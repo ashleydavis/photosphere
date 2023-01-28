@@ -18,6 +18,9 @@ export function createLayout(items, galleryWidth, targetRowHeight) {
 
     rows.push(curRow);
 
+    //
+    // Initially assign each gallery item to a series of rows.
+    //
     for (const item of items) {
 
         const aspectRatio = item.width / item.height;

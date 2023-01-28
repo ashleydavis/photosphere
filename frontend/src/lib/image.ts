@@ -10,7 +10,7 @@ export function loadFile(file) {
 
         reader.addEventListener('load', evt => {
             resolve(evt.target.result)
-        });            
+        });
         
         reader.readAsDataURL(file);
     });
