@@ -71,16 +71,6 @@ export function App() {
 
                     <NavLink
                         className="mr-3"
-                        to="/local"
-                        >
-                        <div className="flex flex-row items-center`">
-                            <i className="w-5 text-center fa-solid fa-hard-drive"></i>
-                            <div className="hidden sm:block ml-2">Local</div>
-                        </div>
-                    </NavLink>
-
-                    <NavLink
-                        className="mr-3"
                         to="/upload"
                     >
                         <div className="flex flex-row items-center">
@@ -89,15 +79,6 @@ export function App() {
                         </div>
                     </NavLink>
 
-                    <NavLink
-                        className="mr-3"
-                        to="/info"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-circle-exclamation"></i>
-                            <div className="hidden sm:block ml-2">Learn more</div>
-                        </div>
-                    </NavLink>
                 </div>
 
                 <div className={"search flex flex-row items-stretch " + (openSearch ? "open": "")}>
@@ -148,13 +129,6 @@ export function App() {
                     </div>
                 </NavLink>
 
-                <NavLink to="/local">
-                    <div className="flex flex-row items-center pl-1 mt-2">
-                        <i className="w-12 text-center fa-solid fa-hard-drive"></i>
-                        <div className="">Local</div>
-                    </div>
-                </NavLink>
-
                 <NavLink to="/upload">
                     <div className="flex flex-row items-center pl-1 mt-2">
                         <i className="w-12 text-center fa-solid fa-upload"></i>
@@ -174,24 +148,9 @@ export function App() {
                     className="flex flex-row items-center pl-1 mt-2 cursor-pointer"
                     onClick={event => notImplemented(event)}
                     >
-                    <i className="w-12 text-center fa-regular fa-images"></i>
-                    <div className="">Collections</div>
-                </button>
-
-                <button
-                    className="flex flex-row items-center pl-1 mt-2 cursor-pointer"
-                    onClick={event => notImplemented(event)}
-                    >
                     <i className="w-12 text-center fa-regular fa-trash-can"></i>
                     <div className="">Trash</div>
                 </button>
-
-                <NavLink to="/info">
-                    <div className="flex flex-row items-center pl-1 mt-8">
-                        <i className="w-12 text-center fa-solid fa-circle-exclamation"></i>
-                        <div className="">Learn more</div>
-                    </div>
-                </NavLink>
             </div>
 
             <div id="main">
