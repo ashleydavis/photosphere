@@ -1,26 +1,250 @@
-
 body {
-    /* Prevent horizonatal scrolling of the photo gallery. */
-    overflow-x: hidden;
+    overflow: hidden;
+    font-family: 'Roboto', Arial, sans-serif;
+    color: rgb(60,64,67);
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+    letter-spacing: 0;
+    font-weight: 400;
+    background-color: #F3F4F6;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
 }
 
-.nav {
+#app {
+    width: 100vw;
+    height: 100vh;
+}
+
+#main {
+    width: 100vw;
+    height: calc(100vh - 51px);
+    overflow-y: scroll;
+}
+
+/* Icons */
+
+i {
+    color: #777777;
+}
+
+/* Menu */
+
+#navbar a {
+    padding: 0.25rem;
+    padding-right: 0.5rem; 
+    border-bottom: 2px solid transparent;
+}
+
+#navbar .active {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+#sidebar .active>div>div {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Sidebar */
+
+#sidebar {
+    z-index: 1000;
+    position: fixed;
+    top: 0;
+    bottom: -100;
+    transition: transform .1s ease-out;
+    will-change: transform;
+    width: 200px;
+    padding-left: 10px;
+    background-color: white;
+
+    /* Left sidebar */
+    left: 0;
+    transform: translateX(-100%);
+
+    /* Sidebar shadow */
+    box-shadow: 0 1px 2px 0 rgb(60 64 67 / 30%), 0 2px 6px 2px rgb(60 64 67 / 15%)
+}
+
+#sidebar.open {
+    transform: translateX(0%);
+}
+
+@media (min-width: 640px) {
+    #content.open {
+        padding-left: 201px;
+    }
+}
+
+/* Nav bar */
+
+#navbar {
+    z-index: 500;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    background-color: white;
+    border-bottom: 1px solid rgb(218, 220, 224);
+}
+
+#main {
+    margin-top: 51px;
+}
+
+/* Drag and drop */
+
+#upload-drop-area {
+    border: 2px dashed #ccc;
+    border-radius: 20px;
+    max-width: 480px;
+    margin: 100px auto;
+    padding: 30px;
+    background-color: white;
+}
+
+#upload-drop-area.highlight {
+    border-color: blue;
+}
+
+/* Info page */
+
+#info-area {
+    border: 2px solid #ccc;
+    border-radius: 20px;
+    max-width: 480px;
+    margin: 100px auto;
+    padding: 30px;
+    background-color: white;
+}
+
+/* Fullscreen photo */
+
+.photo {
+    position: fixed;
+    top: 100%;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: white;
+    z-index: 2000;
+    transition: all .35s ease-out;
+}
+
+.photo.open {
+    top: 0;
+}
+
+.photo-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Photo info */
+
+.info {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    right: 0;
+    background-color: white;
+    z-index: 2000;
+    transition: all .35s ease-out;
+}
+
+.info.open {
+    left: 0;
+}
+
+@media (min-width: 640px) {
+    .info.open {
+        left: 50%;
+    }
+}
+
+.info-header {
+    position: fixed;
+    top: 0;
+    left: 100%;
+    right: 0;
+    height: 50px;
+    background-color: white;
+    border-bottom: 1px solid rgb(218, 220, 224);
+    z-index: 2100;
+    transition: all .35s ease-out;
+}
+
+.info.open>.info-header {
+    left: 0;
+}
+
+@media (min-width: 640px) {
+    .info.open>.info-header {
+        left: 50%;
+    }
+} 
+
+.info-content {
+    margin-top: 50px;
+}
+
+/* Explainer */
+
+#explainer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    /* z-index: 3000; */
+    background: transparent;
+    pointer-events: none;
+}
+
+#explainer-text {
+    position: absolute;
+    right: 40px;
+    bottom: 10px;
+    border: 2px solid #eee;
+    border-radius: 20px;
+    max-width: 480px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+/* Search input */
+
+.search {
+    display: none;
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    top: 5px;
+    height: 42px;
+    background: white;
+}
+
+.search.open {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    width: 100%;
-    padding-top: 2px;
-    padding-left: 4px;
-    padding-right: 4px;
-    padding-bottom: 8px;
 }
 
-.title {
-    width: 150px;
-    font-size: 1.5em;
-}
+@media (min-width: 640px) {
+    .search {
+        left: unset;
+        width: 550px;
+    }
+} 
 
-.nav .link {
-    margin-left: 15px;
+.search-input {
+    padding-left: 10px;
+    border: 1px solid rgb(218,220,224);
 }
 
