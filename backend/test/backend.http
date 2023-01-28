@@ -1,0 +1,61 @@
+@base_url = http://localhost:3000
+
+###
+# @name upload_asset
+#
+# Uploads an asset.
+#
+
+POST {{base_url}}/asset
+Content-Type: image/jpeg
+File-Name: ./test-assets/1.jpeg
+Width: 4160
+Height: 6240
+Hash: 1234
+
+< ./test-assets/1.jpeg
+
+###
+
+POST {{base_url}}/asset
+Content-Type: image/jpeg
+File-Name: ./test-assets/2.jpeg
+Width: 6336
+Height: 9504
+Hash: 5678
+
+< ./test-assets/2.jpeg
+
+###
+
+POST {{base_url}}/asset
+Content-Type: image/jpeg
+File-Name: ./test-assets/3.jpeg
+Width: 3361
+Height: 5041
+Hash: ABCD
+
+< ./test-assets/3.jpeg
+
+
+@upload_asset_id = {{upload_asset.response.body.assetId}}
+
+
+###
+# Retrieve an asset.
+#
+
+GET {{base_url}}/asset?id={{upload_asset_id}}
+
+###
+# Check if an asset with a particular hash has been uploaded.
+
+@hash = 5041
+
+GET {{base_url}}/check-asset?hash={{hash}}
+
+###
+# Retrieve all assets.
+#
+
+GET {{base_url}}/assets
