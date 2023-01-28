@@ -1,0 +1,26 @@
+
+body {
+    /* Prevent horizonatal scrolling of the photo gallery. */
+    overflow-x: hidden;
+}
+
+.nav {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    padding-top: 2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-bottom: 8px;
+}
+
+.title {
+    width: 150px;
+    font-size: 1.5em;
+}
+
+.nav .link {
+    margin-left: 15px;
+}
+
