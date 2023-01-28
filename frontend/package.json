@@ -7,7 +7,10 @@
     "start": "cross-env BASE_URL=http://localhost:3000 parcel",
     "build": "cross-env BASE_URL=http://localhost:3000 parcel build",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "compile": "tsc",
+    "compile:watch": "tsc --watch",
+    "clean": "rm -rf dist .parcel-cache build"
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",
@@ -15,6 +18,7 @@
   "devDependencies": {
     "@fortawesome/fontawesome-free": "^6.2.1",
     "@types/jest": "^29.4.0",
+    "@types/node": "^20.3.1",
     "@types/react": "^18.0.27",
     "buffer": "^6.0.3",
     "cross-env": "^7.0.3",

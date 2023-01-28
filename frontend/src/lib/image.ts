@@ -19,7 +19,7 @@ export function loadFile(file) {
 //
 // Loads URL or source data to an image element.
 //
-export function loadImage(imageSrc) {
+export function loadImage(imageSrc): Promise<any> {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {

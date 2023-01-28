@@ -48,7 +48,6 @@ export function App() {
 
                     <button
                         className="ml-auto mr-3"
-                        to="/search"
                         onClick={event => {
                             setOpenSearch(true);
                         }}
@@ -157,7 +156,6 @@ export function App() {
                 <div id="content" className={sidebarOpen ? "open" : ""} >
                     <Routes>
                         <Route 
-                            exact
                             path="/cloud" 
                             element={
                                 <GalleryPage
@@ -167,13 +165,11 @@ export function App() {
                             />
 
                         <Route 
-                            exact
                             path="/upload" 
                             element={<UploadPage />} 
                             />
 
                         <Route
-                            exact
                             path="/"
                             element={
                                 <Navigate

@@ -10,8 +10,8 @@ export function createLayout(items, galleryWidth, targetRowHeight) {
 
     const rows = [];
 
-    let curRow = {
-        items: [],       
+    let curRow: any = {
+        items: [],
         height: targetRowHeight,
         width: 0,
     };
