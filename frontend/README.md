@@ -2,21 +2,21 @@
 
 This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Parcel](https://parceljs.org/).
 
-This code accompanies chapter 3 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
-
-Follow the author on [Twitter](https://twitter.com/codecapers) for updates.
-
-![Photosphere diagram](docs/Diagram.png)
-
 ## Pre-reqs
 
 You need [Node.js](https://nodejs.org/) installed to run this code.
 
-To run this frontend you must first run the backend available here: https://github.com/Rapid-Fullstack-Development/photosphere-monolithic-backend
+To run this frontend you must first run the backend in the directory `../backend`.
 
 ## Setup
 
-Clone this repo, change into the directory and install dependencies:
+Open a terminal and change directory to the frontend project:
+
+```bash
+cd photosphere-monorepo/frontend
+```
+
+Install dependencies:
 
 ```bash
 npm install

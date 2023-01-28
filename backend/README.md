@@ -1,12 +1,6 @@
-# Photosphere Node.js monolithic backend
+# Photosphere Node.js backend
 
 This is the backend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). It is a REST API to upload and retrieve assets like photos and videos.
-
-This code accompanies chapter 2 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
-
-Follow the author on [Twitter](https://twitter.com/codecapers) for updates.
-
-![Photosphere diagram](docs/Diagram.png)
 
 ## Pre-reqs
 
@@ -14,16 +8,10 @@ You need [Node.js](https://nodejs.org/en/) installed to run this code.
 
 ## Setup
 
-Clone a local copy of the code repository:
+Open a terminal and change directory to the backend project:
 
 ```bash
-git clone git@github.com:Rapid-Fullstack-Development/photosphere-monolithic-backend.git
-```
-
-Open a terminal and change directory into your local copy:
-
-```bash
-cd photosphere-monolithic-backend
+cd photosphere-monorepo/backend
 ```
 
 Install dependencies:
