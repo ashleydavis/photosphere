@@ -11,7 +11,7 @@ export function UploadPage() {
     //
     const [dragOver, setDragOver] = useState(false);
 
-    async function onUploadFiles(files) {
+    async function onUploadFiles(files: FileList) {
         for (const file of files) {
             const imageData = await loadFile(file);
             const imageResolution = await getImageResolution(imageData);
@@ -26,7 +26,7 @@ export function UploadPage() {
         }
     };
 
-    function onDragEnter(event) {
+    function onDragEnter(event: any) {
 
         setDragOver(true);
 
@@ -34,7 +34,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDragLeave(event) {
+    function onDragLeave(event: any) {
 
         setDragOver(false);
 
@@ -42,7 +42,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDragOver(event) {
+    function onDragOver(event: any) {
 
         setDragOver(true);
 
@@ -50,7 +50,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDrop(event) {
+    function onDrop(event: any) {
 
         setDragOver(false);
 
@@ -81,7 +81,7 @@ export function UploadPage() {
                     multiple 
                     accept="image/*"
                     onChange={async event => {
-                        await onUploadFiles(event.target.files);
+                        await onUploadFiles(event.target.files!);
                     }}
                     />
                 <label 

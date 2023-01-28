@@ -4,5 +4,5 @@ import { App } from "./app";
 import '@fortawesome/fontawesome-free/css/all.css';
 
 const container = document.getElementById('app');
-const root = createRoot(container);
+const root = createRoot(container!);
 root.render(<App />);

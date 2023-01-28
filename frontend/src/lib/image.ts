@@ -1,7 +1,7 @@
 //
 // Loads a file to a data URL.
 //
-export function loadFile(file) { 
+export function loadFile(file: File): Promise<any> { 
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.addEventListener('error', () => {
@@ -9,7 +9,7 @@ export function loadFile(file) {
         });
 
         reader.addEventListener('load', evt => {
-            resolve(evt.target.result)
+            resolve(evt.target!.result)
         });
         
         reader.readAsDataURL(file);
@@ -19,7 +19,7 @@ export function loadFile(file) {
 //
 // Loads URL or source data to an image element.
 //
-export function loadImage(imageSrc): Promise<any> {
+export function loadImage(imageSrc: string): Promise<any> {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -32,7 +32,7 @@ export function loadImage(imageSrc): Promise<any> {
 //
 // Gets the size of an image element.
 //
-export async function getImageResolution(imageSrc) {
+export async function getImageResolution(imageSrc: string) {
     const image = await loadImage(imageSrc);
     return {
         width: image.width,

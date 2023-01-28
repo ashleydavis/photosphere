@@ -25,9 +25,9 @@ export function App() {
     //
     // The currently selected gallery item or undefined when no item is selected.
     //
-    const [selectedImage, setSelectedImage] = useState(undefined);
+    const [selectedImage, setSelectedImage] = useState<any | undefined>(undefined);
 
-    function notImplemented(event) {
+    function notImplemented(event: any) {
         alert("This is a not implemented yet.");
 
         event.preventDefault();

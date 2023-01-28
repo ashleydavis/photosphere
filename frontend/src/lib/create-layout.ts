@@ -2,7 +2,7 @@
 //
 // Creates a row-based layout for the photo gallery.
 //
-export function createLayout(items, galleryWidth, targetRowHeight) {
+export function createLayout(items: any[], galleryWidth: number, targetRowHeight: number) {
 
     if (!items || !items.length) {
         return [];
@@ -50,7 +50,7 @@ export function createLayout(items, galleryWidth, targetRowHeight) {
                     width: 0,
                     group: item.group,
                 };
-                rows.push(curRow);                
+                rows.push(curRow);
             }
         }
         else {

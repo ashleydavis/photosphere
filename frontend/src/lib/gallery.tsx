@@ -5,7 +5,7 @@ import useResizeObserver from "@react-hook/resize-observer";
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }) {
+export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }: any) {
 
     //
     // The width of the gallery.
@@ -15,14 +15,14 @@ export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }) {
     //
     // Reference to the gallery container element.
     //
-    const containerRef = useRef(null);
+    const containerRef = useRef<any>(null);
 
     //
     // Updates the gallery width when the container is resized.
     //
     useResizeObserver(containerRef, () => {
         const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
-        setGalleryWidth(containerRef.current.clientWidth + gutter);
+        setGalleryWidth(containerRef.current!.clientWidth + gutter);
     });
 
     return (

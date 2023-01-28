@@ -1,21 +1,29 @@
 import React from "react";
 import { createLayout } from "./create-layout";
 
+export interface IGalleryLayoutProps { 
+	items: any[];
+	galleryWidth: number;
+	targetRowHeight: number;
+	baseUrl: string;
+    onImageClick: ((item: any) => {}) | undefined;
+}
+
 //
 // Responsible for row-based gallery layout.
 //
-export function GalleryLayout({ 
+export function GalleryLayout({
 	items = [], 
 	galleryWidth = 600, 
 	targetRowHeight = 150, 
 	baseUrl = "",
-    onImageClick = undefined
-	}) {
+    onImageClick = undefined,
+    }: IGalleryLayoutProps) {
 
     const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
     const rows = createLayout(items, galleryWidth + gutter, targetRowHeight);
 
-    let prevGroup = undefined;
+    let prevGroup: any = undefined;
 
     return (
         <div
@@ -53,7 +61,7 @@ export function GalleryLayout({
                             height: `${row.height}px`,
                         }}
                         >
-                        {row.items.map(item => {
+                        {row.items.map((item: any) => {
                             return (
                                 <img 
                                     style={{
