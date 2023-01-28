@@ -5,7 +5,7 @@ import useResizeObserver from "@react-hook/resize-observer";
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight, baseUrl }) {
+export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }) {
 
     //
     // The width of the gallery.
@@ -32,6 +32,7 @@ export function Gallery({ items, targetRowHeight, baseUrl }) {
                 targetRowHeight={targetRowHeight}
                 items={items}
                 baseUrl={baseUrl}
+                onImageClick={onImageClick}
                 />
         </div>
     );

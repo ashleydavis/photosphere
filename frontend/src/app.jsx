@@ -3,6 +3,8 @@ import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-do
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 
+const BASE_URL = process.env.BASE_URL;
+
 export function App() {
 
     //
@@ -196,11 +198,17 @@ export function App() {
                 <div id="content" className={sidebarOpen ? "open" : ""} >
                     <Routes>
                         <Route 
+                            exact
                             path="/cloud" 
-                            element={<GalleryPage />} 
+                            element={
+                                <GalleryPage
+                                    onImageClick={setSelectedImage}
+                                />
+                            }
                             />
 
                         <Route 
+                            exact
                             path="/upload" 
                             element={<UploadPage />} 
                             />
@@ -304,9 +312,11 @@ export function App() {
                         </div>
                         <div className="flex-grow flex portrait:flex-col landscape:flex-row justify-center">
                             {selectedImage && 
-                                <img
-                                    src={selectedImage.thumb}
-                                />
+                                <div>
+                                    <img
+                                        src={`${BASE_URL}${selectedImage.thumb}`}
+                                    />
+                                </div>
                             }
                         </div>
                         <div className="flex flex-col justify-center">

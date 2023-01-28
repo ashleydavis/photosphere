@@ -9,7 +9,7 @@ if (!BASE_URL) {
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 
-export function GalleryPage() {
+export function GalleryPage({ onImageClick }) {
 
     const [items, setItems] = useState([]);
 
@@ -28,6 +28,7 @@ export function GalleryPage() {
         <Gallery 
             items={items}                
             baseUrl={BASE_URL}
+            onImageClick={onImageClick}
             />
     );
 }
