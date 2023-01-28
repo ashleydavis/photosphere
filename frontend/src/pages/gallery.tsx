@@ -2,18 +2,25 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Gallery } from "../lib/gallery";
 
-const BASE_URL = process.env.BASE_URL;
+const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
     throw new Error(`Set BASE_URL environment variable to the URL for the Photosphere backend.`);
 }
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 
-export function GalleryPage({ onImageClick }: any) {
+export interface IGalleryPageProps {
+    //
+    // Event raised when an item in the gallery is clicked.
+    //
+    onImageClick: (item: any) => void,
+}
 
-    const [items, setItems] = useState([]);
+export function GalleryPage({ onImageClick }: IGalleryPageProps) {
 
-    useEffect(() => {
+	const [items, setItems] = useState<any[]>([]);
+	
+	useEffect(() => {
         axios.get(`${BASE_URL}/assets`)
             .then(response => {
                 setItems(response.data.assets);

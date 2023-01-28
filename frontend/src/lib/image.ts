@@ -1,7 +1,9 @@
 //
-// Loads a file to a data URL.
+// Loads a file to a data URL (base64 encoded data).
 //
-export function loadFile(file: File): Promise<any> { 
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URLs
+//
+export function loadFile(file: File): Promise<string> { 
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.addEventListener('error', () => {
@@ -9,7 +11,7 @@ export function loadFile(file: File): Promise<any> {
         });
 
         reader.addEventListener('load', evt => {
-            resolve(evt.target!.result)
+            resolve(evt.target!.result as string)
         });
         
         reader.readAsDataURL(file);
@@ -19,7 +21,7 @@ export function loadFile(file: File): Promise<any> {
 //
 // Loads URL or source data to an image element.
 //
-export function loadImage(imageSrc: string): Promise<any> {
+export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -30,9 +32,24 @@ export function loadImage(imageSrc: string): Promise<any> {
 }
 
 //
+// Represents the resolution of the image or video.
+//
+export interface IResolution {
+    //
+    // The width of the image or video.
+    //
+    width: number;
+
+    //
+    // The height of the image or video.
+    //
+    height: number;
+}
+
+//
 // Gets the size of an image element.
 //
-export async function getImageResolution(imageSrc: string) {
+export async function getImageResolution(imageSrc: string): Promise<IResolution> {
     const image = await loadImage(imageSrc);
     return {
         width: image.width,

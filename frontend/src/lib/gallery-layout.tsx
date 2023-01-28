@@ -2,11 +2,30 @@ import React from "react";
 import { createLayout } from "./create-layout";
 
 export interface IGalleryLayoutProps { 
+    //
+    // The items to display in the gallery.
+    //
 	items: any[];
-	galleryWidth: number;
-	targetRowHeight: number;
+
+    //
+    // The width of the gallery.
+    //
+	galleryWidth?: number;
+
+    //
+    // The target height for rows in the gallery.
+    //
+	targetRowHeight?: number;
+
+    //
+    // The URL for the backend.
+    //
 	baseUrl: string;
-    onImageClick: ((item: any) => {}) | undefined;
+
+    //
+    // Event raised when an item in the gallery has been clicked.
+    //
+    onImageClick: ((item: any) => void) | undefined;
 }
 
 //

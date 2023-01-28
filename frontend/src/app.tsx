@@ -10,18 +10,18 @@ export function App() {
     //
     // Set to true to open the sidebar.
     //
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
     // 
     // Set to true to open the search input.
     //
-    const [openSearch, setOpenSearch] = useState(false);
-
+    const [openSearch, setOpenSearch] = useState<boolean>(false);
+    
     // 
     // Set to true to open asset info.
     //
-    const [openInfo, setOpenInfo] = useState(false);
-
+    const [openInfo, setOpenInfo] = useState<boolean>(false);
+    
     //
     // The currently selected gallery item or undefined when no item is selected.
     //

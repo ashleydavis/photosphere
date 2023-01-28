@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, DragEvent } from "react";
 import axios from "axios";
 import { loadFile, getImageResolution } from "../lib/image";
 
@@ -9,7 +9,7 @@ export function UploadPage() {
     //
     // Set to true when something is dragged over the upload area.
     //
-    const [dragOver, setDragOver] = useState(false);
+    const [dragOver, setDragOver] = useState<boolean>(false);
 
     async function onUploadFiles(files: FileList) {
         for (const file of files) {
@@ -26,7 +26,7 @@ export function UploadPage() {
         }
     };
 
-    function onDragEnter(event: any) {
+    function onDragEnter(event: DragEvent<HTMLDivElement>) {
 
         setDragOver(true);
 
@@ -34,7 +34,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDragLeave(event: any) {
+    function onDragLeave(event: DragEvent<HTMLDivElement>) {
 
         setDragOver(false);
 
@@ -42,7 +42,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDragOver(event: any) {
+    function onDragOver(event: DragEvent<HTMLDivElement>) {
 
         setDragOver(true);
 
@@ -50,7 +50,7 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDrop(event: any) {
+    function onDrop(event: DragEvent<HTMLDivElement>) {
 
         setDragOver(false);
 
