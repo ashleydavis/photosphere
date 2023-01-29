@@ -3,6 +3,8 @@ import * as path from "path";
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
+import { IAsset } from "./lib/asset";
+import { Readable } from "stream";
 
 const PORT = process.env.PORT;
 if (!PORT) {
@@ -22,7 +24,7 @@ async function main() {
     await client.connect();
 
     const db = client.db(dbName);
-    const assetCollections = db.collection("assets");
+    const assetCollections = db.collection<IAsset>("assets");
 
     const app = express();
     app.use(cors());
@@ -41,13 +43,13 @@ async function main() {
     
         await assetCollections.insertOne({
             _id: assetId,
-            origFileName: fileName,
-            contentType: contentType,
+            origFileName: fileName as string,
+            contentType: contentType!,
             src: `/asset?id=${assetId}`,
             thumb: `/asset?id=${assetId}`,
             width: width,
             height: height,
-            hash: hash,
+            hash: hash as string,
         });
     
         res.json({
@@ -57,9 +59,13 @@ async function main() {
 
     app.get("/asset", async (req, res) => {
 
-        const assetId = req.query.id as string;    
-        const localFileName = path.join(__dirname, "../uploads", assetId);    
-        const asset: any = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        const assetId = req.query.id as string;
+        const localFileName = path.join(__dirname, "../uploads", assetId);
+        const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        if (!asset) {
+            res.sendStatus(404);
+            return;
+        }
     
         res.writeHead(200, {
             "Content-Type": asset.contentType,
@@ -71,19 +77,19 @@ async function main() {
 
     app.get("/check-asset", async (req, res) => {
         
-        const hash = req.query.hash;
+        const hash = req.query.hash as string;
         const asset = await assetCollections.findOne({ hash: hash });
         if (asset) {
             res.sendStatus(200);
         }
         else {
             res.sendStatus(404);
-        }    
+        }
     });
 
     app.get("/assets", async (req, res) => {
 
-        const assets = await assetCollections.find().toArray();
+        const assets = await assetCollections.find({}).toArray();
         res.json({
             assets: assets,
         });
@@ -104,7 +110,7 @@ main()
 //
 // Streams an input stream to local file storage.
 //
-function streamToStorage(localFileName: string, inputStream: any) {
+function streamToStorage(localFileName: string, inputStream: Readable) {
     return new Promise<void>((resolve, reject) => {
         const fileWriteStream = fs.createWriteStream(localFileName);
         inputStream.pipe(fileWriteStream)
