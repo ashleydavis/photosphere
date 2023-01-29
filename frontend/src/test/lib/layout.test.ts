@@ -140,5 +140,41 @@ describe("layout", () => {
         expect(item3.width).toBeCloseTo(items[2].width);
         expect(item3.height).toBeCloseTo(items[2].height);
         
-    });    
+    });
+
+    test("items with a different group wrap to the next row", () => {
+
+        const items = [
+            {
+                thumb: "https://via.placeholder.com/100x200",
+                width: 100,
+                height: 200,
+                group: "a",
+            },
+            {
+                thumb: "https://via.placeholder.com/100x200",
+                width: 100,
+                height: 200,
+                group: "b",
+            },
+            {
+                thumb: "https://via.placeholder.com/100x200",
+                width: 100,
+                height: 200,
+                group: "b",
+            },
+        ];
+
+        const galleryWidth = 600;
+        const targetRowHeight = 200;
+        const rows = createLayout(items, galleryWidth, targetRowHeight);
+        
+        expect(rows.length).toBe(2);
+        expect(rows[0].items.length).toBe(1);
+        expect(rows[0].items[0].thumb).toBe(items[0].thumb);
+        expect(rows[1].items.length).toBe(2);
+        expect(rows[1].items[0].thumb).toBe(items[1].thumb);
+        expect(rows[1].items[1].thumb).toBe(items[2].thumb);
+    });
+
 });
