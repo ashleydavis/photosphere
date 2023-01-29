@@ -11,8 +11,8 @@
         "compile": "tsc",
         "compile:watch": "tsc --watch",
         "clean": "rm -rf build",
-        "test": "jest --coverage",
-        "test:watch": "jest --watch"
+        "test": "jest --coverage --runInBand",
+        "test:watch": "jest --watch --runInBand"
     },
     "keywords": [],
     "author": "ashley@codecapers.com.au",
