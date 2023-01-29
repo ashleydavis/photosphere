@@ -14,12 +14,6 @@ describe("frontend tests", () => {
 
     test("can upload asset and then see the asset in the gallery", async ({ page }) => {
 
-        //
-        // Need time for the backend to start up.
-        // Is it possible to use wait-port for this?
-        //
-        await sleep(5000);
-
         await page.goto(`${FRONTEND_URL}/upload`);
 
         //

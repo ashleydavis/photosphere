@@ -8,9 +8,9 @@
     "build": "cross-env BASE_URL=http://localhost:3000 parcel build",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
-    
     "start-backend": "cd ../backend && npm run start:dev",
-    "start-for-e2e-tests": "concurrently --kill-others --names \"backend,frontend\" \"npm run start-backend\" \"npm run start\"",
+    "start-frontend-for-e2e-tests": "wait-port 3000 && npm start",
+    "start-for-e2e-tests": "concurrently --kill-others --names \"backend,frontend\" \"npm run start-backend\" \"npm run start-frontend-for-e2e-tests\"",
     "test-e2e": "playwright test --reporter=list",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
@@ -28,6 +28,7 @@
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
     "buffer": "^6.0.3",
+    "concurrently": "^7.2.2",
     "cross-env": "^7.0.3",
     "fs-extra": "^11.1.0",
     "jest": "^29.0.1",
@@ -37,7 +38,7 @@
     "tailwindcss": "^3.2.4",
     "ts-jest": "^29.0.5",
     "typescript": "^4.9.4",
-    "concurrently": "^7.2.2"
+    "wait-port": "^1.0.4"
   },
   "dependencies": {
     "@react-hook/resize-observer": "^1.2.6",
