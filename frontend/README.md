@@ -76,4 +76,16 @@ npm test
 
 ```bash
 npm run test-e2e
+``` 
+
+Enable this to debug with Playwright:
+
+```bash
+export PWDEBUG=1
+```
+
+Or on Windows:
+
+```bash
+set PWDEBUG=1
 ```

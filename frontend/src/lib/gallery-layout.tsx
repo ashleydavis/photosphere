@@ -84,6 +84,7 @@ export function GalleryLayout({
                         {row.items.map(item => {
                             return (
                                 <img 
+                                    data-testid="gallery-thumb"
                                     style={{
                                         padding: "2px",
                                     }}
