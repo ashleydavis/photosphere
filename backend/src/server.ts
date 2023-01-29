@@ -1,5 +1,5 @@
 import express from "express";
-import * as fs from "fs";
+import * as fs from "fs-extra";
 import * as path from "path";
 import cors from "cors";
 import { IAsset } from "./lib/asset";
@@ -23,7 +23,10 @@ export function createServer(db: Db) {
         const width = parseInt(req.headers["width"] as string);
         const height = parseInt(req.headers["height"] as string);
         const hash = req.headers["hash"];
-        const localFileName = path.join(__dirname, "../uploads", assetId.toString());
+        
+        const uploadsDirectory = path.join(__dirname, "../uploads");
+        await fs.ensureDir(uploadsDirectory);
+        const localFileName = path.join(uploadsDirectory, assetId.toString());
 
         await streamToStorage(localFileName, req);
 
@@ -80,7 +83,7 @@ export function createServer(db: Db) {
             assets: assets,
         });
     });
-    
+
     return app;
 }
 
