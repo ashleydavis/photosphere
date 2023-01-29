@@ -3,10 +3,14 @@ import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-do
 import { IGalleryItem } from "./lib/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
-
-const BASE_URL = process.env.BASE_URL;
+import { useApi } from "./context/api-context";
 
 export function App() {
+
+    //
+    // Interface to the API.
+    //
+    const api = useApi();
 
     //
     // Set to true to open the sidebar.
@@ -270,7 +274,7 @@ export function App() {
                             {selectedItem && 
                                 <div>
                                     <img
-                                        src={`${BASE_URL}${selectedItem.thumb}`}
+                                        src={api.makeUrl(selectedItem.thumb)}
                                     />
                                 </div>
                             }

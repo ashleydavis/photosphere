@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { Gallery } from "../lib/gallery";
 import { IGalleryItem } from "../lib/gallery-item";
-
-const BASE_URL = process.env.BASE_URL as string;
-if (!BASE_URL) {
-    throw new Error(`Set BASE_URL environment variable to the URL for the Photosphere backend.`);
-}
-
-console.log(`Expecting backend at ${BASE_URL}.`);
+import { useApi } from "../context/api-context";
 
 export interface IGalleryPageProps {
     //
@@ -19,12 +12,17 @@ export interface IGalleryPageProps {
 
 export function GalleryPage({ onItemClick }: IGalleryPageProps) {
 
+    //
+    // Interface to the API.
+    //
+    const api = useApi();
+
 	const [items, setItems] = useState<IGalleryItem[]>([]);
 	
 	useEffect(() => {
-        axios.get(`${BASE_URL}/assets`)
-            .then(response => {
-                setItems(response.data.assets);
+        api.getAssets()
+            .then(items=> {
+                setItems(items);
             })
             .catch(error => {
                 console.log(`Error retrieving assets:`);
@@ -35,8 +33,8 @@ export function GalleryPage({ onItemClick }: IGalleryPageProps) {
     return (
         <Gallery 
             items={items}                
-            baseUrl={BASE_URL}
             onItemClick={onItemClick}
+            targetRowHeight={150}
             />
     );
 }

@@ -1,10 +1,13 @@
 import React, { useState, DragEvent } from "react";
-import axios from "axios";
 import { loadFile, getImageResolution } from "../lib/image";
-
-const BASE_URL = process.env.BASE_URL;
+import { useApi } from "../context/api-context";
 
 export function UploadPage() {
+
+    //
+    // Interface to the API.
+    //
+    const api = useApi();
 
     //
     // Set to true when something is dragged over the upload area.
@@ -15,20 +18,7 @@ export function UploadPage() {
         for (const file of files) {
             const imageData = await loadFile(file);
             const imageResolution = await getImageResolution(imageData);
-            await axios.post(`${BASE_URL}/asset`, file, {
-                headers: {
-                    "file-name": file.name,
-                    "content-type": file.type,
-                    "width": imageResolution.width,
-                    "height": imageResolution.height,
-
-                    //
-                    // Hash added to satisfy backend requirements.
-                    // Will compute a proper hash from the file data in the future.
-                    //
-                    "hash": "1234", 
-                },
-            });
+            await api.uploadAsset(file, imageResolution);
         }
     };
 

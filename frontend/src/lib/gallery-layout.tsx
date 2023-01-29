@@ -1,6 +1,7 @@
 import React from "react";
 import { createLayout } from "./create-layout";
 import { IGalleryItem } from "./gallery-item";
+import { useApi } from "../context/api-context";
 
 export interface IGalleryLayoutProps { 
     //
@@ -11,17 +12,12 @@ export interface IGalleryLayoutProps {
     //
     // The width of the gallery.
     //
-	galleryWidth?: number;
+	galleryWidth: number;
 
     //
     // The target height for rows in the gallery.
     //
-	targetRowHeight?: number;
-
-    //
-    // The URL for the backend.
-    //
-	baseUrl: string;
+	targetRowHeight: number;
 
     //
     // Event raised when an item in the gallery has been clicked.
@@ -36,9 +32,13 @@ export function GalleryLayout({
 	items = [], 
 	galleryWidth = 600, 
 	targetRowHeight = 150, 
-	baseUrl = "",
     onItemClick = undefined,
     }: IGalleryLayoutProps) {
+
+    //
+    // Interface to the API.
+    //
+    const api = useApi();
 
     const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
     const rows = createLayout(items, galleryWidth + gutter, targetRowHeight);
@@ -89,11 +89,11 @@ export function GalleryLayout({
                                     }}
                                     onClick={() => {
                                         if (onItemClick) {
-                                            onItemClick(item) 
+                                            onItemClick(item);
                                         }
                                     }}
                                     key={item.thumb}
-                                    src={`${baseUrl}${item.thumb}`}
+                                    src={api.makeUrl(item.thumb)}
                                     />
                             );
                         })}

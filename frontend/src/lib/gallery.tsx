@@ -12,12 +12,7 @@ export interface IGalleryProps {
     //
     // The target height for rows in the gallery.
     //
-	targetRowHeight?: number;
-
-    //
-    // The URL for the backend.
-    //
-	baseUrl: string;
+	targetRowHeight: number;
 
     //
     // Event raised when an item in the gallery has been clicked.
@@ -28,7 +23,7 @@ export interface IGalleryProps {
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight, baseUrl, onItemClick }: IGalleryProps) {
+export function Gallery({ items, targetRowHeight, onItemClick }: IGalleryProps) {
 
     //
     // The width of the gallery.
@@ -54,7 +49,6 @@ export function Gallery({ items, targetRowHeight, baseUrl, onItemClick }: IGalle
                 galleryWidth={galleryWidth}
                 targetRowHeight={targetRowHeight}
                 items={items}
-                baseUrl={baseUrl}
                 onItemClick={onItemClick}
                 />
         </div>
