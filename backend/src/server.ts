@@ -74,6 +74,9 @@ export function createServer(db: Db) {
     app.get("/asset", async (req, res) => {
 
         const assetId = req.query.id as string;
+        if (!assetId) {
+            throw new Error(`Asset ID not specified in query parameters.`);
+        }
         const localFileName = path.join(__dirname, "../uploads", assetId);
         const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
