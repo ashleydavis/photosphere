@@ -6,5 +6,6 @@ module.exports = {
         "dist",
         "build",
         ".parcel-cache",
+        "src/test/e2e",
     ],
 };
