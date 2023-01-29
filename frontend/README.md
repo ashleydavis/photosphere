@@ -65,3 +65,15 @@ live-server
 ```
 
 The web page should automatically be displayed in your browser.
+
+## Run automated tests
+
+```bash
+npm test
+```
+
+## Run e2e tests
+
+```bash
+npm run test-e2e
+```
