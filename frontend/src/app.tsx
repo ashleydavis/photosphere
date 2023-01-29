@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-dom";
+import { IGalleryItem } from "./lib/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 
@@ -25,7 +26,7 @@ export function App() {
     //
     // The currently selected gallery item or undefined when no item is selected.
     //
-    const [selectedImage, setSelectedImage] = useState<any | undefined>(undefined);
+    const [selectedImage, setSelectedImage] = useState<IGalleryItem | undefined>(undefined);
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");

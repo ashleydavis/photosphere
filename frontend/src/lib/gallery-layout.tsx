@@ -1,11 +1,12 @@
 import React from "react";
 import { createLayout } from "./create-layout";
+import { IGalleryItem } from "./gallery-item";
 
 export interface IGalleryLayoutProps { 
     //
     // The items to display in the gallery.
     //
-	items: any[];
+	items: IGalleryItem[];
 
     //
     // The width of the gallery.
@@ -25,7 +26,7 @@ export interface IGalleryLayoutProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onImageClick: ((item: any) => void) | undefined;
+    onImageClick: ((item: IGalleryItem) => void) | undefined;
 }
 
 //
@@ -42,7 +43,7 @@ export function GalleryLayout({
     const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
     const rows = createLayout(items, galleryWidth + gutter, targetRowHeight);
 
-    let prevGroup: any = undefined;
+    let prevGroup: string | undefined = undefined;
 
     return (
         <div
@@ -80,7 +81,7 @@ export function GalleryLayout({
                             height: `${row.height}px`,
                         }}
                         >
-                        {row.items.map((item: any) => {
+                        {row.items.map(item => {
                             return (
                                 <img 
                                     style={{

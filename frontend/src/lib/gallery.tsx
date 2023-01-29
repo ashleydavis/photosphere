@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { IGalleryItem } from "./gallery-item";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
 
@@ -6,7 +7,7 @@ export interface IGalleryProps {
     //
     // The items to display in the gallery.
     //
-	items: any[];
+	items: IGalleryItem[];
 
     //
     // The target height for rows in the gallery.
@@ -21,7 +22,7 @@ export interface IGalleryProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onImageClick: ((item: any) => void) | undefined;
+    onImageClick: ((item: IGalleryItem) => void) | undefined;
 }
 
 //

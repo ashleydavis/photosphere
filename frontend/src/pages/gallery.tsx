@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Gallery } from "../lib/gallery";
+import { IGalleryItem } from "../lib/gallery-item";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -13,12 +14,12 @@ export interface IGalleryPageProps {
     //
     // Event raised when an item in the gallery is clicked.
     //
-    onImageClick: (item: any) => void,
+    onImageClick: (item: IGalleryItem) => void,
 }
 
 export function GalleryPage({ onImageClick }: IGalleryPageProps) {
 
-	const [items, setItems] = useState<any[]>([]);
+	const [items, setItems] = useState<IGalleryItem[]>([]);
 	
 	useEffect(() => {
         axios.get(`${BASE_URL}/assets`)

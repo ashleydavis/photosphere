@@ -1,8 +1,10 @@
 
+import { IGalleryItem, IGalleryRow } from "./gallery-item";
+
 //
-// Creates a row-based layout for the photo gallery.
+// Creates a row base layout for items in the gallery.
 //
-export function createLayout(items: any[], galleryWidth: number, targetRowHeight: number) {
+export function createLayout(items: IGalleryItem[], galleryWidth: number, targetRowHeight: number) {
 
     if (!items || !items.length) {
         return [];
@@ -10,7 +12,7 @@ export function createLayout(items: any[], galleryWidth: number, targetRowHeight
 
     const rows = [];
 
-    let curRow: any = {
+    let curRow: IGalleryRow = {
         items: [],
         height: targetRowHeight,
         width: 0,
@@ -95,7 +97,7 @@ export function createLayout(items: any[], galleryWidth: number, targetRowHeight
         // Expand each item to fill the gap.
         //
         for (const item of row.items) {
-            const aspectRatio = item.aspectRatio;
+            const aspectRatio = item.aspectRatio!;
 
             item.width += deltaWidth;
             item.height = item.width * (1.0 / aspectRatio);
