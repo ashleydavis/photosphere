@@ -57,13 +57,13 @@ export function createServer(db: Db) {
 
         await assetCollections.insertOne({
             _id: assetId,
-            origFileName: fileName as string,
-            contentType: contentType!,
+            origFileName: fileName,
+            contentType: contentType,
             src: `/asset?id=${assetId}`,
             thumb: `/asset?id=${assetId}`,
             width: width,
             height: height,
-            hash: hash as string,
+            hash: hash,
         });
 
         res.json({
