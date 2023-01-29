@@ -21,6 +21,12 @@ export function UploadPage() {
                     "content-type": file.type,
                     "width": imageResolution.width,
                     "height": imageResolution.height,
+
+                    //
+                    // Hash added to satisfy backend requirements.
+                    // Will compute a proper hash from the file data in the future.
+                    //
+                    "hash": "1234", 
                 },
             });
         }
