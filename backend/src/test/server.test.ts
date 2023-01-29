@@ -136,5 +136,18 @@ describe("photosphere backend", () => {
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual(Buffer.from("ABCD"));
     });
+
+    test("non existing asset yields a 404 error", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.findOne = (query: any) => {
+            return undefined;
+        };
+
+        const response = await request(app).get(`/asset?id=${assetId}`);
+        expect(response.statusCode).toBe(404);
+    });
 });
 
