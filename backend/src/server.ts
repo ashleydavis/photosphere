@@ -95,6 +95,9 @@ export function createServer(db: Db) {
     app.get("/check-asset", async (req, res) => {
 
         const hash = req.query.hash as string;
+        if (!hash) {
+            throw new Error(`Hash not specified in query parameters.`);
+        }
         const asset = await assetCollections.findOne({ hash: hash });
         if (asset) {
             res.sendStatus(200);

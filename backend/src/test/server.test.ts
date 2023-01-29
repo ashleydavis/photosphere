@@ -274,6 +274,14 @@ describe("photosphere backend", () => {
         expect(response.statusCode).toBe(404);
     });
 
+    test("check for existing asset with no hash yields an error", async () => {
+
+        const { app } = await initServer();
+
+        const response = await request(app).get(`/check-asset`);
+        expect(response.statusCode).toBe(500);
+    });
+
     test("get assets", async () => {
 
         const assetId = new ObjectId();
