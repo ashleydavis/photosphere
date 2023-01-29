@@ -3,8 +3,10 @@ import request from "supertest";
 
 describe("photosphere backend", () => {
 
-    test("no assets", async () => {
-
+    //
+    // Initialises the server for testing.
+    //
+    function initServer() {
         const mockCollection: any = {
             find() {
                 return {
@@ -19,8 +21,15 @@ describe("photosphere backend", () => {
                 return mockCollection;
             },
         };
-        
+
         const app = createServer(mockDb);
+        return app;
+    }
+
+
+    test("no assets", async () => {
+
+        const app = initServer();
         const response = await request(app).get("/assets");
         
         expect(response.statusCode).toBe(200);
@@ -29,3 +38,4 @@ describe("photosphere backend", () => {
         });
     });
 });
+
