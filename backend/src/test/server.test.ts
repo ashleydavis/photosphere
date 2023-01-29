@@ -2,6 +2,7 @@ import { createServer } from "../server";
 import request from "supertest";
 import * as fs from "fs-extra";
 import { ObjectId } from "mongodb";
+import { executionAsyncId } from "async_hooks";
 
 describe("photosphere backend", () => {
 
@@ -14,6 +15,7 @@ describe("photosphere backend", () => {
         // Remove local assets from other test runs.
         //
         await fs.remove("./uploads");
+        await fs.ensureDir("./uploads");
 
         const mockCollection: any = {
             find() {
@@ -111,6 +113,28 @@ describe("photosphere backend", () => {
         expect(uploadedFiles).toEqual([
             assetId,
         ]);
+    });
+
+    test("get asset", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        // Generate the file into the uploads directory.
+        await fs.writeFile(`./uploads/${assetId}`, "ABCD");
+
+        const mockAsset: any = {
+            contentType: "image/jpeg",
+        };
+        mockCollection.findOne = (query: any) => {
+            expect(query._id).toEqual(assetId);
+            
+            return mockAsset;
+        };
+
+        const response = await request(app).get(`/asset?id=${assetId}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toEqual(Buffer.from("ABCD"));
     });
 });
 
