@@ -178,6 +178,34 @@ describe("photosphere backend", () => {
         const response = await request(app).get(`/check-asset?hash=${hash}`);
         expect(response.statusCode).toBe(404);
     });
+
+    test("get assets", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        const mockAsset1: any = {
+            contentType: "image/jpeg",
+        };
+        const mockAsset2: any = {
+            contentType: "image/png",
+        };
+        mockCollection.find = () => {
+            return {
+                toArray() {
+                    return [ mockAsset1, mockAsset2 ];
+                },
+            };
+        };
+
+        const response = await request(app).get(`/assets`);
+        
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toEqual({
+            assets: [ mockAsset1, mockAsset2 ],
+        });
+    });
+
 });
 
 
