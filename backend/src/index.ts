@@ -1,8 +1,8 @@
-const fs = require("fs");
-const path = require("path");
-const express = require("express");
-const { MongoClient, ObjectId } = require('mongodb');
-const cors = require("cors");
+import * as fs from "fs";
+import * as path from "path";
+import express from "express";
+import { MongoClient, ObjectId } from "mongodb";
+import cors from "cors";
 
 const PORT = process.env.PORT;
 if (!PORT) {
@@ -32,12 +32,12 @@ async function main() {
         const assetId = new ObjectId();
         const fileName = req.headers["file-name"];
         const contentType = req.headers["content-type"];
-        const width = parseInt(req.headers["width"]);
-        const height = parseInt(req.headers["height"]);
+        const width = parseInt(req.headers["width"] as string);
+        const height = parseInt(req.headers["height"] as string);
         const hash = req.headers["hash"];
         const localFileName = path.join(__dirname, "../uploads", assetId.toString());
     
-        await streamToStorage(localFileName, req);    
+        await streamToStorage(localFileName, req);
     
         await assetCollections.insertOne({
             _id: assetId,
@@ -57,11 +57,9 @@ async function main() {
 
     app.get("/asset", async (req, res) => {
 
-        const assetId = req.query.id;
-    
-        const localFileName = path.join(__dirname, "../uploads", assetId);
-    
-        const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        const assetId = req.query.id as string;    
+        const localFileName = path.join(__dirname, "../uploads", assetId);    
+        const asset: any = await assetCollections.findOne({ _id: new ObjectId(assetId) });
     
         res.writeHead(200, {
             "Content-Type": asset.contentType,
@@ -106,11 +104,11 @@ main()
 //
 // Streams an input stream to local file storage.
 //
-function streamToStorage(localFileName, inputStream) {
+function streamToStorage(localFileName: string, inputStream: any) {
     return new Promise<void>((resolve, reject) => {
         const fileWriteStream = fs.createWriteStream(localFileName);
         inputStream.pipe(fileWriteStream)
-            .on("error", err => {
+            .on("error", (err: any) => {
                 reject(err);
             })
             .on("finish", () => {
