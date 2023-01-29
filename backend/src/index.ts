@@ -107,7 +107,7 @@ main()
 // Streams an input stream to local file storage.
 //
 function streamToStorage(localFileName, inputStream) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         const fileWriteStream = fs.createWriteStream(localFileName);
         inputStream.pipe(fileWriteStream)
             .on("error", err => {
