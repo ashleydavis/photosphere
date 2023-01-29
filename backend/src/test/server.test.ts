@@ -38,6 +38,19 @@ describe("photosphere backend", () => {
         };
     }
 
+    //
+    // Get list of assets uploaded.
+    //
+    async function getUploads() {
+        const exists = await fs.exists("./uploads");
+        if (exists) {
+            return await fs.readdir("./uploads");
+        }
+        else {
+            return [];
+        }
+    }
+
     test("no assets", async () => {
 
         const { app } = await initServer();
@@ -52,6 +65,12 @@ describe("photosphere backend", () => {
     test("upload asset", async () => {
 
         const { app, mockCollection } = await initServer();
+
+        //
+        // Check we are starting with zero files.
+        //
+        const origFiles = await getUploads();
+        expect(origFiles.length).toBe(0);
 
         mockCollection.insertOne = jest.fn();
 
@@ -87,6 +106,11 @@ describe("photosphere backend", () => {
             height: height,
             hash: hash,
         });
+
+        const uploadedFiles = await getUploads();
+        expect(uploadedFiles).toEqual([
+            assetId,
+        ]);
     });
 });
 
