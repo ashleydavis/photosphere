@@ -149,5 +149,35 @@ describe("photosphere backend", () => {
         const response = await request(app).get(`/asset?id=${assetId}`);
         expect(response.statusCode).toBe(404);
     });
+
+    test("check for existing asset by hash", async () => {
+
+        const hash = "1234";
+        const { app, mockCollection } = await initServer();
+
+        const mockAsset: any = {};
+        mockCollection.findOne = (query: any) => {
+            expect(query.hash).toEqual(hash);
+            
+            return mockAsset;
+        };
+
+        const response = await request(app).get(`/check-asset?hash=${hash}`);
+        expect(response.statusCode).toBe(200);
+    });
+
+    test("check for non-existing asset by hash", async () => {
+
+        const hash = "1234";
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.findOne = (query: any) => {
+            return undefined;
+        };
+
+        const response = await request(app).get(`/check-asset?hash=${hash}`);
+        expect(response.statusCode).toBe(404);
+    });
 });
+
 
