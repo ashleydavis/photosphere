@@ -26,7 +26,7 @@ export function App() {
     //
     // The currently selected gallery item or undefined when no item is selected.
     //
-    const [selectedImage, setSelectedImage] = useState<IGalleryItem | undefined>(undefined);
+    const [selectedItem, setSelectedItem] = useState<IGalleryItem | undefined>(undefined);
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
@@ -160,7 +160,7 @@ export function App() {
                             path="/cloud" 
                             element={
                                 <GalleryPage
-                                    onImageClick={setSelectedImage}
+                                    onItemClick={setSelectedItem}
                                 />
                             }
                             />
@@ -183,13 +183,13 @@ export function App() {
                 </div>
             </div>
 
-            <div className={"photo flex flex-col " + (selectedImage ? "open" : "")}>
+            <div className={"photo flex flex-col " + (selectedItem ? "open" : "")}>
                 <div className="photo-header">
                     <div className="flex flex-row items-center pl-3 pt-3 pb-2">
                         <button
                             className="p-1 px-3"
                             onClick={() => {
-                                setSelectedImage(undefined);
+                                setSelectedItem(undefined);
                                 setOpenInfo(false);
                             }}
                             >
@@ -267,10 +267,10 @@ export function App() {
                             </button>
                         </div>
                         <div className="flex-grow flex portrait:flex-col landscape:flex-row justify-center">
-                            {selectedImage && 
+                            {selectedItem && 
                                 <div>
                                     <img
-                                        src={`${BASE_URL}${selectedImage.thumb}`}
+                                        src={`${BASE_URL}${selectedItem.thumb}`}
                                     />
                                 </div>
                             }

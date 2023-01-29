@@ -14,10 +14,10 @@ export interface IGalleryPageProps {
     //
     // Event raised when an item in the gallery is clicked.
     //
-    onImageClick: (item: IGalleryItem) => void,
+    onItemClick: (item: IGalleryItem) => void,
 }
 
-export function GalleryPage({ onImageClick }: IGalleryPageProps) {
+export function GalleryPage({ onItemClick }: IGalleryPageProps) {
 
 	const [items, setItems] = useState<IGalleryItem[]>([]);
 	
@@ -36,7 +36,7 @@ export function GalleryPage({ onImageClick }: IGalleryPageProps) {
         <Gallery 
             items={items}                
             baseUrl={BASE_URL}
-            onImageClick={onImageClick}
+            onItemClick={onItemClick}
             />
     );
 }

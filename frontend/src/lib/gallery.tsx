@@ -22,13 +22,13 @@ export interface IGalleryProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onImageClick: ((item: IGalleryItem) => void) | undefined;
+    onItemClick: ((item: IGalleryItem) => void) | undefined;
 }
 
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }: IGalleryProps) {
+export function Gallery({ items, targetRowHeight, baseUrl, onItemClick }: IGalleryProps) {
 
     //
     // The width of the gallery.
@@ -55,7 +55,7 @@ export function Gallery({ items, targetRowHeight, baseUrl, onImageClick }: IGall
                 targetRowHeight={targetRowHeight}
                 items={items}
                 baseUrl={baseUrl}
-                onImageClick={onImageClick}
+                onItemClick={onItemClick}
                 />
         </div>
     );

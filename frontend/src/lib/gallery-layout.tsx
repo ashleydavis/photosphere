@@ -26,7 +26,7 @@ export interface IGalleryLayoutProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onImageClick: ((item: IGalleryItem) => void) | undefined;
+    onItemClick: ((item: IGalleryItem) => void) | undefined;
 }
 
 //
@@ -37,7 +37,7 @@ export function GalleryLayout({
 	galleryWidth = 600, 
 	targetRowHeight = 150, 
 	baseUrl = "",
-    onImageClick = undefined,
+    onItemClick = undefined,
     }: IGalleryLayoutProps) {
 
     const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
@@ -88,8 +88,8 @@ export function GalleryLayout({
                                         padding: "2px",
                                     }}
                                     onClick={() => {
-                                        if (onImageClick) {
-                                            onImageClick(item) 
+                                        if (onItemClick) {
+                                            onItemClick(item) 
                                         }
                                     }}
                                     key={item.thumb}
