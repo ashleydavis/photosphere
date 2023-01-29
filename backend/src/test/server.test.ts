@@ -153,6 +153,53 @@ describe("photosphere backend", () => {
         await uploadAssetWithMissingHeader(headers, "hash");
     });
 
+    //
+    // Uploads an asset with the specified headers.
+    //
+    async function uploadAsset(headers: { [index: string]: string; }) {
+
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.insertOne = () => {};
+
+        const req = request(app).post("/asset");
+
+        for (const [header, value] of Object.entries(headers)) {
+            req.set(header, value);
+        }
+    
+        return await req
+            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+    }
+    
+    test("upload asset with bad width", async () => {
+
+        const headers = {
+            "file-name": "a-test-file.jpg",
+            "content-type": "image/jpg",
+            "width": "---",
+            "height": "1024",
+            "hash": "1234",
+        };
+
+        const response = await uploadAsset(headers);
+        expect(response.statusCode).toBe(500);
+    });
+
+    test("upload asset with bad height", async () => {
+
+        const headers = {
+            "file-name": "a-test-file.jpg",
+            "content-type": "image/jpg",
+            "width": "256",
+            "height": "---",
+            "hash": "1234",
+        };
+
+        const response = await uploadAsset(headers);
+        expect(response.statusCode).toBe(500);
+    });
+
     test("get existing asset", async () => {
 
         const assetId = new ObjectId();
