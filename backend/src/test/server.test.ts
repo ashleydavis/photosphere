@@ -115,7 +115,7 @@ describe("photosphere backend", () => {
         ]);
     });
 
-    test("get asset", async () => {
+    test("get existing asset", async () => {
 
         const assetId = new ObjectId();
         const { app, mockCollection } = await initServer();
