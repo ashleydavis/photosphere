@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request } from "express";
 import * as fs from "fs-extra";
 import * as path from "path";
 import cors from "cors";
@@ -15,14 +15,39 @@ export function createServer(db: Db) {
     const app = express();
     app.use(cors());
 
+    //
+    // Gets the value of a header from the request.
+    // Throws an error if the header is not present.
+    //
+    function getHeader(req: Request, name: string): string {
+        const value = req.headers[name] as string;
+        if (!value) {
+            throw new Error(`Expected header ${name}`);
+        }
+
+        return value;
+    }
+
+    //
+    // Gets a header that is expected to be an integer value.
+    // Throws an error if the value doesn't parse.
+    //
+    function getIntHeader(req: Request, name: string): number {
+        const value = parseInt(getHeader(req, name));
+        if (Number.isNaN(value)) {
+            throw new Error(`Failed to parse int header ${name}`);
+        }
+        return value;
+    }
+
     app.post("/asset", async (req, res) => {
 
         const assetId = new ObjectId();
-        const fileName = req.headers["file-name"];
-        const contentType = req.headers["content-type"];
-        const width = parseInt(req.headers["width"] as string);
-        const height = parseInt(req.headers["height"] as string);
-        const hash = req.headers["hash"];
+        const fileName = getHeader(req, "file-name");
+        const contentType = getHeader(req, "content-type");
+        const width = getIntHeader(req, "width");
+        const height = getIntHeader(req, "height");
+        const hash = getHeader(req, "hash");
         
         const uploadsDirectory = path.join(__dirname, "../uploads");
         await fs.ensureDir(uploadsDirectory);

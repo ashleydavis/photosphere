@@ -115,6 +115,44 @@ describe("photosphere backend", () => {
         ]);
     });
 
+    //
+    // Uploads an asset with one of the required headers missing.
+    //
+    async function uploadAssetWithMissingHeader(headers: { [index: string]: string; }, missingHeader: string) {
+
+        const { app } = await initServer();
+
+        const req = request(app).post("/asset");
+
+        for (const [header, value] of Object.entries(headers)) {
+            if (header !== missingHeader) {
+                req.set(header, value);
+            }
+        }
+    
+        const response = await req
+            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+    
+        expect(response.statusCode).toBe(500);
+    }
+    
+    test("upload asset with missing headers", async () => {
+
+        const headers = {
+            "file-name": "a-test-file.jpg",
+            "content-type": "image/jpg",
+            "width": "256",
+            "height": "1024",
+            "hash": "1234",
+        };
+
+        await uploadAssetWithMissingHeader(headers, "file-name");
+        await uploadAssetWithMissingHeader(headers, "content-type");
+        await uploadAssetWithMissingHeader(headers, "width");
+        await uploadAssetWithMissingHeader(headers, "height");
+        await uploadAssetWithMissingHeader(headers, "hash");
+    });
+
     test("get existing asset", async () => {
 
         const assetId = new ObjectId();
@@ -207,5 +245,3 @@ describe("photosphere backend", () => {
     });
 
 });
-
-
