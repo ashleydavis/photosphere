@@ -6,7 +6,7 @@
   "scripts": {
     "start": "cross-env BASE_URL=http://localhost:3000 parcel",
     "build": "cross-env BASE_URL=http://localhost:3000 parcel build",
-    "test": "jest",
+    "test": "jest --coverage",
     "test:watch": "jest --watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
