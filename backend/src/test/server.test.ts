@@ -1,6 +1,6 @@
 import { createServer } from "../server";
 import request from "supertest";
-import * as fs from "fs";
+import * as fs from "fs-extra";
 import { ObjectId } from "mongodb";
 
 describe("photosphere backend", () => {
@@ -8,7 +8,13 @@ describe("photosphere backend", () => {
     //
     // Initialises the server for testing.
     //
-    function initServer() {
+    async function initServer() {
+
+        //
+        // Remove local assets from other test runs.
+        //
+        await fs.remove("./uploads");
+
         const mockCollection: any = {
             find() {
                 return {
@@ -34,7 +40,7 @@ describe("photosphere backend", () => {
 
     test("no assets", async () => {
 
-        const { app } = initServer();
+        const { app } = await initServer();
         const response = await request(app).get("/assets");
         
         expect(response.statusCode).toBe(200);
@@ -45,7 +51,7 @@ describe("photosphere backend", () => {
 
     test("upload asset", async () => {
 
-        const { app, mockCollection } = initServer();
+        const { app, mockCollection } = await initServer();
 
         mockCollection.insertOne = jest.fn();
 
