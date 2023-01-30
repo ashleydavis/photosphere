@@ -52,7 +52,7 @@ export function App() {
                     <h1 className="ml-10">Photosphere</h1>
 
                     <button
-                        className="ml-auto mr-3"
+                        className="ml-16 mr-3"
                         onClick={event => {
                             setOpenSearch(true);
                         }}
