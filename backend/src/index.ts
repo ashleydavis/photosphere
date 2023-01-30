@@ -1,14 +1,14 @@
 import { MongoClient } from "mongodb";
 import { createServer } from "./server";
 
-const PORT = process.env.PORT;
-if (!PORT) {
-    throw new Error(`Set environment variable PORT.`);
-}
-
 async function main() {
 
     const dbName = "photosphere";
+
+    const PORT = process.env.PORT;
+    if (!PORT) {
+        throw new Error(`Set environment variable PORT.`);
+    }
 
     const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING;
     if (DB_CONNECTION_STRING === undefined) {
