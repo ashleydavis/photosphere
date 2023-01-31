@@ -27,6 +27,7 @@
     "@types/node": "^20.3.1",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
+    "blob-util": "^2.0.2",
     "buffer": "^6.0.3",
     "canvas": "^2.11.0",
     "concurrently": "^7.2.2",
