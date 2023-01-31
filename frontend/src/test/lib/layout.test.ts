@@ -18,7 +18,7 @@ describe("layout", () => {
             height: 100,
         };
 
-        const gallery = [ item ];
+        const gallery: any[] = [ item ];
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
@@ -32,7 +32,7 @@ describe("layout", () => {
 
     test("can layout a gallery with multiple items", () => {
 
-        const items = [
+        const items: any[] = [
             {
                 thumb: "https://via.placeholder.com/100x200",
                 width: 100,
@@ -64,7 +64,7 @@ describe("layout", () => {
 
     test("items wrap to the next row on overflow", () => {
 
-        const items = [
+        const items: any[] = [
             {
                 thumb: "https://via.placeholder.com/140x100",
                 width: 140,
@@ -99,7 +99,7 @@ describe("layout", () => {
 
     test("items not in the last row are stretched toward the right hand boundary of the gallery", () => {
 
-        const items = [
+        const items: any[] = [
             {
                 thumb: "https://via.placeholder.com/240x200",
                 width: 240,
@@ -144,7 +144,7 @@ describe("layout", () => {
 
     test("items with a different group wrap to the next row", () => {
 
-        const items = [
+        const items: any[] = [
             {
                 thumb: "https://via.placeholder.com/100x200",
                 width: 100,

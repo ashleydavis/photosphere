@@ -10,6 +10,11 @@ export interface IGalleryItem {
     thumb: string;
 
     //
+    // Partial URL for the original full size item.
+    //
+    src: string;
+
+    //
     // The width of the item.
     //
     width: number;

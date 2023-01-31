@@ -274,7 +274,7 @@ export function App() {
                             {selectedItem && 
                                 <div>
                                     <img
-                                        src={api.makeUrl(selectedItem.thumb)}
+                                        src={api.makeUrl(selectedItem.src)}
                                     />
                                 </div>
                             }
