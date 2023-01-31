@@ -1,5 +1,5 @@
 import React from "react";
-import { createLayout } from "./create-layout";
+import { createLayout } from "../lib/create-layout";
 import { IGalleryItem } from "./gallery-item";
 import { useApi } from "../context/api-context";
 

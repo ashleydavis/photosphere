@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-dom";
-import { IGalleryItem } from "./lib/gallery-item";
+import { IGalleryItem } from "./components/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 import { useApi } from "./context/api-context";

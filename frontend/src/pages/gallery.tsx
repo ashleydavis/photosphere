@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Gallery } from "../lib/gallery";
-import { IGalleryItem } from "../lib/gallery-item";
+import { Gallery } from "../components/gallery";
+import { IGalleryItem } from "../components/gallery-item";
 import { useApi } from "../context/api-context";
 
 export interface IGalleryPageProps {

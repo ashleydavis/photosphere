@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useContext } from "react";
-import { IGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem } from "../components/gallery-item";
 import axios from "axios";
 import { IResolution } from "../lib/image";
 
