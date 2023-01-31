@@ -1,6 +1,4 @@
-import React, { RefObject } from "react";
-import { IGalleryItem } from "./gallery-item";
-import { GalleryLayout } from "./gallery-layout";
+import React from "react";
 
 export interface IAssetInfoProps { 
 

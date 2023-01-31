@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-dom";
-import { AssetInfo } from "./components/asset-info";
+import { AssetView } from "./components/asset-view";
 import { IGalleryItem } from "./components/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
@@ -22,11 +22,6 @@ export function App() {
     // Set to true to open the search input.
     //
     const [openSearch, setOpenSearch] = useState<boolean>(false);
-    
-    // 
-    // Set to true to open asset info.
-    //
-    const [openInfo, setOpenInfo] = useState<boolean>(false);
     
     //
     // The currently selected gallery item or undefined when no item is selected.
@@ -188,115 +183,15 @@ export function App() {
                 </div>
             </div>
 
-            <div className={"photo flex flex-col " + (selectedItem ? "open" : "")}>
-                <div className="photo-header">
-                    <div className="flex flex-row items-center pl-3 pt-3 pb-2">
-                        <button
-                            className="p-1 px-3"
-                            onClick={() => {
-                                setSelectedItem(undefined);
-                                setOpenInfo(false);
-                            }}
-                            >
-                            <i className="fa-solid fa-close"></i>
-                        </button>
-
-                        <NavLink
-                            className="ml-auto mr-4"
-                            to="/search"
-                            onClick={event => notImplemented(event)}
-                            >
-                            <div className="flex flex-row items-center">
-                                <i className="w-4 text-center fa-solid fa-share-nodes"></i>
-                                <div className="hidden sm:block ml-2">Share</div>
-                            </div>
-                        </NavLink>
-
-                        <NavLink
-                            className="mr-4"
-                            to="/cloud"
-                        >
-                            <div className="flex flex-row items-center">
-                                <i className="w-4 text-center fa-regular fa-star"></i>
-                                <div className="hidden sm:block ml-2">Favorite</div>
-                            </div>
-                        </NavLink>
-
-                        <button
-                            data-testid="open-info-button"
-                            className="mr-4"
-                            onClick={event => {
-                                setOpenInfo(true);
-                            }}
-                        >
-                            <div className="flex flex-row items-center">
-                                <i className="w-4 text-center fa-solid fa-circle-info"></i>
-                                <div className="hidden sm:block ml-2">Info</div>
-                            </div>
-                        </button>
-
-                        <NavLink
-                            className="mr-4"
-                            to="/trash"
-                            onClick={event => notImplemented(event)}
-                        >
-                            <div className="flex flex-row items-center">
-                                <i className="w-3 text-center fa-regular fa-trash-can"></i>
-                                <div className="hidden sm:block ml-2">Trash</div>
-                            </div>
-                        </NavLink>
-
-                        <NavLink
-                            className="mr-3"
-                            to="/menu"
-                            onClick={event => notImplemented(event)}
-                        >
-                            <div className="flex flex-row items-center">
-                                <i className="w-2 text-center fa-solid fa-ellipsis-vertical"></i>
-                                <div className="hidden sm:block ml-2">More</div>
-                            </div>
-                        </NavLink>
-                    </div>
-                </div>
-
-                <div className="photo-content flex-grow flex flex-col justify-center">
-                    <div className="flex flex-grow portrait:flex-row landscape:flex-row">
-                        <div className="flex flex-col justify-center">
-                            <button
-                                className="p-1 px-3"
-                                onClick={event => notImplemented(event)}
-                                >
-                                <i className="fa-solid fa-arrow-left"></i>
-                            </button>
-                        </div>
-                        <div className="flex-grow flex portrait:flex-col landscape:flex-row justify-center">
-                            {selectedItem && 
-                                <div>
-                                    <img
-                                        data-testid="fullsize-asset"
-                                        src={api.makeUrl(selectedItem.src)}
-                                    />
-                                </div>
-                            }
-                        </div>
-                        <div className="flex flex-col justify-center">
-                            <button
-                                className="p-1 px-3"
-                                onClick={event => notImplemented(event)}
-                                >
-                                <i className="fa-solid fa-arrow-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <AssetInfo 
-                open={openInfo}
-                onClose={() => {
-                	setOpenInfo(false);
-                }}
-                />
+            {selectedItem &&
+	            <AssetView
+	                open={!!selectedItem}
+	                item={selectedItem}
+	                onClose={() => {
+	                	setSelectedItem(undefined);
+	                }}
+	                />
+            }
 
         </BrowserRouter>
     );
