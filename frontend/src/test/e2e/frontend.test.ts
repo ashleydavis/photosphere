@@ -62,6 +62,19 @@ describe("frontend tests", () => {
         await galleryThumb.click();
         await expect(fullsizeItem).toHaveCount(1);
         await expect(fullsizeItem).toBeVisible();
+
+        //TODO:
+        // const photoInfoHeader = page.getByTestId("info-header");
+        // await expect(photoInfoHeader).toHaveCount(0);
+
+        // //
+        // // Open photo info.
+        // //
+        // const openInfoButton = page.getByTestId("open-info-button");
+        // await openInfoButton.click();
+
+        // await expect(photoInfoHeader).toHaveCount(1);
+        // await expect(photoInfoHeader).toBeVisible();
     });
 
 });

@@ -221,20 +221,18 @@ export function App() {
                             </div>
                         </NavLink>
 
-                        <NavLink
+                        <button
+                            data-testid="open-info-button"
                             className="mr-4"
-                            to="/local"
                             onClick={event => {
                                 setOpenInfo(true);
-                                event.preventDefault();
-                                event.stopPropagation();
                             }}
                         >
                             <div className="flex flex-row items-center">
                                 <i className="w-4 text-center fa-solid fa-circle-info"></i>
                                 <div className="hidden sm:block ml-2">Info</div>
                             </div>
-                        </NavLink>
+                        </button>
 
                         <NavLink
                             className="mr-4"
