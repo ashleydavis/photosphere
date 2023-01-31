@@ -274,6 +274,7 @@ export function App() {
                             {selectedItem && 
                                 <div>
                                     <img
+                                        data-testid="fullsize-asset"
                                         src={api.makeUrl(selectedItem.src)}
                                     />
                                 </div>

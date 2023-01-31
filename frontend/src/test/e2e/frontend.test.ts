@@ -48,12 +48,20 @@ describe("frontend tests", () => {
         // Check that the uploaded assets appears in the gallery.
         //
         await page.goto(`${FRONTEND_URL}/cloud`);
-
-        // await sleep(5000); //fio:
             
         const galleryThumb = page.getByTestId("gallery-thumb");
         await expect(galleryThumb).toHaveCount(1);
         await expect(galleryThumb).toBeVisible();
+
+        const fullsizeItem = page.getByTestId("fullsize-asset");
+        await expect(fullsizeItem).toHaveCount(0);
+
+        //
+        // Open fullscreen photo modal.
+        //
+        await galleryThumb.click();
+        await expect(fullsizeItem).toHaveCount(1);
+        await expect(fullsizeItem).toBeVisible();
     });
 
 });
