@@ -40,6 +40,18 @@ export function createServer(db: Db) {
         return value;
     }
 
+    //
+    // Gets a query param as a number.
+    // Throws an error if the value doesn't parse.
+    //
+    function getIntQueryParam(req: Request, name: string): number {
+        const value = parseInt((req.query as any)[name]);
+        if (Number.isNaN(value)) {
+            throw new Error(`Failed to parse int query param ${name}`);
+        }
+        return value;
+    }
+
     app.post("/asset", async (req, res) => {
 
         const assetId = new ObjectId();
@@ -109,7 +121,13 @@ export function createServer(db: Db) {
 
     app.get("/assets", async (req, res) => {
 
-        const assets = await assetCollections.find({}).toArray();
+        const skip = getIntQueryParam(req, "skip");
+        const limit = getIntQueryParam(req, "limit");
+
+        const assets = await assetCollections.find({})
+            .skip(skip)
+            .limit(limit)
+            .toArray();
         res.json({
             assets: assets,
         });

@@ -58,4 +58,4 @@ GET {{base_url}}/check-asset?hash={{hash}}
 # Retrieve all assets.
 #
 
-GET {{base_url}}/assets
+GET {{base_url}}/assets?skip=0&limit=4
