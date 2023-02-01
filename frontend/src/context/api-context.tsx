@@ -20,7 +20,7 @@ export interface IApiContext {
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(): Promise<IGalleryItem[]>;
+    getAssets(skip: number, limit: number): Promise<IGalleryItem[]>;
 
     //
     // Uploads an asset to the backend.
@@ -46,8 +46,8 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(): Promise<IGalleryItem[]> {
-        const response = await axios.get(`${BASE_URL}/assets`);
+    async function getAssets(skip: number, limit: number): Promise<IGalleryItem[]> {
+        const response = await axios.get(`${BASE_URL}/assets?skip=${skip}&limit=${limit}`);
         return response.data.assets;
     }
 
