@@ -33,18 +33,6 @@ export async function createServer(db: Db) {
     }
 
     //
-    // Gets a header that is expected to be an integer value.
-    // Throws an error if the value doesn't parse.
-    //
-    function getIntHeader(req: Request, name: string): number {
-        const value = parseInt(getHeader(req, name));
-        if (Number.isNaN(value)) {
-            throw new Error(`Failed to parse int header ${name}`);
-        }
-        return value;
-    }
-
-    //
     // Gets a query param as a number.
     // Throws an error if the value doesn't parse.
     //
