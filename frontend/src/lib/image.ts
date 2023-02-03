@@ -1,3 +1,5 @@
+import EXIF from 'exif-js';
+
 //
 // Loads a file to a data URL (base64 encoded data).
 //
@@ -87,5 +89,19 @@ export function resizeImage(imageData: string, maxSize: number): Promise<string>
             resolve(oc.toDataURL());
         };
         img.src = imageData;
+    });
+}
+
+//
+// Retreives exif data from the file.
+//
+// https://github.com/exif-js/exif-js
+//
+export function getExifData(file: File | Blob): Promise<any> {
+    return new Promise((resolve, reject) => {
+        EXIF.getData(file as any, function () { // ! Don't change this to an arrow function. It might break the way this works.
+            // @ts-ignore. This next line is necessary, but it causes a TypeScript error.
+            resolve(EXIF.getAllTags(this));
+        });
     });
 }
