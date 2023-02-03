@@ -10,6 +10,31 @@ if (!BASE_URL) {
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 
+//
+// Details of an asset to be uploaded.
+//
+export interface IUploadDetails {
+    //
+    // The original file to upload.
+    //
+    file: File;
+    
+    //
+    // The resolution of the asset.
+    //
+    resolution: IResolution;
+    
+    //
+    // Base64 encoded thumbnail for the asset.
+    //
+    thumbnail: string;
+    
+    // 
+    // The content type of the thumbnail.
+    //
+    thumbContentType: string;
+}
+
 export interface IApiContext {
 
     //
@@ -25,7 +50,7 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadAsset(file: File, imageResolution: IResolution): Promise<void>;
+    uploadAsset(asset: IUploadDetails): Promise<void>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -54,19 +79,23 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadAsset(file: File, imageResolution: IResolution): Promise<void> {
-        await axios.post(`${BASE_URL}/asset`, file, {
+    async function uploadAsset(asset: IUploadDetails): Promise<void> {
+        await axios.post(`${BASE_URL}/asset`, asset.file, {
             headers: {
-                "file-name": file.name,
-                "content-type": file.type,
-                "width": imageResolution.width,
-                "height": imageResolution.height,
-
-                //
-                // Hash added to satisfy backend requirements.
-                // Will compute a proper hash from the file data in the future.
-                //
-                "hash": "1234", 
+                "content-type": asset.file.type,
+                "metadata": JSON.stringify({
+                    "fileName": asset.file.name,
+                    "contentType": asset.file.type,
+                    "thumbContentType": asset.thumbContentType,
+                    "width": asset.resolution.width,
+                    "height": asset.resolution.height,
+                    //
+                    // Hash added to satisfy backend requirements.
+                    // Will compute a proper hash from the file data in the future.
+                    //
+                    "hash": "1234", 
+                }),
+                "thumbnail": asset.thumbnail,
             },
         });
     }

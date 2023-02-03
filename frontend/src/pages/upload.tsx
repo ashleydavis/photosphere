@@ -1,6 +1,6 @@
 import React, { useState, DragEvent } from "react";
-import { loadFile, getImageResolution } from "../lib/image";
-import { useApi } from "../context/api-context";
+import { loadFile, getImageResolution, resizeImage } from "../lib/image";
+import { IUploadDetails, useApi } from "../context/api-context";
 
 export function UploadPage() {
 
@@ -18,7 +18,18 @@ export function UploadPage() {
         for (const file of files) {
             const imageData = await loadFile(file);
             const imageResolution = await getImageResolution(imageData);
-            await api.uploadAsset(file, imageResolution);
+            const thumbnailDataUrl = await resizeImage(imageData, 20); //TODO: 78 is the max size for a header
+            const thumContentTypeStart = 5;
+            const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
+            const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
+            const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+            const uploadDetails: IUploadDetails = {
+                file: file,
+                resolution: imageResolution,
+                thumbnail: thumbnailData,
+                thumbContentType: thumbContentType,
+            };
+            await api.uploadAsset(uploadDetails);
         }
     };
 
