@@ -115,8 +115,6 @@ describe("photosphere backend", () => {
             origFileName: metadata.fileName,
             contentType: metadata.contentType,
             thumbContentType: metadata.thumbContentType,
-            src: `/asset?id=${assetId}`,
-            thumb: `/asset?id=${assetId}`,
             width: metadata.width,
             height: metadata.height,
             hash: metadata.hash,

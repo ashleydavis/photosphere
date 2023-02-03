@@ -93,8 +93,8 @@ export function GalleryLayout({
                                             onItemClick(item);
                                         }
                                     }}
-                                    key={item.thumb}
-                                    src={api.makeUrl(item.thumb)}
+                                    key={item._id}
+                                    src={api.makeUrl(`/thumb?id=${item._id}`)}
                                     />
                             );
                         })}

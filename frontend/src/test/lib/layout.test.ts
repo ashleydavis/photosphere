@@ -13,7 +13,7 @@ describe("layout", () => {
     test("can layout a gallery with a single item", () => {
 
         const item = {
-            thumb: "https://via.placeholder.com/140x100",
+            _id: 1,
             width: 140,
             height: 100,
         };
@@ -27,24 +27,24 @@ describe("layout", () => {
 
         const row = rows[0];
         expect(row.items.length).toBe(1);
-        expect(row.items[0].thumb).toBe(item.thumb);
+        expect(row.items[0]._id).toBe(1);
     });
 
     test("can layout a gallery with multiple items", () => {
 
         const items: any[] = [
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 1,
                 width: 100,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 2,
                 width: 100,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 3,
                 width: 100,
                 height: 200,
             },
@@ -57,26 +57,26 @@ describe("layout", () => {
 
         const row = rows[0];
         expect(row.items.length).toBe(3);
-        expect(row.items[0].thumb).toBe(items[0].thumb);
-        expect(row.items[1].thumb).toBe(items[1].thumb);
-        expect(row.items[2].thumb).toBe(items[2].thumb);
+        expect(row.items[0]._id).toBe(1);
+        expect(row.items[1]._id).toBe(2);
+        expect(row.items[2]._id).toBe(3);
     });
 
     test("items wrap to the next row on overflow", () => {
 
         const items: any[] = [
             {
-                thumb: "https://via.placeholder.com/140x100",
+                _id: 1,
                 width: 140,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/100x140",
+                _id: 2,
                 width: 100,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/400x50",
+                _id: 3,
                 width: 400,
                 height: 200,
             },
@@ -89,29 +89,26 @@ describe("layout", () => {
 
         const firstRow = rows[0];
         expect(firstRow.items.length).toBe(2);
-        expect(firstRow.items[0].thumb).toBe(items[0].thumb);
-        expect(firstRow.items[1].thumb).toBe(items[1].thumb);
+        expect(firstRow.items[0]._id).toBe(1);
+        expect(firstRow.items[1]._id).toBe(2);
 
         const secondRow = rows[1];
         expect(secondRow.items.length).toBe(1);
-        expect(secondRow.items[0].thumb).toBe(items[2].thumb);
+        expect(secondRow.items[0]._id).toBe(3);
     });    
 
     test("items not in the last row are stretched toward the right hand boundary of the gallery", () => {
 
         const items: any[] = [
             {
-                thumb: "https://via.placeholder.com/240x200",
                 width: 240,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/220x200",
                 width: 220,
                 height: 200,
             },
             {
-                thumb: "https://via.placeholder.com/230x200",
                 width: 230,
                 height: 200,
             },
@@ -146,19 +143,19 @@ describe("layout", () => {
 
         const items: any[] = [
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 1,
                 width: 100,
                 height: 200,
                 group: "a",
             },
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 2,
                 width: 100,
                 height: 200,
                 group: "b",
             },
             {
-                thumb: "https://via.placeholder.com/100x200",
+                _id: 3,
                 width: 100,
                 height: 200,
                 group: "b",
@@ -171,10 +168,10 @@ describe("layout", () => {
         
         expect(rows.length).toBe(2);
         expect(rows[0].items.length).toBe(1);
-        expect(rows[0].items[0].thumb).toBe(items[0].thumb);
+        expect(rows[0].items[0]._id).toBe(1);
         expect(rows[1].items.length).toBe(2);
-        expect(rows[1].items[0].thumb).toBe(items[1].thumb);
-        expect(rows[1].items[1].thumb).toBe(items[2].thumb);
+        expect(rows[1].items[0]._id).toBe(2);
+        expect(rows[1].items[1]._id).toBe(3);
     });
 
 });

@@ -5,14 +5,9 @@
 export interface IGalleryItem {
 
     //
-    // Partial URL of the thumbnail for the item.
+    // The ID of the asset.
     //
-    thumb: string;
-
-    //
-    // Partial URL for the original full size item.
-    //
-    src: string;
+    _id: string;
 
     //
     // The width of the item.

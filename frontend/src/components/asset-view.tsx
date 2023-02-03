@@ -131,7 +131,7 @@ export function AssetView({ open, item, onClose }: IAssetViewProps) {
                             <div>
                                 <img
                                     data-testid="fullsize-asset"
-                                    src={api.makeUrl(item.src)}
+                                    src={api.makeUrl(`/asset?id=${item._id}`)}
                                 />
                             </div>
                         }

@@ -11,16 +11,6 @@ export interface IAsset {
     _id: ObjectId;
 
     //
-    // Partial URL to the asset.
-    //
-    src: string;
-
-    //
-    // Partial URL to the thumbnail for the asset.
-    //
-    thumb: string;
-
-    //
     // The original name of the asset before it was uploaded.
     //
     origFileName: string;

@@ -80,8 +80,6 @@ export async function createServer(db: Db) {
             origFileName: fileName,
             contentType: contentType,
             thumbContentType: thumbContentType,
-            src: `/asset?id=${assetId}`,
-            thumb: `/asset?id=${assetId}`,
             width: width,
             height: height,
             hash: hash,
