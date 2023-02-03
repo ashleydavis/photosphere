@@ -8,7 +8,7 @@
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234" }
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "location": "Somewhere1", "properties": { "a": "property" } }
 
 < ./test-assets/1.jpeg
 
@@ -16,7 +16,7 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "wi
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678" }
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678", "location": "Somewhere2", "properties": { "a": "property" }  }
 
 < ./test-assets/2.jpeg
 
@@ -24,7 +24,7 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "wi
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD" }
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD", "location": "Somewhere3", "properties": { "a": "property" }  }
 
 < ./test-assets/3.jpeg
 

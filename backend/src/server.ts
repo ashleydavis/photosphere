@@ -81,7 +81,7 @@ export function createServer(db: Db) {
 
         await streamToStorage(localFileName, req);
 
-        await assetCollections.insertOne({
+        const newAsset: IAsset = {
             _id: assetId,
             origFileName: fileName,
             contentType: contentType,
@@ -90,7 +90,17 @@ export function createServer(db: Db) {
             width: width,
             height: height,
             hash: hash,
-        });
+        };
+
+        if (metadata.location) {
+            newAsset.location = metadata.location; 
+        }
+
+        if (metadata.properties) {
+            newAsset.properties = metadata.properties;
+        }
+
+        await assetCollections.insertOne(newAsset);
 
         res.json({
             assetId: assetId,

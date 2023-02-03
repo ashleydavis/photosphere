@@ -90,6 +90,10 @@ describe("photosphere backend", () => {
             width: 256,
             height: 1024,
             hash: "1234",
+            location: "Somewhere",
+            properties: {
+                "a": "property",
+            },
         };
 
         const response = await request(app)
@@ -113,6 +117,8 @@ describe("photosphere backend", () => {
             width: metadata.width,
             height: metadata.height,
             hash: metadata.hash,
+            location: metadata.location,
+            properties: metadata.properties,
         });
 
         const uploadedFiles = await getUploads();

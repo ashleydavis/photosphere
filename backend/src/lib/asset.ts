@@ -44,4 +44,14 @@ export interface IAsset {
     // Hash of the asset.
     //
     hash: string;
+
+    //
+    // Optional reverse geocoded location for the asset.
+    //
+    location?: string;
+
+    //
+    // Optional extra properties for the asset, like exif data.
+    //
+    properties?: any;
 }
