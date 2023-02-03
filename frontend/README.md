@@ -89,3 +89,7 @@ Or on Windows:
 ```bash
 set PWDEBUG=1
 ```
+
+## Environment variables
+
+- `GOOGLE_API_KEY` - Set to a valid Google API key to enable reverse geocoding of photo location in the browser.
