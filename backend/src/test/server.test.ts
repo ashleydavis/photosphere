@@ -20,9 +20,17 @@ describe("photosphere backend", () => {
         const mockCollection: any = {
             find() {
                 return {
-                    toArray() {
-                        return [];
-                    },
+                    skip() {
+                        return {
+                            limit() {
+                                return {
+                                    toArray() {
+                                        return [];
+                                    }
+                                };
+                            }
+                        };
+                    }
                 };
             },
         };
@@ -56,7 +64,7 @@ describe("photosphere backend", () => {
     test("no assets", async () => {
 
         const { app } = await initServer();
-        const response = await request(app).get("/assets");
+        const response = await request(app).get("/assets?skip=0&limit=100");
         
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({ 
@@ -116,19 +124,17 @@ describe("photosphere backend", () => {
     //
     // Uploads an asset with one of the required headers missing.
     //
-    async function uploadAssetWithMissingHeader(headers: { [index: string]: string; }, missingHeader: string) {
+    async function uploadAssetWithMissingMetadata(metadata: any, missingField: string) {
 
         const { app } = await initServer();
 
         const req = request(app).post("/asset");
 
-        for (const [header, value] of Object.entries(headers)) {
-            if (header !== missingHeader) {
-                req.set(header, value);
-            }
-        }
-    
+        const augumented = Object.assign({}, metadata);
+        delete augumented[missingField];
+
         const response = await req
+            .set("metadata", JSON.stringify(metadata))
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
     
         expect(response.statusCode).toBe(500);
@@ -136,19 +142,19 @@ describe("photosphere backend", () => {
     
     test("upload asset with missing headers", async () => {
 
-        const headers = {
-            "file-name": "a-test-file.jpg",
-            "content-type": "image/jpg",
-            "width": "256",
-            "height": "1024",
+        const metadata = {
+            "fileName": "a-test-file.jpg",
+            "contentType": "image/jpg",
+            "width": 256,
+            "height": 1024,
             "hash": "1234",
         };
 
-        await uploadAssetWithMissingHeader(headers, "file-name");
-        await uploadAssetWithMissingHeader(headers, "content-type");
-        await uploadAssetWithMissingHeader(headers, "width");
-        await uploadAssetWithMissingHeader(headers, "height");
-        await uploadAssetWithMissingHeader(headers, "hash");
+        await uploadAssetWithMissingMetadata(metadata, "fileName");
+        await uploadAssetWithMissingMetadata(metadata, "contentType");
+        await uploadAssetWithMissingMetadata(metadata, "width");
+        await uploadAssetWithMissingMetadata(metadata, "height");
+        await uploadAssetWithMissingMetadata(metadata, "hash");
     });
 
     //
@@ -282,7 +288,9 @@ describe("photosphere backend", () => {
 
     test("get assets", async () => {
 
-        const assetId = new ObjectId();
+        const skip = 2;
+        const limit = 3;
+
         const { app, mockCollection } = await initServer();
 
         const mockAsset1: any = {
@@ -291,15 +299,28 @@ describe("photosphere backend", () => {
         const mockAsset2: any = {
             contentType: "image/png",
         };
+
         mockCollection.find = () => {
             return {
-                toArray() {
-                    return [ mockAsset1, mockAsset2 ];
-                },
+                skip(value: number) {
+                    expect(value).toBe(skip);
+
+                    return {
+                        limit(value: number) {
+                            expect(value).toBe(limit);
+
+                            return {
+                                toArray() {
+                                    return [ mockAsset1, mockAsset2 ];
+                                },
+                            };
+                        }
+                    };
+                }
             };
         };
 
-        const response = await request(app).get(`/assets`);
+        const response = await request(app).get(`/assets?skip=${skip}&limit=${limit}`);
         
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({
