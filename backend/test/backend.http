@@ -8,7 +8,8 @@
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "location": "Somewhere1", "properties": { "a": "property" } }
+metadata: { "contentType": "image/jpeg", "thumbContentType": "image/png", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "location": "Somewhere1", "properties": { "a": "property" } }
+thumbnail: iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC
 
 < ./test-assets/1.jpeg
 
@@ -16,7 +17,8 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "wi
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678", "location": "Somewhere2", "properties": { "a": "property" }  }
+metadata: { "contentType": "image/jpeg", "thumbContentType": "image/png", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678", "location": "Somewhere2", "properties": { "a": "property" }  }
+thumbnail: iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC
 
 < ./test-assets/2.jpeg
 
@@ -24,7 +26,8 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "wi
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD", "location": "Somewhere3", "properties": { "a": "property" }  }
+metadata: { "contentType": "image/jpeg", "thumbContentType": "image/png", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD", "location": "Somewhere3", "properties": { "a": "property" }  }
+thumbnail: iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC
 
 < ./test-assets/3.jpeg
 
@@ -37,6 +40,13 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "wi
 #
 
 GET {{base_url}}/asset?id={{upload_asset_id}}
+
+###
+# Retrieve an thumbnail.
+#
+
+GET {{base_url}}/thumb?id={{upload_asset_id}}
+
 
 ###
 # Check if an asset with a particular hash has been uploaded.

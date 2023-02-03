@@ -19,7 +19,7 @@ async function main() {
     await client.connect();
 
     const db = client.db(dbName);
-    const app = createServer(db);
+    const app = await createServer(db);
 
     app.listen(PORT, () => {
         console.log(`Example app listening on port ${PORT}`);

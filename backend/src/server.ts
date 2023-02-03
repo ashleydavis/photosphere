@@ -9,7 +9,11 @@ import { ObjectId, Db } from "mongodb";
 //
 // Starts the REST API.
 //
-export function createServer(db: Db) {
+export async function createServer(db: Db) {
+
+    await fs.ensureDir("uploads");
+    await fs.ensureDir("thumbs");
+
     const assetCollections = db.collection<IAsset>("assets");
 
     const app = express();
@@ -71,20 +75,23 @@ export function createServer(db: Db) {
         const metadata = JSON.parse(getHeader(req, "metadata"));
         const fileName = getValue<string>(metadata, "fileName");
         const contentType = getValue<string>(metadata, "contentType");
+        const thumbContentType = getValue<string>(metadata, "thumbContentType");
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
         const hash = getValue<string>(metadata, "hash");
+        const thumbnail = getHeader(req, "thumbnail");
         
-        const uploadsDirectory = path.join(__dirname, "../uploads");
-        await fs.ensureDir(uploadsDirectory);
-        const localFileName = path.join(uploadsDirectory, assetId.toString());
-
+        const localFileName = path.join("uploads", assetId.toString());
         await streamToStorage(localFileName, req);
+
+        const thumbFileName = path.join("thumbs", assetId.toString());
+        await fs.writeFile(thumbFileName, thumbnail, "base64");
 
         const newAsset: IAsset = {
             _id: assetId,
             origFileName: fileName,
             contentType: contentType,
+            thumbContentType: thumbContentType,
             src: `/asset?id=${assetId}`,
             thumb: `/asset?id=${assetId}`,
             width: width,
@@ -113,7 +120,8 @@ export function createServer(db: Db) {
         if (!assetId) {
             throw new Error(`Asset ID not specified in query parameters.`);
         }
-        const localFileName = path.join(__dirname, "../uploads", assetId);
+
+        const localFileName = path.join("uploads", assetId);
         const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
             res.sendStatus(404);
@@ -122,6 +130,28 @@ export function createServer(db: Db) {
 
         res.writeHead(200, {
             "Content-Type": asset.contentType,
+        });
+
+        const fileReadStream = fs.createReadStream(localFileName);
+        fileReadStream.pipe(res);
+    });
+
+    app.get("/thumb", async (req, res) => {
+
+        const assetId = req.query.id as string;
+        if (!assetId) {
+            throw new Error(`Asset ID not specified in query parameters.`);
+        }
+
+        const localFileName = path.join("thumbs", assetId);
+        const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        if (!asset) {
+            res.sendStatus(404);
+            return;
+        }
+
+        res.writeHead(200, {
+            "Content-Type": asset.thumbContentType,
         });
 
         const fileReadStream = fs.createReadStream(localFileName);

@@ -40,7 +40,7 @@ describe("photosphere backend", () => {
             },
         };
 
-        const app = createServer(mockDb);
+        const app = await createServer(mockDb);
         return { 
             app, 
             mockCollection, 
@@ -86,7 +86,8 @@ describe("photosphere backend", () => {
 
         const metadata = {
             fileName: "a-test-file.jpg",
-            contentType: "image/jpg",
+            contentType: "image/jpeg",
+            thumbContentType: "image/png",
             width: 256,
             height: 1024,
             hash: "1234",
@@ -99,6 +100,7 @@ describe("photosphere backend", () => {
         const response = await request(app)
             .post("/asset")
             .set("metadata", JSON.stringify(metadata))
+            .set("thumbnail", "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC")
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
 
         const assetId = response.body.assetId;
@@ -112,6 +114,7 @@ describe("photosphere backend", () => {
             _id: new ObjectId(assetId),
             origFileName: metadata.fileName,
             contentType: metadata.contentType,
+            thumbContentType: metadata.thumbContentType,
             src: `/asset?id=${assetId}`,
             thumb: `/asset?id=${assetId}`,
             width: metadata.width,
@@ -141,6 +144,7 @@ describe("photosphere backend", () => {
 
         const response = await req
             .set("metadata", JSON.stringify(metadata))
+            .set("thumbnail", "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC")
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
     
         expect(response.statusCode).toBe(500);
@@ -150,7 +154,8 @@ describe("photosphere backend", () => {
 
         const metadata = {
             "fileName": "a-test-file.jpg",
-            "contentType": "image/jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/png",
             "width": 256,
             "height": 1024,
             "hash": "1234",
@@ -158,6 +163,7 @@ describe("photosphere backend", () => {
 
         await uploadAssetWithMissingMetadata(metadata, "fileName");
         await uploadAssetWithMissingMetadata(metadata, "contentType");
+        await uploadAssetWithMissingMetadata(metadata, "thumbContentType");
         await uploadAssetWithMissingMetadata(metadata, "width");
         await uploadAssetWithMissingMetadata(metadata, "height");
         await uploadAssetWithMissingMetadata(metadata, "hash");
