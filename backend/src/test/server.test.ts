@@ -76,19 +76,17 @@ describe("photosphere backend", () => {
 
         mockCollection.insertOne = jest.fn();
 
-        const fileName = "a-test-file.jpg";
-        const contentType = "image/jpg";
-        const width = 256;
-        const height = 1024;
-        const hash = "1234";
+        const metadata = {
+            fileName: "a-test-file.jpg",
+            contentType: "image/jpg",
+            width: 256,
+            height: 1024,
+            hash: "1234",
+        };
 
         const response = await request(app)
             .post("/asset")
-            .set("file-name", fileName)
-            .set("content-type", contentType)
-            .set("width", width.toString())
-            .set("height", height.toString())
-            .set("hash", hash)
+            .set("metadata", JSON.stringify(metadata))
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
 
         const assetId = response.body.assetId;
@@ -100,13 +98,13 @@ describe("photosphere backend", () => {
         expect(mockCollection.insertOne).toHaveBeenCalledTimes(1);
         expect(mockCollection.insertOne).toHaveBeenCalledWith({
             _id: new ObjectId(assetId),
-            origFileName: fileName,
-            contentType: contentType,
+            origFileName: metadata.fileName,
+            contentType: metadata.contentType,
             src: `/asset?id=${assetId}`,
             thumb: `/asset?id=${assetId}`,
-            width: width,
-            height: height,
-            hash: hash,
+            width: metadata.width,
+            height: metadata.height,
+            hash: metadata.hash,
         });
 
         const uploadedFiles = await getUploads();

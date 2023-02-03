@@ -52,14 +52,28 @@ export function createServer(db: Db) {
         return value;
     }
 
+    //
+    // Gets the value of a field from an object.
+    // Throws an error if the field is not present.
+    //
+    function getValue<T>(obj: any, name: string): T {
+        const value = obj[name] as T;
+        if (value === undefined) {
+            throw new Error(`Expected field ${name}`);
+        }
+
+        return value;
+    }
+
     app.post("/asset", async (req, res) => {
 
         const assetId = new ObjectId();
-        const fileName = getHeader(req, "file-name");
-        const contentType = getHeader(req, "content-type");
-        const width = getIntHeader(req, "width");
-        const height = getIntHeader(req, "height");
-        const hash = getHeader(req, "hash");
+        const metadata = JSON.parse(getHeader(req, "metadata"));
+        const fileName = getValue<string>(metadata, "fileName");
+        const contentType = getValue<string>(metadata, "contentType");
+        const width = getValue<number>(metadata, "width");
+        const height = getValue<number>(metadata, "height");
+        const hash = getValue<string>(metadata, "hash");
         
         const uploadsDirectory = path.join(__dirname, "../uploads");
         await fs.ensureDir(uploadsDirectory);

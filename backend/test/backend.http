@@ -8,10 +8,7 @@
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-File-Name: ./test-assets/1.jpeg
-Width: 4160
-Height: 6240
-Hash: 1234
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234" }
 
 < ./test-assets/1.jpeg
 
@@ -19,10 +16,7 @@ Hash: 1234
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-File-Name: ./test-assets/2.jpeg
-Width: 6336
-Height: 9504
-Hash: 5678
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678" }
 
 < ./test-assets/2.jpeg
 
@@ -30,10 +24,7 @@ Hash: 5678
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-File-Name: ./test-assets/3.jpeg
-Width: 3361
-Height: 5041
-Hash: ABCD
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD" }
 
 < ./test-assets/3.jpeg
 
