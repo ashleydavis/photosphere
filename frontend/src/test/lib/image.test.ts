@@ -2,7 +2,7 @@
  * @jest-environment-options { "resources": "usable" }
  */
 
-import { getImageResolution, loadFile, loadImage } from "../../lib/image";
+import { getImageResolution, loadFile, loadImage, resizeImage } from "../../lib/image";
 import { base64StringToBlob } from 'blob-util';
 
 describe("image", () => {
@@ -31,6 +31,16 @@ describe("image", () => {
         const blob = base64StringToBlob(base64Data, contentType);
         const loadedFile = await loadFile(blob);
         expect(loadedFile).toEqual(testImg);
+    });
+
+    test("can resize image", async () => {
+
+        const resizedImage = await resizeImage(testImg, 12);
+        const resolution = await getImageResolution(resizedImage);
+        expect(resolution).toEqual({
+            width: 12,
+            height: 12,
+        });
     });
 
 });
