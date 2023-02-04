@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useContext } from "react";
 import { IGalleryItem } from "../components/gallery-item";
 import axios from "axios";
 import { IResolution } from "../lib/image";
+import { base64StringToBlob } from 'blob-util';
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -80,13 +81,15 @@ export function ApiContextProvider({ children }: IProps) {
     // Uploads an asset to the backend.
     //
     async function uploadAsset(asset: IUploadDetails): Promise<void> {
-        await axios.post(`${BASE_URL}/asset`, asset.file, {
+        //
+        // Uploads the full asset and metadata.
+        //
+        const { data } = await axios.post(`${BASE_URL}/asset`, asset.file, {
             headers: {
                 "content-type": asset.file.type,
                 "metadata": JSON.stringify({
                     "fileName": asset.file.name,
                     "contentType": asset.file.type,
-                    "thumbContentType": asset.thumbContentType,
                     "width": asset.resolution.width,
                     "height": asset.resolution.height,
                     //
@@ -95,7 +98,19 @@ export function ApiContextProvider({ children }: IProps) {
                     //
                     "hash": "1234", 
                 }),
-                "thumbnail": asset.thumbnail,
+            },
+        });
+
+        const { assetId } = data;
+
+        //
+        // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
+        //
+        const thumnailBlob = base64StringToBlob(asset.thumbnail, asset.thumbContentType);
+        await axios.post(`${BASE_URL}/thumb`, thumnailBlob, {
+            headers: {
+                "content-type": asset.thumbContentType,
+                "id": assetId,
             },
         });
     }

@@ -27,8 +27,7 @@
     "@types/node": "^20.3.1",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
-    "@types/react-infinite-scroller": "^1.2.3",
-    "blob-util": "^2.0.2",
+    "@types/react-infinite-scroller": "^1.2.3",    
     "buffer": "^6.0.3",
     "canvas": "^2.11.0",
     "concurrently": "^7.2.2",
@@ -47,6 +46,7 @@
   "dependencies": {
     "@react-hook/resize-observer": "^1.2.6",
     "axios": "^0.27.2",
+    "blob-util": "^2.0.2",
     "exif-js": "^2.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

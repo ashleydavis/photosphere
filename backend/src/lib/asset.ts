@@ -21,9 +21,9 @@ export interface IAsset {
     contentType: string;
 
     //
-    // The mime type of the thumbnail.
+    // The mime type of the thumbnail (after one has been set).
     //
-    thumbContentType: string;
+    thumbContentType?: string;
 
     //
     // Width of the image or video.

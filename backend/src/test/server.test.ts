@@ -15,7 +15,9 @@ describe("photosphere backend", () => {
         // Remove local assets from other test runs.
         //
         await fs.remove("./uploads");
+        await fs.remove("./thumbs");
         await fs.ensureDir("./uploads");
+        await fs.ensureDir("./thumbs");
 
         const mockCollection: any = {
             find() {
@@ -61,6 +63,19 @@ describe("photosphere backend", () => {
         }
     }
 
+    //
+    // Get list of thumbnails uploaded.
+    //
+    async function getThumbnails() {
+        const exists = await fs.exists("./thumbs");
+        if (exists) {
+            return await fs.readdir("./thumbs");
+        }
+        else {
+            return [];
+        }
+    }
+
     test("no assets", async () => {
 
         const { app } = await initServer();
@@ -87,7 +102,6 @@ describe("photosphere backend", () => {
         const metadata = {
             fileName: "a-test-file.jpg",
             contentType: "image/jpeg",
-            thumbContentType: "image/png",
             width: 256,
             height: 1024,
             hash: "1234",
@@ -100,7 +114,6 @@ describe("photosphere backend", () => {
         const response = await request(app)
             .post("/asset")
             .set("metadata", JSON.stringify(metadata))
-            .set("thumbnail", "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC")
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
 
         const assetId = response.body.assetId;
@@ -114,7 +127,6 @@ describe("photosphere backend", () => {
             _id: new ObjectId(assetId),
             origFileName: metadata.fileName,
             contentType: metadata.contentType,
-            thumbContentType: metadata.thumbContentType,
             width: metadata.width,
             height: metadata.height,
             hash: metadata.hash,
@@ -123,6 +135,46 @@ describe("photosphere backend", () => {
         });
 
         const uploadedFiles = await getUploads();
+        expect(uploadedFiles).toEqual([
+            assetId,
+        ]);
+    });
+
+    test("upload thumbnail", async () => {
+
+        const { app, mockCollection } = await initServer();
+
+        //
+        // Check we are starting with zero files.
+        //
+        const origThumbnails = await getThumbnails();
+        expect(origThumbnails.length).toBe(0);
+
+        mockCollection.updateOne = jest.fn();
+
+        const assetId = "63de0ba152be7661d4926bf1";
+
+        const response = await request(app)
+            .post("/thumb")
+            .set("id", assetId)
+            .set("content-type", "image/jpeg")
+            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+
+        expect(response.statusCode).toBe(200);
+
+        expect(mockCollection.updateOne).toHaveBeenCalledTimes(1);
+        expect(mockCollection.updateOne).toHaveBeenCalledWith(
+            {
+                _id: new ObjectId(assetId),
+            },
+            {
+                $set: {
+                    thumbContentType: "image/jpeg",
+                },
+            }
+        );
+
+        const uploadedFiles = await getThumbnails();
         expect(uploadedFiles).toEqual([
             assetId,
         ]);
@@ -233,6 +285,7 @@ describe("photosphere backend", () => {
 
         const response = await request(app).get(`/asset?id=${assetId}`);
         expect(response.statusCode).toBe(200);
+        expect(response.header["content-type"]).toBe("image/jpeg");
         expect(response.body).toEqual(Buffer.from("ABCD"));
     });
 
@@ -249,13 +302,78 @@ describe("photosphere backend", () => {
         expect(response.statusCode).toBe(404);
     });
 
-
-
     test("get existing asset with no id yields an error", async () => {
 
         const { app } = await initServer();
 
         const response = await request(app).get(`/asset`);
+        expect(response.statusCode).toBe(500);
+    });
+
+    test("get existing thumb", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        // Generate the file into the thumbs directory.
+        await fs.writeFile(`./thumbs/${assetId}`, "ABCD");
+
+        const mockAsset: any = {
+            thumbContentType: "image/jpeg",
+        };
+        mockCollection.findOne = (query: any) => {
+            expect(query._id).toEqual(assetId);
+            
+            return mockAsset;
+        };
+
+        const response = await request(app).get(`/thumb?id=${assetId}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.header["content-type"]).toBe("image/jpeg");
+        expect(response.body).toEqual(Buffer.from("ABCD"));
+    });
+
+    test("get thumb returns original asset when thumb doesn't exist", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        // Generate the file into the uploads directory.
+        await fs.writeFile(`./uploads/${assetId}`, "ABCD");
+
+        const mockAsset: any = {
+            contentType: "image/jpeg",
+        };
+        mockCollection.findOne = (query: any) => {
+            expect(query._id).toEqual(assetId);
+            
+            return mockAsset;
+        };
+
+        const response = await request(app).get(`/thumb?id=${assetId}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.header["content-type"]).toBe("image/jpeg");
+        expect(response.body).toEqual(Buffer.from("ABCD"));
+    });
+
+    test("non existing thumb yields a 404 error", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.findOne = (query: any) => {
+            return undefined;
+        };
+
+        const response = await request(app).get(`/thumb?id=${assetId}`);
+        expect(response.statusCode).toBe(404);
+    });
+
+    test("get existing thumb with no id yields an error", async () => {
+
+        const { app } = await initServer();
+
+        const response = await request(app).get(`/thumb`);
         expect(response.statusCode).toBe(500);
     });
 

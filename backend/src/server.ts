@@ -57,29 +57,26 @@ export async function createServer(db: Db) {
         return value;
     }
 
+    //
+    // Uploads a new asset.
+    //
     app.post("/asset", async (req, res) => {
 
         const assetId = new ObjectId();
         const metadata = JSON.parse(getHeader(req, "metadata"));
         const fileName = getValue<string>(metadata, "fileName");
         const contentType = getValue<string>(metadata, "contentType");
-        const thumbContentType = getValue<string>(metadata, "thumbContentType");
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
         const hash = getValue<string>(metadata, "hash");
-        const thumbnail = getHeader(req, "thumbnail");
         
         const localFileName = path.join("uploads", assetId.toString());
         await streamToStorage(localFileName, req);
-
-        const thumbFileName = path.join("thumbs", assetId.toString());
-        await fs.writeFile(thumbFileName, thumbnail, "base64");
 
         const newAsset: IAsset = {
             _id: assetId,
             origFileName: fileName,
             contentType: contentType,
-            thumbContentType: thumbContentType,
             width: width,
             height: height,
             hash: hash,
@@ -100,6 +97,9 @@ export async function createServer(db: Db) {
         });
     });
 
+    //
+    // Gets a particular asset by id.
+    //
     app.get("/asset", async (req, res) => {
 
         const assetId = req.query.id as string;
@@ -107,7 +107,6 @@ export async function createServer(db: Db) {
             throw new Error(`Asset ID not specified in query parameters.`);
         }
 
-        const localFileName = path.join("uploads", assetId);
         const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
             res.sendStatus(404);
@@ -118,10 +117,29 @@ export async function createServer(db: Db) {
             "Content-Type": asset.contentType,
         });
 
+        const localFileName = path.join("uploads", assetId);
         const fileReadStream = fs.createReadStream(localFileName);
         fileReadStream.pipe(res);
     });
 
+    //
+    // Uploads a thumbnail for a particular asset.
+    //
+    app.post("/thumb", async (req, res) => {
+        
+        const assetId = new ObjectId(getHeader(req, "id"));
+        const localFileName = path.join("thumbs", assetId.toString());
+        await streamToStorage(localFileName, req);
+
+        const contentType = getHeader(req, "content-type");
+        await assetCollections.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
+        
+        res.sendStatus(200);
+    });
+
+    //
+    // Gets the thumb for an asset by id.
+    //
     app.get("/thumb", async (req, res) => {
 
         const assetId = req.query.id as string;
@@ -129,19 +147,36 @@ export async function createServer(db: Db) {
             throw new Error(`Asset ID not specified in query parameters.`);
         }
 
-        const localFileName = path.join("thumbs", assetId);
         const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
             res.sendStatus(404);
             return;
         }
 
-        res.writeHead(200, {
-            "Content-Type": asset.thumbContentType,
-        });
-
-        const fileReadStream = fs.createReadStream(localFileName);
-        fileReadStream.pipe(res);
+        if (asset.thumbContentType) {
+            //
+            // Return the thumbnail.
+            //
+            res.writeHead(200, {
+                "Content-Type": asset.thumbContentType,
+            });
+    
+            const localFileName = path.join("thumbs", assetId);
+            const fileReadStream = fs.createReadStream(localFileName);
+            fileReadStream.pipe(res);
+        }
+        else {
+            // 
+            // No thumbnail, return the original asset.
+            //
+            res.writeHead(200, {
+                "Content-Type": asset.contentType,
+            });
+    
+            const localFileName = path.join("uploads", assetId);
+            const fileReadStream = fs.createReadStream(localFileName);
+            fileReadStream.pipe(res);
+        }
     });
 
     app.get("/check-asset", async (req, res) => {

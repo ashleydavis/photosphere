@@ -18,7 +18,7 @@ export function UploadPage() {
         for (const file of files) {
             const imageData = await loadFile(file);
             const imageResolution = await getImageResolution(imageData);
-            const thumbnailDataUrl = await resizeImage(imageData, 20); //TODO: 78 is the max size for a header
+            const thumbnailDataUrl = await resizeImage(imageData, 100);
             const thumContentTypeStart = 5;
             const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
             const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
