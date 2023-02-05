@@ -33,6 +33,11 @@ export interface IGalleryItem {
     // The hash of the asset.
     //
     hash: string;
+
+    //
+    // Optional properties, like exif data.
+    //
+    properties?: any;
 }
 
 //

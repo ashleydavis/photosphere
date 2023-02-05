@@ -39,6 +39,11 @@ export interface IUploadDetails {
     // Hash of the data.
     //
     hash: string;
+
+    //
+    // Optional properties, like exif data.
+    //
+    properties?: any;
 }
 
 export interface IApiContext {
@@ -98,6 +103,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "width": asset.resolution.width,
                     "height": asset.resolution.height,
                     "hash": asset.hash,
+                    "properties": asset.properties,
                 }),
             },
         });

@@ -1,5 +1,5 @@
 import React, { useState, DragEvent } from "react";
-import { getImageResolution, resizeImage } from "../lib/image";
+import { getExifData, getImageResolution, resizeImage } from "../lib/image";
 import { IUploadDetails, useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
 
@@ -25,6 +25,7 @@ export function UploadPage() {
             const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
             const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
             const hash = await computeHash(file);
+            const exif = await getExifData(file);
 
             const uploadDetails: IUploadDetails = {
                 file: file,
@@ -33,6 +34,12 @@ export function UploadPage() {
                 thumbContentType: thumbContentType,
                 hash: hash,
             };
+            
+            if (exif) {
+                uploadDetails.properties = {
+                    exif: exif,
+                };
+            }
             await api.uploadAsset(uploadDetails);
         }
     };
