@@ -10,7 +10,7 @@ export function UploadPage() {
     // Interface to the API.
     //
     const api = useApi();
-
+    
     //
     // Set to true when something is dragged over the upload area.
     //
@@ -179,6 +179,12 @@ export function UploadPage() {
                     accept="image/*"
                     onChange={async event => {
                         await onUploadFiles(event.target.files!);
+                        
+                        //
+                        // Clears the file input.
+                        // https://stackoverflow.com/a/42192710/25868
+                        //
+                        (event.target.value as any) = null;                        
                     }}
                     />
                 <label 
