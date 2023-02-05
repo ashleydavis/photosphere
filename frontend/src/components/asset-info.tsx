@@ -80,6 +80,22 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                 </div>
                             </div>
 
+                            <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                                <div className="w-6 mt-2 flex flex-col items-center">
+                                    <i className="text-2xl fa-solid fa-calendar-day"></i>
+                                </div>
+                                <div className="flex flex-col ml-3">
+                                    <div>
+                                        Asset hash
+                                    </div>
+                                    <div
+                                        className="text-sm flex flex-row" 
+                                        >
+                                        <div>{asset.hash}</div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="text-lg text-gray-600 flex flex-row portrait:mt-10 landscape:mt-4 pt-2">
                                 <div className="w-6 mt-2 flex flex-col items-center">
                                     <i className="text-2xl fa-solid fa-tags"></i>

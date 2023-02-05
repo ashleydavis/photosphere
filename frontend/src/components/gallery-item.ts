@@ -1,6 +1,6 @@
 
 //
-// Represents an item that can be displayed in the gallery.
+// Represents an asset that can be displayed in the gallery.
 //
 export interface IGalleryItem {
 
@@ -28,6 +28,11 @@ export interface IGalleryItem {
     // The group that this item is a part of, if any.
     //
     group?: string;
+
+    //
+    // The hash of the asset.
+    //
+    hash: string;
 }
 
 //

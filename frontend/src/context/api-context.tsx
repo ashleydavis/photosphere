@@ -34,6 +34,11 @@ export interface IUploadDetails {
     // The content type of the thumbnail.
     //
     thumbContentType: string;
+
+    //
+    // Hash of the data.
+    //
+    hash: string;
 }
 
 export interface IApiContext {
@@ -92,11 +97,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "contentType": asset.file.type,
                     "width": asset.resolution.width,
                     "height": asset.resolution.height,
-                    //
-                    // Hash added to satisfy backend requirements.
-                    // Will compute a proper hash from the file data in the future.
-                    //
-                    "hash": "1234", 
+                    "hash": asset.hash,
                 }),
             },
         });

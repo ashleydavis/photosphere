@@ -1,7 +1,7 @@
 import React, { useState, DragEvent } from "react";
 import { getImageResolution, resizeImage } from "../lib/image";
 import { IUploadDetails, useApi } from "../context/api-context";
-import { loadFileToDataURL } from "../lib/file";
+import { computeHash, loadDataURL } from "../lib/file";
 
 export function UploadPage() {
 
@@ -17,18 +17,21 @@ export function UploadPage() {
 
     async function onUploadFiles(files: FileList) {
         for (const file of files) {
-            const imageData = await loadFileToDataURL(file);
+            const imageData = await loadDataURL(file);
             const imageResolution = await getImageResolution(imageData);
             const thumbnailDataUrl = await resizeImage(imageData, 100);
             const thumContentTypeStart = 5;
             const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
             const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
             const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+            const hash = await computeHash(file);
+
             const uploadDetails: IUploadDetails = {
                 file: file,
                 resolution: imageResolution,
                 thumbnail: thumbnailData,
                 thumbContentType: thumbContentType,
+                hash: hash,
             };
             await api.uploadAsset(uploadDetails);
         }
