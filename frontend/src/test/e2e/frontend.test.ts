@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 const { describe } = test; 
 
 const FRONTEND_URL = "http://localhost:1234";
+const BACKEND_URL = "http://localhost:3000";
 
 describe("frontend tests", () => {
 
@@ -21,6 +22,8 @@ describe("frontend tests", () => {
         //
         await fs.remove("../backend/uploads");
         await fs.ensureDir("../backend/uploads");
+        await fs.remove("../backend/thumbs");
+        await fs.ensureDir("../backend/thumbs");
         
         //
         // Uploads an image.
@@ -44,6 +47,8 @@ describe("frontend tests", () => {
         
         expect(uploadedFiles.length).toBe(1);
 
+        const [ assetId ] = uploadedFiles;
+
         //
         // Check that the uploaded assets appears in the gallery.
         //
@@ -52,16 +57,18 @@ describe("frontend tests", () => {
         const galleryThumb = page.getByTestId("gallery-thumb");
         await expect(galleryThumb).toHaveCount(1);
         await expect(galleryThumb).toBeVisible();
+        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}`);
 
-        const fullsizeItem = page.getByTestId("fullsize-asset");
-        await expect(fullsizeItem).toHaveCount(0);
+        const fullsizeAsset = page.getByTestId("fullsize-asset");
+        await expect(fullsizeAsset).toHaveCount(0);
 
         //
         // Open fullscreen photo modal.
         //
         await galleryThumb.click();
-        await expect(fullsizeItem).toHaveCount(1);
-        await expect(fullsizeItem).toBeVisible();
+        await expect(fullsizeAsset).toHaveCount(1);
+        await expect(fullsizeAsset).toBeVisible();
+        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/asset?id=${assetId}`);
 
         //TODO:
         // const photoInfoHeader = page.getByTestId("info-header");
