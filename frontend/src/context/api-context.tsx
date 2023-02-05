@@ -66,7 +66,7 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadAsset(asset: IUploadDetails): Promise<void>;
+    uploadAsset(asset: IUploadDetails): Promise<string>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -95,7 +95,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadAsset(asset: IUploadDetails): Promise<void> {
+    async function uploadAsset(asset: IUploadDetails): Promise<string> {
         //
         // Uploads the full asset and metadata.
         //
@@ -126,6 +126,8 @@ export function ApiContextProvider({ children }: IProps) {
                 "id": assetId,
             },
         });
+
+        return assetId;
     }
     
     const value: IApiContext = {

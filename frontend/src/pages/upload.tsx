@@ -16,36 +16,51 @@ export function UploadPage() {
     //
     const [dragOver, setDragOver] = useState<boolean>(false);
 
+    //
+    // Uploads a single asset.
+    //
+    async function uploadFile(file: File) {
+    
+		console.log(`Uploading ${file.name}`);
+		
+        const imageData = await loadDataURL(file);
+        const imageResolution = await getImageResolution(imageData);
+        const thumbnailDataUrl = await resizeImage(imageData, 100);
+        const thumContentTypeStart = 5;
+        const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
+        const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
+        const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+        const hash = await computeHash(file);
+        const exif = await getExifData(file);
+
+        const uploadDetails: IUploadDetails = {
+            file: file,
+            resolution: imageResolution,
+            thumbnail: thumbnailData,
+            thumbContentType: thumbContentType,
+            hash: hash,
+        };
+
+        if (exif) {
+            uploadDetails.properties = {
+                exif: exif,
+            };
+
+            if (exif.GPSLatitude && exif.GPSLongitude) {
+                uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
+            }
+        }
+        const assetId = await api.uploadAsset(uploadDetails);
+
+        console.log(`Uploaded ${assetId}`);
+    }
+
+    //
+    // Uploads a list of files.
+    //
     async function onUploadFiles(files: FileList) {
         for (const file of files) {
-            const imageData = await loadDataURL(file);
-            const imageResolution = await getImageResolution(imageData);
-            const thumbnailDataUrl = await resizeImage(imageData, 100);
-            const thumContentTypeStart = 5;
-            const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
-            const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
-            const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-            const hash = await computeHash(file);
-            const exif = await getExifData(file);
-
-            const uploadDetails: IUploadDetails = {
-                file: file,
-                resolution: imageResolution,
-                thumbnail: thumbnailData,
-                thumbContentType: thumbContentType,
-                hash: hash,
-            };
-            
-            if (exif) {
-                uploadDetails.properties = {
-                    exif: exif,
-                };
-
-                if (exif.GPSLatitude && exif.GPSLongitude) {
-                    uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
-                }
-            }
-            await api.uploadAsset(uploadDetails);
+            await uploadFile(file);
         }
     };
 
@@ -73,17 +88,71 @@ export function UploadPage() {
         event.stopPropagation();
     }
 
-    function onDrop(event: DragEvent<HTMLDivElement>) {
+    //
+    // Gets a file from a file system entry.
+    //
+    function getFile(item: FileSystemFileEntry): Promise<File> {
+        return new Promise<File>((resolve, reject) => {
+            item.file(resolve, reject);
+        })
+    }
+
+    //
+    // Reads the entries in a directory.
+    //
+    function readDirectory(item: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+        return new Promise<FileSystemEntry[]>((resolve, reject) => {
+            const reader = (item as FileSystemDirectoryEntry).createReader();
+            reader.readEntries(resolve, reject);
+        });
+    }
+
+    //
+    // Traverses the file system for files.
+    //
+    // https://protonet.com/blog/html5-drag-drop-files-and-folders/
+    //
+    async function traverseFileSystem(item: FileSystemEntry, path: string): Promise<void> {
+        if (item.isFile) {
+            const file = await getFile(item as FileSystemFileEntry);
+            await uploadFile(file);
+        }
+        else if (item.isDirectory) {
+            const entries = await readDirectory(item as FileSystemDirectoryEntry);
+            for (const entry of entries) {
+                traverseFileSystem(entry, path + item.name);
+            }
+        }
+    }
+
+    async function onDrop(event: DragEvent<HTMLDivElement>) {
 
         setDragOver(false);
 
-        const files = event.dataTransfer.files;
-        if (files) {
-            onUploadFiles(files);
-        }
-
         event.preventDefault();
         event.stopPropagation();
+
+        const items = event.dataTransfer.items;
+        if (items) {
+            //
+            // A folder was dropped.
+            //
+            for (const item of items) {
+                const fileSystemEntry = item.webkitGetAsEntry();
+                if (fileSystemEntry) {
+                    await traverseFileSystem(fileSystemEntry, "");
+                }
+            }
+        }
+        else {
+            //
+            // A set of files was dropped.
+            //
+            const files = event.dataTransfer.files;
+            if (files) {
+                await onUploadFiles(files);
+            }
+        }
     }
 
     return (
