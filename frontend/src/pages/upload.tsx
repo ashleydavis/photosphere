@@ -1,6 +1,7 @@
 import React, { useState, DragEvent } from "react";
-import { loadFile, getImageResolution, resizeImage } from "../lib/image";
+import { getImageResolution, resizeImage } from "../lib/image";
 import { IUploadDetails, useApi } from "../context/api-context";
+import { loadFileToDataURL } from "../lib/file";
 
 export function UploadPage() {
 
@@ -16,7 +17,7 @@ export function UploadPage() {
 
     async function onUploadFiles(files: FileList) {
         for (const file of files) {
-            const imageData = await loadFile(file);
+            const imageData = await loadFileToDataURL(file);
             const imageResolution = await getImageResolution(imageData);
             const thumbnailDataUrl = await resizeImage(imageData, 100);
             const thumContentTypeStart = 5;
