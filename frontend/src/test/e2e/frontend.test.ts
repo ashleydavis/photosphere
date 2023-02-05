@@ -70,18 +70,18 @@ describe("frontend tests", () => {
         await expect(fullsizeAsset).toBeVisible();
         await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/asset?id=${assetId}`);
 
-        //TODO:
-        // const photoInfoHeader = page.getByTestId("info-header");
-        // await expect(photoInfoHeader).toHaveCount(0);
+        const infoAssetId = page.getByTestId("asset-id");
+        await expect(infoAssetId).toHaveCount(0);
 
-        // //
-        // // Open photo info.
-        // //
-        // const openInfoButton = page.getByTestId("open-info-button");
-        // await openInfoButton.click();
+        //
+        // Open photo info.
+        //
+        const openInfoButton = page.getByTestId("open-info-button");
+        await openInfoButton.click();
 
-        // await expect(photoInfoHeader).toHaveCount(1);
-        // await expect(photoInfoHeader).toBeVisible();
+        await expect(infoAssetId).toHaveCount(1);
+        await expect(infoAssetId).toBeVisible();
+        await expect(infoAssetId).toHaveText(assetId);
     });
 
 });

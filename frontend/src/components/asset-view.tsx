@@ -12,9 +12,9 @@ export interface IAssetViewProps {
     open: boolean;
 
     //
-    // The item to display in the modal.
+    // The asset to display in the modal.
     //
-    item?: IGalleryItem;
+    asset?: IGalleryItem;
 
     //
     // Event raised when the model is closed.
@@ -25,7 +25,7 @@ export interface IAssetViewProps {
 //
 // Shows info for a particular asset.
 //
-export function AssetView({ open, item, onClose }: IAssetViewProps) {
+export function AssetView({ open, asset, onClose }: IAssetViewProps) {
 
     //
     // Interface to the backend.
@@ -127,11 +127,11 @@ export function AssetView({ open, item, onClose }: IAssetViewProps) {
                         </button>
                     </div>
                     <div className="flex-grow flex portrait:flex-col landscape:flex-row justify-center">
-                        {item && 
+                        {asset && 
                             <div>
                                 <img
                                     data-testid="fullsize-asset"
-                                    src={api.makeUrl(`/asset?id=${item._id}`)}
+                                    src={api.makeUrl(`/asset?id=${asset._id}`)}
                                 />
                             </div>
                         }
@@ -149,6 +149,7 @@ export function AssetView({ open, item, onClose }: IAssetViewProps) {
 
             <AssetInfo
                 open={openInfo}
+                asset={openInfo && asset || undefined}
                 onClose={() => {
                     setOpenInfo(false);
                 }}

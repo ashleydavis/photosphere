@@ -186,7 +186,7 @@ export function App() {
             {selectedItem &&
 	            <AssetView
 	                open={!!selectedItem}
-	                item={selectedItem}
+	                asset={selectedItem}
 	                onClose={() => {
 	                	setSelectedItem(undefined);
 	                }}
