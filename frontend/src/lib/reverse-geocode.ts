@@ -23,6 +23,41 @@ export interface ILocation {
 }
 
 //
+// Converts degress, minutes, seconds to degrees.
+//
+function convertToDegrees([degrees, minutes, seconds]: { numerator: number, denominator: number  }[]): number {
+    var deg = degrees.numerator / degrees.denominator;
+    var min = minutes.numerator / minutes.denominator;
+    var sec = seconds.numerator / seconds.denominator;
+    return deg + (min / 60) + (sec / 3600);
+}
+
+//
+// Converts exif coordinates to a location.
+//
+// https://gis.stackexchange.com/a/273402
+//
+export function convertExifCoordinates(exif: any): ILocation {
+
+    const coordinates = {
+        lat: convertToDegrees(exif.GPSLatitude),
+        lng: convertToDegrees(exif.GPSLongitude),
+    };
+
+    if (exif.GPSLatitudeRef === "S") {
+        // If the latitude reference is "S", the latitude is negative
+        coordinates.lat = coordinates.lat * -1;
+    }
+
+    if (exif.GPSLongitudeRef === "W") {
+        // If the longitude reference is "W", the longitude is negative (thanks ChatGPT!)
+        coordinates.lng = coordinates.lng * -1;
+    }
+
+    return coordinates;
+}
+
+//
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.

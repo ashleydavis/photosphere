@@ -2,7 +2,7 @@ import React, { useState, DragEvent } from "react";
 import { getExifData, getImageResolution, resizeImage } from "../lib/image";
 import { IUploadDetails, useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
-import { reverseGeocode } from "../lib/reverse-geocode";
+import { convertExifCoordinates, reverseGeocode } from "../lib/reverse-geocode";
 
 export function UploadPage() {
 
@@ -42,29 +42,7 @@ export function UploadPage() {
                 };
 
                 if (exif.GPSLatitude && exif.GPSLongitude) {
-                    // https://gis.stackexchange.com/a/273402
-                    function convertToDegrees([degrees, minutes, seconds]: any[]) {
-                        var deg = degrees.numerator/degrees.denominator;
-                        var min = minutes.numerator/minutes.denominator;
-                        var sec = seconds.numerator/seconds.denominator;
-                        return deg + (min/60) + (sec/3600);
-                    }
-                    const coordinates = {
-                        lat: convertToDegrees(exif.GPSLatitude),
-                        lng: convertToDegrees(exif.GPSLongitude),
-                    };
-                    
-                    if (exif.GPSLatitudeRef === "S") {
-                        // If the latitude reference is "S", the latitude is negative
-                        coordinates.lat = coordinates.lat * -1;
-                    }
-    
-                    if (exif.GPSLongitudeRef === "W") {
-                        // If the longitude reference is "W", the longitude is negative (thanks ChatGPT!)
-                        coordinates.lng = coordinates.lng * -1;
-                    }
-    
-                    uploadDetails.location = await reverseGeocode(coordinates);
+                    uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
                 }
             }
             await api.uploadAsset(uploadDetails);
