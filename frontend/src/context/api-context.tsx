@@ -64,6 +64,11 @@ export interface IApiContext {
     getAssets(skip: number, limit: number): Promise<IGalleryItem[]>;
 
     //
+    // Check if an asset is already uploaded using its hash.
+    //
+    checkAsset(hash: string): Promise<boolean>;
+
+    //
     // Uploads an asset to the backend.
     //
     uploadAsset(asset: IUploadDetails): Promise<string>;
@@ -90,6 +95,18 @@ export function ApiContextProvider({ children }: IProps) {
     async function getAssets(skip: number, limit: number): Promise<IGalleryItem[]> {
         const response = await axios.get(`${BASE_URL}/assets?skip=${skip}&limit=${limit}`);
         return response.data.assets;
+    }
+
+    //
+    // Check if an asset is already uploaded using its hash.
+    //
+    async function checkAsset(hash: string): Promise<boolean> {
+        const url = `${BASE_URL}/check-asset?hash=${hash}`;
+        const options = { 
+            validateStatus: (status: number) => status === 200 || status === 404 
+        };
+        const response = await axios.get(url, options);
+        return response.status === 200;
     }
 
     //
@@ -133,6 +150,7 @@ export function ApiContextProvider({ children }: IProps) {
     const value: IApiContext = {
         makeUrl,
         getAssets,
+        checkAsset,
         uploadAsset,
     };
     

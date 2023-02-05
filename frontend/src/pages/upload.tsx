@@ -20,9 +20,15 @@ export function UploadPage() {
     // Uploads a single asset.
     //
     async function uploadFile(file: File) {
-    
-		console.log(`Uploading ${file.name}`);
-		
+        const hash = await computeHash(file);
+        const assetExists = await api.checkAsset(hash);
+        if (assetExists) {
+            console.log(`Already uploaded ${file.name} with hash ${hash}`);
+            return;
+        }
+
+        console.log(`Uploading ${file.name}`);
+
         const imageData = await loadDataURL(file);
         const imageResolution = await getImageResolution(imageData);
         const thumbnailDataUrl = await resizeImage(imageData, 100);
@@ -30,7 +36,6 @@ export function UploadPage() {
         const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
         const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
         const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-        const hash = await computeHash(file);
         const exif = await getExifData(file);
 
         const uploadDetails: IUploadDetails = {
