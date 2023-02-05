@@ -21,9 +21,9 @@ export function UploadPage() {
     //
     async function uploadFile(file: File) {
         const hash = await computeHash(file);
-        const assetExists = await api.checkAsset(hash);
-        if (assetExists) {
-            console.log(`Already uploaded ${file.name} with hash ${hash}`);
+        const existingAssetId = await api.checkAsset(hash);
+        if (existingAssetId) {
+            console.log(`Already uploaded ${file.name} with hash ${hash}, uploaded to ${existingAssetId}`);
             return;
         }
 

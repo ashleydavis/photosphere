@@ -185,12 +185,13 @@ export async function createServer(db: Db) {
         if (!hash) {
             throw new Error(`Hash not specified in query parameters.`);
         }
+        
         const asset = await assetCollections.findOne({ hash: hash });
         if (asset) {
-            res.sendStatus(200);
+            res.json({ assetId: asset._id });
         }
         else {
-            res.sendStatus(404);
+            res.json({ assetId: undefined });
         }
     });
 

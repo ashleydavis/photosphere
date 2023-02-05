@@ -66,7 +66,7 @@ export interface IApiContext {
     //
     // Check if an asset is already uploaded using its hash.
     //
-    checkAsset(hash: string): Promise<boolean>;
+    checkAsset(hash: string): Promise<string | undefined>;
 
     //
     // Uploads an asset to the backend.
@@ -100,13 +100,10 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Check if an asset is already uploaded using its hash.
     //
-    async function checkAsset(hash: string): Promise<boolean> {
+    async function checkAsset(hash: string): Promise<string | undefined> {
         const url = `${BASE_URL}/check-asset?hash=${hash}`;
-        const options = { 
-            validateStatus: (status: number) => status === 200 || status === 404 
-        };
-        const response = await axios.get(url, options);
-        return response.status === 200;
+        const response = await axios.get(url);
+        return response.data.assetId;
     }
 
     //

@@ -382,7 +382,9 @@ describe("photosphere backend", () => {
         const hash = "1234";
         const { app, mockCollection } = await initServer();
 
-        const mockAsset: any = {};
+        const mockAsset: any = {
+            _id: "ABCD",
+        };
         mockCollection.findOne = (query: any) => {
             expect(query.hash).toEqual(hash);
             
@@ -391,6 +393,7 @@ describe("photosphere backend", () => {
 
         const response = await request(app).get(`/check-asset?hash=${hash}`);
         expect(response.statusCode).toBe(200);
+        expect(response.body.assetId).toEqual("ABCD");
     });
 
     test("check for non-existing asset by hash", async () => {
@@ -403,7 +406,8 @@ describe("photosphere backend", () => {
         };
 
         const response = await request(app).get(`/check-asset?hash=${hash}`);
-        expect(response.statusCode).toBe(404);
+        expect(response.statusCode).toBe(200);
+        expect(response.body.assetId).toBeUndefined();
     });
 
     test("check for existing asset with no hash yields an error", async () => {
