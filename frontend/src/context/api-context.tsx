@@ -44,6 +44,11 @@ export interface IUploadDetails {
     // Optional properties, like exif data.
     //
     properties?: any;
+
+    //
+    // Reverse geocoded location of the asset, if known.
+    //
+    location?: string;
 }
 
 export interface IApiContext {
@@ -104,6 +109,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "height": asset.resolution.height,
                     "hash": asset.hash,
                     "properties": asset.properties,
+                    "location": asset.location,
                 }),
             },
         });

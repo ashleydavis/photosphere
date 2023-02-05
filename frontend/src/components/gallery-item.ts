@@ -38,6 +38,11 @@ export interface IGalleryItem {
     // Optional properties, like exif data.
     //
     properties?: any;
+
+    //
+    // Reverse geocoded location of the asset, if known.
+    //
+    location?: string;
 }
 
 //
