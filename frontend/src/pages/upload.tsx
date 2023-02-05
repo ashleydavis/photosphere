@@ -125,7 +125,7 @@ export function UploadPage() {
         else if (item.isDirectory) {
             const entries = await readDirectory(item as FileSystemDirectoryEntry);
             for (const entry of entries) {
-                traverseFileSystem(entry, path + item.name);
+                await traverseFileSystem(entry, path + item.name);
             }
         }
     }
