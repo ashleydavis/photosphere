@@ -186,13 +186,33 @@ export function UploadPage() {
     }
 
     //
-    // Uploads a list of files.
+    // Uploads a collection of files.
     //
-    async function onUploadFiles(files: FileList) {
-        for (const file of files) {
-            await uploadFile(file);
+    async function onUploadFiles(dataTransfer: { items?: DataTransferItemList, files?: FileList }) {
+        const items = dataTransfer.items;
+        if (items) {
+            //
+            // A folder was dropped.
+            //
+            for (const item of items) {
+                const fileSystemEntry = item.webkitGetAsEntry();
+                if (fileSystemEntry) {
+                    await traverseFileSystem(fileSystemEntry, "");
+                }
+            }
         }
-    };
+        else {
+            //
+            // A set of files was dropped or selected.
+            //
+            const files = dataTransfer.files;
+            if (files) {
+                for (const file of files) {
+                    await uploadFile(file);
+                }
+            }
+        }
+    }
 
     function onDragEnter(event: DragEvent<HTMLDivElement>) {
 
@@ -262,27 +282,7 @@ export function UploadPage() {
         event.preventDefault();
         event.stopPropagation();
 
-        const items = event.dataTransfer.items;
-        if (items) {
-            //
-            // A folder was dropped.
-            //
-            for (const item of items) {
-                const fileSystemEntry = item.webkitGetAsEntry();
-                if (fileSystemEntry) {
-                    await traverseFileSystem(fileSystemEntry, "");
-                }
-            }
-        }
-        else {
-            //
-            // A set of files was dropped.
-            //
-            const files = event.dataTransfer.files;
-            if (files) {
-                await onUploadFiles(files);
-            }
-        }
+        await onUploadFiles(event.dataTransfer);
     }
 
     return (
@@ -303,8 +303,10 @@ export function UploadPage() {
                     multiple 
                     accept="image/*"
                     onChange={async event => {
-                        await onUploadFiles(event.target.files!);
-                        
+                        if (event.target.files) {
+                            await onUploadFiles({ files: event.target.files });
+                        }
+
                         //
                         // Clears the file input.
                         // https://stackoverflow.com/a/42192710/25868
@@ -332,7 +334,13 @@ export function UploadPage() {
                                 className="h-full w-full object-cover"
                                 src={upload.thumbnailDataUrl}
                                 />
-                             <Spinner show={upload.status === "uploading"} />
+                            {(upload.status === "pending" || upload.status === "uploading")
+                                && <div 
+                                    className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
+                                    >
+                                    <Spinner show={upload.status === "uploading"} />
+                                </div>
+                            }
                         </div>
                     );
                 })}
