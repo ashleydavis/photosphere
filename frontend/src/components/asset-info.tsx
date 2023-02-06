@@ -1,5 +1,5 @@
 import React from "react";
-import { IGalleryItem } from "./gallery-item";
+import { IGalleryItem } from "../lib/gallery-item";
 
 export interface IAssetInfoProps { 
 

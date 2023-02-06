@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useContext } from "react";
-import { IGalleryItem } from "../components/gallery-item";
+import { IUploadDetails } from "../lib/upload-details";
+import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
-import { IResolution } from "../lib/image";
 import { base64StringToBlob } from 'blob-util';
 
 const BASE_URL = process.env.BASE_URL as string;
@@ -10,47 +10,6 @@ if (!BASE_URL) {
 }
 
 console.log(`Expecting backend at ${BASE_URL}.`);
-
-//
-// Details of an asset to be uploaded.
-//
-export interface IUploadDetails {
-    //
-    // The original file to upload.
-    //
-    file: File;
-    
-    //
-    // The resolution of the asset.
-    //
-    resolution: IResolution;
-    
-    //
-    // Base64 encoded thumbnail for the asset.
-    //
-    thumbnail: string;
-    
-    // 
-    // The content type of the thumbnail.
-    //
-    thumbContentType: string;
-
-    //
-    // Hash of the data.
-    //
-    hash: string;
-
-    //
-    // Optional properties, like exif data.
-    //
-    properties?: any;
-
-    //
-    // Reverse geocoded location of the asset, if known.
-    //
-    location?: string;
-}
-
 export interface IApiContext {
 
     //

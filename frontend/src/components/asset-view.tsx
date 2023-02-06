@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useApi } from "../context/api-context";
 import { AssetInfo } from "./asset-info";
-import { IGalleryItem } from "./gallery-item";
+import { IGalleryItem } from "../lib/gallery-item";
 
 export interface IAssetViewProps { 
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Gallery } from "../components/gallery";
-import { IGalleryItem } from "../components/gallery-item";
+import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
 import InfiniteScroll from "react-infinite-scroller";
 

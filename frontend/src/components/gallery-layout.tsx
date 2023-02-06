@@ -1,6 +1,6 @@
 import React from "react";
 import { createLayout } from "../lib/create-layout";
-import { IGalleryItem } from "./gallery-item";
+import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
 
 export interface IGalleryLayoutProps { 

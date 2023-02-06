@@ -1,5 +1,4 @@
-
-import { IGalleryItem, IGalleryRow } from "../components/gallery-item";
+import { IGalleryItem, IGalleryRow } from "./gallery-item";
 
 //
 // Creates a row base layout for items in the gallery.
