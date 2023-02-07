@@ -222,7 +222,15 @@ export function UploadPage() {
         else if (item.isDirectory) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
             const reader = (item as FileSystemDirectoryEntry).createReader();
-            const entries = await readDirectory(reader);
+            let entries: FileSystemEntry[] = [];
+            while (true) {
+                const newEntries = await readDirectory(reader);
+                if (newEntries.length === 0) {
+                    break;
+                }
+                entries = entries.concat(newEntries);
+            }
+
             for (const entry of entries) {
                 await traverseFileSystem(entry);
             }
