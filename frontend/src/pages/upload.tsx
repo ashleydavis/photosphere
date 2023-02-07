@@ -24,6 +24,11 @@ export function UploadPage() {
     const [uploads, setUploads] = useState<IUploadDetails[]>([]);
 
     //
+    // Counts the number of scans for assets that are currently in progress.
+    //
+    const [numScans, setNumScans] = useState<number>(0);
+
+    //
     // Set to true when currenlty uploading.
     //
     const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -186,31 +191,65 @@ export function UploadPage() {
     }
 
     //
-    // Uploads a collection of files.
+    // Traverses the file system for files.
     //
-    async function onUploadFiles(dataTransfer: { items?: DataTransferItemList, files?: FileList }) {
-        const items = dataTransfer.items;
-        if (items) {
-            //
-            // A folder was dropped.
-            //
-            for (const item of items) {
-                const fileSystemEntry = item.webkitGetAsEntry();
-                if (fileSystemEntry) {
-                    await traverseFileSystem(fileSystemEntry, "");
-                }
+    // https://protonet.com/blog/html5-drag-drop-files-and-folders/
+    //
+    async function traverseFileSystem(item: FileSystemEntry): Promise<void> {
+        if (item.isFile) {
+            const file = await getFile(item as FileSystemFileEntry);
+            await uploadFile(file);
+        }
+        else if (item.isDirectory) {
+            const entries = await readDirectory(item as FileSystemDirectoryEntry);
+            for (const entry of entries) {
+                await traverseFileSystem(entry);
             }
         }
-        else {
-            //
-            // A set of files was dropped or selected.
-            //
-            const files = dataTransfer.files;
-            if (files) {
-                for (const file of files) {
-                    await uploadFile(file);
-                }
-            }
+    }
+
+    //
+    // Uploads a collection of files.
+    //
+    // https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem
+    //
+    async function onUploadFiles(dataTransfer: { items?: DataTransferItemList, files?: FileList }) {
+		setNumScans(numScans + 1);
+
+        try {
+	        if (dataTransfer.items) {
+	            //
+	            // Files (or directories) have been dropped.
+	            //
+	            // Capture to an array so that we don't lose the items through the subsequent async operations.
+	            // Without this, after the first async traversal, there appears to be no items after the first one.
+	            //
+	            const items = Array.from(dataTransfer.items); 
+	            const entries = items.map(item => item.webkitGetAsEntry());
+	
+	            for (const entry of entries) {
+	                if (entry) {
+	                    await traverseFileSystem(entry);
+	                }
+	            }
+	        }
+	        else if (dataTransfer.files) {
+	            //
+	            // Files were dropped or selected.
+	            // 
+	            // The array copy here may not be needed, but I've included just to be on the safe side consdering
+	            // the problem documented in the code block above.
+	            //
+	            const files = Array.from(dataTransfer.files);
+	            if (files) {
+	                for (const file of files) {
+	                    await uploadFile(file);
+	                }
+	            }
+	        }
+	    }
+        finally {
+            setNumScans(numScans - 1);
         }
     }
 
@@ -255,24 +294,6 @@ export function UploadPage() {
             const reader = (item as FileSystemDirectoryEntry).createReader();
             reader.readEntries(resolve, reject);
         });
-    }
-
-    //
-    // Traverses the file system for files.
-    //
-    // https://protonet.com/blog/html5-drag-drop-files-and-folders/
-    //
-    async function traverseFileSystem(item: FileSystemEntry, path: string): Promise<void> {
-        if (item.isFile) {
-            const file = await getFile(item as FileSystemFileEntry);
-            await uploadFile(file);
-        }
-        else if (item.isDirectory) {
-            const entries = await readDirectory(item as FileSystemDirectoryEntry);
-            for (const entry of entries) {
-                await traverseFileSystem(entry, path + item.name);
-            }
-        }
     }
 
     async function onDrop(event: DragEvent<HTMLDivElement>) {
