@@ -191,6 +191,25 @@ export function UploadPage() {
     }
 
     //
+    // Gets a file from a file system entry.
+    //
+    function getFile(item: FileSystemFileEntry): Promise<File> {
+        return new Promise<File>((resolve, reject) => {
+            item.file(resolve, reject);
+        })
+    }
+
+    //
+    // Reads the entries in a directory.
+    //
+    function readDirectory(item: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+        return new Promise<FileSystemEntry[]>((resolve, reject) => {
+            const reader = (item as FileSystemDirectoryEntry).createReader();
+            reader.readEntries(resolve, reject);
+        });
+    }
+
+    //
     // Traverses the file system for files.
     //
     // https://protonet.com/blog/html5-drag-drop-files-and-folders/
@@ -275,25 +294,6 @@ export function UploadPage() {
 
         event.preventDefault();
         event.stopPropagation();
-    }
-
-    //
-    // Gets a file from a file system entry.
-    //
-    function getFile(item: FileSystemFileEntry): Promise<File> {
-        return new Promise<File>((resolve, reject) => {
-            item.file(resolve, reject);
-        })
-    }
-
-    //
-    // Reads the entries in a directory.
-    //
-    function readDirectory(item: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-        return new Promise<FileSystemEntry[]>((resolve, reject) => {
-            const reader = (item as FileSystemDirectoryEntry).createReader();
-            reader.readEntries(resolve, reject);
-        });
     }
 
     async function onDrop(event: DragEvent<HTMLDivElement>) {
