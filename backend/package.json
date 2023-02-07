@@ -5,12 +5,12 @@
     "main": "build/index.js",
     "scripts": {
         "start": "node build/index.js",
-        "start:dev": "concurrently \"npm run start-db\" \"npm run start-with-dev-db\"",
+        "start:dev": "npm run clean-uploads && concurrently \"npm run start-db\" \"npm run start-with-dev-db\"",
         "start-db": "insta-mongo --db-port=7001 --rest-port=7000",
         "start-with-dev-db": "npm run clean-uploads && cross-env PORT=3000 DB_CONNECTION_STRING=mongodb://localhost:7001 ts-node-dev --respawn src/index.ts",
         "compile": "tsc",
         "compile:watch": "tsc --watch",
-        "clean-uploads": "rm -rf uploads",
+        "clean-uploads": "rm -rf uploads thumbs",
         "clean": "rm -rf build",
         "test": "jest --coverage --runInBand",
         "test:watch": "jest --watch --runInBand"
