@@ -202,9 +202,8 @@ export function UploadPage() {
     //
     // Reads the entries in a directory.
     //
-    function readDirectory(item: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+    function readDirectory(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
         return new Promise<FileSystemEntry[]>((resolve, reject) => {
-            const reader = (item as FileSystemDirectoryEntry).createReader();
             reader.readEntries(resolve, reject);
         });
     }
@@ -216,11 +215,14 @@ export function UploadPage() {
     //
     async function traverseFileSystem(item: FileSystemEntry): Promise<void> {
         if (item.isFile) {
+            // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry
             const file = await getFile(item as FileSystemFileEntry);
             await uploadFile(file);
         }
         else if (item.isDirectory) {
-            const entries = await readDirectory(item as FileSystemDirectoryEntry);
+            // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
+            const reader = (item as FileSystemDirectoryEntry).createReader();
+            const entries = await readDirectory(reader);
             for (const entry of entries) {
                 await traverseFileSystem(entry);
             }
