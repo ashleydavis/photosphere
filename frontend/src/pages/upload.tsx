@@ -357,12 +357,12 @@ export function UploadPage() {
             <div>Total: {uploads.length}</div>
             <div>Uploaded: {numUploaded}</div>
 
-            <div className="flex flex-wrap h-28">
+            <div className="flex flex-wrap">
                 {uploads.map((upload, index) => {
                     return (
                         <div key={index} className="relative">
                             <img 
-                                className="h-full w-full object-cover"
+                                className="w-28 h-28 object-cover"
                                 src={upload.thumbnailDataUrl}
                                 />
                             {(upload.status === "pending" || upload.status === "uploading")
