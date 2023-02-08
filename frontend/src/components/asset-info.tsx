@@ -143,8 +143,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                         {dayjs(asset?.sortDate).format("MMM D, YYYY")}
                                     </div>
                                     <div className="text-sm flex flex-row" >
-                                        <div>{dayjs(asset?.sortDate).format("HH:mm")}</div>
-                                        <div className="ml-4">GMT+10:00</div>
+                                        {dayjs(asset?.sortDate).format("HH:mm")}
                                     </div>
                                 </div>
                             </div>
