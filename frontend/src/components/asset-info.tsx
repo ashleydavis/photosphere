@@ -30,13 +30,25 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
     //
     const [labels, setLabels] = React.useState<string[]>([ "Label 1", "Label 2" ]);
 
-    function notImplemented(event: any) {
-        alert("This is a not implemented yet.");
+    //
+    // Adds a new label to the asset.
+    //
+    async function onAddLabel() {
+        const newLabel = window.prompt("Enter the new label:");
+        if (!newLabel) {
+            return;
+        }
 
-        event.preventDefault();
-        event.stopPropagation();
+        setLabels([...labels, newLabel]);
     }
-
+    
+	//
+    // Removes a label from the asset.
+    //
+    function onRemoveLabel(labelName: string) {
+        setLabels(labels.filter(label => label !== labelName));
+    }
+        
     //
     // Renders a label.
     //
@@ -49,7 +61,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                 {name}
                 <button
                     className="ml-2 p-1 pl-2 pr-1"
-                    onClick={event => notImplemented(event)}
+                    onClick={() => onRemoveLabel(name)}
                 >
                     <i className="fa-solid fa-close"></i>
                 </button>
@@ -134,7 +146,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
 
                                         <button
                                             className="ml-2 p-1 pl-3 pr-3"
-                                            onClick={event => notImplemented(event)}
+                                        	onClick={onAddLabel}
                                             >
                                             <i className="fa-solid fa-square-plus"></i>
                                         </button>
