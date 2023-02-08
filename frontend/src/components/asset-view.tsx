@@ -20,12 +20,23 @@ export interface IAssetViewProps {
     // Event raised when the model is closed.
     //
     onClose: () => void;
+    
+
+    //
+    // Event raised to move to the next asset in the gallery.
+    //
+    onNext: () => void;
+
+    //
+    // Event raised to move to the previous asset in the gallery.
+    //
+    onPrev: () => void;
 }
 
 //
 // Shows info for a particular asset.
 //
-export function AssetView({ open, asset, onClose }: IAssetViewProps) {
+export function AssetView({ open, asset, onClose, onNext, onPrev }: IAssetViewProps) {
 
     //
     // Interface to the backend.
@@ -121,7 +132,7 @@ export function AssetView({ open, asset, onClose }: IAssetViewProps) {
                     <div className="flex flex-col justify-center">
                         <button
                             className="p-1 px-3"
-                            onClick={event => notImplemented(event)}
+                            onClick={event => onPrev()}
                             >
                             <i className="fa-solid fa-arrow-left"></i>
                         </button>
@@ -139,7 +150,7 @@ export function AssetView({ open, asset, onClose }: IAssetViewProps) {
                     <div className="flex flex-col justify-center">
                         <button
                             className="p-1 px-3"
-                            onClick={event => notImplemented(event)}
+                            onClick={event => onNext()}
                             >
                             <i className="fa-solid fa-arrow-right"></i>
                         </button>

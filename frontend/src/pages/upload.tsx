@@ -5,6 +5,7 @@ import { computeHash, loadDataURL } from "../lib/file";
 import { convertExifCoordinates, reverseGeocode } from "../lib/reverse-geocode";
 import { IUploadDetails, UploadState } from "../lib/upload-details";
 import { Spinner } from "../components/spinner";
+import { useGallery } from "../context/gallery-context";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -16,6 +17,11 @@ export function UploadPage() {
     // Interface to the API.
     //
     const api = useApi();
+    
+    //
+    // The interface to the gallery.
+    //
+    const { reset } = useGallery();
     
     //
     // Set to true when something is dragged over the upload area.

@@ -91,3 +91,18 @@ export interface IGalleryRow {
     group?: string;
 
 }
+
+//
+// Represents an item in the gallery that has been selected.
+//
+export interface ISelectedGalleryItem {
+    //
+    // The selected item.
+    //
+    item: IGalleryItem;
+
+    //
+    // The index of the selected item in the gallery.
+    //
+    index: number;
+}

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Gallery } from "../components/gallery";
-import { IGalleryItem } from "../lib/gallery-item";
+import { ISelectedGalleryItem } from "../lib/gallery-item";
 import InfiniteScroll from "react-infinite-scroller";
 import { useGallery } from "../context/gallery-context";
 
@@ -10,7 +10,7 @@ export interface IGalleryPageProps {
     //
     // Event raised when an item in the gallery is clicked.
     //
-    onItemClick: (item: IGalleryItem) => void,
+    onItemClick: (item: ISelectedGalleryItem) => void,
 }
 
 export function GalleryPage({ onItemClick }: IGalleryPageProps) {

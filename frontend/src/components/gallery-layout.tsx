@@ -1,6 +1,6 @@
 import React from "react";
 import { createLayout } from "../lib/create-layout";
-import { IGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
 
 export interface IGalleryLayoutProps { 
@@ -22,7 +22,7 @@ export interface IGalleryLayoutProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onItemClick: ((item: IGalleryItem) => void) | undefined;
+    onItemClick: ((item: ISelectedGalleryItem) => void) | undefined;
 }
 
 //
@@ -81,7 +81,7 @@ export function GalleryLayout({
                             height: `${row.height}px`,
                         }}
                         >
-                        {row.items.map(item => {
+                        {row.items.map((item, index) => {
                             return (
                                 <img 
                                     data-testid="gallery-thumb"
@@ -90,7 +90,7 @@ export function GalleryLayout({
                                     }}
                                     onClick={() => {
                                         if (onItemClick) {
-                                            onItemClick(item);
+                                            onItemClick({ item, index });
                                         }
                                     }}
                                     key={item._id}

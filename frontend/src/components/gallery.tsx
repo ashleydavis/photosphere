@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { IGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
 
@@ -17,7 +17,7 @@ export interface IGalleryProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onItemClick: ((item: IGalleryItem) => void) | undefined;
+    onItemClick: ((item: ISelectedGalleryItem) => void) | undefined;
 }
 
 //

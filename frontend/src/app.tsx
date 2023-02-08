@@ -1,17 +1,22 @@
 import React, { useState } from "react";
 import { BrowserRouter, Route, Routes, NavLink, Navigate } from "react-router-dom";
 import { AssetView } from "./components/asset-view";
-import { IGalleryItem } from "./lib/gallery-item";
+import { ISelectedGalleryItem } from "./lib/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
-import { useApi } from "./context/api-context";
+import { useGallery } from "./context/gallery-context";
 
 export function App() {
 
     //
-    // Interface to the API.
+    // Interface to the gallery.
     //
-    const api = useApi();
+    const { 
+        getNext, 
+        getPrev, 
+        selectedItem, 
+        setSelectedItem 
+        } = useGallery();
 
     //
     // Set to true to open the sidebar.
@@ -22,11 +27,6 @@ export function App() {
     // Set to true to open the search input.
     //
     const [openSearch, setOpenSearch] = useState<boolean>(false);
-    
-    //
-    // The currently selected gallery item or undefined when no item is selected.
-    //
-    const [selectedItem, setSelectedItem] = useState<IGalleryItem | undefined>(undefined);
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
@@ -184,13 +184,19 @@ export function App() {
             </div>
 
             {selectedItem &&
-	            <AssetView
-	                open={!!selectedItem}
-	                asset={selectedItem}
-	                onClose={() => {
-	                	setSelectedItem(undefined);
-	                }}
-	                />
+                <AssetView
+                    open={!!selectedItem}
+                    asset={selectedItem.item}
+                    onClose={() => {
+                        setSelectedItem(undefined);
+                    }}
+                    onPrev={() => {
+                        setSelectedItem(getPrev(selectedItem));
+                    }}
+                    onNext={() => {
+                        setSelectedItem(getNext(selectedItem));
+                    }}
+                    />
             }
 
         </BrowserRouter>

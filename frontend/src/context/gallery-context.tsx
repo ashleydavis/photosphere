@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useContext, useState } from "react";
-import { IGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { useApi } from "./api-context";
 
 const NUM_ASSETS_PER_PAGE = 100;
@@ -40,6 +40,31 @@ export interface IGalleryContext {
     // Resets the gallery to the initial condition.
     //
     reset(): Promise<void>;
+
+    //
+    // Gets the previous asset, or undefined if none.
+    //
+    getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined;
+
+    //
+    // Gets the next asset, or undefined if none.
+    //
+    getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined;
+
+    //
+    // The currently selected gallery item or undefined when no item is selected.
+    //
+    selectedItem: ISelectedGalleryItem | undefined
+    
+    //
+    // Sets the selected gallery item.
+    //
+    setSelectedItem(selectedItem: ISelectedGalleryItem | undefined): void;
+
+    //
+    // Clears the currently selected gallery item.
+    //
+    clearSelectedItem(): void;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -69,6 +94,11 @@ export function GalleryContextProvider({ children }: IProps) {
     // Set to true when there's more assets to load.
     //
     const [ haveMoreAssets, setHaveMoreAssets ] = useState<boolean>(false);
+
+    //
+    // The item in the gallery that is currently selected.
+    //
+    const [selectedItem, setSelectedItem] = useState<ISelectedGalleryItem | undefined>(undefined);
 
     //
     // Adds an asset to the gallery.
@@ -122,7 +152,56 @@ export function GalleryContextProvider({ children }: IProps) {
         setPagesLoaded(0);
         setAssets([]);
         setHaveMoreAssets(true);
+        clearSelectedItem();
     }    
+
+    //
+    // Gets the previous asset, or undefined if none.
+    //
+    function getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
+        if (selectedItem.index < 0) {
+            return undefined;
+        }
+
+        if (selectedItem.index > 0) {
+            const prevIndex = selectedItem.index-1;
+            return {
+                item: assets[prevIndex],
+                index: prevIndex,
+            };
+        }
+        else {
+            return undefined;
+        }
+    }
+
+    //
+    // Gets the next asset, or undefined if none.
+    //
+    function getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
+        
+         if (selectedItem.index < 0) {
+            return undefined;
+        }
+
+        if (selectedItem.index < assets.length-1) {
+            const nextIndex = selectedItem.index + 1;
+            return {
+                item: assets[nextIndex],
+                index: nextIndex,
+            };
+        }
+        else {
+            return undefined;
+        }
+    }
+
+    //
+    // Clears the currently selected gallery item.
+    //
+    function clearSelectedItem(): void {
+        setSelectedItem(undefined);
+    }
 
     const value: IGalleryContext = {
         assets,
@@ -132,6 +211,11 @@ export function GalleryContextProvider({ children }: IProps) {
         setAssets,
         loadPage,
         reset,
+        getPrev,
+        getNext,
+        selectedItem,
+        setSelectedItem,
+        clearSelectedItem,
     };
     
     return (
