@@ -28,7 +28,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
     //
     // Labels added to the asset.
     //
-    const [labels, setLabels] = React.useState<string[]>([ "Label 1", "Label 2" ]);
+    const [labels, setLabels] = React.useState<string[]>([ "Label 1", "Label 2", "Label 2", "Label 2", "Label 2", "Label 2", "Label 2", "Label 2", "Label 2" ]);
 
     //
     // Adds a new label to the asset.
@@ -56,7 +56,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
         return (
             <span
                 key={name}
-                className="ml-2 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
+                className="ml-2 mt-1 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
                 >
                 {name}
                 <button
@@ -139,7 +139,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                     <i className="text-2xl fa-solid fa-tags"></i>
                                 </div>
                                 <div className="flex flex-col ml-3">
-                                    <div className="flex flex-row">
+                                    <div className="flex flex-row flex-wrap">
                                         {labels.map(label => {
                                             return renderLabel(label);
                                         })}
