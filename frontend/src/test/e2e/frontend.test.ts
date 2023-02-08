@@ -62,6 +62,9 @@ describe("frontend tests", () => {
         const fullsizeAsset = page.getByTestId("fullsize-asset");
         await expect(fullsizeAsset).toHaveCount(0);
 
+        const infoAssetId = page.getByTestId("asset-id");
+        await expect(infoAssetId).toHaveCount(0);
+
         //
         // Open fullscreen photo modal.
         //
@@ -69,9 +72,6 @@ describe("frontend tests", () => {
         await expect(fullsizeAsset).toHaveCount(1);
         await expect(fullsizeAsset).toBeVisible();
         await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/asset?id=${assetId}`);
-
-        const infoAssetId = page.getByTestId("asset-id");
-        await expect(infoAssetId).toHaveCount(0);
 
         //
         // Open photo info.

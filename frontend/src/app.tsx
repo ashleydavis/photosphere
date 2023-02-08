@@ -5,6 +5,7 @@ import { ISelectedGalleryItem } from "./lib/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
+import { GalleryItemContextProvider } from "./context/gallery-item-context";
 
 export function App() {
 
@@ -184,19 +185,25 @@ export function App() {
             </div>
 
             {selectedItem &&
-                <AssetView
-                    open={!!selectedItem}
+                <GalleryItemContextProvider 
                     asset={selectedItem.item}
-                    onClose={() => {
-                        setSelectedItem(undefined);
-                    }}
-                    onPrev={() => {
-                        setSelectedItem(getPrev(selectedItem));
-                    }}
-                    onNext={() => {
-                        setSelectedItem(getNext(selectedItem));
-                    }}
-                    />
+                    assetIndex={selectedItem.index}
+                    key={selectedItem.item._id}
+                    >
+		            <AssetView
+		                key={selectedItem.item._id}
+		                open={!!selectedItem}
+		                onClose={() => {
+	                        setSelectedItem(undefined);
+		                }}
+		                onPrev={() => {
+	                        setSelectedItem(getPrev(selectedItem));
+		                }}
+		                onNext={() => {
+	                        setSelectedItem(getNext(selectedItem));
+		                }}
+		                />
+                </GalleryItemContextProvider>
             }
 
         </BrowserRouter>

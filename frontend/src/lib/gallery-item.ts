@@ -63,6 +63,11 @@ export interface IGalleryItem {
     // Optional properties, like exif data.
     //
     properties?: any;
+
+    //
+    // Labels that have been added to the asset.
+    //
+    labels: string[];
 }
 
 //

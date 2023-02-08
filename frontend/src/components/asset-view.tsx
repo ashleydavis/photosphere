@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useApi } from "../context/api-context";
 import { AssetInfo } from "./asset-info";
-import { IGalleryItem } from "../lib/gallery-item";
+import { useGalleryItem } from "../context/gallery-item-context";
 
 export interface IAssetViewProps { 
 
@@ -10,11 +10,6 @@ export interface IAssetViewProps {
     // Set to true to open the asset view modal.
     //
     open: boolean;
-
-    //
-    // The asset to display in the modal.
-    //
-    asset?: IGalleryItem;
 
     //
     // Event raised when the model is closed.
@@ -36,7 +31,12 @@ export interface IAssetViewProps {
 //
 // Shows info for a particular asset.
 //
-export function AssetView({ open, asset, onClose, onNext, onPrev }: IAssetViewProps) {
+export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
+
+    //
+    // Interface to the gallery item.
+    //
+    const { asset } = useGalleryItem();
 
     //
     // Interface to the backend.
@@ -159,8 +159,8 @@ export function AssetView({ open, asset, onClose, onNext, onPrev }: IAssetViewPr
             </div>
 
             <AssetInfo
+            	key={asset._id}
                 open={openInfo}
-                asset={openInfo && asset || undefined}
                 onClose={() => {
                     setOpenInfo(false);
                 }}

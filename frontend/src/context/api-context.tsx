@@ -32,6 +32,16 @@ export interface IApiContext {
     // Uploads an asset to the backend.
     //
     uploadAsset(asset: IUploadDetails): Promise<string>;
+
+    //
+    // Adds a label to an asset.
+    //
+    addLabel(id: string, labelName: string): Promise<void>;
+
+    //
+    // Renmoves a label from an asset.
+    //
+    removeLabel(id: string, labelName: string): Promise<void>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -114,11 +124,34 @@ export function ApiContextProvider({ children }: IProps) {
         return assetId;
     }
     
+
+    //
+    // Adds a label to an asset.
+    //
+    async function addLabel(id: string, labelName: string): Promise<void> {
+        await axios.post(`${BASE_URL}/asset/add-label`, {
+            id: id,
+            label: labelName,
+        });
+    }
+
+    //
+    // Renmoves a label from an asset.
+    //
+    async function removeLabel(id: string, labelName: string): Promise<void> {
+        await axios.post(`${BASE_URL}/asset/remove-label`, {
+            id: id,
+            label: labelName,
+        });
+    }
+
     const value: IApiContext = {
         makeUrl,
         getAssets,
         checkAsset,
         uploadAsset,
+        addLabel,
+        removeLabel,
     };
     
     return (
