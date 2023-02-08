@@ -3,6 +3,7 @@ import { IUploadDetails } from "../lib/upload-details";
 import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
 import { base64StringToBlob } from 'blob-util';
+import dayjs from "dayjs";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -52,8 +53,16 @@ export function ApiContextProvider({ children }: IProps) {
     // Retreives the list of assets from the backend.
     //
     async function getAssets(skip: number, limit: number): Promise<IGalleryItem[]> {
-        const response = await axios.get(`${BASE_URL}/assets?skip=${skip}&limit=${limit}`);
-        return response.data.assets;
+        const { data } = await axios.get(`${BASE_URL}/assets?skip=${skip}&limit=${limit}`);
+        const { assets } = data;
+        
+        for (const asset of assets) {
+            //TODO: This should be configurable.
+            asset.group = dayjs(asset.sortDate).format("MMM, YYYY")
+        }
+
+        return assets;
+
     }
 
     //

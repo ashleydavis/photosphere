@@ -50,6 +50,11 @@ export interface IGalleryItem {
     photoDate?: string;
 
     //
+    /// The date the asset is sorted by in the backend.
+    //
+    sortDate: string;
+
+    //
     /// The date the asset was uploaded.
     //
     uploadDate: string;
