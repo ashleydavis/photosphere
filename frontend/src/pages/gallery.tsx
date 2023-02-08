@@ -42,8 +42,11 @@ export function GalleryPage({ onItemClick }: IGalleryPageProps) {
     //
     async function loadPage(pageNumber: number): Promise<void> {
         
-        const skip = totalLoaded;
+        const skip = (pageNumber-1) * NUM_ASSETS_PER_PAGE;
         const limit = NUM_ASSETS_PER_PAGE;
+
+        console.log(`Loading page ${pageNumber}`);
+        console.log(`Skipping ${skip}`)
         
         const assets = await api.getAssets(skip, limit);
         if (assets.length === 0) {
