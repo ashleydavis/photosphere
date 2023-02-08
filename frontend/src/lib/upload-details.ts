@@ -61,4 +61,14 @@ export interface IUploadDetails {
     // Id assigned to the asset after it is uploaded.
     //
     assetId?: string;
+
+    //
+    // The data the file was created.
+    //
+    fileDate: string;
+
+    //
+    // The data the photo was taken if known.
+    //
+    photoDate?: string;
 }

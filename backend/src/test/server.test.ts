@@ -2,9 +2,11 @@ import { createServer } from "../server";
 import request from "supertest";
 import * as fs from "fs-extra";
 import { ObjectId } from "mongodb";
-import { executionAsyncId } from "async_hooks";
+import dayjs from "dayjs";
 
 describe("photosphere backend", () => {
+
+    const dateNow = dayjs("2023-02-08T01:27:01.419Z").toDate();
 
     //
     // Initialises the server for testing.
@@ -42,7 +44,7 @@ describe("photosphere backend", () => {
             },
         };
 
-        const app = await createServer(mockDb);
+        const app = await createServer(mockDb, () => dateNow);
         return { 
             app, 
             mockCollection, 
@@ -106,6 +108,8 @@ describe("photosphere backend", () => {
             height: 1024,
             hash: "1234",
             location: "Somewhere",
+            fileDate: "2023-02-08T01:24:02.947Z",
+            photoDate: "2023-02-08T01:28:26.735Z",
             properties: {
                 "a": "property",
             },
@@ -132,6 +136,9 @@ describe("photosphere backend", () => {
             hash: metadata.hash,
             location: metadata.location,
             properties: metadata.properties,
+            fileDate: dayjs(metadata.fileDate).toDate(),
+            photoDate: dayjs(metadata.photoDate).toDate(),
+            uploadDate: dateNow,
         });
 
         const uploadedFiles = await getUploads();
@@ -185,7 +192,9 @@ describe("photosphere backend", () => {
     //
     async function uploadAssetWithMissingMetadata(metadata: any, missingField: string) {
 
-        const { app } = await initServer();
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.insertOne = jest.fn();
 
         const req = request(app).post("/asset");
 
@@ -193,8 +202,7 @@ describe("photosphere backend", () => {
         delete augumented[missingField];
 
         const response = await req
-            .set("metadata", JSON.stringify(metadata))
-            .set("thumbnail", "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAXUlEQVR4nL3MoRHAIAxG4bQDRJGLYP9tmAEwiQHFAPy4Co5W9tnv7l0pJXrv/rCfuPdeSiGiWmtrbecQAoCc85xTRA5zVR1jqOphDsDMYoxmBmBnd2dmEWFmd394AV5LK0bYIwU3AAAAAElFTkSuQmCC")
+            .set("metadata", JSON.stringify(augumented))
             .send(fs.readFileSync("./test/test-assets/1.jpeg"));
     
         expect(response.statusCode).toBe(500);
@@ -203,20 +211,20 @@ describe("photosphere backend", () => {
     test("upload asset with missing headers", async () => {
 
         const metadata = {
-            "fileName": "a-test-file.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/png",
-            "width": 256,
-            "height": 1024,
-            "hash": "1234",
+            fileName: "a-test-file.jpg",
+            contentType: "image/jpeg",
+            width: 256,
+            height: 1024,
+            hash: "1234",
+            fileDate: "2023-02-08T01:24:02.947Z",
         };
 
         await uploadAssetWithMissingMetadata(metadata, "fileName");
         await uploadAssetWithMissingMetadata(metadata, "contentType");
-        await uploadAssetWithMissingMetadata(metadata, "thumbContentType");
         await uploadAssetWithMissingMetadata(metadata, "width");
         await uploadAssetWithMissingMetadata(metadata, "height");
         await uploadAssetWithMissingMetadata(metadata, "hash");
+        await uploadAssetWithMissingMetadata(metadata, "fileDate");
     });
 
     //

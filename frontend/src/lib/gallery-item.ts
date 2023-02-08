@@ -35,14 +35,29 @@ export interface IGalleryItem {
     hash: string;
 
     //
-    // Optional properties, like exif data.
-    //
-    properties?: any;
-
-    //
     // Reverse geocoded location of the asset, if known.
     //
     location?: string;
+
+    //
+    // The date the file was created.
+    //
+    fileDate: string;
+
+    //
+    // The date the photo was taken, if known.
+    //
+    photoDate?: string;
+
+    //
+    /// The date the asset was uploaded.
+    //
+    uploadDate: string;
+
+    //
+    // Optional properties, like exif data.
+    //
+    properties?: any;
 }
 
 //

@@ -76,13 +76,15 @@ export function ApiContextProvider({ children }: IProps) {
             headers: {
                 "content-type": asset.file.type,
                 "metadata": JSON.stringify({
-                    "fileName": asset.file.name,
-                    "contentType": asset.file.type,
-                    "width": asset.resolution.width,
-                    "height": asset.resolution.height,
-                    "hash": asset.hash,
-                    "properties": asset.properties,
-                    "location": asset.location,
+                    fileName: asset.file.name,
+                    contentType: asset.file.type,
+                    width: asset.resolution.width,
+                    height: asset.resolution.height,
+                    hash: asset.hash,
+                    properties: asset.properties,
+                    location: asset.location,
+                    fileDate: asset.fileDate,
+                    photoDate: asset.photoDate,
                 }),
             },
         });

@@ -46,6 +46,21 @@ export interface IAsset {
     location?: string;
 
     //
+    // The date the file was created.
+    //
+    fileDate: Date;
+
+    //
+    // The date the photo was taken, if known.
+    //
+    photoDate?: Date;
+
+    //
+    /// The date the asset was uploaded.
+    //
+    uploadDate: Date;
+
+    //
     // Optional extra properties for the asset, like exif data.
     //
     properties?: any;

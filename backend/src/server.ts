@@ -5,11 +5,12 @@ import cors from "cors";
 import { IAsset } from "./lib/asset";
 import { Readable } from "stream";
 import { ObjectId, Db } from "mongodb";
+import dayjs, { Dayjs } from "dayjs";
 
 //
 // Starts the REST API.
 //
-export async function createServer(db: Db) {
+export async function createServer(db: Db, now: () => Date) {
 
     await fs.ensureDir("uploads");
     await fs.ensureDir("thumbs");
@@ -69,6 +70,7 @@ export async function createServer(db: Db) {
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
         const hash = getValue<string>(metadata, "hash");
+        const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
         
         const localFileName = path.join("uploads", assetId.toString());
         await streamToStorage(localFileName, req);
@@ -80,6 +82,8 @@ export async function createServer(db: Db) {
             width: width,
             height: height,
             hash: hash,
+            fileDate: fileDate,
+            uploadDate: now(),
         };
 
         if (metadata.location) {
@@ -88,6 +92,10 @@ export async function createServer(db: Db) {
 
         if (metadata.properties) {
             newAsset.properties = metadata.properties;
+        }
+
+        if (metadata.photoDate) {
+            newAsset.photoDate = dayjs(metadata.photoDate).toDate();
         }
 
         await assetCollections.insertOne(newAsset);

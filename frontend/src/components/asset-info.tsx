@@ -1,5 +1,6 @@
 import React from "react";
 import { IGalleryItem } from "../lib/gallery-item";
+import dayjs from "dayjs";
 
 export interface IAssetInfoProps { 
 
@@ -139,10 +140,10 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                 </div>
                                 <div className="flex flex-col ml-3">
                                     <div>
-                                        Jan 2
+                                        {dayjs(asset?.photoDate || asset?.fileDate).format("MMM D, YYYY")}
                                     </div>
                                     <div className="text-sm flex flex-row" >
-                                        <div>Mon, 5:02 PM</div>
+                                        <div>{dayjs(asset?.photoDate || asset?.fileDate).format("HH:mm")}</div>
                                         <div className="ml-4">GMT+10:00</div>
                                     </div>
                                 </div>

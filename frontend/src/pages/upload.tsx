@@ -6,6 +6,10 @@ import { convertExifCoordinates, reverseGeocode } from "../lib/reverse-geocode";
 import { IUploadDetails, UploadState } from "../lib/upload-details";
 import { Spinner } from "../components/spinner";
 
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
+
 export function UploadPage() {
 
     //
@@ -173,6 +177,7 @@ export function UploadPage() {
             thumbContentType: thumbContentType,
             hash: hash,
             status: existingAssetId ? "already-uploaded" : "pending",
+            fileDate: dayjs(file.lastModified).toISOString(),
         };
 
         if (exif) {
@@ -182,6 +187,20 @@ export function UploadPage() {
 
             if (exif.GPSLatitude && exif.GPSLongitude) {
                 uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
+            }
+
+            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+            for (const dateField of dateFields) {
+                const dateStr = exif[dateField];
+                if (dateStr) {
+                    try {
+                        uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                    }
+                    catch (err) {
+                        console.error(`Failed to parse date from ${dateStr}`);
+                        console.error(err);
+                    }
+                }
             }
         }
 
