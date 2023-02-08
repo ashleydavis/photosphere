@@ -32,6 +32,25 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
         event.stopPropagation();
     }
 
+    //
+    // Renders a label.
+    //
+    function renderLabel(name: string) {
+        return (
+            <span
+                className="ml-2 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
+                >
+                {name}
+                <button
+                    className="ml-2 p-1 pl-2 pr-1"
+                    onClick={event => notImplemented(event)}
+                >
+                    <i className="fa-solid fa-close"></i>
+                </button>
+            </span>
+        );
+    }
+
     return (
         <div className={"info overflow-scroll " + (open ? "open" : "")}>
             <div className="info-header">
@@ -103,26 +122,8 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                 </div>
                                 <div className="flex flex-col ml-3">
                                     <div className="flex flex-row">
-                                        <span
-                                            className="flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0">
-                                            Label 1
-                                            <button
-                                                className="ml-1 p-1 pl-2 pr-1"
-                                                onClick={event => notImplemented(event)}
-                                                >
-                                                <i className="fa-solid fa-close"></i>
-                                            </button>
-                                        </span>
-                                        <span
-                                            className="ml-2 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0">
-                                            Label 2
-                                            <button
-                                                className="ml-2 p-1 pl-2 pr-1"
-                                                onClick={event => notImplemented(event)}
-                                                >
-                                                <i className="fa-solid fa-close"></i>
-                                            </button>
-                                        </span>
+                                        {renderLabel("Label 1")}
+                                        {renderLabel("Label 2")}
 
                                         <button
                                             className="ml-2 p-1 pl-3 pr-3"
