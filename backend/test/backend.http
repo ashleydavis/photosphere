@@ -48,6 +48,30 @@ metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "wi
 
 GET {{base_url}}/asset?id={{upload_asset_id}}
 
+### 
+# Add a label to an asset.
+#
+
+POST {{base_url}}/asset/add-label
+Content-Type: application/json
+
+{
+    "id": "{{upload_asset_id}}",
+    "label": "A great label"
+}
+
+### 
+# Remove a label from an asset.
+#
+
+POST {{base_url}}/asset/remove-label
+Content-Type: application/json
+
+{
+    "id": "{{upload_asset_id}}",
+    "label": "A great label"
+}
+
 ###
 # Retrieve an thumbnail.
 #

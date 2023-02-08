@@ -84,6 +84,7 @@ export async function createServer(db: Db, now: () => Date) {
             hash: hash,
             fileDate: fileDate,
             uploadDate: now(),
+            labels: [],
         };
 
         if (metadata.location) {
@@ -187,6 +188,44 @@ export async function createServer(db: Db, now: () => Date) {
         }
     });
 
+    //
+    // Adds a label to an asset.
+    //
+    app.post("/asset/add-label", express.json(), async (req, res) => {
+
+        const id = new ObjectId(getValue<string>(req.body, "id"));
+        const label = getValue<string>(req.body, "label");
+        await assetCollections.updateOne(
+            { _id: id },
+            {
+                $push: {
+                    labels: label,
+                },
+            }
+        );
+        res.sendStatus(200);
+    });
+
+    //
+    // Removes a label from an asset.
+    //
+    app.post("/asset/remove-label", express.json(), async (req, res) => {
+
+        const id = new ObjectId(getValue<string>(req.body, "id"));
+        const label = getValue<string>(req.body, "label");
+        await assetCollections.updateOne(
+            { _id: id },
+            {
+                $pull: {
+                    labels: label,
+                },
+            }
+        );
+    });
+
+    //
+    // Checks if an asset has already been upload by its hash.
+    //
     app.get("/check-asset", async (req, res) => {
 
         const hash = req.query.hash as string;
@@ -203,6 +242,9 @@ export async function createServer(db: Db, now: () => Date) {
         }
     });
 
+    //
+    // Gets a paginated list of all assets.
+    //
     app.get("/assets", async (req, res) => {
 
         const skip = getIntQueryParam(req, "skip");

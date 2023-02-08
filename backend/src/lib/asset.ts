@@ -64,4 +64,9 @@ export interface IAsset {
     // Optional extra properties for the asset, like exif data.
     //
     properties?: any;
+
+    //
+    // Labels attached to the asset.
+    //
+    labels: string[];
 }
