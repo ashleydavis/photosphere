@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Gallery } from "../components/gallery";
 import { IGalleryItem } from "../lib/gallery-item";
-import { useApi } from "../context/api-context";
 import InfiniteScroll from "react-infinite-scroller";
+import { useGallery } from "../context/gallery-context";
 
-const NUM_ASSETS_PER_PAGE = 100;
 const INFINITE_SCROLL_THRESHOLD = 200;
 
 export interface IGalleryPageProps {
@@ -17,53 +16,9 @@ export interface IGalleryPageProps {
 export function GalleryPage({ onItemClick }: IGalleryPageProps) {
 
     //
-    // Interface to the API.
+    // The interface to the gallery.
     //
-    const api = useApi();
-
-    //
-    // Items to display in the gallery.
-    //
-	const [items, setItems] = useState<IGalleryItem[]>([]);
-	
-    //
-    // Total assets that have been loaded.
-    // This is required to determine how many images to load for the next virtual page.
-    //
-    const [totalLoaded, setTotalLoaded] = useState<number>(0);
-
-    //
-    // Set to true when there's more assets to load.
-    //
-    const [haveMoreAssets, setHaveMoreAssets] = useState<boolean>(true);
-
-    //
-    // Loads the requested page number of the gallery.
-    //
-    async function loadPage(pageNumber: number): Promise<void> {
-        
-        const skip = (pageNumber-1) * NUM_ASSETS_PER_PAGE;
-        const limit = NUM_ASSETS_PER_PAGE;
-
-        console.log(`Loading page ${pageNumber}`);
-        console.log(`Skipping ${skip}`)
-        
-        const assets = await api.getAssets(skip, limit);
-        if (assets.length === 0) {
-            //
-            // Ran out of items to load!
-            //
-            setHaveMoreAssets(false);
-            return;
-        }
-
-        //
-        // Add newly loaded items to state.
-        //
-        setItems(items.concat(assets));
-        setTotalLoaded(totalLoaded + assets.length);
-        setHaveMoreAssets(true);
-    }
+    const { assets, loadPage, haveMoreAssets } = useGallery();
 
     useEffect(() => {
         // 
@@ -90,7 +45,7 @@ export function GalleryPage({ onItemClick }: IGalleryPageProps) {
                 getScrollParent={() => document.getElementById("gallery")}
                 >
 		        <Gallery 
-		            items={items}                
+		            items={assets}
 		            onItemClick={onItemClick}
 		            targetRowHeight={150}
 		            />
