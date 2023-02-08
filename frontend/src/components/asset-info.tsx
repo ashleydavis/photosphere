@@ -25,6 +25,11 @@ export interface IAssetInfoProps {
 //
 export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
 
+    //
+    // Labels added to the asset.
+    //
+    const [labels, setLabels] = React.useState<string[]>([ "Label 1", "Label 2" ]);
+
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
 
@@ -38,6 +43,7 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
     function renderLabel(name: string) {
         return (
             <span
+                key={name}
                 className="ml-2 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
                 >
                 {name}
@@ -122,8 +128,9 @@ export function AssetInfo({ open, asset, onClose }: IAssetInfoProps) {
                                 </div>
                                 <div className="flex flex-col ml-3">
                                     <div className="flex flex-row">
-                                        {renderLabel("Label 1")}
-                                        {renderLabel("Label 2")}
+                                        {labels.map(label => {
+                                            return renderLabel(label);
+                                        })}
 
                                         <button
                                             className="ml-2 p-1 pl-3 pr-3"
