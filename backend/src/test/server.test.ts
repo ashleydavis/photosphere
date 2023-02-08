@@ -139,6 +139,7 @@ describe("photosphere backend", () => {
             fileDate: dayjs(metadata.fileDate).toDate(),
             photoDate: dayjs(metadata.photoDate).toDate(),
             uploadDate: dateNow,
+            labels: [],
         });
 
         const uploadedFiles = await getUploads();
@@ -436,7 +437,7 @@ describe("photosphere backend", () => {
         const mockAsset1: any = {
             contentType: "image/jpeg",
         };
-        const mockAsset2: any = {
+        const mockAsset2: any = { 
             contentType: "image/png",
         };
 
@@ -468,4 +469,61 @@ describe("photosphere backend", () => {
         });
     });
 
+    test("can add label to asset", async () => {
+
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.updateOne = jest.fn();
+
+        const id = new ObjectId();
+        const label = "A good label";
+
+        const response = await request(app)
+            .post(`/asset/add-label`)
+            .send({
+                id: id,
+                label: label,
+            });
+
+        expect(response.statusCode).toBe(200);
+        
+        expect(mockCollection.updateOne).toBeCalledTimes(1);
+        expect(mockCollection.updateOne).toHaveBeenCalledWith(
+            { _id: id },
+            { 
+                $push: {
+                    labels: label,
+                },
+            }
+        );
+    });
+
+    test("can remove label from asset", async () => {
+
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.updateOne = jest.fn();
+
+        const id = new ObjectId();
+        const label = "A good label";
+
+        const response = await request(app)
+            .post(`/asset/remove-label`)
+            .send({
+                id: id,
+                label: label,
+            });
+
+        expect(response.statusCode).toBe(200);
+        
+        expect(mockCollection.updateOne).toBeCalledTimes(1);
+        expect(mockCollection.updateOne).toHaveBeenCalledWith(
+            { _id: id },
+            { 
+                $pull: {
+                    labels: label,
+                },
+            }
+        );
+    });    
 });

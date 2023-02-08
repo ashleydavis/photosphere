@@ -221,6 +221,7 @@ export async function createServer(db: Db, now: () => Date) {
                 },
             }
         );
+        res.sendStatus(200);
     });
 
     //
