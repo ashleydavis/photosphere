@@ -142,6 +142,12 @@ export function UploadPage() {
             // Move onto the next upload.
             //
             setUploadIndex(uploadIndex + 1);
+            
+            //
+            // Resets the state of gallery. 
+            // A cheap way to force the uploaded assets to show up.
+            //
+            await reset();
         }
         catch (error) {
             console.error(`An upload failed.`);
