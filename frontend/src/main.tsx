@@ -129,39 +129,42 @@ export function Main() {
 
                     </div>
 
-                    <div className="flex flex-row items-center pt-3 pb-3 pl-4 pr-1">
-                        <div>
-                            <i className="fa-solid fa-search"></i>
+                    {openSearch
+                        && <div className="flex flex-row items-center pt-3 pb-3 pl-4 pr-1">
+                            <div>
+                                <i className="fa-solid fa-search"></i>
+                            </div>
+                            <input
+                                autoFocus 
+                                className="search-input flex-grow ml-4"
+                                placeholder="Type your search and press enter"
+                                value={searchInput} 
+                                onChange={event => {
+                                    setSearchInput(event.target.value);
+                                }}
+                                onKeyDown={async event => {
+                                    if (event.key === "Enter") {
+                                        //
+                                        // Commits the search.
+                                        //
+                                        await onCommitSearch();
+                                    }
+                                    else if (event.key === "Escape") {
+                                        //
+                                        // Cancels the search.
+                                        //
+                                        await onCloseSearch();
+                                    }
+                                }}
+                                />
+                            <button
+                                className="w-10 text-xl"
+                            	onClick={onCloseSearch}
+                                >
+                                <i className="fa-solid fa-close"></i>
+                            </button>
                         </div>
-                        <input 
-                            className="search-input flex-grow ml-4"
-                            placeholder="Type your search and press enter"
-                            value={searchInput} 
-                            onChange={event => {
-                                setSearchInput(event.target.value);
-                            }}
-                            onKeyDown={async event => {
-                                if (event.key === "Enter") {
-                                    //
-                                    // Commits the search.
-                                    //
-                                	await onCommitSearch();
-                                }
-                                else if (event.key === "Escape") {
-                                    //
-                                    // Cancels the search.
-                                    //
-                                	await onCloseSearch();
-                                }
-                            }}
-                            />
-                        <button
-                            className="w-10 text-xl"
-                            onClick={onCloseSearch}
-                            >
-                            <i className="fa-solid fa-close"></i>
-                        </button>
-                    </div>
+                    }                    
                 </div>
                 
             </div>
