@@ -15,8 +15,8 @@ export async function createServer(db: Db, now: () => Date) {
     await fs.ensureDir("uploads");
     await fs.ensureDir("thumbs");
 
-    const assetCollections = db.collection<IAsset>("assets");
-    await assetCollections.createIndex({ searchText: "text" });
+    const assetsCollection = db.collection<IAsset>("assets");
+    await assetsCollection.createIndex({ searchText: "text" });
 
     const app = express();
     app.use(cors());
@@ -102,7 +102,7 @@ export async function createServer(db: Db, now: () => Date) {
             newAsset.sortDate = newAsset.photoDate;
         }
 
-        await assetCollections.insertOne(newAsset);
+        await assetsCollection.insertOne(newAsset);
 
         res.json({
             assetId: assetId,
@@ -121,7 +121,7 @@ export async function createServer(db: Db, now: () => Date) {
             throw new Error(`Asset ID not specified in query parameters.`);
         }
 
-        const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
             res.sendStatus(404);
             return;
@@ -146,7 +146,7 @@ export async function createServer(db: Db, now: () => Date) {
         await streamToStorage(localFileName, req);
 
         const contentType = getHeader(req, "content-type");
-        await assetCollections.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
+        await assetsCollection.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
         
         res.sendStatus(200);
     });
@@ -161,7 +161,7 @@ export async function createServer(db: Db, now: () => Date) {
             throw new Error(`Asset ID not specified in query parameters.`);
         }
 
-        const asset = await assetCollections.findOne({ _id: new ObjectId(assetId) });
+        const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
         if (!asset) {
             res.sendStatus(404);
             return;
@@ -200,7 +200,7 @@ export async function createServer(db: Db, now: () => Date) {
 
         const id = new ObjectId(getValue<string>(req.body, "id"));
         const label = getValue<string>(req.body, "label");
-        await assetCollections.updateOne(
+        await assetsCollection.updateOne(
             { _id: id },
             {
                 $push: {
@@ -220,7 +220,7 @@ export async function createServer(db: Db, now: () => Date) {
 
         const id = new ObjectId(getValue<string>(req.body, "id"));
         const label = getValue<string>(req.body, "label");
-        await assetCollections.updateOne(
+        await assetsCollection.updateOne(
             { _id: id },
             {
                 $pull: {
@@ -243,7 +243,7 @@ export async function createServer(db: Db, now: () => Date) {
             throw new Error(`Hash not specified in query parameters.`);
         }
         
-        const asset = await assetCollections.findOne({ hash: hash });
+        const asset = await assetsCollection.findOne({ hash: hash });
         if (asset) {
             res.json({ assetId: asset._id });
         }
@@ -269,7 +269,7 @@ export async function createServer(db: Db, now: () => Date) {
             };
         }        
 
-        const assets = await assetCollections.find(query)
+        const assets = await assetsCollection.find(query)
             .sort({ sortDate: -1 })
             .skip(skip)
             .limit(limit)
@@ -285,7 +285,7 @@ export async function createServer(db: Db, now: () => Date) {
     //
     async function updateSearchText(assetId: ObjectId): Promise<void> {
 
-        const asset = await assetCollections.findOne({ _id: assetId });
+        const asset = await assetsCollection.findOne({ _id: assetId });
         if (!asset) {
             // No asset.
             console.log(`Can't update search text for asset ${assetId}, asset doesn't exist.`);
@@ -302,7 +302,7 @@ export async function createServer(db: Db, now: () => Date) {
             searchText += " " + label;
         }
 
-        await assetCollections.updateOne(
+        await assetsCollection.updateOne(
             { _id: assetId },
             {
                 $set: {
