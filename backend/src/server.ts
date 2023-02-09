@@ -16,6 +16,7 @@ export async function createServer(db: Db, now: () => Date) {
     await fs.ensureDir("thumbs");
 
     const assetCollections = db.collection<IAsset>("assets");
+    await assetCollections.createIndex({ searchText: "text" });
 
     const app = express();
     app.use(cors());
@@ -106,6 +107,8 @@ export async function createServer(db: Db, now: () => Date) {
         res.json({
             assetId: assetId,
         });
+
+        await updateSearchText(assetId);
     });
 
     //
@@ -206,6 +209,8 @@ export async function createServer(db: Db, now: () => Date) {
             }
         );
         res.sendStatus(200);
+
+        await updateSearchText(id);
     });
 
     //
@@ -224,6 +229,8 @@ export async function createServer(db: Db, now: () => Date) {
             }
         );
         res.sendStatus(200);
+
+        await updateSearchText(id);
     });
 
     //
@@ -250,10 +257,19 @@ export async function createServer(db: Db, now: () => Date) {
     //
     app.get("/assets", async (req, res) => {
 
+        const search = req.query.search as string;
         const skip = getIntQueryParam(req, "skip");
         const limit = getIntQueryParam(req, "limit");
 
-        const assets = await assetCollections.find({})
+        const query: any = {};
+        
+        if (search) {
+            query.$text = {
+                $search: search.toLowerCase(),
+            };
+        }        
+
+        const assets = await assetCollections.find(query)
             .sort({ sortDate: -1 })
             .skip(skip)
             .limit(limit)
@@ -263,6 +279,40 @@ export async function createServer(db: Db, now: () => Date) {
             assets: assets,
         });
     });
+
+    //
+    // Build the search index for a single asset.
+    //
+    async function updateSearchText(assetId: ObjectId): Promise<void> {
+
+        const asset = await assetCollections.findOne({ _id: assetId });
+        if (!asset) {
+            // No asset.
+            console.log(`Can't update search text for asset ${assetId}, asset doesn't exist.`);
+            return;
+        }
+
+        let searchText = "";
+
+        if (asset.location) {
+            searchText += " " + asset.location.toLowerCase();
+        }
+
+        for (const label of asset.labels) {
+            searchText += " " + label;
+        }
+
+        await assetCollections.updateOne(
+            { _id: assetId },
+            {
+                $set: {
+                    searchText: searchText,
+                },
+            }
+        );
+
+        console.log(`Updated search text for asset ${assetId} to ${searchText}`);
+    }
 
     return app;
 }

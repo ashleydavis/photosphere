@@ -82,7 +82,7 @@ GET {{base_url}}/thumb?id={{upload_asset_id}}
 ###
 # Check if an asset with a particular hash has been uploaded.
 
-@hash = 5041
+@hash = ABCD
 
 GET {{base_url}}/check-asset?hash={{hash}}
 
@@ -91,3 +91,9 @@ GET {{base_url}}/check-asset?hash={{hash}}
 #
 
 GET {{base_url}}/assets?skip=0&limit=100
+
+###
+# Search for asset.
+#
+
+GET {{base_url}}/assets?skip=0&limit=100&search=great

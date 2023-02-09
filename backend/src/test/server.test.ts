@@ -41,6 +41,9 @@ describe("photosphere backend", () => {
                     }
                 };
             },
+
+            createIndex() {
+            }
         };
         const mockDb: any = {
             collection() {
@@ -432,7 +435,7 @@ describe("photosphere backend", () => {
         expect(response.statusCode).toBe(500);
     });
 
-    test("get assets", async () => {
+    test("can get assets", async () => {
 
         const skip = 2;
         const limit = 3;
@@ -446,7 +449,9 @@ describe("photosphere backend", () => {
             contentType: "image/png",
         };
 
-        mockCollection.find = () => {
+        mockCollection.find = (query: any) => {
+            expect(query).toEqual({}); // Expect no search query.
+
             return {
                 sort() {
                     return {
@@ -535,4 +540,56 @@ describe("photosphere backend", () => {
             }
         );
     });    
+
+
+    test("can search assets", async () => {
+
+        const skip = 2;
+        const limit = 3;
+
+        const { app, mockCollection } = await initServer();
+
+        const mockAsset: any = {
+            contentType: "image/jpeg",
+        };
+
+        mockCollection.find = (query: any) => {
+            expect(query).toEqual({ 
+                $text: { 
+                    $search: 'something' 
+                },
+            });
+            
+            return {
+                sort() {
+                    return {
+                        skip(value: number) {
+                            expect(value).toBe(skip);
+        
+                            return {
+                                limit(value: number) {
+                                    expect(value).toBe(limit);
+        
+                                    return {
+                                        toArray() {
+                                            return [ mockAsset ];
+                                        },
+                                    };
+                                }
+                            };
+                        }
+                    };
+                }
+            };
+        };
+
+        const searchText = "something";
+        const response = await request(app).get(`/assets?skip=${skip}&limit=${limit}&search=${searchText}`);
+        
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toEqual({
+            assets: [ mockAsset ],
+        });
+    });
+
 });

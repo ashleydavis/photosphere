@@ -74,4 +74,9 @@ export interface IAsset {
     // Labels attached to the asset.
     //
     labels: string[];
+
+    //
+    // Text to search for the asset.
+    //
+    searchText?: string;
 }
