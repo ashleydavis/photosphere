@@ -40,7 +40,7 @@ export function Main() {
     // Set to true to open the search input.
     //
     const [openSearch, setOpenSearch] = useState<boolean>(false);
-
+    
     //
     // Opens the asset view modal.
     //
@@ -264,7 +264,7 @@ export function Main() {
                     key={selectedItem.item._id}
                     >
 		            <AssetView
-		                key={selectedItem.item._id}
+	                    key={selectedItem.item._id}
 		                open={openAssetView}
 		                onClose={() => {
 	                        setOpenAssetView(false);

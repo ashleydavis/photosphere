@@ -227,7 +227,7 @@ export function GalleryContextProvider({ children }: IProps) {
     //
     function getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
         
-         if (selectedItem.index < 0) {
+        if (selectedItem.index < 0) {
             return undefined;
         }
 

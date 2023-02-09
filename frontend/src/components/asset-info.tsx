@@ -65,7 +65,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     }
 
     return (
-        <div className={"info overflow-scroll " + (open ? "open" : "")}>
+        <div className={"info overflow-scroll bg-white text-black " + (open ? "open" : "")}>
             <div className="info-header">
                 <div className="flex flex-row items-center pl-3 pt-3 pb-2">
                     <button
