@@ -62,80 +62,83 @@ export function App() {
 
     return (
         <BrowserRouter>
-            <div id="navbar">
-                <div className="flex flex-row items-center pl-6 pt-3 pb-2">
-                    <button
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
+            <div id="navbar" className={(openSearch ? "search": "")} >
+                <div className="flex flex-col">
+                    <div className="flex flex-row items-center pl-6 pt-3 pb-2">
+                        <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            >
+                            <i className="fa-solid fa-bars"></i>
+                        </button>
+
+                        <h1 className="ml-10">Photosphere</h1>
+
+                        <button
+                            className="ml-8 mr-3"
+                        	onClick={event => {
+                            	setOpenSearch(true);
+                            }}
+                            >
+                            <div className="flex flex-row items-center">
+                                <i className="w-5 text-center fa-solid fa-search"></i>
+                                <div className="hidden sm:block ml-2">Search</div>
+                            </div>
+                        </button>
+
+                        <NavLink
+                            className="mr-3"
+                            to="/cloud"
+                            >
+                            <div className="flex flex-row items-center">
+                                <i className="w-5 text-center fa-solid fa-cloud"></i>
+                                <div className="hidden sm:block ml-2">Cloud</div>
+                            </div>
+                        </NavLink>
+
+                        <NavLink
+                            className="mr-3"
+                            to="/upload"
                         >
-                        <i className="fa-solid fa-bars"></i>
-                    </button>
+                            <div className="flex flex-row items-center">
+                                <i className="w-5 text-center fa-solid fa-upload"></i>
+                                <div className="hidden sm:block ml-2">Upload</div>
+                            </div>
+                        </NavLink>
 
-                    <h1 className="ml-10">Photosphere</h1>
+                    </div>
 
-                    <button
-                        className="ml-16 mr-3"
-                        onClick={event => {
-                            setOpenSearch(true);
-                        }}
-                        >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-search"></i>
-                            <div className="hidden sm:block ml-2">Search</div>
-                        </div>
-                    </button>
-
-                    <NavLink
-                        className="mr-3"
-                        to="/cloud"
-                        >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-cloud"></i>
-                            <div className="hidden sm:block ml-2">Cloud</div>
-                        </div>
-                    </NavLink>
-
-                    <NavLink
-                        className="mr-3"
-                        to="/upload"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-upload"></i>
-                            <div className="hidden sm:block ml-2">Upload</div>
-                        </div>
-                    </NavLink>
-
+                    <div className="flex flex-row items-center p-3 pl-5 pr-1">
+                        <input 
+                            className="search-input flex-grow"
+                            placeholder="Type your search and press enter"
+                            value={searchInput} 
+                            onChange={event => {
+                                setSearchInput(event.target.value);
+                            }}
+                            onKeyDown={async event => {
+                                if (event.key === "Enter") {
+                                    //
+                                    // Commits the search.
+                                    //
+                                	await onCommitSearch();
+                                }
+                                else if (event.key === "Escape") {
+                                    //
+                                    // Cancels the search.
+                                    //
+                                	await onCloseSearch();
+                                }
+                            }}
+                            />
+                        <button
+                            className="w-10 text-xl"
+                            onClick={onCloseSearch}
+                            >
+                            <i className="fa-solid fa-close"></i>
+                        </button>
+                    </div>
                 </div>
-
-                <div className={"search flex flex-row items-stretch " + (openSearch ? "open": "")}>
-                    <button
-                        className="w-10 text-xl"
-                        onClick={onCloseSearch}
-                        >
-                        <i className="fa-solid fa-close"></i>
-                    </button>
-                    <input 
-                        className="search-input flex-grow"
-                        placeholder="Type your search and press enter"
-                        value={searchInput} 
-                        onChange={event => {
-                            setSearchInput(event.target.value);
-                        }}
-                        onKeyDown={async event => {
-                            if (event.key === "Enter") {
-                                //
-                                // Commits the search.
-                                //
-                                await onCommitSearch();
-                            }
-                            else if (event.key === "Escape") {
-                                //
-                                // Cancels the search.
-                                //
-                                await onCloseSearch();
-                            }
-                        }}
-                    />
-                </div>
+                
             </div>
 
             <div id="sidebar" className={sidebarOpen ? "open" : ""} >
@@ -203,7 +206,7 @@ export function App() {
                                 <GalleryPage
                                     key={searchText} // Forces the gallery to update when the search changes.
                                     onItemClick={setSelectedItem}
-                                />
+                                    />
                             }
                             />
 

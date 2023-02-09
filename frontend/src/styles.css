@@ -101,7 +101,13 @@ i {
     height: 52px;
     background-color: white;
     border-bottom: 1px solid rgb(218, 220, 224);
+    overflow: hidden;
 }
+
+#navbar.search {
+    height: 104px;
+}
+
 
 #main {
     margin-top: 51px;
@@ -231,32 +237,3 @@ i {
     padding: 10px;
     background-color: rgba(255, 255, 255, 0.9);
 }
-
-/* Search input */
-
-.search {
-    display: none;
-    position: absolute;
-    left: 5px;
-    right: 5px;
-    top: 5px;
-    height: 42px;
-    background: white;
-}
-
-.search.open {
-    display: flex;
-}
-
-@media (min-width: 640px) {
-    .search {
-        left: unset;
-        width: 550px;
-    }
-} 
-
-.search-input {
-    padding-left: 10px;
-    border: 1px solid rgb(218,220,224);
-}
-
