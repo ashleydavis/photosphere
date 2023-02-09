@@ -136,7 +136,7 @@ export function Main() {
                             </div>
                             <input
                                 autoFocus 
-                                className="search-input flex-grow ml-4"
+                                className="search-input flex-grow ml-4 outline-none"
                                 placeholder="Type your search and press enter"
                                 value={searchInput} 
                                 onChange={event => {
