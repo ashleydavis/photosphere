@@ -42,6 +42,21 @@ export interface IGalleryContext {
     reset(): Promise<void>;
 
     //
+    // The current search text.
+    //
+    searchText: string;
+
+    //
+    // Search for assets based on text input.
+    //
+    search(searchText: string): Promise<void>;
+
+    //
+    // Clears the current search.
+    //
+    clearSearch(): Promise<void>;
+
+    //
     // Gets the previous asset, or undefined if none.
     //
     getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined;
@@ -86,6 +101,11 @@ export function GalleryContextProvider({ children }: IProps) {
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
+    // The current search that has been executed.
+    //
+    const [ searchText, setSearchText ] = useState<string>("");
+
+    //
     // Records the number of pages loaded so far.
     //
     const [ pagesLoaded, setPagesLoaded ] = useState<number>(0);
@@ -127,7 +147,7 @@ export function GalleryContextProvider({ children }: IProps) {
         console.log(`Skipping ${skip}`)
         console.log(`Limit ${limit}`)
         
-        const newAssets = await api.getAssets(skip, limit);
+        const newAssets = await api.getAssets(searchText, skip, limit);
         if (newAssets.length === 0) {
             //
             // Ran out of items to load!
@@ -154,6 +174,33 @@ export function GalleryContextProvider({ children }: IProps) {
         setHaveMoreAssets(true);
         clearSelectedItem();
     }    
+
+    //
+    // Sets the search text for finding assets.
+    // Passing in empty string or undefined gets all assets.
+    // This does a gallery reset when the search term has changed.
+    //
+    async function search(newSearchText: string): Promise<void> {
+        
+        console.log(`Setting asset search ${newSearchText}`);
+
+        if (searchText === newSearchText) {
+            //
+            // No change.
+            //
+            return;
+        }
+
+        setSearchText(newSearchText);
+        await reset();
+    }
+
+    //
+    // Clears the current search.
+    //
+    async function clearSearch(): Promise<void> {
+        await search("");
+    }
 
     //
     // Gets the previous asset, or undefined if none.
@@ -211,6 +258,9 @@ export function GalleryContextProvider({ children }: IProps) {
         setAssets,
         loadPage,
         reset,
+        searchText,
+        search,
+        clearSearch,
         getPrev,
         getNext,
         selectedItem,

@@ -13,6 +13,9 @@ export function App() {
     // Interface to the gallery.
     //
     const { 
+        searchText,
+        search,
+        clearSearch,
         getNext, 
         getPrev, 
         selectedItem, 
@@ -29,11 +32,32 @@ export function App() {
     //
     const [openSearch, setOpenSearch] = useState<boolean>(false);
 
+    //
+    // The search currently being typed by the user.
+    //
+    const [ searchInput, setSearchInput ] = React.useState<string>("");
+
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
 
         event.preventDefault();
         event.stopPropagation();
+    }
+
+    //
+    // Commits the search the user has typed in.
+    // 
+    async function onCommitSearch() {
+        await search(searchInput);
+    }
+
+    //
+    // Cancels/closes the search.
+    //
+    async function onCloseSearch() {
+        await clearSearch();
+        setSearchInput("");
+        setOpenSearch(false);
     }
 
     return (
@@ -85,16 +109,32 @@ export function App() {
                 <div className={"search flex flex-row items-stretch " + (openSearch ? "open": "")}>
                     <button
                         className="w-10 text-xl"
-                        onClick={event => {
-                            setOpenSearch(false);
-                        }}
+                        onClick={onCloseSearch}
                         >
                         <i className="fa-solid fa-close"></i>
                     </button>
                     <input 
                         className="search-input flex-grow"
                         placeholder="Type your search and press enter"
-                        />
+                        value={searchInput} 
+                        onChange={event => {
+                            setSearchInput(event.target.value);
+                        }}
+                        onKeyDown={async event => {
+                            if (event.key === "Enter") {
+                                //
+                                // Commits the search.
+                                //
+                                await onCommitSearch();
+                            }
+                            else if (event.key === "Escape") {
+                                //
+                                // Cancels the search.
+                                //
+                                await onCloseSearch();
+                            }
+                        }}
+                    />
                 </div>
             </div>
 
@@ -161,6 +201,7 @@ export function App() {
                             path="/cloud" 
                             element={
                                 <GalleryPage
+                                    key={searchText} // Forces the gallery to update when the search changes.
                                     onItemClick={setSelectedItem}
                                 />
                             }
