@@ -64,14 +64,14 @@ export function App() {
         <BrowserRouter>
             <div id="navbar" className={(openSearch ? "search": "")} >
                 <div className="flex flex-col">
-                    <div className="flex flex-row items-center pl-6 pt-3 pb-2">
+                    <div className="flex flex-row items-center pl-4 pt-3 pb-2">
                         <button
                             onClick={() => setSidebarOpen(!sidebarOpen)}
                             >
                             <i className="fa-solid fa-bars"></i>
                         </button>
 
-                        <h1 className="ml-10">Photosphere</h1>
+                        <h1 className="ml-4">Photosphere</h1>
 
                         <button
                             className="ml-8 mr-3"
@@ -107,9 +107,12 @@ export function App() {
 
                     </div>
 
-                    <div className="flex flex-row items-center p-3 pl-5 pr-1">
+                    <div className="flex flex-row items-center pt-3 pb-3 pl-4 pr-1">
+                        <div>
+                            <i className="fa-solid fa-search"></i>
+                        </div>
                         <input 
-                            className="search-input flex-grow"
+                            className="search-input flex-grow ml-4"
                             placeholder="Type your search and press enter"
                             value={searchInput} 
                             onChange={event => {
