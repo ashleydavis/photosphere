@@ -56,6 +56,11 @@ export interface IAsset {
     photoDate?: Date;
 
     //
+    // Date by which to sort the asset.
+    //
+    sortDate: Date;
+
+    //
     /// The date the asset was uploaded.
     //
     uploadDate: Date;

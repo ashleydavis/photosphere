@@ -24,12 +24,16 @@ describe("photosphere backend", () => {
         const mockCollection: any = {
             find() {
                 return {
-                    skip() {
+                    sort() {
                         return {
-                            limit() {
+                            skip() {
                                 return {
-                                    toArray() {
-                                        return [];
+                                    limit() {
+                                        return {
+                                            toArray() {
+                                                return [];
+                                            }
+                                        };
                                     }
                                 };
                             }
@@ -138,6 +142,7 @@ describe("photosphere backend", () => {
             properties: metadata.properties,
             fileDate: dayjs(metadata.fileDate).toDate(),
             photoDate: dayjs(metadata.photoDate).toDate(),
+            sortDate: dayjs(metadata.photoDate).toDate(),
             uploadDate: dateNow,
             labels: [],
         });
@@ -443,17 +448,21 @@ describe("photosphere backend", () => {
 
         mockCollection.find = () => {
             return {
-                skip(value: number) {
-                    expect(value).toBe(skip);
-
+                sort() {
                     return {
-                        limit(value: number) {
-                            expect(value).toBe(limit);
-
+                        skip(value: number) {
+                            expect(value).toBe(skip);
+        
                             return {
-                                toArray() {
-                                    return [ mockAsset1, mockAsset2 ];
-                                },
+                                limit(value: number) {
+                                    expect(value).toBe(limit);
+        
+                                    return {
+                                        toArray() {
+                                            return [ mockAsset1, mockAsset2 ];
+                                        },
+                                    };
+                                }
                             };
                         }
                     };
