@@ -234,6 +234,26 @@ export async function createServer(db: Db, now: () => Date) {
     });
 
     //
+    // Sets a description for the asset.
+    //
+    app.post("/asset/description", express.json(), async (req, res) => {
+
+        const id = new ObjectId(getValue<string>(req.body, "id"));
+        const description = getValue<string>(req.body, "description");
+        await assetsCollection.updateOne(
+            { _id: id },
+            {
+                $set: {
+                    description: description,
+                },
+            }
+        );
+        res.sendStatus(200);
+
+        await updateSearchText(id);
+    });
+
+    //
     // Checks if an asset has already been upload by its hash.
     //
     app.get("/check-asset", async (req, res) => {
@@ -300,6 +320,10 @@ export async function createServer(db: Db, now: () => Date) {
 
         for (const label of asset.labels) {
             searchText += " " + label;
+        }
+
+        if (asset.description) {
+            searchText += " " + asset.description;
         }
 
         await assetsCollection.updateOne(

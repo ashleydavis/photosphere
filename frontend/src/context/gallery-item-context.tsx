@@ -21,6 +21,11 @@ export interface IGalleryItemContext {
     updateAsset(asset: Partial<IGalleryItem>): void;
 
     //
+    // Sets the description on the asset.
+    //
+    setDescription(description: string): Promise<void>;
+
+    //
     // Adds a label to the asset.
     //
     addLabel(label: string): Promise<void>;
@@ -86,6 +91,18 @@ export function GalleryItemContextProvider({ children, asset, assetIndex }: IPro
     }
 
     //
+    // Sets the description on the asset.
+    //
+    async function setDescription(description: string): Promise<void> {
+
+        await api.setDescription(_asset._id, description);
+
+        updateAsset({
+            description,
+        });
+    }
+
+    //
     // Adds a label to the asset.
     //
     async function addLabel(label: string): Promise<void> {
@@ -116,6 +133,7 @@ export function GalleryItemContextProvider({ children, asset, assetIndex }: IPro
         asset: _asset,
         setAsset,
         updateAsset,
+        setDescription,
         addLabel,
         removeLabel,
     };

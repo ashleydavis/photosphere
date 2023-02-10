@@ -539,8 +539,36 @@ describe("photosphere backend", () => {
                 },
             }
         );
-    });    
+    });
 
+    test("can set description for asset", async () => {
+
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.updateOne = jest.fn();
+
+        const id = new ObjectId();
+        const description = "A good description";
+
+        const response = await request(app)
+            .post(`/asset/description`)
+            .send({
+                id: id,
+                description: description,
+            });
+
+        expect(response.statusCode).toBe(200);
+        
+        expect(mockCollection.updateOne).toBeCalledTimes(1);
+        expect(mockCollection.updateOne).toHaveBeenCalledWith(
+            { _id: id },
+            { 
+                $set: {
+                    description: description,
+                },
+            }
+        );
+    });
 
     test("can search assets", async () => {
 

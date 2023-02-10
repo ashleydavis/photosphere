@@ -68,6 +68,11 @@ export interface IGalleryItem {
     // Labels that have been added to the asset.
     //
     labels: string[];
+
+    //
+    // Description of the asset, once it has been set by the user.
+    //
+    description?: string;
 }
 
 //

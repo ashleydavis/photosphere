@@ -23,7 +23,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     //
     // Interface to the gallery item.
     //
-    const { asset, addLabel, removeLabel } = useGalleryItem();
+    const { asset, setDescription, addLabel, removeLabel } = useGalleryItem();
 
     //
     // Adds a new label to the asset.
@@ -44,6 +44,13 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     	await removeLabel(labelName);
     }
         
+    //
+    // Event raised when the user has updated the assets description.
+    //
+    async function onUpdateDescription(description: string): Promise<void> {
+        await setDescription(description); 
+    }
+
     //
     // Renders a label.
     //
@@ -90,6 +97,8 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             placeholder="Add a description"
                             spellCheck="false"
                             autoComplete="off"
+                            value={asset.description}
+                            onChange={event => onUpdateDescription(event.target.value)}
                         >
                         </textarea>
                     </div>

@@ -72,6 +72,19 @@ Content-Type: application/json
     "label": "A great label"
 }
 
+
+### 
+# Sets a description for an asset.
+#
+
+POST {{base_url}}/asset/description
+Content-Type: application/json
+
+{
+    "id": "{{upload_asset_id}}",
+    "description": "A great description"
+}
+
 ###
 # Retrieve an thumbnail.
 #

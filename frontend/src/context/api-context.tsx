@@ -42,6 +42,11 @@ export interface IApiContext {
     // Renmoves a label from an asset.
     //
     removeLabel(id: string, labelName: string): Promise<void>;
+
+    //
+    // Sets a description for an asset.
+    //
+    setDescription(id: string, description: string): Promise<void>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -150,6 +155,16 @@ export function ApiContextProvider({ children }: IProps) {
         });
     }
 
+    //
+    // Sets a description for an asset.
+    //
+    async function setDescription(id: string, description: string): Promise<void> {
+        await axios.post(`${BASE_URL}/asset/description`, {
+            id: id,
+            description: description,
+        });
+    }   
+
     const value: IApiContext = {
         makeUrl,
         getAssets,
@@ -157,6 +172,7 @@ export function ApiContextProvider({ children }: IProps) {
         uploadAsset,
         addLabel,
         removeLabel,
+        setDescription,
     };
     
     return (

@@ -76,6 +76,11 @@ export interface IAsset {
     labels: string[];
 
     //
+    // Description of the asset, once the user has set it.
+    //
+    description?: string;
+
+    //
     // Text to search for the asset.
     //
     searchText?: string;
