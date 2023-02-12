@@ -37,6 +37,7 @@
         "typescript": "^4.9.4"
     },
     "dependencies": {
+        "aws-sdk": "^2.1313.0",
         "cors": "^2.8.5",
         "dayjs": "^1.11.7",
         "express": "^5.0.0-beta.1",

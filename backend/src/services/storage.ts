@@ -15,5 +15,5 @@ export interface IStorage {
     //
     // Writes an input stream to storage.
     //
-    write(type: string, assetId: string, inputStream: Readable): Promise<void>;
+    write(type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 }

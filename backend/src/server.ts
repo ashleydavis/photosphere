@@ -70,7 +70,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         const hash = getValue<string>(metadata, "hash");
         const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
         
-        await storage.write("uploads", assetId.toString(), req);
+        await storage.write("uploads", assetId.toString(), contentType, req);
 
         const newAsset: IAsset = {
             _id: assetId,
@@ -137,9 +137,9 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
     app.post("/thumb", async (req, res) => {
         
         const assetId = new ObjectId(getHeader(req, "id"));
-        await storage.write("thumbs", assetId.toString(), req);
-
         const contentType = getHeader(req, "content-type");
+        await storage.write("thumbs", assetId.toString(), contentType, req);
+
         await assetsCollection.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
         
         res.sendStatus(200);

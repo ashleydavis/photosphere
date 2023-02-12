@@ -1,5 +1,6 @@
 import { MongoClient } from "mongodb";
 import { createServer } from "./server";
+import { CloudStorage } from "./services/cloud-storage";
 import { FileStorage } from "./services/file-storage";
 
 async function main() {
@@ -20,7 +21,9 @@ async function main() {
     await client.connect();
 
     const db = client.db(dbName);
-    const storage = new FileStorage();
+    const storage = process.env.NODE_ENV === "production"
+        ? new CloudStorage()
+        : new FileStorage();
     const app = await createServer(db, () => new Date(Date.now()), storage);
 
     app.listen(PORT, () => {
