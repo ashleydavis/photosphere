@@ -1,8 +1,9 @@
 import { createServer } from "../server";
-import request from "supertest";
 import * as fs from "fs-extra";
+import request from "supertest";
 import { ObjectId } from "mongodb";
 import dayjs from "dayjs";
+import { Readable } from "stream";
 
 describe("photosphere backend", () => {
 
@@ -12,14 +13,6 @@ describe("photosphere backend", () => {
     // Initialises the server for testing.
     //
     async function initServer() {
-
-        //
-        // Remove local assets from other test runs.
-        //
-        await fs.remove("./uploads");
-        await fs.remove("./thumbs");
-        await fs.ensureDir("./uploads");
-        await fs.ensureDir("./thumbs");
 
         const mockCollection: any = {
             find() {
@@ -42,49 +35,53 @@ describe("photosphere backend", () => {
                 };
             },
 
+            findOne() {
+            },
+
             createIndex() {
-            }
+            },
         };
+
         const mockDb: any = {
             collection() {
                 return mockCollection;
             },
         };
 
-        const app = await createServer(mockDb, () => dateNow);
+        const mockStorage: any = {
+            init() {
+
+            },
+        };
+
+        const app = await createServer(mockDb, () => dateNow, mockStorage);
         return { 
             app, 
             mockCollection, 
             mockDb,
+            mockStorage,
         };
     }
-
+    
     //
-    // Get list of assets uploaded.
+    // Creates a readable stream from a string.
     //
-    async function getUploads() {
-        const exists = await fs.exists("./uploads");
-        if (exists) {
-            return await fs.readdir("./uploads");
-        }
-        else {
-            return [];
-        }
+    function stringStream(content: string) {
+        let contentSent = false;
+        const stream = new Readable({
+            read() {
+                if (contentSent) {
+                    this.push(null);
+                }
+                else {
+                    this.push(content);
+                    contentSent = true;
+                }
+            },
+        });
+        return stream;
     }
-
-    //
-    // Get list of thumbnails uploaded.
-    //
-    async function getThumbnails() {
-        const exists = await fs.exists("./thumbs");
-        if (exists) {
-            return await fs.readdir("./thumbs");
-        }
-        else {
-            return [];
-        }
-    }
-
+    
     test("no assets", async () => {
 
         const { app } = await initServer();
@@ -98,15 +95,10 @@ describe("photosphere backend", () => {
 
     test("upload asset", async () => {
 
-        const { app, mockCollection } = await initServer();
-
-        //
-        // Check we are starting with zero files.
-        //
-        const origFiles = await getUploads();
-        expect(origFiles.length).toBe(0);
+        const { app, mockCollection, mockStorage } = await initServer();
 
         mockCollection.insertOne = jest.fn();
+        mockStorage.write = jest.fn();
 
         const metadata = {
             fileName: "a-test-file.jpg",
@@ -133,6 +125,10 @@ describe("photosphere backend", () => {
         expect(assetId).toBeDefined();
         expect(assetId.length).toBeGreaterThan(0);
 
+        expect(mockStorage.write).toHaveBeenCalledTimes(1);
+        expect(mockStorage.write.mock.calls[0][0]).toEqual("uploads");
+        expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
+
         expect(mockCollection.insertOne).toHaveBeenCalledTimes(1);
         expect(mockCollection.insertOne).toHaveBeenCalledWith({
             _id: new ObjectId(assetId),
@@ -149,24 +145,14 @@ describe("photosphere backend", () => {
             uploadDate: dateNow,
             labels: [],
         });
-
-        const uploadedFiles = await getUploads();
-        expect(uploadedFiles).toEqual([
-            assetId,
-        ]);
     });
 
     test("upload thumbnail", async () => {
 
-        const { app, mockCollection } = await initServer();
-
-        //
-        // Check we are starting with zero files.
-        //
-        const origThumbnails = await getThumbnails();
-        expect(origThumbnails.length).toBe(0);
+        const { app, mockCollection, mockStorage } = await initServer();
 
         mockCollection.updateOne = jest.fn();
+        mockStorage.write = jest.fn();
 
         const assetId = "63de0ba152be7661d4926bf1";
 
@@ -190,10 +176,9 @@ describe("photosphere backend", () => {
             }
         );
 
-        const uploadedFiles = await getThumbnails();
-        expect(uploadedFiles).toEqual([
-            assetId,
-        ]);
+        expect(mockStorage.write).toHaveBeenCalledTimes(1);
+        expect(mockStorage.write.mock.calls[0][0]).toEqual("thumbs");
+        expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
     });
 
     //
@@ -286,13 +271,12 @@ describe("photosphere backend", () => {
     test("get existing asset", async () => {
 
         const assetId = new ObjectId();
-        const { app, mockCollection } = await initServer();
-
-        // Generate the file into the uploads directory.
-        await fs.writeFile(`./uploads/${assetId}`, "ABCD");
+        const { app, mockCollection, mockStorage } = await initServer();
+        const content = "ABCD";
+        const contentType = "image/jpeg";
 
         const mockAsset: any = {
-            contentType: "image/jpeg",
+            contentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);
@@ -300,10 +284,16 @@ describe("photosphere backend", () => {
             return mockAsset;
         };
 
+        mockStorage.read = jest.fn((type: string, assetId: string) => {
+            expect(type).toBe("uploads");
+            expect(assetId).toBe(assetId);
+            return stringStream(content);
+        });
+
         const response = await request(app).get(`/asset?id=${assetId}`);
         expect(response.statusCode).toBe(200);
-        expect(response.header["content-type"]).toBe("image/jpeg");
-        expect(response.body).toEqual(Buffer.from("ABCD"));
+        expect(response.header["content-type"]).toBe(contentType);
+        expect(response.body).toEqual(Buffer.from(content));
     });
 
     test("non existing asset yields a 404 error", async () => {
@@ -330,47 +320,59 @@ describe("photosphere backend", () => {
     test("get existing thumb", async () => {
 
         const assetId = new ObjectId();
-        const { app, mockCollection } = await initServer();
+        const content = "ABCD";
+        const contentType = "image/jpeg";
 
-        // Generate the file into the thumbs directory.
-        await fs.writeFile(`./thumbs/${assetId}`, "ABCD");
+        const { app, mockCollection, mockStorage } = await initServer();
 
         const mockAsset: any = {
-            thumbContentType: "image/jpeg",
+            thumbContentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);
-            
             return mockAsset;
         };
+        mockStorage.read = jest.fn((type: string, assetId: string) => {
+            expect(type).toBe("thumbs");
+            expect(assetId).toBe(assetId);
+            return stringStream(content);
+        });
 
         const response = await request(app).get(`/thumb?id=${assetId}`);
         expect(response.statusCode).toBe(200);
-        expect(response.header["content-type"]).toBe("image/jpeg");
-        expect(response.body).toEqual(Buffer.from("ABCD"));
+        expect(response.header["content-type"]).toBe(contentType);
+        expect(response.body).toEqual(Buffer.from(content));
     });
 
     test("get thumb returns original asset when thumb doesn't exist", async () => {
 
         const assetId = new ObjectId();
-        const { app, mockCollection } = await initServer();
+        const content = "ABCD";
+        const contentType = "image/jpeg";
+
+        const { app, mockCollection, mockStorage } = await initServer();
 
         // Generate the file into the uploads directory.
-        await fs.writeFile(`./uploads/${assetId}`, "ABCD");
+        //fio: await fs.writeFile(`./uploads/${assetId}`, "ABCD");
 
         const mockAsset: any = {
-            contentType: "image/jpeg",
+            contentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);
             
             return mockAsset;
         };
+        mockStorage.read = jest.fn((type: string, assetId: string) => {
+            expect(type).toBe("uploads");
+            expect(assetId).toBe(assetId);
+            return stringStream(content);
+        });
 
         const response = await request(app).get(`/thumb?id=${assetId}`);
         expect(response.statusCode).toBe(200);
-        expect(response.header["content-type"]).toBe("image/jpeg");
-        expect(response.body).toEqual(Buffer.from("ABCD"));
+        expect(response.header["content-type"]).toBe(contentType);
+        expect(response.body).toEqual(Buffer.from(content));
     });
 
     test("non existing thumb yields a 404 error", async () => {
@@ -621,3 +623,4 @@ describe("photosphere backend", () => {
     });
 
 });
+

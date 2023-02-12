@@ -1,19 +1,16 @@
 import express, { Request } from "express";
-import * as fs from "fs-extra";
-import * as path from "path";
 import cors from "cors";
 import { IAsset } from "./lib/asset";
-import { Readable } from "stream";
 import { ObjectId, Db } from "mongodb";
 import dayjs from "dayjs";
+import { IStorage } from "./services/storage";
 
 //
 // Starts the REST API.
 //
-export async function createServer(db: Db, now: () => Date) {
+export async function createServer(db: Db, now: () => Date, storage: IStorage) {
 
-    await fs.ensureDir("uploads");
-    await fs.ensureDir("thumbs");
+    await storage.init();
 
     const assetsCollection = db.collection<IAsset>("assets");
     await assetsCollection.createIndex({ searchText: "text" });
@@ -73,8 +70,7 @@ export async function createServer(db: Db, now: () => Date) {
         const hash = getValue<string>(metadata, "hash");
         const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
         
-        const localFileName = path.join("uploads", assetId.toString());
-        await streamToStorage(localFileName, req);
+        await storage.write("uploads", assetId.toString(), req);
 
         const newAsset: IAsset = {
             _id: assetId,
@@ -109,7 +105,7 @@ export async function createServer(db: Db, now: () => Date) {
         });
 
         await updateSearchText(assetId);
-    });
+    }); 
 
     //
     // Gets a particular asset by id.
@@ -131,9 +127,8 @@ export async function createServer(db: Db, now: () => Date) {
             "Content-Type": asset.contentType,
         });
 
-        const localFileName = path.join("uploads", assetId);
-        const fileReadStream = fs.createReadStream(localFileName);
-        fileReadStream.pipe(res);
+        const stream = storage.read("uploads", assetId);
+        stream.pipe(res);
     });
 
     //
@@ -142,8 +137,7 @@ export async function createServer(db: Db, now: () => Date) {
     app.post("/thumb", async (req, res) => {
         
         const assetId = new ObjectId(getHeader(req, "id"));
-        const localFileName = path.join("thumbs", assetId.toString());
-        await streamToStorage(localFileName, req);
+        await storage.write("thumbs", assetId.toString(), req);
 
         const contentType = getHeader(req, "content-type");
         await assetsCollection.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
@@ -175,9 +169,8 @@ export async function createServer(db: Db, now: () => Date) {
                 "Content-Type": asset.thumbContentType,
             });
     
-            const localFileName = path.join("thumbs", assetId);
-            const fileReadStream = fs.createReadStream(localFileName);
-            fileReadStream.pipe(res);
+            const stream = await storage.read("thumbs", assetId);
+            stream.pipe(res);
         }
         else {
             // 
@@ -187,9 +180,8 @@ export async function createServer(db: Db, now: () => Date) {
                 "Content-Type": asset.contentType,
             });
     
-            const localFileName = path.join("uploads", assetId);
-            const fileReadStream = fs.createReadStream(localFileName);
-            fileReadStream.pipe(res);
+            const stream = await storage.read("uploads", assetId);
+            stream.pipe(res);
         }
     });
 
@@ -300,6 +292,7 @@ export async function createServer(db: Db, now: () => Date) {
         });
     });
 
+
     //
     // Build the search index for a single asset.
     //
@@ -341,18 +334,3 @@ export async function createServer(db: Db, now: () => Date) {
     return app;
 }
 
-//
-// Streams an input stream to local file storage.
-//
-function streamToStorage(localFileName: string, inputStream: Readable) {
-    return new Promise<void>((resolve, reject) => {
-        const fileWriteStream = fs.createWriteStream(localFileName);
-        inputStream.pipe(fileWriteStream)
-            .on("error", (err: any) => {
-                reject(err);
-            })
-            .on("finish", () => {
-                resolve();
-            });
-    });
-}

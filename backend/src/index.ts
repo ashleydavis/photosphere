@@ -1,5 +1,6 @@
 import { MongoClient } from "mongodb";
 import { createServer } from "./server";
+import { FileStorage } from "./services/file-storage";
 
 async function main() {
 
@@ -19,7 +20,8 @@ async function main() {
     await client.connect();
 
     const db = client.db(dbName);
-    const app = await createServer(db, () => new Date(Date.now()));
+    const storage = new FileStorage();
+    const app = await createServer(db, () => new Date(Date.now()), storage);
 
     app.listen(PORT, () => {
         console.log(`Example app listening on port ${PORT}`);
