@@ -206,7 +206,7 @@ export function Main() {
                     </div>
                 </NavLink>
 
-                <button
+                {/* <button
                     className="flex flex-row items-center pl-1 mt-8 cursor-pointer"
                     onClick={event => notImplemented(event)}
                     >
@@ -220,7 +220,7 @@ export function Main() {
                     >
                     <i className="w-12 text-center fa-regular fa-trash-can"></i>
                     <div className="">Trash</div>
-                </button>
+                </button> */}
             </div>
 
             <div id="main">
