@@ -40,6 +40,11 @@ export interface IGalleryItem {
     group?: string;
 
     //
+    // The original name of the asset before it was uploaded.
+    //
+    origFileName: string;
+
+    //
     // The hash of the asset.
     //
     hash: string;

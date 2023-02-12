@@ -163,15 +163,15 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
-                                	{dayjs(asset.sortDate).format("MMM D, YYYY")}
+                                    {dayjs(asset.sortDate).format("MMM D, YYYY")}
                                 </div>
                                 <div className="text-sm flex flex-row" >
-                                	{dayjs(asset.sortDate).format("HH:mm")}
+                                    {dayjs(asset.sortDate).format("HH:mm")}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        {/* <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-camera"></i>
                             </div>
@@ -186,7 +186,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                                     <div className="ml-4">ISO368</div>
                                 </div>
                             </div>
-                        </div>
+                        </div> */}
 
                         <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
@@ -194,15 +194,15 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
-                                    PXL_20230102_070227920.jpg
+                                    {asset.origFileName}
                                 </div>
                                 <div className="text-sm flex flex-row" >
-                                <div>{asset.width} × {asset.height}</div>
+                                    <div>{asset.width} × {asset.height}</div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        {/* <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-0 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-upload"></i>
                             </div>
@@ -212,6 +212,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                                 </div>
                             </div>
                         </div>
+                        */}
                     </div>
                 </div>
             </div>
