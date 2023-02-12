@@ -62,8 +62,8 @@ export function createLayout(items: IGalleryItem[], galleryWidth: number, target
         // Clone the item so we can modify it without modifying the original.
         //
         const clone = Object.assign({}, item, {
-            width: computedWidth,
-            height: targetRowHeight,
+            thumbWidth: computedWidth,
+            thumbHeight: targetRowHeight,
             aspectRatio: aspectRatio,
         });
 
@@ -98,9 +98,9 @@ export function createLayout(items: IGalleryItem[], galleryWidth: number, target
         for (const item of row.items) {
             const aspectRatio = item.aspectRatio!;
 
-            item.width += deltaWidth;
-            item.height = item.width * (1.0 / aspectRatio);
-            maxThumbHeight = Math.max(maxThumbHeight, item.height);
+            item.thumbWidth! += deltaWidth;
+            item.thumbHeight = item.thumbWidth! * (1.0 / aspectRatio);
+            maxThumbHeight = Math.max(maxThumbHeight, item.thumbHeight);
         }
 
         row.height = maxThumbHeight;

@@ -122,20 +122,20 @@ describe("layout", () => {
         expect(firstRow.height).toBeGreaterThan(targetRowHeight);
 
         const item1 = firstRow.items[0];
-        expect(item1.width).toBeGreaterThan(items[0].width);
-        expect(item1.height).toBeGreaterThan(items[0].height);
+        expect(item1.thumbWidth).toBeGreaterThan(items[0].width);
+        expect(item1.thumbHeight).toBeGreaterThan(items[0].height);
 
         const item2 = firstRow.items[1];
-        expect(item2.width).toBeGreaterThan(items[1].width);
-        expect(item2.height).toBeGreaterThan(items[1].height);
+        expect(item2.thumbWidth).toBeGreaterThan(items[1].width);
+        expect(item2.thumbHeight).toBeGreaterThan(items[1].height);
 
         const secondRow = rows[1];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.height).toBeCloseTo(targetRowHeight);
 
         const item3 = secondRow.items[0];
-        expect(item3.width).toBeCloseTo(items[2].width);
-        expect(item3.height).toBeCloseTo(items[2].height);
+        expect(item3.thumbWidth).toBeCloseTo(items[2].width);
+        expect(item3.thumbHeight).toBeCloseTo(items[2].height);
         
     });
 

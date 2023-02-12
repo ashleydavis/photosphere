@@ -197,8 +197,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                                     PXL_20230102_070227920.jpg
                                 </div>
                                 <div className="text-sm flex flex-row" >
-                                    <div>4.9MP</div>
-                                    <div className="ml-4">1920 × 2560</div>
+                                <div>{asset.width} × {asset.height}</div>
                                 </div>
                             </div>
                         </div>

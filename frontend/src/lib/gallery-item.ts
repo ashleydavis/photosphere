@@ -20,6 +20,16 @@ export interface IGalleryItem {
     height: number;
 
     //
+    // The computed width of the thumbnail.
+    //
+    thumbWidth?: number;
+
+    //
+    // The computed height of the thumbnail.
+    //
+    thumbHeight?: number;
+
+    //
     // The aspect ratio of them item, once computed.
     //
     aspectRatio?: number;
