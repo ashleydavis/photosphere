@@ -384,9 +384,9 @@ export function UploadPage() {
                 </label>
             </div>
 
-            <div>Uploading: {isUploading}</div>
+            {/* <div>Uploading: {isUploading}</div>
             <div>Total: {uploads.length}</div>
-            <div>Uploaded: {numUploaded}</div>
+            <div>Uploaded: {numUploaded}</div> */}
 
             <div className="flex flex-wrap">
                 {uploads.map((upload, index) => {
