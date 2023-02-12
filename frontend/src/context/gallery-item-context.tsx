@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "./api-context";
 import { useGallery } from "./gallery-context";
@@ -91,12 +91,36 @@ export function GalleryItemContextProvider({ children, asset, assetIndex }: IPro
     }
 
     //
+    // Debounces the update of the description.
+    //
+    useEffect(() => {
+
+        console.log(`Triggered timeout to update description asset ${_asset._id}`);
+
+        const timeout = setTimeout(() => {
+            console.log(`Updating description for asset ${_asset._id}`);
+            api.setDescription(_asset._id, _asset.description || "")
+                .catch(err => {
+                    console.error(`Failed to update description for asset ${_asset._id}:`);
+                    console.error(err)
+                });
+        }, 1000);
+
+        return () => {
+            console.log(`Clearing the timeout for description update.`);
+            clearTimeout(timeout);
+        };
+
+    }, [_asset.description]);
+
+    //
     // Sets the description on the asset.
     //
     async function setDescription(description: string): Promise<void> {
-
-        await api.setDescription(_asset._id, description);
-
+        //
+        // Updating the description triggers a timeout (see useEffect above)
+        // to update the description on the backend.
+        //
         updateAsset({
             description,
         });
