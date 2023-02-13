@@ -14,6 +14,12 @@ First, clone a local copy of the code repository:
 git clone git@github.com:Rapid-Fullstack-Development/photosphere-monorepo.git
 ```
 
+Then install dependencies at the root of the monorepo:
+
+```
+cd photosphere-monorepo
+npm install
+```
 
 Next, start the backend. Follow the instructions in [./backend/README.md](./backend/README.md).
 

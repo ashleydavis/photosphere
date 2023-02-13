@@ -6,12 +6,13 @@
     "scripts": {
         "start": "node build/index.js",
         "start:dev": "npm run clean-uploads && concurrently \"npm run start-db\" \"npm run start-with-dev-db\"",
-        "start-db": "insta-mongo --db-port=7001 --rest-port=7000",
-        "start-with-dev-db": "npm run clean-uploads && cross-env PORT=3000 DB_CONNECTION_STRING=mongodb://localhost:7001 ts-node-dev --respawn src/index.ts",
+        "start-db": "insta-mongo --db-port=7001 --rest-port=7000 --load=50-assets --fixtures=../fixtures --db=photosphere",
+        "start-with-dev-db": "npm run clean-uploads && npm run copy-uploads && cross-env PORT=3000 DB_CONNECTION_STRING=mongodb://localhost:7001 ts-node-dev --respawn src/index.ts",
         "build": "npm install --production=false && npm run compile",
         "compile": "tsc",
         "compile:watch": "tsc --watch",
         "clean-uploads": "rm -rf uploads thumbs",
+        "copy-uploads": "cp -r ../fixtures/50-assets/files/uploads uploads && cp -r ../fixtures/50-assets/files/thumbs thumbs",
         "clean": "rm -rf build",
         "test": "jest --coverage --runInBand",
         "test:watch": "jest --watch --runInBand"
