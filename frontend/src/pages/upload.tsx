@@ -11,6 +11,11 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
+//
+// Size of the thumbnail to generate and upload to the backend.
+//
+const THUMBNAIL_MIN_SIZE = 200;
+
 export function UploadPage() {
 
     //
@@ -174,7 +179,7 @@ export function UploadPage() {
 
         const imageData = await loadDataURL(file);
         const imageResolution = await getImageResolution(imageData);
-        const thumbnailDataUrl = await resizeImage(imageData, 100);
+        const thumbnailDataUrl = await resizeImage(imageData, THUMBNAIL_MIN_SIZE);
         const thumContentTypeStart = 5;
         const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
         const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
