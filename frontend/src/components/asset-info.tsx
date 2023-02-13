@@ -171,6 +171,19 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             </div>
                         </div>
 
+                        {asset.location
+                            && <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                                <div className="w-6 mt-2 flex flex-col items-center">
+                                    <i className="text-2xl fa-regular fa-map"></i>
+                                </div>
+                                <div className="flex flex-col ml-3">
+                                    <div>
+                                        {asset.location}
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
                         {/* <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-camera"></i>
