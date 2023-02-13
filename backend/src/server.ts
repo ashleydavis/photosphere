@@ -311,9 +311,11 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             searchText += " " + asset.location.toLowerCase();
         }
 
-        for (const label of asset.labels) {
-            searchText += " " + label;
-        }
+        if (asset.labels) {
+            for (const label of asset.labels) {
+                searchText += " " + label;
+            }
+        }    
 
         if (asset.description) {
             searchText += " " + asset.description;

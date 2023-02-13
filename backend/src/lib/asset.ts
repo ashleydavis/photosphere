@@ -73,7 +73,7 @@ export interface IAsset {
     //
     // Labels attached to the asset.
     //
-    labels: string[];
+    labels?: string[];
 
     //
     // Description of the asset, once the user has set it.
