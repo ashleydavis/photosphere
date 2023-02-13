@@ -59,18 +59,16 @@ export function createLayout(items: IGalleryItem[], galleryWidth: number, target
         }
 
         //
-        // Clone the item so we can modify it without modifying the original.
+        // Updated computed thumb resolution.
         //
-        const clone = Object.assign({}, item, {
-            thumbWidth: computedWidth,
-            thumbHeight: targetRowHeight,
-            aspectRatio: aspectRatio,
-        });
+        item.thumbWidth = computedWidth;
+        item.thumbHeight = targetRowHeight;
+        item.aspectRatio = aspectRatio;
 
         //
         // Add the item to the row.
         //
-        curRow.items.push(clone);
+        curRow.items.push(item);
         curRow.width += computedWidth;
     }
 
