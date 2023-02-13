@@ -4,1302 +4,1352 @@ const assets = [
 
     /* 1 */
     {
-        "_id" : new ObjectId("63e99974254c230db30fe9b1"),
-        "origFileName" : "hghtG_EUiIk.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef32"),
+        "origFileName" : "kBis_RVfGQM.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 5464,
-        "height" : 8192,
-        "description" : "American Heritage Chocolate, Chocolate Ice Cream",
-        "location" : null,
+        "width" : 5349,
+        "height" : 8019,
+        "description" : "a sandy beach with a body of water in the distance",
+        "location" : "Ouddorp, Niederlande",
+        "searchText" : " a sandy beach with a body of water in the distance Ouddorp, Niederlande",
         "properties" : {
             "exif" : {
                 "make" : "Canon",
                 "model" : " EOS R5",
                 "name" : "Canon, EOS R5",
-                "exposure_time" : "1/100",
-                "aperture" : "8.0",
-                "focal_length" : "135.0",
-                "iso" : 800
+                "exposure_time" : "1/1000",
+                "aperture" : "2.8",
+                "focal_length" : "50.0",
+                "iso" : 100
             },
         },
-        "hash" : "101eb53d3e090a7c6c5b197cd5c1ae17accd199edd4fb79271b6a6aac58ab40a",
-        "fileDate" : "2023-01-12T19:42:09Z",
-        "photoDate" : "2023-01-12T19:42:09Z"
+        "hash" : "25c6d5bd92f9ef375e50b80196030e2903e4b9be896dce8a2fdfe7a8a3c1f365",
+        "fileDate" : "2023-01-09T04:36:22Z",
+        "photoDate" : "2023-01-09T04:36:22Z"
     },
 
     /* 2 */
     {
-        "_id" : new ObjectId("63e99974254c230db30fe9b2"),
-        "origFileName" : "F50wqBrZPgI.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef33"),
+        "origFileName" : "JOvLQVXf9uA.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
         "width" : 4000,
         "height" : 6000,
-        "description" : "a painting of blue and purple flowers on a white background",
-        "location" : null,
+        "description" : "Portland Fashion Model wearing a gold crown and necklace Portrait taken by Portland Photographer Lance Reis on my Sonya7iii in my photography studio.",
+        "location" : "Portland, OR, USA",
+        "searchText" : " Portland Fashion Model wearing a gold crown and necklace Portrait taken by Portland Photographer Lance Reis on my Sonya7iii in my photography studio. Portland, OR, USA",
         "properties" : {
             "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 2000D",
-                "name" : "Canon, EOS 2000D",
+                "make" : "Sony",
+                "model" : null,
+                "name" : "Sony",
                 "exposure_time" : null,
                 "aperture" : null,
-                "focal_length" : null,
-                "iso" : 400
+                "focal_length" : "0.0",
+                "iso" : null
             },
         },
-        "hash" : "d202140706bcf1966689f046538c9ab995289fbec308c66fec087f20c6663630",
-        "fileDate" : "2023-01-14T18:22:40Z",
-        "photoDate" : "2023-01-14T18:22:40Z"
+        "hash" : "39f8c3599cfee13335143cbd2e7893ef5fbd1b0454aaa6e7f51c47eadc9366fa",
+        "fileDate" : "2023-01-09T15:50:46Z",
+        "photoDate" : "2023-01-09T15:50:46Z"
     },
 
     /* 3 */
     {
-        "_id" : new ObjectId("63e99974254c230db30fe9b3"),
-        "origFileName" : "-a29dB9IoCE.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef34"),
+        "origFileName" : "p9ttlbi5wig.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 4000,
-        "height" : 6000,
-        "description" : "a steering wheel and dashboard of a classic car",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-E3",
-                "name" : "FUJIFILM, X-E3",
-                "exposure_time" : "1/400",
-                "aperture" : null,
-                "focal_length" : "35.0",
-                "iso" : 640
-            },
-        },
-        "hash" : "6a6a4b36611a7dbee1b085845ca647c366f0b6d22fa2fbb30014f0bd9fa9cebf",
-        "fileDate" : "2023-01-15T00:59:55Z",
-        "photoDate" : "2023-01-15T00:59:55Z"
-    },
-
-    /* 4 */
-    {
-        "_id" : new ObjectId("63e99975254c230db30fe9b4"),
-        "origFileName" : "looRLz4nAj4.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6000,
-        "height" : 4000,
-        "description" : "a dark alley with a bicycle parked in the middle of it",
-        "location" : "Nakano, Tokyo, Japan",
-        "properties" : {
-            "exif" : {
-                "make" : "SONY",
-                "model" : "ILCE-7M3",
-                "name" : "SONY, ILCE-7M3",
-                "exposure_time" : "1/125",
-                "aperture" : "4",
-                "focal_length" : "28.0",
-                "iso" : 2000
-            },
-        },
-        "hash" : "4438dfe74ad7e33538d44eab7c3b4e3dd91f51662f48b091cdab8f6950a8e741",
-        "fileDate" : "2023-01-15T10:47:27Z",
-        "photoDate" : "2023-01-15T10:47:27Z"
-    },
-
-    /* 5 */
-    {
-        "_id" : new ObjectId("63e99975254c230db30fe9b5"),
-        "origFileName" : "67lDVYINZBc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6336,
-        "height" : 9504,
-        "description" : "View of the CN Tower. Instagram: @anthonyadu_",
-        "location" : "Toronto, ON, Canada",
-        "properties" : {
-            "exif" : {
-                "make" : "SONY",
-                "model" : "ILCE-7RM5",
-                "name" : "SONY, ILCE-7RM5",
-                "exposure_time" : "1/2000",
-                "aperture" : "4",
-                "focal_length" : "90.0",
-                "iso" : 640
-            },
-        },
-        "hash" : "b6ae83a6ebc780812db8172891acd062eb8f850cb43e7c9440cb7455631ba10b",
-        "fileDate" : "2023-01-16T06:14:41Z",
-        "photoDate" : "2023-01-16T06:14:41Z"
-    },
-
-    /* 6 */
-    {
-        "_id" : new ObjectId("63e99975254c230db30fe9b6"),
-        "origFileName" : "PDNP0Q_Swlg.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3648,
-        "height" : 5472,
-        "description" : "a narrow slot in the side of a canyon",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 6D",
-                "name" : "Canon, EOS 6D",
-                "exposure_time" : "1/10",
-                "aperture" : "22.0",
-                "focal_length" : "17.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "5b69c437bb7d672ba6f70dd9c6994e9ac7131c419131a53892c40b08b05e63af",
-        "fileDate" : "2023-01-17T15:21:52Z",
-        "photoDate" : "2023-01-17T15:21:52Z"
-    },
-
-    /* 7 */
-    {
-        "_id" : new ObjectId("63e99976254c230db30fe9b7"),
-        "origFileName" : "pkD53KYMR14.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3648,
-        "height" : 5472,
-        "description" : "a bunch of white lanterns with asian writing on them",
-        "location" : null,
+        "width" : 3600,
+        "height" : 2400,
+        "description" : "Smiling Catholic priest (jesuit) giving his blessing at New Yearˇs",
+        "location" : "Trnava, Slovakia",
+        "searchText" : " Smiling Catholic priest (jesuit) giving his blessing at New Yearˇs Trnava, Slovakia",
         "properties" : {
             "exif" : {
                 "make" : "Canon",
                 "model" : " EOS R6",
                 "name" : "Canon, EOS R6",
-                "exposure_time" : "1/160",
-                "aperture" : null,
-                "focal_length" : null,
+                "exposure_time" : "1/400",
+                "aperture" : "2",
+                "focal_length" : "35.0",
+                "iso" : 1600
+            },
+        },
+        "hash" : "460b3f18faaed8f6841d44f3fd91916fec29b6fc68eaf3fb0cacd55b9f153499",
+        "fileDate" : "2023-01-12T19:26:04Z",
+        "photoDate" : "2023-01-12T19:26:04Z"
+    },
+
+    /* 4 */
+    {
+        "_id" : new ObjectId("63e9c6379164637613e9ef35"),
+        "origFileName" : "rOuTz5d10k8.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4923,
+        "height" : 6154,
+        "description" : "a woman with her hands on her hips",
+        "location" : null,
+        "searchText" : " a woman with her hands on her hips",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-6300",
+                "name" : "SONY, ILCE-6300",
+                "exposure_time" : "1/125",
+                "aperture" : "2.8",
+                "focal_length" : "75.0",
+                "iso" : 800
+            },
+        },
+        "hash" : "c3638f7d122c33f10c42f6ed792c7954018f050a35b13d1a2ad123f0fee783b6",
+        "fileDate" : "2023-01-13T15:21:25Z",
+        "photoDate" : "2023-01-13T15:21:25Z"
+    },
+
+    /* 5 */
+    {
+        "_id" : new ObjectId("63e9c6379164637613e9ef36"),
+        "origFileName" : "jZ5WZaD0v30.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5472,
+        "height" : 3648,
+        "description" : "Earthworks Audio - ETHOS - XLR Microphone used for podcasting, gaming, and chatting with friends.",
+        "location" : null,
+        "searchText" : " Earthworks Audio - ETHOS - XLR Microphone used for podcasting, gaming, and chatting with friends.",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R6",
+                "name" : "Canon, EOS R6",
+                "exposure_time" : "1/30",
+                "aperture" : "3.2",
+                "focal_length" : "35.0",
                 "iso" : 1000
             },
         },
-        "hash" : "e39bf3c61b217b9fada5b7ab8d9bdc3335de24a1708cad38cf0aad70cdf1ab3c",
-        "fileDate" : "2023-01-18T17:51:55Z",
-        "photoDate" : "2023-01-18T17:51:55Z"
+        "hash" : "419726ceacd326c0016991a00f9df1e712cf4798f77357ee5599b2be0d64a3f6",
+        "fileDate" : "2023-01-13T22:34:00Z",
+        "photoDate" : "2023-01-13T22:34:00Z"
     },
 
-    /* 8 */
+    /* 6 */
     {
-        "_id" : new ObjectId("63e99976254c230db30fe9b8"),
-        "origFileName" : "RIKpzRm7ubU.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef37"),
+        "origFileName" : "To_ZxorMluI.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 3180,
-        "height" : 3975,
-        "description" : "a large bird flying through a white sky",
+        "width" : 3667,
+        "height" : 5500,
+        "description" : "a vase with a flower and two eggs on a napkin",
         "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS RP",
-                "name" : "Canon, EOS RP",
-                "exposure_time" : "1/1600",
-                "aperture" : "7.1",
-                "focal_length" : "600.0",
-                "iso" : 200
-            },
-        },
-        "hash" : "76a2fc9c8f6917f2d51aa58cd9c1232e426e59c69cd173d39bb813fd659526a8",
-        "fileDate" : "2023-01-20T03:36:35Z",
-        "photoDate" : "2023-01-20T03:36:35Z"
-    },
-
-    /* 9 */
-    {
-        "_id" : new ObjectId("63e99976254c230db30fe9b9"),
-        "origFileName" : "DxkbYY8uehU.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6000,
-        "height" : 4000,
-        "description" : "a snow covered mountain range under a cloudy sky",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON D5600",
-                "name" : "NIKON CORPORATION, NIKON D5600",
-                "exposure_time" : "1/2000",
-                "aperture" : "3.5",
-                "focal_length" : "16.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "bfabdd276a71b3b1c60fec638e8271715cf766637a824d2d3e38ec0d1b4d1e42",
-        "fileDate" : "2023-01-20T05:11:53Z",
-        "photoDate" : "2023-01-20T05:11:53Z"
-    },
-
-    /* 10 */
-    {
-        "_id" : new ObjectId("63e99977254c230db30fe9ba"),
-        "origFileName" : "VVTVid1y3Qc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4340,
-        "height" : 6510,
-        "description" : "beverage juice",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 5D Mark IV",
-                "name" : "Canon, EOS 5D Mark IV",
-                "exposure_time" : "1/125",
-                "aperture" : "5.6",
-                "focal_length" : "70.0",
-                "iso" : 50
-            },
-        },
-        "hash" : "ce29e8023d2d858a7f7ec9f1be66650bc78ca22abdc571c1c76f626517d29964",
-        "fileDate" : "2023-01-20T12:36:54Z",
-        "photoDate" : "2023-01-20T12:36:54Z"
-    },
-
-    /* 11 */
-    {
-        "_id" : new ObjectId("63e99977254c230db30fe9bb"),
-        "origFileName" : "JXmKMXQKX9k.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 2840,
-        "height" : 4255,
-        "description" : "a little girl sitting on the floor in front of a tree",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON D800",
-                "name" : "NIKON CORPORATION, NIKON D800",
-                "exposure_time" : "1/320",
-                "aperture" : "3.2",
-                "focal_length" : "24.0",
-                "iso" : 160
-            },
-        },
-        "hash" : "b18b840841d7a729e40c5988c02da630b448d5a4c1a3cd3b4b0fe5bc9186fafc",
-        "fileDate" : "2023-01-21T07:11:59Z",
-        "photoDate" : "2023-01-21T07:11:59Z"
-    },
-
-    /* 12 */
-    {
-        "_id" : new ObjectId("63e99977254c230db30fe9bc"),
-        "origFileName" : "uSUJH76Jdno.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4160,
-        "height" : 6240,
-        "description" : "a woman sitting in a chair with a picture frame",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-T4",
-                "name" : "FUJIFILM, X-T4",
-                "exposure_time" : "1/125",
-                "aperture" : "2.0",
-                "focal_length" : "35.0",
-                "iso" : 800
-            },
-        },
-        "hash" : "28e0d840a1f61a68abf384fc16944b69a124c5c6c58f147726c15d0a26bb8dee",
-        "fileDate" : "2023-01-22T12:00:40Z",
-        "photoDate" : "2023-01-22T12:00:40Z"
-    },
-
-    /* 13 */
-    {
-        "_id" : new ObjectId("63e99978254c230db30fe9bd"),
-        "origFileName" : "G24e6U380-s.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6000,
-        "height" : 4001,
-        "description" : "chochin lights at a japanese izakaya",
-        "location" : "Sapporo, Hokkaido, Japan",
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-H1",
-                "name" : "FUJIFILM, X-H1",
-                "exposure_time" : "1/1800",
-                "aperture" : "1.8",
-                "focal_length" : "85.0",
-                "iso" : 800
-            },
-        },
-        "hash" : "9c535f7e1e4ba75d1223acba992ca4ffcf4ce1bb1e9e8a14ecdf95e1fe1d37f7",
-        "fileDate" : "2023-01-23T09:53:31Z",
-        "photoDate" : "2023-01-23T09:53:31Z"
-    },
-
-    /* 14 */
-    {
-        "_id" : new ObjectId("63e99978254c230db30fe9be"),
-        "origFileName" : "mxuidCWPiH8.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 5504,
-        "height" : 8256,
-        "description" : "American Pine Marten Please tag @hyneseyes on Instagram for credit, thank you :)",
-        "location" : null,
+        "searchText" : " a vase with a flower and two eggs on a napkin",
         "properties" : {
             "exif" : {
                 "make" : "NIKON CORPORATION",
                 "model" : "NIKON D850",
                 "name" : "NIKON CORPORATION, NIKON D850",
-                "exposure_time" : "1/1250",
-                "aperture" : "5.6",
-                "focal_length" : "500.0",
-                "iso" : 640
+                "exposure_time" : "1/160",
+                "aperture" : "14.0",
+                "focal_length" : "90.0",
+                "iso" : 160
             },
         },
-        "hash" : "1bc3bbfb4e5e68c6a9be757b480fea8e6a90140155ee1177f8c1d4844304420f",
-        "fileDate" : "2023-01-24T11:29:45Z",
-        "photoDate" : "2023-01-24T11:29:45Z"
+        "hash" : "3ccb5904127ed37f291b5979a909366f062f1f97b03d7c5005d0a0c29c9f84d9",
+        "fileDate" : "2023-01-16T20:21:03Z",
+        "photoDate" : "2023-01-16T20:21:03Z"
     },
 
-    /* 15 */
+    /* 7 */
     {
-        "_id" : new ObjectId("63e99978254c230db30fe9bf"),
-        "origFileName" : "s8USnQQecB4.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef38"),
+        "origFileName" : "Drh5FTN_tvU.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 3888,
-        "height" : 5184,
-        "description" : "a sandy beach with waves coming in to shore",
-        "location" : "Punta Cana, Dominican Republic",
+        "width" : 4024,
+        "height" : 6048,
+        "description" : "a person walking down a snow covered road",
+        "location" : "Calgary, AB, Canada",
+        "searchText" : " a person walking down a snow covered road Calgary, AB, Canada",
         "properties" : {
             "exif" : {
-                "make" : "Panasonic",
-                "model" : "DC-G9",
-                "name" : "Panasonic, DC-G9",
-                "exposure_time" : "1/400",
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON Z 6_2",
+                "name" : "NIKON CORPORATION, NIKON Z 6_2",
+                "exposure_time" : "1/500",
                 "aperture" : "2.8",
-                "focal_length" : "25.0",
-                "iso" : 125
+                "focal_length" : "40.0",
+                "iso" : 100
             },
         },
-        "hash" : "7b5247cf1446710c4c30d655d6a34285c8aaf8b4c16a55e34245b3f18d0182dd",
-        "fileDate" : "2023-01-24T21:40:37Z",
-        "photoDate" : "2023-01-24T21:40:37Z"
+        "hash" : "d09dc11087b1fb93881ba61c75831e29c39d74191e505e95c82d63a922a3ea87",
+        "fileDate" : "2023-01-16T21:35:04Z",
+        "photoDate" : "2023-01-16T21:35:04Z"
     },
 
-    /* 16 */
+    /* 8 */
     {
-        "_id" : new ObjectId("63e99979254c230db30fe9c0"),
-        "origFileName" : "eX5BI7h-PGQ.jpg",
+        "_id" : new ObjectId("63e9c6379164637613e9ef39"),
+        "origFileName" : "syEwWS2ueXw.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 3840,
-        "height" : 5760,
-        "description" : "a very tall building with lots of windows",
-        "location" : "tehran",
+        "width" : 5000,
+        "height" : 7500,
+        "description" : "a tray of cookies with the word love spelled out",
+        "location" : null,
+        "searchText" : " a tray of cookies with the word love spelled out",
+        "properties" : {
+            "exif" : {
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON Z 7_2",
+                "name" : "NIKON CORPORATION, NIKON Z 7_2",
+                "exposure_time" : "1/500",
+                "aperture" : "1.8",
+                "focal_length" : "50.0",
+                "iso" : 160
+            },
+        },
+        "hash" : "abb523db3ba1b12c7624b8a5acc341beaa8d0df028d0301f7aacfde528e1c220",
+        "fileDate" : "2023-01-17T16:33:15Z",
+        "photoDate" : "2023-01-17T16:33:15Z"
+    },
+
+    /* 9 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef3a"),
+        "origFileName" : "hKdlHLDZB_c.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5760,
+        "height" : 3840,
+        "description" : "a man in a hat is looking at the skyline",
+        "location" : "London, London, United Kingdom",
+        "searchText" : " a man in a hat is looking at the skyline London, London, United Kingdom",
         "properties" : {
             "exif" : {
                 "make" : "Canon",
                 "model" : " EOS 5D Mark III",
                 "name" : "Canon, EOS 5D Mark III",
-                "exposure_time" : "1/10",
-                "aperture" : "4.0",
-                "focal_length" : "67.0",
+                "exposure_time" : "1/250",
+                "aperture" : "8",
+                "focal_length" : "50.0",
                 "iso" : 100
             },
         },
-        "hash" : "d83b8b156c7cd3291de0abdf881ef8c584490522b3cc311e6d04959508a93a24",
-        "fileDate" : "2023-01-25T14:16:59Z",
-        "photoDate" : "2023-01-25T14:16:59Z"
+        "hash" : "504345bccaa98396af0535e84947ece609ebd361efae26e7cffd35c12fdb2a12",
+        "fileDate" : "2023-01-19T16:52:05Z",
+        "photoDate" : "2023-01-19T16:52:05Z"
     },
 
-    /* 17 */
+    /* 10 */
     {
-        "_id" : new ObjectId("63e99979254c230db30fe9c1"),
-        "origFileName" : "IDihFjpf3-g.jpg",
+        "_id" : new ObjectId("63e9c6389164637613e9ef3b"),
+        "origFileName" : "oQ8QAqsWryc.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 7113,
-        "height" : 10667,
-        "description" : "Woman sitting in Emirates business class flight taking a photo out of the window",
-        "location" : "Dubai - United Arab Emirates",
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS R",
-                "name" : "Canon, EOS R",
-                "exposure_time" : "1/100",
-                "aperture" : "2.0",
-                "focal_length" : "24.0",
-                "iso" : 200
-            },
-        },
-        "hash" : "22e597a8a4978aff56145bef2a8821b3bd4bcd6080ea1f339fad80da87d4b0b9",
-        "fileDate" : "2023-01-26T05:21:46Z",
-        "photoDate" : "2023-01-26T05:21:46Z"
-    },
-
-    /* 18 */
-    {
-        "_id" : new ObjectId("63e9997a254c230db30fe9c2"),
-        "origFileName" : "Ta7OrPdl9dc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3648,
-        "height" : 5486,
-        "description" : "A church in the middle of Cesky Krumlov, Czechia",
-        "location" : "Český Krumlov, Český Krumlov, Czechia",
-        "properties" : {
-            "exif" : {
-                "make" : null,
-                "model" : null,
-                "name" : null,
-                "exposure_time" : null,
-                "aperture" : "0.0",
-                "focal_length" : "0.0",
-                "iso" : null
-            },
-        },
-        "hash" : "93bfe6ec08e3b6c0bde6e0166de86efd2a0ac6855e37bbc6454ddc1fc86da8d0",
-        "fileDate" : "2023-01-27T16:57:22Z",
-        "photoDate" : "2023-01-27T16:57:22Z"
-    },
-
-    /* 19 */
-    {
-        "_id" : new ObjectId("63e9997a254c230db30fe9c3"),
-        "origFileName" : "rbsF4i3UA5Y.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4271,
-        "height" : 6407,
-        "description" : "the front of a gray sports car in a dark room",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS R",
-                "name" : "Canon, EOS R",
-                "exposure_time" : "1/125",
-                "aperture" : "1.8",
-                "focal_length" : "50.0",
-                "iso" : 160
-            },
-        },
-        "hash" : "e2c5a2704f008da057c453990f22495ad2919726154d68c675035d9d0fa08deb",
-        "fileDate" : "2023-01-28T09:37:32Z",
-        "photoDate" : "2023-01-28T09:37:32Z"
-    },
-
-    /* 20 */
-    {
-        "_id" : new ObjectId("63e9997b254c230db30fe9c4"),
-        "origFileName" : "p4dWdSCAXy0.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 7336,
-        "height" : 4526,
-        "description" : "Lion in African nature reserve",
-        "location" : "South Africa",
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS R5",
-                "name" : "Canon, EOS R5",
-                "exposure_time" : "1/3200",
-                "aperture" : "6.3",
-                "focal_length" : "600.0",
-                "iso" : 2000
-            },
-        },
-        "hash" : "a11224575c9d6f0696f6b1b0ea622c53f642de5a7457949c2b709fc6bd02c764",
-        "fileDate" : "2023-01-28T12:44:24Z",
-        "photoDate" : "2023-01-28T12:44:24Z"
-    },
-
-    /* 21 */
-    {
-        "_id" : new ObjectId("63e9997b254c230db30fe9c5"),
-        "origFileName" : "r9iaj64VRuw.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4000,
-        "height" : 6000,
-        "description" : "a black and white photo of a person on a beach",
-        "location" : "Constitución, Constitucion, Chile",
-        "properties" : {
-            "exif" : {
-                "make" : "Panasonic",
-                "model" : "DC-S5",
-                "name" : "Panasonic, DC-S5",
-                "exposure_time" : "1/80",
-                "aperture" : "2.8",
-                "focal_length" : "42.0",
-                "iso" : 4000
-            },
-        },
-        "hash" : "59647c6d90c9791facabbafe9558675278296a7d916fae9ace76885160c8b159",
-        "fileDate" : "2023-01-28T17:07:10Z",
-        "photoDate" : "2023-01-28T17:07:10Z"
-    },
-
-    /* 22 */
-    {
-        "_id" : new ObjectId("63e9997b254c230db30fe9c6"),
-        "origFileName" : "lxFQWfeegpc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3872,
-        "height" : 4840,
-        "description" : "a room with a book shelf and a television",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-E4",
-                "name" : "FUJIFILM, X-E4",
-                "exposure_time" : "1/125",
-                "aperture" : "2.0",
-                "focal_length" : "50.0",
-                "iso" : 500
-            },
-        },
-        "hash" : "43bad8ce4272828d436cdd625d89066f4e94eddce1a81e6717f6a6f2258158cc",
-        "fileDate" : "2023-02-01T08:57:30Z",
-        "photoDate" : "2023-02-01T08:57:30Z"
-    },
-
-    /* 23 */
-    {
-        "_id" : new ObjectId("63e9997b254c230db30fe9c7"),
-        "origFileName" : "Db-4HBUQVvk.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 2507,
-        "height" : 3310,
-        "description" : "a woman standing with her arms crossed",
-        "location" : "in5 Tech - Dubai - United Arab Emirates",
+        "width" : 4578,
+        "height" : 6867,
+        "description" : "Hazy Winter Day",
+        "location" : "Pikkukosken uimaranta, Helsinki, Finland",
+        "searchText" : " Hazy Winter Day Pikkukosken uimaranta, Helsinki, Finland",
         "properties" : {
             "exif" : {
                 "make" : "SONY",
-                "model" : "ILCE-7C",
-                "name" : "SONY, ILCE-7C",
-                "exposure_time" : "1/1250",
-                "aperture" : "2.8",
-                "focal_length" : "35.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "6b66d34e22e3cc0aaa2068498ad0e49f6fd7d03c5bd941d901a9352d04444a91",
-        "fileDate" : "2023-02-04T11:24:18Z",
-        "photoDate" : "2023-02-04T11:24:18Z"
-    },
-
-    /* 24 */
-    {
-        "_id" : new ObjectId("63e9997c254c230db30fe9c8"),
-        "origFileName" : "0G2L4oujtuE.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4322,
-        "height" : 6484,
-        "description" : "a wooden table sitting under a light hanging from a ceiling",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS R",
-                "name" : "Canon, EOS R",
-                "exposure_time" : "1/100",
-                "aperture" : "4.0",
-                "focal_length" : "85.0",
-                "iso" : 640
-            },
-        },
-        "hash" : "f6143df894130acdf492e5a1ba8ee864510eda336b819d25c3db833bed0be9e6",
-        "fileDate" : "2023-02-05T11:00:48Z",
-        "photoDate" : "2023-02-05T11:00:48Z"
-    },
-
-    /* 25 */
-    {
-        "_id" : new ObjectId("63e9997c254c230db30fe9c9"),
-        "origFileName" : "491moa2oMU4.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4928,
-        "height" : 3264,
-        "description" : "a man flying through the air while riding a snowboard",
-        "location" : "nepal",
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON D7000",
-                "name" : "NIKON CORPORATION, NIKON D7000",
-                "exposure_time" : "1/400",
-                "aperture" : "5.6",
-                "focal_length" : "105.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "361955930edef61b9f6d1928e270d878476c0edf8d4a0e1b77b5d07372f59a75",
-        "fileDate" : "2023-02-05T18:59:23Z",
-        "photoDate" : "2023-02-05T18:59:23Z"
-    },
-
-    /* 26 */
-    {
-        "_id" : new ObjectId("63e9997d254c230db30fe9ca"),
-        "origFileName" : "9EHWNh6na60.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 2949,
-        "height" : 4424,
-        "description" : "a bunch of blue flowers with green leaves",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 6D Mark II",
-                "name" : "Canon, EOS 6D Mark II",
-                "exposure_time" : "1/320",
-                "aperture" : "4.0",
-                "focal_length" : "105.0",
-                "iso" : 400
-            },
-        },
-        "hash" : "7adc4fc26d661128649f6769c022239db2d98a0a8b50141f87802483269a1903",
-        "fileDate" : "2023-02-06T08:15:04Z",
-        "photoDate" : "2023-02-06T08:15:04Z"
-    },
-
-    /* 27 */
-    {
-        "_id" : new ObjectId("63e9997d254c230db30fe9cb"),
-        "origFileName" : "EunIdflTo-g.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4000,
-        "height" : 6000,
-        "description" : "Walking in the frozen pier",
-        "location" : "North Avenue Beach, Chicago, United States",
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS Rebel SL2",
-                "name" : "Canon, EOS Rebel SL2",
-                "exposure_time" : "1/400",
-                "aperture" : "4.5",
-                "focal_length" : "18.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "c52096011535046174a9c4db6452322b8e296e0f506ba8b055ed65143fbe6795",
-        "fileDate" : "2023-02-07T18:41:37Z",
-        "photoDate" : "2023-02-07T18:41:37Z"
-    },
-
-    /* 28 */
-    {
-        "_id" : new ObjectId("63e9997d254c230db30fe9cc"),
-        "origFileName" : "nK-fIOYCFaQ.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4160,
-        "height" : 6240,
-        "description" : "a man kissing a woman on the cheek",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-T4",
-                "name" : "FUJIFILM, X-T4",
-                "exposure_time" : "1/500",
-                "aperture" : "2.2",
-                "focal_length" : "33.0",
-                "iso" : 160
-            },
-        },
-        "hash" : "22a9e1d7e9bf581a208a13d1091f2641d999f3a048a38b54eef0494c3de0561c",
-        "fileDate" : "2023-02-08T01:05:26Z",
-        "photoDate" : "2023-02-08T01:05:26Z"
-    },
-
-    /* 29 */
-    {
-        "_id" : new ObjectId("63e9997e254c230db30fe9cd"),
-        "origFileName" : "-tLDm8wjbOc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4160,
-        "height" : 6240,
-        "description" : "a man is holding a camera on a tripod",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X100V",
-                "name" : "FUJIFILM, X100V",
-                "exposure_time" : "1/250",
-                "aperture" : "2.0",
-                "focal_length" : "23.0",
+                "model" : "ILCE-7M4",
+                "name" : "SONY, ILCE-7M4",
+                "exposure_time" : "1/125",
+                "aperture" : "13.0",
+                "focal_length" : "20.0",
                 "iso" : 200
             },
         },
-        "hash" : "4dded1a4a7a48539f4375f10e99ca44009fe81b79f4a9467a3ef1b15a728c432",
-        "fileDate" : "2023-02-09T04:22:41Z",
-        "photoDate" : "2023-02-09T04:22:41Z"
+        "hash" : "5e1cbd39f832e0d67ad4833a91a376e028a560cdc3946b987a987ba8afc7463d",
+        "fileDate" : "2023-01-22T21:35:05Z",
+        "photoDate" : "2023-01-22T21:35:05Z"
     },
 
-    /* 30 */
+    /* 11 */
     {
-        "_id" : new ObjectId("63e9997e254c230db30fe9ce"),
-        "origFileName" : "jl6m_DhuZ_o.jpg",
+        "_id" : new ObjectId("63e9c6389164637613e9ef3c"),
+        "origFileName" : "NEmPI4C1D44.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 7983,
-        "height" : 5322,
-        "description" : "a red trolley car traveling down a street next to tall buildings",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON D850",
-                "name" : "NIKON CORPORATION, NIKON D850",
-                "exposure_time" : "1/400",
-                "aperture" : "3.5",
-                "focal_length" : "50.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "3dcd3536d3c32393e7ea6655652a7781f36164c681c40aeac161a2637b90bd74",
-        "fileDate" : "2023-02-09T09:35:32Z",
-        "photoDate" : "2023-02-09T09:35:32Z"
-    },
-
-    /* 31 */
-    {
-        "_id" : new ObjectId("63e9997f254c230db30fe9cf"),
-        "origFileName" : "UeGdFldecrs.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4000,
-        "height" : 6000,
-        "description" : "an abstract painting of yellow and brown colors",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 2000D",
-                "name" : "Canon, EOS 2000D",
-                "exposure_time" : "1/40",
-                "aperture" : "5.6",
-                "focal_length" : "50.0",
-                "iso" : 400
-            },
-        },
-        "hash" : "874e6eaa48cc02659106f7c63875779d0b06d1baf48f394cbfe6c1e484499662",
-        "fileDate" : "2023-01-08T21:20:57Z",
-        "photoDate" : "2023-01-08T21:20:57Z"
-    },
-
-    /* 32 */
-    {
-        "_id" : new ObjectId("63e9997f254c230db30fe9d0"),
-        "origFileName" : "0nI_EF28eGM.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3931,
-        "height" : 5897,
-        "description" : "a view of a ferris wheel from the water",
-        "location" : "Dubai - United Arab Emirates",
+        "width" : 3374,
+        "height" : 4218,
+        "description" : "A walk through Middle-Earth",
+        "location" : "De Djawatan Forest, Purwosari, Benculuk, Banyuwangi Regency, East Java, Indonesia",
+        "searchText" : " A walk through Middle-Earth De Djawatan Forest, Purwosari, Benculuk, Banyuwangi Regency, East Java, Indonesia",
         "properties" : {
             "exif" : {
                 "make" : "SONY",
                 "model" : "ILCE-7M3",
                 "name" : "SONY, ILCE-7M3",
-                "exposure_time" : "1/125",
-                "aperture" : "4.0",
-                "focal_length" : "34.0",
-                "iso" : 320
-            },
-        },
-        "hash" : "da5177e76e47398c8a6be10e7b534344ef1f538c5d52981e64f8ba36aa437e01",
-        "fileDate" : "2023-01-13T15:58:15Z",
-        "photoDate" : "2023-01-13T15:58:15Z"
-    },
-
-    /* 33 */
-    {
-        "_id" : new ObjectId("63e99980254c230db30fe9d1"),
-        "origFileName" : "96Ywu4m7kCc.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3992,
-        "height" : 2992,
-        "description" : "a view of a beach with a mountain in the background",
-        "location" : "Mexico",
-        "properties" : {
-            "exif" : {
-                "make" : "DJI",
-                "model" : "FC4170",
-                "name" : "DJI, FC4170",
-                "exposure_time" : "1/20",
-                "aperture" : "4.4",
-                "focal_length" : "29.9",
-                "iso" : 100
-            },
-        },
-        "hash" : "c3145fa29c8aeff247b871f5b3907c5f064b11b1963280feb08d2a4070c5f7df",
-        "fileDate" : "2023-01-14T19:50:55Z",
-        "photoDate" : "2023-01-14T19:50:55Z"
-    },
-
-    /* 34 */
-    {
-        "_id" : new ObjectId("63e99980254c230db30fe9d2"),
-        "origFileName" : "JqYagqPHzV0.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6016,
-        "height" : 4016,
-        "description" : "a woman in a kimono holding a fan",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON D750",
-                "name" : "NIKON CORPORATION, NIKON D750",
-                "exposure_time" : "1/100",
-                "aperture" : "3.5",
-                "focal_length" : "50.0",
-                "iso" : 1250
-            },
-        },
-        "hash" : "2d67fa3bbbd3115f2f88767649c467e53d61bd070a415d5622d43a9f191faca8",
-        "fileDate" : "2023-01-16T08:00:30Z",
-        "photoDate" : "2023-01-16T08:00:30Z"
-    },
-
-    /* 35 */
-    {
-        "_id" : new ObjectId("63e99980254c230db30fe9d3"),
-        "origFileName" : "Hop9jGNYTVk.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4024,
-        "height" : 6048,
-        "description" : "a snow covered mountain with trees in the foreground",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON Z 6_2",
-                "name" : "NIKON CORPORATION, NIKON Z 6_2",
-                "exposure_time" : "1/50",
-                "aperture" : "9.0",
-                "focal_length" : "390.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "eee7ba7260fb549db3f3e628f1fcee188643d507b30bc56c00191e7f9db71237",
-        "fileDate" : "2023-01-16T15:04:07Z",
-        "photoDate" : "2023-01-16T15:04:07Z"
-    },
-
-    /* 36 */
-    {
-        "_id" : new ObjectId("63e99981254c230db30fe9d4"),
-        "origFileName" : "4zq29Io2kcM.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3058,
-        "height" : 4077,
-        "description" : "a bird is perched on top of a building",
-        "location" : "Saigon, Ho Chi Minh City, Vietnam",
-        "properties" : {
-            "exif" : {
-                "make" : null,
-                "model" : null,
-                "name" : null,
-                "exposure_time" : null,
-                "aperture" : null,
-                "focal_length" : null,
-                "iso" : null
-            },
-        },
-        "hash" : "d9c5398b0f8f7ba6e3ab6888d76faa1dfb803341268446af86f38fa2410b28da",
-        "fileDate" : "2023-01-17T05:17:18Z",
-        "photoDate" : "2023-01-17T05:17:18Z"
-    },
-
-    /* 37 */
-    {
-        "_id" : new ObjectId("63e99981254c230db30fe9d5"),
-        "origFileName" : "VpjOYdf6-nE.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 5472,
-        "height" : 3648,
-        "description" : "a man riding skis on top of a snow covered slope",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS 6D",
-                "name" : "Canon, EOS 6D",
-                "exposure_time" : "1/180",
-                "aperture" : "8.0",
-                "focal_length" : "23.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "35cee00e6bcdac1916e7999419ef092b470d705644af4e5998b5713678a7b0c7",
-        "fileDate" : "2023-01-17T17:06:33Z",
-        "photoDate" : "2023-01-17T17:06:33Z"
-    },
-
-    /* 38 */
-    {
-        "_id" : new ObjectId("63e99981254c230db30fe9d6"),
-        "origFileName" : "Tamxef4U3Wo.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3000,
-        "height" : 4000,
-        "description" : "red illustration.",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : null,
-                "model" : null,
-                "name" : null,
-                "exposure_time" : null,
-                "aperture" : null,
-                "focal_length" : null,
-                "iso" : null
-            },
-        },
-        "hash" : "c810fa173b82e113b58e2a5879b49e56e0fb167428f9f068034644f0ae39a274",
-        "fileDate" : "2023-01-18T18:07:10Z",
-        "photoDate" : "2023-01-18T18:07:10Z"
-    },
-
-    /* 39 */
-    {
-        "_id" : new ObjectId("63e99982254c230db30fe9d7"),
-        "origFileName" : "8xneVQWFhk4.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3587,
-        "height" : 5471,
-        "description" : "a camera is sitting on a tripod in front of a building",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "RICOH IMAGING COMPANY, LTD.",
-                "model" : "RICOH GR III",
-                "name" : "RICOH IMAGING COMPANY, LTD., RICOH GR III",
-                "exposure_time" : "1/1000",
-                "aperture" : "5.6",
-                "focal_length" : "18.3",
-                "iso" : 200
-            },
-        },
-        "hash" : "2f694bcaa04d970eadbe9e319d2b366ba35e1d476bfcec7142794f71b6364944",
-        "fileDate" : "2023-01-20T13:33:34Z",
-        "photoDate" : "2023-01-20T13:33:34Z"
-    },
-
-    /* 40 */
-    {
-        "_id" : new ObjectId("63e99982254c230db30fe9d8"),
-        "origFileName" : "DHGWzAW0_ME.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 5000,
-        "height" : 7000,
-        "description" : "The rise of ziman",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : null,
-                "model" : null,
-                "name" : null,
-                "exposure_time" : null,
-                "aperture" : null,
-                "focal_length" : null,
-                "iso" : null
-            },
-        },
-        "hash" : "76bdfa5877aab3193e278ade53ad4f539f9bce33bb7da2934c2263e2aa5c5c0f",
-        "fileDate" : "2023-01-23T04:54:04Z",
-        "photoDate" : "2023-01-23T04:54:04Z"
-    },
-
-    /* 41 */
-    {
-        "_id" : new ObjectId("63e99982254c230db30fe9d9"),
-        "origFileName" : "Y8wvewdLPNo.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3463,
-        "height" : 5194,
-        "description" : "a close up of sushi on a table with chopsticks",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : null,
-                "model" : null,
-                "name" : null,
-                "exposure_time" : null,
-                "aperture" : null,
-                "focal_length" : null,
-                "iso" : null
-            },
-        },
-        "hash" : "944ac87b981bf47c4381afea2cd240af2ff97c8610824509399898010bbbfafd",
-        "fileDate" : "2023-01-26T02:27:36Z",
-        "photoDate" : "2023-01-26T02:27:36Z"
-    },
-
-    /* 42 */
-    {
-        "_id" : new ObjectId("63e99983254c230db30fe9da"),
-        "origFileName" : "iUyCR1Iligo.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4000,
-        "height" : 6000,
-        "description" : "a couple of lions laying on top of a large rock",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "SONY",
-                "model" : "ILCE-6600",
-                "name" : "SONY, ILCE-6600",
-                "exposure_time" : "1/1250",
-                "aperture" : "5.6",
-                "focal_length" : "107.0",
-                "iso" : 100
-            },
-        },
-        "hash" : "dc43c200c93b040b02536d022de91ec0d19ee988379414bfb475505348d90df4",
-        "fileDate" : "2023-01-26T08:20:46Z",
-        "photoDate" : "2023-01-26T08:20:46Z"
-    },
-
-    /* 43 */
-    {
-        "_id" : new ObjectId("63e99983254c230db30fe9db"),
-        "origFileName" : "SWMibVNX6vg.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3974,
-        "height" : 6000,
-        "description" : "a little girl sitting in front of a purple jellyfish tank",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "RICOH IMAGING COMPANY, LTD.",
-                "model" : "GR II",
-                "name" : "RICOH IMAGING COMPANY, LTD., GR II",
-                "exposure_time" : "1/40",
-                "aperture" : "2.8",
-                "focal_length" : "18.3",
-                "iso" : 250
-            },
-        },
-        "hash" : "0fd6ab06d6923bf26a14da8a136b9d052c3d850a727bcba8cbf1a8c98414437f",
-        "fileDate" : "2023-01-26T20:54:14Z",
-        "photoDate" : "2023-01-26T20:54:14Z"
-    },
-
-    /* 44 */
-    {
-        "_id" : new ObjectId("63e99983254c230db30fe9dc"),
-        "origFileName" : "g5fCF2C28P0.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 6048,
-        "height" : 4024,
-        "description" : "a close up of a cracked surface of dirt",
-        "location" : null,
-        "properties" : {
-            "exif" : {
-                "make" : "NIKON CORPORATION",
-                "model" : "NIKON Z 6_2",
-                "name" : "NIKON CORPORATION, NIKON Z 6_2",
-                "exposure_time" : "1/250",
-                "aperture" : "11.0",
-                "focal_length" : "50.0",
-                "iso" : 1800
-            },
-        },
-        "hash" : "195c8a01b2cc79e000f18908a0a70ba4696145d3d2a85b10c35893f4a59bc101",
-        "fileDate" : "2023-01-27T08:51:51Z",
-        "photoDate" : "2023-01-27T08:51:51Z"
-    },
-
-    /* 45 */
-    {
-        "_id" : new ObjectId("63e99984254c230db30fe9dd"),
-        "origFileName" : "BglUX5XJtc8.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 3320,
-        "height" : 4976,
-        "description" : "Home kitchen shelf decor",
-        "location" : "Joshua Tree, CA, USA",
-        "properties" : {
-            "exif" : {
-                "make" : "SONY",
-                "model" : "ILCE-7RM3",
-                "name" : "SONY, ILCE-7RM3",
-                "exposure_time" : "1/400",
-                "aperture" : "1.4",
-                "focal_length" : "30.0",
+                "exposure_time" : "1/3200",
+                "aperture" : "1.6",
+                "focal_length" : "35.0",
                 "iso" : 400
             },
         },
-        "hash" : "1697c5f556f1e0d442e2d0df6a111da22c4cd6fc26c824e42224dcc9d39b032b",
-        "fileDate" : "2023-01-27T21:09:17Z",
-        "photoDate" : "2023-01-27T21:09:17Z"
+        "hash" : "7f15396e65408570f54d266dd465e465b8329949991a1bbeaa4f98e6593f8441",
+        "fileDate" : "2023-01-23T06:06:50Z",
+        "photoDate" : "2023-01-23T06:06:50Z"
     },
 
-    /* 46 */
+    /* 12 */
     {
-        "_id" : new ObjectId("63e99984254c230db30fe9de"),
-        "origFileName" : "qgxlU8flUH4.jpg",
+        "_id" : new ObjectId("63e9c6389164637613e9ef3d"),
+        "origFileName" : "LFq-HxcWT5E.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 4126,
-        "height" : 6240,
-        "description" : "a blurry image of a multicolored background",
+        "width" : 4061,
+        "height" : 6091,
+        "description" : "Experimental portrait",
         "location" : null,
+        "searchText" : " Experimental portrait",
         "properties" : {
             "exif" : {
                 "make" : "FUJIFILM",
                 "model" : "X-T3",
                 "name" : "FUJIFILM, X-T3",
-                "exposure_time" : "1",
-                "aperture" : "16",
-                "focal_length" : "23.0",
-                "iso" : 160
+                "exposure_time" : "1/60",
+                "aperture" : "1.0",
+                "focal_length" : "35.0",
+                "iso" : 6400
             },
         },
-        "hash" : "d8038c6376cd928b49a75cefc4362c3c71828aa2453ddcc3d3f490923768782a",
-        "fileDate" : "2023-01-28T07:14:39Z",
-        "photoDate" : "2023-01-28T07:14:39Z"
+        "hash" : "20508a8e387bc6fbc59b597e1affe289b2fda461e3d472af2c83979de58b6815",
+        "fileDate" : "2023-01-23T21:06:37Z",
+        "photoDate" : "2023-01-23T21:06:37Z"
+    },
+
+    /* 13 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef3e"),
+        "origFileName" : "XpIsQWpxXps.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4236,
+        "height" : 2829,
+        "description" : "a person standing on a balcony of a building",
+        "location" : null,
+        "searchText" : " a person standing on a balcony of a building",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7SM3",
+                "name" : "SONY, ILCE-7SM3",
+                "exposure_time" : "1/60",
+                "aperture" : "5.0",
+                "focal_length" : "85.0",
+                "iso" : 800
+            },
+        },
+        "hash" : "a7db9b6e45bf43114c6ea9a38a9c0fbc44368ab96aee5687e44c9fe9a3cc8e1f",
+        "fileDate" : "2023-01-25T02:36:35Z",
+        "photoDate" : "2023-01-25T02:36:35Z"
+    },
+
+    /* 14 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef3f"),
+        "origFileName" : "mx3RynEbCV4.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5464,
+        "height" : 3640,
+        "description" : "a winding road in the middle of a snow covered forest",
+        "location" : "Weinheim, Deutschland",
+        "searchText" : " a winding road in the middle of a snow covered forest Weinheim, Deutschland",
+        "properties" : {
+            "exif" : {
+                "make" : "DJI",
+                "model" : "FC3411",
+                "name" : "DJI, FC3411",
+                "exposure_time" : "1/640",
+                "aperture" : "2.8",
+                "focal_length" : "8.4",
+                "iso" : 100
+            },
+        },
+        "hash" : "07e825f74bd7841abd03e1eda0ffcdb045abd19fcb3ebf2661daec1afc94b85b",
+        "fileDate" : "2023-01-27T22:48:28Z",
+        "photoDate" : "2023-01-27T22:48:28Z"
+    },
+
+    /* 15 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef40"),
+        "origFileName" : "AecCj5qi88M.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 2624,
+        "height" : 3936,
+        "description" : "a man sitting at a desk working on a laptop",
+        "location" : null,
+        "searchText" : " a man sitting at a desk working on a laptop",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7C",
+                "name" : "SONY, ILCE-7C",
+                "exposure_time" : "1/80",
+                "aperture" : "2.8",
+                "focal_length" : "35.0",
+                "iso" : 100
+            },
+        },
+        "hash" : "e664fd9bd8f9e4d67b7647959134a5152277e4284bb615cbb6d987cc68aeafa4",
+        "fileDate" : "2023-01-28T18:33:13Z",
+        "photoDate" : "2023-01-28T18:33:13Z"
+    },
+
+    /* 16 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef41"),
+        "origFileName" : "TJ3Xl4YgHVs.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4928,
+        "height" : 3264,
+        "description" : "a large body of water surrounded by mountains",
+        "location" : "Norway",
+        "searchText" : " a large body of water surrounded by mountains Norway",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "17228a9a2757e30fbb12a23f2cdc564758dd509c7d947173c4b7d018f9a750cb",
+        "fileDate" : "2023-01-28T19:37:15Z",
+        "photoDate" : "2023-01-28T19:37:15Z"
+    },
+
+    /* 17 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef42"),
+        "origFileName" : "SMSpk9fprcU.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 7189,
+        "height" : 4795,
+        "description" : "a woman sitting on a bench in a gym",
+        "location" : null,
+        "searchText" : " a woman sitting on a bench in a gym",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R5",
+                "name" : "Canon, EOS R5",
+                "exposure_time" : "1/125",
+                "aperture" : "1.8",
+                "focal_length" : "35.0",
+                "iso" : 320
+            },
+        },
+        "hash" : "45409a02deead8e49ae06d47eb9d09b49005b688d6016459f358a504ab1b0d87",
+        "fileDate" : "2023-01-29T21:19:53Z",
+        "photoDate" : "2023-01-29T21:19:53Z"
+    },
+
+    /* 18 */
+    {
+        "_id" : new ObjectId("63e9c6389164637613e9ef43"),
+        "origFileName" : "THI4cJ-HGvw.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5833,
+        "height" : 3889,
+        "description" : "a woman riding a horse through the ocean",
+        "location" : "Kwinana, WA, Australia",
+        "searchText" : " a woman riding a horse through the ocean Kwinana, WA, Australia",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7M3",
+                "name" : "SONY, ILCE-7M3",
+                "exposure_time" : "1/8000",
+                "aperture" : "2.0",
+                "focal_length" : "85.0",
+                "iso" : 50
+            },
+        },
+        "hash" : "d905df09a4709066722677eff7815a5bbb7939e2406367043f85b7920c2ab544",
+        "fileDate" : "2023-01-30T06:27:38Z",
+        "photoDate" : "2023-01-30T06:27:38Z"
+    },
+
+    /* 19 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef44"),
+        "origFileName" : "sW8AATej1Xc.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4000,
+        "height" : 6000,
+        "description" : "a man kneeling down on top of a green holding a golf club",
+        "location" : null,
+        "searchText" : " a man kneeling down on top of a green holding a golf club",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "ba21e6dadd970312facdd2ce412c311151476de2eedcc1dcc3a6c6f0ae415934",
+        "fileDate" : "2023-01-30T19:46:02Z",
+        "photoDate" : "2023-01-30T19:46:02Z"
+    },
+
+    /* 20 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef45"),
+        "origFileName" : "b2873V_RcEw.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3740,
+        "height" : 4675,
+        "description" : "a brown cow standing in a snow covered field",
+        "location" : "Puy-de-Dôme, France",
+        "searchText" : " a brown cow standing in a snow covered field Puy-de-Dôme, France",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "c30c32312c81396af09ab7d49b230d51ee97124b6f2532a2a556db36d71a501b",
+        "fileDate" : "2023-01-31T17:24:52Z",
+        "photoDate" : "2023-01-31T17:24:52Z"
+    },
+
+    /* 21 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef46"),
+        "origFileName" : "fO7tnJ3t5dY.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3093,
+        "height" : 4640,
+        "description" : "Standing on Hopkins Landing dock in Gibsons, B.C",
+        "location" : "Gibsons, BC, Canada",
+        "searchText" : " Standing on Hopkins Landing dock in Gibsons, B.C Gibsons, BC, Canada",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R7",
+                "name" : "Canon, EOS R7",
+                "exposure_time" : "1/50",
+                "aperture" : "2.8",
+                "focal_length" : "35.0",
+                "iso" : 250
+            },
+        },
+        "hash" : "681d21f0d674a54acf2881f51f4ee6f721a2a9b288ba0f3e261e16a2d48c8fac",
+        "fileDate" : "2023-01-31T20:27:28Z",
+        "photoDate" : "2023-01-31T20:27:28Z"
+    },
+
+    /* 22 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef47"),
+        "origFileName" : "Wlvi9rtFOm8.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4419,
+        "height" : 6628,
+        "description" : "a fountain in the middle of a courtyard",
+        "location" : null,
+        "searchText" : " a fountain in the middle of a courtyard",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7M4",
+                "name" : "SONY, ILCE-7M4",
+                "exposure_time" : "1/400",
+                "aperture" : "2.8",
+                "focal_length" : "35.0",
+                "iso" : 125
+            },
+        },
+        "hash" : "64743a92a61a587730ceb444ccfcb535126315e993ae2932224a0716aa544c09",
+        "fileDate" : "2023-02-01T17:35:29Z",
+        "photoDate" : "2023-02-01T17:35:29Z"
+    },
+
+    /* 23 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef48"),
+        "origFileName" : "ZTXnyniUaLY.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 6720,
+        "height" : 4480,
+        "description" : "a man with a beard wearing a hoodie",
+        "location" : "Flint, Flint, United States",
+        "searchText" : " a man with a beard wearing a hoodie Flint, Flint, United States",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R",
+                "name" : "Canon, EOS R",
+                "exposure_time" : "1/100",
+                "aperture" : "3.2",
+                "focal_length" : "50.0",
+                "iso" : 100
+            },
+        },
+        "hash" : "e6752c9bee24f7427dd85bfc45f0ec9582c951fb37ebfaef9e01950ad1a22a94",
+        "fileDate" : "2023-02-02T07:09:20Z",
+        "photoDate" : "2023-02-02T07:09:20Z"
+    },
+
+    /* 24 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef49"),
+        "origFileName" : "16i3KFIlR7I.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 6890,
+        "height" : 9504,
+        "description" : "mobina",
+        "location" : null,
+        "searchText" : " mobina",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7RM4",
+                "name" : "SONY, ILCE-7RM4",
+                "exposure_time" : "1/80",
+                "aperture" : "3.5",
+                "focal_length" : "35.0",
+                "iso" : 250
+            },
+        },
+        "hash" : "65148c4d1710631331e37a4bff52311bc449d68d5186e7cfbf9e94ffc8b593af",
+        "fileDate" : "2023-02-02T16:56:18Z",
+        "photoDate" : "2023-02-02T16:56:18Z"
+    },
+
+    /* 25 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef4a"),
+        "origFileName" : "Hy37gkO-AYs.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 6000,
+        "height" : 4000,
+        "description" : "a snowboarder is going down a snowy mountain",
+        "location" : "Peyragudes, Loudervielle, France",
+        "searchText" : " a snowboarder is going down a snowy mountain Peyragudes, Loudervielle, France",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7C",
+                "name" : "SONY, ILCE-7C",
+                "exposure_time" : "1/2000",
+                "aperture" : "8.0",
+                "focal_length" : "75.0",
+                "iso" : 125
+            },
+        },
+        "hash" : "3de8a1e8307af46081027e5e8c6714c191b6bdbd522b1a005652a6f29f1b2fb5",
+        "fileDate" : "2023-02-02T19:45:52Z",
+        "photoDate" : "2023-02-02T19:45:52Z"
+    },
+
+    /* 26 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef4b"),
+        "origFileName" : "Ie-uzpPyoro.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4000,
+        "height" : 6000,
+        "description" : "a train traveling down train tracks next to a tunnel",
+        "location" : null,
+        "searchText" : " a train traveling down train tracks next to a tunnel",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7M3",
+                "name" : "SONY, ILCE-7M3",
+                "exposure_time" : "1/20",
+                "aperture" : "2.8",
+                "focal_length" : "43.2",
+                "iso" : 320
+            },
+        },
+        "hash" : "9de67bcbd8c2a996081461f66ecc766a494809cd29367d6a169f4a91519044e8",
+        "fileDate" : "2023-02-03T00:26:56Z",
+        "photoDate" : "2023-02-03T00:26:56Z"
+    },
+
+    /* 27 */
+    {
+        "_id" : new ObjectId("63e9c6399164637613e9ef4c"),
+        "origFileName" : "x6-w01edyk0.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5472,
+        "height" : 3648,
+        "description" : "an aerial view of a beach with rocks and water",
+        "location" : null,
+        "searchText" : " an aerial view of a beach with rocks and water",
+        "properties" : {
+            "exif" : {
+                "make" : "Hasselblad",
+                "model" : "L1D-20c",
+                "name" : "Hasselblad, L1D-20c",
+                "exposure_time" : "1/240",
+                "aperture" : "3.5",
+                "focal_length" : "10.3",
+                "iso" : 100
+            },
+        },
+        "hash" : "69ca616bccac1c64df31c29278f59fbf55ec09c4dafc4ed8ec1d85371fff73b0",
+        "fileDate" : "2023-02-05T09:22:19Z",
+        "photoDate" : "2023-02-05T09:22:19Z"
+    },
+
+    /* 28 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef4d"),
+        "origFileName" : "7kpC3MZ5BOg.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5954,
+        "height" : 3590,
+        "description" : "snow covered mountain trees",
+        "location" : "Comox Valley, BC, Canada",
+        "searchText" : " snow covered mountain trees Comox Valley, BC, Canada",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS Rebel T7i",
+                "name" : "Canon, EOS Rebel T7i",
+                "exposure_time" : "1/125",
+                "aperture" : "11.0",
+                "focal_length" : "29.0",
+                "iso" : 400
+            },
+        },
+        "hash" : "80f447731e9107ec1499c90870b131d27f31b78d5cd1d4cc44e21805da924176",
+        "fileDate" : "2023-02-07T21:57:22Z",
+        "photoDate" : "2023-02-07T21:57:22Z"
+    },
+
+    /* 29 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef4e"),
+        "origFileName" : "NK9qJ9LRyPc.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 6240,
+        "height" : 4160,
+        "description" : "a plant in a pot sitting on a table next to a stair case",
+        "location" : null,
+        "searchText" : " a plant in a pot sitting on a table next to a stair case",
+        "properties" : {
+            "exif" : {
+                "make" : "FUJIFILM",
+                "model" : "X100V",
+                "name" : "FUJIFILM, X100V",
+                "exposure_time" : "1/600",
+                "aperture" : "2.2",
+                "focal_length" : "23.0",
+                "iso" : 640
+            },
+        },
+        "hash" : "0664a7ce86769e3754495f8af1205067d6d5f15715c4cf57f795f85cf6a6dd83",
+        "fileDate" : "2023-02-09T14:49:56Z",
+        "photoDate" : "2023-02-09T14:49:56Z"
+    },
+
+    /* 30 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef4f"),
+        "origFileName" : "KSXGw3K3KY0.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 7262,
+        "height" : 4844,
+        "description" : "a close up of a toilet seat with the lid down",
+        "location" : null,
+        "searchText" : " a close up of a toilet seat with the lid down",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R5",
+                "name" : "Canon, EOS R5",
+                "exposure_time" : "1/800",
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : 100
+            },
+        },
+        "hash" : "ab21d7ac3be13b98855ac39db5e9c9e46c97e848fef2c1876953d8ff586b455e",
+        "fileDate" : "2023-02-10T17:25:56Z",
+        "photoDate" : "2023-02-10T17:25:56Z"
+    },
+
+    /* 31 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef50"),
+        "origFileName" : "-qDgiE5Vyww.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3200,
+        "height" : 2400,
+        "description" : "a living room with a book shelf and a plant",
+        "location" : "Akure, Nigeria",
+        "searchText" : " a living room with a book shelf and a plant Akure, Nigeria",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "c7785d7fa96e932e97bc9c41bc0cf3f017daf77899ae421d848e1a2d9557f15c",
+        "fileDate" : "2023-01-12T22:54:12Z",
+        "photoDate" : "2023-01-12T22:54:12Z"
+    },
+
+    /* 32 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef51"),
+        "origFileName" : "L0Bte153mM8.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 2955,
+        "height" : 2364,
+        "description" : "a herd of horses standing next to each other",
+        "location" : null,
+        "searchText" : " a herd of horses standing next to each other",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "c5c8c7a95c777994e1c7dec0b830e8fc29a6ee25881bb10492897727e02d02bf",
+        "fileDate" : "2023-01-13T14:11:04Z",
+        "photoDate" : "2023-01-13T14:11:04Z"
+    },
+
+    /* 33 */
+    {
+        "_id" : new ObjectId("63e9c63a9164637613e9ef52"),
+        "origFileName" : "w3Zc6MHmpmY.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 8256,
+        "height" : 5504,
+        "description" : "a sandy beach with grass growing on top of it",
+        "location" : null,
+        "searchText" : " a sandy beach with grass growing on top of it",
+        "properties" : {
+            "exif" : {
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON D850",
+                "name" : "NIKON CORPORATION, NIKON D850",
+                "exposure_time" : "1/2000",
+                "aperture" : "6.7",
+                "focal_length" : "50.0",
+                "iso" : 800
+            },
+        },
+        "hash" : "380179fdd2d496276ae39cd85246045ab73c0e817ee50017fb9afe169c3e92ab",
+        "fileDate" : "2023-01-14T01:32:34Z",
+        "photoDate" : "2023-01-14T01:32:34Z"
+    },
+
+    /* 34 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef53"),
+        "origFileName" : "xCSP0fMNDkE.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4990,
+        "height" : 6653,
+        "description" : "This lonely road is just beautiful",
+        "location" : "Cabrera, 33000, Dominican Republic",
+        "searchText" : " This lonely road is just beautiful Cabrera, 33000, Dominican Republic",
+        "properties" : {
+            "exif" : {
+                "make" : "DJI",
+                "model" : "Mini Pro 3",
+                "name" : "DJI, Mini Pro 3",
+                "exposure_time" : "1/6",
+                "aperture" : "1.7",
+                "focal_length" : "6.7",
+                "iso" : 200
+            },
+        },
+        "hash" : "9ca378e5cf846c4b78a3cf6eb515558eb62fd8ca88cc2800aa588a0903c464ee",
+        "fileDate" : "2023-01-14T01:48:52Z",
+        "photoDate" : "2023-01-14T01:48:52Z"
+    },
+
+    /* 35 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef54"),
+        "origFileName" : "a5C4QyqXH7I.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 2555,
+        "height" : 3832,
+        "description" : "a man standing in front of a body of water",
+        "location" : null,
+        "searchText" : " a man standing in front of a body of water",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS 6D",
+                "name" : "Canon, EOS 6D",
+                "exposure_time" : "1/200",
+                "aperture" : "2.2",
+                "focal_length" : "85.0",
+                "iso" : 100
+            },
+        },
+        "hash" : "477f1dbde89658e34813fff1107b5b1dec077f0ef5dd1d56b7e5ef14439932c4",
+        "fileDate" : "2023-01-17T16:20:35Z",
+        "photoDate" : "2023-01-17T16:20:35Z"
+    },
+
+    /* 36 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef55"),
+        "origFileName" : "WWEFneQ5XAk.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 5464,
+        "height" : 8192,
+        "description" : "journaling bible open to psalm 63 with notes",
+        "location" : null,
+        "searchText" : " journaling bible open to psalm 63 with notes",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R5",
+                "name" : "Canon, EOS R5",
+                "exposure_time" : "1/1250",
+                "aperture" : "2.8",
+                "focal_length" : "35.0",
+                "iso" : 800
+            },
+        },
+        "hash" : "c70b2a0ebd7b97ba256b0e82677a28afd647fb0520c148cd51193f60a927568e",
+        "fileDate" : "2023-01-17T18:25:14Z",
+        "photoDate" : "2023-01-17T18:25:14Z"
+    },
+
+    /* 37 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef56"),
+        "origFileName" : "kp-wF-ZCHRo.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3343,
+        "height" : 4179,
+        "description" : "a building with a clock on the side of it",
+        "location" : "Avilés, España",
+        "searchText" : " a building with a clock on the side of it Avilés, España",
+        "properties" : {
+            "exif" : {
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON D7500",
+                "name" : "NIKON CORPORATION, NIKON D7500",
+                "exposure_time" : "1/1000",
+                "aperture" : "4.5",
+                "focal_length" : "35.0",
+                "iso" : 100
+            },
+        },
+        "hash" : "b7b4fa54dbda2c3218abb48ea4af8620ece637a4af9d08b92dd5850ea3b76696",
+        "fileDate" : "2023-01-18T16:59:18Z",
+        "photoDate" : "2023-01-18T16:59:18Z"
+    },
+
+    /* 38 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef57"),
+        "origFileName" : "fZL3vx4pLuM.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4000,
+        "height" : 6000,
+        "description" : "Paros, Greece.",
+        "location" : "Paros, Greece",
+        "searchText" : " Paros, Greece. Paros, Greece",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "0766b644a3f7b5afa8e260a630e2d639db273ecd24fbcfc7f8211930a44405c0",
+        "fileDate" : "2023-01-23T08:21:41Z",
+        "photoDate" : "2023-01-23T08:21:41Z"
+    },
+
+    /* 39 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef58"),
+        "origFileName" : "-do1gkYi21c.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4000,
+        "height" : 6016,
+        "description" : "🌷",
+        "location" : "Hanover, Hanover, Jamaica",
+        "searchText" : " 🌷 Hanover, Hanover, Jamaica",
+        "properties" : {
+            "exif" : {
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
+            },
+        },
+        "hash" : "dc5d065ee0d2c8eb01ae14b6c2b82014b810beaec4d8bd1c0bc3aa48f702696e",
+        "fileDate" : "2023-01-23T18:54:30Z",
+        "photoDate" : "2023-01-23T18:54:30Z"
+    },
+
+    /* 40 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef59"),
+        "origFileName" : "v4x6y2q92LI.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3600,
+        "height" : 5408,
+        "description" : "a building with a clock tower in the middle of a city",
+        "location" : "Denver, CO, USA",
+        "searchText" : " a building with a clock tower in the middle of a city Denver, CO, USA",
+        "properties" : {
+            "exif" : {
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON Z 7_2",
+                "name" : "NIKON CORPORATION, NIKON Z 7_2",
+                "exposure_time" : "1/1000",
+                "aperture" : "1.4",
+                "focal_length" : "35.0",
+                "iso" : 125
+            },
+        },
+        "hash" : "63e0696d186d1851b739552b1d4e1e93b9c3cb5a7843e73793ac48da046befe0",
+        "fileDate" : "2023-01-23T18:59:57Z",
+        "photoDate" : "2023-01-23T18:59:57Z"
+    },
+
+    /* 41 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef5a"),
+        "origFileName" : "bwOklw2MKXc.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3961,
+        "height" : 5942,
+        "description" : "Experimental portrait",
+        "location" : null,
+        "searchText" : " Experimental portrait",
+        "properties" : {
+            "exif" : {
+                "make" : "FUJIFILM",
+                "model" : "X-T3",
+                "name" : "FUJIFILM, X-T3",
+                "exposure_time" : "1/280",
+                "aperture" : "1.4",
+                "focal_length" : "35.0",
+                "iso" : 6400
+            },
+        },
+        "hash" : "553520d9686d63c49ca180fc9169f4a5d7329d5cb4c8b2be4ef205e1ea5797a8",
+        "fileDate" : "2023-01-23T21:06:37Z",
+        "photoDate" : "2023-01-23T21:06:37Z"
+    },
+
+    /* 42 */
+    {
+        "_id" : new ObjectId("63e9c63b9164637613e9ef5b"),
+        "origFileName" : "Xby93pk7tOM.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4024,
+        "height" : 6048,
+        "description" : "a man with long hair and a beard with tattoos",
+        "location" : null,
+        "searchText" : " a man with long hair and a beard with tattoos",
+        "properties" : {
+            "exif" : {
+                "make" : "NIKON CORPORATION",
+                "model" : "NIKON Z 6",
+                "name" : "NIKON CORPORATION, NIKON Z 6",
+                "exposure_time" : "1/800",
+                "aperture" : "1.4",
+                "focal_length" : "24.0",
+                "iso" : 80
+            },
+        },
+        "hash" : "f585fe0383fcbfb208b621c4a9dce0835545c465c637c7940cf5a06c843ed1cd",
+        "fileDate" : "2023-01-25T01:09:13Z",
+        "photoDate" : "2023-01-25T01:09:13Z"
+    },
+
+    /* 43 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef5c"),
+        "origFileName" : "UHWLE1rrBng.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3555,
+        "height" : 5244,
+        "description" : "ig - @pilseeta",
+        "location" : "Mārupe, Mārupes novads, Latvia",
+        "searchText" : " ig - @pilseeta Mārupe, Mārupes novads, Latvia",
+        "properties" : {
+            "exif" : {
+                "make" : "Premier",
+                "model" : "AF M-8000",
+                "name" : "Premier, AF M-8000",
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : "0.0",
+                "iso" : null
+            },
+        },
+        "hash" : "290cc76da5c4528711e36be80c6db2ae341cecd9a50c0f13e1c38614cf834f58",
+        "fileDate" : "2023-01-25T11:09:29Z",
+        "photoDate" : "2023-01-25T11:09:29Z"
+    },
+
+    /* 44 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef5d"),
+        "origFileName" : "wfromvPVGhI.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4400,
+        "height" : 6600,
+        "description" : "a mountain covered in snow and trees under a cloudy sky",
+        "location" : null,
+        "searchText" : " a mountain covered in snow and trees under a cloudy sky",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7RM3",
+                "name" : "SONY, ILCE-7RM3",
+                "exposure_time" : "1/250",
+                "aperture" : "5.6",
+                "focal_length" : "70.0",
+                "iso" : 1000
+            },
+        },
+        "hash" : "51eb0f882a47f162b31e2c01f4ce6d58412557978b4fc825a402c26d2cef67d1",
+        "fileDate" : "2023-01-25T19:01:09Z",
+        "photoDate" : "2023-01-25T19:01:09Z"
+    },
+
+    /* 45 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef5e"),
+        "origFileName" : "YpUcxEnAy5k.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4000,
+        "height" : 6000,
+        "description" : "a close up of a blue and green object",
+        "location" : null,
+        "searchText" : " a close up of a blue and green object",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS 2000D",
+                "name" : "Canon, EOS 2000D",
+                "exposure_time" : "1/25",
+                "aperture" : "5.6",
+                "focal_length" : "50.0",
+                "iso" : 400
+            },
+        },
+        "hash" : "305833625ad85adb6778c3bbb512b5a08fe577bf1536c1864b24307e25cd317f",
+        "fileDate" : "2023-01-28T23:35:43Z",
+        "photoDate" : "2023-01-28T23:35:43Z"
+    },
+
+    /* 46 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef5f"),
+        "origFileName" : "Ohq7b4-gAmA.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 3557,
+        "height" : 5336,
+        "description" : "a woman sitting on top of a black suitcase",
+        "location" : "Hamburg, Germany",
+        "searchText" : " a woman sitting on top of a black suitcase Hamburg, Germany",
+        "properties" : {
+            "exif" : {
+                "make" : "SONY",
+                "model" : "ILCE-7M3",
+                "name" : "SONY, ILCE-7M3",
+                "exposure_time" : "1/200",
+                "aperture" : "2.5",
+                "focal_length" : "85.0",
+                "iso" : 400
+            },
+        },
+        "hash" : "11d4ef27322a97821d683746421605385a3b7f2a257cb663a233125a1f4074eb",
+        "fileDate" : "2023-01-29T04:12:02Z",
+        "photoDate" : "2023-01-29T04:12:02Z"
     },
 
     /* 47 */
     {
-        "_id" : new ObjectId("63e99985254c230db30fe9df"),
-        "origFileName" : "3EltJNXdQMA.jpg",
+        "_id" : new ObjectId("63e9c63c9164637613e9ef60"),
+        "origFileName" : "u5nuXl4_deQ.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 4032,
-        "height" : 3024,
-        "description" : "a coffee pot sitting on top of a wooden table",
+        "width" : 4000,
+        "height" : 3000,
+        "description" : "a blue pillow with a bunch of different objects on it",
         "location" : null,
+        "searchText" : " a blue pillow with a bunch of different objects on it",
         "properties" : {
             "exif" : {
-                "make" : "Apple",
-                "model" : "iPhone 13 Pro Max",
-                "name" : "Apple, iPhone 13 Pro Max",
-                "exposure_time" : "1/250",
-                "aperture" : "2.8",
-                "focal_length" : "9.0",
-                "iso" : 25
+                "make" : null,
+                "model" : null,
+                "name" : null,
+                "exposure_time" : null,
+                "aperture" : null,
+                "focal_length" : null,
+                "iso" : null
             },
         },
-        "hash" : "64235292a702cb23a94f9bf4dd70d1e3dce77dd0edf83ca2d83acc097bc2fd8c",
-        "fileDate" : "2023-01-29T01:34:55Z",
-        "photoDate" : "2023-01-29T01:34:55Z"
+        "hash" : "7f76e8f047a9eaea2463e9a3f79429dcb5cdcaf40a16e156fd5020f3e2fdda7a",
+        "fileDate" : "2023-01-29T21:52:42Z",
+        "photoDate" : "2023-01-29T21:52:42Z"
     },
 
     /* 48 */
     {
-        "_id" : new ObjectId("63e99985254c230db30fe9e0"),
-        "origFileName" : "A2nqI0AudX0.jpg",
+        "_id" : new ObjectId("63e9c63c9164637613e9ef61"),
+        "origFileName" : "J-Nir7H1j0o.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
-        "width" : 3192,
-        "height" : 4788,
-        "description" : "Layers.",
-        "location" : "Écrins National Park, France",
+        "width" : 4635,
+        "height" : 5794,
+        "description" : "a person sitting at a table with a plate of food",
+        "location" : null,
+        "searchText" : " a person sitting at a table with a plate of food",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R5",
+                "name" : "Canon, EOS R5",
+                "exposure_time" : "1/125",
+                "aperture" : "4.0",
+                "focal_length" : "35.0",
+                "iso" : 640
+            },
+        },
+        "hash" : "4374e98d33bcd9e6033738a597653e49d92d3d1fdffce75f4122b8c9728cc0f7",
+        "fileDate" : "2023-01-30T05:16:59Z",
+        "photoDate" : "2023-01-30T05:16:59Z"
+    },
+
+    /* 49 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef62"),
+        "origFileName" : "7oMcrpVYVwM.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 4695,
+        "height" : 5869,
+        "description" : "a woman sitting at a table with a plate of food",
+        "location" : null,
+        "searchText" : " a woman sitting at a table with a plate of food",
+        "properties" : {
+            "exif" : {
+                "make" : "Canon",
+                "model" : " EOS R5",
+                "name" : "Canon, EOS R5",
+                "exposure_time" : "1/125",
+                "aperture" : "4.0",
+                "focal_length" : "70.0",
+                "iso" : 200
+            },
+        },
+        "hash" : "25bc960e37a49183fc5dd8aef81aa53d603565e7bdbb3bf8b0d835c2db5a8ead",
+        "fileDate" : "2023-01-30T05:16:59Z",
+        "photoDate" : "2023-01-30T05:16:59Z"
+    },
+
+    /* 50 */
+    {
+        "_id" : new ObjectId("63e9c63c9164637613e9ef63"),
+        "origFileName" : "rrkau-m9Yec.jpg",
+        "contentType" : "image/jpeg",
+        "thumbContentType" : "image/jpeg",
+        "width" : 2141,
+        "height" : 3211,
+        "description" : "Sydney Tower Eye",
+        "location" : "悉尼, 悉尼, 澳大利亚",
+        "searchText" : " Sydney Tower Eye 悉尼, 悉尼, 澳大利亚",
         "properties" : {
             "exif" : {
                 "make" : "Canon",
                 "model" : " EOS R6",
                 "name" : "Canon, EOS R6",
                 "exposure_time" : "1/2500",
-                "aperture" : "8.0",
-                "focal_length" : "400.0",
-                "iso" : 200
+                "aperture" : "2.8",
+                "focal_length" : "50.0",
+                "iso" : 100
             },
         },
-        "hash" : "6166cc0349b5697908d4246c2503449b0b604fc49f8b4ccc1e2ec1057675f172",
-        "fileDate" : "2023-01-29T15:52:15Z",
-        "photoDate" : "2023-01-29T15:52:15Z"
-    },
-
-    /* 49 */
-    {
-        "_id" : new ObjectId("63e99985254c230db30fe9e1"),
-        "origFileName" : "1NDi52dQn1A.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 4333,
-        "height" : 6499,
-        "description" : "a woman sitting on the floor in front of a window",
-        "location" : "Ukraine",
-        "properties" : {
-            "exif" : {
-                "make" : "Canon",
-                "model" : " EOS R",
-                "name" : "Canon, EOS R",
-                "exposure_time" : "1/4000",
-                "aperture" : "1.4",
-                "focal_length" : "35.0",
-                "iso" : 200
-            },
-        },
-        "hash" : "7db98f8642032a54e87641761f55d5f40e81a30f0470b258f5ca301e021f0166",
-        "fileDate" : "2023-01-29T21:25:30Z",
-        "photoDate" : "2023-01-29T21:25:30Z"
-    },
-
-    /* 50 */
-    {
-        "_id" : new ObjectId("63e99986254c230db30fe9e2"),
-        "origFileName" : "nCbH2-L9KZA.jpg",
-        "contentType" : "image/jpeg",
-        "thumbContentType" : "image/jpeg",
-        "width" : 5568,
-        "height" : 3712,
-        "description" : "Taras Shevchenko memorial damaged with bullet",
-        "location" : "Borodianka, Kyiv Oblast, Ukraine",
-        "properties" : {
-            "exif" : {
-                "make" : "FUJIFILM",
-                "model" : "X-T4",
-                "name" : "FUJIFILM, X-T4",
-                "exposure_time" : "1/7000",
-                "aperture" : "4.0",
-                "focal_length" : "55.0",
-                "iso" : 640
-            },
-        },
-        "hash" : "6361f744aaa935d415265a2ee2094ef226a25dfa11711c45cc0776046c33024e",
-        "fileDate" : "2023-01-29T22:29:59Z",
-        "photoDate" : "2023-01-29T22:29:59Z"
+        "hash" : "76a3438febf8a96a1fd0b1515017dc5ca3d7f3372ee69e84ce4de58cd3327501",
+        "fileDate" : "2023-01-30T05:37:55Z",
+        "photoDate" : "2023-01-30T05:37:55Z"
     },
 
 ];
