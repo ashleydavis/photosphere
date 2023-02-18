@@ -65,6 +65,7 @@ describe("frontend tests", () => {
         const infoAssetId = page.getByTestId("asset-id");
         await expect(infoAssetId).toHaveCount(0);
 
+
         //
         // Open fullscreen photo modal.
         //
@@ -78,7 +79,6 @@ describe("frontend tests", () => {
         //
         const openInfoButton = page.getByTestId("open-info-button");
         await openInfoButton.click();
-
         await expect(infoAssetId).toHaveCount(1);
         await expect(infoAssetId).toBeVisible();
         await expect(infoAssetId).toHaveText(assetId);

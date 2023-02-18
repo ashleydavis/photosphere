@@ -40,8 +40,7 @@ export function GalleryLayout({
     //
     const api = useApi();
 
-    const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
-    const rows = createLayout(items, galleryWidth + gutter, targetRowHeight);
+    const rows = createLayout(items, galleryWidth, targetRowHeight);
 
     let prevGroup: string | undefined = undefined;
 

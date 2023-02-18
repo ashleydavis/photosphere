@@ -3,6 +3,11 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
 
+//
+// Adds a small gutter on the right hand side of the gallery for some whitespace.
+//
+const GUTTER = 8;
+
 export interface IGalleryProps { 
     //
     // The items to display in the gallery.
@@ -39,12 +44,14 @@ export function Gallery({ items, targetRowHeight, onItemClick }: IGalleryProps) 
     // Updates the gallery width when the container is resized.
     //
     useResizeObserver(containerRef, () => {
-        const gutter = 8; // Small gutter to make sure the edge or each rows is not visible.
-        setGalleryWidth(containerRef.current!.clientWidth + gutter);
+        setGalleryWidth(containerRef.current!.clientWidth - GUTTER);
     });
 
     return (
-        <div ref={containerRef}>
+        <div 
+        	className="pl-1" 
+        	ref={containerRef}
+        	>
         	<GalleryLayout
                 galleryWidth={galleryWidth}
                 targetRowHeight={targetRowHeight}

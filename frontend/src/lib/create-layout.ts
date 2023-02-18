@@ -83,26 +83,76 @@ export function createLayout(items: IGalleryItem[], galleryWidth: number, target
             continue; // Don't expand the last row in each group.
         }
 
-        let rowWidth = row.width;
-        
-        const gap = galleryWidth - rowWidth;
+        const gap = galleryWidth - row.width;
         const deltaWidth = gap / row.items.length;
 
         let maxThumbHeight = 0;
+        row.width = 0;
 
         //
         // Expand each item to fill the gap.
         //
         for (const item of row.items) {
-            const aspectRatio = item.aspectRatio!;
-
             item.thumbWidth! += deltaWidth;
-            item.thumbHeight = item.thumbWidth! * (1.0 / aspectRatio);
+            item.thumbHeight = item.thumbWidth! * (1.0 / item.aspectRatio!);
+            row.width += item.thumbWidth!;
             maxThumbHeight = Math.max(maxThumbHeight, item.thumbHeight);
         }
 
-        row.height = maxThumbHeight;
+        computeFromHeight(row, maxThumbHeight);
+    }
+
+    //
+    // Now pull back the width of all rows so they don't overlap the right hand edge by too much.
+    //
+    for (let rowIndex = 0; rowIndex < rows.length-1; rowIndex++) {
+        const row = rows[rowIndex];
+        const nextRow = rows[rowIndex+1];
+        if (row.group !== nextRow.group) {
+            //TODO: This should be optional.
+            continue; // Don't expand the last row in each group.
+        }
+
+        let pullback = 1;
+        let origHeight = row.height;
+        let prevHeight = origHeight;
+
+        while (true) {
+
+            const newHeight = origHeight - pullback;
+            computeFromHeight(row, newHeight);
+
+            if (row.width < galleryWidth) {
+                //
+                // Pulled the row width in too far, restore the previous height.
+                //
+                computeFromHeight(row, prevHeight);
+                break;
+            }
+
+            prevHeight = newHeight;
+            
+            // 
+            // Each time we double the amount of pullback we try. It
+            // results in too many iterations if we advance this by one each loop.
+            //
+            pullback *= 2;
+        }
     }
 
     return rows;
+}
+
+//
+// Compute thumbnail resolution from a requested height.
+//
+function computeFromHeight(row: IGalleryRow, height: number): void {
+    row.height = height;
+    row.width = 0;
+
+    for (const item of row.items) {
+        item.thumbHeight = height;
+        item.thumbWidth = row.height * item.aspectRatio!;
+        row.width += item.thumbWidth;
+    }
 }
