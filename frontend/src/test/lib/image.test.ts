@@ -61,7 +61,6 @@ describe("image", () => {
             "ExifVersion": "0232",
             "DateTimeOriginal": "2023:01:24 15:35:57",
             "DateTimeDigitized": "2023:01:24 15:35:57",
-            "undefined": 3,
             "ComponentsConfiguration": "YCbCr",
             "ShutterSpeedValue": 8.2,
             "ApertureValue": 1.78,
