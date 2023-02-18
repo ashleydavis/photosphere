@@ -169,27 +169,28 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadAsset(asset: IUploadDetails): Promise<string> {
+    async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
         //
         // Uploads the full asset and metadata.
         //
         const apiKey = await getApiKey();
         const { data } = await axios.post(
             `${BASE_URL}/asset`, 
-            asset.file, 
+            uploadDetails.file, 
             {
                 headers: {
-                    "content-type": asset.file.type,
+                    "content-type": uploadDetails.file.type,
                     "metadata": JSON.stringify({
-                        fileName: asset.file.name,
-                        contentType: asset.file.type,
-                        width: asset.resolution.width,
-                        height: asset.resolution.height,
-                        hash: asset.hash,
-                        properties: asset.properties,
-                        location: asset.location,
-                        fileDate: asset.fileDate,
-                        photoDate: asset.photoDate,
+                        fileName: uploadDetails.file.name,
+                        contentType: uploadDetails.file.type,
+                        width: uploadDetails.resolution.width,
+                        height: uploadDetails.resolution.height,
+                        hash: uploadDetails.hash,
+                        properties: uploadDetails.properties,
+                        location: uploadDetails.location,
+                        fileDate: uploadDetails.fileDate,
+                        photoDate: uploadDetails.photoDate,
+                        labels: uploadDetails.labels,
                     }),
                     "key": apiKey,
                 },
@@ -201,13 +202,13 @@ export function ApiContextProvider({ children }: IProps) {
         //
         // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
         //
-        const thumnailBlob = base64StringToBlob(asset.thumbnail, asset.thumbContentType);
+        const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
         await axios.post(
             `${BASE_URL}/thumb`, 
             thumnailBlob, 
             {
                 headers: {
-                    "content-type": asset.thumbContentType,
+                    "content-type": uploadDetails.thumbContentType,
                     "id": assetId,
                     "key": apiKey,
                 },

@@ -166,7 +166,7 @@ export function UploadPage() {
     //
     // Uploads a single asset.
     //
-    async function uploadFile(file: File) {
+    async function uploadFile(file: File, labels: string[]): Promise<void> {
         const hash = await computeHash(file);
         const existingAssetId = await api.checkAsset(hash);
         if (existingAssetId) {
@@ -195,6 +195,7 @@ export function UploadPage() {
             hash: hash,
             status: existingAssetId ? "already-uploaded" : "pending",
             fileDate: dayjs(file.lastModified).toISOString(),
+            labels: labels,
         };
 
         if (exif) {
@@ -249,11 +250,11 @@ export function UploadPage() {
     //
     // https://protonet.com/blog/html5-drag-drop-files-and-folders/
     //
-    async function traverseFileSystem(item: FileSystemEntry): Promise<void> {
+    async function traverseFileSystem(item: FileSystemEntry, path: string[]): Promise<void> {
         if (item.isFile) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry
             const file = await getFile(item as FileSystemFileEntry);
-            await uploadFile(file);
+            await uploadFile(file, path);
         }
         else if (item.isDirectory) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
@@ -268,7 +269,7 @@ export function UploadPage() {
             }
 
             for (const entry of entries) {
-                await traverseFileSystem(entry);
+                await traverseFileSystem(entry, path.concat([ item.name ]));
             }
         }
     }
@@ -294,7 +295,7 @@ export function UploadPage() {
 	
 	            for (const entry of entries) {
 	                if (entry) {
-	                    await traverseFileSystem(entry);
+	                    await traverseFileSystem(entry, []);
 	                }
 	            }
 	        }
@@ -308,7 +309,7 @@ export function UploadPage() {
 	            const files = Array.from(dataTransfer.files);
 	            if (files) {
 	                for (const file of files) {
-	                    await uploadFile(file);
+	                    await uploadFile(file, []);
 	                }
 	            }
 	        }

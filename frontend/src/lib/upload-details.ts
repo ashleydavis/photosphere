@@ -71,4 +71,9 @@ export interface IUploadDetails {
     // The data the photo was taken if known.
     //
     photoDate?: string;
+
+    //
+    // Labels to add to the uploaded asset, if any.
+    //
+    labels?: string[];
 }
