@@ -47,7 +47,7 @@ export function GalleryPage({ onItemClick }: IGalleryPageProps) {
 		        <Gallery 
 		            items={assets}
 		            onItemClick={onItemClick}
-		            targetRowHeight={300}
+		            targetRowHeight={150}
 		            />
             </InfiniteScroll>
         </div>
