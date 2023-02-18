@@ -112,6 +112,9 @@ describe("photosphere backend", () => {
             properties: {
                 "a": "property",
             },
+            labels: [
+                "Cool photo",
+            ],
         };
 
         const response = await request(app)
@@ -143,7 +146,7 @@ describe("photosphere backend", () => {
             photoDate: dayjs(metadata.photoDate).toDate(),
             sortDate: dayjs(metadata.photoDate).toDate(),
             uploadDate: dateNow,
-            labels: [],
+            labels: metadata.labels,
         });
     });
 

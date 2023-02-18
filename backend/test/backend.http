@@ -14,7 +14,7 @@
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "fileDate": "2023-02-08T01:27:01.419Z", "photoDate": "2023-02-08T01:27:01.419Z", "location": "Somewhere1", "properties": { "a": "property" } }
+metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "fileDate": "2023-02-08T01:27:01.419Z", "photoDate": "2023-02-08T01:27:01.419Z", "location": "Somewhere1", "properties": { "a": "property" }, "labels": [ "Cool photo" ] }
 
 < ./test-assets/1.jpeg
 

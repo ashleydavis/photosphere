@@ -88,6 +88,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         const height = getValue<number>(metadata, "height");
         const hash = getValue<string>(metadata, "hash");
         const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
+        const labels = metadata.labels || [];
         
         await storage.write("uploads", assetId.toString(), contentType, req);
 
@@ -101,7 +102,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             fileDate: fileDate,
             sortDate: fileDate,
             uploadDate: now(),
-            labels: [],
+            labels: labels,
         };
 
         if (metadata.location) {
