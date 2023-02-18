@@ -1,3 +1,9 @@
+#
+# Note: If running these scripts against the production REST API you need
+# might beed to add a "key" header to each that specifies the API key 
+# when that has been enabled in the backend.
+#
+
 @base_url = http://localhost:3000
 
 ###

@@ -5,6 +5,8 @@ import { ObjectId, Db } from "mongodb";
 import dayjs from "dayjs";
 import { IStorage } from "./services/storage";
 
+const API_KEY = process.env.API_KEY;
+
 //
 // Starts the REST API.
 //
@@ -17,6 +19,23 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
 
     const app = express();
     app.use(cors());
+
+    if (API_KEY) {
+        //
+        // Authenticates with an API key.
+        // All routes after this must provide the API key.
+        //
+        app.use((req, res, next) => {
+            if (req.query.key === API_KEY || req.headers.key === API_KEY) {
+                // Allow the request.
+                next();
+                return;
+            }
+            
+            // Disallow the request.
+            res.sendStatus(403);
+        });
+    }
 
     //
     // Gets the value of a header from the request.
