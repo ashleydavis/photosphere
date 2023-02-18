@@ -62,6 +62,11 @@ export function UploadPage() {
     const [numUploaded, setNumUploaded] = useState<number>(0);
 
     //
+    // Number of assets that were found to be already uploaded.
+    //
+    const [numAlreadyUploaded, setNumAlreadyUploaded] = useState<number>(0);
+
+    //
     // The upload we are currently working on.
     //
     const [uploadIndex, setUploadIndex] = useState<number>(0);
@@ -215,6 +220,7 @@ export function UploadPage() {
             console.log(`Already uploaded ${fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
 
             setNumUploaded(numUploaded + 1);
+            setNumAlreadyUploaded(numAlreadyUploaded + 1);
         }
 
         console.log(`Queueing ${fileName}`);
@@ -455,9 +461,9 @@ export function UploadPage() {
                 </label>
             </div>
 
-            <div>Uploading: {isUploading}</div>
-            <div>Total: {uploads.length}</div>
-            <div>Uploaded: {numUploaded}</div>
+            <div>Total files queued: {uploads.length}</div>
+            <div>Files uploaded: {numUploaded}</div>
+            <div>Files previously uploaded: {numAlreadyUploaded}</div>
 
             <div className="flex flex-wrap">
                 {uploads.map((upload, index) => {
