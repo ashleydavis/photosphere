@@ -167,6 +167,12 @@ export function UploadPage() {
     // Uploads a single asset.
     //
     async function uploadFile(file: File, labels: string[]): Promise<void> {
+        if (file.type !== "image/png" && file.type !== "image/jpeg") {
+            // Only accept png and jpg images for upload.
+            console.log(`Ignoring non image file ${file.name} with type ${file.type}`);
+            return;
+        }
+
         const hash = await computeHash(file);
         const existingAssetId = await api.checkAsset(hash);
         if (existingAssetId) {
