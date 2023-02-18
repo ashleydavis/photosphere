@@ -24,6 +24,11 @@ export interface IUploadDetails {
     // I don't want to hold that data in memory unless I have to.
     //
     file: Blob;
+
+    //
+    // The content type of the asset.
+    //
+    contentType: string;
     
     //
     // The resolution of the asset.

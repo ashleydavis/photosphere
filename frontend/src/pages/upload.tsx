@@ -12,6 +12,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 import JSZip from "jszip";
+import mimeTypes from "mime-types";
 
 //
 // Size of the thumbnail to generate and upload to the backend.
@@ -179,28 +180,34 @@ export function UploadPage() {
             const zip = new JSZip();
             const unpacked = await zip.loadAsync(file);
             for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
-
-                const blob = await zipObject.async("blob");
-
-                await queueUpload(fileName, blob, zipObject.date, labels.concat(["From zip file", file.name]));
+                if (!zipObject.dir) {
+                    //
+                    // It's a file.
+                    //
+                    const blob = await zipObject.async("blob");
+                    const contentType = mimeTypes.lookup(fileName);
+                    if (contentType) {
+                        const fullFileName = `${file.name}/${fileName}`;
+                        await queueUpload(fullFileName, blob, contentType, zipObject.date, labels.concat(["From zip file", file.name]));
+                    }
+                }
             }
             return;
         }
 
-        if (file.type !== "image/png" && file.type !== "image/jpeg") {
-            // Only accept png and jpg images for upload.
-            console.log(`Ignoring non image file ${file.name} with type ${file.type}`);
-            return;
-        }
-
-
-        await queueUpload(file.name, file, dayjs(file.lastModified).toDate(), labels);
+        await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), labels);
     }
 
     //
     // Queue the upload of a file.
     //
-    async function queueUpload(fileName: string, file: Blob, fileDate: Date, labels: string[]) {
+    async function queueUpload(fileName: string, file: Blob, contentType: string, fileDate: Date, labels: string[]) {
+
+        if (contentType !== "image/png" && contentType !== "image/jpeg") {
+            // Only accept png and jpg images for upload.
+            console.log(`Ignoring non image file ${fileName} with type ${contentType}`);
+            return;
+        }
 
         const hash = await computeHash(file);
         const existingAssetId = await api.checkAsset(hash);
@@ -222,8 +229,9 @@ export function UploadPage() {
         const exif = await getExifData(file);
 
         const uploadDetails: IUploadDetails = {
-        	fileName: fileName,
             file: file,
+            fileName: fileName,
+            contentType: contentType,
             resolution: imageResolution,
             thumbnailDataUrl: thumbnailDataUrl,
             thumbnail: thumbnailData,
