@@ -13,9 +13,17 @@ export type UploadState = "already-uploaded" | "pending" | "uploading" | "upload
 
 export interface IUploadDetails {
     //
+    // The name of the file.
+    //
+    fileName: string;
+    
+    //
     // The original file to upload.
     //
-    file: File;
+    // This isn't set for assets automatically extracted from zip files because
+    // I don't want to hold that data in memory unless I have to.
+    //
+    file: Blob;
     
     //
     // The resolution of the asset.

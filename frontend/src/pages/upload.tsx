@@ -11,10 +11,17 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
+import JSZip from "jszip";
+
 //
 // Size of the thumbnail to generate and upload to the backend.
 //
 const THUMBNAIL_MIN_SIZE = 300;
+
+//
+// Size of the display asset to generated and uploaded to the backend.
+//
+const DISPLAY_MIN_SIZE = 1000;
 
 export function UploadPage() {
 
@@ -122,7 +129,7 @@ export function UploadPage() {
         const nextUpload = uploads[uploadIndex];
 
         try {
-            console.log(`Uploading ${nextUpload.file.name}`);
+            console.log(`Uploading ${nextUpload.fileName}`);
 
             //
             // This asset is not yet uploaded.
@@ -167,22 +174,44 @@ export function UploadPage() {
     // Uploads a single asset.
     //
     async function uploadFile(file: File, labels: string[]): Promise<void> {
+        
+        if (file.type === "application/zip") {
+            const zip = new JSZip();
+            const unpacked = await zip.loadAsync(file);
+            for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
+
+                const blob = await zipObject.async("blob");
+
+                await queueUpload(fileName, blob, zipObject.date, labels.concat(["From zip file", file.name]));
+            }
+            return;
+        }
+
         if (file.type !== "image/png" && file.type !== "image/jpeg") {
             // Only accept png and jpg images for upload.
             console.log(`Ignoring non image file ${file.name} with type ${file.type}`);
             return;
         }
 
+
+        await queueUpload(file.name, file, dayjs(file.lastModified).toDate(), labels);
+    }
+
+    //
+    // Queue the upload of a file.
+    //
+    async function queueUpload(fileName: string, file: Blob, fileDate: Date, labels: string[]) {
+
         const hash = await computeHash(file);
         const existingAssetId = await api.checkAsset(hash);
         if (existingAssetId) {
-            console.log(`Already uploaded ${file.name} with hash ${hash}, uploaded to ${existingAssetId}`);
+            console.log(`Already uploaded ${fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
 
             setNumUploaded(numUploaded + 1);
         }
 
-        console.log(`Queueing ${file.name}`);
-
+        console.log(`Queueing ${fileName}`);
+        
         const imageData = await loadDataURL(file);
         const imageResolution = await getImageResolution(imageData);
         const thumbnailDataUrl = await resizeImage(imageData, THUMBNAIL_MIN_SIZE);
@@ -193,6 +222,7 @@ export function UploadPage() {
         const exif = await getExifData(file);
 
         const uploadDetails: IUploadDetails = {
+        	fileName: fileName,
             file: file,
             resolution: imageResolution,
             thumbnailDataUrl: thumbnailDataUrl,
@@ -200,7 +230,7 @@ export function UploadPage() {
             thumbContentType: thumbContentType,
             hash: hash,
             status: existingAssetId ? "already-uploaded" : "pending",
-            fileDate: dayjs(file.lastModified).toISOString(),
+            fileDate: dayjs(fileDate).toISOString(),
         };
 
         if (exif) {
@@ -242,7 +272,7 @@ export function UploadPage() {
 
         setUploads(uploads => [ ...uploads, uploadDetails ]);
 
-        console.log(`Queued ${file.name}`);
+        console.log(`Queued ${fileName}`);
     }
 
     //
@@ -417,9 +447,9 @@ export function UploadPage() {
                 </label>
             </div>
 
-            {/* <div>Uploading: {isUploading}</div>
+            <div>Uploading: {isUploading}</div>
             <div>Total: {uploads.length}</div>
-            <div>Uploaded: {numUploaded}</div> */}
+            <div>Uploaded: {numUploaded}</div>
 
             <div className="flex flex-wrap">
                 {uploads.map((upload, index) => {

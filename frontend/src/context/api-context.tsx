@@ -181,7 +181,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     "content-type": uploadDetails.file.type,
                     "metadata": JSON.stringify({
-                        fileName: uploadDetails.file.name,
+                        fileName: uploadDetails.fileName,
                         contentType: uploadDetails.file.type,
                         width: uploadDetails.resolution.width,
                         height: uploadDetails.resolution.height,
