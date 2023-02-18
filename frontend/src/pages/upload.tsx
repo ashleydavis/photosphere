@@ -201,7 +201,6 @@ export function UploadPage() {
             hash: hash,
             status: existingAssetId ? "already-uploaded" : "pending",
             fileDate: dayjs(file.lastModified).toISOString(),
-            labels: labels,
         };
 
         if (exif) {
@@ -228,9 +227,31 @@ export function UploadPage() {
             }
         }
 
+        //
+        // Add the month and year as labels.
+        //
+        const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
+        const month = dayjs(photoDate).format("MMMM");
+        const year = dayjs(photoDate).format("YYYY");
+        uploadDetails.labels = [month, year].concat(labels);
+
+        //
+        // Remove duplicate labels, in case month/year already added.
+        //
+        uploadDetails.labels = removeDuplicates(uploadDetails.labels);
+
         setUploads(uploads => [ ...uploads, uploadDetails ]);
 
         console.log(`Queued ${file.name}`);
+    }
+
+    //
+    // Removes duplicate labels.
+    // 
+    // https://stackoverflow.com/a/9229821/25868
+    //
+    function removeDuplicates(labels: string[]): string[] {
+        return [ ...new Set<string>(labels) ];
     }
 
     //
