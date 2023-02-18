@@ -14,7 +14,7 @@ dayjs.extend(customParseFormat);
 //
 // Size of the thumbnail to generate and upload to the backend.
 //
-const THUMBNAIL_MIN_SIZE = 200;
+const THUMBNAIL_MIN_SIZE = 300;
 
 export function UploadPage() {
 
