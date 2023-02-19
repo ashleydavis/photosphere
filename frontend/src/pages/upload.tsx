@@ -228,10 +228,14 @@ export function UploadPage() {
         const imageData = await loadDataURL(file);
         const imageResolution = await getImageResolution(imageData);
         const thumbnailDataUrl = await resizeImage(imageData, THUMBNAIL_MIN_SIZE);
-        const thumContentTypeStart = 5;
-        const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", thumContentTypeStart);
-        const thumbContentType = thumbnailDataUrl.slice(thumContentTypeStart, thumbContentTypeEnd);
+        const contentTypeStart = 5;
+        const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
+        const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
         const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+        const displayDataUrl = await resizeImage(imageData, DISPLAY_MIN_SIZE); //TODO: Don't really need this if we know the asset is already uploaded.
+        const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
+        const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
+        const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
         const exif = await getExifData(file);
 
         const uploadDetails: IUploadDetails = {
@@ -242,6 +246,8 @@ export function UploadPage() {
             thumbnailDataUrl: thumbnailDataUrl,
             thumbnail: thumbnailData,
             thumbContentType: thumbContentType,
+            display: displayData,
+            displayContentType: displayContentType,
             hash: hash,
             status: existingAssetId ? "already-uploaded" : "pending",
             fileDate: dayjs(fileDate).toISOString(),

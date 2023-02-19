@@ -1,4 +1,4 @@
-import { IStorage } from "./storage";
+import { AssetType, IStorage } from "./storage";
 import { Readable } from "stream";
 import aws from "aws-sdk";
 
@@ -45,7 +45,7 @@ export class CloudStorage implements IStorage {
     //
     // Reads an file from stroage.
     //
-    read(type: string, assetId: string): Readable {
+    read(type: AssetType, assetId: string): Readable {
         const getParams: aws.S3.Types.GetObjectRequest = {
             Bucket: this.bucket, 
             Key: `${type}/${assetId}`,
@@ -56,7 +56,7 @@ export class CloudStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
-    async write(type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+    async write(type: AssetType, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
 
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,

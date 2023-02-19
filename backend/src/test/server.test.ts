@@ -129,7 +129,7 @@ describe("photosphere backend", () => {
         expect(assetId.length).toBeGreaterThan(0);
 
         expect(mockStorage.write).toHaveBeenCalledTimes(1);
-        expect(mockStorage.write.mock.calls[0][0]).toEqual("uploads");
+        expect(mockStorage.write.mock.calls[0][0]).toEqual("original");
         expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
 
         expect(mockCollection.insertOne).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe("photosphere backend", () => {
         );
 
         expect(mockStorage.write).toHaveBeenCalledTimes(1);
-        expect(mockStorage.write.mock.calls[0][0]).toEqual("thumbs");
+        expect(mockStorage.write.mock.calls[0][0]).toEqual("thumb");
         expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
     });
 
@@ -288,7 +288,7 @@ describe("photosphere backend", () => {
         };
 
         mockStorage.read = jest.fn((type: string, assetId: string) => {
-            expect(type).toBe("uploads");
+            expect(type).toBe("original");
             expect(assetId).toBe(assetId);
             return stringStream(content);
         });
@@ -336,7 +336,7 @@ describe("photosphere backend", () => {
             return mockAsset;
         };
         mockStorage.read = jest.fn((type: string, assetId: string) => {
-            expect(type).toBe("thumbs");
+            expect(type).toBe("thumb");
             expect(assetId).toBe(assetId);
             return stringStream(content);
         });
@@ -355,9 +355,6 @@ describe("photosphere backend", () => {
 
         const { app, mockCollection, mockStorage } = await initServer();
 
-        // Generate the file into the uploads directory.
-        //fio: await fs.writeFile(`./uploads/${assetId}`, "ABCD");
-
         const mockAsset: any = {
             contentType: contentType,
         };
@@ -367,7 +364,7 @@ describe("photosphere backend", () => {
             return mockAsset;
         };
         mockStorage.read = jest.fn((type: string, assetId: string) => {
-            expect(type).toBe("uploads");
+            expect(type).toBe("original");
             expect(assetId).toBe(assetId);
             return stringStream(content);
         });
@@ -396,6 +393,82 @@ describe("photosphere backend", () => {
         const { app } = await initServer();
 
         const response = await request(app).get(`/thumb`);
+        expect(response.statusCode).toBe(500);
+    });
+
+    test("get existing display asset", async () => {
+
+        const assetId = new ObjectId();
+        const content = "ABCD";
+        const contentType = "image/jpeg";
+
+        const { app, mockCollection, mockStorage } = await initServer();
+
+        const mockAsset: any = {
+            displayContentType: contentType,
+        };
+        mockCollection.findOne = (query: any) => {
+            expect(query._id).toEqual(assetId);
+            return mockAsset;
+        };
+        mockStorage.read = jest.fn((type: string, assetId: string) => {
+            expect(type).toBe("display");
+            expect(assetId).toBe(assetId);
+            return stringStream(content);
+        });
+
+        const response = await request(app).get(`/display?id=${assetId}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.header["content-type"]).toBe(contentType);
+        expect(response.body).toEqual(Buffer.from(content));
+    });
+
+    test("get display asset returns original asset when display asset doesn't exist", async () => {
+
+        const assetId = new ObjectId();
+        const content = "ABCD";
+        const contentType = "image/jpeg";
+
+        const { app, mockCollection, mockStorage } = await initServer();
+
+        const mockAsset: any = {
+            contentType: contentType,
+        };
+        mockCollection.findOne = (query: any) => {
+            expect(query._id).toEqual(assetId);
+            
+            return mockAsset;
+        };
+        mockStorage.read = jest.fn((type: string, assetId: string) => {
+            expect(type).toBe("original");
+            expect(assetId).toBe(assetId);
+            return stringStream(content);
+        });
+
+        const response = await request(app).get(`/display?id=${assetId}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.header["content-type"]).toBe(contentType);
+        expect(response.body).toEqual(Buffer.from(content));
+    });
+
+    test("non existing display asset yields a 404 error", async () => {
+
+        const assetId = new ObjectId();
+        const { app, mockCollection } = await initServer();
+
+        mockCollection.findOne = (query: any) => {
+            return undefined;
+        };
+
+        const response = await request(app).get(`/display?id=${assetId}`);
+        expect(response.statusCode).toBe(404);
+    });
+
+    test("get existing display asset with no id yields an error", async () => {
+
+        const { app } = await initServer();
+
+        const response = await request(app).get(`/display`);
         expect(response.statusCode).toBe(500);
     });
 

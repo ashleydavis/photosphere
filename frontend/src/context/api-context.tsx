@@ -215,6 +215,21 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
 
+        //
+        // Uploads the display asset separately for simplicity and no restriction on size.
+        //
+        const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
+        await axios.post(
+            `${BASE_URL}/display`, 
+            displayBlob, 
+            {
+                headers: {
+                    "content-type": uploadDetails.displayContentType,
+                    "id": assetId,
+                    "key": apiKey,
+                },
+            }
+        );
         return assetId;
     }
     

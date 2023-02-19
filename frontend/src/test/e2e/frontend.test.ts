@@ -27,10 +27,10 @@ describe("frontend tests", () => {
         //
         // Clear uploaded assets.
         //
-        await fs.remove("../backend/uploads");
-        await fs.ensureDir("../backend/uploads");
-        await fs.remove("../backend/thumbs");
-        await fs.ensureDir("../backend/thumbs");
+        await fs.remove("../backend/files");
+        await fs.ensureDir("../backend/files/original");
+        await fs.ensureDir("../backend/files/thumb");
+        await fs.ensureDir("../backend/files/display");
         
         //
         // Uploads an image.
@@ -46,7 +46,7 @@ describe("frontend tests", () => {
         while (true) {
             await sleep(1); //TODO: Should wait until progress spinner has hidden.
     
-            uploadedFiles = await fs.readdir("../backend/uploads");
+            uploadedFiles = await fs.readdir("../backend/files/original");
             if (uploadedFiles.length > 0) {
                 break;
             }
@@ -78,7 +78,7 @@ describe("frontend tests", () => {
         await galleryThumb.click();
         await expect(fullsizeAsset).toHaveCount(1);
         await expect(fullsizeAsset).toBeVisible();
-        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/asset?id=${assetId}&key=${apiKey}`);
+        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}&key=${apiKey}`);
 
         //
         // Open photo info.

@@ -90,7 +90,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
         const labels = metadata.labels || [];
         
-        await storage.write("uploads", assetId.toString(), contentType, req);
+        await storage.write("original", assetId.toString(), contentType, req);
 
         const newAsset: IAsset = {
             _id: assetId,
@@ -147,7 +147,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             "Content-Type": asset.contentType,
         });
 
-        const stream = storage.read("uploads", assetId);
+        const stream = storage.read("original", assetId);
         stream.pipe(res);
     });
 
@@ -158,7 +158,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         
         const assetId = new ObjectId(getHeader(req, "id"));
         const contentType = getHeader(req, "content-type");
-        await storage.write("thumbs", assetId.toString(), contentType, req);
+        await storage.write("thumb", assetId.toString(), contentType, req);
 
         await assetsCollection.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
         
@@ -189,7 +189,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
                 "Content-Type": asset.thumbContentType,
             });
     
-            const stream = await storage.read("thumbs", assetId);
+            const stream = await storage.read("thumb", assetId);
             stream.pipe(res);
         }
         else {
@@ -200,7 +200,61 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
                 "Content-Type": asset.contentType,
             });
     
-            const stream = await storage.read("uploads", assetId);
+            const stream = await storage.read("original", assetId);
+            stream.pipe(res);
+        }
+    });
+
+    //
+    // Uploads a display version for a particular asset.
+    //
+    app.post("/display", async (req, res) => {
+        
+        const assetId = new ObjectId(getHeader(req, "id"));
+        const contentType = getHeader(req, "content-type");
+        await storage.write("display", assetId.toString(), contentType, req);
+
+        await assetsCollection.updateOne({ _id: assetId }, { $set: { displayContentType:  contentType } });
+        
+        res.sendStatus(200);
+    });
+
+    //
+    // Gets the display version for an asset by id.
+    //
+    app.get("/display", async (req, res) => {
+
+        const assetId = req.query.id as string;
+        if (!assetId) {
+            throw new Error(`Asset ID not specified in query parameters.`);
+        }
+
+        const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
+        if (!asset) {
+            res.sendStatus(404);
+            return;
+        }
+
+        if (asset.displayContentType) {
+            //
+            // Return the display version of the asset.
+            //
+            res.writeHead(200, {
+                "Content-Type": asset.displayContentType,
+            });
+    
+            const stream = await storage.read("display", assetId);
+            stream.pipe(res);
+        }
+        else {
+            // 
+            // No display asset, return the original asset.
+            //
+            res.writeHead(200, {
+                "Content-Type": asset.contentType,
+            });
+    
+            const stream = await storage.read("original", assetId);
             stream.pipe(res);
         }
     });

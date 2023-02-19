@@ -32,6 +32,29 @@ id: {{upload_asset_id}}
 < ./test-assets/1.jpeg
 
 ###
+# Retrieve an thumbnail.
+#
+
+GET {{base_url}}/thumb?id={{upload_asset_id}}
+
+###
+#
+# Uploads the display version of an asset.
+#
+
+POST {{base_url}}/display
+Content-Type: image/jpeg
+id: {{upload_asset_id}}
+
+< ./test-assets/1.jpeg
+
+###
+# Retrieve the display asset.
+#
+
+GET {{base_url}}/display?id={{upload_asset_id}}
+
+###
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
@@ -90,12 +113,6 @@ Content-Type: application/json
     "id": "{{upload_asset_id}}",
     "description": "A great description"
 }
-
-###
-# Retrieve an thumbnail.
-#
-
-GET {{base_url}}/thumb?id={{upload_asset_id}}
 
 
 ###

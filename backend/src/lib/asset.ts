@@ -26,6 +26,11 @@ export interface IAsset {
     thumbContentType?: string;
 
     //
+    // The mime type of the display asset (after one has been set).
+    //
+    displayContentType?: string;
+
+    //
     // Width of the image or video.
     //
     width: number;

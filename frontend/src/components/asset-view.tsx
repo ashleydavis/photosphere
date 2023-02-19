@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
 import { useApi } from "../context/api-context";
 import { AssetInfo } from "./asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
@@ -55,7 +54,7 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                     && <div className="photo-container flex flex-col items-center justify-center">
                         <img
                             data-testid="fullsize-asset"
-                            src={api.makeUrl(`/asset?id=${asset._id}`)}
+                            src={api.makeUrl(`/display?id=${asset._id}`)}
                             />
                     </div>
                 }

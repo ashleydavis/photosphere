@@ -1,5 +1,7 @@
 import { Readable } from "stream";
 
+export type AssetType = "thumb" | "display" | "original";
+
 export interface IStorage {
 
     //
@@ -10,10 +12,10 @@ export interface IStorage {
     //
     // Reads an file from stroage.
     //
-    read(type: string, assetId: string): Readable;
+    read(type: AssetType, assetId: string): Readable;
 
     //
     // Writes an input stream to storage.
     //
-    write(type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    write(type: AssetType, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 }

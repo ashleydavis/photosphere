@@ -10,7 +10,6 @@ import { IResolution } from "./image";
 //
 export type UploadState = "already-uploaded" | "pending" | "uploading" | "uploaded";
 
-
 export interface IUploadDetails {
     //
     // The name of the file.
@@ -49,6 +48,16 @@ export interface IUploadDetails {
     // The content type of the thumbnail.
     //
     thumbContentType: string;
+
+    //
+    // Base64 encoded display asset.
+    //
+    display: string;
+
+    // 
+    // The content type of the display asset.
+    //
+    displayContentType: string;
 
     //
     // Hash of the data.
