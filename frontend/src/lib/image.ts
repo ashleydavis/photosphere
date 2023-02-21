@@ -31,8 +31,7 @@ export interface IResolution {
 //
 // Gets the size of an image element.
 //
-export async function getImageResolution(imageSrc: string): Promise<IResolution> {
-    const image = await loadImage(imageSrc);
+export function getImageResolution(image: HTMLImageElement): IResolution {
     return {
         width: image.width,
         height: image.height,
@@ -44,32 +43,26 @@ export async function getImageResolution(imageSrc: string): Promise<IResolution>
 //
 // https://stackoverflow.com/a/43354901/25868
 //
-export function resizeImage(imageData: string, maxSize: number): Promise<string> {
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-            const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
-            const octx = oc.getContext('2d')!;
-            oc.width = img.width;
-            oc.height = img.height;
-            octx.drawImage(img, 0, 0);
+export function resizeImage(image: HTMLImageElement, minSize: number): string {
+    const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
+    const octx = oc.getContext('2d')!;
+    oc.width = image.width;
+    oc.height = image.height;
+    octx.drawImage(image, 0, 0);
 
-            // Commented out code could be useful.
-            if( img.width > img.height) {
-                oc.height = (img.height / img.width) * maxSize;
-                oc.width = maxSize;
-            } 
-            else {
-                oc.width = (img.width / img.height) * maxSize;
-                oc.height = maxSize;
-            }
+    // Commented out code could be useful.
+    if( image.width > image.height) {
+        oc.height = minSize;
+        oc.width = (image.width / image.height) * minSize;
+    } 
+    else {
+        oc.height = (image.height / image.width) * minSize;
+        oc.width = minSize;
+    }
 
-            octx.drawImage(oc, 0, 0, oc.width, oc.height);
-            octx.drawImage(img, 0, 0, oc.width, oc.height);
-            resolve(oc.toDataURL());
-        };
-        img.src = imageData;
-    });
+    octx.drawImage(oc, 0, 0, oc.width, oc.height);
+    octx.drawImage(image, 0, 0, oc.width, oc.height);
+    return oc.toDataURL();
 }
 
 //

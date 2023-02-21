@@ -1,5 +1,5 @@
 import React, { useState, DragEvent, useEffect } from "react";
-import { getExifData, getImageResolution, resizeImage } from "../lib/image";
+import { getExifData, getImageResolution, loadImage, resizeImage } from "../lib/image";
 import { useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
 import { convertExifCoordinates, reverseGeocode } from "../lib/reverse-geocode";
@@ -225,14 +225,15 @@ export function UploadPage() {
 
         console.log(`Queueing ${fileName}`);
         
-        const imageData = await loadDataURL(file);
-        const imageResolution = await getImageResolution(imageData);
-        const thumbnailDataUrl = await resizeImage(imageData, THUMBNAIL_MIN_SIZE);
+        const imageData = await loadDataURL(file); 
+        const image = await loadImage(imageData);
+        const imageResolution = await getImageResolution(image);
+        const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
         const contentTypeStart = 5;
         const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
         const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
         const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-        const displayDataUrl = await resizeImage(imageData, DISPLAY_MIN_SIZE); //TODO: Don't really need this if we know the asset is already uploaded.
+        const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
         const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
         const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
         const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);

@@ -19,7 +19,8 @@ describe("image", () => {
 
     test("can get image resolution", async () => {
 
-        const resolution = await getImageResolution(testImg);
+        const image = await loadImage(testImg);
+        const resolution = getImageResolution(image);
         expect(resolution).toEqual({
             width: 10,
             height: 10,
@@ -28,8 +29,10 @@ describe("image", () => {
 
     test("can resize image", async () => {
 
-        const resizedImage = await resizeImage(testImg, 12);
-        const resolution = await getImageResolution(resizedImage);
+        const image = await loadImage(testImg);
+        const resizedImageData = resizeImage(image, 12);
+        const resizedImage = await loadImage(resizedImageData);
+        const resolution = getImageResolution(resizedImage);
         expect(resolution).toEqual({
             width: 12,
             height: 12,
