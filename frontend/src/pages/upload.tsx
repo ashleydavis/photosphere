@@ -147,108 +147,137 @@ export function UploadPage() {
             //
             setUploadStatus("uploading", uploadIndex);
 
-            const hash = await computeHash(nextUpload.file);
-            const existingAssetId = await api.checkAsset(hash);
-            if (existingAssetId) {
-                console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
+            if (nextUpload.contentType === "application/zip") {
 
-	            setUploadStatus("already-uploaded", uploadIndex);
-	            setNumUploaded(numUploaded + 1);
-	            setNumAlreadyUploaded(numAlreadyUploaded + 1);
-            }
-            else {
+                console.log(`Unpacking zip file ${nextUpload.fileName}`);
+
                 //
-                // Load the image and generate thumbnail, etc. 
-                // Don't hold any of this data in memory longer than necessary
-                // otherwise we get an out of memory error when trying to
-                // upload 1000s of assets.
+                // It's a zip file, so read the files in it and queue them for separate upload.
                 //
-                const imageData = await loadDataURL(nextUpload.file); 
-                const image = await loadImage(imageData);
-                const imageResolution = await getImageResolution(image);
-                const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
-                const contentTypeStart = 5;
-                const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
-                const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
-                const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-                const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
-                const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
-                const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
-                const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
-                const exif = await getExifData(nextUpload.file);
-                
-                const uploadDetails: IUploadDetails = {
-                    ...nextUpload,
-                    resolution: imageResolution,
-                    thumbnailDataUrl: thumbnailDataUrl,
-                    thumbnail: thumbnailData,
-                    thumbContentType: thumbContentType,
-                    display: displayData,
-                    displayContentType: displayContentType,
-                    hash: hash,
-                };
-                
-                if (exif) {
-                    uploadDetails.properties = {
-                        exif: exif,
-                    };
-                
-                    if (exif.GPSLatitude && exif.GPSLongitude) {
-                        uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
-                    }
-                
-                    const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-                    for (const dateField of dateFields) {
-                        const dateStr = exif[dateField];
-                        if (dateStr) {
-                            try {
-                                uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                            }
-                            catch (err) {
-                                console.error(`Failed to parse date from ${dateStr}`);
-                                console.error(err);
-                            }
+                // TODO. This can't load zip files bigger than 2GB in the browser. I need to handle errors better for this kind of thing.
+                //
+                const zip = new JSZip();
+                const unpacked = await zip.loadAsync(nextUpload.file);
+                for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
+                    if (!zipObject.dir) {
+                        //
+                        // Found a file in the zip file.
+                        //
+                        const blob = await zipObject.async("blob"); //todo: this forces much data to be stored in memory at the same time.
+                        const contentType = mimeTypes.lookup(fileName);
+                        if (contentType) {
+                            const fullFileName = `${nextUpload.fileName}/${fileName}`;
+                            await queueUpload(fullFileName, blob, contentType, zipObject.date, nextUpload.labels.concat(["From zip file", nextUpload.fileName]));
                         }
                     }
                 }
 
-                //
-                // Add the month and year as labels.
-                //
-                const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
-                const month = dayjs(photoDate).format("MMMM");
-                const year = dayjs(photoDate).format("YYYY");
-                uploadDetails.labels = [month, year].concat(uploadDetails.labels || []);
-
-                //
-                // Remove duplicate labels, in case month/year already added.
-                //
-                uploadDetails.labels = removeDuplicates(uploadDetails.labels);
-
-                const assetId = await api.uploadAsset(uploadDetails);
-                console.log(`Uploaded ${assetId}`);
-
-	            //
-	            // Update upload state.
-	            //
-	            updateUpload({ status: "uploaded", assetId }, uploadIndex);
-
-	            //
-	            // Increment the number uploaded.
-	            //
-                setNumUploaded(numUploaded + 1);
-
-	            //
-	            // Move onto the next upload.
-	            //
-	            setUploadIndex(uploadIndex + 1);
-	            
-	            //
-	            // Resets the state of gallery. 
-	            // A cheap way to force the uploaded assets to show up.
-	            //
-	            await reset();
+                setUploadStatus("uploaded", uploadIndex);
             }
+            else {
+	            const hash = await computeHash(nextUpload.file);
+	            const existingAssetId = await api.checkAsset(hash);
+	            if (existingAssetId) {
+	                console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
+	
+		            setUploadStatus("already-uploaded", uploadIndex);
+		            setNumUploaded(numUploaded + 1);
+		            setNumAlreadyUploaded(numAlreadyUploaded + 1);
+	            }
+	            else {
+	                //
+	                // Load the image and generate thumbnail, etc. 
+	                // Don't hold any of this data in memory longer than necessary
+	                // otherwise we get an out of memory error when trying to
+	                // upload 1000s of assets.
+	                //
+	                const imageData = await loadDataURL(nextUpload.file); 
+	                const image = await loadImage(imageData);
+	                const imageResolution = await getImageResolution(image);
+	                const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
+	                const contentTypeStart = 5;
+	                const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
+	                const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
+	                const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+	                const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
+	                const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
+	                const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
+	                const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
+	                const exif = await getExifData(nextUpload.file);
+	                
+	                const uploadDetails: IUploadDetails = {
+	                    ...nextUpload,
+	                    resolution: imageResolution,
+	                    thumbnailDataUrl: thumbnailDataUrl,
+	                    thumbnail: thumbnailData,
+	                    thumbContentType: thumbContentType,
+	                    display: displayData,
+	                    displayContentType: displayContentType,
+	                    hash: hash,
+	                };
+	                
+	                if (exif) {
+	                    uploadDetails.properties = {
+	                        exif: exif,
+	                    };
+	                
+	                    if (exif.GPSLatitude && exif.GPSLongitude) {
+	                        uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
+	                    }
+	                
+	                    const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+	                    for (const dateField of dateFields) {
+	                        const dateStr = exif[dateField];
+	                        if (dateStr) {
+	                            try {
+	                                uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+	                            }
+	                            catch (err) {
+	                                console.error(`Failed to parse date from ${dateStr}`);
+	                                console.error(err);
+	                            }
+	                        }
+	                    }
+	                }
+	
+	                //
+	                // Add the month and year as labels.
+	                //
+	                const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
+	                const month = dayjs(photoDate).format("MMMM");
+	                const year = dayjs(photoDate).format("YYYY");
+	                uploadDetails.labels = [month, year].concat(uploadDetails.labels || []);
+	
+	                //
+	                // Remove duplicate labels, in case month/year already added.
+	                //
+	                uploadDetails.labels = removeDuplicates(uploadDetails.labels);
+	
+	                const assetId = await api.uploadAsset(uploadDetails);
+	                console.log(`Uploaded ${assetId}`);
+	
+		            //
+		            // Update upload state.
+		            //
+		            updateUpload({ status: "uploaded", assetId }, uploadIndex);
+	
+		            //
+		            // Increment the number uploaded.
+		            //
+	                setNumUploaded(numUploaded + 1);
+
+		            //
+		            // Resets the state of gallery. 
+		            // A cheap way to force the uploaded assets to show up.
+		            //
+		            await reset();
+		        }
+            }
+            
+            //
+            // Move onto the next upload.
+            //
+            setUploadIndex(uploadIndex + 1);
         }
         catch (error) {
             console.error(`An upload failed.`);
@@ -263,26 +292,6 @@ export function UploadPage() {
     // Uploads a single asset.
     //
     async function uploadFile(file: File, labels: string[]): Promise<void> {
-        
-        if (file.type === "application/zip") {
-            const zip = new JSZip();
-            const unpacked = await zip.loadAsync(file);
-            for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
-                if (!zipObject.dir) {
-                    //
-                    // It's a file.
-                    //
-                    const blob = await zipObject.async("blob");
-                    const contentType = mimeTypes.lookup(fileName);
-                    if (contentType) {
-                        const fullFileName = `${file.name}/${fileName}`;
-                        await queueUpload(fullFileName, blob, contentType, zipObject.date, labels.concat(["From zip file", file.name]));
-                    }
-                }
-            }
-            return;
-        }
-
         await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), labels);
     }
 
@@ -291,9 +300,9 @@ export function UploadPage() {
     //
     async function queueUpload(fileName: string, file: Blob, contentType: string, fileDate: Date, labels: string[]) {
 
-        if (contentType !== "image/png" && contentType !== "image/jpeg") {
-            // Only accept png and jpg images for upload.
-            console.log(`Ignoring non image file ${fileName} with type ${contentType}`);
+        if (contentType !== "image/png" && contentType !== "image/jpeg" && contentType !== "application/zip") {
+            // Only accept png, jpg and zip files for upload.
+            console.log(`Ignoring file ${fileName} with type ${contentType}`);
             return;
         }
 
