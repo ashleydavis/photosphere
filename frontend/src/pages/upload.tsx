@@ -208,7 +208,6 @@ export function UploadPage() {
 	                const uploadDetails: IUploadDetails = {
 	                    ...nextUpload,
 	                    resolution: imageResolution,
-	                    thumbnailDataUrl: thumbnailDataUrl,
 	                    thumbnail: thumbnailData,
 	                    thumbContentType: thumbContentType,
 	                    display: displayData,
@@ -326,7 +325,7 @@ export function UploadPage() {
             // result in an out of memory error when we attempt to upload
             // 1000s of assets.
             //
-            thumbnailDataUrl: resizeImage(await loadImage(await loadDataURL(file)), PREVIEW_THUMBNAIL_MIN_SIZE),
+            previewThumbnail: await createThumbnail(contentType, file),
         };
 
         setUploads(uploads => [ ...uploads, uploadDetails ]);
@@ -334,6 +333,35 @@ export function UploadPage() {
         console.log(`Queued ${fileName}`);
     }
 
+    //
+    // Thumbnail for a zip file.
+    //
+    const zipThumbnail = (
+        <div className="w-28 h-28 flex flex-col items-center justify-center">
+            <i className="text-7xl fa-regular fa-file-zipper"></i>
+        </div>
+    );
+
+    //
+    // Creates a thumbnail for the file.
+    //
+    async function createThumbnail(contentType: string, file: Blob): Promise<JSX.Element | undefined> {
+        if (contentType.startsWith("image/")) {
+            return (
+                <img 
+                    className="w-28 h-28 object-cover"
+                    src={resizeImage(await loadImage(await loadDataURL(file)), PREVIEW_THUMBNAIL_MIN_SIZE)}
+                    />
+            );
+        }
+        else if (contentType === "application/zip") {
+            return zipThumbnail;
+        }
+        else {
+            return undefined;
+        }
+    }
+    
     //
     // Removes duplicate labels.
     // 
@@ -514,10 +542,8 @@ export function UploadPage() {
                 {uploads.map((upload, index) => {
                     return (
                         <div key={index} className="relative">
-                            <img 
-                                className="w-28 h-28 object-cover"
-                                src={upload.thumbnailDataUrl}
-                                />
+                            {upload.previewThumbnail}
+                                    
                             {(upload.status === "pending" || upload.status === "uploading")
                                 && <div 
                                     className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"

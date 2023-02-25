@@ -53,7 +53,7 @@ export interface IQueuedUpload {
     //
     // Small thumbnail to show while uploading.
     //
-    thumbnailDataUrl: string;
+    previewThumbnail: JSX.Element | undefined;
 }
 
 //
@@ -66,11 +66,6 @@ export interface IUploadDetails extends IQueuedUpload {
     //
     resolution: IResolution;
 
-    //
-    // Full data URL for the thumbnail, so it can be displayed in the browser during the upload.
-    //
-    thumbnailDataUrl: string;
-    
     //
     // Base64 encoded thumbnail for the asset.
     //
