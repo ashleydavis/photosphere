@@ -288,13 +288,6 @@ export function UploadPage() {
     }
 
     //
-    // Uploads a single asset.
-    //
-    async function uploadFile(file: File, labels: string[]): Promise<void> {
-        await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), labels);
-    }
-
-    //
     // Queue the upload of a file.
     //
     async function queueUpload(fileName: string, file: Blob, contentType: string, fileDate: Date, labels: string[]) {
@@ -398,7 +391,7 @@ export function UploadPage() {
         if (item.isFile) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry
             const file = await getFile(item as FileSystemFileEntry);
-            await uploadFile(file, path);
+            await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), path);
         }
         else if (item.isDirectory) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
@@ -453,7 +446,7 @@ export function UploadPage() {
 	            const files = Array.from(dataTransfer.files);
 	            if (files) {
 	                for (const file of files) {
-	                    await uploadFile(file, []);
+	                    await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), []);
 	                }
 	            }
 	        }
