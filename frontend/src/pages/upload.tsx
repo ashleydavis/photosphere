@@ -175,115 +175,127 @@ export function UploadPage() {
                 setUploadStatus("uploaded", uploadIndex);
             }
             else {
-	            const hash = await computeHash(nextUpload.file);
-	            const existingAssetId = await api.checkAsset(hash);
-	            if (existingAssetId) {
-	                console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
-	
-		            setUploadStatus("already-uploaded", uploadIndex);
-		            setNumUploaded(numUploaded + 1);
-		            setNumAlreadyUploaded(numAlreadyUploaded + 1);
-	            }
-	            else {
-	                //
-	                // Load the image and generate thumbnail, etc. 
-	                // Don't hold any of this data in memory longer than necessary
-	                // otherwise we get an out of memory error when trying to
-	                // upload 1000s of assets.
-	                //
-	                const imageData = await loadDataURL(nextUpload.file); 
-	                const image = await loadImage(imageData);
-	                const imageResolution = await getImageResolution(image);
-	                const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
-	                const contentTypeStart = 5;
-	                const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
-	                const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
-	                const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-	                const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
-	                const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
-	                const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
-	                const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
-	                const exif = await getExifData(nextUpload.file);
-	                
-	                const uploadDetails: IUploadDetails = {
-	                    ...nextUpload,
-	                    resolution: imageResolution,
-	                    thumbnail: thumbnailData,
-	                    thumbContentType: thumbContentType,
-	                    display: displayData,
-	                    displayContentType: displayContentType,
-	                    hash: hash,
-	                };
-	                
-	                if (exif) {
-	                    uploadDetails.properties = {
-	                        exif: exif,
-	                    };
-	                
-	                    if (exif.GPSLatitude && exif.GPSLongitude) {
-	                        uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
-	                    }
-	                
-	                    const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-	                    for (const dateField of dateFields) {
-	                        const dateStr = exif[dateField];
-	                        if (dateStr) {
-	                            try {
-	                                uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-	                            }
-	                            catch (err) {
-	                                console.error(`Failed to parse date from ${dateStr}`);
-	                                console.error(err);
-	                            }
-	                        }
-	                    }
-	                }
-	
-	                //
-	                // Add the month and year as labels.
-	                //
-	                const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
-	                const month = dayjs(photoDate).format("MMMM");
-	                const year = dayjs(photoDate).format("YYYY");
-	                uploadDetails.labels = [month, year].concat(uploadDetails.labels || []);
-	
-	                //
-	                // Remove duplicate labels, in case month/year already added.
-	                //
-	                uploadDetails.labels = removeDuplicates(uploadDetails.labels);
-	
-	                const assetId = await api.uploadAsset(uploadDetails);
-	                console.log(`Uploaded ${assetId}`);
-	
-		            //
-		            // Update upload state.
-		            //
-		            updateUpload({ status: "uploaded", assetId }, uploadIndex);
-	
-		            //
-		            // Increment the number uploaded.
-		            //
-	                setNumUploaded(numUploaded + 1);
-
-		            //
-		            // Resets the state of gallery. 
-		            // A cheap way to force the uploaded assets to show up.
-		            //
-		            await reset();
-		        }
+                    await uploadFile(nextUpload, uploadIndex);
+                    
+					console.log(`Upload successful for ${nextUpload.fileName}`);
             }
-            
-            //
-            // Move onto the next upload.
-            //
-            setUploadIndex(uploadIndex + 1);
         }
         catch (error) {
             console.error(`An upload failed.`);
             console.error(error);
         }
         finally {
+            //
+            // Move onto the next upload.
+            //
+            setUploadIndex(uploadIndex + 1);
+
+            //
+            // Uploading has finished (for now).
+            //
             setIsUploading(false);
+        }
+    }
+
+    //
+    // Uploads a file.
+    //
+    async function uploadFile(nextUpload: IQueuedUpload, uploadIndex: number): Promise<void> {
+        const hash = await computeHash(nextUpload.file);
+        const existingAssetId = await api.checkAsset(hash);
+        if (existingAssetId) {
+            console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
+
+            setUploadStatus("already-uploaded", uploadIndex);
+            setNumUploaded(numUploaded + 1);
+            setNumAlreadyUploaded(numAlreadyUploaded + 1);
+        }
+        else {
+            //
+            // Load the image and generate thumbnail, etc. 
+            // Don't hold any of this data in memory longer than necessary
+            // otherwise we get an out of memory error when trying to
+            // upload 1000s of assets.
+            //
+            const imageData = await loadDataURL(nextUpload.file); 
+            const image = await loadImage(imageData);
+            const imageResolution = await getImageResolution(image);
+            const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
+            const contentTypeStart = 5;
+            const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
+            const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
+            const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+            const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
+            const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
+            const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
+            const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
+            const exif = await getExifData(nextUpload.file);
+            
+            const uploadDetails: IUploadDetails = {
+                ...nextUpload,
+                resolution: imageResolution,
+                thumbnail: thumbnailData,
+                thumbContentType: thumbContentType,
+                display: displayData,
+                displayContentType: displayContentType,
+                hash: hash,
+            };
+            
+            if (exif) {
+                uploadDetails.properties = {
+                    exif: exif,
+                };
+            
+                if (exif.GPSLatitude && exif.GPSLongitude) {
+                    uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
+                }
+            
+                const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+                for (const dateField of dateFields) {
+                    const dateStr = exif[dateField];
+                    if (dateStr) {
+                        try {
+                            uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                        }
+                        catch (err) {
+                            console.error(`Failed to parse date from ${dateStr}`);
+                            console.error(err);
+                        }
+                    }
+                }
+            }
+        
+            //
+            // Add the month and year as labels.
+            //
+            const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
+            const month = dayjs(photoDate).format("MMMM");
+            const year = dayjs(photoDate).format("YYYY");
+            uploadDetails.labels = [month, year].concat(uploadDetails.labels || []);
+        
+            //
+            // Remove duplicate labels, in case month/year already added.
+            //
+            uploadDetails.labels = removeDuplicates(uploadDetails.labels);
+        
+            const assetId = await api.uploadAsset(uploadDetails);
+            console.log(`Uploaded ${assetId}`);
+        
+            //
+            // Update upload state.
+            //
+            updateUpload({ status: "uploaded", assetId }, uploadIndex);
+        
+            //
+            // Increment the number uploaded.
+            //
+            setNumUploaded(numUploaded + 1);
+        
+            //
+            // Resets the state of gallery. 
+            // A cheap way to force the uploaded assets to show up.
+            //
+            await reset();
         }
     }
 
