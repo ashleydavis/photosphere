@@ -70,6 +70,11 @@ export function UploadPage() {
     // Number of assets that were found to be already uploaded.
     //
     const [numAlreadyUploaded, setNumAlreadyUploaded] = useState<number>(0);
+    
+    //
+    // Number of uploads that failed.
+    //
+    const [numFailed, setNumFailed] = useState<number>(0);
 
     //
     // The upload we are currently working on.
@@ -180,9 +185,18 @@ export function UploadPage() {
 					console.log(`Upload successful for ${nextUpload.fileName}`);
             }
         }
-        catch (error) {
-            console.error(`An upload failed.`);
-            console.error(error);
+        catch (err: any) {
+            console.error(`Failed to upload ${nextUpload.fileName}`);
+            console.error(err && err.stack || err);
+
+            console.log(`Upload failed for ${nextUpload.fileName}`);
+
+            //
+            // Mark the upload as failed.
+            // This allows asset upload to be attempted again later.
+            //
+            setUploadStatus("failed", uploadIndex);
+            setNumFailed(numFailed + 1);
         }
         finally {
             //
@@ -542,6 +556,7 @@ export function UploadPage() {
             <div>Total files queued: {uploads.length}</div>
             <div>Files uploaded: {numUploaded}</div>
             <div>Files previously uploaded: {numAlreadyUploaded}</div>
+            <div>Failed uploads: {numFailed}</div>
 
             <div className="flex flex-wrap">
                 {uploads.map((upload, index) => {

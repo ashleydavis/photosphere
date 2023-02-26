@@ -8,7 +8,7 @@ import { IResolution } from "./image";
 //
 // The state of an individual upload.
 //
-export type UploadState = "already-uploaded" | "pending" | "uploading" | "uploaded";
+export type UploadState = "already-uploaded" | "pending" | "uploading" | "uploaded" | "failed";
 
 export interface IQueuedUpload {
     //
@@ -18,6 +18,7 @@ export interface IQueuedUpload {
 
     //
     // The original file to upload.
+
     //
     // This isn't set for assets automatically extracted from zip files because
     // I don't want to hold that data in memory unless I have to.

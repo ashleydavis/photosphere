@@ -39,7 +39,7 @@ export function GalleryLayout({
     // Interface to the API.
     //
     const api = useApi();
-
+    
     const rows = createLayout(items, galleryWidth, targetRowHeight);
 
     let prevGroup: string | undefined = undefined;
