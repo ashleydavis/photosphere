@@ -571,6 +571,30 @@ export function UploadPage() {
                                     <Spinner show={upload.status === "uploading"} />
                                 </div>
                             }
+                            
+                            {(upload.status === "failed")
+                                && <div 
+                                    className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
+                                    >
+                                    <i className="text-7xl fa-solid fa-triangle-exclamation"></i>
+                                </div>
+                            }
+                    
+                            {(upload.status === "uploaded")
+                                && <div 
+                                    className="flex items-center justify-center absolute inset-0"
+                                    >
+                                    <i className="text-3xl text-white fa-solid fa-check"></i>
+                                </div>
+                            }
+
+                            {(upload.status === "already-uploaded")
+                                && <div 
+                                    className="flex items-center justify-center absolute inset-0"
+                                    >
+                                    <i className="text-3xl text-white fa-solid fa-cloud"></i>
+                                </div>
+                            }
                         </div>
                     );
                 })}

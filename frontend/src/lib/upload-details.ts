@@ -18,7 +18,6 @@ export interface IQueuedUpload {
 
     //
     // The original file to upload.
-
     //
     // This isn't set for assets automatically extracted from zip files because
     // I don't want to hold that data in memory unless I have to.
