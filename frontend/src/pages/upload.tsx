@@ -46,6 +46,11 @@ export function UploadPage() {
     //
     const [dragOver, setDragOver] = useState<boolean>(false);
 
+	//
+    // List of uploads that failed.
+    //
+    const [failed, setFailed] = useState<IQueuedUpload[]>([]);
+
     //
     // List of uploads in progress.
     //
@@ -71,11 +76,6 @@ export function UploadPage() {
     //
     const [numAlreadyUploaded, setNumAlreadyUploaded] = useState<number>(0);
     
-    //
-    // Number of uploads that failed.
-    //
-    const [numFailed, setNumFailed] = useState<number>(0);
-
     //
     // The upload we are currently working on.
     //
@@ -196,7 +196,12 @@ export function UploadPage() {
             // This allows asset upload to be attempted again later.
             //
             setUploadStatus("failed", uploadIndex);
-            setNumFailed(numFailed + 1);
+
+            //
+            // Add the failed upload to the list that failed.
+            // This means we can show it to the user separately.
+            //
+            setFailed([...failed, nextUpload]);
         }
         finally {
             //
@@ -516,6 +521,36 @@ export function UploadPage() {
         await onUploadFiles(event.dataTransfer);
     }
 
+    //
+    // User has chosen to retry failed uploads.
+    //
+    function onRetryFailedUploads() {
+        if (failed.length === 0) {
+            // 
+            // Nothing failed!
+            //
+            return;
+        }
+
+        setFailed([]);
+        setUploads(uploads => uploads.map(upload => {
+            if (upload.status === "failed") {
+                //
+                // Reset the failed upload to pending state to make sure it is retried.
+                //
+                const newUpload: IQueuedUpload = {
+                    ...upload,
+                    status: "pending",
+                };
+                return newUpload;
+            }
+            else {
+                // No change.
+                return upload;
+            }
+        }));
+    }
+
     return (
         <div className="w-full h-full p-4 overflow-y-auto">
             <div 
@@ -553,52 +588,117 @@ export function UploadPage() {
                 </label>
             </div>
 
-            <div>Total files queued: {uploads.length}</div>
-            <div>Files uploaded: {numUploaded}</div>
-            <div>Files previously uploaded: {numAlreadyUploaded}</div>
-            <div>Failed uploads: {numFailed}</div>
-
-            <div className="flex flex-wrap">
-                {uploads.map((upload, index) => {
-                    return (
-                        <div key={index} className="relative">
-                            {upload.previewThumbnail}
-                                    
-                            {(upload.status === "pending" || upload.status === "uploading")
-                                && <div 
-                                    className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
-                                    >
-                                    <Spinner show={upload.status === "uploading"} />
+            {uploads.length > 0
+                && <>
+                    <div className="flex flex-col w-full mt-4 pt-2 border-t border-gray-300 border-solid">
+                        <h2 className="flex-grow text-xl">Upload stats</h2>
+                        <div className="flex flex-wrap ml-2 mt-1">
+                            <div className="flex flex-col flex-grow">
+                                <div className="flex flex-row items-center">
+                                    Total files queued
+                                    <span className="text-2xl ml-2">
+                                        {uploads.length}
+                                    </span>
                                 </div>
-                            }
-                            
-                            {(upload.status === "failed")
-                                && <div 
-                                    className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
-                                    >
-                                    <i className="text-7xl fa-solid fa-triangle-exclamation"></i>
+                                <div className="flex flex-row items-center">
+                                    Files uploaded
+                                    <span className="text-2xl ml-2">
+                                        {numUploaded}
+                                    </span>
                                 </div>
-                            }
-                    
-                            {(upload.status === "uploaded")
-                                && <div 
-                                    className="flex items-center justify-center absolute inset-0"
-                                    >
-                                    <i className="text-3xl text-white fa-solid fa-check"></i>
+                            </div>
+                            <div className="flex flex-col flex-grow">
+                                <div className="flex flex-row items-center">
+                                    Files previously uploaded
+                                    <span className="text-2xl ml-2">
+                                        {numAlreadyUploaded}
+                                    </span>
                                 </div>
-                            }
-
-                            {(upload.status === "already-uploaded")
-                                && <div 
-                                    className="flex items-center justify-center absolute inset-0"
-                                    >
-                                    <i className="text-3xl text-white fa-solid fa-cloud"></i>
+                                <div className="flex flex-row items-center">
+                                    Failed uploads
+                                    <span className="text-2xl ml-2">
+                                        {failed.length}
+                                    </span>
                                 </div>
-                            }
+                            </div>
                         </div>
-                    );
-                })}
-            </div>
+                    </div>
+
+                    {failed.length > 0
+                        && <>
+                            <div className="flex flex-row w-full mt-4 pt-2 border-t border-gray-300 border-solid items-center">
+                                <h2 className="flex-grow text-xl">Failed uploads</h2>
+                                <button 
+                                    className="p-2 cursor-pointer rounded border border-gray-300 hover:border-gray-500 border-solid bg-white"
+                                    onClick={onRetryFailedUploads}
+                                    >
+                                    Retry failed uploads
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap mt-2">
+                                {failed.map((upload, index) => {
+                                    return (
+                                        <div key={index} className="relative">
+                                            {upload.previewThumbnail}
+
+                                        <div 
+                                                className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
+                                                >
+                                                <i className="text-7xl fa-solid fa-triangle-exclamation"></i>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    }
+
+                    <div className="flex flex-row w-full mt-4 pt-2 border-t border-gray-300 border-solid">
+                        <h2 className="text-xl">Upload queue</h2>
+                    </div>
+                    <div className="flex flex-wrap mt-2">
+                        {uploads.map((upload, index) => {
+                            return (
+                                <div key={index} className="relative">
+                                    {upload.previewThumbnail}
+                                    
+                                    {(upload.status === "pending" || upload.status === "uploading")
+                                        && <div 
+                                            className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
+                                            >
+                                            <Spinner show={upload.status === "uploading"} />
+                                        </div>
+                                    }
+
+                                    {(upload.status === "failed")
+                                        && <div 
+                                            className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0"
+                                            >
+                                            <i className="text-7xl fa-solid fa-triangle-exclamation"></i>
+                                        </div>
+                                    }
+
+                                    {(upload.status === "uploaded")
+                                        && <div 
+                                            className="flex items-center justify-center absolute inset-0"
+                                            >
+                                            <i className="text-3xl text-white fa-solid fa-check"></i>
+                                        </div>
+                                    }
+
+                                    {(upload.status === "already-uploaded")
+                                        && <div 
+                                            className="flex items-center justify-center absolute inset-0"
+                                            >
+                                            <i className="text-3xl text-white fa-solid fa-cloud"></i>
+                                        </div>
+                                    }
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            }
         </div>
     );
 }
