@@ -54,6 +54,11 @@ export interface IQueuedUpload {
     // Small thumbnail to show while uploading.
     //
     previewThumbnail: JSX.Element | undefined;
+
+    //
+    // Number of attempts to upload.
+    //
+    numAttempts: number;
 }
 
 //

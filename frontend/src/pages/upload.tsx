@@ -220,6 +220,13 @@ export function UploadPage() {
     // Uploads a file.
     //
     async function uploadFile(nextUpload: IQueuedUpload, uploadIndex: number): Promise<void> {
+        updateUpload({ numAttempts: nextUpload.numAttempts + 1 }, uploadIndex);
+    
+        // if (nextUpload.numAttempts === 1) {
+        //     // Blow up on the first attempt
+        //     throw new Error("Smeg");
+        // }
+    
         const hash = await computeHash(nextUpload.file);
         const existingAssetId = await api.checkAsset(hash);
         if (existingAssetId) {
@@ -341,6 +348,7 @@ export function UploadPage() {
             status: "pending",
             fileDate: dayjs(fileDate).toISOString(),
             labels: labels,
+            numAttempts: 0,
 
             //
             // Generate a tiny thumbnail to display while uploading.
