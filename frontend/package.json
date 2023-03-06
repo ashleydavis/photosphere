@@ -12,6 +12,7 @@
     "start-frontend-for-e2e-tests": "wait-port 3000 && npm start",
     "start-for-e2e-tests": "concurrently --kill-others --names \"backend,frontend\" \"npm run start-backend-for-e2e-tests\" \"npm run start-frontend-for-e2e-tests\"",
     "test-e2e": "playwright test --reporter=list",
+    "test-e2e:debug": "playwright test --reporter=list --debug",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
     "clean": "rm -rf dist .parcel-cache build"
