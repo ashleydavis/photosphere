@@ -58,11 +58,27 @@ export function convertExifCoordinates(exif: any): ILocation {
 }
 
 //
+// Checks if the passed in coordinate is valid number.
+//
+function checkCoordinateOk(coordinate: any, msg: string) {
+    if (coordinate === null || coordinate === undefined || Number.isNaN(coordinate) || !Number.isFinite(coordinate)) {
+        throw new Error(msg);
+    }
+}
+
+//
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
 export async function reverseGeocode(location: ILocation): Promise<string | undefined> {
+
+    if (location === null || location === undefined) {
+        throw new Error(`Invalid location ${location}`);
+    }
+
+    checkCoordinateOk(location.lat, `Bad "lat" field of location: ${location.lat}`);
+    checkCoordinateOk(location.lng, `Bad "lng" field of location: ${location.lng}`);
 
     if (!GOOGLE_API_KEY) {
         return undefined;
