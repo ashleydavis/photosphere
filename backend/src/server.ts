@@ -79,7 +79,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
     // Uploads a new asset.
     //
     app.post("/asset", async (req, res) => {
-
+        
         const assetId = new ObjectId();
         const metadata = JSON.parse(getHeader(req, "metadata"));
         const fileName = getValue<string>(metadata, "fileName");
@@ -375,7 +375,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         const asset = await assetsCollection.findOne({ _id: assetId });
         if (!asset) {
             // No asset.
-            console.log(`Can't update search text for asset ${assetId}, asset doesn't exist.`);
+            // console.log(`Can't update search text for asset ${assetId}, asset doesn't exist.`);
             return;
         }
 
@@ -404,7 +404,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             }
         );
 
-        console.log(`Updated search text for asset ${assetId} to ${searchText}`);
+        // console.log(`Updated search text for asset ${assetId} to ${searchText}`);
     }
 
     return app;
