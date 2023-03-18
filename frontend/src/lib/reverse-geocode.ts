@@ -14,6 +14,11 @@ import axios from "axios";
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
+export const LAT_MIN = -90
+export const LAT_MAX = 90;
+export const LNG_MIN = -180;
+export const LNG_MAX = 180;
+
 //
 // Represents a GPS location.
 //
@@ -52,6 +57,16 @@ function convertToDegrees([degrees, minutes, seconds]: GPSCoordinateNumber[]): n
     var min = convertNumber(minutes);
     var sec = convertNumber(seconds);
     return deg + (min / 60) + (sec / 3600);
+}
+
+//
+// Checks if the location is in range.
+//
+export function isLocationInRange(location: ILocation) {
+    return location.lat >= LAT_MIN
+        && location.lat <= LAT_MAX
+        && location.lng >= LNG_MIN
+        && location.lng <= LNG_MAX;
 }
 
 //
@@ -107,8 +122,8 @@ export async function reverseGeocode(location: ILocation): Promise<string | unde
         throw new Error(`Invalid location ${location}`);
     }
 
-    checkCoordinateOk(location.lat, `lat`, -90, 90);
-    checkCoordinateOk(location.lng, `lng`, -180, 180);
+    checkCoordinateOk(location.lat, `lat`, LAT_MIN, LAT_MAX);
+    checkCoordinateOk(location.lng, `lng`, LNG_MIN, LNG_MAX);
 
     if (!GOOGLE_API_KEY) {
         return undefined;

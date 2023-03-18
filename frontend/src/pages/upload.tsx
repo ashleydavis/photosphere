@@ -2,7 +2,7 @@ import React, { useState, DragEvent, useEffect } from "react";
 import { getExifData, getImageResolution, loadImage, resizeImage } from "../lib/image";
 import { useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
-import { convertExifCoordinates, reverseGeocode } from "../lib/reverse-geocode";
+import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "../lib/reverse-geocode";
 import { IQueuedUpload, IUploadDetails, UploadState } from "../lib/upload-details";
 import { Spinner } from "../components/spinner";
 import { useGallery } from "../context/gallery-context";
@@ -274,7 +274,13 @@ export function UploadPage() {
                 };
             
                 if (exif.GPSLatitude && exif.GPSLongitude) {
-                    uploadDetails.location = await retry(() => reverseGeocode(convertExifCoordinates(exif)), 3, 5000);
+                    const location = convertExifCoordinates(exif);
+                    if (isLocationInRange(location)) {
+                        uploadDetails.location = await retry(() => reverseGeocode(location), 3, 5000);
+                    }
+                    else {
+                        console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${uploadDetails.fileName}.`);
+                    }
                 }
             
                 const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];

@@ -34,7 +34,6 @@ export interface IQueuedUpload {
     //
     status: UploadState;
     
-
     //
     // Id assigned to the asset after it is uploaded.
     //
