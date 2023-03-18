@@ -37,7 +37,7 @@ describe("reverse geocoding", () => {
         });
     });
 
-    test("convert exif coordinates - problem", () => {
+    test("convert exif coordinates - with normal numbers", () => {
 
         const location = convertExifCoordinates({
             GPSLatitudeRef: "N",
@@ -53,8 +53,11 @@ describe("reverse geocoding", () => {
                 32.84
             ],
         });
-        expect(location.lat).not.toBeNaN();
-        expect(location.lng).not.toBeNaN();
+
+        expect(location).toEqual({
+            lat: 39.938174999999994,
+            lng: 32.859122222222226,
+        });
     });
 
     //
