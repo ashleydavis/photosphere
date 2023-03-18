@@ -13,6 +13,7 @@ dayjs.extend(customParseFormat);
 
 import JSZip from "jszip";
 import mimeTypes from "mime-types";
+import { retry } from "../lib/retry";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -273,7 +274,7 @@ export function UploadPage() {
                 };
             
                 if (exif.GPSLatitude && exif.GPSLongitude) {
-                    uploadDetails.location = await reverseGeocode(convertExifCoordinates(exif));
+                    uploadDetails.location = await retry(() => reverseGeocode(convertExifCoordinates(exif)), 3, 5000);
                 }
             
                 const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
