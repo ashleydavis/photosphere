@@ -37,6 +37,26 @@ describe("reverse geocoding", () => {
         });
     });
 
+    test("convert exif coordinates - problem", () => {
+
+        const location = convertExifCoordinates({
+            GPSLatitudeRef: "N",
+            GPSLatitude: [
+                39,
+                56,
+                17.43
+            ],
+            GPSLongitudeRef: "E",
+            GPSLongitude: [
+                32,
+                51,
+                32.84
+            ],
+        });
+        expect(location.lat).not.toBeNaN();
+        expect(location.lng).not.toBeNaN();
+    });
+
     //
     // Tests reverse Geocoding with bad arguments.
     //

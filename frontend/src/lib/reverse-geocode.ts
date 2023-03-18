@@ -23,12 +23,34 @@ export interface ILocation {
 }
 
 //
+// A component of a GPS coordinate can be defined by a fraction.
+//
+type GPSCoordinateFraction = { numerator: number, denominator: number  };
+
+//
+// The numbers that make up GPS coordinates come in two separate forms. 
+//
+type GPSCoordinateNumber
+    = number                 // A regular number.
+    | GPSCoordinateFraction; // A number composed of a fraction.
+
+function convertNumber(value: GPSCoordinateNumber): number {
+    const fraction = value as GPSCoordinateFraction;
+    if (fraction.numerator !== undefined && fraction.denominator !== undefined) {
+        return fraction.numerator / fraction.denominator; // Convert to a regular number.
+    }
+    else {
+        return value as number; // It is just a regular number.
+    }
+}
+
+//
 // Converts degress, minutes, seconds to degrees.
 //
-function convertToDegrees([degrees, minutes, seconds]: { numerator: number, denominator: number  }[]): number {
-    var deg = degrees.numerator / degrees.denominator;
-    var min = minutes.numerator / minutes.denominator;
-    var sec = seconds.numerator / seconds.denominator;
+function convertToDegrees([degrees, minutes, seconds]: GPSCoordinateNumber[]): number {
+    var deg = convertNumber(degrees);
+    var min = convertNumber(minutes);
+    var sec = convertNumber(seconds);
     return deg + (min / 60) + (sec / 3600);
 }
 
