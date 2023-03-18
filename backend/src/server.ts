@@ -76,26 +76,22 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
     }
 
     //
-    // Uploads a new asset.
+    // Uploads metadata for an asset and allocats a new asset id.
     //
-    app.post("/asset", async (req, res) => {
-        
+    app.post("/metadata", express.json(), async (req, res) => {
+
         const assetId = new ObjectId();
-        const metadata = JSON.parse(getHeader(req, "metadata"));
+        const metadata = req.body;
         const fileName = getValue<string>(metadata, "fileName");
-        const contentType = getValue<string>(metadata, "contentType");
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
         const hash = getValue<string>(metadata, "hash");
         const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
         const labels = metadata.labels || [];
-        
-        await storage.write("original", assetId.toString(), contentType, req);
 
         const newAsset: IAsset = {
             _id: assetId,
             origFileName: fileName,
-            contentType: contentType,
             width: width,
             height: height,
             hash: hash,
@@ -125,6 +121,24 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         });
 
         await updateSearchText(assetId);
+    });
+
+
+    //
+    // Uploads a new asset.
+    //
+    app.post("/asset", async (req, res) => {
+        
+        const assetId = new ObjectId(getHeader(req, "id"));
+        const contentType = getHeader(req, "content-type");
+        
+        await storage.write("original", assetId.toString(), contentType, req);
+
+        await assetsCollection.updateOne({ _id: assetId }, { $set: { assetContentType:  contentType } });
+
+        res.json({
+            assetId: assetId,
+        });
     }); 
 
     //
@@ -138,13 +152,13 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         }
 
         const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
-        if (!asset) {
+        if (!asset || !asset.assetContentType) {
             res.sendStatus(404);
             return;
         }
 
         res.writeHead(200, {
-            "Content-Type": asset.contentType,
+            "Content-Type": asset.assetContentType,
         });
 
         const stream = storage.read("original", assetId);
@@ -158,6 +172,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         
         const assetId = new ObjectId(getHeader(req, "id"));
         const contentType = getHeader(req, "content-type");
+
         await storage.write("thumb", assetId.toString(), contentType, req);
 
         await assetsCollection.updateOne({ _id: assetId }, { $set: { thumbContentType:  contentType } });
@@ -176,7 +191,8 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         }
 
         const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
-        if (!asset) {
+        if (!asset || (!asset.thumbContentType && !asset.assetContentType)) {
+            // The asset doesn't exist or it's content was never uploaded.
             res.sendStatus(404);
             return;
         }
@@ -197,7 +213,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             // No thumbnail, return the original asset.
             //
             res.writeHead(200, {
-                "Content-Type": asset.contentType,
+                "Content-Type": asset.assetContentType,
             });
     
             const stream = await storage.read("original", assetId);
@@ -212,6 +228,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         
         const assetId = new ObjectId(getHeader(req, "id"));
         const contentType = getHeader(req, "content-type");
+        
         await storage.write("display", assetId.toString(), contentType, req);
 
         await assetsCollection.updateOne({ _id: assetId }, { $set: { displayContentType:  contentType } });
@@ -230,7 +247,8 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
         }
 
         const asset = await assetsCollection.findOne({ _id: new ObjectId(assetId) });
-        if (!asset) {
+        if (!asset || (!asset.displayContentType && !asset.assetContentType)) {
+            // The asset doesn't exist or it's content was never uploaded.
             res.sendStatus(404);
             return;
         }
@@ -251,7 +269,7 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
             // No display asset, return the original asset.
             //
             res.writeHead(200, {
-                "Content-Type": asset.contentType,
+                "Content-Type": asset.assetContentType,
             });
     
             const stream = await storage.read("original", assetId);

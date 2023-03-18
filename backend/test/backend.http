@@ -9,21 +9,53 @@
 ###
 # @name upload_asset
 #
-# Uploads an asset.
+# Uploads the metadata for the asset.
 #
+
+POST {{base_url}}/metadata
+Content-Type: application/json
+
+{ 
+    "contentType": "image/jpeg", 
+    "fileName": "./test-assets/1.jpeg", 
+    "width": 4160, 
+    "height": 6240, 
+    "hash": "1234", 
+    "fileDate": "2023-02-08T01:27:01.419Z", 
+    "photoDate": "2023-02-08T01:27:01.419Z", 
+    "location": "Somewhere1", 
+    "properties": { 
+        "a": "property" 
+    }, 
+    "labels": [ 
+        "Cool photo" 
+    ] 
+}
+
+###
+# 
+# Uploads the full content for the asset.
+#
+
+@upload_asset_id = {{upload_asset.response.body.assetId}}
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/1.jpeg", "width": 4160, "height": 6240, "hash": "1234", "fileDate": "2023-02-08T01:27:01.419Z", "photoDate": "2023-02-08T01:27:01.419Z", "location": "Somewhere1", "properties": { "a": "property" }, "labels": [ "Cool photo" ] }
+id: {{upload_asset_id}}
 
 < ./test-assets/1.jpeg
+
+
+###
+# Retrieve an asset.
+#
+
+GET {{base_url}}/asset?id={{upload_asset_id}}
 
 ###
 #
 # Uploads a thumbnail for the asset.
-
-@upload_asset_id = {{upload_asset.response.body.assetId}}
-
+#
 
 POST {{base_url}}/thumb
 Content-Type: image/jpeg
@@ -54,29 +86,6 @@ id: {{upload_asset_id}}
 
 GET {{base_url}}/display?id={{upload_asset_id}}
 
-###
-
-POST {{base_url}}/asset
-Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/2.jpeg", "width": 6336, "height": 9504, "hash": "5678", "fileDate": "2023-02-08T01:27:01.419Z", "photoDate": "2023-02-08T01:27:01.419Z", "location": "Somewhere2", "properties": { "a": "property" }  }
-
-< ./test-assets/2.jpeg
-
-###
-
-POST {{base_url}}/asset
-Content-Type: image/jpeg
-metadata: { "contentType": "image/jpeg", "fileName": "./test-assets/3.jpeg", "width": 3361, "height": 5041, "hash": "ABCD", "fileDate": "2023-02-08T01:27:01.419Z", "photoDate": "2023-02-08T01:27:01.419Z", "location": "Somewhere3", "properties": { "a": "property" }  }
-
-< ./test-assets/3.jpeg
-
-
-###
-# Retrieve an asset.
-#
-
-GET {{base_url}}/asset?id={{upload_asset_id}}
-
 ### 
 # Add a label to an asset.
 #
@@ -100,7 +109,6 @@ Content-Type: application/json
     "id": "{{upload_asset_id}}",
     "label": "A great label"
 }
-
 
 ### 
 # Sets a description for an asset.

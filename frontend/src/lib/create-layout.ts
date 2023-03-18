@@ -1,3 +1,8 @@
+
+//
+// Creates a row-based layout for the photo gallery.
+//
+
 import { IGalleryItem, IGalleryRow } from "./gallery-item";
 
 //

@@ -93,12 +93,11 @@ describe("photosphere backend", () => {
         });
     });
 
-    test("upload asset", async () => {
+    test("upload asset metadata", async () => {
 
-        const { app, mockCollection, mockStorage } = await initServer();
+        const { app, mockCollection } = await initServer();
 
         mockCollection.insertOne = jest.fn();
-        mockStorage.write = jest.fn();
 
         const metadata = {
             fileName: "a-test-file.jpg",
@@ -118,9 +117,8 @@ describe("photosphere backend", () => {
         };
 
         const response = await request(app)
-            .post("/asset")
-            .set("metadata", JSON.stringify(metadata))
-            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+            .post("/metadata")
+            .send(metadata);
 
         const assetId = response.body.assetId;
 
@@ -128,15 +126,10 @@ describe("photosphere backend", () => {
         expect(assetId).toBeDefined();
         expect(assetId.length).toBeGreaterThan(0);
 
-        expect(mockStorage.write).toHaveBeenCalledTimes(1);
-        expect(mockStorage.write.mock.calls[0][0]).toEqual("original");
-        expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
-
         expect(mockCollection.insertOne).toHaveBeenCalledTimes(1);
         expect(mockCollection.insertOne).toHaveBeenCalledWith({
             _id: new ObjectId(assetId),
             origFileName: metadata.fileName,
-            contentType: metadata.contentType,
             width: metadata.width,
             height: metadata.height,
             hash: metadata.hash,
@@ -148,6 +141,40 @@ describe("photosphere backend", () => {
             uploadDate: dateNow,
             labels: metadata.labels,
         });
+    });
+
+    test("upload asset original", async () => {
+
+        const { app, mockCollection, mockStorage } = await initServer();
+
+        mockCollection.updateOne = jest.fn();
+        mockStorage.write = jest.fn();
+
+        const assetId = "63de0ba152be7661d4926bf1";
+
+        const response = await request(app)
+            .post("/asset")
+            .set("id", assetId)
+            .set("content-type", "image/jpeg")
+            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+
+        expect(response.statusCode).toBe(200);
+
+        expect(mockStorage.write).toHaveBeenCalledTimes(1);
+        expect(mockStorage.write.mock.calls[0][0]).toEqual("original");
+        expect(mockStorage.write.mock.calls[0][1]).toEqual(assetId);
+
+        expect(mockCollection.updateOne).toHaveBeenCalledTimes(1);
+        expect(mockCollection.updateOne).toHaveBeenCalledWith(
+            {
+                _id: new ObjectId(assetId),
+            },
+            {
+                $set: {
+                    assetContentType: "image/jpeg",
+                },
+            }
+        );
     });
 
     test("upload thumbnail", async () => {
@@ -193,14 +220,12 @@ describe("photosphere backend", () => {
 
         mockCollection.insertOne = jest.fn();
 
-        const req = request(app).post("/asset");
-
         const augumented = Object.assign({}, metadata);
         delete augumented[missingField];
-
-        const response = await req
-            .set("metadata", JSON.stringify(augumented))
-            .send(fs.readFileSync("./test/test-assets/1.jpeg"));
+        
+        const response = await request(app)
+            .post("/metadata")
+            .send(augumented);
     
         expect(response.statusCode).toBe(500);
     }
@@ -209,7 +234,6 @@ describe("photosphere backend", () => {
 
         const metadata = {
             fileName: "a-test-file.jpg",
-            contentType: "image/jpeg",
             width: 256,
             height: 1024,
             hash: "1234",
@@ -217,7 +241,6 @@ describe("photosphere backend", () => {
         };
 
         await uploadAssetWithMissingMetadata(metadata, "fileName");
-        await uploadAssetWithMissingMetadata(metadata, "contentType");
         await uploadAssetWithMissingMetadata(metadata, "width");
         await uploadAssetWithMissingMetadata(metadata, "height");
         await uploadAssetWithMissingMetadata(metadata, "hash");
@@ -279,7 +302,7 @@ describe("photosphere backend", () => {
         const contentType = "image/jpeg";
 
         const mockAsset: any = {
-            contentType: contentType,
+            assetContentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);
@@ -356,7 +379,7 @@ describe("photosphere backend", () => {
         const { app, mockCollection, mockStorage } = await initServer();
 
         const mockAsset: any = {
-            contentType: contentType,
+            assetContentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);
@@ -432,7 +455,7 @@ describe("photosphere backend", () => {
         const { app, mockCollection, mockStorage } = await initServer();
 
         const mockAsset: any = {
-            contentType: contentType,
+            assetContentType: contentType,
         };
         mockCollection.findOne = (query: any) => {
             expect(query._id).toEqual(assetId);

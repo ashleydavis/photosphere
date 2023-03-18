@@ -27,7 +27,7 @@ export interface IQueuedUpload {
     //
     // The content type of the asset.
     //
-    contentType: string;
+    assetContentType: string;
 
     //
     //  Records the status of the upload item.

@@ -152,7 +152,7 @@ export function UploadPage() {
             //
             setUploadStatus("uploading", uploadIndex);
 
-            if (nextUpload.contentType === "application/zip") {
+            if (nextUpload.assetContentType === "application/zip") {
 
                 console.log(`Unpacking zip file ${nextUpload.fileName}`);
 
@@ -344,7 +344,7 @@ export function UploadPage() {
         const uploadDetails: IQueuedUpload = {
             file: file, //todo: don't want to store this for zip files!
             fileName: fileName,
-            contentType: contentType,
+            assetContentType: contentType,
             status: "pending",
             fileDate: dayjs(fileDate).toISOString(),
             labels: labels,

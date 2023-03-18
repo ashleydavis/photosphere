@@ -174,30 +174,43 @@ export function ApiContextProvider({ children }: IProps) {
         // Uploads the full asset and metadata.
         //
         const apiKey = await getApiKey();
+
         const { data } = await axios.post(
-            `${BASE_URL}/asset`, 
-            uploadDetails.file, 
+            `${BASE_URL}/metadata`, 
+            {
+                fileName: uploadDetails.fileName,
+                width: uploadDetails.resolution.width,
+                height: uploadDetails.resolution.height,
+                hash: uploadDetails.hash,
+                properties: uploadDetails.properties,
+                location: uploadDetails.location,
+                fileDate: uploadDetails.fileDate,
+                photoDate: uploadDetails.photoDate,
+                labels: uploadDetails.labels,
+            },
             {
                 headers: {
-                    "content-type": uploadDetails.file.type,
-                    "metadata": JSON.stringify({
-                        fileName: uploadDetails.fileName,
-                        contentType: uploadDetails.file.type,
-                        width: uploadDetails.resolution.width,
-                        height: uploadDetails.resolution.height,
-                        hash: uploadDetails.hash,
-                        properties: uploadDetails.properties,
-                        location: uploadDetails.location,
-                        fileDate: uploadDetails.fileDate,
-                        photoDate: uploadDetails.photoDate,
-                        labels: uploadDetails.labels,
-                    }),
                     "key": apiKey,
                 },
             }
         );
 
         const { assetId } = data;
+
+        //
+        // Uploads the full asset.
+        //
+        await axios.post(
+            `${BASE_URL}/asset`, 
+            uploadDetails.file, 
+            {
+                headers: {
+                    "content-type": uploadDetails.assetContentType,
+                    "id": assetId,
+                    "key": apiKey,
+                },
+            }
+        );
 
         //
         // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).

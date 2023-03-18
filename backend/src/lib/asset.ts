@@ -18,7 +18,7 @@ export interface IAsset {
     //
     // The mime type of the asset.
     //
-    contentType: string;
+    assetContentType?: string;
 
     //
     // The mime type of the thumbnail (after one has been set).
