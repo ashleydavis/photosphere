@@ -82,9 +82,17 @@ export function convertExifCoordinates(exif: any): ILocation {
 //
 // Checks if the passed in coordinate is valid number.
 //
-function checkCoordinateOk(coordinate: any, msg: string) {
+function checkCoordinateOk(coordinate: any, name: string, min: number, max: number) {
     if (coordinate === null || coordinate === undefined || Number.isNaN(coordinate) || !Number.isFinite(coordinate)) {
-        throw new Error(msg);
+        throw new Error(`Bad "${name}" field: ${coordinate}`);
+    }
+
+    if (coordinate < min) {
+        throw new Error(`Bad "${name}" field, value ${coordinate} is less than mininmum ${min}`);
+    }
+
+    if (coordinate > max) {
+        throw new Error(`Bad "${name}" field, value ${coordinate} is more than maximum ${max}`);
     }
 }
 
@@ -99,8 +107,8 @@ export async function reverseGeocode(location: ILocation): Promise<string | unde
         throw new Error(`Invalid location ${location}`);
     }
 
-    checkCoordinateOk(location.lat, `Bad "lat" field of location: ${location.lat}`);
-    checkCoordinateOk(location.lng, `Bad "lng" field of location: ${location.lng}`);
+    checkCoordinateOk(location.lat, `lat`, -90, 90);
+    checkCoordinateOk(location.lng, `lng`, -180, 180);
 
     if (!GOOGLE_API_KEY) {
         return undefined;
