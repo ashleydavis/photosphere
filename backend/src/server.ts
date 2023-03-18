@@ -399,6 +399,8 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
 
         let searchText = "";
 
+        searchText += asset.origFileName + " ";
+
         if (asset.location) {
             searchText += " " + asset.location.toLowerCase();
         }
