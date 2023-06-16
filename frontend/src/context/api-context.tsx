@@ -12,6 +12,7 @@ if (!BASE_URL) {
 }
 
 console.log(`Expecting backend at ${BASE_URL}.`);
+
 export interface IApiContext {
 
     //
@@ -48,6 +49,7 @@ export interface IApiContext {
     // Sets a description for an asset.
     //
     setDescription(id: string, description: string): Promise<void>;
+
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -146,7 +148,6 @@ export function ApiContextProvider({ children }: IProps) {
         }
 
         return assets;
-
     }
 
     //
@@ -243,6 +244,7 @@ export function ApiContextProvider({ children }: IProps) {
                 },
             }
         );
+
         return assetId;
     }
     

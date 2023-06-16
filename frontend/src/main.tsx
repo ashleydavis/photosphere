@@ -7,6 +7,7 @@ import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
 import { GalleryItemContextProvider } from "./context/gallery-item-context";
+import { useUpload } from "./context/upload-context";
 
 //
 // The main page of the Photosphere app.
@@ -30,6 +31,11 @@ export function Main() {
         selectedItem, 
         setSelectedItem 
         } = useGallery();
+
+    //
+    // Interface to the upload context.
+    //
+    const { numScans, isUploading } = useUpload();
 
     //
     // Set to true to open the sidebar.
@@ -127,6 +133,14 @@ export function Main() {
                             </div>
                         </NavLink>
 
+                        {(isUploading || numScans > 0)
+                            && <div className="ml-auto flex flex-row items-center">
+                                <span className="hidden sm:block">Uploading</span>
+                                <div className="mx-2">
+                                    <Spinner show={true} />
+                                </div>
+                            </div>
+                        }
                     </div>
 
                     {openSearch

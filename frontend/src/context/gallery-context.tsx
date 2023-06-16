@@ -162,6 +162,7 @@ export function GalleryContextProvider({ children }: IProps) {
         //
         setAssets(assets.concat(newAssets));
         setHaveMoreAssets(true);
+
     }
 
     //
