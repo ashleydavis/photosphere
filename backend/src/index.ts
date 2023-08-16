@@ -27,7 +27,7 @@ async function main() {
     const app = await createServer(db, () => new Date(Date.now()), storage);
 
     app.listen(PORT, () => {
-        console.log(`Example app listening on port ${PORT}`);
+        console.log(`Photosphere listening on port ${PORT}`);
     });
 }
 
