@@ -32,7 +32,7 @@
     "@types/react-dom": "^18.0.10",
     "@types/react-infinite-scroller": "^1.2.3",
     "buffer": "^6.0.3",
-    "canvas": "^2.11.0",
+    "canvas": "^2.11.2",
     "concurrently": "^7.2.2",
     "cross-env": "^7.0.3",
     "crypto-browserify": "^3.12.0",
