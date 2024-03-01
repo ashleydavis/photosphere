@@ -4,12 +4,14 @@
   "description": "The Electron frontend for Photosphere",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "start:dev": "cross-env HTML_PAGE=http://localhost:1234 electron ."
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^29.1.0"
   }
 }

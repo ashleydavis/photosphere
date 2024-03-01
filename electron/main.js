@@ -1,5 +1,11 @@
 const { app, BrowserWindow } = require('electron');
 
+
+let HTML_PAGE = process.env.HTML_PAGE;
+if (!HTML_PAGE) {
+    HTML_PAGE = "index.html";
+}
+
 //
 // Creates the browser window.
 //
@@ -11,11 +17,21 @@ function createWindow() {
         },
     });
 
-    // and load the index.html of the app.
-    mainWindow.loadFile('index.html');
-
     // Open the DevTools.
     mainWindow.webContents.openDevTools();
+
+    if (HTML_PAGE.startsWith("http://")) {
+        //
+        // Loads the web page served by the dev server.
+        //
+        mainWindow.loadURL(HTML_PAGE);
+    }
+    else {
+        //
+        // Loads the prebuilt web page.
+        //
+        mainWindow.loadFile(HTML_PAGE);
+    }
 }
 
 //
