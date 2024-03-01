@@ -1,8 +1,10 @@
 # Photosphere monorepo
 
-This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
+This is the monorepo for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
 
-This code accompanies chapter 6 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
+This is an extended version of the monorepo that contains backend, web-based frontend and the desktop Electron app.
+
+This code accompanies chapter 8 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
 
 Follow the author on [Twitter](https://twitter.com/codecapers) for updates.
 
@@ -23,7 +25,11 @@ npm install
 
 Next, start the backend. Follow the instructions in [./backend/README.md](./backend/README.md).
 
-Then, start the frontend. Follow the instructions in [./frontend/README.md](./frontend/README.md).
+Start the web-based frontend. Follow the instructions in [./frontend/README.md](./frontend/README.md).
+
+Start the Electron-based frontend. Follow the instructions in [./electron/README.md](./electron/README.md).
+
+
 
 
 
