@@ -3,3 +3,4 @@ packages:
   - "backend"
   - "frontend"
   - "electron"
+  - "electron/frontend"

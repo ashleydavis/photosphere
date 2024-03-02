@@ -3,7 +3,7 @@ const { app, BrowserWindow } = require('electron');
 
 let HTML_PAGE = process.env.HTML_PAGE;
 if (!HTML_PAGE) {
-    HTML_PAGE = "index.html";
+    HTML_PAGE = "frontend/dist/index.html";
 }
 
 //

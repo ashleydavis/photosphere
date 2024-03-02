@@ -4,3 +4,6 @@ dist
 .parcel-cache
 node_modules
 coverage
+packages/user-interface/build
+frontend/build
+electron/frontend/build

@@ -10,6 +10,9 @@
   "keywords": [],
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
+  "dependencies": {
+    "user-interface": "workspace:*"
+  },
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^29.1.0"

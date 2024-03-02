@@ -2,10 +2,6 @@
 
 This is the backend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). It is a REST API to upload and retrieve assets like photos and videos.
 
-## Pre-reqs
-
-You need [Node.js](https://nodejs.org/en/) installed to run this code.
-
 ## Setup
 
 Open a terminal and change directory to the backend project:

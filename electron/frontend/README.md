@@ -2,12 +2,18 @@
 
 This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Parcel](https://parceljs.org/).
 
+## Pre-reqs
+
+You need [Node.js](https://nodejs.org/) installed to run this code.
+
+To run this frontend you must first run the backend in the directory `../backend`.
+
 ## Setup
 
 Open a terminal and change directory to the frontend project:
 
 ```bash
-cd photosphere-monorepo/frontend
+cd photosphere-monorepo/electron/frontend
 ```
 
 Install dependencies:
@@ -76,24 +82,6 @@ The web page should automatically be displayed in your browser.
 
 ```bash
 pnpm test
-```
-
-## Run e2e tests
-
-```bash
-pnpm run test-e2e
-``` 
-
-Enable this to debug with Playwright:
-
-```bash
-export PWDEBUG=1
-```
-
-Or on Windows:
-
-```bash
-set PWDEBUG=1
 ```
 
 ## Environment variables

@@ -1,4 +1,4 @@
-import EXIF from './exif-js/exif';
+import * as EXIF from './exif-js/exif';
 
 //
 // Loads URL or source data to an image element.
