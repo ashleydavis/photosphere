@@ -1,10 +1,10 @@
 import React from "react";
-import { BrowserRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { Main, ApiContextProvider, GalleryContextProvider, UploadContextProvider } from "user-interface";
 
 export function App() {
     return (
-        <BrowserRouter>
+        <HashRouter>
             <ApiContextProvider>
                 <GalleryContextProvider>
                     <UploadContextProvider>
@@ -12,6 +12,6 @@ export function App() {
                     </UploadContextProvider>
                 </GalleryContextProvider>
             </ApiContextProvider>
-        </BrowserRouter>
+        </HashRouter>
     );
 }
