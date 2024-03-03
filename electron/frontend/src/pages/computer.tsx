@@ -1,10 +1,13 @@
+//
+// This pages displays assets that have been found on the local computer.
+//
+
 import React, { useEffect } from "react";
-import { Main } from "user-interface";
-import { scanImages } from "./lib/scan";
-import { useUpload } from "user-interface/build/context/upload-context";
+import { useUpload } from "user-interface";
+import { scanImages } from "../lib/scan";
 import fs from "fs";
 
-export function Scan() {
+export function ComputerPage() {
 
     const { uploadFiles } = useUpload();
 
@@ -19,8 +22,10 @@ export function Scan() {
             .then(() => console.log('Scanning complete'))
             .catch(error => console.error('Error scanning images', error));
     }, []);
-
+        
     return (
-        <Main />
+        <div>
+            Placeholder
+        </div>
     );
 }

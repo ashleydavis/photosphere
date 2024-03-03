@@ -8,13 +8,19 @@ import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
 import { GalleryItemContextProvider } from "./context/gallery-item-context";
 import { useUpload } from "./context/upload-context";
-import { ComputerPage } from "./pages/computer";
 const FPSStats = require("react-fps-stats").default;
+
+export interface IMainProps {
+    //
+    // The "computer page" which is only displayed in the Electron or mobile version.
+    //
+    computerPage?: JSX.Element;
+}
 
 //
 // The main page of the Photosphere app.
 //
-export function Main() {
+export function Main({ computerPage }: IMainProps) {
 
     //
     // Interface to React Router navigation.
@@ -125,15 +131,17 @@ export function Main() {
                             </div>
                         </NavLink>
 
-                        <NavLink
-                            className="mr-3"
-                            to="/local"
-                            >
-                            <div className="flex flex-row items-center">
-                                <i className="w-5 text-center fa-solid fa-computer"></i>
-                                <div className="hidden sm:block ml-2">Computer</div>
-                            </div>
-                        </NavLink>
+                        {computerPage && 
+                            (<NavLink
+                                className="mr-3"
+                                to="/computer"
+                                >
+                                <div className="flex flex-row items-center">
+                                    <i className="w-5 text-center fa-solid fa-computer"></i>
+                                    <div className="hidden sm:block ml-2">Computer</div>
+                                </div>
+                            </NavLink>
+                        }
 
                         <NavLink
                             className="mr-3"
@@ -225,6 +233,15 @@ export function Main() {
                     </div>
                 </NavLink>
 
+                {computerPage 
+                    && <NavLink to="/cloud">
+                        <div className="flex flex-row items-center pl-1 mt-8">
+                            <i className="w-12 text-center fa-solid fa-computer"></i>
+                            <div className="">Computer</div>
+                        </div>
+                    </NavLink>
+                }
+
                 <NavLink to="/upload">
                     <div className="flex flex-row items-center pl-1 mt-2">
                         <i className="w-12 text-center fa-solid fa-upload"></i>
@@ -265,10 +282,12 @@ export function Main() {
                             }
                             />
 
-                        <Route
-                            path="/local"
-                            element={<ComputerPage />}
-                            />
+                        {computerPage 
+                            && <Route
+                                path="/computer"
+                                element={computerPage}
+                                />
+                        }
 
                         <Route 
                             path="/upload" 
