@@ -6,6 +6,7 @@
     "scripts": {
         "start": "node build/index.js",
         "start:dev": "npm run clean-uploads && npm run copy-uploads && concurrently \"npm run start-db-with-fixture\" \"npm run start-with-dev-db\"",
+        "start:dev:nodb": "npm run clean-uploads && concurrently \"npm run start-db-empty\" \"npm run start-with-dev-db\"",
         "start-db-with-fixture": "insta-mongo --db-port=7001 --rest-port=7000 --load=50-assets --fixtures=../fixtures --db=photosphere",
         "start-db-empty": "insta-mongo --db-port=7001 --rest-port=7000 --fixtures=../fixtures",
         "start-with-dev-db": "cross-env PORT=3000 DB_CONNECTION_STRING=mongodb://localhost:7001 ts-node-dev --respawn src/index.ts",
