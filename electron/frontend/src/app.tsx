@@ -1,6 +1,7 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { Main, ApiContextProvider, GalleryContextProvider, UploadContextProvider } from "user-interface";
+import { ApiContextProvider, GalleryContextProvider, UploadContextProvider } from "user-interface";
+import { Scan } from "./scan";
 
 export function App() {
     return (
@@ -8,7 +9,7 @@ export function App() {
             <ApiContextProvider>
                 <GalleryContextProvider>
                     <UploadContextProvider>
-                        <Main />
+                        <Scan />
                     </UploadContextProvider>
                 </GalleryContextProvider>
             </ApiContextProvider>
