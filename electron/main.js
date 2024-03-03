@@ -1,5 +1,4 @@
 const { app, BrowserWindow } = require('electron');
-const { exec } = require('child_process');
 
 let HTML_PAGE = process.env.HTML_PAGE;
 if (!HTML_PAGE) {
@@ -65,17 +64,3 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-
-
-if (process.platform === "win32") {
-    //
-    // Prototype scanning code for disk drives on Windows.
-    //
-    exec('wmic logicaldisk get name', (error, stdout) => {
-        if (error) {
-            console.error(`exec error: ${error}`);
-            return;
-        }
-        console.log(stdout);
-    });
-}
