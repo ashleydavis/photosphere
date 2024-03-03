@@ -8,6 +8,7 @@ import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
 import { GalleryItemContextProvider } from "./context/gallery-item-context";
 import { useUpload } from "./context/upload-context";
+import { ComputerPage } from "./pages/computer";
 const FPSStats = require("react-fps-stats").default;
 
 //
@@ -126,8 +127,18 @@ export function Main() {
 
                         <NavLink
                             className="mr-3"
+                            to="/local"
+                            >
+                            <div className="flex flex-row items-center">
+                                <i className="w-5 text-center fa-solid fa-computer"></i>
+                                <div className="hidden sm:block ml-2">Computer</div>
+                            </div>
+                        </NavLink>
+
+                        <NavLink
+                            className="mr-3"
                             to="/upload"
-                        >
+                            >
                             <div className="flex flex-row items-center">
                                 <i className="w-5 text-center fa-solid fa-upload"></i>
                                 <div className="hidden sm:block ml-2">Upload</div>
@@ -254,10 +265,16 @@ export function Main() {
                             }
                             />
 
+                        <Route
+                            path="/local"
+                            element={<ComputerPage />}
+                            />
+
                         <Route 
                             path="/upload" 
                             element={<UploadPage />} 
                             />
+
 
                         <Route
                             path="/"
