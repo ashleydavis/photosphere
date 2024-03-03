@@ -33,7 +33,7 @@ export interface IUploadContext {
     //
     // Uploads a collection of files.
     //
-    uploadFiles(dataTransfer: { items?: DataTransferItemList, files?: FileList }): Promise<void>;
+    uploadFiles(dataTransfer: { items?: DataTransferItemList, files?: File[] }): Promise<void>;
 
     //
     // User has chosen to retry failed uploads.
@@ -521,7 +521,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem
     //
-    async function uploadFiles(dataTransfer: { items?: DataTransferItemList, files?: FileList }) {
+    async function uploadFiles(dataTransfer: { items?: DataTransferItemList, files?: File[] }) {
 
         setNumScans(numScans + 1);
 
@@ -549,7 +549,7 @@ export function UploadContextProvider({ children }: IProps) {
                 // The array copy here may not be needed, but I've included just to be on the safe side consdering
                 // the problem documented in the code block above.
                 //
-                const files = Array.from(dataTransfer.files);
+                const files = dataTransfer.files;
                 if (files) {
                     for (const file of files) {
                         await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), []);

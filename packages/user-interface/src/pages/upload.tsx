@@ -48,7 +48,7 @@ export function UploadPage() {
         event.preventDefault();
         event.stopPropagation();
 
-        await uploadFiles(event.dataTransfer);
+        await uploadFiles({ items: event.dataTransfer.items });
     }
 
     return (
@@ -70,7 +70,7 @@ export function UploadPage() {
                     accept="image/*"
                     onChange={async event => {
                         if (event.target.files) {
-                            await uploadFiles({ files: event.target.files });
+                            await uploadFiles({ files: Array.from(event.target.files) });
                         }
 
                         //

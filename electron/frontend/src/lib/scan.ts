@@ -3,12 +3,32 @@ import fs from 'fs';
 import path from 'path';
 
 //
+// Information on a file.
+//
+export interface IFileDetails {
+    //
+    // The path of the file.
+    //
+    path: string;
+
+    //
+    // The content type of the file.
+    //
+    contentType: string;
+}
+
+//
+// Callback for when a file is discovered.
+//
+export type FileFoundFn = (fileDetails: IFileDetails) => Promise<void>;
+
+//
 // Scans the file system for images.
 //
-export async function scanImages() {
+export async function scanImages(fileFound: FileFoundFn): Promise<void> {
     const fileSystems = await getFileSystems();
     for (const fileSystem of fileSystems) {
-        await findImageFiles(fileSystem);
+        await findImageFiles(fileSystem, fileFound);
     }
 }
 
@@ -40,12 +60,20 @@ async function getFileSystems(): Promise<string[]> {
 //
 // List of image file extensions to find.
 //
-const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']);
+const imageExtensions: any = {
+    '.jpg': "image/jpeg", 
+    '.jpeg': "image/jpeg", 
+    '.png': "image/png", 
+    '.gif': "image/gif", 
+    '.bmp': "image/bmp", 
+    '.tiff': "image/tiff", 
+    '.webp': "image/webp",
+};
 
 //
 // Search a directory for image files.
 //
-async function findImageFiles(directory: string): Promise<void> {
+async function findImageFiles(directory: string, fileFound: FileFoundFn): Promise<void> {
 
     try {
         const files = await fs.promises.readdir(directory, { withFileTypes: true });
@@ -54,12 +82,18 @@ async function findImageFiles(directory: string): Promise<void> {
             const filePath = path.join(directory, file.name);
             if (file.isDirectory()) {
                 // If the file is a directory, recursively search it.
-                await findImageFiles(filePath);
+                await findImageFiles(filePath, fileFound);
             }
             else {
                 // Check if the file is an image based on its extension.
-                if (imageExtensions.has(path.extname(file.name).toLowerCase())) {
-                    console.log(`Image file found: ${filePath}`);
+                const ext = path.extname(file.name).toLowerCase();
+                const contentType = imageExtensions[ext];
+                console.log(`Extension ${ext} has content type ${contentType} for file ${file.name} at path ${filePath}`); //fio:
+                if (contentType) {
+                    await fileFound({ 
+                        path: path.join(file.path, file.name),
+                        contentType,
+                    });
                 }
             }
         }
