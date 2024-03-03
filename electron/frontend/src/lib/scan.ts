@@ -67,7 +67,7 @@ const imageExtensions: any = {
     '.gif': "image/gif", 
     '.bmp': "image/bmp", 
     '.tiff': "image/tiff", 
-    '.webp': "image/webp",
+    // '.webp': "image/webp",
 };
 
 //
