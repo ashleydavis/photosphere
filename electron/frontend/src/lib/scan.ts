@@ -81,6 +81,10 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
         for (const file of files) {
             const filePath = path.join(directory, file.name);
             if (file.isDirectory()) {
+                if (file.name.toLowerCase() === "$recycle.bin") {
+                    continue;
+                }
+
                 // If the file is a directory, recursively search it.
                 await findImageFiles(filePath, fileFound);
             }
