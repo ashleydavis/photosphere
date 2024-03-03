@@ -1,5 +1,3 @@
-const { Crypto } = require("@peculiar/webcrypto");
-
 //
 // Loads a file (or blob) to a data URL (base64 encoded data).
 //
@@ -50,7 +48,6 @@ export function loadArrayBuffer(file: Blob): Promise<ArrayBuffer> {
 //
 export async function computeHash(data: Blob) {
 
-    const crypto = new Crypto();
     const dataBuffer = await loadArrayBuffer(data);
     const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));

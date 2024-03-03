@@ -1,6 +1,6 @@
 # Photosphere frontend
 
-This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Parcel](https://parceljs.org/).
+This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
 
 ## Setup
 
@@ -16,7 +16,7 @@ Install dependencies:
 pnpm install
 ```
 
-## Run the Parcel dev server
+## Run the Webpack dev server
 
 Run the dev server like this:
 
@@ -24,7 +24,7 @@ Run the dev server like this:
 pnpm start
 ```
 
-Then click the link or point your browser at the default location for Parcel: [http://localhost:1234](http://localhost:1234).
+Then click the link or point your browser at the default location for Webpack: [http://localhost:8080](http://localhost:8080).
 
 ## Build the static web page
 

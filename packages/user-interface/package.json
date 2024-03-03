@@ -14,7 +14,6 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "devDependencies": {
-    "@fortawesome/fontawesome-free": "^6.2.1",
     "@peculiar/webcrypto": "^1.4.1",
     "@playwright/test": "^1.30.0",
     "@types/fs-extra": "^11.0.1",

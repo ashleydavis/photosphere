@@ -5,7 +5,6 @@ module.exports = {
     modulePathIgnorePatterns: [
         "dist",
         "build",
-        ".parcel-cache",
         "src/test/e2e",
     ],
 };
