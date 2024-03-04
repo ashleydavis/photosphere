@@ -92,7 +92,6 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
                 // Check if the file is an image based on its extension.
                 const ext = path.extname(file.name).toLowerCase();
                 const contentType = imageExtensions[ext];
-                console.log(`Extension ${ext} has content type ${contentType} for file ${file.name} at path ${filePath}`); //fio:
                 if (contentType) {
                     await fileFound({ 
                         path: path.join(file.path, file.name),

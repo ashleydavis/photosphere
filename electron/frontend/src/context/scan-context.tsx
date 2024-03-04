@@ -2,12 +2,19 @@
 // This context implements scanning the file system for assets.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { useUpload } from "user-interface";
+import React, { createContext, ReactNode, useContext, useState } from "react";
+import { IGalleryItem } from "user-interface";
 import { scanImages as _scanImages } from "../lib/scan";
+import dayjs from "dayjs";
 import fs from "fs";
 
 export interface IScanContext {
+
+    //
+    // Assets that have been scanned.
+    //
+    assets: IGalleryItem[];
+
     //
     // Scan the file system for assets.
     //
@@ -22,25 +29,40 @@ export interface IProps {
 
 export function ScanContextProvider({ children }: IProps) {
 
-    const { uploadFiles } = useUpload();
+    //
+    // Assets that have been scanned.
+    //
+    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
     // Scan the file system for assets.
     //
     function scanImages(): void {
         _scanImages(async fileDetails => {
-            console.log(`Uploading ${fileDetails.path}`);
+
             const buffer = await fs.promises.readFile(fileDetails.path);
-            const blob = new Blob([buffer], { type: fileDetails.contentType });
-            const file = new File([blob], fileDetails.path, { type: fileDetails.contentType });
-            await uploadFiles({ files: [ file ] });
+            const blob = new Blob([buffer], { type: fileDetails.contentType });            
+            const objectURL = URL.createObjectURL(blob); //todo: At some point this must be revoked.
+
+            const newAsset: IGalleryItem = {
+                _id: `local://${fileDetails.path}`,
+                width: 100,
+                height: 100,
+                origFileName: fileDetails.path,
+                hash: "ABCD",
+                fileDate: dayjs().toISOString(),
+                sortDate: dayjs().toISOString(),
+                uploadDate: dayjs().toISOString(),
+                objectURL,
+            };
+            setAssets(prev => prev.concat([ newAsset ]));
         })
         .then(() => console.log('Scanning complete'))
         .catch(error => console.error('Error scanning images', error));
-
     }
 
     const value: IScanContext = {
+        assets,
         scanImages,
     };
 

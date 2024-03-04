@@ -88,6 +88,11 @@ export interface IGalleryItem {
     // Description of the asset, once it has been set by the user.
     //
     description?: string;
+
+    //
+    // Object URL for an asset when loaded from a local image file.
+    //
+    objectURL?: string;
 }
 
 //

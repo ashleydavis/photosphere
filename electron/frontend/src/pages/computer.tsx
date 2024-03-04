@@ -4,10 +4,11 @@
 
 import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
+import { Gallery } from "user-interface";
 
 export function ComputerPage() {
 
-    const { scanImages } = useScan();
+    const { assets, scanImages } = useScan();
 
     useEffect(() => {
         scanImages();
@@ -15,7 +16,11 @@ export function ComputerPage() {
         
     return (
         <div>
-            Placeholder
+            <Gallery
+                items={assets}
+                onItemClick={() => {}}
+                targetRowHeight={150}
+                />
         </div>
     );
 }

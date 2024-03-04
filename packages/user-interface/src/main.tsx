@@ -132,7 +132,7 @@ export function Main({ computerPage }: IMainProps) {
                         </NavLink>
 
                         {computerPage && 
-                            (<NavLink
+                            <NavLink
                                 className="mr-3"
                                 to="/computer"
                                 >
