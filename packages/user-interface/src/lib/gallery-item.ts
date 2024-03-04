@@ -90,9 +90,9 @@ export interface IGalleryItem {
     description?: string;
 
     //
-    // Object URL for an asset when loaded from a local image file.
+    // Direct URL for an asset. Can be a data URL when loaded from a local image file.
     //
-    objectURL?: string;
+    url?: string;
 }
 
 //

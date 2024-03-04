@@ -81,13 +81,7 @@ export function GalleryLayout({
                         }}
                         >
                         {row.items.map((item, index) => {
-                            let url;
-                            if (item.objectURL) {
-                                url = item.objectURL;
-                            }
-                            else {
-                                url = api.makeUrl(`/thumb?id=${item._id}`)
-                            }
+                            const url = item.url || api.makeUrl(`/thumb?id=${item._id}`);
                             return (
                                 <img 
                                     data-testid="gallery-thumb"

@@ -7,6 +7,12 @@ import { IGalleryItem } from "user-interface";
 import { scanImages as _scanImages } from "../lib/scan";
 import dayjs from "dayjs";
 import fs from "fs";
+import { loadBlobToImage, resizeImage } from "user-interface/build/lib/image";
+
+//
+// Size of the thumbnail to generate and display during uploaded.
+//
+const PREVIEW_THUMBNAIL_MIN_SIZE = 60;
 
 export interface IScanContext {
 
@@ -39,11 +45,10 @@ export function ScanContextProvider({ children }: IProps) {
     //
     function scanImages(): void {
         _scanImages(async fileDetails => {
-
             const buffer = await fs.promises.readFile(fileDetails.path);
-            const blob = new Blob([buffer], { type: fileDetails.contentType });            
-            const objectURL = URL.createObjectURL(blob); //todo: At some point this must be revoked.
-
+            const blob = new Blob([buffer], { type: fileDetails.contentType });
+            const image = await loadBlobToImage(blob);
+            const previewThumbnailDataUrl = resizeImage(image, PREVIEW_THUMBNAIL_MIN_SIZE);
             const newAsset: IGalleryItem = {
                 _id: `local://${fileDetails.path}`,
                 width: 100,
@@ -53,7 +58,7 @@ export function ScanContextProvider({ children }: IProps) {
                 fileDate: dayjs().toISOString(),
                 sortDate: dayjs().toISOString(),
                 uploadDate: dayjs().toISOString(),
-                objectURL,
+                url: previewThumbnailDataUrl,
             };
             setAssets(prev => prev.concat([ newAsset ]));
         })

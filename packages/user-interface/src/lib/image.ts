@@ -14,6 +14,24 @@ export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
 }
 
 //
+// Loads a blob to an image element.
+//
+export function loadBlobToImage(blob: Blob): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                resolve(img);
+            };
+            img.src = reader.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+//
 // Represents the resolution of the image or video.
 //
 export interface IResolution {
