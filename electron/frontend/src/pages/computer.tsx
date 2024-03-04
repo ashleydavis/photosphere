@@ -15,7 +15,7 @@ export function ComputerPage() {
     }, []);
         
     return (
-        <div>
+        <div className="w-full h-full overflow-x-hidden overflow-y-auto">
             <Gallery
                 items={assets}
                 onItemClick={() => {}}
