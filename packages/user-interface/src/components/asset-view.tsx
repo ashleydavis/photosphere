@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { useApi } from "../../../context/api-context";
-import { AssetInfo } from "./asset-info";
-import { useGalleryItem } from "../../../context/gallery-item-context";
+import { useApi } from "../context/api-context";
+import { AssetInfo } from "../pages/gallery/components/asset-info";
+import { useGalleryItem } from "../context/gallery-item-context";
 
 export interface IAssetViewProps { 
 
