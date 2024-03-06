@@ -1,6 +1,6 @@
 import React from "react";
 import dayjs from "dayjs";
-import { useGalleryItem } from "../context/gallery-item-context";
+import { useGalleryItem } from "../../../context/gallery-item-context";
 
 export interface IAssetInfoProps { 
 

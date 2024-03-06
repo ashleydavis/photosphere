@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Gallery } from "../components/gallery";
+import { Gallery } from "../../components/gallery";
 import InfiniteScroll from "react-infinite-scroller";
-import { useGallery } from "../context/gallery-context";
-import { AssetView } from "../components/asset-view";
-import { GalleryItemContextProvider } from "../context/gallery-item-context";
+import { useGallery } from "../../context/gallery-context";
+import { AssetView } from "./components/asset-view";
+import { GalleryItemContextProvider } from "../../context/gallery-item-context";
 
 const INFINITE_SCROLL_THRESHOLD = 200;
 

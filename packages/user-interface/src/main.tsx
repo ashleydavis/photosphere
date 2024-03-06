@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Route, Routes, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { Spinner } from "./components/spinner";
-import { GalleryPage } from "./pages/gallery";
+import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
 import { useUpload } from "./context/upload-context";
