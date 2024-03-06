@@ -12,7 +12,7 @@ import { loadBlobToImage, resizeImage } from "user-interface/build/lib/image";
 //
 // Size of the thumbnail to generate and display during uploaded.
 //
-const PREVIEW_THUMBNAIL_MIN_SIZE = 60;
+const PREVIEW_THUMBNAIL_MIN_SIZE = 120;
 
 export interface IScanContext {
 
