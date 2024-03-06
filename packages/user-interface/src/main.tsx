@@ -1,12 +1,9 @@
 import React, { useState } from "react";
-import { BrowserRouter, Route, Routes, NavLink, Navigate, useNavigate } from "react-router-dom";
-import { AssetView } from "./components/asset-view";
+import { Route, Routes, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { Spinner } from "./components/spinner";
-import { ISelectedGalleryItem } from "./lib/gallery-item";
 import { GalleryPage } from "./pages/gallery";
 import { UploadPage } from "./pages/upload";
 import { useGallery } from "./context/gallery-context";
-import { GalleryItemContextProvider } from "./context/gallery-item-context";
 import { useUpload } from "./context/upload-context";
 const FPSStats = require("react-fps-stats").default;
 
@@ -34,11 +31,7 @@ export function Main({ computerPage }: IMainProps) {
         searchText,
         search,
         clearSearch,
-        getNext, 
-        getPrev, 
-        selectedItem, 
-        setSelectedItem 
-        } = useGallery();
+    } = useGallery();
 
     //
     // Interface to the upload context.
@@ -55,11 +48,6 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [openSearch, setOpenSearch] = useState<boolean>(false);
     
-    //
-    // Opens the asset view modal.
-    //
-    const [openAssetView, setOpenAssetView] = useState<boolean>(false);
-
     //
     // The search currently being typed by the user.
     //
@@ -274,10 +262,6 @@ export function Main({ computerPage }: IMainProps) {
                             element={
                                 <GalleryPage
                                     key={searchText} // Forces the gallery to update when the search changes.
-                                    onItemClick={item => {
-                                        setOpenAssetView(true);
-                                        setSelectedItem(item);
-                                    }}
                                     />
                             }
                             />
@@ -307,28 +291,6 @@ export function Main({ computerPage }: IMainProps) {
                     </Routes>
                 </div>
             </div>
-
-            {selectedItem &&
-                <GalleryItemContextProvider 
-                    asset={selectedItem.item}
-                    assetIndex={selectedItem.index}
-                    key={selectedItem.item._id}
-                    >
-		            <AssetView
-	                    key={selectedItem.item._id}
-		                open={openAssetView}
-		                onClose={() => {
-	                        setOpenAssetView(false);
-		                }}
-		                onPrev={() => {
-	                        setSelectedItem(getPrev(selectedItem));
-		                }}
-		                onNext={() => {
-	                        setSelectedItem(getNext(selectedItem));
-		                }}
-		                />
-                </GalleryItemContextProvider>
-            }
 
             <FPSStats 
                 top="auto"
