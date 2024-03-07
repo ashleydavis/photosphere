@@ -4,3 +4,4 @@ packages:
   - "frontend"
   - "electron"
   - "electron/frontend"
+  - "mobile"
