@@ -7,6 +7,9 @@ module.exports = {
     devtool: 'inline-source-map',
     mode: 'development',
     target: 'web',
+    devServer: {
+        historyApiFallback: true,
+    },
     module: {
         rules: [
             {
