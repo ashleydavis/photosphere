@@ -4,7 +4,6 @@ import { useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
 import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "../lib/reverse-geocode";
 import { IQueuedUpload, IUploadDetails, UploadState } from "../lib/upload-details";
-import { useGallery } from "../context/gallery-context";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";

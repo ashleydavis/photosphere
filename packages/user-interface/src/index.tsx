@@ -9,3 +9,4 @@ export { UploadContextProvider, useUpload } from './context/upload-context';
 export { IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";
+export * from "./lib/file";

@@ -4,7 +4,7 @@ import * as EXIF from './exif-js/exif';
 // Loads URL or source data to an image element.
 //
 export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
             resolve(img);
@@ -14,21 +14,25 @@ export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
 }
 
 //
-// Loads a blob to an image element.
+// Loads a blob to a data URL.
 //
-export function loadBlobToImage(blob: Blob): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
+export function loadBlobToDataURL(blob: Blob): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-            const img = new Image();
-            img.onload = () => {
-                resolve(img);
-            };
-            img.src = reader.result as string;
+            resolve(reader.result as string);
         };
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
+}
+
+//
+// Loads a blob to an image element.
+//
+export async function loadBlobToImage(blob: Blob): Promise<HTMLImageElement> {
+    const dataURL = await loadBlobToDataURL(blob);
+    return await loadImage(dataURL);
 }
 
 //

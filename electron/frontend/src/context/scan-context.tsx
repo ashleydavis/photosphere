@@ -3,11 +3,11 @@
 //
 
 import React, { createContext, ReactNode, useContext, useState } from "react";
-import { IGalleryItem } from "user-interface";
+import { computeHash, IGalleryItem } from "user-interface";
 import { scanImages as _scanImages } from "../lib/scan";
 import dayjs from "dayjs";
 import fs from "fs";
-import { loadBlobToImage, resizeImage } from "user-interface/build/lib/image";
+import { getImageResolution, IResolution, loadBlobToDataURL, loadBlobToImage, resizeImage } from "user-interface/build/lib/image";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -41,24 +41,54 @@ export function ScanContextProvider({ children }: IProps) {
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
+    // Loads a local file into a blob.
+    //
+    async function loadFileToBlob(filePath: string, contentType: string): Promise<Blob> {
+        const buffer = await fs.promises.readFile(filePath);
+
+        return new Blob([buffer], { type: contentType });
+    }
+
+    //
+    // Loads a thumbnail from a local file.
+    //
+    async function loadThumbnail(filePath: string, contentType: string): Promise<{ thumbnail: string, resolution: IResolution, hash: string }> {
+        const blob = await loadFileToBlob(filePath, contentType);
+        const image = await loadBlobToImage(blob);
+        return {
+            thumbnail: resizeImage(image, PREVIEW_THUMBNAIL_MIN_SIZE),
+            resolution: getImageResolution(image),
+            hash: await computeHash(blob),
+        };
+    }
+
+    //
+    // Loads the full resolution version of a local file.
+    //
+    async function loadHighRes(filePath: string, contentType: string): Promise<string> {
+        const blob = await loadFileToBlob(filePath, contentType);
+        return loadBlobToDataURL(blob);
+    }   
+
+    //
     // Scan the file system for assets.
     //
     function scanImages(): void {
         _scanImages(async fileDetails => {
-            const buffer = await fs.promises.readFile(fileDetails.path);
-            const blob = new Blob([buffer], { type: fileDetails.contentType });
-            const image = await loadBlobToImage(blob);
-            const previewThumbnailDataUrl = resizeImage(image, PREVIEW_THUMBNAIL_MIN_SIZE);
+            const { thumbnail, resolution, hash } = await loadThumbnail(fileDetails.path, fileDetails.contentType);
             const newAsset: IGalleryItem = {
                 _id: `local://${fileDetails.path}`,
-                width: 100,
-                height: 100,
+                width: resolution.width,
+                height: resolution.height,
                 origFileName: fileDetails.path,
-                hash: "ABCD",
+                hash,
                 fileDate: dayjs().toISOString(),
                 sortDate: dayjs().toISOString(),
                 uploadDate: dayjs().toISOString(),
-                url: previewThumbnailDataUrl,
+                url: thumbnail,
+                makeFullUrl: async () => {
+                    return await loadHighRes(fileDetails.path, fileDetails.contentType);
+                },
             };
             setAssets(prev => prev.concat([ newAsset ]));
         })

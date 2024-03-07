@@ -34,7 +34,6 @@ export class FileStorage implements IStorage {
                     reject(err);
                 })
                 .on("finish", () => {
-                    console.log(`Uplaoded ${localFileName}`); //fio:
                     resolve();
                 });
         });

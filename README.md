@@ -2,7 +2,7 @@
 
 This is an extended version of the monorepo for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
 
-In addition to the usual backand and frontend, this monorepot contains an Electron-based desktop version of Photosphere.
+In addition to the usual backand and frontend, this monorepo contains an Electron-based desktop version of Photosphere.
 
 This code accompanies chapter 8 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
 
