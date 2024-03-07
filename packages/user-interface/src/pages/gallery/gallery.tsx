@@ -1,11 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Gallery } from "../../components/gallery";
-import InfiniteScroll from "react-infinite-scroller";
-import { useGallery } from "../../context/gallery-context";
-import { AssetView } from "../../components/asset-view";
-import { GalleryItemContextProvider } from "../../context/gallery-item-context";
-
-const INFINITE_SCROLL_THRESHOLD = 200;
+import { GalleryContextProvider } from "../../context/gallery-context";
+import { useCloudGallerySource } from "../../context/source/cloud-gallery-source-context";
 
 export interface IGalleryPageProps {
 }
@@ -13,80 +9,18 @@ export interface IGalleryPageProps {
 export function GalleryPage({}: IGalleryPageProps) {
 
     //
-    // The interface to the gallery.
+    // Retreives assets from the cloud.
     //
-    const { 
-        assets, 
-        loadPage, 
-        haveMoreAssets,
-        selectedItem, 
-        setSelectedItem,
-        getNext, 
-        getPrev, 
-    } = useGallery();
-
-    //
-    // Opens the asset view modal.
-    //
-    const [openAssetView, setOpenAssetView] = useState<boolean>(false);
-
-    useEffect(() => {
-        // 
-        // Loads the first page of the gallery on mount.
-        //
-        loadPage(1)
-            .catch(err => {
-                console.error(`Failed to load gallery:`);
-                console.error(err);
-            });
-    }, []);
+    const cloudGallerySource = useCloudGallerySource();
 
     return (
-        <>
-            <div 
-                id="gallery" 
-                >
-                <InfiniteScroll
-                    pageStart={1}
-                    initialLoad={false}
-                    loadMore={loadPage}
-                    hasMore={haveMoreAssets}
-                    threshold={INFINITE_SCROLL_THRESHOLD}
-                    useWindow={false}
-                    getScrollParent={() => document.getElementById("gallery")}
-                    >
-                    <Gallery 
-                        items={assets}
-                        onItemClick={item => {
-                            setOpenAssetView(true);
-                            setSelectedItem(item);
-                        }}
-                        targetRowHeight={150}
-                        />
-                </InfiniteScroll>
-            </div>
-
-            {selectedItem &&
-                <GalleryItemContextProvider 
-                    asset={selectedItem.item}
-                    assetIndex={selectedItem.index}
-                    key={selectedItem.item._id}
-                    >
-		            <AssetView
-	                    key={selectedItem.item._id}
-		                open={openAssetView}
-		                onClose={() => {
-	                        setOpenAssetView(false);
-		                }}
-		                onPrev={() => {
-	                        setSelectedItem(getPrev(selectedItem));
-		                }}
-		                onNext={() => {
-	                        setSelectedItem(getNext(selectedItem));
-		                }}
-		                />
-                </GalleryItemContextProvider>
-            }
-        </>
+        <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
+            <GalleryContextProvider source={cloudGallerySource}>
+                <Gallery 
+                    items={cloudGallerySource.assets}
+                    targetRowHeight={150}
+                    />
+            </GalleryContextProvider>
+        </div>
     );
 }

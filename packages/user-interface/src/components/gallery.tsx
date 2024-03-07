@@ -2,6 +2,9 @@ import React, { useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
+import { useGallery } from "../context/gallery-context";
+import { GalleryItemContextProvider } from "../context/gallery-item-context";
+import { AssetView } from "./asset-view";
 
 //
 // Adds a small gutter on the right hand side of the gallery for some whitespace.
@@ -18,17 +21,28 @@ export interface IGalleryProps {
     // The target height for rows in the gallery.
     //
 	targetRowHeight: number;
-
-    //
-    // Event raised when an item in the gallery has been clicked.
-    //
-    onItemClick: ((item: ISelectedGalleryItem) => void) | undefined;
 }
 
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight, onItemClick }: IGalleryProps) {
+export function Gallery({ items, targetRowHeight }: IGalleryProps) {
+
+    //
+    // The interface to the gallery.
+    //
+    const { 
+        source,
+        selectedItem, 
+        setSelectedItem,
+        getNext, 
+        getPrev, 
+    } = useGallery();
+
+    //
+    // Opens the asset view modal.
+    //
+    const [openAssetView, setOpenAssetView] = useState<boolean>(false);
 
     //
     // The width of the gallery.
@@ -56,8 +70,34 @@ export function Gallery({ items, targetRowHeight, onItemClick }: IGalleryProps) 
                 galleryWidth={galleryWidth}
                 targetRowHeight={targetRowHeight}
                 items={items}
-                onItemClick={onItemClick}
+                onItemClick={item => { 
+                    setOpenAssetView(true);
+                    setSelectedItem(item);
+                }}                
                 />
+
+            {selectedItem &&
+                <GalleryItemContextProvider 
+                    source={source}
+                    asset={selectedItem.item}
+                    assetIndex={selectedItem.index}
+                    key={selectedItem.item._id}
+                    >
+                    <AssetView
+                        key={selectedItem.item._id}
+                        open={openAssetView}
+                        onClose={() => {
+                            setOpenAssetView(false);
+                        }}
+                        onPrev={() => {
+                            setSelectedItem(getPrev(selectedItem));
+                        }}
+                        onNext={() => {
+                            setSelectedItem(getNext(selectedItem));
+                        }}
+                        />
+                </GalleryItemContextProvider>
+            }                
         </div>
     );
 }

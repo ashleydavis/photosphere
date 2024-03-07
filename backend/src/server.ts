@@ -362,8 +362,6 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
     app.get("/assets", async (req, res) => {
 
         const search = req.query.search as string;
-        const skip = getIntQueryParam(req, "skip");
-        const limit = getIntQueryParam(req, "limit");
 
         const query: any = {};
         
@@ -375,8 +373,6 @@ export async function createServer(db: Db, now: () => Date, storage: IStorage) {
 
         const assets = await assetsCollection.find(query)
             .sort({ sortDate: -1 })
-            .skip(skip)
-            .limit(limit)
             .toArray();
 
         res.json({

@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useState } from
 import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "./api-context";
 import { useGallery } from "./gallery-context";
+import { IGallerySourceContext } from "./source/gallery-source-context";
 
 export interface IGalleryItemContext {
 
@@ -16,7 +17,7 @@ export interface IGalleryItemContext {
     setAsset(asset: IGalleryItem): void;
 
     //
-    // Updates certain fields on the asset.
+    // Updates the configuration of the asset.
     //
     updateAsset(asset: Partial<IGalleryItem>): void;
 
@@ -39,6 +40,12 @@ export interface IGalleryItemContext {
 const GalleryItemContext = createContext<IGalleryItemContext | undefined>(undefined);
 
 export interface IProps {
+
+    //
+    // The sources that loads asset into the gallery.
+    //
+    source: IGallerySourceContext;
+
     //
     // Children of the component.
     //
@@ -56,7 +63,7 @@ export interface IProps {
     assetIndex: number;
 }
 
-export function GalleryItemContextProvider({ children, asset, assetIndex }: IProps) {
+export function GalleryItemContextProvider({ source, children, asset, assetIndex }: IProps) {
 
     //
     // Interface to the backend.
@@ -64,30 +71,20 @@ export function GalleryItemContextProvider({ children, asset, assetIndex }: IPro
     const api = useApi();
 
     //
-    // Interface to the gallery.
-    //
-    const { assets, setAssets } = useGallery();
-
-    //
     // The asset being edited.
     //
     const [_asset, setAsset] = useState<IGalleryItem>(asset);
 
     //
-    // Updates certain fields on the asset.
+    // Updates the configuration of the asset.
     //
     function updateAsset(assetUpdate: Partial<IGalleryItem>): void {
-        const newAsset = {
+        setAsset({
             ..._asset,
             ...assetUpdate,
-        };
-        setAsset(newAsset);
+        });
 
-        setAssets([
-            ...assets.slice(0, assetIndex),
-            newAsset,
-            ...assets.slice(assetIndex + 1),
-        ]);
+        source.updateAsset(assetIndex, assetUpdate);
     }
 
     //

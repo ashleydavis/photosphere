@@ -23,7 +23,7 @@ export interface IApiContext {
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(search: string | undefined, skip: number, limit: number): Promise<IGalleryItem[]>;
+    getAssets(search: string | undefined): Promise<IGalleryItem[]>;
 
     //
     // Check if an asset is already uploaded using its hash.
@@ -125,8 +125,8 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(search: string | undefined, skip: number, limit: number): Promise<IGalleryItem[]> {
-        let url = `${BASE_URL}/assets?skip=${skip}&limit=${limit}`;
+    async function getAssets(search: string | undefined): Promise<IGalleryItem[]> {
+        let url = `${BASE_URL}/assets`;
         if (search && search.length > 0) {
             url += `&search=${search}`;
         }

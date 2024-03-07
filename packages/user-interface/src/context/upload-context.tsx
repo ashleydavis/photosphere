@@ -13,6 +13,7 @@ dayjs.extend(customParseFormat);
 import JSZip from "jszip";
 import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
+import { useCloudGallerySource } from "./source/cloud-gallery-source-context";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -87,7 +88,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset } = useGallery();
+    const { addAsset } = useCloudGallerySource();
 
     //
     // List of uploads that failed.

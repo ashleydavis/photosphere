@@ -3,8 +3,8 @@ import { Route, Routes, NavLink, Navigate, useNavigate } from "react-router-dom"
 import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
-import { useGallery } from "./context/gallery-context";
 import { useUpload } from "./context/upload-context";
+import { useSearch } from "./context/search-context";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -31,7 +31,7 @@ export function Main({ computerPage }: IMainProps) {
         searchText,
         search,
         clearSearch,
-    } = useGallery();
+    } = useSearch();
 
     //
     // Interface to the upload context.
