@@ -1,7 +1,7 @@
 {
-  "name": "electron-frontend",
+  "name": "mobile-frontend",
   "version": "1.0.0",
-  "description": "The frontend for the Electron version of the Photosphere application.",
+  "description": "The frontend for the mobile version of the Photosphere application.",
   "source": "src/index.html",
   "scripts": {
     "start": "cross-env BASE_URL=http://localhost:3000 webpack serve",

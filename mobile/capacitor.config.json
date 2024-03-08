@@ -2,7 +2,7 @@
   "appId": "com.photosphere.codecapers",
   "appName": "Photosphere",
   "bundledWebRuntime": false,
-  "webDir": "dist",
+  "webDir": "frontend/dist",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0

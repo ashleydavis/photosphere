@@ -7,11 +7,6 @@
     "capacitor",
     "mobile"
   ],
-  "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
   "dependencies": {
     "@capacitor/android": "^5.7.2",
     "@capacitor/camera": "latest",
@@ -20,8 +15,7 @@
     "@capacitor/splash-screen": "latest"
   },
   "devDependencies": {
-    "@capacitor/cli": "latest",
-    "vite": "^2.9.13"
+    "@capacitor/cli": "latest"
   },
   "author": "",
   "license": "ISC"
