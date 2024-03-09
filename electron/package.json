@@ -1,7 +1,7 @@
 {
   "name": "photosphere-electron",
   "version": "1.0.0",
-  "description": "The Electron frontend for Photosphere",
+  "description": "The Electron desktop application for Photosphere",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

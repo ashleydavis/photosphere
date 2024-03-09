@@ -1,12 +1,56 @@
-## Created with Capacitor Create App
+## Mobile
 
-This app was created using [`@capacitor/create-app`](https://github.com/ionic-team/create-capacitor-app),
-and comes with a very minimal shell for building an app.
+The mobile phone version of [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
 
-### Running this example
+## Pre-reqs
 
-To run the provided example, you can use `npm start` command.
+- Node.js.
+- A computer with Android Studio to build for Android.
+- A MacOS computer with Xcode to build for iPhone/iPad. 
+- Run the Photosphere backend (`../backend`).
+
+## Setup
+
+Open a terminal and change directory to the Electron project:
 
 ```bash
-npm start
+cd photosphere-monorepo/mobile
 ```
+
+Install dependencies:
+
+```bash
+ppnpm install
+```
+
+## Running in development
+
+Run it in the browser with live reload:
+
+```bash
+pnpm start
+```
+
+## Build and run for Android
+
+You need Android Studio installed for this.
+
+```bash 
+set BASE_URL=<url-for-the-backend>
+pnpm run build 
+pnpm run android
+```
+
+Now build and run using Android Studio.
+
+## Build and run for iOS
+
+You need Xcode installed for this.
+
+```bash 
+export BASE_URL=<url-for-the-backend>
+pnpm run build
+pnpm run ios 
+```
+
+Now build and run using Xcode.

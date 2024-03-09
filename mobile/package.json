@@ -1,12 +1,14 @@
 {
-  "name": "capacitor-app",
+  "name": "photosphere-mobile",
   "version": "1.0.0",
-  "description": "An Amazing Capacitor App",
-  "main": "index.js",
-  "keywords": [
-    "capacitor",
-    "mobile"
-  ],
+  "description": "The mobile application for Photosphere",
+  "keywords": [],
+  "scripts": {
+    "start": "pnpm --filter mobile-frontend start",
+    "build": "pnpm --filter mobile-frontend build",
+    "android": "npx cap update && npx cap sync && npx cap open android",
+    "ios": "npx cap update && npx cap sync && npx cap open ios"
+  },
   "dependencies": {
     "@capacitor/android": "^5.7.2",
     "@capacitor/camera": "latest",
@@ -17,6 +19,6 @@
   "devDependencies": {
     "@capacitor/cli": "latest"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "ashley@codecapers.com.au",
+  "license": "MIT"
 }
