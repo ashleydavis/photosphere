@@ -24,7 +24,12 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.math.BigInteger;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -131,7 +136,7 @@ public class FileUploader extends Plugin {
             JSObject file = new JSObject();
             file.put("name", fileDetails.name);
             file.put("path", fileDetails.path);
-            file.put("type", fileDetails.contentType);
+            file.put("contentType", fileDetails.contentType);
             file.put("date", fileDetails.creationDate);
             files.put(file);
         }
@@ -142,11 +147,45 @@ public class FileUploader extends Plugin {
     }
 
     //
+    // Converts bytes to hex values.
+    //
+    // https://stackoverflow.com/q/7166129/25868
+    //
+    private String bin2hex(byte[] data) {
+        return String.format("%0" + (data.length*2) + "X", new BigInteger(1, data));
+    }
+
+    //
+    // Computes the hash for a file.
+    //
+    // https://stackoverflow.com/a/32032908/25868
+    //
+    private String computeHash(File file) {
+        try {
+            byte[] buffer = new byte[4096];
+            int count;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
+            while ((count = bis.read(buffer)) > 0) {
+                digest.update(buffer, 0, count);
+            }
+            bis.close();
+
+            return bin2hex(digest.digest());
+        }
+        catch (Exception ex) {
+            Log.e("Err", "Failed to hash file " + file.getPath());
+            return null;
+        }
+    }
+    //
     // Loads a thumbnail for a file.
     //
     @PluginMethod()
     public void loadThumbnail(PluginCall call) {
         String path = call.getString("path");
+
+        String hash = computeHash(new File(path));
 
         // https://developer.android.com/reference/android/graphics/Bitmap
         Bitmap origImage = BitmapFactory.decodeFile(path);
@@ -168,6 +207,9 @@ public class FileUploader extends Plugin {
 
         JSObject ret = new JSObject();
         ret.put("thumbnail", thumbnail);
+        ret.put("width", width);
+        ret.put("height", height);
+        ret.put("hash", hash);
         call.resolve(ret);
     }
 
@@ -186,7 +228,7 @@ public class FileUploader extends Plugin {
         String fullImage = new String(Base64.getEncoder().encode(fullOutputStream.toByteArray()));
 
         JSObject ret = new JSObject();
-        ret.put("full", fullImage);
+        ret.put("fullImage", fullImage);
         call.resolve(ret);
     }
 

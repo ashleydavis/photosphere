@@ -2,10 +2,9 @@
 // This pages displays assets that have been found on the local computer.
 //
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
-import { AssetView, Gallery, GalleryContextProvider, GalleryItemContextProvider } from "user-interface";
-import { ISelectedGalleryItem } from "user-interface/build/lib/gallery-item";
+import { AssetView, Gallery, GalleryContextProvider } from "user-interface";
 import { useComputerGallerySource } from "../context/source/computer-gallery-source-context";
 
 export function ComputerPage() {

@@ -178,7 +178,7 @@ public class UploadWorker extends Worker {
                     editor.commit();
                 }
                 else {
-                    Log.i("Dbg[" + id + "]", "Have record for " + file.getPath());
+                    // Log.i("Dbg[" + id + "]", "Have record for " + file.getPath());
 
                     //TODO: Update existing entry, mark as "found".
                 }
@@ -199,7 +199,7 @@ public class UploadWorker extends Worker {
                     editor.commit();
                 }
                 else {
-                    Log.i("Dbg[" + id + "]", "Have record for " + file.getPath());
+                    // Log.i("Dbg[" + id + "]", "Have record for " + file.getPath());
 
                     //TODO: Update existing entry, mark as "found".
                 }
