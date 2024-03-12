@@ -18,7 +18,7 @@ pnpm install
 
 ## Compile
 
-Copmile the code:
+Compile the code:
 
 ```bash
 pnpm compile
