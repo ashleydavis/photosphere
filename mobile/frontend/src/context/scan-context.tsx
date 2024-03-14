@@ -60,20 +60,23 @@ export function ScanContextProvider({ children }: IProps) {
         await FileUploader.updateSettings({
             backend: backend,
         });
+    
+        console.log(`Checking permissions...`);
+
+        const { havePermissions } = await FileUploader.checkPermission();
+        if (!havePermissions) {
+            await FileUploader.requestPermission();
+            const { havePermissions } = await FileUploader.checkPermission();
+            if (!havePermissions) {
+                console.log(`Don't have permission.`);
+                return;
+            }
+        }
 
         const { syncing } = FileUploader.checkSyncStatus();
         if (syncing) {
             console.log(`Already syncing.`);
             return;
-        }
-    
-        const { havePermissions } = await FileUploader.checkPermissions();
-        if (!havePermissions) {
-            await FileUploader.requestPermissions();
-            const { havePermissions } = await FileUploader.checkPermissions();
-            if (!havePermissions) {
-                return;
-            }
         }
 
         console.log(`Staring the sync.`);
@@ -90,7 +93,7 @@ export function ScanContextProvider({ children }: IProps) {
             syncingAssets.current = true;
 
             FileUploader.getFiles()
-                .then(async ({ files }: { files: any[] }) => { //todo:
+                .then(async ({ files }: { files: any[] }) => { //todo: type me
                     for (const file of files) {
                         if (assetMap.current.has(file.path)) {
                             continue;
@@ -109,7 +112,7 @@ export function ScanContextProvider({ children }: IProps) {
                             uploadDate: dayjs().toISOString(),
                             url: dataURL,
                             makeFullUrl: async () => {
-                                const { fullImage } = await FileUploader.loadFullImage({ path: file.path });
+                                const { fullImage } = await FileUploader.loadFullImage({ path: file.path, contentType: file.type });
                                 const dataURL = `data:${file.contentType};base64,${fullImage}`;
                                 return dataURL;
                             },

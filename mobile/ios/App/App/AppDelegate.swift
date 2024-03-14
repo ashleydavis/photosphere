@@ -10,7 +10,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   let backgroundTaskId = "com.photosphere.codecapers:scan-files"
 
   func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-   MediaUploader.instance.clearStorage()
+    //
+    // Clears storage on start:
+    //
+    //MediaUploader.instance.clearStorage()
 
     //
     // https://stackoverflow.com/a/68736333

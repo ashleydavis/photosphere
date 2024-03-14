@@ -52,14 +52,14 @@ public class FileUploader extends Plugin {
     }
 
     @PluginMethod()
-    public void checkPermissions(PluginCall call) {
+    public void checkPermission(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("havePermissions", Environment.isExternalStorageManager());
         call.resolve(ret);
     }
 
     @PluginMethod()
-    public void requestPermissions(PluginCall call) {
+    public void requestPermission(PluginCall call) {
         Log.i("Dbg", "Requesting permissions.");
         Intent intent = new Intent();
         intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
