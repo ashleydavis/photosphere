@@ -1,26 +1,22 @@
-# Photosphere frontend for mobile
+# Photosphere mobile frontend
 
-This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
+This is the mobile frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
 
 ## Pre-reqs
 
 You need [Node.js](https://nodejs.org/) installed to run this code.
 
-To run this frontend you must first run the backend in the directory `../backend`.
-
 ## Setup
 
-Open a terminal and change directory to the frontend project:
+First, follow the instructions in [the mobile readme](../README.md).
+
+Then open a terminal and change directory to the mobile/frontend project:
 
 ```bash
-cd photosphere-monorepo/electron/frontend
+cd mobile/frontend
 ```
 
-Install dependencies:
-
-```bash
-pnpm install
-```
+To enable the frontend you must also run the [backend](../../backend/README.md).
 
 ## Run the Webpack dev server
 

@@ -4,16 +4,12 @@ This is the backend for [the Photosphere application](https://rapidfullstackdeve
 
 ## Setup
 
-Open a terminal and change directory to the backend project:
+First, follow the instructions in [the main readme](../README.md).
+
+Then open a terminal and change directory to the backend project:
 
 ```bash
-cd photosphere-monorepo/backend
-```
-
-Install dependencies:
-
-```bash
-npm install
+cd backend
 ```
 
 ## Run it in development

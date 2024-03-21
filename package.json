@@ -2,7 +2,12 @@
   "name": "photosphere-monorepo",
   "version": "1.0.0",
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
-  "main": "index.js",
+  "scripts": {
+    "c": "pnpm run compile",
+    "cw": "pnpm run compile:watch",
+    "compile": "pnpm --stream -r run compile",
+    "compile:watch": "pnpm --stream -r --parallel run compile:watch"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Rapid-Fullstack-Development/photosphere-monorepo.git"

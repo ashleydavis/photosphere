@@ -1,20 +1,18 @@
-# Photosphere frontend
+# Photosphere web frontend
 
-This is the frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
+This is the web frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
 
 ## Setup
 
-Open a terminal and change directory to the frontend project:
+First, follow the instructions in [the main readme](../README.md).
+
+Then open a terminal and change directory to the frontend project:
 
 ```bash
-cd photosphere-monorepo/frontend
+cd frontend
 ```
 
-Install dependencies:
-
-```bash
-pnpm install
-```
+To enable the frontend you must also run the [backend](../backend/README.md).
 
 ## Run the Webpack dev server
 

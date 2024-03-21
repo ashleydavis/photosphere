@@ -1,4 +1,4 @@
-## Mobile
+## Photosphere mobile
 
 The mobile phone version of [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
 
@@ -12,17 +12,15 @@ The mobile phone version of [the Photosphere application](https://rapidfullstack
 
 ## Setup
 
-Open a terminal and change directory to the Electron project:
+First, follow the instructions in [the main readme](../README.md).
+
+Then open a terminal and change directory to the mobile project:
 
 ```bash
-cd photosphere-monorepo/mobile
+cd mobile
 ```
 
-Install dependencies:
-
-```bash
-ppnpm install
-```
+To enable the frontend you must also run the [backend](../../backend/README.md).
 
 ## Running in development
 

@@ -6,3 +6,5 @@ coverage
 packages/user-interface/build
 frontend/build
 electron/frontend/build
+backend/build
+mobile/frontend/build
