@@ -19,16 +19,8 @@ describe("photosphere backend", () => {
                 return {
                     sort() {
                         return {
-                            skip() {
-                                return {
-                                    limit() {
-                                        return {
-                                            toArray() {
-                                                return [];
-                                            }
-                                        };
-                                    }
-                                };
+                            toArray() {
+                                return [];
                             }
                         };
                     }
@@ -85,7 +77,7 @@ describe("photosphere backend", () => {
     test("no assets", async () => {
 
         const { app } = await initServer();
-        const response = await request(app).get("/assets?skip=0&limit=100");
+        const response = await request(app).get("/assets");
         
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({ 
@@ -538,9 +530,6 @@ describe("photosphere backend", () => {
 
     test("can get assets", async () => {
 
-        const skip = 2;
-        const limit = 3;
-
         const { app, mockCollection } = await initServer();
 
         const mockAsset1: any = {
@@ -556,27 +545,15 @@ describe("photosphere backend", () => {
             return {
                 sort() {
                     return {
-                        skip(value: number) {
-                            expect(value).toBe(skip);
-        
-                            return {
-                                limit(value: number) {
-                                    expect(value).toBe(limit);
-        
-                                    return {
-                                        toArray() {
-                                            return [ mockAsset1, mockAsset2 ];
-                                        },
-                                    };
-                                }
-                            };
+                        toArray() {
+                            return [ mockAsset1, mockAsset2 ];
                         }
                     };
                 }
             };
         };
 
-        const response = await request(app).get(`/assets?skip=${skip}&limit=${limit}`);
+        const response = await request(app).get(`/assets`);
         
         expect(response.statusCode).toBe(200);
         expect(response.body).toEqual({

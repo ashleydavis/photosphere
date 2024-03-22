@@ -48,6 +48,12 @@ Start the application in production mode:
 npm start
 ```
 
+## Run tests
+
+```bash
+npm test
+```
+
 ## Environment variables
 
 - `NODE_ENV`    - Set to "production" to enable AWS cloud storage.
