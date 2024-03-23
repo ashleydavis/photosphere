@@ -1,16 +1,16 @@
-name: Backend Tests
+name: User Interface Tests
 on:
   push:
     branches: 
       - main
     paths:
-      - backend/**
+      - packages/user-interface/**
 
   pull_request:
     branches: 
       - main
     paths:
-      - backend/**
+      - packages/user-interface/**
 
   workflow_dispatch:
 
@@ -45,5 +45,5 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        working-directory: backend
+        working-directory: packages/user-interface
         run: pnpm test
