@@ -98,8 +98,8 @@ const config = {
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run start-for-e2e-tests',
-    port: 1234,
+    command: 'pnpm run start-for-e2e-tests',
+    port: 8080,
   },
 };
 

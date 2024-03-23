@@ -64,7 +64,7 @@ describe("frontend tests", () => {
         const galleryThumb = page.getByTestId("gallery-thumb");
         await expect(galleryThumb).toHaveCount(1);
         await expect(galleryThumb).toBeVisible();
-        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}&key=${apiKey}`);
+        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}`);
 
         const fullsizeAsset = page.getByTestId("fullsize-asset");
         await expect(fullsizeAsset).toHaveCount(0);
@@ -78,7 +78,7 @@ describe("frontend tests", () => {
         await galleryThumb.click();
         await expect(fullsizeAsset).toHaveCount(1);
         await expect(fullsizeAsset).toBeVisible();
-        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}&key=${apiKey}`);
+        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}`);
 
         //
         // Open photo info.
