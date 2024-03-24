@@ -4,7 +4,7 @@ The Electron-based desktop version of [the Photosphere application](https://rapi
 
 ## Pre-reqs
 
-To run the Electron version of Photosphere you must first run the backend (`../backend`) and the Electron-specific frontend (`./frontend`).
+To run the Electron version of Photosphere you must first run [the backend](../backend/README.md).
 
 ## Setup
 
@@ -16,8 +16,6 @@ Then open a terminal and change directory to the Electron project:
 cd electron
 ```
 
-To enable the frontend you must also run the [backend](../../backend/README.md).
-
 ## Run from the dev server
 
 If you are running the Electron frontend in dev mode, start the Electron app like this:
@@ -26,11 +24,14 @@ If you are running the Electron frontend in dev mode, start the Electron app lik
 npm run start:dev
 ```
 
+This command also starts the dev server.
+
 ## Run from the static web page
 
-If you built the Electron frontend to a static webage, start the Electron app like this:
+To build the Electron frontend to a static web page, start the Electron app like this:
 
 ```bash
 npm start
 ```
 
+This command also builds the static version of the web page.
