@@ -7,8 +7,8 @@ The mobile phone version of [the Photosphere application](https://rapidfullstack
 - Node.js.
 - A computer with Android Studio to build for Android.
 - A MacOS computer with Xcode to build for iPhone/iPad. 
-- Run the Photosphere backend (`../backend`).
-- Compile the user-interface code (`../packages/user-interface`).
+- Run [the backend](../backend/README.md).
+- Compile [the user-interface code](../packages/user-interface/README.md).
 
 ## Setup
 
@@ -19,8 +19,6 @@ Then open a terminal and change directory to the mobile project:
 ```bash
 cd mobile
 ```
-
-To enable the frontend you must also run the [backend](../../backend/README.md).
 
 ## Running in development
 

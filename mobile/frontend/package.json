@@ -4,7 +4,7 @@
   "description": "The frontend for the mobile version of the Photosphere application.",
   "source": "src/index.html",
   "scripts": {
-    "start": "cross-env BASE_URL=http://localhost:3000 webpack serve --open",
+    "start": "cross-env BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
     "build": "webpack",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
