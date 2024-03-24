@@ -53,6 +53,13 @@ jobs:
         run: |
           npx playwright install --with-deps
 
+# Uncomment the following lines and add them to the to the next step to see what happens when as the server is started.
+# This can make it easier to see problem.
+#         pnpm run start-for-e2e-tests
+#         echo "Waiting for the server to start"
+#         npx wait-on --interval 1000 8080
+#         echo "Server started"
+
       - name: Run Playwright tests
         working-directory: frontend
         run: |          
