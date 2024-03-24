@@ -15,12 +15,12 @@ describe("frontend tests", () => {
 
     test("can upload asset and then see the asset in the gallery", async ({ page }) => {
 
-        const apiKey = "1234";
+        // const apiKey = "1234";
 
-        page.on("dialog", async dialog => {
-            // Enters the API key into the prompt.
-            await dialog.accept(apiKey);
-        });
+        // page.on("dialog", async dialog => {
+        //     // Enters the API key into the prompt.
+        //     await dialog.accept(apiKey);
+        // });
 
         await page.goto(`${FRONTEND_URL}/upload`);
 
