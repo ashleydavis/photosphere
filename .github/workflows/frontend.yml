@@ -44,6 +44,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Compile code
+        run: pnpm run compile
+
       # https://radekmie.dev/blog/on-playwright-in-github-actions/
       - name: Install Playwright Browsers
         working-directory: frontend
