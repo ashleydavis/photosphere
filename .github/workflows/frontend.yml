@@ -29,17 +29,17 @@ jobs:
         with:
           version: 8.15.5
 
-      - name: Get pnpm cache directory
-        id: pnpm-cache-dir
-        run: echo "::set-output name=dir::$(pnpm cache dir)"
+      # - name: Get pnpm cache directory
+      #   id: pnpm-cache-dir
+      #   run: echo "::set-output name=dir::$(pnpm cache dir)"
 
-      - name: Cache pnpm modules
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.pnpm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+      # - name: Cache pnpm modules
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ${{ steps.pnpm-cache-dir.outputs.dir }}
+      #     key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-pnpm-
 
       - name: Install Dependencies
         run: pnpm install
