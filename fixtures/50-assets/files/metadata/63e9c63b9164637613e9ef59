@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c63b9164637613e9ef59",
+  "origFileName": "v4x6y2q92LI.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 3600,
+  "height": 5408,
+  "description": "a building with a clock tower in the middle of a city",
+  "location": "Denver, CO, USA",
+  "searchText": " a building with a clock tower in the middle of a city Denver, CO, USA",
+  "properties": {
+    "exif": {
+      "make": "NIKON CORPORATION",
+      "model": "NIKON Z 7_2",
+      "name": "NIKON CORPORATION, NIKON Z 7_2",
+      "exposure_time": "1/1000",
+      "aperture": "1.4",
+      "focal_length": "35.0",
+      "iso": 125
+    }
+  },
+  "hash": "63e0696d186d1851b739552b1d4e1e93b9c3cb5a7843e73793ac48da046befe0",
+  "fileDate": "2023-01-23T18:59:57Z",
+  "photoDate": "2023-01-23T18:59:57Z",
+  "sortDate": "2023-01-23T18:59:57Z"
+}

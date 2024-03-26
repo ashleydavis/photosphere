@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c63a9164637613e9ef4f",
+  "origFileName": "KSXGw3K3KY0.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 7262,
+  "height": 4844,
+  "description": "a close up of a toilet seat with the lid down",
+  "location": null,
+  "searchText": " a close up of a toilet seat with the lid down",
+  "properties": {
+    "exif": {
+      "make": "Canon",
+      "model": " EOS R5",
+      "name": "Canon, EOS R5",
+      "exposure_time": "1/800",
+      "aperture": null,
+      "focal_length": null,
+      "iso": 100
+    }
+  },
+  "hash": "ab21d7ac3be13b98855ac39db5e9c9e46c97e848fef2c1876953d8ff586b455e",
+  "fileDate": "2023-02-10T17:25:56Z",
+  "photoDate": "2023-02-10T17:25:56Z",
+  "sortDate": "2023-02-10T17:25:56Z"
+}

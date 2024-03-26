@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c6379164637613e9ef39",
+  "origFileName": "syEwWS2ueXw.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 5000,
+  "height": 7500,
+  "description": "a tray of cookies with the word love spelled out",
+  "location": null,
+  "searchText": " a tray of cookies with the word love spelled out",
+  "properties": {
+    "exif": {
+      "make": "NIKON CORPORATION",
+      "model": "NIKON Z 7_2",
+      "name": "NIKON CORPORATION, NIKON Z 7_2",
+      "exposure_time": "1/500",
+      "aperture": "1.8",
+      "focal_length": "50.0",
+      "iso": 160
+    }
+  },
+  "hash": "abb523db3ba1b12c7624b8a5acc341beaa8d0df028d0301f7aacfde528e1c220",
+  "fileDate": "2023-01-17T16:33:15Z",
+  "photoDate": "2023-01-17T16:33:15Z",
+  "sortDate": "2023-01-17T16:33:15Z"
+}

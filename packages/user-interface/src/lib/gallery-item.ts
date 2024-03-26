@@ -1,3 +1,17 @@
+//
+// Represents a photographer.
+//
+export interface IPhotographer {
+    //
+    // The name of the photographer.
+    //
+    name: string;
+
+    //
+    // The URL of the photographer's website.
+    //
+    url: string;
+}
 
 //
 // Represents an asset that can be displayed in the gallery.

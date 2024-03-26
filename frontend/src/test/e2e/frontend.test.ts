@@ -28,6 +28,8 @@ describe("frontend tests", () => {
         // Clear uploaded assets.
         //
         await fs.remove("../backend/files");
+        await fs.ensureDir("../backend/files/metadata");
+        await fs.ensureDir("../backend/files/hash");
         await fs.ensureDir("../backend/files/original");
         await fs.ensureDir("../backend/files/thumb");
         await fs.ensureDir("../backend/files/display");
@@ -46,7 +48,8 @@ describe("frontend tests", () => {
         while (true) {
             await sleep(1); //TODO: Should wait until progress spinner has hidden.
     
-            uploadedFiles = await fs.readdir("../backend/files/original");
+            uploadedFiles = (await fs.readdir("../backend/files/original"))
+                .filter(file => !file.endsWith(".info")); // Remove info files.
             if (uploadedFiles.length > 0) {
                 break;
             }

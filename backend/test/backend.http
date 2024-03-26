@@ -1,9 +1,3 @@
-#
-# Note: If running these scripts against the production REST API you need
-# might beed to add a "key" header to each that specifies the API key 
-# when that has been enabled in the backend.
-#
-
 @base_url = http://localhost:3000
 
 ###
@@ -61,7 +55,7 @@ POST {{base_url}}/thumb
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 
-< ./test-assets/1.jpeg
+< ./test-assets/2.jpeg
 
 ###
 # Retrieve an thumbnail.
@@ -78,7 +72,7 @@ POST {{base_url}}/display
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 
-< ./test-assets/1.jpeg
+< ./test-assets/3.jpeg
 
 ###
 # Retrieve the display asset.
@@ -126,7 +120,7 @@ Content-Type: application/json
 ###
 # Check if an asset with a particular hash has been uploaded.
 
-@hash = ABCD
+@hash = 1234
 
 GET {{base_url}}/check-asset?hash={{hash}}
 
@@ -134,10 +128,5 @@ GET {{base_url}}/check-asset?hash={{hash}}
 # Retrieve a page of assets.
 #
 
-GET {{base_url}}/assets?skip=0&limit=100
+GET {{base_url}}/assets
 
-###
-# Search for asset.
-#
-
-GET {{base_url}}/assets?skip=0&limit=100&search=great

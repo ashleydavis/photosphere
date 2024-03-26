@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c63c9164637613e9ef60",
+  "origFileName": "u5nuXl4_deQ.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 4000,
+  "height": 3000,
+  "description": "a blue pillow with a bunch of different objects on it",
+  "location": null,
+  "searchText": " a blue pillow with a bunch of different objects on it",
+  "properties": {
+    "exif": {
+      "make": null,
+      "model": null,
+      "name": null,
+      "exposure_time": null,
+      "aperture": null,
+      "focal_length": null,
+      "iso": null
+    }
+  },
+  "hash": "7f76e8f047a9eaea2463e9a3f79429dcb5cdcaf40a16e156fd5020f3e2fdda7a",
+  "fileDate": "2023-01-29T21:52:42Z",
+  "photoDate": "2023-01-29T21:52:42Z",
+  "sortDate": "2023-01-29T21:52:42Z"
+}

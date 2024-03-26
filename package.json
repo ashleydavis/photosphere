@@ -20,7 +20,6 @@
   },
   "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
   "dependencies": {
-    "mongodb": "^5.0.1"
   },
   "devDependencies": {
   }

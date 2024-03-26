@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c6389164637613e9ef3b",
+  "origFileName": "oQ8QAqsWryc.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 4578,
+  "height": 6867,
+  "description": "Hazy Winter Day",
+  "location": "Pikkukosken uimaranta, Helsinki, Finland",
+  "searchText": " Hazy Winter Day Pikkukosken uimaranta, Helsinki, Finland",
+  "properties": {
+    "exif": {
+      "make": "SONY",
+      "model": "ILCE-7M4",
+      "name": "SONY, ILCE-7M4",
+      "exposure_time": "1/125",
+      "aperture": "13.0",
+      "focal_length": "20.0",
+      "iso": 200
+    }
+  },
+  "hash": "5e1cbd39f832e0d67ad4833a91a376e028a560cdc3946b987a987ba8afc7463d",
+  "fileDate": "2023-01-22T21:35:05Z",
+  "photoDate": "2023-01-22T21:35:05Z",
+  "sortDate": "2023-01-22T21:35:05Z"
+}

@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c63a9164637613e9ef4e",
+  "origFileName": "NK9qJ9LRyPc.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 6240,
+  "height": 4160,
+  "description": "a plant in a pot sitting on a table next to a stair case",
+  "location": null,
+  "searchText": " a plant in a pot sitting on a table next to a stair case",
+  "properties": {
+    "exif": {
+      "make": "FUJIFILM",
+      "model": "X100V",
+      "name": "FUJIFILM, X100V",
+      "exposure_time": "1/600",
+      "aperture": "2.2",
+      "focal_length": "23.0",
+      "iso": 640
+    }
+  },
+  "hash": "0664a7ce86769e3754495f8af1205067d6d5f15715c4cf57f795f85cf6a6dd83",
+  "fileDate": "2023-02-09T14:49:56Z",
+  "photoDate": "2023-02-09T14:49:56Z",
+  "sortDate": "2023-02-09T14:49:56Z"
+}

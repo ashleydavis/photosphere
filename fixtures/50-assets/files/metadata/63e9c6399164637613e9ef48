@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c6399164637613e9ef48",
+  "origFileName": "ZTXnyniUaLY.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 6720,
+  "height": 4480,
+  "description": "a man with a beard wearing a hoodie",
+  "location": "Flint, Flint, United States",
+  "searchText": " a man with a beard wearing a hoodie Flint, Flint, United States",
+  "properties": {
+    "exif": {
+      "make": "Canon",
+      "model": " EOS R",
+      "name": "Canon, EOS R",
+      "exposure_time": "1/100",
+      "aperture": "3.2",
+      "focal_length": "50.0",
+      "iso": 100
+    }
+  },
+  "hash": "e6752c9bee24f7427dd85bfc45f0ec9582c951fb37ebfaef9e01950ad1a22a94",
+  "fileDate": "2023-02-02T07:09:20Z",
+  "photoDate": "2023-02-02T07:09:20Z",
+  "sortDate": "2023-02-02T07:09:20Z"
+}

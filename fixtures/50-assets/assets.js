@@ -1,10 +1,9 @@
-const { ObjectId } = require("mongodb");
 
 const assets = [
 
     /* 1 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef32"),
+        "_id" : ("63e9c6379164637613e9ef32"),
         "origFileName" : "kBis_RVfGQM.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -32,7 +31,7 @@ const assets = [
 
     /* 2 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef33"),
+        "_id" : ("63e9c6379164637613e9ef33"),
         "origFileName" : "JOvLQVXf9uA.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -60,7 +59,7 @@ const assets = [
 
     /* 3 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef34"),
+        "_id" : ("63e9c6379164637613e9ef34"),
         "origFileName" : "p9ttlbi5wig.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -88,7 +87,7 @@ const assets = [
 
     /* 4 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef35"),
+        "_id" : ("63e9c6379164637613e9ef35"),
         "origFileName" : "rOuTz5d10k8.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -116,7 +115,7 @@ const assets = [
 
     /* 5 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef36"),
+        "_id" : ("63e9c6379164637613e9ef36"),
         "origFileName" : "jZ5WZaD0v30.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -144,7 +143,7 @@ const assets = [
 
     /* 6 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef37"),
+        "_id" : ("63e9c6379164637613e9ef37"),
         "origFileName" : "To_ZxorMluI.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -172,7 +171,7 @@ const assets = [
 
     /* 7 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef38"),
+        "_id" : ("63e9c6379164637613e9ef38"),
         "origFileName" : "Drh5FTN_tvU.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -200,7 +199,7 @@ const assets = [
 
     /* 8 */
     {
-        "_id" : new ObjectId("63e9c6379164637613e9ef39"),
+        "_id" : ("63e9c6379164637613e9ef39"),
         "origFileName" : "syEwWS2ueXw.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -228,7 +227,7 @@ const assets = [
 
     /* 9 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3a"),
+        "_id" : ("63e9c6389164637613e9ef3a"),
         "origFileName" : "hKdlHLDZB_c.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -256,7 +255,7 @@ const assets = [
 
     /* 10 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3b"),
+        "_id" : ("63e9c6389164637613e9ef3b"),
         "origFileName" : "oQ8QAqsWryc.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -284,7 +283,7 @@ const assets = [
 
     /* 11 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3c"),
+        "_id" : ("63e9c6389164637613e9ef3c"),
         "origFileName" : "NEmPI4C1D44.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -312,7 +311,7 @@ const assets = [
 
     /* 12 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3d"),
+        "_id" : ("63e9c6389164637613e9ef3d"),
         "origFileName" : "LFq-HxcWT5E.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -340,7 +339,7 @@ const assets = [
 
     /* 13 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3e"),
+        "_id" : ("63e9c6389164637613e9ef3e"),
         "origFileName" : "XpIsQWpxXps.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -368,7 +367,7 @@ const assets = [
 
     /* 14 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef3f"),
+        "_id" : ("63e9c6389164637613e9ef3f"),
         "origFileName" : "mx3RynEbCV4.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -396,7 +395,7 @@ const assets = [
 
     /* 15 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef40"),
+        "_id" : ("63e9c6389164637613e9ef40"),
         "origFileName" : "AecCj5qi88M.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -424,7 +423,7 @@ const assets = [
 
     /* 16 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef41"),
+        "_id" : ("63e9c6389164637613e9ef41"),
         "origFileName" : "TJ3Xl4YgHVs.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -452,7 +451,7 @@ const assets = [
 
     /* 17 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef42"),
+        "_id" : ("63e9c6389164637613e9ef42"),
         "origFileName" : "SMSpk9fprcU.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -480,7 +479,7 @@ const assets = [
 
     /* 18 */
     {
-        "_id" : new ObjectId("63e9c6389164637613e9ef43"),
+        "_id" : ("63e9c6389164637613e9ef43"),
         "origFileName" : "THI4cJ-HGvw.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -508,7 +507,7 @@ const assets = [
 
     /* 19 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef44"),
+        "_id" : ("63e9c6399164637613e9ef44"),
         "origFileName" : "sW8AATej1Xc.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -536,7 +535,7 @@ const assets = [
 
     /* 20 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef45"),
+        "_id" : ("63e9c6399164637613e9ef45"),
         "origFileName" : "b2873V_RcEw.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -564,7 +563,7 @@ const assets = [
 
     /* 21 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef46"),
+        "_id" : ("63e9c6399164637613e9ef46"),
         "origFileName" : "fO7tnJ3t5dY.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -592,7 +591,7 @@ const assets = [
 
     /* 22 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef47"),
+        "_id" : ("63e9c6399164637613e9ef47"),
         "origFileName" : "Wlvi9rtFOm8.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -620,7 +619,7 @@ const assets = [
 
     /* 23 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef48"),
+        "_id" : ("63e9c6399164637613e9ef48"),
         "origFileName" : "ZTXnyniUaLY.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -648,7 +647,7 @@ const assets = [
 
     /* 24 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef49"),
+        "_id" : ("63e9c6399164637613e9ef49"),
         "origFileName" : "16i3KFIlR7I.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -676,7 +675,7 @@ const assets = [
 
     /* 25 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef4a"),
+        "_id" : ("63e9c6399164637613e9ef4a"),
         "origFileName" : "Hy37gkO-AYs.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -704,7 +703,7 @@ const assets = [
 
     /* 26 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef4b"),
+        "_id" : ("63e9c6399164637613e9ef4b"),
         "origFileName" : "Ie-uzpPyoro.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -732,7 +731,7 @@ const assets = [
 
     /* 27 */
     {
-        "_id" : new ObjectId("63e9c6399164637613e9ef4c"),
+        "_id" : ("63e9c6399164637613e9ef4c"),
         "origFileName" : "x6-w01edyk0.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -760,7 +759,7 @@ const assets = [
 
     /* 28 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef4d"),
+        "_id" : ("63e9c63a9164637613e9ef4d"),
         "origFileName" : "7kpC3MZ5BOg.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -788,7 +787,7 @@ const assets = [
 
     /* 29 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef4e"),
+        "_id" : ("63e9c63a9164637613e9ef4e"),
         "origFileName" : "NK9qJ9LRyPc.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -816,7 +815,7 @@ const assets = [
 
     /* 30 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef4f"),
+        "_id" : ("63e9c63a9164637613e9ef4f"),
         "origFileName" : "KSXGw3K3KY0.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -844,7 +843,7 @@ const assets = [
 
     /* 31 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef50"),
+        "_id" : ("63e9c63a9164637613e9ef50"),
         "origFileName" : "-qDgiE5Vyww.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -872,7 +871,7 @@ const assets = [
 
     /* 32 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef51"),
+        "_id" : ("63e9c63a9164637613e9ef51"),
         "origFileName" : "L0Bte153mM8.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -900,7 +899,7 @@ const assets = [
 
     /* 33 */
     {
-        "_id" : new ObjectId("63e9c63a9164637613e9ef52"),
+        "_id" : ("63e9c63a9164637613e9ef52"),
         "origFileName" : "w3Zc6MHmpmY.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -928,7 +927,7 @@ const assets = [
 
     /* 34 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef53"),
+        "_id" : ("63e9c63b9164637613e9ef53"),
         "origFileName" : "xCSP0fMNDkE.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -956,7 +955,7 @@ const assets = [
 
     /* 35 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef54"),
+        "_id" : ("63e9c63b9164637613e9ef54"),
         "origFileName" : "a5C4QyqXH7I.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -984,7 +983,7 @@ const assets = [
 
     /* 36 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef55"),
+        "_id" : ("63e9c63b9164637613e9ef55"),
         "origFileName" : "WWEFneQ5XAk.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1012,7 +1011,7 @@ const assets = [
 
     /* 37 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef56"),
+        "_id" : ("63e9c63b9164637613e9ef56"),
         "origFileName" : "kp-wF-ZCHRo.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1040,7 +1039,7 @@ const assets = [
 
     /* 38 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef57"),
+        "_id" : ("63e9c63b9164637613e9ef57"),
         "origFileName" : "fZL3vx4pLuM.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1068,7 +1067,7 @@ const assets = [
 
     /* 39 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef58"),
+        "_id" : ("63e9c63b9164637613e9ef58"),
         "origFileName" : "-do1gkYi21c.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1096,7 +1095,7 @@ const assets = [
 
     /* 40 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef59"),
+        "_id" : ("63e9c63b9164637613e9ef59"),
         "origFileName" : "v4x6y2q92LI.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1124,7 +1123,7 @@ const assets = [
 
     /* 41 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef5a"),
+        "_id" : ("63e9c63b9164637613e9ef5a"),
         "origFileName" : "bwOklw2MKXc.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1152,7 +1151,7 @@ const assets = [
 
     /* 42 */
     {
-        "_id" : new ObjectId("63e9c63b9164637613e9ef5b"),
+        "_id" : ("63e9c63b9164637613e9ef5b"),
         "origFileName" : "Xby93pk7tOM.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1180,7 +1179,7 @@ const assets = [
 
     /* 43 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef5c"),
+        "_id" : ("63e9c63c9164637613e9ef5c"),
         "origFileName" : "UHWLE1rrBng.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1208,7 +1207,7 @@ const assets = [
 
     /* 44 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef5d"),
+        "_id" : ("63e9c63c9164637613e9ef5d"),
         "origFileName" : "wfromvPVGhI.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1236,7 +1235,7 @@ const assets = [
 
     /* 45 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef5e"),
+        "_id" : ("63e9c63c9164637613e9ef5e"),
         "origFileName" : "YpUcxEnAy5k.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1264,7 +1263,7 @@ const assets = [
 
     /* 46 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef5f"),
+        "_id" : ("63e9c63c9164637613e9ef5f"),
         "origFileName" : "Ohq7b4-gAmA.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1292,7 +1291,7 @@ const assets = [
 
     /* 47 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef60"),
+        "_id" : ("63e9c63c9164637613e9ef60"),
         "origFileName" : "u5nuXl4_deQ.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1320,7 +1319,7 @@ const assets = [
 
     /* 48 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef61"),
+        "_id" : ("63e9c63c9164637613e9ef61"),
         "origFileName" : "J-Nir7H1j0o.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1348,7 +1347,7 @@ const assets = [
 
     /* 49 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef62"),
+        "_id" : ("63e9c63c9164637613e9ef62"),
         "origFileName" : "7oMcrpVYVwM.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1376,7 +1375,7 @@ const assets = [
 
     /* 50 */
     {
-        "_id" : new ObjectId("63e9c63c9164637613e9ef63"),
+        "_id" : ("63e9c63c9164637613e9ef63"),
         "origFileName" : "rrkau-m9Yec.jpg",
         "contentType" : "image/jpeg",
         "thumbContentType" : "image/jpeg",
@@ -1404,4 +1403,11 @@ const assets = [
 
 ];
 
-module.exports = assets;
+const fs = require("fs");
+
+for (const asset of assets) {
+    // asset.sortDate = asset.photoDate;
+    // fs.writeFileSync(`./files/metadata/${asset._id}`, JSON.stringify(asset, null, 2));
+
+    fs.writeFileSync(`./files/display/${asset._id}.info`, JSON.stringify({ contentType: "image/jpeg" }, null, 2));
+}

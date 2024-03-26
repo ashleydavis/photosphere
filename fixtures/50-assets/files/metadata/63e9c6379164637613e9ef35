@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c6379164637613e9ef35",
+  "origFileName": "rOuTz5d10k8.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 4923,
+  "height": 6154,
+  "description": "a woman with her hands on her hips",
+  "location": null,
+  "searchText": " a woman with her hands on her hips",
+  "properties": {
+    "exif": {
+      "make": "SONY",
+      "model": "ILCE-6300",
+      "name": "SONY, ILCE-6300",
+      "exposure_time": "1/125",
+      "aperture": "2.8",
+      "focal_length": "75.0",
+      "iso": 800
+    }
+  },
+  "hash": "c3638f7d122c33f10c42f6ed792c7954018f050a35b13d1a2ad123f0fee783b6",
+  "fileDate": "2023-01-13T15:21:25Z",
+  "photoDate": "2023-01-13T15:21:25Z",
+  "sortDate": "2023-01-13T15:21:25Z"
+}

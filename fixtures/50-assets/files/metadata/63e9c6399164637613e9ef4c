@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c6399164637613e9ef4c",
+  "origFileName": "x6-w01edyk0.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 5472,
+  "height": 3648,
+  "description": "an aerial view of a beach with rocks and water",
+  "location": null,
+  "searchText": " an aerial view of a beach with rocks and water",
+  "properties": {
+    "exif": {
+      "make": "Hasselblad",
+      "model": "L1D-20c",
+      "name": "Hasselblad, L1D-20c",
+      "exposure_time": "1/240",
+      "aperture": "3.5",
+      "focal_length": "10.3",
+      "iso": 100
+    }
+  },
+  "hash": "69ca616bccac1c64df31c29278f59fbf55ec09c4dafc4ed8ec1d85371fff73b0",
+  "fileDate": "2023-02-05T09:22:19Z",
+  "photoDate": "2023-02-05T09:22:19Z",
+  "sortDate": "2023-02-05T09:22:19Z"
+}

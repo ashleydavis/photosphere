@@ -1,21 +1,70 @@
 import { Readable } from "stream";
 
-export type AssetType = "thumb" | "display" | "original";
+//
+// Partial result of the list operation.
+//
+export interface IListResult {
+    //
+    // The IDs of assets that were found.
+    //
+    assetIds: string[];
+
+    //
+    // If there are more assets to read the contination token is set.
+    //
+    continuation?: string;
+}
+
+//
+// Information about an asset.
+//
+export interface IAssetInfo {
+    //
+    // The content type of the asset.
+    //
+    contentType: string;
+
+    //
+    // The length of the asset in bytes.
+    //
+    length: number;
+}
 
 export interface IStorage {
 
     //
-    // Initialises the storage interface.
+    // List files in storage.
     //
-    init(): Promise<void>;
+    list(type: string, max: number, continuationToken?: string): Promise<IListResult>;
+
+    //
+    // Returns true if the specified asset exists.
+    //
+    exists(type: string, assetId: string): Promise<boolean>;
+
+    //
+    // Gets info about an asset.
+    //
+    info(type: string, assetId: string): Promise<IAssetInfo>;
     
     //
-    // Reads an file from stroage.
+    // Reads a file from storage.
+    // Returns undefined if the file doesn't exist.
     //
-    read(type: AssetType, assetId: string): Readable;
+    read(type: string, assetId: string): Promise<Buffer | undefined>;
+
+    //
+    // Writes a file to storage.
+    //
+    write(type: string, assetId: string, contentType: string, data: Buffer): Promise<void>;
+
+    //
+    // Streams a file from stroage.
+    //
+    readStream(type: string, assetId: string): Readable;
 
     //
     // Writes an input stream to storage.
     //
-    write(type: AssetType, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    writeStream(type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 }

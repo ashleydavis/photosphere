@@ -1,0 +1,27 @@
+{
+  "_id": "63e9c63b9164637613e9ef57",
+  "origFileName": "fZL3vx4pLuM.jpg",
+  "contentType": "image/jpeg",
+  "thumbContentType": "image/jpeg",
+  "displayContentType": "image/jpeg",
+  "width": 4000,
+  "height": 6000,
+  "description": "Paros, Greece.",
+  "location": "Paros, Greece",
+  "searchText": " Paros, Greece. Paros, Greece",
+  "properties": {
+    "exif": {
+      "make": null,
+      "model": null,
+      "name": null,
+      "exposure_time": null,
+      "aperture": null,
+      "focal_length": null,
+      "iso": null
+    }
+  },
+  "hash": "0766b644a3f7b5afa8e260a630e2d639db273ecd24fbcfc7f8211930a44405c0",
+  "fileDate": "2023-01-23T08:21:41Z",
+  "photoDate": "2023-01-23T08:21:41Z",
+  "sortDate": "2023-01-23T08:21:41Z"
+}
