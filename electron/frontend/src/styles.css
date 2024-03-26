@@ -47,16 +47,17 @@ i {
 
 #navbar a {
     padding: 0.25rem;
-    padding-right: 0.5rem; 
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
     border-bottom: 2px solid transparent;
 }
 
 #navbar .active {
-    border-bottom: 2px solid #CCCCCC;
+    border-bottom: 2px solid #B1B1B1;
 }
 
 #sidebar .active>div>div {
-    border-bottom: 2px solid #CCCCCC;
+    border-bottom: 2px solid #B1B1B1;
 }
 
 /* Sidebar */
@@ -85,7 +86,11 @@ i {
 }
 
 @media (min-width: 640px) {
-    #content.open {
+    #navbar.sidebar {
+        padding-left: 201px;
+    }
+
+    #main.sidebar {
         padding-left: 201px;
     }
 }
@@ -110,7 +115,47 @@ i {
 
 
 #main {
-    margin-top: 51px;
+    margin-top: 52px;
+}
+
+#main.search {
+    margin-top: 104px;
+}
+
+/* Gallery */
+
+.gallery-thumb {
+    opacity: 0;
+    animation: fadeInAnimation 0.25s ease-in forwards;
+}
+
+@keyframes fadeInAnimation {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.gallery-scroller {
+    overflow-y: auto;
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */   
+}
+
+.gallery-scroller::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/* Gallery scrollbar */
+
+.gallery-scrollbar {
+    position: fixed;
+    top: 52px;
+    right: 0;
+    height: 100%;
+    border-left: 1px solid rgba(94, 95, 97, 0.541);
 }
 
 /* Drag and drop */
@@ -119,7 +164,7 @@ i {
     border: 2px dashed #ccc;
     border-radius: 20px;
     max-width: 480px;
-    margin: 100px auto;
+    margin: 150px auto;
     padding: 30px;
     background-color: white;
 }
@@ -172,17 +217,34 @@ i {
     bottom: 0;
 }
 
-.photo-container img {
+.photo-container .thumbnail {
     position: absolute;
-    width: auto;
-    height: auto;
     top: 0;
-    bottom: 0;
     left: 0;
     right: 0;
+    bottom: 0;
+    width: 80%;
+    height: 80%;
     margin: auto;
-    max-width: 100vw;
-    max-height: 100vh;
+    object-fit: contain;
+}
+
+.photo-container .full {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 80%;
+    height: 80%;
+    margin: auto;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.photo-container .full.loaded {
+    opacity: 1;
 }
 
 .photo-nav {
