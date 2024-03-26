@@ -1,4 +1,5 @@
 import { createServer } from "./server";
+import { AssetDatabase } from "./services/asset-database";
 import { CloudStorage } from "./services/cloud-storage";
 import { Database } from "./services/database";
 import { FileStorage } from "./services/file-storage";
@@ -16,7 +17,8 @@ async function main() {
         ? new CloudStorage()
         : new FileStorage();
     const database = new Database(storage);
-    const app = await createServer(() => new Date(Date.now()), database, storage);
+    const assetDatabase = new AssetDatabase(database, storage);
+    const app = await createServer(() => new Date(Date.now()), assetDatabase);
 
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);

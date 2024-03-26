@@ -5,11 +5,12 @@ import dayjs from "dayjs";
 import { IStorage } from "./services/storage";
 import { v4 as uuid } from 'uuid';
 import { IDatabase } from "./services/database";
+import { IAssetDatabase } from "./services/asset-database";
 
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, database: IDatabase<IAsset>, storage: IStorage) {
+export async function createServer(now: () => Date, assetDatabase: IAssetDatabase) {
 
     const app = express();
     app.use(cors());
@@ -52,23 +53,6 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
         return value;
     }
 
-    //
-    // Tracks a new hash to an asset id.
-    //
-    async function updateHash(hash: string, assetId: string): Promise<void> {
-        await storage.write("hash", hash, "text/plain", Buffer.from(assetId));
-    }
-
-    //
-    // Reads the assetId that is linked to a hash.
-    //
-    async function readHash(hash: string): Promise<string | undefined> {
-        const buffer = await storage.read("hash", hash);
-        if (!buffer) {
-            return undefined;
-        }
-        return buffer.toString("utf-8");
-    }
 
     //
     // A handler for errors in async route handlers.
@@ -124,9 +108,7 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
             newAsset.properties = metadata.properties;
         }
 
-        await database.setOne(assetId, newAsset);
-
-        await updateHash(hash, assetId);
+        await assetDatabase.addMetadata(assetId, hash, newAsset);
 
         res.json({
             assetId: assetId,
@@ -140,10 +122,11 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
 
         const assetId = req.query.id as string;
         if (!assetId) {
-            throw new Error(`Asset ID not specified in query parameters.`);
+            res.sendStatus(400);
+            return;
         }
 
-        const metadata = await database.getOne(assetId);
+        const metadata = await assetDatabase.getMetadata(assetId);
         if (!metadata) {
             res.sendStatus(404);
             return;
@@ -156,14 +139,9 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
-        
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-        
-        await storage.writeStream("original", assetId.toString(), contentType, req);
-
-        await database.updateOne(assetId, { assetContentType: contentType });
-
+        await assetDatabase.uploadOriginal(assetId, contentType, req);
         res.sendStatus(200);
     })); 
 
@@ -178,32 +156,26 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
             return;
         }
 
-        const assetInfo = await storage.info("original", assetId);
-        if (!assetInfo) {
+        const assetStream = await assetDatabase.streamOriginal(assetId);
+        if (!assetStream) {
             res.sendStatus(404);
             return;
         }
 
         res.writeHead(200, {
-            "Content-Type": assetInfo.contentType,
+            "Content-Type": assetStream.contentType,
         });
 
-        const stream = storage.readStream("original", assetId);
-        stream.pipe(res);
+        assetStream.stream.pipe(res);
     }));
 
     //
     // Uploads a thumbnail for a particular asset.
     //
     app.post("/thumb", asyncErrorHandler(async (req, res) => {
-        
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-
-        await storage.writeStream("thumb", assetId.toString(), contentType, req);
-
-        await database.updateOne(assetId, { thumbContentType: contentType });
-        
+        await assetDatabase.uploadThumbnail(assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -218,32 +190,26 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
             return;
         }
 
-        const assetInfo = await storage.info("thumb", assetId);
-        if (!assetInfo) {
+        const assetStream = await assetDatabase.streamThumbnail(assetId);
+        if (!assetStream) {
             res.sendStatus(404);
             return;
         }
 
         res.writeHead(200, {
-            "Content-Type": assetInfo.contentType,
+            "Content-Type": assetStream.contentType,
         });
 
-        const stream = await storage.readStream("thumb", assetId);
-        stream.pipe(res);
-    }));
+        assetStream.stream.pipe(res);
+``    }));
 
     //
     // Uploads a display version for a particular asset.
     //
     app.post("/display", asyncErrorHandler(async (req, res) => {
-        
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-        
-        await storage.writeStream("display", assetId.toString(), contentType, req);
-
-        await database.updateOne(assetId, { displayContentType: contentType });
-
+        await assetDatabase.uploadThumbnail(assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -258,43 +224,26 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
             return;
         }
 
-        const assetInfo = await storage.info("display", assetId);
-        if (!assetInfo) {
+        const assetStream = await assetDatabase.streamDisplay(assetId);
+        if (!assetStream) {
             res.sendStatus(404);
             return;
         }
 
-        //
-        // Return the display version of the asset.
-        //
         res.writeHead(200, {
-            "Content-Type": assetInfo.contentType,
+            "Content-Type": assetStream.contentType,
         });
 
-        const stream = await storage.readStream("display", assetId);
-        stream.pipe(res);
+        assetStream.stream.pipe(res);
     }));
 
     //
     // Adds a label to an asset.
     //
     app.post("/asset/add-label", express.json(), asyncErrorHandler(async (req, res) => {
-
         const id = getValue<string>(req.body, "id");
         const label = getValue<string>(req.body, "label");
-
-        const metadata = await database.getOne(id);
-        if (!metadata) {
-            res.sendStatus(404);
-            return;
-        }
-
-        if (!metadata.labels) {
-            metadata.labels = [];
-        }
-        metadata.labels.push(label);
-        await database.setOne(id, metadata);
-
+        await assetDatabase.addLabel(id, label);
         res.sendStatus(200);
     }));
 
@@ -302,21 +251,9 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
     // Removes a label from an asset.
     //
     app.post("/asset/remove-label", express.json(), asyncErrorHandler(async (req, res) => {
-
         const id = getValue<string>(req.body, "id");
         const label = getValue<string>(req.body, "label");
-
-        const metadata = await database.getOne(id);
-        if (!metadata) {
-            res.sendStatus(404);
-            return;
-        }
-
-       if (metadata.labels) {
-            metadata.labels = metadata.labels.filter(l => l !== label);
-            await database.setOne(id, metadata);
-        }
-
+        await assetDatabase.removeLabel(id, label);
         res.sendStatus(200);
     }));
 
@@ -324,12 +261,9 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
     // Sets a description for the asset.
     //
     app.post("/asset/description", express.json(), asyncErrorHandler(async (req, res) => {
-
         const id = getValue<string>(req.body, "id");
         const description = getValue<string>(req.body, "description");
-
-        await database.updateOne(id, { description });
-                
+        await assetDatabase.setDescription(id, description);
         res.sendStatus(200);
     }));
 
@@ -345,7 +279,7 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
         }
 
         // Read the hash map.
-        const assetId = await readHash(hash);
+        const assetId = await assetDatabase.checkAsset(hash);
         if (assetId) {
             // The asset exists.
             res.json({ assetId: assetId });
@@ -360,20 +294,11 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
     // Gets a paginated list of all assets.
     //
     app.get("/assets", asyncErrorHandler(async (req, res) => {
-
         const next = req.query.next as string;
-
-        const result = await storage.list("metadata", 1000, next);
-        const assets = await Promise.all(result.assetIds.map(
-            async assetId => {
-                const asset = await database.getOne(assetId);
-                return asset;
-            }
-        ));
-
+        const result = await assetDatabase.getAssets(next);
         res.json({
-            assets: assets,
-            next: result.continuation,
+            assets: result.assets,
+            next: result.next,
         });    
     }));
 

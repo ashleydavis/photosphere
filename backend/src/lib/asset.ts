@@ -18,21 +18,6 @@ export interface IAsset {
     origFileName: string;
 
     //
-    // The mime type of the asset.
-    //
-    assetContentType?: string;
-
-    //
-    // The mime type of the thumbnail (after one has been set).
-    //
-    thumbContentType?: string;
-
-    //
-    // The mime type of the display asset (after one has been set).
-    //
-    displayContentType?: string;
-
-    //
     // Width of the image or video.
     //
     width: number;
