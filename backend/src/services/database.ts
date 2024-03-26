@@ -47,22 +47,22 @@ export interface IDatabase<RecordT = any> {
     //
     // Sets a new record to the database.
     //
-    setOne(id: string, record: RecordT): Promise<void>;
+    setOne(accountId: string, id: string, record: RecordT): Promise<void>;
 
     //
     // Gets one record by id.
     //
-    getOne(id: string): Promise<RecordT | undefined>;
+    getOne(accountId: string, id: string): Promise<RecordT | undefined>;
 
     //
     // Updates a record in the database.
     //
-    updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void>;
+    updateOne(accountId: string, id: string, recordUpdate: Partial<RecordT>): Promise<void>;
 
     //
     // Gets a page of records from the database.
     //
-    getAll(max: number, next?: string): Promise<IPage<RecordT>>;
+    getAll(accountId: string, max: number, next?: string): Promise<IPage<RecordT>>;
 }
 
 export class Database<RecordT = any> implements IDatabase<RecordT> {
@@ -73,15 +73,15 @@ export class Database<RecordT = any> implements IDatabase<RecordT> {
     //
     // Sets a new record to the database.
     //
-    async setOne(id: string, record: RecordT): Promise<void> {
-        await this.storage.write("metadata", id, "application/json", Buffer.from(JSON.stringify(record)));
+    async setOne(accountId: string, id: string, record: RecordT): Promise<void> {
+        await this.storage.write(accountId, "metadata", id, "application/json", Buffer.from(JSON.stringify(record)));
     }
 
     //
     // Gets one record by id.
     // 
-    async getOne(id: string): Promise<RecordT | undefined> {
-        const buffer = await this.storage.read("metadata", id);
+    async getOne(accountId: string, id: string): Promise<RecordT | undefined> {
+        const buffer = await this.storage.read(accountId, "metadata", id);
         if (!buffer) {
             return undefined;
         }
@@ -92,21 +92,21 @@ export class Database<RecordT = any> implements IDatabase<RecordT> {
     // 
     // Updates a record in the database.
     //
-    async updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void> {
-        const buffer = await this.storage.read("metadata", id);
+    async updateOne(accountId: string, id: string, recordUpdate: Partial<RecordT>): Promise<void> {
+        const buffer = await this.storage.read(accountId, "metadata", id);
         const asset = JSON.parse(buffer!.toString('utf-8'));
         const updated = Object.assign({}, asset, recordUpdate);
-        await this.storage.write("metadata", id, "application/json", Buffer.from(JSON.stringify(updated)));    
+        await this.storage.write(accountId, "metadata", id, "application/json", Buffer.from(JSON.stringify(updated)));    
     }
 
     //
     // Gets a page of records from the database.
     //
-    async getAll(max: number, next?: string): Promise<IPage<RecordT>> {
-        const listResult = await this.storage.list("metadata", max, next);
+    async getAll(accountId: string, max: number, next?: string): Promise<IPage<RecordT>> {
+        const listResult = await this.storage.list(accountId, "metadata", max, next);
         const records: RecordT[] = [];
         for (const assetId of listResult.assetIds) {
-            records.push((await this.getOne(assetId))!);
+            records.push((await this.getOne(accountId, assetId))!);
         }
         
         return {

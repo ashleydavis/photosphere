@@ -35,36 +35,36 @@ export interface IStorage {
     //
     // List files in storage.
     //
-    list(type: string, max: number, continuationToken?: string): Promise<IListResult>;
+    list(accountId: string, type: string, max: number, continuationToken?: string): Promise<IListResult>;
 
     //
     // Returns true if the specified asset exists.
     //
-    exists(type: string, assetId: string): Promise<boolean>;
+    exists(accountId: string, type: string, assetId: string): Promise<boolean>;
 
     //
     // Gets info about an asset.
     //
-    info(type: string, assetId: string): Promise<IAssetInfo>;
+    info(accountId: string, type: string, assetId: string): Promise<IAssetInfo>;
     
     //
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    read(type: string, assetId: string): Promise<Buffer | undefined>;
+    read(accountId: string, type: string, assetId: string): Promise<Buffer | undefined>;
 
     //
     // Writes a file to storage.
     //
-    write(type: string, assetId: string, contentType: string, data: Buffer): Promise<void>;
+    write(accountId: string, type: string, assetId: string, contentType: string, data: Buffer): Promise<void>;
 
     //
     // Streams a file from stroage.
     //
-    readStream(type: string, assetId: string): Readable;
+    readStream(accountId: string, type: string, assetId: string): Readable;
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    writeStream(accountId: string, type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 }

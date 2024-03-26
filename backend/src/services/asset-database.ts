@@ -35,67 +35,67 @@ export interface IAssetDatabase {
     //
     // Adds metadata for a new asset.
     //
-    addMetadata(assetId: string, hash: string, asset: IAsset): Promise<void>;
+    addMetadata(accountId: string, assetId: string, hash: string, asset: IAsset): Promise<void>;
 
     //
     // Gets the metadata for an asset.
     //
-    getMetadata(assetId: string): Promise<IAsset | undefined>;
+    getMetadata(accountId: string, assetId: string): Promise<IAsset | undefined>;
 
     //
     // Upload an original asset.
     //
-    uploadOriginal(assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    uploadOriginal(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 
     //
     // Streams the oirginal asset.
     //
-    streamOriginal(assetId: string): Promise<IAssetStream | undefined>;
+    streamOriginal(accountId: string, assetId: string): Promise<IAssetStream | undefined>;
 
     //
     // Uploads an asset thumbnail.
     //
-    uploadThumbnail(assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    uploadThumbnail(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 
     //
     // Streams the asset thumbnail.
     //
-    streamThumbnail(assetId: string): Promise<IAssetStream | undefined>;
+    streamThumbnail(accountId: string, assetId: string): Promise<IAssetStream | undefined>;
 
     //
     // Uploads the display resolution asset.
     //
-    uploadDisplay(assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    uploadDisplay(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
 
     //
     // Streams the display resolution asset.
     //
-    streamDisplay(assetId: string): Promise<IAssetStream | undefined>;
+    streamDisplay(accountId: string, assetId: string): Promise<IAssetStream | undefined>;
 
     //
     // Adds a label.
     //
-    addLabel(assetId: string, label: string): Promise<void>;
+    addLabel(accountId: string, assetId: string, label: string): Promise<void>;
 
     // 
     // Removes a label.
     //
-    removeLabel(assetId: string, label: string): Promise<void>;
+    removeLabel(accountId: string, assetId: string, label: string): Promise<void>;
 
     //
     // Sets the description.
     //
-    setDescription(assetId: string, description: string): Promise<void>;
+    setDescription(accountId: string, assetId: string, description: string): Promise<void>;
 
     //
     // Checks if the asset exists based on a hash.
     //
-    checkAsset(hash: string): Promise<string | undefined>;
+    checkAsset(accountId: string, hash: string): Promise<string | undefined>;
 
     //
     // Gets the list of all assets.
     //
-    getAssets(next?: string): Promise<IAssetsResult>;
+    getAssets(accountId: string, next?: string): Promise<IAssetsResult>;
 }
 
 export class AssetDatabase {
@@ -106,15 +106,15 @@ export class AssetDatabase {
     //
     // Tracks a new hash to an asset id.
     //
-    private async updateHash(hash: string, assetId: string): Promise<void> {
-        await this.storage.write("hash", hash, "text/plain", Buffer.from(assetId));
+    private async updateHash(accountId: string, hash: string, assetId: string): Promise<void> {
+        await this.storage.write(accountId, "hash", hash, "text/plain", Buffer.from(assetId));
     }
 
     //
     // Reads the assetId that is linked to a hash.
     //
-    private async readHash(hash: string): Promise<string | undefined> {
-        const buffer = await this.storage.read("hash", hash);
+    private async readHash(accountId: string, hash: string): Promise<string | undefined> {
+        const buffer = await this.storage.read(accountId, "hash", hash);
         if (!buffer) {
             return undefined;
         }
@@ -124,89 +124,89 @@ export class AssetDatabase {
     //
     // Adds metadata for a new asset.
     //
-    async addMetadata(assetId: string, hash: string, asset: IAsset): Promise<void> {
-        await this.database.setOne(assetId, asset);
-        await this.updateHash(hash, assetId);
+    async addMetadata(accountId: string, assetId: string, hash: string, asset: IAsset): Promise<void> {
+        await this.database.setOne(accountId, assetId, asset);
+        await this.updateHash(accountId, hash, assetId);
     }
 
     //
     // Gets the metadata for an asset.
     //
-    async getMetadata(assetId: string): Promise<IAsset | undefined> {
-        return this.database.getOne(assetId);
+    async getMetadata(accountId: string, assetId: string): Promise<IAsset | undefined> {
+        return this.database.getOne(accountId, assetId);
     }
 
     //
     // Uploads an original asset.
     //
-    async uploadOriginal(assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream("original", assetId, contentType, inputStream);
+    async uploadOriginal(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+        await this.storage.writeStream(accountId, "original", assetId, contentType, inputStream);
     }
 
     //
     // Streams the original asset.
     //
-    async streamOriginal(assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info("original", assetId);
+    async streamOriginal(accountId: string, assetId: string): Promise<IAssetStream | undefined> {
+        const info = await this.storage.info(accountId, "original", assetId);
         if (!info) {
             return undefined;
         }
 
         return {
             contentType: info.contentType,
-            stream: this.storage.readStream("original", assetId),
+            stream: this.storage.readStream(accountId, "original", assetId),
         };
     }
 
     //
     // Uploads an asset thumbnail.
     //
-    async uploadThumbnail(assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream("thumb", assetId, contentType, inputStream);
+    async uploadThumbnail(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+        await this.storage.writeStream(accountId, "thumb", assetId, contentType, inputStream);
     }
 
     //
     // Streams the asset thumbnail.
     //
-    async streamThumbnail(assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info("thumb", assetId);
+    async streamThumbnail(accountId: string, assetId: string): Promise<IAssetStream | undefined> {
+        const info = await this.storage.info(accountId, "thumb", assetId);
         if (!info) {
             return undefined;
         }
 
         return {
             contentType: info.contentType,
-            stream: this.storage.readStream("thumb", assetId),
+            stream: this.storage.readStream(accountId, "thumb", assetId),
         };
     }
 
     //
     // Uploads the display resolution asset.
     //
-    async uploadDisplay(assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream("display", assetId, contentType, inputStream);
+    async uploadDisplay(accountId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+        await this.storage.writeStream(accountId, "display", assetId, contentType, inputStream);
     }
 
     //
     // Streams the display resolution asset.
     //
-    async streamDisplay(assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info("display", assetId);
+    async streamDisplay(accountId: string, assetId: string): Promise<IAssetStream | undefined> {
+        const info = await this.storage.info(accountId, "display", assetId);
         if (!info) {
             return undefined;
         }
 
         return {
             contentType: info.contentType,
-            stream: this.storage.readStream("display", assetId),
+            stream: this.storage.readStream(accountId, "display", assetId),
         };
     }
 
     //
     // Adds a label.
     //
-    async addLabel(assetId: string, label: string): Promise<void> {
-        const asset = await this.database.getOne(assetId);
+    async addLabel(accountId: string, assetId: string, label: string): Promise<void> {
+        const asset = await this.database.getOne(accountId, assetId);
         if (!asset) {
             throw new Error(`Asset ${assetId} not found.`);
         }
@@ -216,45 +216,45 @@ export class AssetDatabase {
         }
 
         asset.labels.push(label);
-        await this.database.setOne(assetId, asset);
+        await this.database.setOne(accountId, assetId, asset);
     }
 
     // 
     // Removes a label.
     //
-    async removeLabel(assetId: string, label: string): Promise<void> {
-        const asset = await this.database.getOne(assetId);
+    async removeLabel(accountId: string, assetId: string, label: string): Promise<void> {
+        const asset = await this.database.getOne(accountId, assetId);
         if (!asset) {
             throw new Error(`Asset ${assetId} not found.`);
         }
 
         if (asset.labels) {
             asset.labels = asset.labels.filter(l => l !== label);
-            await this.database.setOne(assetId, asset);
+            await this.database.setOne(accountId, assetId, asset);
         }
     }
 
     //
     // Sets the description.
     //
-    async setDescription(assetId: string, description: string): Promise<void> {
-        await this.database.updateOne(assetId, { description });
+    async setDescription(accountId: string, assetId: string, description: string): Promise<void> {
+        await this.database.updateOne(accountId, assetId, { description });
     }
 
     //
     // Checks if the asset exists based on a hash.
     //
-    async checkAsset(hash: string): Promise<string | undefined> {
-        return this.readHash(hash);
+    async checkAsset(accountId: string, hash: string): Promise<string | undefined> {
+        return this.readHash(accountId, hash);
     }
 
     //
     // Gets a paginated list of all assets.
     //
-    async getAssets(next?: string): Promise<IAssetsResult> {
-        const result = await this.storage.list("metadata", 1000, next);
+    async getAssets(accountId: string, next?: string): Promise<IAssetsResult> {
+        const result = await this.storage.list(accountId, "metadata", 1000, next);
         const assets = await Promise.all(result.assetIds
-            .map(assetId => this.database.getOne(assetId))
+            .map(assetId => this.database.getOne(accountId, assetId))
         );  
         return {
             assets: assets.filter(asset => asset !== undefined) as IAsset[],

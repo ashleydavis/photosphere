@@ -2,10 +2,10 @@ import express, { Request } from "express";
 import cors from "cors";
 import { IAsset } from "./lib/asset";
 import dayjs from "dayjs";
-import { IStorage } from "./services/storage";
 import { v4 as uuid } from 'uuid';
-import { IDatabase } from "./services/database";
 import { IAssetDatabase } from "./services/asset-database";
+
+const accountId = "test-account";
 
 //
 // Starts the REST API.
@@ -108,7 +108,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             newAsset.properties = metadata.properties;
         }
 
-        await assetDatabase.addMetadata(assetId, hash, newAsset);
+        await assetDatabase.addMetadata(accountId, assetId, hash, newAsset);
 
         res.json({
             assetId: assetId,
@@ -126,7 +126,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const metadata = await assetDatabase.getMetadata(assetId);
+        const metadata = await assetDatabase.getMetadata(accountId, assetId);
         if (!metadata) {
             res.sendStatus(404);
             return;
@@ -141,7 +141,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/asset", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadOriginal(assetId, contentType, req);
+        await assetDatabase.uploadOriginal(accountId, assetId, contentType, req);
         res.sendStatus(200);
     })); 
 
@@ -156,7 +156,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const assetStream = await assetDatabase.streamOriginal(assetId);
+        const assetStream = await assetDatabase.streamOriginal(accountId, assetId);
         if (!assetStream) {
             res.sendStatus(404);
             return;
@@ -175,7 +175,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/thumb", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadThumbnail(assetId, contentType, req);
+        await assetDatabase.uploadThumbnail(accountId, assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -190,7 +190,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const assetStream = await assetDatabase.streamThumbnail(assetId);
+        const assetStream = await assetDatabase.streamThumbnail(accountId, assetId);
         if (!assetStream) {
             res.sendStatus(404);
             return;
@@ -209,7 +209,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/display", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
         const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadThumbnail(assetId, contentType, req);
+        await assetDatabase.uploadThumbnail(accountId, assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -224,7 +224,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const assetStream = await assetDatabase.streamDisplay(assetId);
+        const assetStream = await assetDatabase.streamDisplay(accountId, assetId);
         if (!assetStream) {
             res.sendStatus(404);
             return;
@@ -243,7 +243,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/asset/add-label", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
         const label = getValue<string>(req.body, "label");
-        await assetDatabase.addLabel(id, label);
+        await assetDatabase.addLabel(accountId, id, label);
         res.sendStatus(200);
     }));
 
@@ -253,7 +253,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/asset/remove-label", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
         const label = getValue<string>(req.body, "label");
-        await assetDatabase.removeLabel(id, label);
+        await assetDatabase.removeLabel(accountId, id, label);
         res.sendStatus(200);
     }));
 
@@ -263,7 +263,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/asset/description", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
         const description = getValue<string>(req.body, "description");
-        await assetDatabase.setDescription(id, description);
+        await assetDatabase.setDescription(accountId, id, description);
         res.sendStatus(200);
     }));
 
@@ -279,7 +279,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         }
 
         // Read the hash map.
-        const assetId = await assetDatabase.checkAsset(hash);
+        const assetId = await assetDatabase.checkAsset(accountId, hash);
         if (assetId) {
             // The asset exists.
             res.json({ assetId: assetId });
@@ -295,7 +295,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.get("/assets", asyncErrorHandler(async (req, res) => {
         const next = req.query.next as string;
-        const result = await assetDatabase.getAssets(next);
+        const result = await assetDatabase.getAssets(accountId, next);
         res.json({
             assets: result.assets,
             next: result.next,

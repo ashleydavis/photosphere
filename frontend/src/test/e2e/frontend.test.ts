@@ -21,11 +21,6 @@ describe("frontend tests", () => {
         // Clear uploaded assets.
         //
         await fs.remove("../backend/files");
-        await fs.ensureDir("../backend/files/metadata");
-        await fs.ensureDir("../backend/files/hash");
-        await fs.ensureDir("../backend/files/original");
-        await fs.ensureDir("../backend/files/thumb");
-        await fs.ensureDir("../backend/files/display");
         
         //
         // Uploads an image.

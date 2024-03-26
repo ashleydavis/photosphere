@@ -106,7 +106,7 @@ describe("photosphere backend", () => {
         expect(assetId.length).toBeGreaterThan(0);
 
         expect(mockAssetDatabase.addMetadata).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.addMetadata).toHaveBeenCalledWith(assetId, hash, {
+        expect(mockAssetDatabase.addMetadata).toHaveBeenCalledWith("test-account", assetId, hash, {
             _id: assetId,
             origFileName: metadata.fileName,
             width: metadata.width,
@@ -145,7 +145,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledWith(assetId, contentType, expect.any(IncomingMessage));
+        expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledWith("test-account", assetId, contentType, expect.any(IncomingMessage));
     });
 
     test("upload thumbnail", async () => {
@@ -170,7 +170,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledWith(assetId, contentType, expect.any(IncomingMessage));
+        expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledWith("test-account", assetId, contentType, expect.any(IncomingMessage));
     });
 
     //
@@ -453,7 +453,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.addLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.addLabel).toHaveBeenCalledWith(assetId, label);
+        expect(mockAssetDatabase.addLabel).toHaveBeenCalledWith("test-account", assetId, label);
     });
 
     test("can remove label from asset", async () => {
@@ -476,7 +476,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.removeLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.removeLabel).toHaveBeenCalledWith(assetId, label);
+        expect(mockAssetDatabase.removeLabel).toHaveBeenCalledWith("test-account", assetId, label);
     });
 
     test("can set description for asset", async () => {
@@ -499,7 +499,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.setDescription).toBeCalledTimes(1);
-        expect(mockAssetDatabase.setDescription).toHaveBeenCalledWith(assetId, description);
+        expect(mockAssetDatabase.setDescription).toHaveBeenCalledWith("test-account", assetId, description);
     });
 });
 
