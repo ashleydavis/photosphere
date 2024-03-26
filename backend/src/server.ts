@@ -6,8 +6,6 @@ import { IStorage } from "./services/storage";
 import { v4 as uuid } from 'uuid';
 import { IDatabase } from "./services/database";
 
-const API_KEY = process.env.API_KEY;
-
 //
 // Starts the REST API.
 //
@@ -15,23 +13,6 @@ export async function createServer(now: () => Date, database: IDatabase<IAsset>,
 
     const app = express();
     app.use(cors());
-
-    if (API_KEY) {
-        //
-        // Authenticates with an API key.
-        // All routes after this must provide the API key.
-        //
-        app.use((req, res, next) => {
-            if (req.query.key === API_KEY || req.headers.key === API_KEY) {
-                // Allow the request.
-                next();
-                return;
-            }
-            
-            // Disallow the request.
-            res.sendStatus(403);
-        });
-    }
 
     //
     // Gets the value of a header from the request.
