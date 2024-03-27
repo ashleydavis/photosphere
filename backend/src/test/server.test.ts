@@ -5,12 +5,12 @@ import { Readable } from "stream";
 import { AddressInfo } from "net";
 import axios from "axios";
 import http, { IncomingMessage } from "http";
-import { IAsset } from "../lib/asset";
-import { mock } from "node:test";
 
 describe("photosphere backend", () => {
 
     const dateNow = dayjs("2023-02-08T01:27:01.419Z").toDate();
+    const accountId = "automated-tests-account";
+    const apiKey = "1234";
 
     let servers: http.Server[] = [];
 
@@ -19,7 +19,7 @@ describe("photosphere backend", () => {
     //
     async function initServer() {
         const mockAssetDatabase: any = {};
-        const app = await createServer(() => dateNow, mockAssetDatabase);
+        const app = await createServer(() => dateNow, mockAssetDatabase, apiKey);
 
         const server = app.listen();
         servers.push(server);
@@ -67,7 +67,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.getAssets = async () => ({ assets: [] });
 
-        const response = await axios.get(`${baseUrl}/assets`);
+        const response = await axios.get(`${baseUrl}/assets?acc=${accountId}&key=${apiKey}`);
 
         expect(response.status).toBe(200);
         expect(response.data).toEqual({ assets: [] });
@@ -81,6 +81,7 @@ describe("photosphere backend", () => {
 
         const hash = "!234";
         const metadata = {
+            acc: accountId,
             fileName: "a-test-file.jpg",
             contentType: "image/jpeg",
             width: 256,
@@ -97,7 +98,11 @@ describe("photosphere backend", () => {
             ],
         };
 
-        const response = await axios.post(`${baseUrl}/metadata`, metadata);
+        const response = await axios.post(`${baseUrl}/metadata`, metadata, {
+            headers: {
+                "key": apiKey,
+            },
+        });
 
         const assetId = response.data.assetId;
 
@@ -106,7 +111,7 @@ describe("photosphere backend", () => {
         expect(assetId.length).toBeGreaterThan(0);
 
         expect(mockAssetDatabase.addMetadata).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.addMetadata).toHaveBeenCalledWith("test-account", assetId, hash, {
+        expect(mockAssetDatabase.addMetadata).toHaveBeenCalledWith(accountId, assetId, hash, {
             _id: assetId,
             origFileName: metadata.fileName,
             width: metadata.width,
@@ -136,8 +141,10 @@ describe("photosphere backend", () => {
             fs.readFileSync("./test/test-assets/1.jpeg"),
             {
                 headers: { 
-                    'id': assetId,
-                    'Content-Type': contentType,
+                    "acc": accountId,
+                    "id": assetId,
+                    "Content-Type": contentType,
+                    "key": apiKey,
                 },
             }
         );
@@ -145,7 +152,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledWith("test-account", assetId, contentType, expect.any(IncomingMessage));
+        expect(mockAssetDatabase.uploadOriginal).toHaveBeenCalledWith(accountId, assetId, contentType, expect.any(IncomingMessage));
     });
 
     test("upload thumbnail", async () => {
@@ -161,8 +168,10 @@ describe("photosphere backend", () => {
             `${baseUrl}/thumb`, 
             fs.readFileSync("./test/test-assets/1.jpeg"), {
                 headers: { 
-                    'id': assetId, 
-                    'Content-Type': contentType,
+                    "acc": accountId,
+                    "id": assetId,
+                    "Content-Type": contentType,
+                    "key": apiKey,
                 },
             }
         );
@@ -170,7 +179,7 @@ describe("photosphere backend", () => {
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledTimes(1);
-        expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledWith("test-account", assetId, contentType, expect.any(IncomingMessage));
+        expect(mockAssetDatabase.uploadThumbnail).toHaveBeenCalledWith(accountId, assetId, contentType, expect.any(IncomingMessage));
     });
 
     //
@@ -186,7 +195,11 @@ describe("photosphere backend", () => {
         const augumented = Object.assign({}, metadata);
         delete augumented[missingField];
 
-        const response = await axios.post(`${baseUrl}/metadata`, augumented);
+        const response = await axios.post(`${baseUrl}/metadata`, augumented, {
+            headers: {
+                "key": apiKey,
+            },
+        });
     
         expect(response.status).toBe(500);
     }
@@ -194,6 +207,7 @@ describe("photosphere backend", () => {
     test("upload asset with missing headers", async () => {
 
         const metadata = {
+            acc: accountId,
             fileName: "a-test-file.jpg",
             width: 256,
             height: 1024,
@@ -219,6 +233,7 @@ describe("photosphere backend", () => {
         mockAssetDatabase.setOne = jest.fn();
 
         const defaultMetadata = {
+            acc: accountId,
             fileName: "a-test-file.jpg",
             contentType: "image/jpeg",
             width: 256,
@@ -237,7 +252,11 @@ describe("photosphere backend", () => {
 
         const uploadMetadata = Object.assign({}, defaultMetadata, metadata);
 
-        return await axios.post(`${baseUrl}/metadata`, uploadMetadata);
+        return await axios.post(`${baseUrl}/metadata`, uploadMetadata, {
+            headers: {
+                "key": apiKey,
+            },
+        });
     }
     
     //
@@ -275,7 +294,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -288,7 +307,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.streamOriginal = async () => undefined;
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(404);
     });
 
@@ -296,7 +315,7 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/asset`);
+        const response = await axios.get(`${baseUrl}/asset?acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(400);
     });
 
@@ -313,7 +332,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -326,7 +345,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.streamThumbnail = () => undefined;
 
-        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(404);
     });
 
@@ -334,7 +353,7 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/thumb`);
+        const response = await axios.get(`${baseUrl}/thumb?acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(400);
     });
 
@@ -351,7 +370,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/display?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/display?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -364,7 +383,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.streamDisplay = async () => undefined;
 
-        const response = await axios.get(`${baseUrl}/display?id=${assetId}`);
+        const response = await axios.get(`${baseUrl}/display?id=${assetId}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(404);
     });
 
@@ -372,7 +391,7 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/display`);
+        const response = await axios.get(`${baseUrl}/display?acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(400);
     });
 
@@ -384,7 +403,7 @@ describe("photosphere backend", () => {
         mockAssetDatabase.checkAsset = async () => assetId;
         
         const hash = "ABCD";
-        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}`);
+        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&acc=${accountId}&key=${apiKey}`);
         expect(response.status).toBe(200);
         expect(response.data.assetId).toEqual(assetId);
     });
@@ -396,7 +415,11 @@ describe("photosphere backend", () => {
         mockAssetDatabase.checkAsset = async () => undefined;
                     
         const hash = "1234";
-        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}`);
+        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&acc=${accountId}`,  {
+            headers: {
+                "key": apiKey,
+            },
+        });
         expect(response.status).toBe(200);
         expect(response.data.assetId).toBeUndefined();
     });
@@ -405,7 +428,11 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/check-asset`);
+        const response = await axios.get(`${baseUrl}/check-asset?acc=${accountId}`, {
+            headers: {
+                "key": apiKey,
+            },
+        });
         expect(response.status).toBe(400);
     });
 
@@ -425,7 +452,11 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.getAssets = async () => ({ assets: [ mockAsset1, mockAsset2 ] });
 
-        const response = await axios.get(`${baseUrl}/assets`);
+        const response = await axios.get(`${baseUrl}/assets?acc=${accountId}`, {
+            headers: {
+                "key": apiKey,
+            },
+        });
         
         expect(response.status).toBe(200);
         expect(response.data).toEqual({
@@ -445,15 +476,21 @@ describe("photosphere backend", () => {
         const response = await axios.post(
             `${baseUrl}/asset/add-label`, 
             {
+                acc: accountId,
                 id: assetId,
                 label: label,
+            },
+            {
+                headers: {
+                    "key": apiKey,
+                },
             }
         );
 
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.addLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.addLabel).toHaveBeenCalledWith("test-account", assetId, label);
+        expect(mockAssetDatabase.addLabel).toHaveBeenCalledWith(accountId, assetId, label);
     });
 
     test("can remove label from asset", async () => {
@@ -468,15 +505,21 @@ describe("photosphere backend", () => {
         const response = await axios.post(
             `${baseUrl}/asset/remove-label`,
             {
+                acc: accountId,
                 id: assetId,
                 label: label,
+            },
+            {
+                headers: {
+                    "key": apiKey,
+                },
             }
         );
 
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.removeLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.removeLabel).toHaveBeenCalledWith("test-account", assetId, label);
+        expect(mockAssetDatabase.removeLabel).toHaveBeenCalledWith(accountId, assetId, label);
     });
 
     test("can set description for asset", async () => {
@@ -491,15 +534,21 @@ describe("photosphere backend", () => {
         const response = await axios.post(
             `${baseUrl}/asset/description`,
             {
+                acc: accountId,
                 id: assetId,
                 description: description,
+            },
+            {
+                headers: {
+                    "key": apiKey,
+                },
             }
         );
 
         expect(response.status).toBe(200);
 
         expect(mockAssetDatabase.setDescription).toBeCalledTimes(1);
-        expect(mockAssetDatabase.setDescription).toHaveBeenCalledWith("test-account", assetId, description);
+        expect(mockAssetDatabase.setDescription).toHaveBeenCalledWith(accountId, assetId, description);
     });
 });
 

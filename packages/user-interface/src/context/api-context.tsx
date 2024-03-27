@@ -67,60 +67,60 @@ export function ApiContextProvider({ children }: IProps) {
 
     const accountId = "test-account";
 
-    // //
-    // // The user's API key, once that is set.
-    // //
-    // let apiKey: string | undefined = undefined;
+    //
+    // The user's API key, once that is set.
+    //
+    let apiKey: string | undefined = undefined;
 
-    // //
-    // // Requests the API key from the the user.
-    // //
-    // function  requestApiKey(): Promise<string> {
-    //     return new Promise<string>((resolve, reject) => {
-    //         const apiKey = window.promp   t("Please enter your API key (just type anything if running against a development backend).");
-    //         if (apiKey) {
-    //             resolve(apiKey);
-    //         }
-    //         else {
-    //             reject(new Error("User didn't provide an API key."));
-    //         }
-    //     });
-    // }
+    //
+    // Requests the API key from the the user.
+    //
+    function  requestApiKey(): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            const apiKey = window.prompt("Please enter your API key (usually 1234 when running against a development backend).");
+            if (apiKey) {
+                resolve(apiKey);
+            }
+            else {
+                reject(new Error("User didn't provide an API key."));
+            }
+        });
+    }
 
     //
     // Gets the users API key.
     //
-    // async function getApiKey(): Promise<string> {
-    //     if (!apiKey) {
-    //         //
-    //         // Try to load the key from local storaage.
-    //         //
-    //         apiKey = await localStorage.get("key");
-    //         if (!apiKey) {
-    //             //
-    //             // Use the user to enter the key.
-    //             //
-    //             apiKey = await requestApiKey();
-    //             if (apiKey) {
-    //                 //
-    //                 // Save the key in local storage for next time.
-    //                 //
-    //                 await localStorage.set("key", apiKey);
-    //             }
-    //         }
-    //     }
+    async function getApiKey(): Promise<string> {
+        if (!apiKey) {
+            //
+            // Try to load the key from local storaage.
+            //
+            apiKey = await localStorage.get("key");
+            if (!apiKey) {
+                //
+                // Use the user to enter the key.
+                //
+                apiKey = await requestApiKey();
+                if (apiKey) {
+                    //
+                    // Save the key in local storage for next time.
+                    //
+                    await localStorage.set("key", apiKey);
+                }
+            }
+        }
         
-    //     return apiKey;
-    // }
+        return apiKey;
+    }
 
     //
     // Makes a full URL to a route in the REST API.
     //
     function makeUrl(route: string): string {
         let url = `${BASE_URL}${route}&acc=${accountId}`;
-        // if (apiKey) {
-        //     url += `&key=${apiKey}`;
-        // }
+        if (apiKey) {
+            url += `&key=${apiKey}`;
+        }
         return url;
     }
 
@@ -130,12 +130,13 @@ export function ApiContextProvider({ children }: IProps) {
     async function getAssets(): Promise<IGalleryItem[]> {
         let url = `${BASE_URL}/assets?acc=${accountId}`;
 
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
         const { data } = await axios.get(
             url, 
             { 
                 headers: { 
-                    // "key": apiKey,
+                    "acc": accountId,
+                    "key": apiKey,
                 },
             }
         );
@@ -153,13 +154,14 @@ export function ApiContextProvider({ children }: IProps) {
     // Check if an asset is already uploaded using its hash.
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
         const url = `${BASE_URL}/check-asset?hash=${hash}&acc=${accountId}`;
         const response = await axios.get(
             url, 
             {
                 headers: {
-                    // "key": apiKey,
+                    "acc": accountId,
+                    "key": apiKey,
                 },
             }
         );
@@ -170,10 +172,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Uploads an asset to the backend.
     //
     async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
-        //
-        // Uploads the full asset and metadata.
-        //
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
 
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
@@ -191,7 +190,8 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    // "key": apiKey,
+                    "acc": accountId,
+                    "key": apiKey,
                 },
             }
         );
@@ -206,10 +206,10 @@ export function ApiContextProvider({ children }: IProps) {
             uploadDetails.file, 
             {
                 headers: {
+                    "acc": accountId,
                     "content-type": uploadDetails.assetContentType,
                     "id": assetId,
-                    "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );
@@ -223,10 +223,10 @@ export function ApiContextProvider({ children }: IProps) {
             thumnailBlob, 
             {
                 headers: {
+                    "acc": accountId,
                     "content-type": uploadDetails.thumbContentType,
                     "id": assetId,
-                    "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );
@@ -240,10 +240,10 @@ export function ApiContextProvider({ children }: IProps) {
             displayBlob, 
             {
                 headers: {
+                    "acc": accountId,
                     "content-type": uploadDetails.displayContentType,
                     "id": assetId,
-                    "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );
@@ -256,7 +256,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Adds a label to an asset.
     //
     async function addLabel(id: string, labelName: string): Promise<void> {
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
                 id: id,
@@ -265,7 +265,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );
@@ -275,7 +275,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Renmoves a label from an asset.
     //
     async function removeLabel(id: string, labelName: string): Promise<void> {
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
@@ -285,7 +285,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );
@@ -295,7 +295,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Sets a description for an asset.
     //
     async function setDescription(id: string, description: string): Promise<void> {
-        // const apiKey = await getApiKey();
+        const apiKey = await getApiKey();
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {
@@ -305,7 +305,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    // "key": apiKey,
+                    "key": apiKey,
                 },
             }
         );

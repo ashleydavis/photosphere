@@ -13,12 +13,17 @@ async function main() {
         throw new Error(`Set environment variable PORT.`);
     }
 
+    const API_KEY = process.env.API_KEY;
+    if (!API_KEY) {
+        throw new Error("API_KEY environment variable not set.");
+    }
+
     const storage = process.env.NODE_ENV === "production"
         ? new CloudStorage()
         : new FileStorage();
     const database = new Database(storage);
     const assetDatabase = new AssetDatabase(database, storage);
-    const app = await createServer(() => new Date(Date.now()), assetDatabase);
+    const app = await createServer(() => new Date(Date.now()), assetDatabase, API_KEY);
 
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);

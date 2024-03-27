@@ -8,10 +8,25 @@ import { IAssetDatabase } from "./services/asset-database";
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetDatabase: IAssetDatabase) {
+export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, apiKey: string) {
 
     const app = express();
     app.use(cors());
+
+    //
+    // Authenticates with an API key.
+    // All routes after this must provide the API key.
+    //
+    app.use((req, res, next) => {
+        if (req.query.key === apiKey || req.headers.key === apiKey) {
+            // Allow the request.
+            next();
+            return;
+        }
+        
+        // Disallow the request.
+        res.sendStatus(403);
+    });
 
     //
     // Gets the value of a header from the request.

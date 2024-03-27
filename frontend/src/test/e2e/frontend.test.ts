@@ -15,6 +15,13 @@ describe("frontend tests", () => {
 
     test("can upload asset and then see the asset in the gallery", async ({ page }) => {
 
+        const apiKey = "1234";
+
+        page.on("dialog", async dialog => {
+            // Enters the API key into the prompt.
+            await dialog.accept(apiKey);
+        });
+
         await page.goto(`${FRONTEND_URL}/upload`);
 
         //
@@ -55,7 +62,7 @@ describe("frontend tests", () => {
         const galleryThumb = page.getByTestId("gallery-thumb");
         await expect(galleryThumb).toHaveCount(1);
         await expect(galleryThumb).toBeVisible();
-        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}`);
+        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}&key=${apiKey}`);
 
         const fullsizeAsset = page.getByTestId("fullsize-asset");
         await expect(fullsizeAsset).toHaveCount(0);
@@ -69,7 +76,7 @@ describe("frontend tests", () => {
         await galleryThumb.click();
         await expect(fullsizeAsset).toHaveCount(1);
         await expect(fullsizeAsset).toBeVisible();
-        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}`);
+        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}&key=${apiKey}`);
 
         //
         // Open photo info.
