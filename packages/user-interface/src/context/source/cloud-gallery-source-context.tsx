@@ -34,11 +34,6 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     // Interface to the backend.
     //
     const api = useApi();
-
-    //
-    // Gets search text.
-    //
-    const { searchText } = useSearch();
     
     //
     // Assets that have been loaded from the backend.
@@ -50,13 +45,13 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     //
     useEffect(() => {
         loadAssets();
-    }, [searchText]);
+    }, []);
 
     //
     // Loads assets into the gallery.
     //
     async function loadAssets(): Promise<void> {
-        const newAssets = await api.getAssets(searchText);
+        const newAssets = await api.getAssets();
         setAssets(newAssets);
     }
 

@@ -5,8 +5,6 @@ import dayjs from "dayjs";
 import { v4 as uuid } from 'uuid';
 import { IAssetDatabase } from "./services/asset-database";
 
-const accountId = "test-account";
-
 //
 // Starts the REST API.
 //
@@ -64,8 +62,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             }
             catch (err: any) {
                 console.error(`An error occured handling ${req.method} ${req.path}`);
-                console.error(err);
-                res.sendStatus(500);;
+                console.error(err.stack);
+                res.sendStatus(500);
             }
         };
     }
@@ -76,6 +74,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
 
         const metadata = req.body;
+        const accountId = getValue<string>(metadata, "acc");
         const fileName = getValue<string>(metadata, "fileName");
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
@@ -121,7 +120,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.get("/metadata", asyncErrorHandler(async (req, res) => {
 
         const assetId = req.query.id as string;
-        if (!assetId) {
+        const accountId = req.query.acc as string;
+        if (!assetId || !accountId) {
             res.sendStatus(400);
             return;
         }
@@ -140,6 +140,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
+        const accountId = getHeader(req, "acc");
         const contentType = getHeader(req, "content-type");
         await assetDatabase.uploadOriginal(accountId, assetId, contentType, req);
         res.sendStatus(200);
@@ -151,7 +152,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.get("/asset", asyncErrorHandler(async (req, res) => {
 
         const assetId = req.query.id as string;
-        if (!assetId) {
+        const accountId = req.query.acc as string;
+        if (!assetId || !accountId) {
             res.sendStatus(400);
             return;
         }
@@ -174,6 +176,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/thumb", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
+        const accountId = getHeader(req, "acc");
         const contentType = getHeader(req, "content-type");
         await assetDatabase.uploadThumbnail(accountId, assetId, contentType, req);
         res.sendStatus(200);
@@ -185,7 +188,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.get("/thumb", asyncErrorHandler(async (req, res) => {
 
         const assetId = req.query.id as string;
-        if (!assetId) {
+        const accountId = req.query.acc as string;
+        if (!assetId || !accountId) {
             res.sendStatus(400);
             return;
         }
@@ -208,8 +212,9 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/display", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
+        const accountId = getHeader(req, "acc");
         const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadThumbnail(accountId, assetId, contentType, req);
+        await assetDatabase.uploadDisplay(accountId, assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -219,7 +224,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.get("/display", asyncErrorHandler(async (req, res) => {
 
         const assetId = req.query.id as string;
-        if (!assetId) {
+        const accountId = req.query.acc as string;
+        if (!assetId || !accountId) {
             res.sendStatus(400);
             return;
         }
@@ -242,6 +248,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/asset/add-label", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
+        const accountId = getValue<string>(req.body, "acc");
         const label = getValue<string>(req.body, "label");
         await assetDatabase.addLabel(accountId, id, label);
         res.sendStatus(200);
@@ -252,6 +259,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/asset/remove-label", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
+        const accountId = getValue<string>(req.body, "acc");
         const label = getValue<string>(req.body, "label");
         await assetDatabase.removeLabel(accountId, id, label);
         res.sendStatus(200);
@@ -262,6 +270,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.post("/asset/description", express.json(), asyncErrorHandler(async (req, res) => {
         const id = getValue<string>(req.body, "id");
+        const accountId = getValue<string>(req.body, "acc");
         const description = getValue<string>(req.body, "description");
         await assetDatabase.setDescription(accountId, id, description);
         res.sendStatus(200);
@@ -273,7 +282,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.get("/check-asset", asyncErrorHandler(async (req, res) => {
 
         const hash = req.query.hash as string;
-        if (!hash) {
+        const accountId = req.query.acc as string;
+        if (!hash || !accountId) {
             res.sendStatus(400);
             return;
         }
@@ -295,6 +305,12 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.get("/assets", asyncErrorHandler(async (req, res) => {
         const next = req.query.next as string;
+        const accountId = req.query.acc as string;
+        if (!accountId) {
+            res.sendStatus(400);
+            return;
+        }
+
         const result = await assetDatabase.getAssets(accountId, next);
         res.json({
             assets: result.assets,

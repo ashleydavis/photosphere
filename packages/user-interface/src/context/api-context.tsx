@@ -23,7 +23,7 @@ export interface IApiContext {
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(search: string | undefined): Promise<IGalleryItem[]>;
+    getAssets(): Promise<IGalleryItem[]>;
 
     //
     // Check if an asset is already uploaded using its hash.
@@ -64,6 +64,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Interface to local storage.
     //
     const localStorage = new LocalStorage();
+
+    const accountId = "test-account";
 
     // //
     // // The user's API key, once that is set.
@@ -115,7 +117,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Makes a full URL to a route in the REST API.
     //
     function makeUrl(route: string): string {
-        let url = `${BASE_URL}${route}`;
+        let url = `${BASE_URL}${route}&acc=${accountId}`;
         // if (apiKey) {
         //     url += `&key=${apiKey}`;
         // }
@@ -125,11 +127,8 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(search: string | undefined): Promise<IGalleryItem[]> {
-        let url = `${BASE_URL}/assets`;
-        if (search && search.length > 0) {
-            url += `&search=${search}`;
-        }
+    async function getAssets(): Promise<IGalleryItem[]> {
+        let url = `${BASE_URL}/assets?acc=${accountId}`;
 
         // const apiKey = await getApiKey();
         const { data } = await axios.get(
@@ -155,7 +154,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
         // const apiKey = await getApiKey();
-        const url = `${BASE_URL}/check-asset?hash=${hash}`;
+        const url = `${BASE_URL}/check-asset?hash=${hash}&acc=${accountId}`;
         const response = await axios.get(
             url, 
             {
@@ -179,6 +178,7 @@ export function ApiContextProvider({ children }: IProps) {
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
             {
+                acc: accountId,
                 fileName: uploadDetails.fileName,
                 width: uploadDetails.resolution.width,
                 height: uploadDetails.resolution.height,
@@ -208,6 +208,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     "content-type": uploadDetails.assetContentType,
                     "id": assetId,
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }
@@ -224,6 +225,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     "content-type": uploadDetails.thumbContentType,
                     "id": assetId,
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }
@@ -240,6 +242,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     "content-type": uploadDetails.displayContentType,
                     "id": assetId,
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }
@@ -261,6 +264,7 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }
@@ -280,6 +284,7 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }
@@ -299,6 +304,7 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
+                    "acc": accountId,
                     // "key": apiKey,
                 },
             }

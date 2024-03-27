@@ -10,6 +10,7 @@ POST {{base_url}}/metadata
 Content-Type: application/json
 
 { 
+    "acc": "test-account",
     "contentType": "image/jpeg", 
     "fileName": "./test-assets/1.jpeg", 
     "width": 4160, 
@@ -36,6 +37,7 @@ Content-Type: application/json
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
+acc: test-account
 
 < ./test-assets/1.jpeg
 
@@ -44,7 +46,7 @@ id: {{upload_asset_id}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}
+GET {{base_url}}/asset?id={{upload_asset_id}}&acc=test-account
 
 ###
 #
@@ -54,6 +56,7 @@ GET {{base_url}}/asset?id={{upload_asset_id}}
 POST {{base_url}}/thumb
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
+acc: test-account
 
 < ./test-assets/2.jpeg
 
@@ -61,7 +64,7 @@ id: {{upload_asset_id}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/thumb?id={{upload_asset_id}}
+GET {{base_url}}/thumb?id={{upload_asset_id}}&acc=test-account
 
 ###
 #
@@ -71,6 +74,7 @@ GET {{base_url}}/thumb?id={{upload_asset_id}}
 POST {{base_url}}/display
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
+acc: test-account
 
 < ./test-assets/3.jpeg
 
@@ -78,7 +82,7 @@ id: {{upload_asset_id}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/display?id={{upload_asset_id}}
+GET {{base_url}}/display?id={{upload_asset_id}}&acc=test-account
 
 ### 
 # Add a label to an asset.
@@ -89,6 +93,7 @@ Content-Type: application/json
 
 {
     "id": "{{upload_asset_id}}",
+    "acc": "test-account",
     "label": "A great label"
 }
 
@@ -101,6 +106,7 @@ Content-Type: application/json
 
 {
     "id": "{{upload_asset_id}}",
+    "acc": "test-account",
     "label": "A great label"
 }
 
@@ -122,11 +128,11 @@ Content-Type: application/json
 
 @hash = 1234
 
-GET {{base_url}}/check-asset?hash={{hash}}
+GET {{base_url}}/check-asset?hash={{hash}}&acc=test-account
 
 ###
 # Retrieve a page of assets.
 #
 
-GET {{base_url}}/assets
+GET {{base_url}}/assets?acc=test-account
 
