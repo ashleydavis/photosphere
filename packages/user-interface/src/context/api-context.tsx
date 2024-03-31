@@ -5,6 +5,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
 import { base64StringToBlob } from 'blob-util';
 import dayjs from "dayjs";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -60,6 +61,10 @@ export interface IProps {
 
 export function ApiContextProvider({ children }: IProps) {
 
+    const {
+        getAccessTokenSilently,
+    } = useAuth0();
+
     //
     // Interface to local storage.
     //
@@ -68,49 +73,19 @@ export function ApiContextProvider({ children }: IProps) {
     const accountId = "test-account";
 
     //
-    // The user's API key, once that is set.
+    // The user's access token.
     //
-    let apiKey: string | undefined = undefined;
+    let token: string | undefined = undefined;
 
     //
-    // Requests the API key from the the user.
+    // Gets the users access token.
     //
-    function  requestApiKey(): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            const apiKey = window.prompt("Please enter your API key (usually 1234 when running against a development backend).");
-            if (apiKey) {
-                resolve(apiKey);
-            }
-            else {
-                reject(new Error("User didn't provide an API key."));
-            }
-        });
-    }
-
-    //
-    // Gets the users API key.
-    //
-    async function getApiKey(): Promise<string> {
-        if (!apiKey) {
-            //
-            // Try to load the key from local storaage.
-            //
-            apiKey = await localStorage.get("key");
-            if (!apiKey) {
-                //
-                // Use the user to enter the key.
-                //
-                apiKey = await requestApiKey();
-                if (apiKey) {
-                    //
-                    // Save the key in local storage for next time.
-                    //
-                    await localStorage.set("key", apiKey);
-                }
-            }
+    async function getToken(): Promise<string> {
+        if (!token) {
+            token = await getAccessTokenSilently();
         }
         
-        return apiKey;
+        return token;
     }
 
     //
@@ -118,8 +93,8 @@ export function ApiContextProvider({ children }: IProps) {
     //
     function makeUrl(route: string): string {
         let url = `${BASE_URL}${route}&acc=${accountId}`;
-        if (apiKey) {
-            url += `&key=${apiKey}`;
+        if (token) {
+            url += `&tok=${token}`;
         }
         return url;
     }
@@ -130,13 +105,13 @@ export function ApiContextProvider({ children }: IProps) {
     async function getAssets(): Promise<IGalleryItem[]> {
         let url = `${BASE_URL}/assets?acc=${accountId}`;
 
-        const apiKey = await getApiKey();
+        const token = await getToken();
         const { data } = await axios.get(
             url, 
             { 
                 headers: { 
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -154,14 +129,14 @@ export function ApiContextProvider({ children }: IProps) {
     // Check if an asset is already uploaded using its hash.
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
-        const apiKey = await getApiKey();
+        const token = await getToken();
         const url = `${BASE_URL}/check-asset?hash=${hash}&acc=${accountId}`;
         const response = await axios.get(
             url, 
             {
                 headers: {
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -172,7 +147,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Uploads an asset to the backend.
     //
     async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
-        const apiKey = await getApiKey();
+        const token = await getToken();
 
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
@@ -191,7 +166,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -209,7 +184,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "acc": accountId,
                     "content-type": uploadDetails.assetContentType,
                     "id": assetId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -226,7 +201,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "acc": accountId,
                     "content-type": uploadDetails.thumbContentType,
                     "id": assetId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -243,7 +218,7 @@ export function ApiContextProvider({ children }: IProps) {
                     "acc": accountId,
                     "content-type": uploadDetails.displayContentType,
                     "id": assetId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -256,7 +231,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Adds a label to an asset.
     //
     async function addLabel(id: string, labelName: string): Promise<void> {
-        const apiKey = await getApiKey();
+        const token = await getToken();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
                 id: id,
@@ -265,7 +240,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -275,7 +250,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Renmoves a label from an asset.
     //
     async function removeLabel(id: string, labelName: string): Promise<void> {
-        const apiKey = await getApiKey();
+        const token = await getToken();
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
@@ -285,7 +260,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
@@ -295,7 +270,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Sets a description for an asset.
     //
     async function setDescription(id: string, description: string): Promise<void> {
-        const apiKey = await getApiKey();
+        const token = await getToken();
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {
@@ -305,7 +280,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "acc": accountId,
-                    "key": apiKey,
+                    "tok": token,
                 },
             }
         );
