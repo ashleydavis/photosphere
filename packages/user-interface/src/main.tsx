@@ -5,6 +5,7 @@ import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
 import { useSearch } from "./context/search-context";
+import { useAuth0 } from "@auth0/auth0-react";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -18,6 +19,15 @@ export interface IMainProps {
 // The main page of the Photosphere app.
 //
 export function Main({ computerPage }: IMainProps) {
+
+    const {
+        isLoading,
+        isAuthenticated,
+        user,
+        error,
+        loginWithRedirect,
+        logout,
+    } = useAuth0();
 
     //
     // Interface to React Router navigation.
@@ -84,6 +94,17 @@ export function Main({ computerPage }: IMainProps) {
         setOpenSearch(false);
     }
 
+    //
+    // Log out.
+    //
+    function logoutWithRedirect(): void {
+        logout({
+            logoutParams: {
+                returnTo: `${window.location.origin}/cloud`,
+            }
+        });
+    }
+
     return (
         <>
             <div id="navbar" className={(openSearch ? "search": "")} >
@@ -141,8 +162,30 @@ export function Main({ computerPage }: IMainProps) {
                             </div>
                         </NavLink>
 
+                        {!isAuthenticated && (
+                            <div className="ml-auto mr-4">
+                                <button
+                                    onClick={() => loginWithRedirect({})}
+                                    >
+                                    <i className="w-5 fa-solid fa-right-to-bracket"></i>
+                                    <span className="ml-2">Log in</span>
+                                </button>
+                            </div> 
+                        )}
+
+                        {isAuthenticated && (
+                            <div className="ml-auto mr-4">
+                                <button
+                                    onClick={() => logoutWithRedirect()}
+                                    >
+                                    <i className="w-5 fa-solid fa-right-from-bracket"></i>
+                                    <span className="ml-1">Log out</span>
+                                </button>
+                            </div> 
+                        )}
+
                         {(isUploading || numScans > 0)
-                            && <div className="ml-auto flex flex-row items-center">
+                            && <div className="flex flex-row items-center">
                                 <span className="hidden sm:block">Uploading</span>
                                 <div className="mx-2">
                                     <Spinner show={true} />
