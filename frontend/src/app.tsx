@@ -11,7 +11,7 @@ export function App() {
                 domain="photosphere-dev.au.auth0.com"
                 clientId="PKeSJKF9c130lsllhbLwPAHJGFLLeR4P"
                 authorizationParams={{
-                    redirect_uri: `${window.location.origin}/cloud`,
+                    redirect_uri: `${window.location.origin}/on_login`,
                 }}
                 >
                 <ApiContextProvider>

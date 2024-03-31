@@ -100,7 +100,7 @@ export function Main({ computerPage }: IMainProps) {
     function logoutWithRedirect(): void {
         logout({
             logoutParams: {
-                returnTo: `${window.location.origin}/cloud`,
+                returnTo: `${window.location.origin}/on_logout`,
             }
         });
     }
@@ -321,6 +321,26 @@ export function Main({ computerPage }: IMainProps) {
                             element={<UploadPage />} 
                             />
 
+
+                        <Route
+                            path="/on_login"
+                            element={
+                                <Navigate
+                                    replace
+                                    to="/cloud"
+                                    />
+                            }
+                            />
+
+                        <Route
+                            path="/on_logout"
+                            element={
+                                <Navigate
+                                    replace
+                                    to="/cloud"
+                                    />
+                            }
+                            />
 
                         <Route
                             path="/"
