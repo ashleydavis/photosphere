@@ -21,7 +21,7 @@ cd electron
 If you are running the Electron frontend in dev mode, start the Electron app like this:
 
 ```bash
-npm run start:dev
+pnpm run start:dev
 ```
 
 This command also starts the dev server.
@@ -31,7 +31,7 @@ This command also starts the dev server.
 To build the Electron frontend to a static web page, start the Electron app like this:
 
 ```bash
-npm start
+pnpm start
 ```
 
 This command also builds the static version of the web page.
