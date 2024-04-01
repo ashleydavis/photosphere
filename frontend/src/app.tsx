@@ -4,13 +4,13 @@ import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceCont
 import { Auth0Provider } from "@auth0/auth0-react";
 
 export function App() {
-    console.log(`App ${window.location.origin}`); //fio:
     return (
         <BrowserRouter>
             <Auth0Provider
                 domain="photosphere-dev.au.auth0.com"
                 clientId="PKeSJKF9c130lsllhbLwPAHJGFLLeR4P"
                 authorizationParams={{
+                    audience: 'https://photosphere-dev',
                     redirect_uri: `${window.location.origin}/on_login`,
                 }}
                 >

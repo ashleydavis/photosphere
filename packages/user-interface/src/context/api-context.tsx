@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext } from "react";
+import React, { createContext, ReactNode, useContext, useRef } from "react";
 import { LocalStorage } from "../lib/local-storage";
 import { IUploadDetails } from "../lib/upload-details";
 import { IGalleryItem } from "../lib/gallery-item";
@@ -75,17 +75,17 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // The user's access token.
     //
-    let token: string | undefined = undefined;
+    let token = useRef<string | undefined>(undefined);
 
     //
     // Gets the users access token.
     //
     async function getToken(): Promise<string> {
-        if (!token) {
-            token = await getAccessTokenSilently();
+        if (!token.current) {
+            token.current = await getAccessTokenSilently();
         }
         
-        return token;
+        return token.current;
     }
 
     //
@@ -93,11 +93,15 @@ export function ApiContextProvider({ children }: IProps) {
     //
     function makeUrl(route: string): string {
         let url = `${BASE_URL}${route}&acc=${accountId}`;
-        if (token) {
-            url += `&tok=${token}`;
+        if (token.current) {
+            url += `&tok=${token.current}`;
         }
         return url;
     }
+
+    //todo:
+    // 'authorization: Bearer AUTH0-ACCESS-TOKEN'
+    //
 
     //
     // Retreives the list of assets from the backend.
@@ -109,9 +113,9 @@ export function ApiContextProvider({ children }: IProps) {
         const { data } = await axios.get(
             url, 
             { 
-                headers: { 
-                    "acc": accountId,
-                    "tok": token,
+                headers: {                     
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -135,8 +139,8 @@ export function ApiContextProvider({ children }: IProps) {
             url, 
             {
                 headers: {
-                    "acc": accountId,
-                    "tok": token,
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -165,8 +169,8 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    "acc": accountId,
-                    "tok": token,
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -181,10 +185,10 @@ export function ApiContextProvider({ children }: IProps) {
             uploadDetails.file, 
             {
                 headers: {
-                    "acc": accountId,
+                    acc: accountId,
                     "content-type": uploadDetails.assetContentType,
-                    "id": assetId,
-                    "tok": token,
+                    id: assetId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -198,10 +202,10 @@ export function ApiContextProvider({ children }: IProps) {
             thumnailBlob, 
             {
                 headers: {
-                    "acc": accountId,
+                    acc: accountId,
                     "content-type": uploadDetails.thumbContentType,
-                    "id": assetId,
-                    "tok": token,
+                    id: assetId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -215,10 +219,10 @@ export function ApiContextProvider({ children }: IProps) {
             displayBlob, 
             {
                 headers: {
-                    "acc": accountId,
+                    acc: accountId,
                     "content-type": uploadDetails.displayContentType,
-                    "id": assetId,
-                    "tok": token,
+                    id: assetId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -239,8 +243,8 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    "acc": accountId,
-                    "tok": token,
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -259,8 +263,8 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    "acc": accountId,
-                    "tok": token,
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );
@@ -279,8 +283,8 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    "acc": accountId,
-                    "tok": token,
+                    acc: accountId,
+                    Authorization: `Bearer ${token}`,
                 },
             }
         );

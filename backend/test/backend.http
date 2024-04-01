@@ -1,4 +1,6 @@
 @base_url = http://localhost:3000
+@token = <add your token>
+
 
 ###
 # @name upload_asset
@@ -8,6 +10,7 @@
 
 POST {{base_url}}/metadata
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 { 
     "acc": "test-account",
@@ -38,6 +41,7 @@ POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 acc: test-account
+Authorization: Bearer {{token}}
 
 < ./test-assets/1.jpeg
 
@@ -46,7 +50,7 @@ acc: test-account
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&acc=test-account
+GET {{base_url}}/asset?id={{upload_asset_id}}&acc=test-account&tok={{token}}
 
 ###
 #
@@ -57,6 +61,7 @@ POST {{base_url}}/thumb
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 acc: test-account
+Authorization: Bearer {{token}}
 
 < ./test-assets/2.jpeg
 
@@ -64,7 +69,7 @@ acc: test-account
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/thumb?id={{upload_asset_id}}&acc=test-account
+GET {{base_url}}/thumb?id={{upload_asset_id}}&acc=test-account&tok={{token}}
 
 ###
 #
@@ -75,6 +80,7 @@ POST {{base_url}}/display
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 acc: test-account
+Authorization: Bearer {{token}}
 
 < ./test-assets/3.jpeg
 
@@ -82,7 +88,7 @@ acc: test-account
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/display?id={{upload_asset_id}}&acc=test-account
+GET {{base_url}}/display?id={{upload_asset_id}}&acc=test-account&tok={{token}}
 
 ### 
 # Add a label to an asset.
@@ -90,6 +96,7 @@ GET {{base_url}}/display?id={{upload_asset_id}}&acc=test-account
 
 POST {{base_url}}/asset/add-label
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
@@ -103,6 +110,7 @@ Content-Type: application/json
 
 POST {{base_url}}/asset/remove-label
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
@@ -116,6 +124,7 @@ Content-Type: application/json
 
 POST {{base_url}}/asset/description
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
@@ -129,10 +138,12 @@ Content-Type: application/json
 @hash = 1234
 
 GET {{base_url}}/check-asset?hash={{hash}}&acc=test-account
+Authorization: Bearer {{token}}
 
 ###
 # Retrieve a page of assets.
 #
 
 GET {{base_url}}/assets?acc=test-account
+Authorization: Bearer {{token}}
 

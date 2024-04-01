@@ -1,32 +1,40 @@
-import express, { Request } from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import { IAsset } from "./lib/asset";
 import dayjs from "dayjs";
 import { v4 as uuid } from 'uuid';
 import { IAssetDatabase } from "./services/asset-database";
+import { auth } from "express-oauth2-jwt-bearer";
 
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, apiKey: string) {
+export async function createServer(now: () => Date, assetDatabase: IAssetDatabase) {
 
     const app = express();
     app.use(cors());
 
     //
-    // Authenticates with an API key.
-    // All routes after this must provide the API key.
+    // Extracts JWT from query parameters.
     //
     app.use((req, res, next) => {
-        if (req.query.key === apiKey || req.headers.key === apiKey) {
-            // Allow the request.
-            next();
-            return;
+        // Check if the token exists in the query parameters.
+        if (!req.headers.authorization && req.query && req.query.tok) {
+            // Add the token to the Authorization header.
+            req.headers.authorization = `Bearer ${req.query.tok}`;
         }
         
-        // Disallow the request.
-        res.sendStatus(403);
+        next();
     });
+
+    //
+    // Authenticates a JWT token.
+    //
+    app.use(auth({
+        audience: 'https://photosphere-dev',
+        issuerBaseURL: 'https://photosphere-dev.au.auth0.com/',
+        tokenSigningAlg: 'RS256'        
+    }));
 
     //
     // Gets the value of a header from the request.
@@ -70,8 +78,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     // A handler for errors in async route handlers.
     //
-    function asyncErrorHandler(handler: (req: Request, res: express.Response) => Promise<void>) {
-        return async (req: Request, res: express.Response) => {
+    function asyncErrorHandler(handler: (req: Request, res: Response) => Promise<void>) {
+        return async (req: Request, res: Response) => {
             try {
                 await handler(req, res);
             }
