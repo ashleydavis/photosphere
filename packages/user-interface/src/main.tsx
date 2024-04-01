@@ -105,6 +105,24 @@ export function Main({ computerPage }: IMainProps) {
         });
     }
 
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                <Spinner show={true} />
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        loginWithRedirect({});
+        return (
+            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                <Spinner show={true} />
+            </div>
+        );
+    }
+
     return (
         <>
             <div id="navbar" className={(openSearch ? "search": "")} >
