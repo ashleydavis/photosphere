@@ -228,7 +228,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         });
 
         assetStream.stream.pipe(res);
-``    }));
+    }));
 
     //
     // Uploads a display version for a particular asset.
