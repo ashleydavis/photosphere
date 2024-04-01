@@ -5,11 +5,22 @@ import dayjs from "dayjs";
 import { v4 as uuid } from 'uuid';
 import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
+import { IDatabaseCollection } from "./services/database-collection";
+import { IUser } from "./lib/user";
+
+declare global {
+    namespace Express {
+        interface Request {
+            userId?: string;
+            user?: IUser;
+        }
+    }
+}
 
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetDatabase: IAssetDatabase) {
+export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, userDatabase: IDatabaseCollection<IUser>) {
 
     const app = express();
     app.use(cors());
@@ -35,6 +46,27 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         issuerBaseURL: 'https://photosphere-dev.au.auth0.com/',
         tokenSigningAlg: 'RS256'        
     }));
+
+    //
+    // Attaches user information to the request.
+    //
+    app.use(async (req, res, next) => {
+        if (!req.auth?.payload.sub) {
+            res.sendStatus(401);
+            return;
+        }
+
+        const userId = (req.auth.payload.sub!).replace("|", "-");
+        const user = await userDatabase.getOne(`users`, userId);
+        if (!user) {
+            res.sendStatus(401);
+            return;
+        }
+
+        req.userId = userId;
+        req.user = user;
+        next();
+    });
 
     //
     // Gets the value of a header from the request.

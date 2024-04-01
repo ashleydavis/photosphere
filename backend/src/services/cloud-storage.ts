@@ -42,10 +42,10 @@ export class CloudStorage implements IStorage {
     //
     // List files in storage.
     //
-    async list(accountId: string, type: string, max: number, continuationToken?: string): Promise<IListResult> {    
+    async list(path: string, max: number, continuationToken?: string): Promise<IListResult> {    
         const listParams: aws.S3.Types.ListObjectsV2Request = {
             Bucket: this.bucket,
-            Prefix: `${accountId}/${type}/`,
+            Prefix: `${path}/`,
             MaxKeys: max,
             ContinuationToken: continuationToken,
         };
@@ -62,10 +62,10 @@ export class CloudStorage implements IStorage {
     //
     // Returns true if the specified asset exists.
     //
-    async exists(accountId: string, type: string, assetId: string): Promise<boolean> {
+    async exists(path: string, assetId: string): Promise<boolean> {
         const headParams: aws.S3.Types.HeadObjectRequest = {
             Bucket: this.bucket,
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
         };
         try {
             await this.s3.headObject(headParams).promise();
@@ -82,10 +82,10 @@ export class CloudStorage implements IStorage {
     //
     // Gets info about an asset.
     //
-    async info(accountId: string, type: string, assetId: string): Promise<IAssetInfo> {
+    async info(path: string, assetId: string): Promise<IAssetInfo> {
         const headParams: aws.S3.Types.HeadObjectRequest = {
             Bucket: this.bucket,
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
         };
         const headResult = await this.s3.headObject(headParams).promise();
         return {
@@ -98,10 +98,10 @@ export class CloudStorage implements IStorage {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    async read(accountId: string, type: string, assetId: string): Promise<Buffer | undefined> {
+    async read(path: string, assetId: string): Promise<Buffer | undefined> {
         const getParams: aws.S3.Types.GetObjectRequest = {
             Bucket: this.bucket, 
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
         };
         try {
             const getObjectOutput = await this.s3.getObject(getParams).promise();
@@ -118,10 +118,10 @@ export class CloudStorage implements IStorage {
     //
     // Writes a file to storage.
     //
-    async write(accountId: string, type: string, assetId: string, contentType: string, data: Buffer): Promise<void> {
+    async write(path: string, assetId: string, contentType: string, data: Buffer): Promise<void> {
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
             Body: data,
             ContentType: contentType,
         };    
@@ -131,10 +131,10 @@ export class CloudStorage implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(accountId: string, type: string, assetId: string): Readable {
+    readStream(path: string, assetId: string): Readable {
         const getParams: aws.S3.Types.GetObjectRequest = {
             Bucket: this.bucket, 
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
         };
         return this.s3.getObject(getParams).createReadStream();
     }
@@ -142,10 +142,10 @@ export class CloudStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
-    async writeStream(accountId: string, type: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+    async writeStream(path: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,
-            Key: `${accountId}/${type}/${assetId}`,
+            Key: `${path}/${assetId}`,
             Body: inputStream,
             ContentType: contentType,
         };    

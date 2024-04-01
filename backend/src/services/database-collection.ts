@@ -43,29 +43,29 @@ export interface IPage<RecordT> {
     next?: string;
 }
 
-export interface IDatabase<RecordT = any> {
+export interface IDatabaseCollection<RecordT = any> {
     //
     // Sets a new record to the database.
     //
-    setOne(accountId: string, id: string, record: RecordT): Promise<void>;
+    setOne(path: string, id: string, record: RecordT): Promise<void>;
 
     //
     // Gets one record by id.
     //
-    getOne(accountId: string, id: string): Promise<RecordT | undefined>;
+    getOne(path: string, id: string): Promise<RecordT | undefined>;
 
     //
     // Updates a record in the database.
     //
-    updateOne(accountId: string, id: string, recordUpdate: Partial<RecordT>): Promise<void>;
+    updateOne(path: string, id: string, recordUpdate: Partial<RecordT>): Promise<void>;
 
     //
     // Gets a page of records from the database.
     //
-    getAll(accountId: string, max: number, next?: string): Promise<IPage<RecordT>>;
+    getAll(path: string, max: number, next?: string): Promise<IPage<RecordT>>;
 }
 
-export class Database<RecordT = any> implements IDatabase<RecordT> {
+export class DatabaseCollection<RecordT = any> implements IDatabaseCollection<RecordT> {
 
     constructor(private storage: IStorage) {
     }
@@ -73,15 +73,15 @@ export class Database<RecordT = any> implements IDatabase<RecordT> {
     //
     // Sets a new record to the database.
     //
-    async setOne(accountId: string, id: string, record: RecordT): Promise<void> {
-        await this.storage.write(accountId, "metadata", id, "application/json", Buffer.from(JSON.stringify(record)));
+    async setOne(path: string, id: string, record: RecordT): Promise<void> {
+        await this.storage.write(path, id, "application/json", Buffer.from(JSON.stringify(record)));
     }
 
     //
     // Gets one record by id.
     // 
-    async getOne(accountId: string, id: string): Promise<RecordT | undefined> {
-        const buffer = await this.storage.read(accountId, "metadata", id);
+    async getOne(path: string, id: string): Promise<RecordT | undefined> {
+        const buffer = await this.storage.read(path, id);
         if (!buffer) {
             return undefined;
         }
@@ -92,21 +92,21 @@ export class Database<RecordT = any> implements IDatabase<RecordT> {
     // 
     // Updates a record in the database.
     //
-    async updateOne(accountId: string, id: string, recordUpdate: Partial<RecordT>): Promise<void> {
-        const buffer = await this.storage.read(accountId, "metadata", id);
+    async updateOne(path: string, id: string, recordUpdate: Partial<RecordT>): Promise<void> {
+        const buffer = await this.storage.read(path, id);
         const asset = JSON.parse(buffer!.toString('utf-8'));
         const updated = Object.assign({}, asset, recordUpdate);
-        await this.storage.write(accountId, "metadata", id, "application/json", Buffer.from(JSON.stringify(updated)));    
+        await this.storage.write(path, id, "application/json", Buffer.from(JSON.stringify(updated)));    
     }
 
     //
     // Gets a page of records from the database.
     //
-    async getAll(accountId: string, max: number, next?: string): Promise<IPage<RecordT>> {
-        const listResult = await this.storage.list(accountId, "metadata", max, next);
+    async getAll(path: string, max: number, next?: string): Promise<IPage<RecordT>> {
+        const listResult = await this.storage.list(path, max, next);
         const records: RecordT[] = [];
         for (const assetId of listResult.assetIds) {
-            records.push((await this.getOne(accountId, assetId))!);
+            records.push((await this.getOne(path, assetId))!);
         }
         
         return {
