@@ -5,9 +5,9 @@
     "main": "build/index.js",
     "scripts": {
         "start": "node build/index.js",
-        "start:dev": "pnpm run clean-uploads && pnpm run copy-uploads && cross-env API_KEY=1234 pnpm run start-watch",
-        "start:dev-no-uploads": "pnpm run clean-uploads &&  cross-env API_KEY=1234 pnpm run start-watch",
-        "start-watch": "cross-env PORT=3000 ts-node-dev --respawn src/index.ts",
+        "start:dev": "pnpm run clean-uploads && pnpm run copy-uploads && cross-env NODE_ENV=development pnpm run start-watch",
+        "start:dev-no-uploads": "pnpm run clean-uploads &&  cross-env NODE_ENV=development pnpm run start-watch",
+        "start-watch": "cross-env NODE_ENV=development PORT=3000 ts-node-dev --respawn src/index.ts",
         "start-for-e2e-tests": "pnpm run clean-uploads && pnpm run start:dev-no-uploads",
         "build": "pnpm install --production=false && pnpm run compile",
         "compile": "tsc",
@@ -15,8 +15,8 @@
         "clean-uploads": "rm -rf files",
         "copy-uploads": "cp -r ../fixtures/50-assets/files files",
         "clean": "rm -rf build",
-        "test": "jest --coverage",
-        "test:watch": "jest --watch"
+        "test": "cross-env NODE_ENV=development jest --coverage",
+        "test:watch": "cross-env NODE_ENV=development jest --watch"
     },
     "keywords": [],
     "author": "ashley@codecapers.com.au",

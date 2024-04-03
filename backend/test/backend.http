@@ -1,5 +1,5 @@
 @base_url = http://localhost:3000
-@token = <add your token>
+@token = "doesn't matter in dev and testing"
 
 
 ###

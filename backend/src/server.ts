@@ -44,14 +44,37 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         next();
     });
 
-    //
-    // Authenticates a JWT token.
-    //
-    app.use(auth({
+    const checkJwt = auth({
         audience: 'https://photosphere-dev',
         issuerBaseURL: 'https://photosphere-dev.au.auth0.com/',
         tokenSigningAlg: 'RS256'        
-    }));
+    });
+
+    //
+    // Authenticates a JWT token.
+    //
+    app.use((req, res, next) => {
+
+        //
+        // Skip authentication in development and test.
+        //
+        if (process.env.NODE_ENV === "development"
+            || process.env.NODE_ENV === "test") {
+            req.auth = { 
+                payload: { 
+                    sub: "auth0-6609076bbfe7556c8ab391dc", // Test user.
+                } 
+            } as any;
+            
+            next();
+            return;
+        }
+
+        //
+        // Otherwise check the JWT.
+        //
+        checkJwt(req, res, next);
+    });
 
     //
     // Attaches user information to the request.
