@@ -3,12 +3,12 @@
 //
 export interface IUser {
     //
-    // The default account to upload to the user.
+    // The default collection to upload to the user.
     //
-    uploadAccount: string;
+    uploadCollection: string;
 
     //
-    // The accounts the user has access to.
+    // The collection the user has access to.
     //
-    accounts: string[];
+    collections: string[];
 }

@@ -1,4 +1,4 @@
 {
-    "uploadAccount": "test-account",
-    "accounts": [ "test-account" ]
+    "uploadCollection": "test-collection",
+    "collections": [ "test-collection" ]
 }

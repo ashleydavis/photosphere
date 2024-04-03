@@ -70,7 +70,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     const localStorage = new LocalStorage();
 
-    const accountId = "test-account";
+    const collectionId = "test-collection";
 
     //
     // The user's access token.
@@ -92,29 +92,25 @@ export function ApiContextProvider({ children }: IProps) {
     // Makes a full URL to a route in the REST API.
     //
     function makeUrl(route: string): string {
-        let url = `${BASE_URL}${route}&acc=${accountId}`;
+        let url = `${BASE_URL}${route}&col=${collectionId}`;
         if (token.current) {
             url += `&tok=${token.current}`;
         }
         return url;
     }
 
-    //todo:
-    // 'authorization: Bearer AUTH0-ACCESS-TOKEN'
-    //
-
     //
     // Retreives the list of assets from the backend.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
-        let url = `${BASE_URL}/assets?acc=${accountId}`;
+        let url = `${BASE_URL}/assets?col=${collectionId}`;
 
         const token = await getToken();
         const { data } = await axios.get(
             url, 
             { 
                 headers: {                     
-                    acc: accountId,
+                    col: collectionId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -134,12 +130,12 @@ export function ApiContextProvider({ children }: IProps) {
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
         const token = await getToken();
-        const url = `${BASE_URL}/check-asset?hash=${hash}&acc=${accountId}`;
+        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
         const response = await axios.get(
             url, 
             {
                 headers: {
-                    acc: accountId,
+                    col: collectionId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -156,7 +152,7 @@ export function ApiContextProvider({ children }: IProps) {
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
             {
-                acc: accountId,
+                col: collectionId,
                 fileName: uploadDetails.fileName,
                 width: uploadDetails.resolution.width,
                 height: uploadDetails.resolution.height,
@@ -185,7 +181,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.assetContentType,
-                    acc: accountId,
+                    col: collectionId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -202,7 +198,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.thumbContentType,
-                    acc: accountId,
+                    col: collectionId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -219,7 +215,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.displayContentType,
-                    acc: accountId,
+                    col: collectionId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -237,7 +233,7 @@ export function ApiContextProvider({ children }: IProps) {
         const token = await getToken();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
-                acc: accountId,
+                col: collectionId,
                 id: id,
                 label: labelName,
             },
@@ -257,7 +253,7 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
-                acc: accountId,
+                col: collectionId,
                 id: id,
                 label: labelName,
             },
@@ -277,7 +273,7 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {
-                acc: accountId,
+                col: collectionId,
                 id: id,
                 description: description,
             },
