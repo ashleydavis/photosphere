@@ -4,8 +4,8 @@
   "description": "The frontend for the Photosphere application.",
   "source": "src/index.html",
   "scripts": {
-    "start": "cross-env BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
-    "start:no-open": "cross-env BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve",
+    "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
+    "start:no-open": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve",
     "build": "webpack",
     "test": "jest --coverage",
     "test:watch": "jest --watch",

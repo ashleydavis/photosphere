@@ -4,7 +4,7 @@
   "description": "The frontend for the Electron version of the Photosphere application.",
   "source": "src/index.html",
   "scripts": {
-    "start": "cross-env BASE_URL=http://localhost:3000 webpack serve",
+    "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 webpack serve",
     "build": "webpack",
     "test": "jest --coverage",
     "test:watch": "jest --watch",

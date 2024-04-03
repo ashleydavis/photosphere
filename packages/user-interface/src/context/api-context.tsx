@@ -81,8 +81,14 @@ export function ApiContextProvider({ children }: IProps) {
     // Gets the users access token.
     //
     async function getToken(): Promise<string> {
+        const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
         if (!token.current) {
-            token.current = await getAccessTokenSilently();
+            if (isProd) {
+                token.current = await getAccessTokenSilently();
+            }
+            else {
+                token.current = "testing-token";
+            }
         }
         
         return token.current;

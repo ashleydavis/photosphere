@@ -15,19 +15,9 @@ describe("frontend tests", () => {
 
     test("can upload asset and then see the asset in the gallery", async ({ page }) => {
 
-        const apiKey = "1234";
-
-        page.on("dialog", async dialog => {
-            // Enters the API key into the prompt.
-            await dialog.accept(apiKey);
-        });
+        const apiKey = "testing-token";
 
         await page.goto(`${FRONTEND_URL}/upload`);
-
-        //
-        // Clear uploaded assets.
-        //
-        await fs.remove("../backend/files");
         
         //
         // Uploads an image.
@@ -42,8 +32,13 @@ describe("frontend tests", () => {
         //
         while (true) {
             await sleep(1); //TODO: Should wait until progress spinner has hidden.
+
+            const uploadDir = "../backend/files/collections/test-collection/display";
+            if (!fs.existsSync(uploadDir)) {
+                continue;
+            }
     
-            uploadedFiles = (await fs.readdir("../backend/files/original"))
+            uploadedFiles = (await fs.readdir(uploadDir))
                 .filter(file => !file.endsWith(".info")); // Remove info files.
             if (uploadedFiles.length > 0) {
                 break;
@@ -62,7 +57,7 @@ describe("frontend tests", () => {
         const galleryThumb = page.getByTestId("gallery-thumb");
         await expect(galleryThumb).toHaveCount(1);
         await expect(galleryThumb).toBeVisible();
-        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}&key=${apiKey}`);
+        await expect(galleryThumb).toHaveAttribute("src", `${BACKEND_URL}/thumb?id=${assetId}&col=test-collection&tok=${apiKey}`);
 
         const fullsizeAsset = page.getByTestId("fullsize-asset");
         await expect(fullsizeAsset).toHaveCount(0);
@@ -76,7 +71,7 @@ describe("frontend tests", () => {
         await galleryThumb.click();
         await expect(fullsizeAsset).toHaveCount(1);
         await expect(fullsizeAsset).toBeVisible();
-        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}&key=${apiKey}`);
+        await expect(fullsizeAsset).toHaveAttribute("src", `${BACKEND_URL}/display?id=${assetId}&col=test-collection&tok=${apiKey}`);
 
         //
         // Open photo info.
