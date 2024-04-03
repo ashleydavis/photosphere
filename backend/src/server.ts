@@ -371,18 +371,21 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const accountMetdata = await assetDatabase.getAccountMetadata(accountId);
-        if (!accountMetdata) {
-            res.sendStatus(404);
-            return;
-        }
+        //
+        // TODO: bring this online later.
+        //
+        // const accountMetdata = await assetDatabase.getAccountMetadata(accountId);
+        // if (!accountMetdata) {
+        //     res.sendStatus(404);
+        //     return;
+        // }
 
-        if (req.userId === undefined 
-            || !accountMetdata.owners.includes(req.userId)) {
-            // The user doesn't own this account. They can't view the assets.
-            res.sendStatus(403);
-            return;
-        }
+        // if (req.userId === undefined 
+        //     || !accountMetdata.owners.includes(req.userId)) {
+        //     // The user doesn't own this account. They can't view the assets.
+        //     res.sendStatus(403);
+        //     return;
+        // }
 
         const result = await assetDatabase.getAssets(accountId, next);
         res.json({
