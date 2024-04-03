@@ -29,6 +29,15 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     // Extracts JWT from query parameters.
     //
     app.use((req, res, next) => {
+
+        if (req.path === "/" || req.path === "/favicon.ico") {
+            res.sendStatus(404);
+            return;
+        }
+
+        console.log(`${req.method} ${req.path}`);
+        console.log(req.ip);
+
         // Check if the token exists in the query parameters.
         if (!req.headers.authorization && req.query && req.query.tok) {
             // Add the token to the Authorization header.
