@@ -169,7 +169,6 @@ export function ApiContextProvider({ children }: IProps) {
             },
             {
                 headers: {
-                    acc: accountId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -185,8 +184,8 @@ export function ApiContextProvider({ children }: IProps) {
             uploadDetails.file, 
             {
                 headers: {
-                    acc: accountId,
                     "content-type": uploadDetails.assetContentType,
+                    acc: accountId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -202,8 +201,8 @@ export function ApiContextProvider({ children }: IProps) {
             thumnailBlob, 
             {
                 headers: {
-                    acc: accountId,
                     "content-type": uploadDetails.thumbContentType,
+                    acc: accountId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -219,8 +218,8 @@ export function ApiContextProvider({ children }: IProps) {
             displayBlob, 
             {
                 headers: {
-                    acc: accountId,
                     "content-type": uploadDetails.displayContentType,
+                    acc: accountId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -238,12 +237,12 @@ export function ApiContextProvider({ children }: IProps) {
         const token = await getToken();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
+                acc: accountId,
                 id: id,
                 label: labelName,
             },
             {
                 headers: {
-                    acc: accountId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -258,12 +257,12 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
+                acc: accountId,
                 id: id,
                 label: labelName,
             },
             {
                 headers: {
-                    acc: accountId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -278,12 +277,12 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {
+                acc: accountId,
                 id: id,
                 description: description,
             },
             {
                 headers: {
-                    acc: accountId,
                     Authorization: `Bearer ${token}`,
                 },
             }

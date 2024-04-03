@@ -35,9 +35,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        console.log(`${req.method} ${req.path}`);
-        console.log(req.ip);
-
         // Check if the token exists in the query parameters.
         if (!req.headers.authorization && req.query && req.query.tok) {
             // Add the token to the Authorization header.
@@ -114,7 +111,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
 
         return value;
     }
-
 
     //
     // A handler for errors in async route handlers.
