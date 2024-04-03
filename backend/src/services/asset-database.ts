@@ -6,6 +6,7 @@ import { Readable } from "stream";
 import { IAsset } from "../lib/asset";
 import { DatabaseCollection, IDatabaseCollection } from "./database-collection";
 import { IStorage } from "./storage";
+import { IAccountMetadata } from "../lib/account";
 
 export interface IAssetStream {
     //
@@ -32,6 +33,11 @@ export interface IAssetsResult {
 }
 
 export interface IAssetDatabase {
+    //
+    // Gets account metadata.
+    //
+    getAccountMetadata(accountId: string): Promise<IAccountMetadata | undefined>;
+
     //
     // Adds metadata for a new asset.
     //
@@ -123,6 +129,19 @@ export class AssetDatabase {
         }
         return buffer.toString("utf-8");
     }
+
+    //
+    // Gets account metadata.
+    //
+    async getAccountMetadata(accountId: string): Promise<IAccountMetadata | undefined> {
+        const buffer = await this.storage.read(`accounts/${accountId}`, `metadata.json`); 
+        if (!buffer) {
+            return undefined;
+        }
+        
+        return JSON.parse(buffer.toString('utf-8'));
+    }
+
 
     //
     // Adds metadata for a new asset.
