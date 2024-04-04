@@ -2,11 +2,10 @@
 // Provides a source of assets for the gallery from the cloud.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useState } from "React";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { IGallerySourceContext } from "./gallery-source-context";
 import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
-import { useSearch } from "../search-context";
 
 const NUM_ASSETS_PER_PAGE = 100;
 

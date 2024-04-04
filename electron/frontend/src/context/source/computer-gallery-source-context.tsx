@@ -2,7 +2,7 @@
 // Provides a source of assets for the gallery from the local computer.
 //
 
-import React, { createContext, ReactNode, useContext, useState } from "React";
+import React, { createContext, ReactNode, useContext, useState } from "react";
 import { IGallerySourceContext } from "user-interface/src/context/source/gallery-source-context";
 import { useScan } from "../scan-context";
 import { IGalleryItem } from "user-interface";
