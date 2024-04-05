@@ -1,0 +1,15 @@
+version: '3'
+services:
+
+  backend:
+    build:
+      context: ./
+      dockerfile: ./backend/Dockerfile
+    image: backend
+    container_name: backend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+        

@@ -1,0 +1,8 @@
+.git
+.github
+**/node_modules
+fixtures
+frontend
+mobile
+**/build
+**/coverage
