@@ -1,0 +1,8 @@
+spec:
+  name: photosphere
+  services:
+  - dockerfile_path: Dockerfile
+    git:
+      branch: main
+      repo_clone_url: https://github.com/ashleydavis/photosphere.git
+    name: photosphere
