@@ -1,5 +1,4 @@
 import React, { createContext, ReactNode, useContext, useRef } from "react";
-import { LocalStorage } from "../lib/local-storage";
 import { IUploadDetails } from "../lib/upload-details";
 import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
@@ -64,11 +63,6 @@ export function ApiContextProvider({ children }: IProps) {
     const {
         getAccessTokenSilently,
     } = useAuth0();
-
-    //
-    // Interface to local storage.
-    //
-    const localStorage = new LocalStorage();
 
     const collectionId = "test-collection";
 
