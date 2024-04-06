@@ -62,3 +62,8 @@ npm test
 - `AWS_ACCESS_KEY_ID` - The access key for your AWS account.
 - `AWS_SECRET_ACCESS_KEY` - The secret access key for your AWS account.
 - `AWS_ENDPOINT` - Custom endpoint if required. This is used for contecting to Digital Ocean Spaces instead of AWS S3.
+
+### Auth0 authentication details:
+
+- `AUTH0_DOMAIN`
+- `AUTH0_BASE_URL`

@@ -7,10 +7,10 @@ export function App() {
     return (
         <BrowserRouter>
             <Auth0Provider
-                domain="photosphere-dev.au.auth0.com"
-                clientId="PKeSJKF9c130lsllhbLwPAHJGFLLeR4P"
+                domain={process.env.AUTH0_DOMAIN as string}
+                clientId={process.env.AUTH0_CLIENT_ID as string}
                 authorizationParams={{
-                    audience: 'https://photosphere-dev',
+                    audience: process.env.AUTH0_AUDIENCE as string,
                     redirect_uri: `${window.location.origin}/on_login`,
                 }}
                 >

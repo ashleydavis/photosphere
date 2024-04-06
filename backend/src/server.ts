@@ -45,8 +45,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     });
 
     const checkJwt = auth({
-        audience: 'https://photosphere-dev',
-        issuerBaseURL: 'https://photosphere-dev.au.auth0.com/',
+        audience: process.env.AUTH0_AUDIENCE as string,
+        issuerBaseURL: process.env.AUTH0_BASE_URL as string,
         tokenSigningAlg: 'RS256'        
     });
 
