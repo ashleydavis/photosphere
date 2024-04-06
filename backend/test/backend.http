@@ -1,5 +1,7 @@
 @base_url = http://localhost:3000
+# @base_url = https://photosphere-api.codecapers.com.au
 @token = "doesn't matter in dev and testing"
+@collection = ash-test
 
 
 ###
@@ -13,7 +15,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 { 
-    "col": "test-collection",
+    "col": "{{collection}}",
     "contentType": "image/jpeg", 
     "fileName": "./test-assets/1.jpeg", 
     "width": 4160, 
@@ -40,7 +42,7 @@ Authorization: Bearer {{token}}
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
-col: test-collection
+col: {{collection}}
 Authorization: Bearer {{token}}
 
 < ./test-assets/1.jpeg
@@ -50,7 +52,7 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&col=test-collection&tok={{token}}
+GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
 
 ###
 #
@@ -60,7 +62,7 @@ GET {{base_url}}/asset?id={{upload_asset_id}}&col=test-collection&tok={{token}}
 POST {{base_url}}/thumb
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
-col: test-collection
+col: {{collection}}
 Authorization: Bearer {{token}}
 
 < ./test-assets/2.jpeg
@@ -69,7 +71,7 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/thumb?id={{upload_asset_id}}&col=test-collection&tok={{token}}
+GET {{base_url}}/thumb?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
 
 ###
 #
@@ -79,7 +81,7 @@ GET {{base_url}}/thumb?id={{upload_asset_id}}&col=test-collection&tok={{token}}
 POST {{base_url}}/display
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
-col: test-collection
+col: {{collection}}
 Authorization: Bearer {{token}}
 
 < ./test-assets/3.jpeg
@@ -88,7 +90,7 @@ Authorization: Bearer {{token}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/display?id={{upload_asset_id}}&col=test-collection&tok={{token}}
+GET {{base_url}}/display?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
 
 ### 
 # Add a label to an asset.
@@ -100,7 +102,7 @@ Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
-    "col": "test-collection",
+    "col": "{{collection}}",
     "label": "A great label"
 }
 
@@ -114,7 +116,7 @@ Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
-    "col": "test-collection",
+    "col": "{{collection}}",
     "label": "A great label"
 }
 
@@ -137,13 +139,12 @@ Authorization: Bearer {{token}}
 
 @hash = 1234
 
-GET {{base_url}}/check-asset?hash={{hash}}&col=test-collection
+GET {{base_url}}/check-asset?hash={{hash}}&col={{collection}}
 Authorization: Bearer {{token}}
 
 ###
 # Retrieve a page of assets.
 #
 
-GET {{base_url}}/assets?col=test-collection
+GET {{base_url}}/assets?col={{collection}}
 Authorization: Bearer {{token}}
-
