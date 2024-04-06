@@ -7,6 +7,11 @@ module.exports = {
     devtool: 'inline-source-map',
     mode: 'development',
     target: 'web',
+    performance: { //TODO: Adjust/remove this later for prod performance.
+        hints: false,
+        maxEntrypointSize: 512000,
+        maxAssetSize: 512000
+    },
     devServer: {
         historyApiFallback: true,
     },
