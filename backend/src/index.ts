@@ -6,12 +6,12 @@ import { FileStorage } from "./services/file-storage";
 
 async function main() {
 
-    const dbName = "photosphere";
-
     const PORT = process.env.PORT;
     if (!PORT) {
         throw new Error(`Set environment variable PORT.`);
     }
+
+    console.log(`Running in mode: ${process.env.NODE_ENV} on port ${PORT}.`);
 
     const storage = process.env.NODE_ENV === "production"
         ? new CloudStorage()
