@@ -64,7 +64,7 @@ export function ApiContextProvider({ children }: IProps) {
         getAccessTokenSilently,
     } = useAuth0();
 
-    const collectionId = "test-collection";
+    const collectionId = "ash-test";
 
     //
     // The user's access token.
