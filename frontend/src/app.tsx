@@ -11,7 +11,7 @@ export function App() {
                 clientId={process.env.AUTH0_CLIENT_ID as string}
                 authorizationParams={{
                     audience: process.env.AUTH0_AUDIENCE as string,
-                    redirect_uri: `${window.location.origin}/on_login`,
+                    redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
                 }}
                 >
                 <ApiContextProvider>

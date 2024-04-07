@@ -4,9 +4,10 @@
   "description": "The Electron desktop application for Photosphere",
   "main": "main.js",
   "scripts": {
-    "start": "cross-env BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" pnpm run --filter electron-frontend build && electron .",
+    "start": "pnpm run --filter electron-frontend build && electron .",
     "electron:dev": "wait-on --interval 5000 http://localhost:8080 && cross-env HTML_PAGE=http://localhost:8080 electron .",
-    "start:dev": "concurrently --names=\"dev-server,electron\" \"pnpm --filter electron-frontend run start\" \"pnpm run electron:dev\""
+    "start:dev": "concurrently --names=\"dev-server,electron\" \"pnpm --filter electron-frontend run start\" \"pnpm run electron:dev\"",
+    "start:prod": "concurrently --names=\"dev-server,electron\" \"pnpm --filter electron-frontend run start:prod\" \"pnpm run electron:dev\""
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",

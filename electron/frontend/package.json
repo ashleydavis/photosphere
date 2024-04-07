@@ -5,7 +5,8 @@
   "source": "src/index.html",
   "scripts": {
     "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 webpack serve",
-    "build": "webpack",
+    "start:prod": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --mode production --devtool source-map",
+    "build": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au webpack --mode production --devtool source-map",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "compile": "tsc",
@@ -43,6 +44,7 @@
     "webpack-dev-server": "^5.0.2"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.2.4",
     "@react-hook/resize-observer": "^1.2.6",
     "axios": "^0.27.2",
     "blob-util": "^2.0.2",
