@@ -1,9 +1,20 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, protocol, net } = require('electron');
+const path = require('path');
 
 let HTML_PAGE = process.env.HTML_PAGE;
 if (!HTML_PAGE) {
-    HTML_PAGE = "frontend/dist/index.html";
+    HTML_PAGE = "app://localhost/index.html";
 }
+
+//
+// Register the app protocol.
+//
+protocol.registerSchemesAsPrivileged([
+    { 
+        scheme: 'app', 
+        privileges: { corsEnabled: true, standard: true } ,
+    }
+]);
 
 //
 // Creates the browser window.
@@ -21,18 +32,30 @@ function createWindow() {
     // Open the DevTools.
     mainWindow.webContents.openDevTools();
 
-    if (HTML_PAGE.startsWith("http://")) {
-        //
-        // Loads the web page served by the dev server.
-        //
-        mainWindow.loadURL(HTML_PAGE);
-    }
-    else {
-        //
-        // Loads the prebuilt web page.
-        //
-        mainWindow.loadFile(HTML_PAGE);
-    }
+    mainWindow.loadURL(HTML_PAGE);
+}
+
+//
+// Register a custom protocol. 
+// This is required for Auth0 redirection.
+//
+function registerProtocol() {
+    protocol.registerFileProtocol('app', (request, callback) => {
+        const [ url, query ] = request.url.split('?');
+        let filePath = url.substring('app://localhost/'.length);
+        if (filePath == "on_login") {
+            filePath = "index.html";
+        }
+        else if (filePath == "on_logout") {
+            filePath = "index.html";
+        }
+
+        filePath = `frontend/dist/${filePath}`;
+
+        console.log(`Loading file ${filePath} from url ${request.url}`);
+
+        callback({ path: filePath }); // Maps the URL to a file path.
+    });
 }
 
 //
@@ -41,6 +64,8 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 //
 app.whenReady().then(() => {
+
+    registerProtocol();
     createWindow()
 
     app.on('activate', () => {
