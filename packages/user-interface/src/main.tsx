@@ -8,6 +8,25 @@ import { useSearch } from "./context/search-context";
 import { useAuth0 } from "@auth0/auth0-react";
 const FPSStats = require("react-fps-stats").default;
 
+//
+// Check an environment variable. 
+//
+function checkEnvironmentVariable(name: string): void {
+    if (!process.env[name]) {
+        throw new Error(`Environment variable ${name} is not set.`);
+    }
+}
+
+//
+// Make sure auth0 settings are enabled.
+//
+function validateAuthSettings() {
+    checkEnvironmentVariable("AUTH0_DOMAIN");
+    checkEnvironmentVariable("AUTH0_CLIENT_ID");
+    checkEnvironmentVariable("AUTH0_AUDIENCE");
+    checkEnvironmentVariable("AUTH0_ORIGIN");
+}
+
 export interface IMainProps {
     //
     // The "computer page" which is only displayed in the Electron or mobile version.
@@ -107,6 +126,8 @@ export function Main({ computerPage }: IMainProps) {
 
     const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
     if (isProd) {       
+        validateAuthSettings();
+
         if (isLoading) {
             return (
                 <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
