@@ -5,19 +5,19 @@
   "keywords": [],
   "scripts": {
     "start": "pnpm --filter mobile-frontend start",
+    "start:prod": "pnpm --filter mobile-frontend run start:prod",
     "build": "pnpm --filter mobile-frontend build",
     "android": "npx cap update && npx cap sync && npx cap open android",
     "ios": "npx cap update && npx cap sync && npx cap open ios"
   },
   "dependencies": {
-    "@capacitor/android": "^5.7.2",
-    "@capacitor/camera": "latest",
-    "@capacitor/core": "latest",
-    "@capacitor/ios": "^5.7.2",
-    "@capacitor/splash-screen": "latest"
+    "@capacitor/android": "^5.7.4",
+    "@capacitor/core": "^5.7.4",
+    "@capacitor/ios": "^5.7.4",
+    "@capacitor/splash-screen": "^5.0.7"
   },
   "devDependencies": {
-    "@capacitor/cli": "latest"
+    "@capacitor/cli": "^5.7.4"
   },
   "author": "ashley@codecapers.com.au",
   "license": "MIT"

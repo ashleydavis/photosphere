@@ -1,11 +1,13 @@
 {
   "appId": "com.photosphere.codecapers",
   "appName": "Photosphere",
-  "bundledWebRuntime": false,
   "webDir": "frontend/dist",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0
     }
+  },
+  "server": {
+    "androidScheme": "https"
   }
 }
