@@ -11,8 +11,8 @@ const FPSStats = require("react-fps-stats").default;
 //
 // Check an environment variable. 
 //
-function checkEnvironmentVariable(name: string): void {
-    if (!process.env[name]) {
+function checkEnvironmentVariable(name: string, value: any): void {
+    if (!value) {
         throw new Error(`Environment variable ${name} is not set.`);
     }
 }
@@ -21,10 +21,10 @@ function checkEnvironmentVariable(name: string): void {
 // Make sure auth0 settings are enabled.
 //
 function validateAuthSettings() {
-    checkEnvironmentVariable("AUTH0_DOMAIN");
-    checkEnvironmentVariable("AUTH0_CLIENT_ID");
-    checkEnvironmentVariable("AUTH0_AUDIENCE");
-    checkEnvironmentVariable("AUTH0_ORIGIN");
+    checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
+    checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
+    checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);
+    checkEnvironmentVariable("AUTH0_ORIGIN", process.env.AUTH0_ORIGIN);
 }
 
 export interface IMainProps {
