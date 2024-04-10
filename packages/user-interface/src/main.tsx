@@ -5,27 +5,9 @@ import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
 import { useSearch } from "./context/search-context";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "./context/auth-context";
 const FPSStats = require("react-fps-stats").default;
 
-//
-// Check an environment variable. 
-//
-function checkEnvironmentVariable(name: string, value: any): void {
-    if (!value) {
-        throw new Error(`Environment variable ${name} is not set.`);
-    }
-}
-
-//
-// Make sure auth0 settings are enabled.
-//
-function validateAuthSettings() {
-    checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
-    checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
-    checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);
-    checkEnvironmentVariable("AUTH0_ORIGIN", process.env.AUTH0_ORIGIN);
-}
 
 export interface IMainProps {
     //
@@ -42,11 +24,9 @@ export function Main({ computerPage }: IMainProps) {
     const {
         isLoading,
         isAuthenticated,
-        user,
-        error,
-        loginWithRedirect,
+        login,
         logout,
-    } = useAuth0();
+    } = useAuth();
 
     //
     // Interface to React Router navigation.
@@ -113,21 +93,9 @@ export function Main({ computerPage }: IMainProps) {
         setOpenSearch(false);
     }
 
-    //
-    // Log out.
-    //
-    function logoutWithRedirect(): void {
-        logout({
-            logoutParams: {
-                returnTo: `${process.env.AUTH0_ORIGIN}/on_logout`,
-            }
-        });
-    }
 
     const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
     if (isProd) {       
-        validateAuthSettings();
-
         if (isLoading) {
             return (
                 <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
@@ -137,7 +105,11 @@ export function Main({ computerPage }: IMainProps) {
         }
     
         if (!isAuthenticated) {
-            loginWithRedirect({});
+            login()
+                .catch(err => {
+                    console.error(`Error on login:`);
+                    console.error(err);
+                });
             return (
                 <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
                     <Spinner show={true} />
@@ -206,7 +178,7 @@ export function Main({ computerPage }: IMainProps) {
                         {!isAuthenticated && (
                             <div className="ml-auto mr-4">
                                 <button
-                                    onClick={() => loginWithRedirect({})}
+                                    onClick={login}
                                     >
                                     <i className="w-5 fa-solid fa-right-to-bracket"></i>
                                     <span className="ml-2">Log in</span>
@@ -217,7 +189,7 @@ export function Main({ computerPage }: IMainProps) {
                         {isAuthenticated && (
                             <div className="ml-auto mr-4">
                                 <button
-                                    onClick={() => logoutWithRedirect()}
+                                    onClick={logout}
                                     >
                                     <i className="w-5 fa-solid fa-right-from-bracket"></i>
                                     <span className="ml-1">Log out</span>

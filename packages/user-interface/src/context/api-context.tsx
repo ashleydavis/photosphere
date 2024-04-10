@@ -4,7 +4,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
 import { base64StringToBlob } from 'blob-util';
 import dayjs from "dayjs";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "./auth-context";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -61,41 +61,18 @@ export interface IProps {
 export function ApiContextProvider({ children }: IProps) {
 
     const {
-        getAccessTokenSilently,
-    } = useAuth0();
+        loadToken,
+        getToken,
+    } = useAuth();
 
     const collectionId = "ash-test";
-
-    //
-    // The user's access token.
-    //
-    let token = useRef<string | undefined>(undefined);
-
-    //
-    // Gets the users access token.
-    //
-    async function getToken(): Promise<string> {
-        const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
-        if (!token.current) {
-            if (isProd) {
-                token.current = await getAccessTokenSilently();
-            }
-            else {
-                token.current = "testing-token";
-            }
-        }
-        
-        return token.current;
-    }
 
     //
     // Makes a full URL to a route in the REST API.
     //
     function makeUrl(route: string): string {
         let url = `${BASE_URL}${route}&col=${collectionId}`;
-        if (token.current) {
-            url += `&tok=${token.current}`;
-        }
+        url += `&tok=${getToken()}`;
         return url;
     }
 
@@ -105,7 +82,8 @@ export function ApiContextProvider({ children }: IProps) {
     async function getAssets(): Promise<IGalleryItem[]> {
         let url = `${BASE_URL}/assets?col=${collectionId}`;
 
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
         const { data } = await axios.get(
             url, 
             { 
@@ -129,7 +107,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Check if an asset is already uploaded using its hash.
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
         const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
         const response = await axios.get(
             url, 
@@ -147,7 +126,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Uploads an asset to the backend.
     //
     async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
 
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
@@ -230,7 +210,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Adds a label to an asset.
     //
     async function addLabel(id: string, labelName: string): Promise<void> {
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
                 col: collectionId,
@@ -249,7 +230,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Renmoves a label from an asset.
     //
     async function removeLabel(id: string, labelName: string): Promise<void> {
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
@@ -269,7 +251,8 @@ export function ApiContextProvider({ children }: IProps) {
     // Sets a description for an asset.
     //
     async function setDescription(id: string, description: string): Promise<void> {
-        const token = await getToken();
+        await loadToken();
+        const token = getToken();
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {

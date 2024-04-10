@@ -1,6 +1,6 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 export function App() {
@@ -14,15 +14,17 @@ export function App() {
                     redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
                 }}
                 >
-                <ApiContextProvider>
-                    <SearchContextProvider>
-                        <CloudGallerySourceContextProvider>
-                            <UploadContextProvider>
-                                <Main />
-                            </UploadContextProvider>
-                        </CloudGallerySourceContextProvider>
-                    </SearchContextProvider>
-                </ApiContextProvider>
+                <AuthContextProvider>
+                    <ApiContextProvider>
+                        <SearchContextProvider>
+                            <CloudGallerySourceContextProvider>
+                                <UploadContextProvider>
+                                    <Main />
+                                </UploadContextProvider>
+                            </CloudGallerySourceContextProvider>
+                        </SearchContextProvider>
+                    </ApiContextProvider>
+                </AuthContextProvider>
             </Auth0Provider>
         </BrowserRouter>
     );

@@ -1,4 +1,5 @@
 export { Main } from './main';
+export { AuthContextProvider } from './context/auth-context';
 export { ApiContextProvider } from './context/api-context';
 export { SearchContextProvider } from './context/search-context';
 export { IGallerySourceContext } from './context/source/gallery-source-context';
