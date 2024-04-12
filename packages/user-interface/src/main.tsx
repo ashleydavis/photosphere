@@ -129,10 +129,10 @@ export function Main({ computerPage }: IMainProps) {
                             <i className="fa-solid fa-bars"></i>
                         </button>
 
-                        <h1 className="ml-4">Photosphere</h1>
+                        <h1 className="ml-1 sm:ml-4">Photosphere</h1>
 
                         <button
-                            className="ml-8 mr-3"
+                            className="ml-2 mr-1 sm:ml-8 sm:mr-3"
                         	onClick={event => {
                             	setOpenSearch(true);
                             }}
@@ -144,7 +144,7 @@ export function Main({ computerPage }: IMainProps) {
                         </button>
 
                         <NavLink
-                            className="mr-3"
+                            className="mr-1 sm:mr-3"
                             to="/cloud"
                             >
                             <div className="flex flex-row items-center">
@@ -155,7 +155,7 @@ export function Main({ computerPage }: IMainProps) {
 
                         {computerPage && 
                             <NavLink
-                                className="mr-3"
+                                className="mr-1 sm:mr-3"
                                 to="/computer"
                                 >
                                 <div className="flex flex-row items-center">
@@ -166,7 +166,7 @@ export function Main({ computerPage }: IMainProps) {
                         }
 
                         <NavLink
-                            className="mr-3"
+                            className="mr-1 sm:mr-3"
                             to="/upload"
                             >
                             <div className="flex flex-row items-center">
@@ -176,7 +176,7 @@ export function Main({ computerPage }: IMainProps) {
                         </NavLink>
 
                         {!isAuthenticated && (
-                            <div className="ml-auto mr-4">
+                            <div className="ml-auto mr-1 sm:mr-4">
                                 <button
                                     onClick={login}
                                     >
@@ -187,7 +187,7 @@ export function Main({ computerPage }: IMainProps) {
                         )}
 
                         {isAuthenticated && (
-                            <div className="ml-auto mr-4">
+                            <div className="ml-auto mr-1 sm:mr-4">
                                 <button
                                     onClick={logout}
                                     >
@@ -200,7 +200,7 @@ export function Main({ computerPage }: IMainProps) {
                         {(isUploading || numScans > 0)
                             && <div className="flex flex-row items-center">
                                 <span className="hidden sm:block">Uploading</span>
-                                <div className="mx-2">
+                                <div className="mx-1 sm:mx-2">
                                     <Spinner show={true} />
                                 </div>
                             </div>
