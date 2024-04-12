@@ -181,7 +181,7 @@ export function Main({ computerPage }: IMainProps) {
                                     onClick={login}
                                     >
                                     <i className="w-5 fa-solid fa-right-to-bracket"></i>
-                                    <span className="ml-2">Log in</span>
+                                    <span className="hidden sm:block ml-2">Log in</span>
                                 </button>
                             </div> 
                         )}
@@ -192,7 +192,7 @@ export function Main({ computerPage }: IMainProps) {
                                     onClick={logout}
                                     >
                                     <i className="w-5 fa-solid fa-right-from-bracket"></i>
-                                    <span className="ml-1">Log out</span>
+                                    <span className="hidden sm:block ml-1">Log out</span>
                                 </button>
                             </div> 
                         )}

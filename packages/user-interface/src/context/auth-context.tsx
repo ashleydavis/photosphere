@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth0, User } from "@auth0/auth0-react";
 
 export interface IAuthContext {
 
@@ -12,6 +12,16 @@ export interface IAuthContext {
     // Set to true when authenticated.
     //
     isAuthenticated: boolean;
+
+    //
+    // The logged in user.
+    //
+    user: User | undefined;
+
+    //
+    // The authentication error, if one occured.
+    //
+    error: Error | undefined;
 
     //
     // Loads the users access token.
@@ -33,15 +43,21 @@ export interface IAuthContext {
     //
     logout(): Promise<void>;
 
+
 }
 
 const AuthContext = createContext<IAuthContext | undefined>(undefined);
 
-export interface IProps {
+export interface IAuthContextProviderProps {
+    //
+    // Used to control the login/logout redirect and not rely on the SDK to do the actual redirect.
+    //
+    openUrl?: (url: string) => Promise<void> | void;
+
     children: ReactNode | ReactNode[];
 }
 
-export function AuthContextProvider({ children }: IProps) {
+export function AuthContextProvider({ openUrl, children }: IAuthContextProviderProps) {
 
     const {
         isLoading,
@@ -53,6 +69,29 @@ export function AuthContextProvider({ children }: IProps) {
         getAccessTokenSilently,
     } = useAuth0();
 
+    useEffect(() => {
+        validateAuthSettings();
+    }, []);
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            console.log(`User is authenticated, loading access token.`);
+            loadToken()
+                .then(() => {
+                    console.log(`Access token loaded.`);                
+                })
+                .catch(error => {
+                    token.current = undefined;
+                    console.error(`Error loading access token:`);
+                    console.error(error);
+                });
+        }
+        else {
+            console.log(`User is not authenticated, clearing access token.`)
+            token.current = undefined;
+        }
+    }, [isAuthenticated]);
+    
     //
     // The user's access token.
     //
@@ -73,11 +112,22 @@ export function AuthContextProvider({ children }: IProps) {
         }
     }
 
+    function stackTrace() {
+        function getStackTrace() {
+            const error = new Error();
+            return error.stack;
+        }
+        
+        console.log(getStackTrace());
+    }
+
     //
     // Gets an access token for the user.
     //
     function getToken(): string {
         if (!token.current) {
+            console.error(`Access token is not loaded!`);
+            stackTrace();
             throw new Error(`Access token is not loaded!`);
         }
         return token.current;
@@ -87,7 +137,9 @@ export function AuthContextProvider({ children }: IProps) {
     // Logs in.
     //
     async function login(): Promise<void> {
-        await loginWithRedirect({});        
+        await loginWithRedirect({
+            openUrl,
+        });       
     }
 
     //
@@ -97,17 +149,16 @@ export function AuthContextProvider({ children }: IProps) {
         _logout({
             logoutParams: {
                 returnTo: `${process.env.AUTH0_ORIGIN}/on_logout`,
-            }
+            },
+            openUrl,
         });
     }
-
-    useEffect(() => {
-        validateAuthSettings();
-    }, []);
 
     const value: IAuthContext = {
         isLoading,
         isAuthenticated,
+        user,
+        error,
         loadToken,
         getToken,
         login,
