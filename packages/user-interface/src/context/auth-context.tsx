@@ -1,3 +1,11 @@
+//
+// Useful Auth0 docs:
+//
+//  https://auth0.com/docs/quickstart/native/ionic-react/01-login
+//  https://github.com/auth0-samples/auth0-ionic-samples
+//  https://community.auth0.com/t/auth0-callback-url-with-capacitor-native-app/66293
+//
+
 import React, { createContext, ReactNode, useContext, useEffect, useRef } from "react";
 import { useAuth0, User } from "@auth0/auth0-react";
 
