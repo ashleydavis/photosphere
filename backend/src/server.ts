@@ -25,6 +25,10 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     const app = express();
     app.use(cors());
 
+    app.get("/alive", (req, res) => {
+        res.sendStatus(200);
+    });
+
     //
     // Extracts JWT from query parameters.
     //
