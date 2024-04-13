@@ -92,6 +92,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         }
         const user = await userDatabase.getOne(`users`, userId);
         if (!user) {
+            console.log(`User not found: ${userId}`);
             res.sendStatus(401);
             return;
         }
