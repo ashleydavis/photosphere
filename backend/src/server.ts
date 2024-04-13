@@ -62,7 +62,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             || process.env.NODE_ENV === "test") {
             req.auth = { 
                 payload: { 
-                    sub: "auth0-6609076bbfe7556c8ab391dc", // Test user.
+                    sub: "test-user", // Test user.
                 } 
             } as any;
             
