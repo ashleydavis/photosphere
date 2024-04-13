@@ -65,7 +65,7 @@ export function ApiContextProvider({ children }: IProps) {
         getToken,
     } = useAuth();
 
-    const collectionId = "ash-test";
+    const collectionId = "test-collection";
 
     //
     // Makes a full URL to a route in the REST API.
