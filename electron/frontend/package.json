@@ -10,7 +10,7 @@
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "compile": "tsc",
-    "compile:watch": "tsc --watch",
+    "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf dist build"
   },
   "keywords": [],
