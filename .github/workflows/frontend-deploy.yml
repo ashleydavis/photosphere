@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  deploy:
     timeout-minutes: 60
     runs-on: ubuntu-latest
 
@@ -69,5 +69,6 @@ jobs:
       # Deploys to static web page to s3.
       #
       - name: Deploy to S3
-        run: aws s3 cp ./frontend/build s3://${{secrets.FRONTEND_S3_BUCKET}}/ --recursive
+        working-directory: frontend
+        run: aws s3 cp ./dist s3://${{secrets.FRONTEND_S3_BUCKET}}/ --recursive
 
