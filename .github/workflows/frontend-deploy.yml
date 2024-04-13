@@ -16,6 +16,13 @@ jobs:
 
     env:
       VERSION: ${{github.sha}}
+      AUTH0_DOMAIN: ${{secrets.AUTH0_DOMAIN}}
+      AUTH0_CLIENT_ID: ${{secrets.AUTH0_CLIENT_ID}}
+      AUTH0_AUDIENCE: ${{secrets.AUTH0_AUDIENCE}}
+      GOOGLE_API_KEY: ${{secrets.GOOGLE_API_KEY}}
+      BASE_URL: ${{secrets.AUTH0_DOMAIBASE_URL}}
+      NODE_ENV: production
+      AUTH0_ORIGIN: ${{secrets.AUTH0_ORIGIN}}
 
     steps:
       - uses: actions/checkout@v3
