@@ -85,7 +85,11 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const userId = (req.auth.payload.sub!).replace("|", "-");
+        let userId = req.auth.payload.sub;
+        if (userId.startsWith("auth0|")) {
+            // Removes the auth0| prefix the user id.
+            userId = userId.substring(6);
+        }
         const user = await userDatabase.getOne(`users`, userId);
         if (!user) {
             res.sendStatus(401);
