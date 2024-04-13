@@ -156,6 +156,15 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }
 
     //
+    // Gets collections the user has access to.
+    //
+    app.get("/collections", asyncErrorHandler(async (req, res) => { //todo: test me .http and jest
+        res.json({
+            defaultCollection: "d5a75330-61ca-487d-b81b-0d2aeaa74c76",
+        });
+    }));
+
+    //
     // Uploads metadata for an asset and allocates a new asset id.
     //
     app.post("/metadata", express.json(), asyncErrorHandler(async (req, res) => {

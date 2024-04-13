@@ -7,8 +7,6 @@ import { IGallerySourceContext } from "./gallery-source-context";
 import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
 
-const NUM_ASSETS_PER_PAGE = 100;
-
 export interface ICloudGallerySourceContext extends IGallerySourceContext {
     //
     // Loads assets into the gallery.
@@ -43,8 +41,10 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     // Resets the gallery when the search text changes.
     //
     useEffect(() => {
-        loadAssets();
-    }, []);
+        if (api.isInitialised) {
+            loadAssets();
+        }
+    }, [api.isInitialised]);
 
     //
     // Loads assets into the gallery.

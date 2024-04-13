@@ -6,7 +6,7 @@
 //  https://community.auth0.com/t/auth0-callback-url-with-capacitor-native-app/66293
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useRef } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useAuth0, User } from "@auth0/auth0-react";
 
 export interface IAuthContext {
@@ -17,9 +17,14 @@ export interface IAuthContext {
     isLoading: boolean;
 
     //
-    // Set to true when authenticated.
+    // Set to true when the user is authenticated.
     //
     isAuthenticated: boolean;
+
+    //
+    // Set to true when the auth token is loaded.
+    //
+    isTokenLoaded: boolean;
 
     //
     // The logged in user.
@@ -86,7 +91,8 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
             console.log(`User is authenticated, loading access token.`);
             loadToken()
                 .then(() => {
-                    console.log(`Access token loaded.`);                
+                    console.log(`Access token loaded.`);
+                    setIsTokenLoaded(true);
                 })
                 .catch(error => {
                     token.current = undefined;
@@ -103,7 +109,12 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     //
     // The user's access token.
     //
-    let token = useRef<string | undefined>(undefined);
+    const token = useRef<string | undefined>(undefined);
+
+    //
+    // Set to true when the auth token is loaded.
+    //
+    const [isTokenLoaded, setIsTokenLoaded] = useState<boolean>(false);
 
     //
     // Loads the users access token.
@@ -165,6 +176,7 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     const value: IAuthContext = {
         isLoading,
         isAuthenticated,
+        isTokenLoaded,
         user,
         error,
         loadToken,

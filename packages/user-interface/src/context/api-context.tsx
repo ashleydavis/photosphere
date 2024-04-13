@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext, useRef } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IUploadDetails } from "../lib/upload-details";
 import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
@@ -16,9 +16,24 @@ console.log(`Expecting backend at ${BASE_URL}.`);
 export interface IApiContext {
 
     //
+    // Set to true once the api is ready to use.
+    //
+    isInitialised: boolean;
+
+    //
     // Makes a full URL to a route in the REST API.
     //
     makeUrl(route: string): string;
+
+    //
+    // The collection ID the user is working with.
+    //
+    collectionId: string | undefined;
+
+    //
+    // Sets the collection the user is working with.
+    //
+    setCollection(newCollectionId: string): void;
 
     //
     // Retreives the list of assets from the backend.
@@ -61,11 +76,56 @@ export interface IProps {
 export function ApiContextProvider({ children }: IProps) {
 
     const {
+        isTokenLoaded,
         loadToken,
         getToken,
     } = useAuth();
 
-    const collectionId = "test-collection";
+    //
+    // The collection ID the user is working with.
+    //
+    const collectionId = useRef<string | undefined>(undefined);
+
+    //
+    // Set true once authenticated and when the token is loaded.
+    //
+    const [isInitialised, setIsInitialised] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (isTokenLoaded) {
+            loadCollection()
+                .then(() => {
+                    setIsInitialised(true);
+                })
+                .catch(err => {
+                    console.error(`Failed to load collection:`);
+                    console.error(err);                
+                });
+        }
+    }, [isTokenLoaded]);
+
+    //
+    // Loads the collection the user is working with.
+    //
+    async function loadCollection(): Promise<void> {
+        await loadToken();
+        const token = getToken();
+
+        const url = `${BASE_URL}/collections`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        const { defaultCollection } = response.data;
+        collectionId.current = defaultCollection;
+        
+        console.log(`Working with collection: ${collectionId.current}`);
+    }
 
     //
     // Makes a full URL to a route in the REST API.
@@ -77,9 +137,20 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
+    // Sets the collection the user is working with.
+    //
+    function setCollection(newCollectionId: string): void {
+        collectionId.current = newCollectionId;
+    }
+
+    //
     // Retreives the list of assets from the backend.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
+        if (!collectionId.current) {
+            throw new Error(`Collection ID is not set!`);
+        }
+
         let url = `${BASE_URL}/assets?col=${collectionId}`;
 
         await loadToken();
@@ -88,7 +159,7 @@ export function ApiContextProvider({ children }: IProps) {
             url, 
             { 
                 headers: {                     
-                    col: collectionId,
+                    col: collectionId.current,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -107,6 +178,10 @@ export function ApiContextProvider({ children }: IProps) {
     // Check if an asset is already uploaded using its hash.
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
+        if (!collectionId.current) {
+            throw new Error(`Collection ID is not set!`);
+        }
+
         await loadToken();
         const token = getToken();
         const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
@@ -114,7 +189,7 @@ export function ApiContextProvider({ children }: IProps) {
             url, 
             {
                 headers: {
-                    col: collectionId,
+                    col: collectionId.current,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -126,6 +201,10 @@ export function ApiContextProvider({ children }: IProps) {
     // Uploads an asset to the backend.
     //
     async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
+        if (!collectionId.current) {
+            throw new Error(`Collection ID is not set!`);
+        }
+
         await loadToken();
         const token = getToken();
 
@@ -161,7 +240,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.assetContentType,
-                    col: collectionId,
+                    col: collectionId.current,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -178,7 +257,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.thumbContentType,
-                    col: collectionId,
+                    col: collectionId.current,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -195,7 +274,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": uploadDetails.displayContentType,
-                    col: collectionId,
+                    col: collectionId.current,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -269,7 +348,10 @@ export function ApiContextProvider({ children }: IProps) {
     }   
 
     const value: IApiContext = {
+        isInitialised,
         makeUrl,
+        collectionId: collectionId.current,
+        setCollection: setCollection,
         getAssets,
         checkAsset,
         uploadAsset,
