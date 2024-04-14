@@ -161,12 +161,10 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }
 
     //
-    // Gets collections the user has access to.
+    // Gets the user's metadata.
     //
-    app.get("/collections", asyncErrorHandler(async (req, res) => { //todo: test me .http and jest
-        res.json({
-            defaultCollection: "d5a75330-61ca-487d-b81b-0d2aeaa74c76",
-        });
+    app.get("/user", asyncErrorHandler(async (req, res) => { //todo: test me .http and jest
+        res.json(req.user);
     }));
 
     //

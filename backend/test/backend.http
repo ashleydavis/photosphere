@@ -3,6 +3,18 @@
 @token = "doesn't matter in dev and testing"
 @collection = ash-test
 
+###
+
+GET {{base_url}}/alive
+
+###
+# @name user_metadata
+#
+# Gets metadata for a user.
+#
+GET {{base_url}}/user
+Authorization: Bearer {{token}}
+
 
 ###
 # @name upload_asset

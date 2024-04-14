@@ -111,7 +111,7 @@ export function ApiContextProvider({ children }: IProps) {
         await loadToken();
         const token = getToken();
 
-        const url = `${BASE_URL}/collections`;
+        const url = `${BASE_URL}/user`;
         const response = await axios.get(
             url, 
             {
@@ -121,8 +121,7 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
 
-        const { defaultCollection } = response.data;
-        collectionId.current = defaultCollection;
+        collectionId.current = response.data.collections.default;
         
         console.log(`Working with collection: ${collectionId.current}`);
     }

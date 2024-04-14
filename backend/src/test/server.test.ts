@@ -31,7 +31,7 @@ describe("photosphere backend", () => {
         const address = server.address() as AddressInfo;
         const baseUrl = `http://localhost:${address.port}`;
 
-        return { app, server, baseUrl, mockAssetDatabase };        
+        return { app, server, baseUrl, mockAssetDatabase, mockUserDatabase };        
     }
 
     beforeAll(() => {
@@ -65,6 +65,23 @@ describe("photosphere backend", () => {
         });
         return stream;
     }
+
+    test("user metadata", async () => {
+        const { baseUrl, mockUserDatabase } = await initServer();
+
+        const mockUser = {
+            collections: {
+                upload: "upload",
+                default: "default",
+                access: [ "access" ],
+            },
+        };
+        mockUserDatabase.getOne = async () => mockUser;
+
+        const response = await axios.get(`${baseUrl}/user`);
+        expect(response.status).toBe(200);
+        expect(response.data).toEqual(mockUser);
+    });
     
     test("no assets", async () => {
         const { baseUrl, mockAssetDatabase } = await initServer();
