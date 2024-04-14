@@ -1,4 +1,5 @@
 {
     "uploadCollection": "test-collection",
+    "defaultCollection": "test-collection",
     "collections": [ "test-collection" ]
 }
