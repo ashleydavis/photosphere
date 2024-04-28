@@ -130,7 +130,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Makes a full URL to a route in the REST API.
     //
     function makeUrl(route: string): string {
-        let url = `${BASE_URL}${route}&col=${collectionId}`;
+        let url = `${BASE_URL}${route}&col=${collectionId.current}`;
         url += `&tok=${getToken()}`;
         return url;
     }
@@ -150,7 +150,7 @@ export function ApiContextProvider({ children }: IProps) {
             throw new Error(`Collection ID is not set!`);
         }
 
-        let url = `${BASE_URL}/assets?col=${collectionId}`;
+        let url = `${BASE_URL}/assets?col=${collectionId.current}`;
 
         await loadToken();
         const token = getToken();
@@ -170,6 +170,8 @@ export function ApiContextProvider({ children }: IProps) {
             asset.group = dayjs(asset.sortDate).format("MMM, YYYY")
         }
 
+        console.log(assets); //fio:
+
         return assets;
     }
 
@@ -183,7 +185,7 @@ export function ApiContextProvider({ children }: IProps) {
 
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
+        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId.current}`;
         const response = await axios.get(
             url, 
             {
@@ -210,7 +212,7 @@ export function ApiContextProvider({ children }: IProps) {
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
             {
-                col: collectionId,
+                col: collectionId.current,
                 fileName: uploadDetails.fileName,
                 width: uploadDetails.resolution.width,
                 height: uploadDetails.resolution.height,
@@ -292,7 +294,7 @@ export function ApiContextProvider({ children }: IProps) {
         const token = getToken();
         await axios.post(`${BASE_URL}/asset/add-label`, 
             {
-                col: collectionId,
+                col: collectionId.current,
                 id: id,
                 label: labelName,
             },
@@ -313,7 +315,7 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/remove-label`, 
             {
-                col: collectionId,
+                col: collectionId.current,
                 id: id,
                 label: labelName,
             },
@@ -334,7 +336,7 @@ export function ApiContextProvider({ children }: IProps) {
         await axios.post(
             `${BASE_URL}/asset/description`, 
             {
-                col: collectionId,
+                col: collectionId.current,
                 id: id,
                 description: description,
             },
