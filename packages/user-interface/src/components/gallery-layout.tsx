@@ -2,6 +2,7 @@ import React from "react";
 import { createLayout } from "../lib/create-layout";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
+import { Image } from "./image";
 
 export interface IGalleryLayoutProps { 
     //
@@ -81,20 +82,17 @@ export function GalleryLayout({
                         }}
                         >
                         {row.items.map((item, index) => {
-                            const url = item.url || api.makeUrl(`/thumb?id=${item._id}`);
                             return (
-                                <img 
-                                    data-testid="gallery-thumb"
-                                    style={{
-                                        padding: "2px",
-                                    }}
-                                    onClick={() => {
+                               <Image
+                                    key={item._id}
+                                    testId="gallery-thumb"
+                                    imgClassName="gallery-thumb"
+                                    asset={item}
+                                    onClick={() =>{
                                         if (onItemClick) {
                                             onItemClick({ item, index });
                                         }
                                     }}
-                                    key={item._id}
-                                    src={url}
                                     />
                             );
                         })}

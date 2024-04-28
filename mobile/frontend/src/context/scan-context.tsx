@@ -99,27 +99,30 @@ export function ScanContextProvider({ children }: IProps) {
                             continue;
                         }
 
-                        const { thumbnail, width, height, hash } = await FileUploader.loadThumbnail({ path: file.path });
-                        const dataURL = `data:${file.contentType};base64,${thumbnail}`;
-                        const newAsset: IGalleryItem = {
-                            _id: `local://${file.path}`,
-                            width,
-                            height,
-                            origFileName: file.path,
-                            hash,
-                            fileDate: dayjs().toISOString(),
-                            sortDate: dayjs().toISOString(),
-                            uploadDate: dayjs().toISOString(),
-                            url: dataURL,
-                            makeFullUrl: async () => {
-                                const { fullImage } = await FileUploader.loadFullImage({ path: file.path, contentType: file.type });
-                                const dataURL = `data:${file.contentType};base64,${fullImage}`;
-                                return dataURL;
-                            },
-                        };
+                        //
+                        //todo: This will be a bit different using local storage.
+                        //
+                        // const { thumbnail, width, height, hash } = await FileUploader.loadThumbnail({ path: file.path });
+                        // const dataURL = `data:${file.contentType};base64,${thumbnail}`;
+                        // const newAsset: IGalleryItem = {
+                        //     _id: `local://${file.path}`,
+                        //     width,
+                        //     height,
+                        //     origFileName: file.path,
+                        //     hash,
+                        //     fileDate: dayjs().toISOString(),
+                        //     sortDate: dayjs().toISOString(),
+                        //     uploadDate: dayjs().toISOString(),
+                        //     url: dataURL,
+                        //     makeFullUrl: async () => {
+                        //         const { fullImage } = await FileUploader.loadFullImage({ path: file.path, contentType: file.type });
+                        //         const dataURL = `data:${file.contentType};base64,${fullImage}`;
+                        //         return dataURL;
+                        //     },
+                        // };
 
-                        assetMap.current.set(file.path, newAsset);
-                        setAssets(prev => prev.concat([ newAsset ]));
+                        // assetMap.current.set(file.path, newAsset);
+                        // setAssets(prev => prev.concat([ newAsset ]));
                     }
 
                     syncingAssets.current = false;

@@ -30,9 +30,25 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
         //TODO: Want to store local data for an asset before it is uploaded.
     }
 
+    //
+    // Loads data for an asset.
+    //
+    function loadAsset(assetId: string, onLoaded: (objectURL: string) => void): void {
+        //TODO: 
+    }
+
+    //
+    // Unloads data for an asset.
+    //
+    function unloadAsset(assetId: string): void {
+        //TODO:
+    }
+
     const value: IComputerGallerySourceContext = {
         assets,
         updateAsset,
+        loadAsset,
+        unloadAsset,
     };
     
     return (

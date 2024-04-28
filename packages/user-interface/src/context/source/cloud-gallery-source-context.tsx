@@ -2,10 +2,11 @@
 // Provides a source of assets for the gallery from the cloud.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useReducer, useRef, useState } from "react";
 import { IGallerySourceContext } from "./gallery-source-context";
 import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
+import { loadImageAsObjectURL, unloadObjectURL } from "../../lib/image";
 
 export interface ICloudGallerySourceContext extends IGallerySourceContext {
     //
@@ -36,6 +37,26 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     // Assets that have been loaded from the backend.
     //
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
+
+    //
+    // A cache entry for a loaded asset.
+    //
+    interface IAssetCacheEntry {
+        //
+        // Number of references to this asset.
+        //
+        numRefs: number;
+
+        //
+        // Object URL for the asset.
+        //
+        objectUrl: string;
+    }
+
+    //
+    // Caches loaded assets.
+    //
+    const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
     //
     // Resets the gallery when the search text changes.
@@ -78,11 +99,48 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
         });
     }
 
+    //
+    // Loads data for an asset.
+    //
+    function loadAsset(assetId: string, onLoaded: (objectURL: string) => void): void {
+        const existingCacheEntry = assetCache.current.get(assetId);
+        if (existingCacheEntry) {
+            existingCacheEntry.numRefs += 1;
+            onLoaded(existingCacheEntry.objectUrl);
+            return;
+        }
+
+        const url = api.makeUrl(`/thumb?id=${assetId}`);
+        loadImageAsObjectURL(url)
+            .then(objectUrl => {                
+                assetCache.current.set(assetId, { numRefs: 1, objectUrl });
+                onLoaded(objectUrl);
+            });
+    }
+
+    //
+    // Unloads data for an asset.
+    //
+    function unloadAsset(assetId: string): void {
+        const cacheEntry = assetCache.current.get(assetId);
+        if (cacheEntry) {            
+            if (cacheEntry.numRefs === 1) {
+                unloadObjectURL(cacheEntry.objectUrl);
+                assetCache.current.delete(assetId);
+            }
+            else {
+                cacheEntry.numRefs -= 1;
+            }
+        }
+    }
+
     const value: ICloudGallerySourceContext = {
         loadAssets,
         assets,
         addAsset,
         updateAsset,
+        loadAsset,
+        unloadAsset,
     };
     
     return (

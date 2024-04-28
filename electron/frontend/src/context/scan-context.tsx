@@ -74,26 +74,30 @@ export function ScanContextProvider({ children }: IProps) {
     // Scan the file system for assets.
     //
     function scanImages(): void {
-        _scanImages(async fileDetails => {
-            const { thumbnail, resolution, hash } = await loadThumbnail(fileDetails.path, fileDetails.contentType);
-            const newAsset: IGalleryItem = {
-                _id: `local://${fileDetails.path}`,
-                width: resolution.width,
-                height: resolution.height,
-                origFileName: fileDetails.path,
-                hash,
-                fileDate: dayjs().toISOString(),
-                sortDate: dayjs().toISOString(),
-                uploadDate: dayjs().toISOString(),
-                url: thumbnail,
-                makeFullUrl: async () => {
-                    return await loadHighRes(fileDetails.path, fileDetails.contentType);
-                },
-            };
-            setAssets(prev => prev.concat([ newAsset ]));
-        })
-        .then(() => console.log('Scanning complete'))
-        .catch(error => console.error('Error scanning images', error));
+        //
+        //todo: This will be a bit different using local storage.
+        //
+        //
+        // _scanImages(async fileDetails => {
+        //     const { thumbnail, resolution, hash } = await loadThumbnail(fileDetails.path, fileDetails.contentType);
+        //     const newAsset: IGalleryItem = {
+        //         _id: `local://${fileDetails.path}`,
+        //         width: resolution.width,
+        //         height: resolution.height,
+        //         origFileName: fileDetails.path,
+        //         hash,
+        //         fileDate: dayjs().toISOString(),
+        //         sortDate: dayjs().toISOString(),
+        //         uploadDate: dayjs().toISOString(),
+        //         url: thumbnail,
+        //         makeFullUrl: async () => {
+        //             return await loadHighRes(fileDetails.path, fileDetails.contentType);
+        //         },
+        //     };
+        //     setAssets(prev => prev.concat([ newAsset ]));
+        // })
+        // .then(() => console.log('Scanning complete'))
+        // .catch(error => console.error('Error scanning images', error));
     }
 
     const value: IScanContext = {

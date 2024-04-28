@@ -102,16 +102,6 @@ export interface IGalleryItem {
     // Description of the asset, once it has been set by the user.
     //
     description?: string;
-
-    //
-    // Direct URL for an asset. Can be a data URL when loaded from a local image file.
-    //
-    url?: string;
-
-    //
-    // Function that can be attached to dynamically build the URL for the high res asset.
-    //
-    makeFullUrl?: () => Promise<string>;
 }
 
 //

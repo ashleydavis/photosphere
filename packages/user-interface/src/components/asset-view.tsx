@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useApi } from "../context/api-context";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
+import { Image } from "./image";
 
 export interface IAssetViewProps { 
 
@@ -46,40 +47,15 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
     //
     const [openInfo, setOpenInfo] = useState<boolean>(false);
 
-    //
-    // The URL for the image.
-    //
-    const [url, setUrl] = useState<string>("");
-
-    useEffect(() => {
-        if (asset.makeFullUrl) {
-            asset.makeFullUrl()
-                .then(url => {
-                    setUrl(url);
-                })
-                .catch(err => {
-                    console.error(`Failed to load full asset ${asset._id}`);
-                    console.error(err);
-                });
-        } 
-        else if (asset.url) {
-            setUrl(asset.url);
-        } 
-        else {
-            setUrl(api.makeUrl(`/display?id=${asset._id}`));
-        }
-    
-    }, [asset]);
-
     return (
         <div className={"photo bg-black text-white text-xl " + (open ? "open" : "")}>
 
             <div className="w-full h-full flex flex-col justify-center items-center">
                 {open
                     && <div className="photo-container flex flex-col items-center justify-center">
-                        <img
-                            data-testid="fullsize-asset"
-                            src={url}
+                        <Image
+                            testId="fullsize-asset"
+                            asset={asset}
                             />
                     </div>
                 }
