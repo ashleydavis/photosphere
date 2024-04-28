@@ -35,3 +35,17 @@ pnpm start
 ```
 
 This command also builds the static version of the web page.
+
+## Build the installer
+
+Run build script for each platform:
+
+```bash
+pnpm run build-win
+pnpm run build-linux
+pnpm run build-mac
+```
+
+For MacOS you need to build it on a Mac.
+
+Results can be found under `./tmp/build`.

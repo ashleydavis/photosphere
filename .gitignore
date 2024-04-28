@@ -9,3 +9,4 @@ electron/frontend/build
 backend/build
 mobile/frontend/build
 frontend/playwright-report
+electron/tmp
