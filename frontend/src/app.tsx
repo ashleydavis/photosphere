@@ -1,31 +1,51 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider, isProduction } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
-export function App() {
+//
+// Default setup for the app.
+//
+function DefaultSetup() {
     return (
-        <BrowserRouter>
-            <Auth0Provider
-                domain={process.env.AUTH0_DOMAIN as string}
-                clientId={process.env.AUTH0_CLIENT_ID as string}
-                authorizationParams={{
-                    audience: process.env.AUTH0_AUDIENCE as string,
-                    redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
-                }}
-                >
-                <AuthContextProvider>
-                    <ApiContextProvider>
-                        <SearchContextProvider>
-                            <CloudGallerySourceContextProvider>
-                                <UploadContextProvider>
-                                    <Main />
-                                </UploadContextProvider>
-                            </CloudGallerySourceContextProvider>
-                        </SearchContextProvider>
-                    </ApiContextProvider>
-                </AuthContextProvider>
-            </Auth0Provider>
-        </BrowserRouter>
+        <AuthContextProvider>
+            <ApiContextProvider>
+                <SearchContextProvider>
+                    <CloudGallerySourceContextProvider>
+                        <UploadContextProvider>
+                            <Main />
+                        </UploadContextProvider>
+                    </CloudGallerySourceContextProvider>
+                </SearchContextProvider>
+            </ApiContextProvider>
+        </AuthContextProvider>
     );
+}
+
+export function App() {
+    if (isProduction) {
+        // Setup with authentication.
+        return (
+            <BrowserRouter>
+                <Auth0Provider
+                    domain={process.env.AUTH0_DOMAIN as string}
+                    clientId={process.env.AUTH0_CLIENT_ID as string}
+                    authorizationParams={{
+                        audience: process.env.AUTH0_AUDIENCE as string,
+                        redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
+                    }}
+                    >
+                    <DefaultSetup />
+                </Auth0Provider>
+            </BrowserRouter>
+        );
+    }
+    else {
+        // Setup for dev and testing with no authentication.
+        return (
+            <BrowserRouter>
+                <DefaultSetup />
+            </BrowserRouter>
+        );
+    }
 }

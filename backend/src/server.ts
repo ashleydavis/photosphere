@@ -48,22 +48,25 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         next();
     });
 
-    const checkJwt = auth({
-        audience: process.env.AUTH0_AUDIENCE as string,
-        issuerBaseURL: process.env.AUTH0_BASE_URL as string,
-        tokenSigningAlg: 'RS256'        
-    });
-
-    //
-    // Authenticates a JWT token.
-    //
-    app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+        
+        const checkJwt = auth({
+            audience: process.env.AUTH0_AUDIENCE as string,
+            issuerBaseURL: process.env.AUTH0_BASE_URL as string,
+            tokenSigningAlg: 'RS256'        
+        });
 
         //
-        // Skip authentication in development and test.
+        // Authenticates a JWT token.
         //
-        if (process.env.NODE_ENV === "development"
-            || process.env.NODE_ENV === "test") {
+        app.use(checkJwt);
+    }
+    else {
+        //
+        // Mocks a JWT token.
+        //
+        app.use((req, res, next) => {
+
             req.auth = { 
                 payload: { 
                     sub: "test-user", // Test user.
@@ -71,14 +74,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             } as any;
             
             next();
-            return;
-        }
-
-        //
-        // Otherwise check the JWT.
-        //
-        checkJwt(req, res, next);
-    });
+        });
+    }
 
     //
     // Attaches user information to the request.

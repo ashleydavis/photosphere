@@ -9,6 +9,8 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useAuth0, User } from "@auth0/auth0-react";
 
+export const isProduction = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
+
 export interface IAuthContext {
 
     //
@@ -87,22 +89,27 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     }, []);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            console.log(`User is authenticated, loading access token.`);
-            loadToken()
-                .then(() => {
-                    console.log(`Access token loaded.`);
-                    setIsTokenLoaded(true);
-                })
-                .catch(error => {
-                    token.current = undefined;
-                    console.error(`Error loading access token:`);
-                    console.error(error);
-                });
+        if (isProduction) {
+            if (isAuthenticated) {
+                console.log(`User is authenticated, loading access token.`);
+                loadToken()
+                    .then(() => {
+                        console.log(`Access token loaded.`);
+                        setIsTokenLoaded(true);
+                    })
+                    .catch(error => {
+                        token.current = undefined;
+                        console.error(`Error loading access token:`);
+                        console.error(error);
+                    });
+            }
+            else {
+                console.log(`User is not authenticated, clearing access token.`)
+                token.current = undefined;
+            }
         }
         else {
-            console.log(`User is not authenticated, clearing access token.`)
-            token.current = undefined;
+            setIsTokenLoaded(true);
         }
     }, [isAuthenticated]);
     
@@ -121,8 +128,7 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     //
     async function loadToken(): Promise<void> {
         if (!token.current) {
-            const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
-            if (isProd) {
+            if (isProduction) {
                 token.current = await getAccessTokenSilently();
             }
             else {
@@ -174,8 +180,8 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     }
 
     const value: IAuthContext = {
-        isLoading,
-        isAuthenticated,
+        isLoading: isProduction ? isLoading : false,
+        isAuthenticated: isProduction ? isAuthenticated : true,
         isTokenLoaded,
         user,
         error,
@@ -216,8 +222,10 @@ function checkEnvironmentVariable(name: string, value: any): void {
 // Make sure auth0 settings are enabled.
 //
 function validateAuthSettings() {
-    checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
-    checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
-    checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);
-    checkEnvironmentVariable("AUTH0_ORIGIN", process.env.AUTH0_ORIGIN);
+    if (isProduction) {
+        checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
+        checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
+        checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);
+        checkEnvironmentVariable("AUTH0_ORIGIN", process.env.AUTH0_ORIGIN);
+    }
 }
