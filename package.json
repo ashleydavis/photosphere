@@ -6,7 +6,11 @@
     "c": "pnpm run compile",
     "cw": "pnpm run compile:watch",
     "compile": "pnpm --stream -r run compile",
-    "compile:watch": "pnpm --stream -r --parallel run compile:watch"
+    "compile:watch": "pnpm --stream -r --parallel run compile:watch",
+    "test": "pnpm --stream -r run test",
+    "test:watch": "pnpm --stream -r --parallel run test:watch",
+    "t": "pnpm run test",
+    "tw": "pnpm run test:watch"
   },
   "repository": {
     "type": "git",
