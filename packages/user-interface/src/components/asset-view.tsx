@@ -56,6 +56,7 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                         <Image
                             testId="fullsize-asset"
                             asset={asset}
+                            type="display"
                             />
                     </div>
                 }

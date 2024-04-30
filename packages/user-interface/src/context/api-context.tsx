@@ -1,8 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { IUploadDetails } from "../lib/upload-details";
 import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
-import { base64StringToBlob } from 'blob-util';
 import dayjs from "dayjs";
 import { useAuth } from "./auth-context";
 
@@ -12,6 +10,53 @@ if (!BASE_URL) {
 }
 
 console.log(`Expecting backend at ${BASE_URL}.`);
+
+export interface IAssetMetadata {
+    //
+    // The name of the file.
+    //
+    fileName: string;
+
+    //
+    // The width of the image or video.
+    //
+    width: number;
+
+    //
+    // The height of the image or video.
+    //
+    height: number;
+
+    //
+    // Hash of the data.
+    //
+    hash: string;
+
+    //
+    // Optional properties, like exif data.
+    //
+    properties?: any;
+
+    //
+    // Reverse geocoded location of the asset, if known.
+    //
+    location?: string;
+
+    //
+    // The data the file was created.
+    //
+    fileDate: string;
+
+    //
+    // The data the photo was taken if known.
+    //
+    photoDate?: string;
+
+    //
+    // Labels to add to the uploaded asset, if any.
+    //
+    labels: string[];
+}
 
 export interface IApiContext {
 
@@ -41,6 +86,11 @@ export interface IApiContext {
     getAssets(): Promise<IGalleryItem[]>;
 
     //
+    // Retreives the data for an asset from the backend.
+    //
+    getAsset(assetId: string, type: string): Promise<Blob>;
+
+    //
     // Check if an asset is already uploaded using its hash.
     //
     checkAsset(hash: string): Promise<string | undefined>;
@@ -48,23 +98,17 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadAsset(asset: IUploadDetails): Promise<string>;
+    uploadSingleAsset(assetId: string, type: string, contentType: string, data: Blob): Promise<void>;
 
     //
-    // Adds a label to an asset.
+    // Uploads an asset's metadata to the backend.
     //
-    addLabel(id: string, labelName: string): Promise<void>;
+    uploadAssetMetadata(assetMetadata: IAssetMetadata): Promise<string>;
 
     //
-    // Renmoves a label from an asset.
+    // Updates an asset's metadata.
     //
-    removeLabel(id: string, labelName: string): Promise<void>;
-
-    //
-    // Sets a description for an asset.
-    //
-    setDescription(id: string, description: string): Promise<void>;
-
+    updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -170,9 +214,19 @@ export function ApiContextProvider({ children }: IProps) {
             asset.group = dayjs(asset.sortDate).format("MMM, YYYY")
         }
 
-        console.log(assets); //fio:
-
         return assets;
+    }
+
+    //
+    // Retreives the data for an asset from the backend.
+    //
+    async function getAsset(assetId: string, type: string): Promise<Blob> {
+        const assetUrl = makeUrl(`/${type}?id=${assetId}`);
+        const response = await axios.get(assetUrl, {
+            responseType: 'blob'
+        });
+    
+        return response.data;
     }
 
     //
@@ -201,7 +255,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadAsset(uploadDetails: IUploadDetails): Promise<string> {
+    async function uploadSingleAsset(assetId: string, type: string, contentType: string, data: Blob): Promise<void> {
         if (!collectionId.current) {
             throw new Error(`Collection ID is not set!`);
         }
@@ -209,19 +263,44 @@ export function ApiContextProvider({ children }: IProps) {
         await loadToken();
         const token = getToken();
 
+        await axios.post(
+            `${BASE_URL}/${type}`, 
+            data, 
+            {
+                headers: {
+                    "content-type": contentType,
+                    col: collectionId.current,
+                    id: assetId,
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+    }
+
+    //
+    // Uploads an asset's metadata to the backend.
+    //
+    async function uploadAssetMetadata(assetMetadata: IAssetMetadata): Promise<string> {
+        if (!collectionId.current) {
+            throw new Error(`Collection ID is not set!`);
+        }
+
+        await loadToken();
+        const token = getToken();
+        
         const { data } = await axios.post(
             `${BASE_URL}/metadata`, 
             {
                 col: collectionId.current,
-                fileName: uploadDetails.fileName,
-                width: uploadDetails.resolution.width,
-                height: uploadDetails.resolution.height,
-                hash: uploadDetails.hash,
-                properties: uploadDetails.properties,
-                location: uploadDetails.location,
-                fileDate: uploadDetails.fileDate,
-                photoDate: uploadDetails.photoDate,
-                labels: uploadDetails.labels,
+                fileName: assetMetadata.fileName,
+                width: assetMetadata.width,
+                height: assetMetadata.height,
+                hash: assetMetadata.hash,
+                properties: assetMetadata.properties,
+                location: assetMetadata.location,
+                fileDate: assetMetadata.fileDate,
+                photoDate: assetMetadata.photoDate,
+                labels: assetMetadata.labels,
             },
             {
                 headers: {
@@ -231,72 +310,20 @@ export function ApiContextProvider({ children }: IProps) {
         );
 
         const { assetId } = data;
-
-        //
-        // Uploads the full asset.
-        //
-        await axios.post(
-            `${BASE_URL}/asset`, 
-            uploadDetails.file, 
-            {
-                headers: {
-                    "content-type": uploadDetails.assetContentType,
-                    col: collectionId.current,
-                    id: assetId,
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
-        //
-        // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
-        //
-        const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
-        await axios.post(
-            `${BASE_URL}/thumb`, 
-            thumnailBlob, 
-            {
-                headers: {
-                    "content-type": uploadDetails.thumbContentType,
-                    col: collectionId.current,
-                    id: assetId,
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
-        //
-        // Uploads the display asset separately for simplicity and no restriction on size.
-        //
-        const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
-        await axios.post(
-            `${BASE_URL}/display`, 
-            displayBlob, 
-            {
-                headers: {
-                    "content-type": uploadDetails.displayContentType,
-                    col: collectionId.current,
-                    id: assetId,
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
         return assetId;
     }
-    
 
     //
-    // Adds a label to an asset.
+    // Updates an asset's metadata.
     //
-    async function addLabel(id: string, labelName: string): Promise<void> {
+    async function updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void> {
         await loadToken();
         const token = getToken();
-        await axios.post(`${BASE_URL}/asset/add-label`, 
+        await axios.patch(`${BASE_URL}/metadata`, 
             {
                 col: collectionId.current,
                 id: id,
-                label: labelName,
+                update: assetMetadata,
             },
             {
                 headers: {
@@ -305,48 +332,6 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
     }
-
-    //
-    // Renmoves a label from an asset.
-    //
-    async function removeLabel(id: string, labelName: string): Promise<void> {
-        await loadToken();
-        const token = getToken();
-        await axios.post(
-            `${BASE_URL}/asset/remove-label`, 
-            {
-                col: collectionId.current,
-                id: id,
-                label: labelName,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-    }
-
-    //
-    // Sets a description for an asset.
-    //
-    async function setDescription(id: string, description: string): Promise<void> {
-        await loadToken();
-        const token = getToken();
-        await axios.post(
-            `${BASE_URL}/asset/description`, 
-            {
-                col: collectionId.current,
-                id: id,
-                description: description,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-    }   
 
     const value: IApiContext = {
         isInitialised,
@@ -354,11 +339,11 @@ export function ApiContextProvider({ children }: IProps) {
         collectionId: collectionId.current,
         setCollection: setCollection,
         getAssets,
+        getAsset,
         checkAsset,
-        uploadAsset,
-        addLabel,
-        removeLabel,
-        setDescription,
+        uploadSingleAsset,
+        uploadAssetMetadata,
+        updateAssetMetadata,
     };
     
     return (

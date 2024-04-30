@@ -44,6 +44,11 @@ export interface IAssetDatabase {
     addMetadata(collectionId: string, assetId: string, hash: string, asset: IAsset): Promise<void>;
 
     //
+    // Updates metadata for an asset.
+    //
+    updateMetadata(collectionId: string, assetId: string, assetUpdate: Partial<IAsset>): Promise<void>;
+
+    //
     // Gets the metadata for an asset.
     //
     getMetadata(collectionId: string, assetId: string): Promise<IAsset | undefined>;
@@ -77,21 +82,6 @@ export interface IAssetDatabase {
     // Streams the display resolution asset.
     //
     streamDisplay(collectionId: string, assetId: string): Promise<IAssetStream | undefined>;
-
-    //
-    // Adds a label.
-    //
-    addLabel(collectionId: string, assetId: string, label: string): Promise<void>;
-
-    // 
-    // Removes a label.
-    //
-    removeLabel(collectionId: string, assetId: string, label: string): Promise<void>;
-
-    //
-    // Sets the description.
-    //
-    setDescription(collectionId: string, assetId: string, description: string): Promise<void>;
 
     //
     // Checks if the asset exists based on a hash.
@@ -149,6 +139,19 @@ export class AssetDatabase {
     async addMetadata(collectionId: string, assetId: string, hash: string, asset: IAsset): Promise<void> {
         await this.database.setOne(`collections/${collectionId}/metadata`, assetId, asset);
         await this.updateHash(collectionId, hash, assetId);
+    }
+
+    //
+    // Updates metadata for an asset.
+    //
+    async updateMetadata(collectionId: string, assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
+        const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
+        if (!asset) {
+            throw new Error(`Asset ${assetId} not found.`);
+        }
+
+        const updatedAsset = { ...asset, ...assetUpdate };
+        await this.database.setOne(`collections/${collectionId}/metadata`, assetId, updatedAsset);
     }
 
     //
@@ -225,45 +228,6 @@ export class AssetDatabase {
     }
 
     //
-    // Adds a label.
-    //
-    async addLabel(collectionId: string, assetId: string, label: string): Promise<void> {
-        const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
-        if (!asset) {
-            throw new Error(`Asset ${assetId} not found.`);
-        }
-
-        if (!asset.labels) {
-            asset.labels = [];
-        }
-
-        asset.labels.push(label);
-        await this.database.setOne(`collections/${collectionId}/metadata`, assetId, asset);
-    }
-
-    // 
-    // Removes a label.
-    //
-    async removeLabel(collectionId: string, assetId: string, label: string): Promise<void> {
-        const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
-        if (!asset) {
-            throw new Error(`Asset ${assetId} not found.`);
-        }
-
-        if (asset.labels) {
-            asset.labels = asset.labels.filter(l => l !== label);
-            await this.database.setOne(`collections/${collectionId}/metadata`, assetId, asset);
-        }
-    }
-
-    //
-    // Sets the description.
-    //
-    async setDescription(collectionId: string, assetId: string, description: string): Promise<void> {
-        await this.database.updateOne(`collections/${collectionId}/metadata`, assetId, { description });
-    }
-
-    //
     // Checks if the asset exists based on a hash.
     //
     async checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
@@ -283,5 +247,4 @@ export class AssetDatabase {
             next: result.continuation,
         };
     }
-
 }

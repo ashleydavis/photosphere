@@ -439,12 +439,10 @@ describe("photosphere backend", () => {
 
         const { baseUrl, mockAssetDatabase } = await initServer();
 
-        const assetId1 = "1234";
         const mockAsset1: any = {
             contentType: "image/jpeg",
         };
 
-        const assetId = "5678";
         const mockAsset2: any = { 
             contentType: "image/png",
         };
@@ -459,76 +457,88 @@ describe("photosphere backend", () => {
         });
     });
 
-    test("can add label to asset", async () => {
+    test("can set labels for an asset", async () => {
 
         const { baseUrl, mockAssetDatabase } = await initServer();
 
-        mockAssetDatabase.addLabel = jest.fn();
+        mockAssetDatabase.updateMetadata = jest.fn();
 
         const assetId = "1234";
         const label = "A good label";
 
-        const response = await axios.post(
-            `${baseUrl}/asset/add-label`, 
+        const update = {
+            labels: [ label ],
+        };
+
+        const response = await axios.patch(
+            `${baseUrl}/metadata`, 
             {
                 col: collectionId,
                 id: assetId,
-                label: label,
+                update: {
+                    labels: [ label ],
+                },
             }
         );
 
         expect(response.status).toBe(200);
 
-        expect(mockAssetDatabase.addLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.addLabel).toHaveBeenCalledWith(collectionId, assetId, label);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledTimes(1);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledWith(collectionId, assetId, update);
     });
 
-    test("can remove label from asset", async () => {
+    test("can clears labels from an asset", async () => {
 
         const { baseUrl, mockAssetDatabase } = await initServer();
 
-        mockAssetDatabase.removeLabel = jest.fn();
+        mockAssetDatabase.updateMetadata = jest.fn();
 
         const assetId = "1234";
         const label = "A good label";
+        const update = {
+            labels: [],
+        };
         
-        const response = await axios.post(
-            `${baseUrl}/asset/remove-label`,
+        const response = await axios.patch(
+            `${baseUrl}/metadata`,
             {
                 col: collectionId,
                 id: assetId,
-                label: label,
+                update,
             }
         );
 
         expect(response.status).toBe(200);
 
-        expect(mockAssetDatabase.removeLabel).toBeCalledTimes(1);
-        expect(mockAssetDatabase.removeLabel).toHaveBeenCalledWith(collectionId, assetId, label);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledTimes(1);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledWith(collectionId, assetId, update);
     });
 
     test("can set description for asset", async () => {
 
         const { baseUrl, mockAssetDatabase } = await initServer();
 
-        mockAssetDatabase.setDescription = jest.fn();
+        mockAssetDatabase.updateMetadata = jest.fn();
 
         const assetId = "1234";
         const description = "A good description";
+        const update = {
+            description,
+        };
 
-        const response = await axios.post(
-            `${baseUrl}/asset/description`,
+        const response = await axios.patch(
+            `${baseUrl}/metadata`,
             {
                 col: collectionId,
                 id: assetId,
-                description: description,
+                update,
             }
         );
 
         expect(response.status).toBe(200);
 
-        expect(mockAssetDatabase.setDescription).toBeCalledTimes(1);
-        expect(mockAssetDatabase.setDescription).toHaveBeenCalledWith(collectionId, assetId, description);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledTimes(1);
+        expect(mockAssetDatabase.updateMetadata).toHaveBeenCalledWith(collectionId, assetId, update);
     });
 });
 

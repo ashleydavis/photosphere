@@ -210,6 +210,17 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         });
     }));
 
+    // 
+    // Applies a partial metdata update to an asset.
+    //
+    app.patch("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
+        const collectionId = getValue<string>(req.body, "col");
+        const assetId = getValue<string>(req.body, "id");
+        const update: Partial<IAsset> = req.body.update;
+        await assetDatabase.updateMetadata(collectionId, assetId, update);
+        res.sendStatus(200);
+    }));
+
     //
     // Gets the metadata for an asset by id.
     //
@@ -337,39 +348,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         });
 
         assetStream.stream.pipe(res);
-    }));
-
-    //
-    // Adds a label to an asset.
-    //
-    app.post("/asset/add-label", express.json(), asyncErrorHandler(async (req, res) => {
-        const id = getValue<string>(req.body, "id");
-        const collectionId = getValue<string>(req.body, "col");
-        const label = getValue<string>(req.body, "label");
-        await assetDatabase.addLabel(collectionId, id, label);
-        res.sendStatus(200);
-    }));
-
-    //
-    // Removes a label from an asset.
-    //
-    app.post("/asset/remove-label", express.json(), asyncErrorHandler(async (req, res) => {
-        const id = getValue<string>(req.body, "id");
-        const collectionId = getValue<string>(req.body, "col");
-        const label = getValue<string>(req.body, "label");
-        await assetDatabase.removeLabel(collectionId, id, label);
-        res.sendStatus(200);
-    }));
-
-    //
-    // Sets a description for the asset.
-    //
-    app.post("/asset/description", express.json(), asyncErrorHandler(async (req, res) => {
-        const id = getValue<string>(req.body, "id");
-        const collectionId = getValue<string>(req.body, "col");
-        const description = getValue<string>(req.body, "description");
-        await assetDatabase.setDescription(collectionId, id, description);
-        res.sendStatus(200);
     }));
 
     //

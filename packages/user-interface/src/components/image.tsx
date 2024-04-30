@@ -19,6 +19,11 @@ export interface IImageProps {
     asset: IGalleryItem;
 
     //
+    // The type of asset to retreive.
+    //
+    type: string;
+
+    //
     // Event raised when an item in the gallery has been clicked.
     //
     onClick?: (() => void);
@@ -27,19 +32,19 @@ export interface IImageProps {
 //
 // Renders an image.
 //
-export function Image({ testId, imgClassName, asset, onClick }: IImageProps) {
+export function Image({ testId, imgClassName, asset, type, onClick }: IImageProps) {
 
     const [objectURL, setObjectURL] = useState<string>("");
 
     const { source } = useGallery();
 
     useEffect(() => {
-        source.loadAsset(asset._id, objectURL => {
+        source.loadAsset(asset._id, type, objectURL => {
             setObjectURL(objectURL);
         });
 
         return () => {
-            source.unloadAsset(asset._id);
+            source.unloadAsset(asset._id, type);
         };
     }, [asset]);
 

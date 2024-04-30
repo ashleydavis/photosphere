@@ -3,11 +3,10 @@
 //
 
 import React, { createContext, ReactNode, useContext, useState } from "react";
-import { IGallerySourceContext } from "user-interface/src/context/source/gallery-source-context";
+import { IGallerySource } from "user-interface/src/context/source/gallery-source";
 import { useScan } from "../scan-context";
-import { IGalleryItem } from "user-interface";
 
-export interface IComputerGallerySourceContext extends IGallerySourceContext {
+export interface IComputerGallerySourceContext extends IGallerySource {
 }
 
 const ComputerGallerySourceContext = createContext<IComputerGallerySourceContext | undefined>(undefined);
@@ -24,16 +23,9 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
     const { assets } = useScan();
 
     //
-    // Updates the configuration of the asset.
-    //
-    function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): void {
-        //TODO: Want to store local data for an asset before it is uploaded.
-    }
-
-    //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, onLoaded: (objectURL: string) => void): void {
+    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
         //TODO: 
     }
 
@@ -46,7 +38,6 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
 
     const value: IComputerGallerySourceContext = {
         assets,
-        updateAsset,
         loadAsset,
         unloadAsset,
     };

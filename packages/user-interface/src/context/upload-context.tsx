@@ -13,6 +13,7 @@ import JSZip from "jszip";
 import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
 import { useCloudGallerySource } from "./source/cloud-gallery-source-context";
+import { base64StringToBlob } from "blob-util";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -355,7 +356,37 @@ export function UploadContextProvider({ children }: IProps) {
             //
             uploadDetails.labels = removeDuplicates(uploadDetails.labels);
 
-            const assetId = await api.uploadAsset(uploadDetails);
+            //
+            // Add asset to the gallery.
+            //
+            const assetId = await addAsset({
+                width: imageResolution.width,
+                height: imageResolution.height,
+                fileName: uploadDetails.fileName,
+                hash: uploadDetails.hash,
+                location: uploadDetails.location,
+                fileDate: uploadDetails.fileDate,
+                photoDate: uploadDetails.photoDate,
+                properties: uploadDetails.properties,
+                labels: uploadDetails.labels,
+            });
+
+            //
+            // Uploads the full asset.
+            //
+            await api.uploadSingleAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
+            //
+            // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
+            //
+            const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
+            await api.uploadSingleAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
+
+            //
+            // Uploads the display asset separately for simplicity and no restriction on size.
+            //
+            const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
+            await api.uploadSingleAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
+            
             console.log(`Uploaded ${assetId}`);
 
             //
@@ -366,28 +397,7 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Increment the number uploaded.
             //
-            setNumUploaded(numUploaded + 1);
-
-            //
-            // Add asset to the gallery.
-            //
-            const sortDate = uploadDetails.photoDate || uploadDetails.fileDate;
-            addAsset({
-                _id: assetId,
-                width: imageResolution.width,
-                height: imageResolution.height,
-                origFileName: uploadDetails.fileName,
-                hash: uploadDetails.hash,
-                location: uploadDetails.location,
-                fileDate: uploadDetails.fileDate,
-                photoDate: uploadDetails.photoDate,
-                sortDate: sortDate,
-                group: dayjs(sortDate).format("MMM, YYYY"),
-                uploadDate: dayjs(new Date()).format(),
-                properties: uploadDetails.properties,
-                labels: uploadDetails.labels,
-                description: "",
-            });
+            setNumUploaded(numUploaded + 1);        
         }
     }
 

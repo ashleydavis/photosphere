@@ -3,21 +3,17 @@
 //
 
 import React, { createContext, ReactNode, useContext, useEffect, useReducer, useRef, useState } from "react";
-import { IGallerySourceContext } from "./gallery-source-context";
+import { IGallerySource } from "./gallery-source";
 import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
-import { loadImageAsObjectURL, unloadObjectURL } from "../../lib/image";
+import { IAssetDetails, IGallerySink } from "./gallery-sink";
+import dayjs from "dayjs";
 
-export interface ICloudGallerySourceContext extends IGallerySourceContext {
+export interface ICloudGallerySourceContext extends IGallerySource, IGallerySink {
     //
     // Loads assets into the gallery.
     //
     loadAssets(): Promise<void>;
-
-    //
-    // Adds an asset to the gallery.
-    //
-    addAsset(asset: IGalleryItem): void;
 }
 
 const CloudGallerySourceContext = createContext<ICloudGallerySourceContext | undefined>(undefined);
@@ -76,16 +72,87 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     }
 
     //
+    // Loads data for an asset.
+    //
+    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
+        const key = `${type}/${assetId}`;
+        const existingCacheEntry = assetCache.current.get(key);
+        if (existingCacheEntry) {
+            existingCacheEntry.numRefs += 1;
+            onLoaded(existingCacheEntry.objectUrl);
+            return;
+        }
+
+        api.getAsset(assetId, type)
+            .then(assetBlob => {
+                const objectUrl = URL.createObjectURL(assetBlob);
+                assetCache.current.set(key, { numRefs: 1, objectUrl });
+                onLoaded(objectUrl);
+            })
+            .catch(err => {
+                console.error(`Failed to load asset ${type}:${assetId}`);
+                console.error(err);
+            });
+    }
+
+    //
+    // Unloads data for an asset.
+    //
+    function unloadAsset(assetId: string, type: string): void {
+        const key = `${type}/${assetId}`;
+        const cacheEntry = assetCache.current.get(key);
+        if (cacheEntry) {            
+            if (cacheEntry.numRefs === 1) {
+                URL.revokeObjectURL(cacheEntry.objectUrl);
+                assetCache.current.delete(key);
+            }
+            else {
+                cacheEntry.numRefs -= 1;
+            }
+        }
+    }
+
+    //
+    // Uploads an asset.
+    //
+    async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+        await api.uploadSingleAsset(assetId, assetType, contentType, data);
+    }
+
+    //
     // Adds an asset to the gallery.
     //
-    function addAsset(asset: IGalleryItem): void {
-        setAssets([ asset, ...assets ]);
+    async function addAsset(assetDetails: IAssetDetails): Promise<string> {
+
+        const assetId = await api.uploadAssetMetadata(assetDetails);
+
+        const sortDate = assetDetails.photoDate || assetDetails.fileDate;
+        const galleryItem: IGalleryItem = {
+            _id: assetId,
+            width: assetDetails.width,
+            height: assetDetails.height,
+            origFileName: assetDetails.fileName,
+            hash: assetDetails.hash,
+            location: assetDetails.location,
+            fileDate: assetDetails.fileDate,
+            photoDate: assetDetails.photoDate,
+            sortDate,
+            group: dayjs(sortDate).format("MMM, YYYY"),
+            uploadDate: dayjs(new Date()).format(),
+            properties: assetDetails.properties,
+            labels: assetDetails.labels,
+            description: "",
+        };
+
+        setAssets([ galleryItem, ...assets ]);
+
+        return assetId;
     }
 
     //
     // Updates the configuration of the asset.
     //
-    function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): void {
+    async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
         setAssets(prevAssets => {
             const newAsset = {
                 ...prevAssets[assetIndex],
@@ -97,50 +164,18 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
                 ...prevAssets.slice(assetIndex + 1),
             ];        
         });
-    }
 
-    //
-    // Loads data for an asset.
-    //
-    function loadAsset(assetId: string, onLoaded: (objectURL: string) => void): void {
-        const existingCacheEntry = assetCache.current.get(assetId);
-        if (existingCacheEntry) {
-            existingCacheEntry.numRefs += 1;
-            onLoaded(existingCacheEntry.objectUrl);
-            return;
-        }
-
-        const url = api.makeUrl(`/thumb?id=${assetId}`);
-        loadImageAsObjectURL(url)
-            .then(objectUrl => {                
-                assetCache.current.set(assetId, { numRefs: 1, objectUrl });
-                onLoaded(objectUrl);
-            });
-    }
-
-    //
-    // Unloads data for an asset.
-    //
-    function unloadAsset(assetId: string): void {
-        const cacheEntry = assetCache.current.get(assetId);
-        if (cacheEntry) {            
-            if (cacheEntry.numRefs === 1) {
-                unloadObjectURL(cacheEntry.objectUrl);
-                assetCache.current.delete(assetId);
-            }
-            else {
-                cacheEntry.numRefs -= 1;
-            }
-        }
-    }
-
+        await api.updateAssetMetadata(assets[assetIndex]._id, assetUpdate);
+    }    
+        
     const value: ICloudGallerySourceContext = {
         loadAssets,
         assets,
         addAsset,
-        updateAsset,
         loadAsset,
         unloadAsset,
+        uploadAsset,
+        updateAsset,
     };
     
     return (

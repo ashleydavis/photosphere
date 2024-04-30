@@ -33,6 +33,7 @@ export function Gallery({ items, targetRowHeight }: IGalleryProps) {
     //
     const { 
         source,
+        sink,
         selectedItem, 
         setSelectedItem,
         getNext, 
@@ -79,6 +80,7 @@ export function Gallery({ items, targetRowHeight }: IGalleryProps) {
             {selectedItem &&
                 <GalleryItemContextProvider 
                     source={source}
+                    sink={sink}
                     asset={selectedItem.item}
                     assetIndex={selectedItem.index}
                     key={selectedItem.item._id}

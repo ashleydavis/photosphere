@@ -15,7 +15,10 @@ export function GalleryPage({}: IGalleryPageProps) {
 
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
-            <GalleryContextProvider source={cloudGallerySource}>
+            <GalleryContextProvider 
+                source={cloudGallerySource}
+                sink={cloudGallerySource}
+                >
                 <Gallery 
                     items={cloudGallerySource.assets}
                     targetRowHeight={150}

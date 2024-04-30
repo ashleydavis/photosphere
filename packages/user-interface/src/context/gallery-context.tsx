@@ -1,14 +1,20 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { ISelectedGalleryItem } from "../lib/gallery-item";
-import { IGallerySourceContext } from "./source/gallery-source-context";
+import { IGallerySource } from "./source/gallery-source";
 import { useSearch } from "./search-context";
+import { IGallerySink } from "./source/gallery-sink";
 
 export interface IGalleryContext {
 
     //
-    // The sources that loads asset into the gallery.
+    // The source that loads asset into the gallery.
     //
-    source: IGallerySourceContext;
+    source: IGallerySource;
+
+    //
+    // The sink that uploads and updates assets.
+    //
+    sink?: IGallerySink;
 
     //
     // Gets the previous asset, or undefined if none.
@@ -41,14 +47,19 @@ const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
 export interface IGalleryContextProviderProps {
 
     //
-    // The sources that loads asset into the gallery.
+    // The source that loads asset into the gallery.
     //
-    source: IGallerySourceContext;
+    source: IGallerySource;
+
+    //
+    // The sink that uploads and updates assets.
+    //
+    sink?: IGallerySink;
 
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
 
     //
     // Gets search text.
@@ -118,6 +129,7 @@ export function GalleryContextProvider({ source, children }: IGalleryContextProv
 
     const value: IGalleryContext = {
         source,
+        sink,
         getPrev,
         getNext,
         selectedItem,

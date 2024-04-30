@@ -4,7 +4,7 @@
 
 import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
-import { AssetView, Gallery, GalleryContextProvider } from "user-interface";
+import { Gallery, GalleryContextProvider } from "user-interface";
 import { useComputerGallerySource } from "../context/source/computer-gallery-source-context";
 
 export function ComputerPage() {
@@ -25,7 +25,9 @@ export function ComputerPage() {
         
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
-            <GalleryContextProvider source={computerGallerySource}>
+            <GalleryContextProvider 
+                source={computerGallerySource}
+                >
                 <Gallery
                     items={assets}
                     targetRowHeight={150}

@@ -1,7 +1,7 @@
 @base_url = http://localhost:3000
 # @base_url = https://photosphere-api.codecapers.com.au
-@token = "doesn't matter in dev and testing"
-@collection = ash-test
+@token = not needed
+@collection = test-collection
 
 ###
 
@@ -104,46 +104,90 @@ Authorization: Bearer {{token}}
 
 GET {{base_url}}/display?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
 
-### 
-# Add a label to an asset.
+###
+# Gets metadata for an asset.
 #
 
-POST {{base_url}}/asset/add-label
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 
+# Sets labels for an asset.
+#
+
+PATCH {{base_url}}/metadata
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
     "col": "{{collection}}",
-    "label": "A great label"
+    "update": {
+        "labels": [ "A great label" ]
+    }
 }
 
-### 
-# Remove a label from an asset.
+
+###
+# Gets metadata for an asset.
 #
 
-POST {{base_url}}/asset/remove-label
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+
+### 
+# Clears label from an asset.
+#
+
+PATCH {{base_url}}/metadata
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
     "col": "{{collection}}",
-    "label": "A great label"
+    "update": {
+        "labels": []
+    }
 }
+
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
 
 ### 
 # Sets a description for an asset.
 #
 
-POST {{base_url}}/asset/description
+PATCH {{base_url}}/metadata
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
     "id": "{{upload_asset_id}}",
-    "description": "A great description"
+    "col": "{{collection}}",
+    "update": {
+        "description": "A great description"
+    }
 }
+
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
 
 
 ###

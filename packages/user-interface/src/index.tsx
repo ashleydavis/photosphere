@@ -2,7 +2,7 @@ export { Main } from './main';
 export { AuthContextProvider, isProduction } from './context/auth-context';
 export { ApiContextProvider } from './context/api-context';
 export { SearchContextProvider } from './context/search-context';
-export { IGallerySourceContext } from './context/source/gallery-source-context';
+export { IGallerySource as IGallerySourceContext } from './context/source/gallery-source';
 export { ICloudGallerySourceContext, CloudGallerySourceContextProvider } from './context/source/cloud-gallery-source-context';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
