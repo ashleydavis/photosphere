@@ -17,7 +17,7 @@ export function ComputerPage() {
     //
     // The interface for scanning local files.
     //
-    const { assets, scanImages } = useScan();
+    const { scanImages } = useScan();
 
     useEffect(() => {
         scanImages();
@@ -29,7 +29,6 @@ export function ComputerPage() {
                 source={computerGallerySource}
                 >
                 <Gallery
-                    items={assets}
                     targetRowHeight={150}
                     />
             </GalleryContextProvider>

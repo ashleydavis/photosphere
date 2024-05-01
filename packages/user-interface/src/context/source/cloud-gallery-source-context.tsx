@@ -2,19 +2,14 @@
 // Provides a source of assets for the gallery from the cloud.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useReducer, useRef, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGallerySource } from "./gallery-source";
 import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { IAssetDetails, IGallerySink } from "./gallery-sink";
-import dayjs from "dayjs";
 import { uuid } from "../../lib/uuid";
 
 export interface ICloudGallerySourceContext extends IGallerySource, IGallerySink {
-    //
-    // Loads assets into the gallery.
-    //
-    loadAssets(): Promise<void>;
 }
 
 const CloudGallerySourceContext = createContext<ICloudGallerySourceContext | undefined>(undefined);
@@ -29,11 +24,6 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     // Interface to the backend.
     //
     const api = useApi();
-
-    //
-    // Assets that have been loaded from the backend.
-    //
-    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
     // A cache entry for a loaded asset.
@@ -56,20 +46,10 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
     //
-    // Resets the gallery when the search text changes.
+    // Retreives assets from the source.
     //
-    useEffect(() => {
-        if (api.isInitialised) {
-            loadAssets();
-        }
-    }, [api.isInitialised]);
-
-    //
-    // Loads assets into the gallery.
-    //
-    async function loadAssets(): Promise<void> {
-        const newAssets = await api.getAssets();
-        setAssets(newAssets);
+    async function getAssets(): Promise<IGalleryItem[]> {
+        return await api.getAssets();
     }
 
     //
@@ -149,47 +129,13 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
             },
         ]);
 
-        const sortDate = assetDetails.photoDate || assetDetails.fileDate;
-        const galleryItem: IGalleryItem = {
-            _id: assetId,
-            width: assetDetails.width,
-            height: assetDetails.height,
-            origFileName: assetDetails.fileName,
-            hash: assetDetails.hash,
-            location: assetDetails.location,
-            fileDate: assetDetails.fileDate,
-            photoDate: assetDetails.photoDate,
-            sortDate,
-            group: dayjs(sortDate).format("MMM, YYYY"),
-            uploadDate: dayjs(new Date()).format(),
-            properties: assetDetails.properties,
-            labels: assetDetails.labels,
-            description: "",
-        };
-
-        setAssets([ galleryItem, ...assets ]);
-
         return assetId;
     }
 
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
-        setAssets(prevAssets => {
-            const newAsset = {
-                ...prevAssets[assetIndex],
-                ...assetUpdate,
-            };
-            return [
-                ...prevAssets.slice(0, assetIndex),
-                newAsset,
-                ...prevAssets.slice(assetIndex + 1),
-            ];
-        });
-
-        const assetId = assets[assetIndex]._id;
-
+    async function updateAsset(assetId: string, assetUpdate: Partial<IGalleryItem>): Promise<void> {
         await api.submitOperations([
             {
                 id: assetId,
@@ -205,8 +151,7 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     }
 
     const value: ICloudGallerySourceContext = {
-        loadAssets,
-        assets,
+        getAssets,
         addAsset,
         loadAsset,
         unloadAsset,

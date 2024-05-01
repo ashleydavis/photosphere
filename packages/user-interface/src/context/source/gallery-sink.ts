@@ -65,5 +65,5 @@ export interface IGallerySink {
     //
     // Updates the configuration of an asset.
     //
-    updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void>;
+    updateAsset(assetId: string, assetUpdate: Partial<IGalleryItem>): Promise<void>;
 }

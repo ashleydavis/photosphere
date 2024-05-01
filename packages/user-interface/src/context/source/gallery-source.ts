@@ -5,10 +5,11 @@
 import { IGalleryItem } from "../../lib/gallery-item";
 
 export interface IGallerySource {
+
     //
-    // The assets currently loaded.
+    // Retreives assets from the source.
     //
-    assets: IGalleryItem[];
+    getAssets(): Promise<IGalleryItem[]>;
 
     //
     // Loads data for an asset.

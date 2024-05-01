@@ -13,11 +13,6 @@ const GUTTER = 8;
 
 export interface IGalleryProps { 
     //
-    // The items to display in the gallery.
-    //
-	items: IGalleryItem[];
-
-    //
     // The target height for rows in the gallery.
     //
 	targetRowHeight: number;
@@ -26,14 +21,12 @@ export interface IGalleryProps {
 //
 // A photo gallery component.
 //
-export function Gallery({ items, targetRowHeight }: IGalleryProps) {
+export function Gallery({ targetRowHeight }: IGalleryProps) {
 
     //
     // The interface to the gallery.
     //
     const { 
-        source,
-        sink,
         selectedItem, 
         setSelectedItem,
         getNext, 
@@ -70,7 +63,6 @@ export function Gallery({ items, targetRowHeight }: IGalleryProps) {
         	<GalleryLayout
                 galleryWidth={galleryWidth}
                 targetRowHeight={targetRowHeight}
-                items={items}
                 onItemClick={item => { 
                     setOpenAssetView(true);
                     setSelectedItem(item);
@@ -79,8 +71,6 @@ export function Gallery({ items, targetRowHeight }: IGalleryProps) {
 
             {selectedItem &&
                 <GalleryItemContextProvider 
-                    source={source}
-                    sink={sink}
                     asset={selectedItem.item}
                     assetIndex={selectedItem.index}
                     key={selectedItem.item._id}

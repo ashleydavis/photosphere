@@ -3,6 +3,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "./api-context";
 import { IGallerySource } from "./source/gallery-source";
 import { IGallerySink } from "./source/gallery-sink";
+import { useGallery } from "./gallery-context";
 
 export interface IGalleryItemContext {
 
@@ -27,16 +28,6 @@ const GalleryItemContext = createContext<IGalleryItemContext | undefined>(undefi
 export interface IProps {
 
     //
-    // The source that loads asset into the gallery.
-    //
-    source: IGallerySource;
-
-    //
-    // The sink that uploads and updates assets.
-    //
-    sink?: IGallerySink;
-
-    //
     // Children of the component.
     //
     children: ReactNode | ReactNode[];
@@ -53,16 +44,13 @@ export interface IProps {
     assetIndex: number;
 }
 
-export function GalleryItemContextProvider({ source, sink, children, asset, assetIndex }: IProps) {
+export function GalleryItemContextProvider({ children, asset, assetIndex }: IProps) {
 
     //
     // todo: Register for update to the asset from the source to trigger a render.
     //
 
-    //
-    // Interface to the backend.
-    //
-    const api = useApi();
+    const { updateAsset: updateGalleryAsset } = useGallery();
 
     //
     // The asset being edited.
@@ -73,16 +61,12 @@ export function GalleryItemContextProvider({ source, sink, children, asset, asse
     // Updates the configuration of the asset.
     //
     async function updateAsset(assetUpdate: Partial<IGalleryItem>): Promise<void> {
-        if (!sink) {
-            throw new Error(`Cannot edit readonly gallery.`); 
-        }
-
         setAsset({
             ..._asset,
             ...assetUpdate,
         });
 
-        await sink.updateAsset(assetIndex, assetUpdate);
+        await updateGalleryAsset(assetIndex, assetUpdate);
     }
 
     const value: IGalleryItemContext = {

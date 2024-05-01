@@ -1,20 +1,42 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { ISelectedGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { IGallerySource } from "./source/gallery-source";
 import { useSearch } from "./search-context";
-import { IGallerySink } from "./source/gallery-sink";
+import { IAssetDetails, IGallerySink } from "./source/gallery-sink";
+import { useApi } from "./api-context";
+import dayjs from "dayjs";
 
 export interface IGalleryContext {
 
     //
-    // The source that loads asset into the gallery.
+    // The assets currently loaded.
     //
-    source: IGallerySource;
+    assets: IGalleryItem[];
 
     //
-    // The sink that uploads and updates assets.
+    // Loads assets into the gallery.
     //
-    sink?: IGallerySink;
+    loadAssets(): Promise<void>;
+
+    //
+    // Adds an asset to the start of the gallery.
+    //
+    addAsset(assetDetails: IAssetDetails): Promise<string>;
+
+    //
+    // Updates an asset in the gallery by index.
+    //
+    updateAsset(assetIndex: number, asset: Partial<IGalleryItem>): Promise<void>;
+
+    //
+    // Loads data for an asset.
+    //
+    loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void;
+
+    //
+    // Unloads data for an asset.
+    //
+    unloadAsset(assetId: string, type: string): void;
 
     //
     // Gets the previous asset, or undefined if none.
@@ -62,6 +84,16 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
 
     //
+    // Interface to the backend.
+    //
+    const api = useApi();
+
+    //
+    // Assets that have been loaded from the backend.
+    //
+    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
+
+    //
     // Gets search text.
     //
     const { searchText } = useSearch();
@@ -80,6 +112,95 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     }, [searchText]);
 
     //
+    // Resets the gallery when the search text changes.
+    //
+    useEffect(() => {
+        if (api.isInitialised) {
+            loadAssets();
+        }
+    }, [api.isInitialised]);
+
+    //
+    // Loads assets into the gallery.
+    //
+    async function loadAssets(): Promise<void> {
+        const newAssets = await source.getAssets();
+        setAssets(newAssets);
+    }
+
+    //
+    // Adds an asset to the start of the gallery.
+    //
+    async function addAsset(assetDetails: IAssetDetails): Promise<string> {
+        if (!sink) {
+            throw new Error(`Cannot edit readonly gallery.`); 
+        }
+
+        const assetId = await sink?.addAsset(assetDetails);
+
+        const sortDate = assetDetails.photoDate || assetDetails.fileDate;
+        const galleryItem: IGalleryItem = {
+            _id: assetId,
+            width: assetDetails.width,
+            height: assetDetails.height,
+            origFileName: assetDetails.fileName,
+            hash: assetDetails.hash,
+            location: assetDetails.location,
+            fileDate: assetDetails.fileDate,
+            photoDate: assetDetails.photoDate,
+            sortDate,
+            group: dayjs(sortDate).format("MMM, YYYY"),
+            uploadDate: dayjs(new Date()).format(),
+            properties: assetDetails.properties,
+            labels: assetDetails.labels,
+            description: "",
+        };
+
+        setAssets([ galleryItem, ...assets ]);
+
+        return assetId;
+    }
+
+    //
+    // Updates an asset in the gallery by index.
+    //
+    async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
+        if (!sink) {
+            throw new Error(`Cannot edit readonly gallery.`); 
+        }
+
+        setAssets(prevAssets => {
+            const newAsset = {
+                ...prevAssets[assetIndex],
+                ...assetUpdate,
+            };
+            return [
+                ...prevAssets.slice(0, assetIndex),
+                newAsset,
+                ...prevAssets.slice(assetIndex + 1),
+            ];
+        });
+
+        const assetId = assets[assetIndex]._id;
+        await sink?.updateAsset(assetId, assetUpdate);
+    }
+
+    //
+    // Loads data for an asset.
+    //
+    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
+        source.loadAsset(assetId, type, onLoaded);
+
+    }
+
+    //
+    // Unloads data for an asset.
+    //
+    function unloadAsset(assetId: string, type: string): void {
+        source.unloadAsset(assetId, type);
+    }
+
+    //
     // Gets the previous asset, or undefined if none.
     //
     function getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
@@ -90,7 +211,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         if (selectedItem.index > 0) {
             const prevIndex = selectedItem.index-1;
             return {
-                item: source.assets[prevIndex],
+                item: assets[prevIndex],
                 index: prevIndex,
             };
         }
@@ -108,10 +229,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             return undefined;
         }
 
-        if (selectedItem.index < source.assets.length-1) {
+        if (selectedItem.index < assets.length-1) {
             const nextIndex = selectedItem.index + 1;
             return {
-                item: source.assets[nextIndex],
+                item: assets[nextIndex],
                 index: nextIndex,
             };
         }
@@ -128,8 +249,12 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     }
 
     const value: IGalleryContext = {
-        source,
-        sink,
+        assets,
+        loadAssets,
+        addAsset,
+        updateAsset,
+        loadAsset,
+        unloadAsset,
         getPrev,
         getNext,
         selectedItem,

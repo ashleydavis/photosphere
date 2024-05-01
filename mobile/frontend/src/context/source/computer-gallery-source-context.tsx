@@ -5,6 +5,7 @@
 import React, { createContext, ReactNode, useContext, useState } from "react";
 import { IGallerySource } from "user-interface/src/context/source/gallery-source";
 import { useScan } from "../scan-context";
+import { IGalleryItem } from "user-interface";
 
 export interface IComputerGallerySourceContext extends IGallerySource {
 }
@@ -23,6 +24,14 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
     const { assets } = useScan();
 
     //
+    // Retreives assets from the source.
+    //
+    async function getAssets(): Promise<IGalleryItem[]> {
+        //TODO:
+        return [];
+    }
+
+    //
     // Loads data for an asset.
     //
     function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
@@ -37,7 +46,7 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
     }
 
     const value: IComputerGallerySourceContext = {
-        assets,
+        getAssets,
         loadAsset,
         unloadAsset,
     };

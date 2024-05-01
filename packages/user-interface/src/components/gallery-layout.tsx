@@ -3,13 +3,9 @@ import { createLayout } from "../lib/create-layout";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
 import { Image } from "./image";
+import { useGallery } from "../context/gallery-context";
 
 export interface IGalleryLayoutProps { 
-    //
-    // The items to display in the gallery.
-    //
-	items: IGalleryItem[];
-
     //
     // The width of the gallery.
     //
@@ -30,7 +26,6 @@ export interface IGalleryLayoutProps {
 // Responsible for row-based gallery layout.
 //
 export function GalleryLayout({
-	items = [], 
 	galleryWidth = 600, 
 	targetRowHeight = 150, 
     onItemClick = undefined,
@@ -40,8 +35,10 @@ export function GalleryLayout({
     // Interface to the API.
     //
     const api = useApi();
+
+    const { assets } = useGallery();
     
-    const rows = createLayout(items, galleryWidth, targetRowHeight);
+    const rows = createLayout(assets, galleryWidth, targetRowHeight);
 
     let prevGroup: string | undefined = undefined;
 

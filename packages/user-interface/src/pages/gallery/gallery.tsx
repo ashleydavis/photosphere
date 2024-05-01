@@ -20,7 +20,6 @@ export function GalleryPage({}: IGalleryPageProps) {
                 sink={cloudGallerySource}
                 >
                 <Gallery 
-                    items={cloudGallerySource.assets}
                     targetRowHeight={150}
                     />
             </GalleryContextProvider>

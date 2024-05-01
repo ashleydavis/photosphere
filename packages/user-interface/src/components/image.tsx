@@ -36,15 +36,15 @@ export function Image({ testId, imgClassName, asset, type, onClick }: IImageProp
 
     const [objectURL, setObjectURL] = useState<string>("");
 
-    const { source } = useGallery();
+    const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
-        source.loadAsset(asset._id, type, objectURL => {
+        loadAsset(asset._id, type, objectURL => {
             setObjectURL(objectURL);
         });
 
         return () => {
-            source.unloadAsset(asset._id, type);
+            unloadAsset(asset._id, type);
         };
     }, [asset]);
 

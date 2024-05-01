@@ -14,6 +14,7 @@ import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
 import { useCloudGallerySource } from "./source/cloud-gallery-source-context";
 import { base64StringToBlob } from "blob-util";
+import { useGallery } from "./gallery-context";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -88,7 +89,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset } = useCloudGallerySource();
+    const { addAsset } = useGallery();
 
     //
     // List of uploads that failed.
