@@ -103,7 +103,7 @@ export interface IApiContext {
     //
     // Uploads an asset's metadata to the backend.
     //
-    uploadAssetMetadata(assetMetadata: IAssetMetadata): Promise<string>;
+    uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void>;
 
     //
     // Updates an asset's metadata.
@@ -280,7 +280,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset's metadata to the backend.
     //
-    async function uploadAssetMetadata(assetMetadata: IAssetMetadata): Promise<string> {
+    async function uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void> {
         if (!collectionId.current) {
             throw new Error(`Collection ID is not set!`);
         }
@@ -288,10 +288,11 @@ export function ApiContextProvider({ children }: IProps) {
         await loadToken();
         const token = getToken();
         
-        const { data } = await axios.post(
+        await axios.post(
             `${BASE_URL}/metadata`, 
             {
                 col: collectionId.current,
+                id: assetId,
                 fileName: assetMetadata.fileName,
                 width: assetMetadata.width,
                 height: assetMetadata.height,
@@ -308,9 +309,6 @@ export function ApiContextProvider({ children }: IProps) {
                 },
             }
         );
-
-        const { assetId } = data;
-        return assetId;
     }
 
     //

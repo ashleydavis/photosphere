@@ -2,7 +2,6 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { IAsset } from "./lib/asset";
 import dayjs from "dayjs";
-import { v4 as uuid } from 'uuid';
 import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IDatabaseCollection } from "./services/database-collection";
@@ -171,6 +170,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
 
         const metadata = req.body;
         const collectionId = getValue<string>(metadata, "col");
+        const assetId = getValue<string>(req.body, "id");
         const fileName = getValue<string>(metadata, "fileName");
         const width = getValue<number>(metadata, "width");
         const height = getValue<number>(metadata, "height");
@@ -180,7 +180,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const photoDate = metadata.photoDate ? dayjs(metadata.photoDate).toDate() : undefined;
         const uploadDate = now();
         const sortDate = photoDate || fileDate || uploadDate;
-        const assetId = uuid();
 
         const newAsset: IAsset = {
             _id: assetId,

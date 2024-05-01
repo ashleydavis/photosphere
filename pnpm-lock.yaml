@@ -28,9 +28,6 @@ importers:
       fs-extra:
         specifier: ^11.1.0
         version: 11.2.0
-      uuid:
-        specifier: ^9.0.1
-        version: 9.0.1
     devDependencies:
       '@types/cors':
         specifier: ^2.8.13
@@ -47,9 +44,6 @@ importers:
       '@types/node':
         specifier: ^18.19.15
         version: 18.19.21
-      '@types/uuid':
-        specifier: ^9.0.8
-        version: 9.0.8
       axios:
         specifier: ^0.27.2
         version: 0.27.2
@@ -2023,10 +2017,6 @@ packages:
 
   /@types/tough-cookie@4.0.5:
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
-    dev: true
-
-  /@types/uuid@9.0.8:
-    resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
     dev: true
 
   /@types/verror@1.10.10:
@@ -8496,11 +8486,6 @@ packages:
     hasBin: true
     requiresBuild: true
     dev: true
-
-  /uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
-    hasBin: true
-    dev: false
 
   /v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}

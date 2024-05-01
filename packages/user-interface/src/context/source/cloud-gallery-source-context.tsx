@@ -8,6 +8,7 @@ import { useApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { IAssetDetails, IGallerySink } from "./gallery-sink";
 import dayjs from "dayjs";
+import { uuid } from "../../lib/uuid";
 
 export interface ICloudGallerySourceContext extends IGallerySource, IGallerySink {
     //
@@ -124,7 +125,8 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     //
     async function addAsset(assetDetails: IAssetDetails): Promise<string> {
 
-        const assetId = await api.uploadAssetMetadata(assetDetails);
+        const assetId = uuid();
+        await api.uploadAssetMetadata(assetId, assetDetails);
 
         const sortDate = assetDetails.photoDate || assetDetails.fileDate;
         const galleryItem: IGalleryItem = {
