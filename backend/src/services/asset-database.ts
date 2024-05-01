@@ -145,6 +145,17 @@ export interface IDbOps {
     ops: ICollectionOps[];
 }
 
+//
+// Records updates to assets in the collection.
+//
+export interface IJournalEntry {
+    //
+    // Operations to apply to assets in the collection.
+    //
+    ops: IAssetOps[];
+}
+
+
 export interface IAssetDatabase {
     //
     // Gets collection metadata.
@@ -214,10 +225,12 @@ export interface IAssetDatabase {
 
 export class AssetDatabase {
 
+    private journal: IDatabaseCollection<IJournalEntry>;
     private database: IDatabaseCollection<IAsset>;
 
     constructor(private storage: IStorage) {
         this.database = new DatabaseCollection<IAsset>(storage);
+        this.journal = new DatabaseCollection<IJournalEntry>(storage);
     }
 
     //
@@ -276,8 +289,15 @@ export class AssetDatabase {
     // Applies a set of operations to the database.
     //
     async applyOperations(dbOps: IDbOps): Promise<void> {
+
         for (const collectionOps of dbOps.ops) {
             const collectionId = collectionOps.id;
+
+            //
+            // Updates the journal for the collection.
+            //
+            await this.journal.setOne(`collections/${collectionId}/journal`, Date.now().toString(), { ops: collectionOps.ops });
+
             for (const assetOps of collectionOps.ops) {
                 const assetId = assetOps.id;
                 const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
