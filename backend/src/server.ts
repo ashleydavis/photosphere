@@ -164,6 +164,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
+    // TODO: Deprecated in favor of database options.
+    //
     // Uploads metadata for an asset and allocates a new asset id.
     //
     app.post("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
@@ -209,6 +211,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         });
     }));
 
+    //
+    // TODO: Deprecated in favor of database options.
     // 
     // Applies a partial metdata update to an asset.
     //

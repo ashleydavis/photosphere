@@ -7,6 +7,7 @@ import { IAsset } from "../lib/asset";
 import { DatabaseCollection, IDatabaseCollection } from "./database-collection";
 import { IStorage } from "./storage";
 import { ICollectionMetadata } from "../lib/collection";
+import { IDbOps, ISetOp, IPushOp, IPullOp, IAssetOps } from "../lib/ops";
 
 export interface IAssetStream {
     //
@@ -33,119 +34,6 @@ export interface IAssetsResult {
 }
 
 //
-// An operation to apply to an asset.
-//
-export interface IOp {
-    //
-    // The type of operation:
-    //  - Sets the value of a field.
-    //  - Pushs a value into an array.
-    //  - Pulls a value from an array.
-    //
-    type: "set" | "push" | "pull";
-}
-
-//
-// An operation to set a field on an asset.
-//
-export interface ISetOp extends IOp {
-    //
-    // The type of operation.
-    //
-    type: "set";
-
-    //
-    // The field to set.
-    //
-    field: string;
-
-    //
-    // The value to set.
-    //
-    value: any;
-}
-
-//
-// An operation to push a value into an array.
-//
-export interface IPushOp extends IOp {
-    //
-    // The type of operation.
-    //
-    type: "push";
-
-    //
-    // The field to push to.
-    //
-    field: string;
-
-    //
-    // The value to push.
-    //
-    value: any;
-}
-
-//
-// An operation to pull a value from an array.
-//
-export interface IPullOp extends IOp {
-    //
-    // The type of operation.
-    //
-    type: "pull";
-
-    //
-    // The field to pull from.
-    //
-    field: string;
-
-    //
-    // The value to pull.
-    //
-    value: any;
-}
-
-//
-// A set of operations to apply to a particular asset.
-//
-export interface IAssetOps {
-    //
-    // The id of the asset to which operations are applied.
-    //
-    id: string;
-
-    //
-    // Operations to apply to this asset.
-    //
-    ops: IOp[];
-}
-
-//
-// A set of operations to apply to a particular collection.
-//
-export interface ICollectionOps {
-    //
-    // The id of the collection to which operations are applied.
-    //
-    id: string; 
-
-    //
-    // Operations to apply to assets in the collection.
-    //
-    ops: IAssetOps[];
-}
-
-//
-// A set of operations to apply to the database.
-//
-export interface IDbOps {
-    //
-    // Operations to apply to collections in the database.
-    //
-    ops: ICollectionOps[];
-}
-
-//
 // Records updates to assets in the collection.
 //
 export interface IJournalEntry {
@@ -154,7 +42,6 @@ export interface IJournalEntry {
     //
     ops: IAssetOps[];
 }
-
 
 export interface IAssetDatabase {
     //
@@ -301,40 +188,35 @@ export class AssetDatabase {
             for (const assetOps of collectionOps.ops) {
                 const assetId = assetOps.id;
                 const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
-                if (!asset) {
-                    throw new Error(`Asset ${assetId} not found.`);
-                }
-
-                let fields = asset as any;
+                let fields = asset as any || {};
 
                 for (const assetOp of assetOps.ops) {
                     switch (assetOp.type) {
                         case "set": {
-                            const setOp = assetOp as ISetOp;
-                            fields[setOp.field] = setOp.value;
+                            for (const [name, value] of Object.entries(assetOp.fields)) {
+                                fields[name] = value;
+                            }
                             break;
                         }
 
                         case "push": {
-                            const pushOp = assetOp as IPushOp;
-                            if (!fields[pushOp.field]) {
-                                fields[pushOp.field] = [];
+                            if (!fields[assetOp.field]) {
+                                fields[assetOp.field] = [];
                             }
-                            fields[pushOp.field].push(pushOp.value);
+                            fields[assetOp.field].push(assetOp.value);
                             break;
                         }
 
                         case "pull": {
-                            const pullOp = assetOp as IPullOp;
-                            if (!fields[pullOp.field]) {
-                                fields[pullOp.field] = [];
+                            if (!fields[assetOp.field]) {
+                                fields[assetOp.field] = [];
                             }
-                            fields[pullOp.field] = fields[pullOp.field].filter((v: any) => v !== pullOp.value);
+                            fields[assetOp.field] = fields[assetOp.field].filter((v: any) => v !== assetOp.value);
                             break;
                         }
 
                         default: {
-                            throw new Error(`Invalid operation type: ${assetOp.type}`);
+                            throw new Error(`Invalid operation type: ${(assetOp as any).type}`);
                         }
                     }
                 }

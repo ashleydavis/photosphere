@@ -29,7 +29,7 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     // Interface to the backend.
     //
     const api = useApi();
-    
+
     //
     // Assets that have been loaded from the backend.
     //
@@ -102,7 +102,7 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     function unloadAsset(assetId: string, type: string): void {
         const key = `${type}/${assetId}`;
         const cacheEntry = assetCache.current.get(key);
-        if (cacheEntry) {            
+        if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {
                 URL.revokeObjectURL(cacheEntry.objectUrl);
                 assetCache.current.delete(key);
@@ -126,7 +126,28 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
     async function addAsset(assetDetails: IAssetDetails): Promise<string> {
 
         const assetId = uuid();
-        await api.uploadAssetMetadata(assetId, assetDetails);
+
+        await api.submitOperations([
+            {
+                id: assetId,
+                ops: [
+                    {
+                        type: "set",
+                        fields: {
+                            fileName: assetDetails.fileName,
+                            width: assetDetails.width,
+                            height: assetDetails.height,
+                            hash: assetDetails.hash,
+                            properties: assetDetails.properties,
+                            location: assetDetails.location,
+                            fileDate: assetDetails.fileDate,
+                            photoDate: assetDetails.photoDate,
+                            labels: assetDetails.labels,
+                        },
+                    },
+                ],
+            },
+        ]);
 
         const sortDate = assetDetails.photoDate || assetDetails.fileDate;
         const galleryItem: IGalleryItem = {
@@ -164,12 +185,25 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
                 ...prevAssets.slice(0, assetIndex),
                 newAsset,
                 ...prevAssets.slice(assetIndex + 1),
-            ];        
+            ];
         });
 
-        await api.updateAssetMetadata(assets[assetIndex]._id, assetUpdate);
-    }    
-        
+        const assetId = assets[assetIndex]._id;
+
+        await api.submitOperations([
+            {
+                id: assetId,
+                ops: [
+                    {
+                        type: "set",
+                        fields: assetUpdate, //TODO: Should use push/pull for labels.
+                    }
+                ],
+            },        
+        ]);
+
+    }
+
     const value: ICloudGallerySourceContext = {
         loadAssets,
         assets,
@@ -179,7 +213,7 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
         uploadAsset,
         updateAsset,
     };
-    
+
     return (
         <CloudGallerySourceContext.Provider value={value} >
             {children}

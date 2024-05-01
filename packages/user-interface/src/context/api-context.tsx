@@ -3,6 +3,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useAuth } from "./auth-context";
+import { IAssetOps, IDbOps } from "../def/ops";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -101,14 +102,23 @@ export interface IApiContext {
     uploadSingleAsset(assetId: string, type: string, contentType: string, data: Blob): Promise<void>;
 
     //
+    // TODO: Deprecated in favor of database options.
+    //
     // Uploads an asset's metadata to the backend.
     //
     uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void>;
 
     //
+    // TODO: Deprecated in favor of database options.
+    //
     // Updates an asset's metadata.
     //
     updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void>;
+
+    //
+    // Submits database operations.
+    //
+    submitOperations(assetOps: IAssetOps[]): Promise<void>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -278,6 +288,8 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
+    // TODO: Deprecated in favor of database options.
+    //
     // Uploads an asset's metadata to the backend.
     //
     async function uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void> {
@@ -312,6 +324,8 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
+    // TODO: Deprecated in favor of database options.
+    //
     // Updates an asset's metadata.
     //
     async function updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void> {
@@ -331,6 +345,41 @@ export function ApiContextProvider({ children }: IProps) {
         );
     }
 
+    //
+    // Submits database operations.
+    //
+    async function submitOperations(assetOps: IAssetOps[]): Promise<void> {
+        if (!collectionId.current) {
+            throw new Error(`Collection ID is not set!`);
+        }
+
+        await loadToken();
+        const token = getToken();
+
+        const dbOps: IDbOps = {
+            ops: [
+                {
+                    id: collectionId.current,
+                    ops: assetOps,
+                },
+            ],
+        };
+
+        await axios.put(
+            `${BASE_URL}/metadata`, 
+            {
+                dbOps,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+    
+    }
+
+
     const value: IApiContext = {
         isInitialised,
         makeUrl,
@@ -342,6 +391,7 @@ export function ApiContextProvider({ children }: IProps) {
         uploadSingleAsset,
         uploadAssetMetadata,
         updateAssetMetadata,
+        submitOperations,
     };
     
     return (

@@ -4,30 +4,6 @@
 
 import { IStorage } from "./storage";
 
-export interface IAssetOps {
-    //
-    // The record to perform operations on.
-    //
-    id: string;
-
-    //
-    // Operations to apply to the record.
-    //
-    ops: [
-        {
-            //
-            // The operation to perform.
-            //
-            op: string;
-
-            //
-            // The value to apply to the operation.
-            //
-            data: any;
-        },
-    ],
-};
-
 //
 // A page of records from the database.
 //
