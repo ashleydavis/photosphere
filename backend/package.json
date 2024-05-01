@@ -4,6 +4,8 @@
     "description": "",
     "main": "build/index.js",
     "scripts": {
+        "s": "pnpm start",
+        "sd": "pnpm run start:dev",
         "start": "node build/index.js",
         "start:prod": "pnpm run clean-uploads && pnpm run copy-no-assets && cross-env NODE_ENV=production PORT=3000 ts-node-dev --respawn src/index.ts",
         "start:dev": "pnpm run clean-uploads && pnpm run copy-50-assets && cross-env NODE_ENV=development pnpm run start-watch",
