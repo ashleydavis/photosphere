@@ -221,6 +221,15 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
+    // Applies a set of operations to the asset database.
+    //
+    app.put("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
+        const { dbOps } = req.body;
+        await assetDatabase.applyOperations(dbOps);
+        res.sendStatus(200);
+    }));
+
+    //
     // Gets the metadata for an asset by id.
     //
     app.get("/metadata", asyncErrorHandler(async (req, res) => {

@@ -2,6 +2,7 @@
 # @base_url = https://photosphere-api.codecapers.com.au
 @token = not needed
 @collection = test-collection
+@asset = 1234
 
 ###
 
@@ -28,6 +29,7 @@ Authorization: Bearer {{token}}
 
 { 
     "col": "{{collection}}",
+    "id": "{{asset}}",
     "contentType": "image/jpeg", 
     "fileName": "./test-assets/1.jpeg", 
     "width": 4160, 
@@ -189,6 +191,119 @@ GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
+### 
+# Sets fields for an asset.
+#
+
+PUT {{base_url}}/metadata
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "dbOps": {
+        "ops": [
+            {
+                "id": "{{collection}}",
+                "ops": [
+                    {
+                        "id": "{{upload_asset_id}}",
+                        "ops": [
+                            {
+                                "type": "set",
+                                "field": "aField",
+                                "value": "aValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 
+# Pushes a value on an array.
+#
+
+PUT {{base_url}}/metadata
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "dbOps": {
+        "ops": [
+            {
+                "id": "{{collection}}",
+                "ops": [
+                    {
+                        "id": "{{upload_asset_id}}",
+                        "ops": [
+                            {
+                                "type": "push",
+                                "field": "anArray",
+                                "value": "anElementValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 
+# Pops a value on an array.
+#
+
+PUT {{base_url}}/metadata
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "dbOps": {
+        "ops": [
+            {
+                "id": "{{collection}}",
+                "ops": [
+                    {
+                        "id": "{{upload_asset_id}}",
+                        "ops": [
+                            {
+                                "type": "pull",
+                                "field": "anArray",
+                                "value": "anElementValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
 
 ###
 # Check if an asset with a particular hash has been uploaded.

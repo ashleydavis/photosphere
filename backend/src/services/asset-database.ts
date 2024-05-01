@@ -32,6 +32,119 @@ export interface IAssetsResult {
     next?: string;
 }
 
+//
+// An operation to apply to an asset.
+//
+export interface IOp {
+    //
+    // The type of operation:
+    //  - Sets the value of a field.
+    //  - Pushs a value into an array.
+    //  - Pulls a value from an array.
+    //
+    type: "set" | "push" | "pull";
+}
+
+//
+// An operation to set a field on an asset.
+//
+export interface ISetOp extends IOp {
+    //
+    // The type of operation.
+    //
+    type: "set";
+
+    //
+    // The field to set.
+    //
+    field: string;
+
+    //
+    // The value to set.
+    //
+    value: any;
+}
+
+//
+// An operation to push a value into an array.
+//
+export interface IPushOp extends IOp {
+    //
+    // The type of operation.
+    //
+    type: "push";
+
+    //
+    // The field to push to.
+    //
+    field: string;
+
+    //
+    // The value to push.
+    //
+    value: any;
+}
+
+//
+// An operation to pull a value from an array.
+//
+export interface IPullOp extends IOp {
+    //
+    // The type of operation.
+    //
+    type: "pull";
+
+    //
+    // The field to pull from.
+    //
+    field: string;
+
+    //
+    // The value to pull.
+    //
+    value: any;
+}
+
+//
+// A set of operations to apply to a particular asset.
+//
+export interface IAssetOps {
+    //
+    // The id of the asset to which operations are applied.
+    //
+    id: string;
+
+    //
+    // Operations to apply to this asset.
+    //
+    ops: IOp[];
+}
+
+//
+// A set of operations to apply to a particular collection.
+//
+export interface ICollectionOps {
+    //
+    // The id of the collection to which operations are applied.
+    //
+    id: string; 
+
+    //
+    // Operations to apply to assets in the collection.
+    //
+    ops: IAssetOps[];
+}
+
+//
+// A set of operations to apply to the database.
+//
+export interface IDbOps {
+    //
+    // Operations to apply to collections in the database.
+    //
+    ops: ICollectionOps[];
+}
+
 export interface IAssetDatabase {
     //
     // Gets collection metadata.
@@ -47,6 +160,11 @@ export interface IAssetDatabase {
     // Updates metadata for an asset.
     //
     updateMetadata(collectionId: string, assetId: string, assetUpdate: Partial<IAsset>): Promise<void>;
+
+    //
+    // Applies a set of operations to the database.
+    //
+    applyOperations(ops: IDbOps): Promise<void>;
 
     //
     // Gets the metadata for an asset.
@@ -152,6 +270,58 @@ export class AssetDatabase {
 
         const updatedAsset = { ...asset, ...assetUpdate };
         await this.database.setOne(`collections/${collectionId}/metadata`, assetId, updatedAsset);
+    }
+
+    //
+    // Applies a set of operations to the database.
+    //
+    async applyOperations(dbOps: IDbOps): Promise<void> {
+        for (const collectionOps of dbOps.ops) {
+            const collectionId = collectionOps.id;
+            for (const assetOps of collectionOps.ops) {
+                const assetId = assetOps.id;
+                const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
+                if (!asset) {
+                    throw new Error(`Asset ${assetId} not found.`);
+                }
+
+                let fields = asset as any;
+
+                for (const assetOp of assetOps.ops) {
+                    switch (assetOp.type) {
+                        case "set": {
+                            const setOp = assetOp as ISetOp;
+                            fields[setOp.field] = setOp.value;
+                            break;
+                        }
+
+                        case "push": {
+                            const pushOp = assetOp as IPushOp;
+                            if (!fields[pushOp.field]) {
+                                fields[pushOp.field] = [];
+                            }
+                            fields[pushOp.field].push(pushOp.value);
+                            break;
+                        }
+
+                        case "pull": {
+                            const pullOp = assetOp as IPullOp;
+                            if (!fields[pullOp.field]) {
+                                fields[pullOp.field] = [];
+                            }
+                            fields[pullOp.field] = fields[pullOp.field].filter((v: any) => v !== pullOp.value);
+                            break;
+                        }
+
+                        default: {
+                            throw new Error(`Invalid operation type: ${assetOp.type}`);
+                        }
+                    }
+                }
+
+                await this.database.setOne(`collections/${collectionId}/metadata`, assetId, fields);
+            }
+        }
     }
 
     //
