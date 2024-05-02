@@ -4,6 +4,7 @@ export { ApiContextProvider } from './context/api-context';
 export { SearchContextProvider } from './context/search-context';
 export { IGallerySource as IGallerySourceContext } from './context/source/gallery-source';
 export { ICloudGallerySourceContext, CloudGallerySourceContextProvider } from './context/source/cloud-gallery-source-context';
+export { ICloudGallerySinkContext, CloudGallerySinkContextProvider } from './context/source/cloud-gallery-sink-context';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { UploadContextProvider, useUpload } from './context/upload-context';

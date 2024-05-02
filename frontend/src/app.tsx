@@ -1,6 +1,6 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider, isProduction } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider, isProduction, CloudGallerySinkContextProvider } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 //
@@ -12,9 +12,11 @@ function DefaultSetup() {
             <ApiContextProvider>
                 <SearchContextProvider>
                     <CloudGallerySourceContextProvider>
-                        <UploadContextProvider>
-                            <Main />
-                        </UploadContextProvider>
+                        <CloudGallerySinkContextProvider>
+                            <UploadContextProvider>
+                                <Main />
+                            </UploadContextProvider>
+                        </CloudGallerySinkContextProvider>
                     </CloudGallerySourceContextProvider>
                 </SearchContextProvider>
             </ApiContextProvider>
