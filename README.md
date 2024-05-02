@@ -1,10 +1,16 @@
 # Photosphere monorepo extended
 
-This is an extended version of the monorepo for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
+This is the official ongoing monorepo for Photosphere, an application for managing your photos (videos coming later).
 
-In addition to the usual backand and frontend, this monorepo contains Electron and mobile versions of Photosphere.
+Photosphere is designed to be easy to host for yourself. Host the web page, supply an AWS S3 bucket (other storage providers coming later), and you are ready to go. 
 
-This code accompanies chapter 8 of the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
+Contained herein are the code for Photosphere's:
+- Backend
+- Web frontend
+- Electron app
+- Android and iOS apps
+
+Early development of Photosphere was covered in the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
 
 ## Running Photosphere locally for development
 
