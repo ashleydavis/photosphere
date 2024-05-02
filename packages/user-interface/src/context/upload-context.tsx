@@ -1,6 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { getExifData, getImageResolution, loadImage, resizeImage } from "../lib/image";
-import { useApi } from "../context/api-context";
 import { computeHash, loadDataURL } from "../lib/file";
 import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "../lib/reverse-geocode";
 import { IQueuedUpload, IUploadDetails, UploadState } from "../lib/upload-details";
@@ -12,9 +11,9 @@ dayjs.extend(customParseFormat);
 import JSZip from "jszip";
 import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
-import { useCloudGallerySource } from "./source/cloud-gallery-source";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
+import { uuid } from "../lib/uuid";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -82,14 +81,9 @@ export interface IProps {
 export function UploadContextProvider({ children }: IProps) {
 
     //
-    // Interface to the backend.
-    //
-    const api = useApi();
-
-    //
     // Interface to the gallery.
     //
-    const { addAsset } = useGallery();
+    const { addAsset, uploadAsset, checkAsset } = useGallery();
 
     //
     // List of uploads that failed.
@@ -275,7 +269,7 @@ export function UploadContextProvider({ children }: IProps) {
         // }
 
         const hash = await computeHash(nextUpload.file);
-        const existingAssetId = await api.checkAsset(hash);
+        const existingAssetId = await checkAsset(hash);
         if (existingAssetId) {
             console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
 
@@ -357,36 +351,43 @@ export function UploadContextProvider({ children }: IProps) {
             //
             uploadDetails.labels = removeDuplicates(uploadDetails.labels);
 
+            const assetId = uuid();
+
             //
             // Add asset to the gallery.
             //
-            const assetId = await addAsset({
+            await addAsset({
+                _id: assetId,
                 width: imageResolution.width,
                 height: imageResolution.height,
-                fileName: uploadDetails.fileName,
+                origFileName: uploadDetails.fileName,
                 hash: uploadDetails.hash,
                 location: uploadDetails.location,
                 fileDate: uploadDetails.fileDate,
                 photoDate: uploadDetails.photoDate,
+                sortDate: uploadDetails.photoDate || uploadDetails.fileDate,
+                uploadDate: dayjs().toISOString(),
                 properties: uploadDetails.properties,
                 labels: uploadDetails.labels,
+                description: "",
             });
 
             //
             // Uploads the full asset.
             //
-            await api.uploadSingleAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
+            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
+
             //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
             //
             const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
-            await api.uploadSingleAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
+            await uploadAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
 
             //
             // Uploads the display asset separately for simplicity and no restriction on size.
             //
             const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
-            await api.uploadSingleAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
+            await uploadAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
             
             console.log(`Uploaded ${assetId}`);
 

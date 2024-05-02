@@ -47,8 +47,8 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
-        const key = `${type}/${assetId}`;
+    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void {
+        const key = `${assetType}/${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
@@ -56,14 +56,14 @@ export function useCloudGallerySource(): IGallerySource {
             return;
         }
 
-        api.getAsset(assetId, type)
+        api.getAsset(assetId, assetType)
             .then(assetBlob => {
                 const objectUrl = URL.createObjectURL(assetBlob);
                 assetCache.current.set(key, { numRefs: 1, objectUrl });
                 onLoaded(objectUrl);
             })
             .catch(err => {
-                console.error(`Failed to load asset ${type}:${assetId}`);
+                console.error(`Failed to load asset ${assetType}:${assetId}`);
                 console.error(err);
             });
     }
@@ -71,8 +71,8 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, type: string): void {
-        const key = `${type}/${assetId}`;
+    function unloadAsset(assetId: string, assetType: string): void {
+        const key = `${assetType}/${assetId}`;
         const cacheEntry = assetCache.current.get(key);
         if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {

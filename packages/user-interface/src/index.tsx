@@ -7,6 +7,8 @@ export { useCloudGallerySource } from './context/source/cloud-gallery-source';
 export { useCloudGallerySink } from './context/source/cloud-gallery-sink';
 export { useLocalGallerySource } from './context/source/local-gallery-source';
 export { useLocalGallerySink } from './context/source/local-gallery-sink';
+export { useIndexeddbGallerySource } from './context/source/indexeddb-gallery-source';
+export { useIndexeddbGallerySink } from './context/source/indexeddb-gallery-sink';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { UploadContextProvider, useUpload } from './context/upload-context';

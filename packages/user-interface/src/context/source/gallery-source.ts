@@ -14,10 +14,10 @@ export interface IGallerySource {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void;
+    loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void;
 
     //
     // Unloads data for an asset.
     //
-    unloadAsset(assetId: string, type: string): void;
+    unloadAsset(assetId: string, assetType: string): void;
 }

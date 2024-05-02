@@ -2,11 +2,9 @@
 // Provides a sink for adding/updating assets in the cloud.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useApi } from "../api-context";
-import { IGalleryItem } from "../../lib/gallery-item";
-import { IAssetDetails, IGallerySink } from "./gallery-sink";
-import { uuid } from "../../lib/uuid";
+import { IGallerySink } from "./gallery-sink";
+import { IAsset } from "../../def/asset";
 
 //
 // Use the "Cloud sink" in a component.
@@ -28,39 +26,34 @@ export function useCloudGallerySink(): IGallerySink {
     //
     // Adds an asset to the gallery.
     //
-    async function addAsset(assetDetails: IAssetDetails): Promise<string> {
-
-        const assetId = uuid();
-
+    async function addAsset(asset: IAsset): Promise<void> {
         await api.submitOperations([
             {
-                id: assetId,
+                id: asset._id,
                 ops: [
                     {
                         type: "set",
                         fields: {
-                            fileName: assetDetails.fileName,
-                            width: assetDetails.width,
-                            height: assetDetails.height,
-                            hash: assetDetails.hash,
-                            properties: assetDetails.properties,
-                            location: assetDetails.location,
-                            fileDate: assetDetails.fileDate,
-                            photoDate: assetDetails.photoDate,
-                            labels: assetDetails.labels,
+                            origFileName: asset.origFileName,
+                            width: asset.width,
+                            height: asset.height,
+                            hash: asset.hash,
+                            properties: asset.properties,
+                            location: asset.location,
+                            fileDate: asset.fileDate,
+                            photoDate: asset.photoDate,
+                            labels: asset.labels,
                         },
                     },
                 ],
             },
         ]);
-
-        return assetId;
     }
 
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetId: string, assetUpdate: Partial<IGalleryItem>): Promise<void> {
+    async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
         await api.submitOperations([
             {
                 id: assetId,
@@ -72,12 +65,19 @@ export function useCloudGallerySink(): IGallerySink {
                 ],
             },        
         ]);
-
     }
+
+    //
+    // Check that asset that has already been uploaded with a particular hash.
+    //
+    async function checkAsset(hash: string): Promise<string | undefined> {
+        return await api.checkAsset(hash);
+    }    
 
     return {
         addAsset,
         uploadAsset,
         updateAsset,
+        checkAsset,
     };
 }

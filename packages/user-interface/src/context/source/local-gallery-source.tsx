@@ -44,21 +44,21 @@ export function useLocalGallerySource({ cloudSource }: { cloudSource: IGallerySo
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
+    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void {
 
         //todo: load from indexed db, fallback to cloud if asset doesn't exist locally.
 
-        cloudSource.loadAsset(assetId, type, onLoaded);
+        cloudSource.loadAsset(assetId, assetType, onLoaded);
     }
 
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, type: string): void {
+    function unloadAsset(assetId: string, assetType: string): void {
         
         //todo: unload from indexed db.
 
-        cloudSource.unloadAsset(assetId, type);
+        cloudSource.unloadAsset(assetId, assetType);
     }
 
     return {

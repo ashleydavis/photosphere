@@ -2,9 +2,8 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { IGalleryItem } from "../../lib/gallery-item";
-import { IAssetDetails, IGallerySink } from "./gallery-sink";
+import { IAsset } from "../../def/asset";
+import { IGallerySink } from "./gallery-sink";
 
 //
 // Use the "Local sink" in a component.
@@ -24,28 +23,36 @@ export function useLocalGallerySink({ cloudSink }: { cloudSink: IGallerySink }):
     //
     // Adds an asset to the gallery.
     //
-    async function addAsset(assetDetails: IAssetDetails): Promise<string> {
+    async function addAsset(asset: IAsset): Promise<void> {
 
-        const assetId = await cloudSink.addAsset(assetDetails);
+        const assetId = await cloudSink.addAsset(asset);
 
         //todo: add to indexeddb. Queue for upload to cloud.
-
-        return assetId;
     }
 
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetId: string, assetUpdate: Partial<IGalleryItem>): Promise<void> {
+    async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
 
         //todo: update in indexeddb. Queue for upload to cloud.
 
         await cloudSink.updateAsset(assetId, assetUpdate);
     }
 
+    //
+    // Check that asset that has already been uploaded with a particular hash.
+    //
+    async function checkAsset(hash: string): Promise<string | undefined> {
+        return await cloudSink.checkAsset(hash);
+
+        //todo: check and fallback to cloud.
+    }
+
     return {
         addAsset,
         uploadAsset,
         updateAsset,
+        checkAsset,
     };
 }

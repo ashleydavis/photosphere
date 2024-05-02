@@ -89,7 +89,7 @@ export interface IApiContext {
     //
     // Retreives the data for an asset from the backend.
     //
-    getAsset(assetId: string, type: string): Promise<Blob>;
+    getAsset(assetId: string, assetType: string): Promise<Blob>;
 
     //
     // Check if an asset is already uploaded using its hash.
@@ -99,7 +99,7 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadSingleAsset(assetId: string, type: string, contentType: string, data: Blob): Promise<void>;
+    uploadSingleAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
 
     //
     // TODO: Deprecated in favor of database options.
@@ -230,8 +230,8 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the data for an asset from the backend.
     //
-    async function getAsset(assetId: string, type: string): Promise<Blob> {
-        const assetUrl = makeUrl(`/${type}?id=${assetId}`);
+    async function getAsset(assetId: string, assetType: string): Promise<Blob> {
+        const assetUrl = makeUrl(`/${assetType}?id=${assetId}`);
         const response = await axios.get(assetUrl, {
             responseType: 'blob'
         });
@@ -265,7 +265,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(assetId: string, type: string, contentType: string, data: Blob): Promise<void> {
+    async function uploadSingleAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
         if (!collectionId.current) {
             throw new Error(`Collection ID is not set!`);
         }
@@ -274,7 +274,7 @@ export function ApiContextProvider({ children }: IProps) {
         const token = getToken();
 
         await axios.post(
-            `${BASE_URL}/${type}`, 
+            `${BASE_URL}/${assetType}`, 
             data, 
             {
                 headers: {

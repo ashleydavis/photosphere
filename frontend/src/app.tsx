@@ -1,17 +1,12 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
-import { useCloudGallerySource } from "user-interface/build/context/source/cloud-gallery-source";
-import { useCloudGallerySink } from "user-interface/build/context/source/cloud-gallery-sink";
 
 function GallerySetup() {
 
-    const cloudSource = useCloudGallerySource();
-    const cloudSink = useCloudGallerySink();
-
-    const localSource = useLocalGallerySource({ cloudSource });
-    const localSink = useLocalGallerySink({ cloudSink });
+    const localSource = useIndexeddbGallerySource();
+    const localSink = useIndexeddbGallerySink();
 
     return (
         <SearchContextProvider>
