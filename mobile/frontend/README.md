@@ -1,6 +1,6 @@
 # Photosphere mobile frontend
 
-This is the mobile frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
+This is the mobile frontend for the Photosphere application. Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
 
 ## Pre-reqs
 
@@ -16,7 +16,7 @@ Then open a terminal and change directory to the mobile/frontend project:
 cd mobile/frontend
 ```
 
-To enable the frontend you must also run the [backend](../../backend/README.md).
+To enable the frontend you must first run the [backend](../../backend/README.md).
 
 ## Run the Webpack dev server
 
@@ -90,3 +90,4 @@ pnpm test
 - `AUTH0_DOMAIN`
 - `AUTH0_CLIENT_ID`
 - `AUTH0_AUDIDENCE`
+- `AUTH0_ORIGIN`

@@ -1,6 +1,6 @@
-# Photosphere monorepo extended
+# Photosphere
 
-This is the official ongoing monorepo for Photosphere, an application for managing your photos (videos coming later).
+This is the official ongoing monorepo for Photosphere, a cross-platform application for managing your photos (videos coming later).
 
 Photosphere is designed to be easy to host for yourself. Host the web page, supply an AWS S3 bucket (other storage providers coming later), and you are ready to go. 
 
@@ -16,22 +16,28 @@ Early development of Photosphere was covered in the book [Rapid Fullstack Develo
 
 ### Pre-reqs
 
-You need [Node.js](https://nodejs.org/) installed to run this code.
+You need [Node.js](https://nodejs.org/) installed to run this code. Tested against Node.js v20+.
 
 You need [Pnpm](https://pnpm.io/). It is used to install dependencies and manage the workspaces.
+
+Install pnpm like this:
+
+```bash
+npm install -g pnpm
+```
 
 ### Setup
 
 First, clone a local copy of the code repository:
 
 ```bash
-git clone git@github.com:Rapid-Fullstack-Development/photosphere-monorepo-extended.git
+git clone git@github.com:ashleydavis/photosphere.git
 ```
 
 Then install all dependencies at the root of the monorepo:
 
 ```
-cd photosphere-monorepo-extended
+cd photosphere
 pnpm install
 ```
 

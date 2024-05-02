@@ -1,6 +1,6 @@
 # Photosphere web frontend
 
-This is the web frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application). Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
+This is the web frontend for the Photosphere application. Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
 
 ## Setup
 
@@ -12,7 +12,7 @@ Then open a terminal and change directory to the frontend project:
 cd frontend
 ```
 
-To enable the frontend you must also run the [backend](../backend/README.md).
+To enable the frontend you must first run the [backend](../backend/README.md).
 
 ## Run the Webpack dev server
 
@@ -104,3 +104,4 @@ set PWDEBUG=1
 - `AUTH0_DOMAIN`
 - `AUTH0_CLIENT_ID`
 - `AUTH0_AUDIDENCE`
+- `AUTH0_ORIGIN`

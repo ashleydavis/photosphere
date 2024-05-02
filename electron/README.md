@@ -1,6 +1,6 @@
 # Photosphere Electron
 
-The Electron-based desktop version of [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).
+The Electron-based desktop version of the Photosphere application.
 
 ## Pre-reqs
 
@@ -15,6 +15,8 @@ Then open a terminal and change directory to the Electron project:
 ```bash
 cd electron
 ```
+
+See the [Electron frontend readme](./frontend/README.md) for the environment variables you need for the Electron frontend.
 
 ## Run from the dev server
 
