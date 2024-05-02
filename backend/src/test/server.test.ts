@@ -100,8 +100,10 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.addMetadata = jest.fn();
 
-        const hash = "!234";
+        const assetId = "1234";
+        const hash = "ACBD";
         const metadata = {
+            id: assetId,
             col: collectionId,
             fileName: "a-test-file.jpg",
             contentType: "image/jpeg",
@@ -121,11 +123,7 @@ describe("photosphere backend", () => {
 
         const response = await axios.post(`${baseUrl}/metadata`, metadata);
 
-        const assetId = response.data.assetId;
-
         expect(response.status).toBe(200);
-        expect(assetId).toBeDefined();
-        expect(assetId.length).toBeGreaterThan(0);
 
         expect(mockAssetDatabase.addMetadata).toHaveBeenCalledTimes(1);
         expect(mockAssetDatabase.addMetadata).toHaveBeenCalledWith(collectionId, assetId, hash, {
