@@ -210,8 +210,9 @@ Authorization: Bearer {{token}}
                         "ops": [
                             {
                                 "type": "set",
-                                "field": "aField",
-                                "value": "aValue"
+                                "fields": {
+                                    "aField": "aValue"
+                                }
                             }
                         ]
                     }
