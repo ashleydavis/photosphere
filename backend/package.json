@@ -19,6 +19,8 @@
         "copy-50-assets": "cp -r ../fixtures/50-assets/files files",
         "copy-no-assets": "cp -r ../fixtures/no-assets/files files",
         "clean": "rm -rf build",
+        "t": "pnpm run test",
+        "tw": "pnpm run test:watch",
         "test": "cross-env NODE_ENV=development jest --coverage",
         "test:watch": "cross-env NODE_ENV=development jest --watch"
     },
