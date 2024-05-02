@@ -2,21 +2,15 @@
 // Provides a source of assets for the gallery from the cloud.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGallerySource } from "./gallery-source";
 import { useApi } from "../api-context";
+import { useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 
-export interface ICloudGallerySourceContext extends IGallerySource {
-}
-
-const CloudGallerySourceContext = createContext<ICloudGallerySourceContext | undefined>(undefined);
-
-export interface ICloudGallerySourceContextProviderProps {
-    children: ReactNode | ReactNode[];
-}
-
-export function CloudGallerySourceContextProvider({ children }: ICloudGallerySourceContextProviderProps) {
+//
+// Use the "Cloud source" in a component.
+//
+export function useCloudGallerySource(): IGallerySource {
 
     //
     // Interface to the backend.
@@ -91,27 +85,9 @@ export function CloudGallerySourceContextProvider({ children }: ICloudGallerySou
         }
     }
 
-    const value: ICloudGallerySourceContext = {
+    return {
         getAssets,
         loadAsset,
         unloadAsset,
     };
-
-    return (
-        <CloudGallerySourceContext.Provider value={value} >
-            {children}
-        </CloudGallerySourceContext.Provider>
-    );
 }
-
-//
-// Use the "Cloud source" in a component.
-//
-export function useCloudGallerySource(): ICloudGallerySourceContext {
-    const context = useContext(CloudGallerySourceContext);
-    if (!context) {
-        throw new Error(`"Cloud source" context is not set! Add CloudGallerySourceContextProvider to the component tree.`);
-    }
-    return context;
-}
-

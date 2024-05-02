@@ -7,16 +7,10 @@ import { IGallerySource } from "user-interface/src/context/source/gallery-source
 import { useScan } from "../scan-context";
 import { IGalleryItem } from "user-interface";
 
-export interface IComputerGallerySourceContext extends IGallerySource {
-}
-
-const ComputerGallerySourceContext = createContext<IComputerGallerySourceContext | undefined>(undefined);
-
-export interface IComputerGallerySourceContextProviderProps {
-    children: ReactNode | ReactNode[];
-}
-
-export function ComputerGallerySourceContextProvider({ children }: IComputerGallerySourceContextProviderProps) {
+//
+// Use the "computer source" in a component.
+//
+export function useComputerGallerySource(): IGallerySource {
 
     //
     // The interface to file system scanning.
@@ -45,27 +39,9 @@ export function ComputerGallerySourceContextProvider({ children }: IComputerGall
         //TODO:
     }
 
-    const value: IComputerGallerySourceContext = {
+    return {
         getAssets,
         loadAsset,
         unloadAsset,
     };
-    
-    return (
-        <ComputerGallerySourceContext.Provider value={value} >
-            {children}
-        </ComputerGallerySourceContext.Provider>
-    );
 }
-
-//
-// Use the "computer source" in a component.
-//
-export function useComputerGallerySource(): IComputerGallerySourceContext {
-    const context = useContext(ComputerGallerySourceContext);
-    if (!context) {
-        throw new Error(`"Computer source" context is not set! Add ComputerGallerySourceContextProvider to the component tree.`);
-    }
-    return context;
-}
-

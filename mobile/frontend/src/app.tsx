@@ -1,14 +1,41 @@
 import React, { useEffect } from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AuthContextProvider, CloudGallerySourceContextProvider, GalleryContextProvider, Main, SearchContextProvider, UploadContextProvider } from "user-interface";
+import { ApiContextProvider, AuthContextProvider, GalleryContextProvider, Main, SearchContextProvider, UploadContextProvider, useCloudGallerySink, useCloudGallerySource } from "user-interface";
 import { ComputerPage } from "./pages/computer";
-import { ComputerGallerySourceContextProvider } from "./context/source/computer-gallery-source-context";
 import { ScanContextProvider } from "./context/scan-context";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 
+function GallerySetup() {
+
+    const source = useCloudGallerySource();
+    const sink = useCloudGallerySink();
+
+    return (
+        <SearchContextProvider>
+            <GalleryContextProvider 
+                source={source}
+                sink={sink}
+                >
+                <UploadContextProvider>
+                    <Main />
+                </UploadContextProvider>
+            </GalleryContextProvider>
+        </SearchContextProvider>
+    );
+}
+
+function ApiSetup() {
+    return (        
+        <ApiContextProvider>
+            <GallerySetup />
+        </ApiContextProvider>
+    );
+}
+
 export function App() {
+
     return (
         <HashRouter>
             <Auth0Provider
@@ -35,21 +62,7 @@ export function App() {
                     }}
                     >
                     <HandleAuthCallback />
-                    <ApiContextProvider>
-                        <SearchContextProvider>
-                            <CloudGallerySourceContextProvider>
-                                <ScanContextProvider>
-                                    <ComputerGallerySourceContextProvider>
-                                        <UploadContextProvider>
-                                                <Main
-                                                    computerPage={<ComputerPage />} 
-                                                    />
-                                        </UploadContextProvider>
-                                    </ComputerGallerySourceContextProvider>
-                                </ScanContextProvider>
-                            </CloudGallerySourceContextProvider>
-                        </SearchContextProvider>
-                    </ApiContextProvider>
+                    <ApiSetup />
                 </AuthContextProvider>
             </Auth0Provider>
        </HashRouter>

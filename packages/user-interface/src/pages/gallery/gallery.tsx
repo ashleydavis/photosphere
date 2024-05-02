@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
 import { Gallery } from "../../components/gallery";
 import { GalleryContextProvider } from "../../context/gallery-context";
-import { useCloudGallerySource } from "../../context/source/cloud-gallery-source-context";
-import { useCloudGallerySink } from "../../context/source/cloud-gallery-sink-context";
+import { useCloudGallerySource } from "../../context/source/cloud-gallery-source";
+import { useCloudGallerySink } from "../../context/source/cloud-gallery-sink";
 
 export interface IGalleryPageProps {
 }

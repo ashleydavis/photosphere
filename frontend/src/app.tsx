@@ -1,24 +1,34 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, CloudGallerySourceContextProvider, SearchContextProvider, AuthContextProvider, isProduction, CloudGallerySinkContextProvider } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
+import { useCloudGallerySource } from "user-interface/build/context/source/cloud-gallery-source";
+import { useCloudGallerySink } from "user-interface/build/context/source/cloud-gallery-sink";
 
-//
-// Default setup for the app.
-//
-function DefaultSetup() {
+function GallerySetup() {
+
+    const source = useCloudGallerySource();
+    const sink = useCloudGallerySink();
+
     return (
+        <SearchContextProvider>
+            <GalleryContextProvider 
+                source={source}
+                sink={sink}
+                >
+                <UploadContextProvider>
+                    <Main />
+                </UploadContextProvider>
+            </GalleryContextProvider>
+        </SearchContextProvider>
+    );
+}
+
+function ApiSetup() {
+    return (        
         <AuthContextProvider>
             <ApiContextProvider>
-                <SearchContextProvider>
-                    <CloudGallerySourceContextProvider>
-                        <CloudGallerySinkContextProvider>
-                            <UploadContextProvider>
-                                <Main />
-                            </UploadContextProvider>
-                        </CloudGallerySinkContextProvider>
-                    </CloudGallerySourceContextProvider>
-                </SearchContextProvider>
+                <GallerySetup />
             </ApiContextProvider>
         </AuthContextProvider>
     );
@@ -37,7 +47,7 @@ export function App() {
                         redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
                     }}
                     >
-                    <DefaultSetup />
+                    <ApiSetup />
                 </Auth0Provider>
             </BrowserRouter>
         );
@@ -46,7 +56,7 @@ export function App() {
         // Setup for dev and testing with no authentication.
         return (
             <BrowserRouter>
-                <DefaultSetup />
+                <ApiSetup />
             </BrowserRouter>
         );
     }

@@ -1,5 +1,5 @@
 //
-// Provides a source of assets for the gallery from the cloud.
+// Provides a sink for adding/updating assets in the cloud.
 //
 
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
@@ -8,16 +8,10 @@ import { IGalleryItem } from "../../lib/gallery-item";
 import { IAssetDetails, IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 
-export interface ICloudGallerySinkContext extends IGallerySink {
-}
-
-const CloudGallerySinkContext = createContext<ICloudGallerySinkContext | undefined>(undefined);
-
-export interface ICloudGallerySinkContextProviderProps {
-    children: ReactNode | ReactNode[];
-}
-
-export function CloudGallerySinkContextProvider({ children }: ICloudGallerySinkContextProviderProps) {
+//
+// Use the "Cloud sink" in a component.
+//
+export function useCloudGallerySink(): IGallerySink {
 
     //
     // Interface to the backend.
@@ -81,27 +75,9 @@ export function CloudGallerySinkContextProvider({ children }: ICloudGallerySinkC
 
     }
 
-    const value: ICloudGallerySinkContext = {
+    return {
         addAsset,
         uploadAsset,
         updateAsset,
     };
-
-    return (
-        <CloudGallerySinkContext.Provider value={value} >
-            {children}
-        </CloudGallerySinkContext.Provider>
-    );
 }
-
-//
-// Use the "Cloud sink" in a component.
-//
-export function useCloudGallerySink(): ICloudGallerySinkContext {
-    const context = useContext(CloudGallerySinkContext);
-    if (!context) {
-        throw new Error(`"Cloud sink" context is not set! Add CloudGallerySinkContextProvider to the component tree.`);
-    }
-    return context;
-}
-

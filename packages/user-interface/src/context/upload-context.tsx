@@ -12,7 +12,7 @@ dayjs.extend(customParseFormat);
 import JSZip from "jszip";
 import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
-import { useCloudGallerySource } from "./source/cloud-gallery-source-context";
+import { useCloudGallerySource } from "./source/cloud-gallery-source";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 
