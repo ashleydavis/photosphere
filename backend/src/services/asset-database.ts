@@ -190,6 +190,11 @@ export class AssetDatabase {
                 const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
                 let fields = asset as any || {};
 
+                if (!asset) {
+                    // Set the asset id when upserting.
+                    fields._id = assetId;
+                }
+
                 for (const assetOp of assetOps.ops) {
                     switch (assetOp.type) {
                         case "set": {
