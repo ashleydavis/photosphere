@@ -47,25 +47,18 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void {
+    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
         const key = `${assetType}/${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
-            onLoaded(existingCacheEntry.objectUrl);
-            return;
+            return existingCacheEntry.objectUrl;
         }
 
-        api.getAsset(assetId, assetType)
-            .then(assetBlob => {
-                const objectUrl = URL.createObjectURL(assetBlob);
-                assetCache.current.set(key, { numRefs: 1, objectUrl });
-                onLoaded(objectUrl);
-            })
-            .catch(err => {
-                console.error(`Failed to load asset ${assetType}:${assetId}`);
-                console.error(err);
-            });
+        const assetBlob = await api.getAsset(assetId, assetType);
+        const objectUrl = URL.createObjectURL(assetBlob);
+        assetCache.current.set(key, { numRefs: 1, objectUrl });
+        return objectUrl;
     }
 
     //

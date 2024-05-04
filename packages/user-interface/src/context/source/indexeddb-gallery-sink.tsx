@@ -65,29 +65,6 @@ export function useIndexeddbGallerySink(): IGallerySink {
     }
 
     //
-    // Adds an asset to the gallery.
-    //
-    async function addAsset(asset: IAsset): Promise<void> {
-        if (db.current === undefined) {
-            throw new Error("Database not open");
-        }
-
-        let hashRecord = await getRecord<IHashRecord>(db.current, "hashes", asset.hash);
-        if (hashRecord) {
-            hashRecord.assetIds.push(asset._id);
-        }
-        else {
-            hashRecord = {
-                _id: asset.hash,
-                assetIds: [ asset._id ],
-            };
-        }
-
-        await storeRecord<IHashRecord>(db.current, "hashes", hashRecord);
-        await storeRecord<IAsset>(db.current, "metadata", asset);
-    }
-
-    //
     // Updates the configuration of the asset.
     //
     async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
@@ -95,13 +72,14 @@ export function useIndexeddbGallerySink(): IGallerySink {
             throw new Error("Database not open");
         }
 
-        const assetDetails = await getRecord<IAsset>(db.current, "metadata", assetId);
-        if (!assetDetails) {
-            throw new Error(`Asset ${assetId} not found`);
+        let asset = await getRecord<any>(db.current, "metadata", assetId);
+        if (!asset) {
+            asset = {};
         }
 
-        await storeRecord<IAsset>(db.current, "metadata", {
-            ...assetDetails,
+        await storeRecord<any>(db.current, "metadata", {
+            _id: assetId,
+            ...asset,
             ...assetUpdate,
         });
     }
@@ -127,7 +105,6 @@ export function useIndexeddbGallerySink(): IGallerySink {
     }
 
     return {
-        addAsset,
         uploadAsset,
         updateAsset,
         checkAsset,

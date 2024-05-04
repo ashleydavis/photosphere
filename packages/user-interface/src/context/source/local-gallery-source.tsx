@@ -9,55 +9,33 @@ import { IGalleryItem } from "../../lib/gallery-item";
 //
 // Use the "Local source" in a component.
 //
-export function useLocalGallerySource({ cloudSource }: { cloudSource: IGallerySource }): IGallerySource {
-
-    //
-    // A cache entry for a loaded asset.
-    //
-    interface IAssetCacheEntry {
-        //
-        // Number of references to this asset.
-        //
-        numRefs: number;
-
-        //
-        // Object URL for the asset.
-        //
-        objectUrl: string;
-    }
-
-    //
-    // Caches loaded assets.
-    //
-    const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
-
+export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexeddbSource: IGallerySource, cloudSource: IGallerySource }): IGallerySource {
     //
     // Retreives assets from the source.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
-
-        //todo: get from indexeddb. No fallback to cloud. Need a separate sync process to replicate cloud metdata to indexeddb.
-
-        return await cloudSource.getAssets();
+        return await indexeddbSource.getAssets();
     }
 
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void {
+    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
 
-        //todo: load from indexed db, fallback to cloud if asset doesn't exist locally.
-
-        cloudSource.loadAsset(assetId, assetType, onLoaded);
+        const localAsset = await indexeddbSource.loadAsset(assetId, assetType);
+        if (localAsset) {
+            return localAsset;
+        }
+        
+        // Fallback to cloud.
+        return await cloudSource.loadAsset(assetId, assetType);        
     }
 
     //
     // Unloads data for an asset.
     //
     function unloadAsset(assetId: string, assetType: string): void {
-        
-        //todo: unload from indexed db.
-
+        indexeddbSource.unloadAsset(assetId, assetType);
         cloudSource.unloadAsset(assetId, assetType);
     }
 

@@ -11,11 +11,6 @@ export interface IGallerySink {
     uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
 
     //
-    // Adds an asset to the gallery.
-    //
-    addAsset(asset: IAsset): Promise<void>;
-
-    //
     // Updates the configuration of an asset.
     //
     updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void>;

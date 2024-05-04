@@ -9,6 +9,8 @@ export { useLocalGallerySource } from './context/source/local-gallery-source';
 export { useLocalGallerySink } from './context/source/local-gallery-sink';
 export { useIndexeddbGallerySource } from './context/source/indexeddb-gallery-source';
 export { useIndexeddbGallerySink } from './context/source/indexeddb-gallery-sink';
+export { useOutgoingQueueSink } from './context/source/outgoing-queue-sink';
+export { useDatabaseSync } from './context/source/database-sync';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { UploadContextProvider, useUpload } from './context/upload-context';

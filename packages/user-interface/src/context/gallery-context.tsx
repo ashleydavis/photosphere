@@ -42,7 +42,7 @@ export interface IGalleryContext {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void;
+    loadAsset(assetId: string, assetType: string): Promise<string | undefined>;
 
     //
     // Unloads data for an asset.
@@ -147,7 +147,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot edit readonly gallery.`); 
         }
 
-        await sink.addAsset(galleryItemToAsset(galleryItem));
+        await sink.updateAsset(galleryItem._id, galleryItemToAsset(galleryItem));
 
         setAssets([ galleryItem, ...assets ]);
     }
@@ -242,9 +242,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void {
-        source.loadAsset(assetId, assetType, onLoaded);
-
+    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
+        return await source.loadAsset(assetId, assetType);
     }
 
     //

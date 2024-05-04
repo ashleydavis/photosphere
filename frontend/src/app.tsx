@@ -1,12 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 function GallerySetup() {
 
-    const localSource = useIndexeddbGallerySource();
-    const localSink = useIndexeddbGallerySink();
+    const indexeddbSource = useIndexeddbGallerySource();
+    const indexeddbSink = useIndexeddbGallerySink();
+
+    const cloudSource = useCloudGallerySource();
+    const cloudSink = useCloudGallerySink();
+
+    const outgoingSink = useOutgoingQueueSink();
+    const localSource = useLocalGallerySource({ indexeddbSource, cloudSource });
+    const localSink = useLocalGallerySink({ indexeddbSink, outgoingSink });
+
+    useDatabaseSync({ cloudSink });
 
     return (
         <SearchContextProvider>
@@ -59,3 +68,4 @@ export function App() {
         );
     }
 }
+

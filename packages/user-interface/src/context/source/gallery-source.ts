@@ -14,7 +14,7 @@ export interface IGallerySource {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string) => void): void;
+    loadAsset(assetId: string, assetType: string): Promise<string | undefined>;
 
     //
     // Unloads data for an asset.

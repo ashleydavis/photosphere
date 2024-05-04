@@ -28,8 +28,9 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, type: string, onLoaded: (objectURL: string) => void): void {
+    async function loadAsset(assetId: string, type: string): Promise<string | undefined> {
         //TODO: 
+        return undefined;
     }
 
     //

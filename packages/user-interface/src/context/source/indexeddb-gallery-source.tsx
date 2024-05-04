@@ -7,7 +7,6 @@ import { useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
 import { getAllRecords, getAsset, openDatabase } from "../../lib/indexeddb";
-import { get } from "http";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -77,38 +76,31 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    function loadAsset(assetId: string, assetType: string, onLoaded: (objectURL: string, contentType: string) => void): void {
+    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
         if (db.current === undefined) {
-            return;
+            return undefined;
         }
 
         const key = `${assetType}/${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
-            onLoaded(existingCacheEntry.objectUrl, existingCacheEntry.contentType);
-            return;
+            return existingCacheEntry.objectUrl;
         }
 
-        getAsset(db.current, assetType, assetId)
-            .then(assetData => {
-                if (!assetData) {
-                    console.error(`Asset not found: ${assetType}:${assetId}`);
-                    return;
-                }
+        const assetData = await getAsset(db.current, assetType, assetId)
+        if (!assetData) {
+            console.error(`Asset not found: ${assetType}:${assetId}`);
+            return undefined;
+        }
 
-                const objectUrl = URL.createObjectURL(assetData.data);
-                assetCache.current.set(key, { 
-                    numRefs: 1, 
-                    objectUrl, 
-                    contentType: assetData.contentType,
-                 });
-                onLoaded(objectUrl, assetData.contentType);
-            })
-            .catch(err => {
-                console.error(`Failed to load asset ${assetType}:${assetId}`);
-                console.error(err);
-            });
+        const objectUrl = URL.createObjectURL(assetData.data);
+        assetCache.current.set(key, { 
+            numRefs: 1, 
+            objectUrl, 
+            contentType: assetData.contentType,
+        });
+        return objectUrl;
     }
 
     //

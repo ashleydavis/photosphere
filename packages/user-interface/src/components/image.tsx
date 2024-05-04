@@ -39,9 +39,16 @@ export function Image({ testId, imgClassName, asset, type, onClick }: IImageProp
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
-        loadAsset(asset._id, type, objectURL => {
-            setObjectURL(objectURL);
-        });
+        loadAsset(asset._id, type)
+            .then(objectURL => {
+                if (objectURL) {
+                    setObjectURL(objectURL);
+                }
+            })
+            .catch(err => {
+                console.error("Failed to load asset: ${type}:${asset._id}");
+                console.error(err);
+            });
 
         return () => {
             unloadAsset(asset._id, type);

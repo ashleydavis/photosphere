@@ -3,7 +3,7 @@
 //
 export function openDatabase(): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("photosphere-test-1", 4);
+        const request = indexedDB.open("photosphere-test-1", 5);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
             const db = (event.target as IDBOpenDBRequest).result;
@@ -37,6 +37,14 @@ async function createObjectStores(db: IDBDatabase) {
     if (!db.objectStoreNames.contains("metadata")) {
         db.createObjectStore("metadata", { keyPath: "_id" });
     }
+
+    if (!db.objectStoreNames.contains("outgoing-asset-upload")) {
+        db.createObjectStore("outgoing-asset-upload", { keyPath: "_id" });
+    }
+
+    if (!db.objectStoreNames.contains("outgoing-asset-update")) {
+        db.createObjectStore("outgoing-asset-update", { keyPath: "_id" });
+    }
 }
 
 //
@@ -66,6 +74,27 @@ export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, asse
 }
 
 //
+// Gets the least recent record from the database.
+//
+export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: string): Promise<RecordT | undefined> {  
+    return new Promise<RecordT | undefined>((resolve, reject) => {
+        const transaction = db.transaction(collectionName, 'readonly');
+        const store = transaction.objectStore(collectionName);
+        const request = store.openCursor(null, 'prev');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = event => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor) {
+                resolve(cursor.value);
+            } 
+            else {
+                resolve(undefined);
+            }
+        };
+    });
+}
+
+//
 // Gets all records from the database.
 //
 export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string): Promise<RecordT[]> {
@@ -77,6 +106,20 @@ export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string):
         allRecordsRequest.onerror = () => reject(allRecordsRequest.error);
     });
 }
+
+//
+// Deletes a record.
+//
+export async function deleteRecord(db: IDBDatabase, collectionName: string, assetId: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(collectionName, 'readwrite');
+        const store = transaction.objectStore(collectionName);
+        const request = store.delete(assetId);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+    });
+}
+
 
 //
 // Specifies the data for an asset.

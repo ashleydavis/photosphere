@@ -24,33 +24,6 @@ export function useCloudGallerySink(): IGallerySink {
     }
 
     //
-    // Adds an asset to the gallery.
-    //
-    async function addAsset(asset: IAsset): Promise<void> {
-        await api.submitOperations([
-            {
-                id: asset._id,
-                ops: [
-                    {
-                        type: "set",
-                        fields: {
-                            origFileName: asset.origFileName,
-                            width: asset.width,
-                            height: asset.height,
-                            hash: asset.hash,
-                            properties: asset.properties,
-                            location: asset.location,
-                            fileDate: asset.fileDate,
-                            photoDate: asset.photoDate,
-                            labels: asset.labels,
-                        },
-                    },
-                ],
-            },
-        ]);
-    }
-
-    //
     // Updates the configuration of the asset.
     //
     async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
@@ -75,7 +48,6 @@ export function useCloudGallerySink(): IGallerySink {
     }    
 
     return {
-        addAsset,
         uploadAsset,
         updateAsset,
         checkAsset,
