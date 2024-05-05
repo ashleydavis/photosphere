@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync, IndexeddbContextProvider } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 function GallerySetup() {
@@ -35,7 +35,9 @@ function ApiSetup() {
     return (        
         <AuthContextProvider>
             <ApiContextProvider>
-                <GallerySetup />
+                <IndexeddbContextProvider>
+                    <GallerySetup />
+                </IndexeddbContextProvider>
             </ApiContextProvider>
         </AuthContextProvider>
     );

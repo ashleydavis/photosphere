@@ -3,6 +3,7 @@ import { useOnline } from "../../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./outgoing-queue-sink";
 import { openDatabase, getLeastRecentRecord, deleteRecord } from "../../lib/indexeddb";
 import { IGallerySink } from "./gallery-sink";
+import { useIndexeddb } from "../indexeddb-context";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -12,40 +13,17 @@ const SYNC_POLL_PERIOD = 1000;
 export function useDatabaseSync({ cloudSink }: { cloudSink: IGallerySink }) {
     
     const { isOnline } = useOnline();
-
-    const db = useRef<IDBDatabase | undefined>(undefined);
-
-    useEffect(() => {
-
-        async function openDb() {
-            db.current = await openDatabase();
-        }
-
-        openDb()
-            .catch(err => {
-                console.error(`Failed to open indexeddb:`);
-                console.error(err);
-            });
-
-        return () => {
-            if (db.current) {
-                db.current.close();
-                db.current = undefined;
-            }
-        };
-    });
+    const { db } = useIndexeddb()
 
     useEffect(() => {
         let timer: NodeJS.Timeout | undefined = undefined;
-
-        
-
+       
         if (isOnline) {
             async function sync() {
                 timer = undefined;
 
                 try {
-                    if (db.current === undefined) {
+                    if (db === undefined) {
                         throw new Error("Database not open");
                     }
 
@@ -53,26 +31,26 @@ export function useDatabaseSync({ cloudSink }: { cloudSink: IGallerySink }) {
                     // Flush the queue of outgoing asset uploads.
                     //
                     while (true) {
-                        const outgoingUpload = await getLeastRecentRecord<IAssetUploadRecord>(db.current, "outgoing-asset-upload");
+                        const outgoingUpload = await getLeastRecentRecord<IAssetUploadRecord>(db, "outgoing-asset-upload");
                         if (!outgoingUpload) {
                             break;
                         }
 
                         await cloudSink.uploadAsset(outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.contentType, outgoingUpload.data);
-                        await deleteRecord(db.current, "outgoing-asset-upload", outgoingUpload._id);
+                        await deleteRecord(db, "outgoing-asset-upload", outgoingUpload._id);
                     }
 
                     //
                     // Flush the queue of outoing asset updates.
                     //
                     while (true) {
-                        const outgoingUpdate = await getLeastRecentRecord<IAssetUpdateRecord>(db.current, "outgoing-asset-update");
+                        const outgoingUpdate = await getLeastRecentRecord<IAssetUpdateRecord>(db, "outgoing-asset-update");
                         if (!outgoingUpdate) {
                             break;
                         }
 
                         await cloudSink.updateAsset(outgoingUpdate.assetId, outgoingUpdate.assetUpdate);
-                        await deleteRecord(db.current, "outgoing-asset-update", outgoingUpdate._id);
+                        await deleteRecord(db, "outgoing-asset-update", outgoingUpdate._id);
                     }
                 }    
                 catch (err) {

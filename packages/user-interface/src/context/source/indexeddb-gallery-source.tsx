@@ -6,7 +6,8 @@ import { IGallerySource } from "./gallery-source";
 import { useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
-import { getAllRecords, getAsset, openDatabase } from "../../lib/indexeddb";
+import { getAllRecords, getAsset } from "../../lib/indexeddb";
+import { useIndexeddb } from "../indexeddb-context";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -40,44 +41,24 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
-    const db = useRef<IDBDatabase | undefined>(undefined);
-
-    useEffect(() => {
-
-        async function openDb() {
-            db.current = await openDatabase();
-        }
-
-        openDb()
-            .catch(err => {
-                console.error(`Failed to open indexeddb:`);
-                console.error(err);
-            });
-
-        return () => {
-            if (db.current) {
-                db.current.close();
-                db.current = undefined;
-            }
-        };
-    });
+    const { db } = useIndexeddb();
 
     //
     // Retreives assets from the source.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
-        if (db.current === undefined) {
+        if (db === undefined) {
             return [];
         }
 
-        return await getAllRecords<IGalleryItem>(db.current, "metadata");
+        return await getAllRecords<IGalleryItem>(db, "metadata");
     }
 
     //
     // Loads data for an asset.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
-        if (db.current === undefined) {
+        if (db === undefined) {
             return undefined;
         }
 
@@ -88,7 +69,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await getAsset(db.current, assetType, assetId)
+        const assetData = await getAsset(db, assetType, assetId)
         if (!assetData) {
             console.error(`Asset not found: ${assetType}:${assetId}`);
             return undefined;

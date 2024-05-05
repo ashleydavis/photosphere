@@ -1,13 +1,13 @@
 //
 // Opens the database.
 //
-export function openDatabase(): Promise<IDBDatabase> {
+export function openDatabase(versionNumber: number, collectionNames: string[]): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("photosphere-test-1", 5);
+        const request = indexedDB.open("photosphere-test-1", versionNumber);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
             const db = (event.target as IDBOpenDBRequest).result;
-            createObjectStores(db);
+            createObjectStores(db, collectionNames);
         };
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
@@ -17,33 +17,11 @@ export function openDatabase(): Promise<IDBDatabase> {
 //
 // Creates object store only if they don't already exist.
 //
-async function createObjectStores(db: IDBDatabase) {
-    if (!db.objectStoreNames.contains("thumb")) {
-        db.createObjectStore("thumb", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("display")) {
-        db.createObjectStore("display", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("asset")) {
-        db.createObjectStore("asset", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("hashes")) {
-        db.createObjectStore("hashes", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("metadata")) {
-        db.createObjectStore("metadata", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("outgoing-asset-upload")) {
-        db.createObjectStore("outgoing-asset-upload", { keyPath: "_id" });
-    }
-
-    if (!db.objectStoreNames.contains("outgoing-asset-update")) {
-        db.createObjectStore("outgoing-asset-update", { keyPath: "_id" });
+async function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
+    for (const collectionName of collectionNames) {
+        if (!db.objectStoreNames.contains(collectionName)) {
+            db.createObjectStore(collectionName, { keyPath: "_id" });
+        }
     }
 }
 

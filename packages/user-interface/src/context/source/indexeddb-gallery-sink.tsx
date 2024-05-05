@@ -5,45 +5,26 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { IGallerySink } from "./gallery-sink";
-import { getRecord, openDatabase, storeAsset, storeRecord } from "../../lib/indexeddb";
+import { getRecord, storeAsset, storeRecord } from "../../lib/indexeddb";
 import { IAsset } from "../../def/asset";
+import { useIndexeddb } from "../indexeddb-context";
 
 //
 // Use the "Indexeddb sink" in a component.
 //
 export function useIndexeddbGallerySink(): IGallerySink {
 
-    const db = useRef<IDBDatabase | undefined>(undefined);
+    const { db } = useIndexeddb();
 
-    useEffect(() => {
-
-        async function openDb() {
-            db.current = await openDatabase(); 
-        }
-
-        openDb()
-            .catch(err => {
-                console.error(`Failed to open indexeddb:`);
-                console.error(err);
-            });
-
-        return () => {
-            if (db.current) {
-                db.current.close();
-                db.current = undefined;
-            }
-        };
-    });
-        
     //
     // Uploads an asset.
     //
     async function uploadAsset(assetId: string, assetType: string, contentType: string, assetData: Blob): Promise<void> {
-        if (db.current === undefined) {
+        if (db === undefined) {
             throw new Error("Database not open");
         }
 
-        await storeAsset(db.current, assetType, assetId, {
+        await storeAsset(db, assetType, assetId, {
             contentType,
             data: assetData,        
         });
@@ -68,16 +49,16 @@ export function useIndexeddbGallerySink(): IGallerySink {
     // Updates the configuration of the asset.
     //
     async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
-        if (db.current === undefined) {
+        if (db === undefined) {
             throw new Error("Database not open");
         }
 
-        let asset = await getRecord<any>(db.current, "metadata", assetId);
+        let asset = await getRecord<any>(db, "metadata", assetId);
         if (!asset) {
             asset = {};
         }
 
-        await storeRecord<any>(db.current, "metadata", {
+        await storeRecord<any>(db, "metadata", {
             _id: assetId,
             ...asset,
             ...assetUpdate,
@@ -88,11 +69,11 @@ export function useIndexeddbGallerySink(): IGallerySink {
     // Check that asset that has already been uploaded with a particular hash.
     //
     async function checkAsset(hash: string): Promise<string | undefined> {
-        if (db.current === undefined) {
+        if (db === undefined) {
             throw new Error("Database not open");
         }
 
-        const hashRecord = await getRecord<IHashRecord>(db.current, "hashes", hash);
+        const hashRecord = await getRecord<IHashRecord>(db, "hashes", hash);
         if (!hashRecord) {
             return undefined;
         }
