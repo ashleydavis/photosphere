@@ -88,7 +88,6 @@ export function useIndexeddbGallerySource(): IGallerySource {
 
         const assetData = await getAsset(db, assetType, assetId); //todo: Make use of collection id.
         if (!assetData) {
-            console.error(`Asset not found: ${assetType}:${assetId}`);
             return undefined;
         }
 
