@@ -42,7 +42,7 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, type: string): Promise<string | undefined> {
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
         //TODO: 
         return undefined;
     }
@@ -50,11 +50,12 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string): void {
+    function unloadAsset(assetId: string, assetType: string): void {
         //TODO:
     }
 
     return {
+        isInitialised: false,
         getUser,
         getAssets,
         loadAsset,
