@@ -57,6 +57,7 @@ POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 col: {{collection}}
+asset-type: original
 Authorization: Bearer {{token}}
 
 < ./test-assets/1.jpeg
@@ -66,17 +67,18 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
+GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=original
 
 ###
 #
 # Uploads a thumbnail for the asset.
 #
 
-POST {{base_url}}/thumb
+POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 col: {{collection}}
+asset-type: thumb
 Authorization: Bearer {{token}}
 
 < ./test-assets/2.jpeg
@@ -85,17 +87,18 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/thumb?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
+GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=thumb
 
 ###
 #
 # Uploads the display version of an asset.
 #
 
-POST {{base_url}}/display
+POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{upload_asset_id}}
 col: {{collection}}
+asset-type: display
 Authorization: Bearer {{token}}
 
 < ./test-assets/3.jpeg
@@ -104,7 +107,7 @@ Authorization: Bearer {{token}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/display?id={{upload_asset_id}}&col={{collection}}&tok={{token}}
+GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=display
 
 ###
 # Gets metadata for an asset.

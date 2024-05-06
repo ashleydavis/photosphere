@@ -160,6 +160,7 @@ describe("photosphere backend", () => {
                     "col": collectionId,
                     "id": assetId,
                     "Content-Type": contentType,
+                    "asset-type": "original",
                 },
             }
         );
@@ -180,12 +181,13 @@ describe("photosphere backend", () => {
         const contentType = "image/jpeg";
 
         const response = await axios.post(
-            `${baseUrl}/thumb`, 
+            `${baseUrl}/asset`, 
             fs.readFileSync("./test/test-assets/1.jpeg"), {
                 headers: { 
                     "col": collectionId,
                     "id": assetId,
                     "Content-Type": contentType,
+                    "asset-type": "thumb",
                 },
             }
         );
@@ -300,7 +302,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=original`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -313,7 +315,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.streamOriginal = async () => undefined;
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=original`);
         expect(response.status).toBe(404);
     });
 
@@ -321,7 +323,7 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/asset?col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?col=${collectionId}&type=original`);
         expect(response.status).toBe(400);
     });
 
@@ -338,7 +340,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=thumb`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -351,7 +353,7 @@ describe("photosphere backend", () => {
 
         mockAssetDatabase.streamThumbnail = () => undefined;
 
-        const response = await axios.get(`${baseUrl}/thumb?id=${assetId}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=thumb`);
         expect(response.status).toBe(404);
     });
 
@@ -359,7 +361,7 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/thumb?col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?col=${collectionId}&type=thumb`);
         expect(response.status).toBe(400);
     });
 
@@ -376,7 +378,7 @@ describe("photosphere backend", () => {
             stream: stringStream(content),
         });
 
-        const response = await axios.get(`${baseUrl}/display?id=${assetId}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=display`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);

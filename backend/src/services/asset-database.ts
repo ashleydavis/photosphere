@@ -116,34 +116,14 @@ export interface IAssetDatabase {
     getMetadata(collectionId: string, assetId: string): Promise<IAsset | undefined>;
 
     //
-    // Upload an original asset.
+    // Upload an asset.
     //
-    uploadOriginal(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, inputStream: Readable): Promise<void>;
 
     //
-    // Streams the oirginal asset.
+    // Streams am asset asset.
     //
-    streamOriginal(collectionId: string, assetId: string): Promise<IAssetStream | undefined>;
-
-    //
-    // Uploads an asset thumbnail.
-    //
-    uploadThumbnail(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
-
-    //
-    // Streams the asset thumbnail.
-    //
-    streamThumbnail(collectionId: string, assetId: string): Promise<IAssetStream | undefined>;
-
-    //
-    // Uploads the display resolution asset.
-    //
-    uploadDisplay(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
-
-    //
-    // Streams the display resolution asset.
-    //
-    streamDisplay(collectionId: string, assetId: string): Promise<IAssetStream | undefined>;
+    streamAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetStream | undefined>;
 
     //
     // Checks if the asset exists based on a hash.
@@ -352,68 +332,24 @@ export class AssetDatabase {
     }
 
     //
-    // Uploads an original asset.
+    // Uploads an asset.
     //
-    async uploadOriginal(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream(`collections/${collectionId}/original`, assetId, contentType, inputStream);
+    async uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, inputStream: Readable): Promise<void> {
+        await this.storage.writeStream(`collections/${collectionId}/${assetType}`, assetId, contentType, inputStream);
     }
 
     //
-    // Streams the original asset.
+    // Streams an asset.
     //
-    async streamOriginal(collectionId: string, assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info(`collections/${collectionId}/original`, assetId);
+    async streamAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetStream | undefined> {
+        const info = await this.storage.info(`collections/${collectionId}/${assetType}`, assetId);
         if (!info) {
             return undefined;
         }
 
         return {
             contentType: info.contentType,
-            stream: this.storage.readStream(`collections/${collectionId}/original`, assetId),
-        };
-    }
-
-    //
-    // Uploads an asset thumbnail.
-    //
-    async uploadThumbnail(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream(`collections/${collectionId}/thumb`, assetId, contentType, inputStream);
-    }
-
-    //
-    // Streams the asset thumbnail.
-    //
-    async streamThumbnail(collectionId: string, assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info(`collections/${collectionId}/thumb`, assetId);
-        if (!info) {
-            return undefined;
-        }
-
-        return {
-            contentType: info.contentType,
-            stream: this.storage.readStream(`collections/${collectionId}/thumb`, assetId),
-        };
-    }
-
-    //
-    // Uploads the display resolution asset.
-    //
-    async uploadDisplay(collectionId: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream(`collections/${collectionId}/display`, assetId, contentType, inputStream);
-    }
-
-    //
-    // Streams the display resolution asset.
-    //
-    async streamDisplay(collectionId: string, assetId: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info(`collections/${collectionId}/display`, assetId);
-        if (!info) {
-            return undefined;
-        }
-
-        return {
-            contentType: info.contentType,
-            stream: this.storage.readStream(`collections/${collectionId}/display`, assetId),
+            stream: this.storage.readStream(`collections/${collectionId}/${assetType}`, assetId),
         };
     }
 

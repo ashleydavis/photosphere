@@ -257,7 +257,7 @@ export function ApiContextProvider({ children }: IProps) {
     // Retreives the data for an asset from the backend.
     //
     async function getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob> {
-        const assetUrl = makeUrl(collectionId, `/${assetType}?id=${assetId}`);
+        const assetUrl = makeUrl(collectionId, `/asset?id=${assetId}&type=${assetType}`);
         const response = await axios.get(assetUrl, { //todo: Token needs to be passed in header.
             responseType: 'blob'
         });

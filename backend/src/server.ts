@@ -273,7 +273,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const assetId = getHeader(req, "id");
         const collectionId = getHeader(req, "col");
         const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadOriginal(collectionId, assetId, contentType, req);
+        const assetType = getHeader(req, "asset-type");
+        await assetDatabase.uploadAsset(collectionId, assetId, assetType, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -284,84 +285,13 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
 
         const assetId = req.query.id as string;
         const collectionId = req.query.col as string;
-        if (!assetId || !collectionId) {
+        const assetType = req.query.type as string;
+        if (!assetId || !collectionId || !assetType) {
             res.sendStatus(400);
             return;
         }
 
-        const assetStream = await assetDatabase.streamOriginal(collectionId, assetId);
-        if (!assetStream) {
-            res.sendStatus(404);
-            return;
-        }
-
-        res.writeHead(200, {
-            "Content-Type": assetStream.contentType,
-        });
-
-        assetStream.stream.pipe(res);
-    }));
-
-    //
-    // Uploads a thumbnail for a particular asset.
-    //
-    app.post("/thumb", asyncErrorHandler(async (req, res) => {
-        const assetId = getHeader(req, "id");
-        const collectionId = getHeader(req, "col");
-        const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadThumbnail(collectionId, assetId, contentType, req);
-        res.sendStatus(200);
-    }));
-
-    //
-    // Gets the thumb for an asset by id.
-    //
-    app.get("/thumb", asyncErrorHandler(async (req, res) => {
-
-        const assetId = req.query.id as string;
-        const collectionId = req.query.col as string;
-        if (!assetId || !collectionId) {
-            res.sendStatus(400);
-            return;
-        }
-
-        const assetStream = await assetDatabase.streamThumbnail(collectionId, assetId);
-        if (!assetStream) {
-            res.sendStatus(404);
-            return;
-        }
-
-        res.writeHead(200, {
-            "Content-Type": assetStream.contentType,
-        });
-
-        assetStream.stream.pipe(res);
-    }));
-
-    //
-    // Uploads a display version for a particular asset.
-    //
-    app.post("/display", asyncErrorHandler(async (req, res) => {
-        const assetId = getHeader(req, "id");
-        const collectionId = getHeader(req, "col");
-        const contentType = getHeader(req, "content-type");
-        await assetDatabase.uploadDisplay(collectionId, assetId, contentType, req);
-        res.sendStatus(200);
-    }));
-
-    //
-    // Gets the display version for an asset by id.
-    //
-    app.get("/display", asyncErrorHandler(async (req, res) => {
-
-        const assetId = req.query.id as string;
-        const collectionId = req.query.col as string;
-        if (!assetId || !collectionId) {
-            res.sendStatus(400);
-            return;
-        }
-
-        const assetStream = await assetDatabase.streamDisplay(collectionId, assetId);
+        const assetStream = await assetDatabase.streamAsset(collectionId, assetId, assetType);
         if (!assetStream) {
             res.sendStatus(404);
             return;
