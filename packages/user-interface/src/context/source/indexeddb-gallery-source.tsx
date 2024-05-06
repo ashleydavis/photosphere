@@ -6,8 +6,9 @@ import { IGallerySource } from "./gallery-source";
 import { useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
-import { getAllRecords, getAsset } from "../../lib/indexeddb";
+import { getAllRecords, getAsset, getRecord } from "../../lib/indexeddb";
 import { useIndexeddb } from "../indexeddb-context";
+import { IUser } from "../../def/user";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -44,6 +45,22 @@ export function useIndexeddbGallerySource(): IGallerySource {
     const { db } = useIndexeddb();
 
     //
+    // Loads the user's details.
+    //
+    async function getUser(): Promise<IUser | undefined> {
+        if (db === undefined) {
+            return undefined;
+        }
+
+        const user = await getRecord<IUser>(db, "user", "config");
+        if (!user) {
+            return undefined;
+        }
+
+        return user;
+    }
+
+    //
     // Retreives assets from the source.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
@@ -57,7 +74,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
         if (db === undefined) {
             return undefined;
         }
@@ -69,7 +86,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await getAsset(db, assetType, assetId)
+        const assetData = await getAsset(db, assetType, assetId); //todo: Make use of collection id.
         if (!assetData) {
             console.error(`Asset not found: ${assetType}:${assetId}`);
             return undefined;
@@ -102,6 +119,8 @@ export function useIndexeddbGallerySource(): IGallerySource {
     }
 
     return {
+        isInitialised: db !== undefined,
+        getUser,
         getAssets,
         loadAsset,
         unloadAsset,

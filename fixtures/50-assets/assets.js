@@ -1405,9 +1405,31 @@ const assets = [
 
 const fs = require("fs");
 
-for (const asset of assets) {
+const maxLength = String(assets.length).length;
+
+for (let i = 0; i < assets.length; i++) {
+    const asset = assets[i];
+
     // asset.sortDate = asset.photoDate;
     // fs.writeFileSync(`./files/metadata/${asset._id}`, JSON.stringify(asset, null, 2));
 
-    fs.writeFileSync(`./files/display/${asset._id}.info`, JSON.stringify({ contentType: "image/jpeg" }, null, 2));
+    // fs.writeFileSync(`./files/display/${asset._id}.info`, JSON.stringify({ contentType: "image/jpeg" }, null, 2));
+
+    
+
+    // for (let i = 1; i <= maxNumber; i++) {
+    const paddedNumber = String(i).padStart(maxLength, '0');
+    fs.writeFileSync(`./files/collections/test-collection/journal/${paddedNumber}`, JSON.stringify({ 
+        ops: [
+            {
+                id: asset._id,
+                "ops": [
+                    {
+                        type: "set",
+                        fields: asset,
+                    },
+                ],
+            },
+        ],
+     }, null, 2));
 }

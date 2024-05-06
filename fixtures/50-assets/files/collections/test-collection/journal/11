@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6389164637613e9ef3d",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6389164637613e9ef3d",
+            "origFileName": "LFq-HxcWT5E.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 4061,
+            "height": 6091,
+            "description": "Experimental portrait",
+            "location": null,
+            "searchText": " Experimental portrait",
+            "properties": {
+              "exif": {
+                "make": "FUJIFILM",
+                "model": "X-T3",
+                "name": "FUJIFILM, X-T3",
+                "exposure_time": "1/60",
+                "aperture": "1.0",
+                "focal_length": "35.0",
+                "iso": 6400
+              }
+            },
+            "hash": "20508a8e387bc6fbc59b597e1affe289b2fda461e3d472af2c83979de58b6815",
+            "fileDate": "2023-01-23T21:06:37Z",
+            "photoDate": "2023-01-23T21:06:37Z"
+          }
+        }
+      ]
+    }
+  ]
+}

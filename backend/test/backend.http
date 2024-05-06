@@ -195,7 +195,7 @@ Authorization: Bearer {{token}}
 # Sets fields for an asset.
 #
 
-PUT {{base_url}}/metadata
+POST {{base_url}}/operations
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -234,7 +234,7 @@ Authorization: Bearer {{token}}
 # Pushes a value on an array.
 #
 
-PUT {{base_url}}/metadata
+POST {{base_url}}/operations
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -272,7 +272,7 @@ Authorization: Bearer {{token}}
 # Pops a value on an array.
 #
 
-PUT {{base_url}}/metadata
+PUT {{base_url}}/operations
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -305,6 +305,20 @@ Authorization: Bearer {{token}}
 GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
+
+###
+# Gets journal operations for a collection.
+#
+
+GET {{base_url}}/operations?col={{collection}}
+
+###
+# Gets journal operations after a certain update.
+#
+
+@last_update = 30788784010399
+
+GET {{base_url}}/operations?col={{collection}}&id={{last_update}}
 
 ###
 # Check if an asset with a particular hash has been uploaded.

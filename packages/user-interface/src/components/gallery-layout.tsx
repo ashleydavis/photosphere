@@ -85,7 +85,7 @@ export function GalleryLayout({
                                     testId="gallery-thumb"
                                     imgClassName="gallery-thumb"
                                     asset={item}
-                                    type="thumb"
+                                    assetType="thumb"
                                     onClick={() =>{
                                         if (onItemClick) {
                                             onItemClick({ item, index });

@@ -2,7 +2,7 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import { IAsset } from "../../def/asset";
+import { ICollectionOps, IOpSelection } from "../../def/ops";
 import { IGallerySink } from "./gallery-sink";
 
 //
@@ -13,43 +13,43 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
     //
     // Uploads an asset.
     //
-    async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
         // 
         // Store the asset locally.
         //
-        await indexeddbSink.uploadAsset(assetId, assetType, contentType, data);
+        await indexeddbSink.uploadAsset(collectionId, assetId, assetType, contentType, data);
 
         // 
         // Queue the asset for upload to the cloud.
         //
-        await outgoingSink.uploadAsset(assetId, assetType, contentType, data);
+        await outgoingSink.uploadAsset(collectionId, assetId, assetType, contentType, data);
     }
 
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
+    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
         //
         // Update the asset locally.
         //
-        await indexeddbSink.updateAsset(assetId, assetUpdate);
+        await indexeddbSink.updateAsset(collectionOps);
 
         //
         // Queue the update for upload to the cloud.
         //
-        await outgoingSink.updateAsset(assetId, assetUpdate);
+        await outgoingSink.updateAsset(collectionOps);
     }
 
     //
     // Check if asset has already been uploaded with a particular hash.
     //
-    async function checkAsset(hash: string): Promise<string | undefined> {       
-        const result = await indexeddbSink.checkAsset(hash);
+    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {       
+        const result = await indexeddbSink.checkAsset(collectionId, hash);
         if (result) {
             return result;
         }
 
-        return await outgoingSink.checkAsset(hash);
+        return await outgoingSink.checkAsset(collectionId, hash);
     }
 
     return {

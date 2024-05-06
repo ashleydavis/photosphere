@@ -2,11 +2,11 @@
 // Provides a sink that stores outgoing assets in indexeddb and queues them for upload to the cloud.
 //
 
-import { IAsset } from "../../def/asset";
 import { storeRecord } from "../../lib/indexeddb";
 import { IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 import { useIndexeddb } from "../indexeddb-context";
+import { ICollectionOps } from "../../def/ops";
 
 //
 // Records an asset upload in the outgoing queue.
@@ -16,6 +16,11 @@ export interface IAssetUploadRecord {
     // ID of the database record.
     //
     _id: string;
+
+    //
+    // ID of the collection to upload to.
+    //
+    collectionId: string;
 
     //
     // ID of the asset.
@@ -48,14 +53,9 @@ export interface IAssetUpdateRecord {
     _id: string;
 
     //
-    // The asset to update.
+    // Operations to apply to the database.
     //
-    assetId: string;
-    
-    //
-    // The fields of the asset to update.
-    //
-    assetUpdate: Partial<IAsset>;
+    collectionOps: ICollectionOps;
 }
 
 //
@@ -68,13 +68,14 @@ export function useOutgoingQueueSink(): IGallerySink {
     //
     // Uploads an asset.
     //
-    async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
         if (db === undefined) {
             throw new Error("Database not open");
         }
 
         await storeRecord<IAssetUploadRecord>(db, "outgoing-asset-upload", {
             _id: uuid(),
+            collectionId,
             assetId,
             assetType,
             contentType,
@@ -85,15 +86,14 @@ export function useOutgoingQueueSink(): IGallerySink {
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
+    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
         if (db === undefined) {
             throw new Error("Database not open");
         }
 
         await storeRecord<IAssetUpdateRecord>(db, "outgoing-asset-update", {
             _id: uuid(),
-            assetId,
-            assetUpdate,
+            collectionOps,
         });
     }
 

@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6379164637613e9ef34",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6379164637613e9ef34",
+            "origFileName": "p9ttlbi5wig.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 3600,
+            "height": 2400,
+            "description": "Smiling Catholic priest (jesuit) giving his blessing at New Yearˇs",
+            "location": "Trnava, Slovakia",
+            "searchText": " Smiling Catholic priest (jesuit) giving his blessing at New Yearˇs Trnava, Slovakia",
+            "properties": {
+              "exif": {
+                "make": "Canon",
+                "model": " EOS R6",
+                "name": "Canon, EOS R6",
+                "exposure_time": "1/400",
+                "aperture": "2",
+                "focal_length": "35.0",
+                "iso": 1600
+              }
+            },
+            "hash": "460b3f18faaed8f6841d44f3fd91916fec29b6fc68eaf3fb0cacd55b9f153499",
+            "fileDate": "2023-01-12T19:26:04Z",
+            "photoDate": "2023-01-12T19:26:04Z"
+          }
+        }
+      ]
+    }
+  ]
+}

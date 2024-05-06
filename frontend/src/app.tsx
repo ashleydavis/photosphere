@@ -15,7 +15,7 @@ function GallerySetup() {
     const localSource = useLocalGallerySource({ indexeddbSource, cloudSource });
     const localSink = useLocalGallerySink({ indexeddbSink, outgoingSink });
 
-    useDatabaseSync({ cloudSink });
+    useDatabaseSync({ cloudSink, indexeddbSink, localSource });
 
     return (
         <SearchContextProvider>

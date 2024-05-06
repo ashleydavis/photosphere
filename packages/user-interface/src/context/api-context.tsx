@@ -3,7 +3,8 @@ import { IGalleryItem } from "../lib/gallery-item";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useAuth } from "./auth-context";
-import { IAssetOps, IDbOps } from "../def/ops";
+import { IAssetOps, ICollectionOps, IDbOps } from "../def/ops";
+import { IUser } from "../def/user";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -59,6 +60,55 @@ export interface IAssetMetadata {
     labels: string[];
 }
 
+//
+// Records updates to assets in the collection.
+//
+export interface IJournalRecord {
+    //
+    // The date the server received the operation.
+    //
+    serverTime: string;
+    
+    //
+    // Operations to apply to assets in the collection.
+    //
+    ops: IAssetOps[];
+}
+
+export interface ICollectionOpsResult {
+    //
+    // Operations against the collection.
+    //
+    collectionOps: ICollectionOps;
+
+    //
+    // The id of the latest asset that has been retreived.
+    //
+    latestUpdateId?: string;
+
+    //
+    // Continuation token for the next page of operations.
+    //
+    next?: string;
+}
+
+//
+// Collection of the last update ids for each collection.
+//
+export interface ICollectionUpdateIds {
+    //
+    // The latest update id for each collection.
+    //
+    [collectionId: string]: string;
+}
+
+export interface IDpOpsResult {
+    //
+    // Operations to apply to the database.
+    //
+    collectionOps: ICollectionOpsResult[];
+}
+
 export interface IApiContext {
 
     //
@@ -67,58 +117,58 @@ export interface IApiContext {
     isInitialised: boolean;
 
     //
+    // Loads the user's details.
+    //
+    getUser(): Promise<IUser>;
+
+    //
     // Makes a full URL to a route in the REST API.
     //
-    makeUrl(route: string): string;
-
-    //
-    // The collection ID the user is working with.
-    //
-    collectionId: string | undefined;
-
-    //
-    // Sets the collection the user is working with.
-    //
-    setCollection(newCollectionId: string): void;
+    makeUrl(collectionId: string, route: string): string;
 
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(): Promise<IGalleryItem[]>;
+    getAssets(collectionId: string): Promise<IGalleryItem[]>;
 
     //
     // Retreives the data for an asset from the backend.
     //
-    getAsset(assetId: string, assetType: string): Promise<Blob>;
+    getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob>;
 
     //
     // Check if an asset is already uploaded using its hash.
     //
-    checkAsset(hash: string): Promise<string | undefined>;
+    checkAsset(collectionId: string, hash: string): Promise<string | undefined>;
 
     //
     // Uploads an asset to the backend.
     //
-    uploadSingleAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
+    uploadSingleAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
 
     //
     // TODO: Deprecated in favor of database options.
     //
     // Uploads an asset's metadata to the backend.
     //
-    uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void>;
+    uploadAssetMetadata(collectionId: string, assetId: string, assetMetadata: IAssetMetadata): Promise<void>;
 
     //
     // TODO: Deprecated in favor of database options.
     //
     // Updates an asset's metadata.
     //
-    updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void>;
+    updateAssetMetadata(collectionId: string, id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void>;
 
     //
-    // Submits database operations.
+    // Submits database operations to the cloud.
     //
-    submitOperations(assetOps: IAssetOps[]): Promise<void>;
+    submitOperations(dbOps: IDbOps): Promise<void>;
+
+    //
+    // Retreives latest database operations from the cloud.
+    //
+    retrieveOperations(lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -136,32 +186,20 @@ export function ApiContextProvider({ children }: IProps) {
     } = useAuth();
 
     //
-    // The collection ID the user is working with.
-    //
-    const collectionId = useRef<string | undefined>(undefined);
-
-    //
     // Set true once authenticated and when the token is loaded.
     //
     const [isInitialised, setIsInitialised] = useState<boolean>(false);
 
     useEffect(() => {
         if (isTokenLoaded) {
-            loadCollection()
-                .then(() => {
-                    setIsInitialised(true);
-                })
-                .catch(err => {
-                    console.error(`Failed to load collection:`);
-                    console.error(err);                
-                });
+            setIsInitialised(true);
         }
     }, [isTokenLoaded]);
 
     //
-    // Loads the collection the user is working with.
+    // Loads the user's details.
     //
-    async function loadCollection(): Promise<void> {
+    async function getUser(): Promise<IUser> {
         await loadToken();
         const token = getToken();
 
@@ -175,36 +213,23 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
 
-        collectionId.current = response.data.collections.default;
-        
-        console.log(`Working with collection: ${collectionId.current}`);
+        return response.data;
     }
 
     //
     // Makes a full URL to a route in the REST API.
     //
-    function makeUrl(route: string): string {
-        let url = `${BASE_URL}${route}&col=${collectionId.current}`;
+    function makeUrl(collectionId: string, route: string): string {
+        let url = `${BASE_URL}${route}&col=${collectionId}`;
         url += `&tok=${getToken()}`;
         return url;
     }
 
     //
-    // Sets the collection the user is working with.
-    //
-    function setCollection(newCollectionId: string): void {
-        collectionId.current = newCollectionId;
-    }
-
-    //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(): Promise<IGalleryItem[]> {
-        if (!collectionId.current) {
-            throw new Error(`Collection ID is not set!`);
-        }
-
-        let url = `${BASE_URL}/assets?col=${collectionId.current}`;
+    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
+        let url = `${BASE_URL}/assets?col=${collectionId}`;
 
         await loadToken();
         const token = getToken();
@@ -212,12 +237,13 @@ export function ApiContextProvider({ children }: IProps) {
             url, 
             { 
                 headers: {                     
-                    col: collectionId.current,
+                    col: collectionId,
                     Authorization: `Bearer ${token}`,
                 },
             }
         );
-        const { assets } = data;
+
+        const { assets } = data; //todo: Need to care about the "next" field here to get the next page.
         
         for (const asset of assets) {
             //TODO: This should be configurable.
@@ -230,9 +256,9 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the data for an asset from the backend.
     //
-    async function getAsset(assetId: string, assetType: string): Promise<Blob> {
-        const assetUrl = makeUrl(`/${assetType}?id=${assetId}`);
-        const response = await axios.get(assetUrl, {
+    async function getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob> {
+        const assetUrl = makeUrl(collectionId, `/${assetType}?id=${assetId}`);
+        const response = await axios.get(assetUrl, { //todo: Token needs to be passed in header.
             responseType: 'blob'
         });
     
@@ -242,19 +268,15 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Check if an asset is already uploaded using its hash.
     //
-    async function checkAsset(hash: string): Promise<string | undefined> {
-        if (!collectionId.current) {
-            throw new Error(`Collection ID is not set!`);
-        }
-
+    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId.current}`;
+        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
         const response = await axios.get(
             url, 
             {
                 headers: {
-                    col: collectionId.current,
+                    col: collectionId,
                     Authorization: `Bearer ${token}`,
                 },
             }
@@ -265,11 +287,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        if (!collectionId.current) {
-            throw new Error(`Collection ID is not set!`);
-        }
-
+    async function uploadSingleAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
         await loadToken();
         const token = getToken();
 
@@ -279,7 +297,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": contentType,
-                    col: collectionId.current,
+                    col: collectionId,
                     id: assetId,
                     Authorization: `Bearer ${token}`,
                 },
@@ -292,18 +310,14 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset's metadata to the backend.
     //
-    async function uploadAssetMetadata(assetId: string, assetMetadata: IAssetMetadata): Promise<void> {
-        if (!collectionId.current) {
-            throw new Error(`Collection ID is not set!`);
-        }
-
+    async function uploadAssetMetadata(collectionId: string, assetId: string, assetMetadata: IAssetMetadata): Promise<void> {
         await loadToken();
         const token = getToken();
         
         await axios.post(
             `${BASE_URL}/metadata`, 
             {
-                col: collectionId.current,
+                col: collectionId,
                 id: assetId,
                 fileName: assetMetadata.fileName,
                 width: assetMetadata.width,
@@ -328,12 +342,12 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Updates an asset's metadata.
     //
-    async function updateAssetMetadata(id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void> {
+    async function updateAssetMetadata(collectionId: string, id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void> {
         await loadToken();
         const token = getToken();
         await axios.patch(`${BASE_URL}/metadata`, 
             {
-                col: collectionId.current,
+                col: collectionId,
                 id: id,
                 update: assetMetadata,
             },
@@ -346,27 +360,14 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Submits database operations.
+    // Submits database operations to the cloud.
     //
-    async function submitOperations(assetOps: IAssetOps[]): Promise<void> {
-        if (!collectionId.current) {
-            throw new Error(`Collection ID is not set!`);
-        }
-
+    async function submitOperations(dbOps: IDbOps): Promise<void> {
         await loadToken();
         const token = getToken();
 
-        const dbOps: IDbOps = {
-            ops: [
-                {
-                    id: collectionId.current,
-                    ops: assetOps,
-                },
-            ],
-        };
-
-        await axios.put(
-            `${BASE_URL}/metadata`, 
+        await axios.post(
+            `${BASE_URL}/operations`, 
             {
                 dbOps,
             },
@@ -375,16 +376,35 @@ export function ApiContextProvider({ children }: IProps) {
                     Authorization: `Bearer ${token}`,
                 },
             }
+        );    
+    }
+
+    //
+    // Retreives latest database operations from the cloud.
+    //
+    async function retrieveOperations(lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult> {
+        await loadToken();
+        const token = getToken();
+
+        const url = `${BASE_URL}/operations`;
+        const response = await axios.put(
+            url, 
+            { lastUpdateIds },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
         );
-    
+
+        return response.data; //todo: Need to care about the "next" field here to get the next page.
     }
 
 
     const value: IApiContext = {
-        isInitialised,
+    	isInitialised,
+        getUser,
         makeUrl,
-        collectionId: collectionId.current,
-        setCollection: setCollection,
         getAssets,
         getAsset,
         checkAsset,
@@ -392,6 +412,7 @@ export function ApiContextProvider({ children }: IProps) {
         uploadAssetMetadata,
         updateAssetMetadata,
         submitOperations,
+        retrieveOperations,
     };
     
     return (

@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6399164637613e9ef49",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6399164637613e9ef49",
+            "origFileName": "16i3KFIlR7I.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 6890,
+            "height": 9504,
+            "description": "mobina",
+            "location": null,
+            "searchText": " mobina",
+            "properties": {
+              "exif": {
+                "make": "SONY",
+                "model": "ILCE-7RM4",
+                "name": "SONY, ILCE-7RM4",
+                "exposure_time": "1/80",
+                "aperture": "3.5",
+                "focal_length": "35.0",
+                "iso": 250
+              }
+            },
+            "hash": "65148c4d1710631331e37a4bff52311bc449d68d5186e7cfbf9e94ffc8b593af",
+            "fileDate": "2023-02-02T16:56:18Z",
+            "photoDate": "2023-02-02T16:56:18Z"
+          }
+        }
+      ]
+    }
+  ]
+}

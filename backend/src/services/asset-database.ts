@@ -7,7 +7,9 @@ import { IAsset } from "../lib/asset";
 import { DatabaseCollection, IDatabaseCollection } from "./database-collection";
 import { IStorage } from "./storage";
 import { ICollectionMetadata } from "../lib/collection";
-import { IDbOps, ISetOp, IPushOp, IPullOp, IAssetOps } from "../lib/ops";
+import { createReverseChronoTimestamp } from "../lib/timestamp";
+import dayjs from "dayjs";
+import { IAssetOps, ICollectionOps, IDbOps } from "../lib/ops";
 
 export interface IAssetStream {
     //
@@ -36,11 +38,50 @@ export interface IAssetsResult {
 //
 // Records updates to assets in the collection.
 //
-export interface IJournalEntry {
+export interface IJournalRecord {
+    //
+    // The date the server received the operation.
+    //
+    serverTime: string;
+    
     //
     // Operations to apply to assets in the collection.
     //
     ops: IAssetOps[];
+}
+
+export interface ICollectionOpsResult {
+    //
+    // Operations against the collection.
+    //
+    collectionOps: ICollectionOps;
+
+    //
+    // The id of the latest asset that has been retreived.
+    //
+    latestUpdateId?: string;
+
+    //
+    // Continuation token for the next page of operations.
+    //
+    next?: string;
+}
+
+//
+// Collection of the last update ids for each collection.
+//
+export interface ICollectionUpdateIds {
+    //
+    // The latest update id for each collection.
+    //
+    [collectionId: string]: string;
+}
+
+export interface IDpOpsResult {
+    //
+    // Operations to apply to the database.
+    //
+    collectionOps: ICollectionOpsResult[];
 }
 
 export interface IAssetDatabase {
@@ -63,6 +104,11 @@ export interface IAssetDatabase {
     // Applies a set of operations to the database.
     //
     applyOperations(ops: IDbOps): Promise<void>;
+
+    //
+    // Retreives operations from the database.
+    //
+    retreiveOperations(collectionIds: string[], lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult>;
 
     //
     // Gets the metadata for an asset.
@@ -112,12 +158,12 @@ export interface IAssetDatabase {
 
 export class AssetDatabase {
 
-    private journal: IDatabaseCollection<IJournalEntry>;
+    private journal: IDatabaseCollection<IJournalRecord>;
     private database: IDatabaseCollection<IAsset>;
 
     constructor(private storage: IStorage) {
         this.database = new DatabaseCollection<IAsset>(storage);
-        this.journal = new DatabaseCollection<IJournalEntry>(storage);
+        this.journal = new DatabaseCollection<IJournalRecord>(storage);
     }
 
     //
@@ -183,7 +229,12 @@ export class AssetDatabase {
             //
             // Updates the journal for the collection.
             //
-            await this.journal.setOne(`collections/${collectionId}/journal`, Date.now().toString(), { ops: collectionOps.ops });
+            const journalRecordId = createReverseChronoTimestamp(new Date());
+            const journalRecord: IJournalRecord = {
+                serverTime: dayjs().toISOString(),
+                ops: collectionOps.ops,
+            };
+            await this.journal.setOne(`collections/${collectionId}/journal`, journalRecordId, journalRecord);
 
             for (const assetOps of collectionOps.ops) {
                 const assetId = assetOps.id;
@@ -229,6 +280,68 @@ export class AssetDatabase {
                 await this.database.setOne(`collections/${collectionId}/metadata`, assetId, fields);
             }
         }
+    }
+
+    //
+    // Retreives operations for a particular collection.
+    //
+    private async retrieveOperationsForCollection(collectionId: string, lastUpdateId: string | undefined): Promise<ICollectionOpsResult> { 
+        const result = await this.journal.listAll(`collections/${collectionId}/journal`, 1000);
+        let journalRecordIds = result.records;
+        let cutOffIndex: number | undefined = undefined;
+
+        //
+        // Only deliver updates that are newer than the record that was last seen.
+        //
+        if (lastUpdateId !== undefined) {
+            for (let i = 0; i < journalRecordIds.length; i++) { //todo: This can be optimized with a binary search.
+                if (journalRecordIds[i] === lastUpdateId) {
+                    cutOffIndex = i;
+                    break;
+                }
+            }
+        }
+
+        let next: string | undefined = result.next;
+
+        if (cutOffIndex !== undefined) {
+            journalRecordIds = journalRecordIds.slice(0, cutOffIndex);
+            next = undefined; // No more to retreive.
+        }
+
+        const journalRecords = await Promise.all(
+            journalRecordIds
+                .map(id => 
+                    this.journal.getOne(`collections/${collectionId}/journal`, id)
+                )
+        );
+
+        return {
+            collectionOps: {
+                id: collectionId,
+                ops: journalRecords
+                    .filter(journalRecord => journalRecord !== undefined)
+                    .map(journalRecord => journalRecord!.ops)
+                    .flat()
+                    .reverse(), // Operations are pull out in reverse chronological order, puts them in chronological order.
+            },
+            latestUpdateId: journalRecordIds.length > 0 ? journalRecordIds[0] : undefined,
+        };
+    }
+
+    //
+    // Retreives operations from the database.
+    //
+    async retreiveOperations(collectionIds: string[], lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult> {
+        const collectionOps = await Promise.all(
+            collectionIds.map(collectionId => 
+                this.retrieveOperationsForCollection(collectionId, lastUpdateIds[collectionId])
+            )
+        );
+
+        return {
+            collectionOps,
+        };
     }
 
     //

@@ -36,6 +36,11 @@ export interface IDatabaseCollection<RecordT = any> {
     updateOne(path: string, id: string, recordUpdate: Partial<RecordT>): Promise<void>;
 
     //
+    // Lists all records in the database.
+    //
+    listAll(path: string, max: number, next?: string): Promise<IPage<string>>;
+
+    //
     // Gets a page of records from the database.
     //
     getAll(path: string, max: number, next?: string): Promise<IPage<RecordT>>;
@@ -73,6 +78,17 @@ export class DatabaseCollection<RecordT = any> implements IDatabaseCollection<Re
         const asset = JSON.parse(buffer!.toString('utf-8'));
         const updated = Object.assign({}, asset, recordUpdate);
         await this.storage.write(path, id, "application/json", Buffer.from(JSON.stringify(updated)));    
+    }
+
+    //
+    // Lists all recores in the database.
+    //
+    async listAll(path: string, max: number, next?: string): Promise<IPage<string>> {
+        const listResult = await this.storage.list(path, max, next);
+        return {
+            records: listResult.assetIds,
+            next: listResult.continuation,
+        };
     }
 
     //

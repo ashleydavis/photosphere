@@ -6,6 +6,7 @@ import { IGallerySource } from "./gallery-source";
 import { useApi } from "../api-context";
 import { useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
+import { IUser } from "../../def/user";
 
 //
 // Use the "Cloud source" in a component.
@@ -38,16 +39,23 @@ export function useCloudGallerySource(): IGallerySource {
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
     //
+    // Loads the user's details.
+    //
+    async function getUser(): Promise<IUser | undefined> {
+        return await api.getUser();
+    }
+
+    //
     // Retreives assets from the source.
     //
-    async function getAssets(): Promise<IGalleryItem[]> {
-        return await api.getAssets();
+    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
+        return await api.getAssets(collectionId);
     }
 
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
         const key = `${assetType}/${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
@@ -55,7 +63,7 @@ export function useCloudGallerySource(): IGallerySource {
             return existingCacheEntry.objectUrl;
         }
 
-        const assetBlob = await api.getAsset(assetId, assetType);
+        const assetBlob = await api.getAsset(collectionId, assetId, assetType);
         const objectUrl = URL.createObjectURL(assetBlob);
         assetCache.current.set(key, { numRefs: 1, objectUrl });
         return objectUrl;
@@ -79,6 +87,8 @@ export function useCloudGallerySource(): IGallerySource {
     }
 
     return {
+        isInitialised: api.isInitialised,
+        getUser,
         getAssets,
         loadAsset,
         unloadAsset,

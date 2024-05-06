@@ -4,7 +4,7 @@
 
 import { useApi } from "../api-context";
 import { IGallerySink } from "./gallery-sink";
-import { IAsset } from "../../def/asset";
+import { ICollectionOps } from "../../def/ops";
 
 //
 // Use the "Cloud sink" in a component.
@@ -19,32 +19,24 @@ export function useCloudGallerySink(): IGallerySink {
     //
     // Uploads an asset.
     //
-    async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        await api.uploadSingleAsset(assetId, assetType, contentType, data);
+    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+        await api.uploadSingleAsset(collectionId, assetId, assetType, contentType, data);
     }
 
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetId: string, assetUpdate: Partial<IAsset>): Promise<void> {
-        await api.submitOperations([
-            {
-                id: assetId,
-                ops: [
-                    {
-                        type: "set",
-                        fields: assetUpdate, //TODO: Should use push/pull for labels.
-                    }
-                ],
-            },        
-        ]);
+    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
+        await api.submitOperations({
+            ops: [ collectionOps ],
+        });
     }
 
     //
     // Check that asset that has already been uploaded with a particular hash.
     //
-    async function checkAsset(hash: string): Promise<string | undefined> {
-        return await api.checkAsset(hash);
+    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
+        return await api.checkAsset(collectionId, hash);
     }    
 
     return {

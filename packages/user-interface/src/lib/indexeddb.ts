@@ -1,9 +1,9 @@
 //
 // Opens the database.
 //
-export function openDatabase(versionNumber: number, collectionNames: string[]): Promise<IDBDatabase> {
+export function openDatabase(databaseName: string, versionNumber: number, collectionNames: string[]): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("photosphere-test-1", versionNumber);
+        const request = indexedDB.open(databaseName, versionNumber);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
             const db = (event.target as IDBOpenDBRequest).result;
@@ -132,14 +132,24 @@ export function storeAsset(db: IDBDatabase, collectionName: string, assetId: str
 //
 export function getAsset(db: IDBDatabase, collectionName: string, assetId: string): Promise<IAssetData | undefined> {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(collectionName, "readonly");
-        const store = transaction.objectStore(collectionName);
-        const request = store.get(assetId);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-            const data = request.result;
-            resolve(data ? data.data as IAssetData : undefined);
-        };
+        try {
+            const transaction = db.transaction(collectionName, "readonly");
+            const store = transaction.objectStore(collectionName);
+            const request = store.get(assetId);
+            request.onerror = () => {
+                console.error(`Failed to get asset ${assetId} from ${collectionName}`);
+                reject(request.error);
+            };
+            request.onsuccess = () => {
+                const data = request.result;
+                resolve(data ? data.data as IAssetData : undefined);
+            };
+        }
+        catch (err) {
+            console.error(`Failed to get asset ${assetId} from ${collectionName}`);
+            console.error(err);
+            reject(err);
+        }
     });
 }
 

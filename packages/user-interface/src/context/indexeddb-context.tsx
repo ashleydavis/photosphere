@@ -21,14 +21,17 @@ export function IndexeddbContextProvider({ children }: IProps) {
     useEffect(() => {
 
         async function openDb() {
-        setDb(await openDatabase(6, [
+            const databaseName = `photosphere-test-5`;
+            setDb(await openDatabase(databaseName, 1, [
                 "thumb",
                 "display",
                 "asset",
                 "hashes",
                 "metadata",
                 "outgoing-asset-upload",
-                "outgoing-asset-update",            
+                "outgoing-asset-update",
+                "last-update-id",
+                "user",
             ]));
         }
 

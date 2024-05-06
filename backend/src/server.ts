@@ -98,7 +98,9 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         }
 
         req.userId = userId;
-        req.user = user;
+        req.user = Object.assign({}, user, {
+            _id: userId,
+        });
         next();
     });
 
@@ -225,15 +227,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
-    // Applies a set of operations to the asset database.
-    //
-    app.put("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
-        const { dbOps } = req.body;
-        await assetDatabase.applyOperations(dbOps);
-        res.sendStatus(200);
-    }));
-
-    //
     // Gets the metadata for an asset by id.
     //
     app.get("/metadata", asyncErrorHandler(async (req, res) => {
@@ -255,6 +248,25 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
+    // Applies a set of operations to the asset database.
+    //
+    app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
+        const { dbOps } = req.body;
+        await assetDatabase.applyOperations(dbOps);
+        res.sendStatus(200);
+    }));
+
+    //
+    // Retreives a set of operations from the asset database.
+    // I had to make this PUT instead of GET so that it could have a request body.
+    //
+    app.put("/operations", express.json(), asyncErrorHandler(async (req, res) => {
+        const { lastUpdateIds } = req.body;
+        const result = await assetDatabase.retreiveOperations(req.user!.collections.access, lastUpdateIds);
+        res.json(result);
+    }));
+
+    //
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
@@ -263,7 +275,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const contentType = getHeader(req, "content-type");
         await assetDatabase.uploadOriginal(collectionId, assetId, contentType, req);
         res.sendStatus(200);
-    })); 
+    }));
 
     //
     // Gets a particular asset by id.

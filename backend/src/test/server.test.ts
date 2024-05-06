@@ -70,6 +70,7 @@ describe("photosphere backend", () => {
         const { baseUrl, mockUserDatabase } = await initServer();
 
         const mockUser = {
+            _id: "test-user",
             collections: {
                 upload: "upload",
                 default: "default",

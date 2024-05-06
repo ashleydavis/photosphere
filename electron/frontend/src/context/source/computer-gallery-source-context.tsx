@@ -5,7 +5,7 @@
 import React, { createContext, ReactNode, useContext, useState } from "react";
 import { IGallerySource } from "user-interface/src/context/source/gallery-source";
 import { useScan } from "../scan-context";
-import { IGalleryItem } from "user-interface";
+import { IGalleryItem, IUser } from "user-interface";
 
 //
 // Use the "computer source" in a component.
@@ -18,6 +18,13 @@ export function useComputerGallerySource(): IGallerySource {
     const { assets } = useScan();
 
     //
+    // Loads the user's details.
+    //
+    async function getUser(): Promise<IUser | undefined> {
+        return undefined;
+    }
+
+    //
     // Retreives assets from the source.
     //
     async function getAssets(): Promise<IGalleryItem[]> {
@@ -28,7 +35,7 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, type: string): Promise<string | undefined> {
+    async function loadAsset(collectionId: string, assetId: string, type: string): Promise<string | undefined> {
         //TODO: 
         return undefined;
     }
@@ -41,6 +48,7 @@ export function useComputerGallerySource(): IGallerySource {
     }
 
     return {
+        getUser,
         getAssets,
         loadAsset,
         unloadAsset,

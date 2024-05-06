@@ -70,6 +70,11 @@ export interface IPullOp extends IOp {
 }
 
 //
+// Specifies the range of possible operations.
+//
+export type IOpSelection = ISetOp | IPushOp | IPullOp;
+
+//
 // A set of operations to apply to a particular asset.
 //
 export interface IAssetOps {
@@ -81,7 +86,7 @@ export interface IAssetOps {
     //
     // Operations to apply to this asset.
     //
-    ops: (ISetOp | IPushOp | IPullOp)[];
+    ops: IOpSelection[];
 }
 
 //

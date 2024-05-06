@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6389164637613e9ef43",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6389164637613e9ef43",
+            "origFileName": "THI4cJ-HGvw.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 5833,
+            "height": 3889,
+            "description": "a woman riding a horse through the ocean",
+            "location": "Kwinana, WA, Australia",
+            "searchText": " a woman riding a horse through the ocean Kwinana, WA, Australia",
+            "properties": {
+              "exif": {
+                "make": "SONY",
+                "model": "ILCE-7M3",
+                "name": "SONY, ILCE-7M3",
+                "exposure_time": "1/8000",
+                "aperture": "2.0",
+                "focal_length": "85.0",
+                "iso": 50
+              }
+            },
+            "hash": "d905df09a4709066722677eff7815a5bbb7939e2406367043f85b7920c2ab544",
+            "fileDate": "2023-01-30T06:27:38Z",
+            "photoDate": "2023-01-30T06:27:38Z"
+          }
+        }
+      ]
+    }
+  ]
+}

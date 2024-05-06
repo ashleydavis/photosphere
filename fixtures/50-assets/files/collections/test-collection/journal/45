@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c63c9164637613e9ef5f",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c63c9164637613e9ef5f",
+            "origFileName": "Ohq7b4-gAmA.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 3557,
+            "height": 5336,
+            "description": "a woman sitting on top of a black suitcase",
+            "location": "Hamburg, Germany",
+            "searchText": " a woman sitting on top of a black suitcase Hamburg, Germany",
+            "properties": {
+              "exif": {
+                "make": "SONY",
+                "model": "ILCE-7M3",
+                "name": "SONY, ILCE-7M3",
+                "exposure_time": "1/200",
+                "aperture": "2.5",
+                "focal_length": "85.0",
+                "iso": 400
+              }
+            },
+            "hash": "11d4ef27322a97821d683746421605385a3b7f2a257cb663a233125a1f4074eb",
+            "fileDate": "2023-01-29T04:12:02Z",
+            "photoDate": "2023-01-29T04:12:02Z"
+          }
+        }
+      ]
+    }
+  ]
+}

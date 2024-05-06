@@ -3,7 +3,6 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { IGallerySource } from "./source/gallery-source";
 import { useSearch } from "./search-context";
 import { IGallerySink } from "./source/gallery-sink";
-import { useApi } from "./api-context";
 import dayjs from "dayjs";
 import { IAsset } from "../def/asset";
 
@@ -95,9 +94,9 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
 
     //
-    // Interface to the backend.
+    // The collection currently being viewed.
     //
-    const api = useApi();
+    const [ collectionId, setCollectionId ] = useState<string | undefined>(undefined);
 
     //
     // Assets that have been loaded from the backend.
@@ -123,19 +122,31 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     }, [searchText]);
 
     //
-    // Resets the gallery when the search text changes.
+    // Loads assets on mount.
     //
     useEffect(() => {
-        if (api.isInitialised) {
+        if (source.isInitialised) {
             loadAssets();
         }
-    }, [api.isInitialised]);
+    }, [source.isInitialised]);
+
 
     //
     // Loads assets into the gallery.
     //
     async function loadAssets(): Promise<void> {
-        const newAssets = await source.getAssets();
+        let _collectionId = collectionId;
+        if (_collectionId === undefined) {
+            const user = await source.getUser();
+            if (user === undefined) {
+                return;
+            }
+            
+            _collectionId = user.collections.default;
+            setCollectionId(_collectionId);
+        }
+
+        const newAssets = await source.getAssets(_collectionId);
         setAssets(newAssets);
     }
 
@@ -147,9 +158,29 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot edit readonly gallery.`); 
         }
 
-        await sink.updateAsset(galleryItem._id, galleryItemToAsset(galleryItem));
+        if (!collectionId) {
+            throw new Error(`Cannot add asset without a collection id.`);
+        }
 
+        //
+        // Add the asset for display in the UI.
+        //
         setAssets([ galleryItem, ...assets ]);
+
+        //
+        // Add the asset to the database.
+        //
+        await sink.updateAsset({
+            id: collectionId,
+            ops: [{
+                id: galleryItem._id,
+                ops: [{
+                    type: "set",
+                    fields: galleryItemToAsset(galleryItem),
+                }]
+            }],
+        });
+
     }
 
     //
@@ -201,6 +232,13 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot edit readonly gallery.`); 
         }
 
+        if (!collectionId) {
+            throw new Error(`Cannot add asset without a collection id.`);
+        }
+
+        //
+        // Update assets in memory for display in the UI.
+        //
         setAssets(prevAssets => {
             const updatedGalleryItem = {
                 ...prevAssets[assetIndex],
@@ -213,8 +251,21 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             ];
         });
 
+        //
+        // Update the asset in the database.
+        //
         const assetId = assets[assetIndex]._id;
-        await sink.updateAsset(assetId, partialGalleryItemToAsset(assetUpdate));
+
+        await sink.updateAsset({
+            id: collectionId,
+            ops: [{
+                id: assetId,
+                ops: [{
+                    type: "set",
+                    fields: partialGalleryItemToAsset(assetUpdate),
+                }]
+            }],
+        });
     }
 
     //
@@ -225,7 +276,11 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot check asset in readonly gallery.`);
         }
 
-        return await sink.checkAsset(hash);
+        if (!collectionId) {
+            throw new Error(`Cannot add asset without a collection id.`);
+        }
+
+        return await sink.checkAsset(collectionId, hash);
     }    
 
     //
@@ -236,14 +291,22 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot upload to readonly gallery.`); 
         }
 
-        await sink.uploadAsset(assetId, assetType, contentType, data);
+        if (!collectionId) {
+            throw new Error(`Cannot add asset without a collection id.`);
+        }
+
+        await sink.uploadAsset(collectionId, assetId, assetType, contentType, data);
     }
 
     //
     // Loads data for an asset.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
-        return await source.loadAsset(assetId, assetType);
+        if (!collectionId) {
+            throw new Error(`Cannot add asset without a collection id.`);
+        }
+
+        return await source.loadAsset(collectionId, assetId, assetType);
     }
 
     //

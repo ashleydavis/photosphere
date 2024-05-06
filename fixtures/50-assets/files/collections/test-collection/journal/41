@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c63b9164637613e9ef5b",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c63b9164637613e9ef5b",
+            "origFileName": "Xby93pk7tOM.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 4024,
+            "height": 6048,
+            "description": "a man with long hair and a beard with tattoos",
+            "location": null,
+            "searchText": " a man with long hair and a beard with tattoos",
+            "properties": {
+              "exif": {
+                "make": "NIKON CORPORATION",
+                "model": "NIKON Z 6",
+                "name": "NIKON CORPORATION, NIKON Z 6",
+                "exposure_time": "1/800",
+                "aperture": "1.4",
+                "focal_length": "24.0",
+                "iso": 80
+              }
+            },
+            "hash": "f585fe0383fcbfb208b621c4a9dce0835545c465c637c7940cf5a06c843ed1cd",
+            "fileDate": "2023-01-25T01:09:13Z",
+            "photoDate": "2023-01-25T01:09:13Z"
+          }
+        }
+      ]
+    }
+  ]
+}

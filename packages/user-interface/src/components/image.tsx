@@ -21,7 +21,7 @@ export interface IImageProps {
     //
     // The type of asset to retreive.
     //
-    type: string;
+    assetType: string;
 
     //
     // Event raised when an item in the gallery has been clicked.
@@ -32,26 +32,26 @@ export interface IImageProps {
 //
 // Renders an image.
 //
-export function Image({ testId, imgClassName, asset, type, onClick }: IImageProps) {
+export function Image({ testId, imgClassName, asset, assetType, onClick }: IImageProps) {
 
     const [objectURL, setObjectURL] = useState<string>("");
 
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
-        loadAsset(asset._id, type)
+        loadAsset(asset._id, assetType)
             .then(objectURL => {
                 if (objectURL) {
                     setObjectURL(objectURL);
                 }
             })
             .catch(err => {
-                console.error("Failed to load asset: ${type}:${asset._id}");
+                console.error(`Failed to load asset: ${assetType}:${asset._id}`);
                 console.error(err);
             });
 
         return () => {
-            unloadAsset(asset._id, type);
+            unloadAsset(asset._id, assetType);
         };
     }, [asset]);
 

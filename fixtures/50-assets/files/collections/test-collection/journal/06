@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6379164637613e9ef38",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6379164637613e9ef38",
+            "origFileName": "Drh5FTN_tvU.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 4024,
+            "height": 6048,
+            "description": "a person walking down a snow covered road",
+            "location": "Calgary, AB, Canada",
+            "searchText": " a person walking down a snow covered road Calgary, AB, Canada",
+            "properties": {
+              "exif": {
+                "make": "NIKON CORPORATION",
+                "model": "NIKON Z 6_2",
+                "name": "NIKON CORPORATION, NIKON Z 6_2",
+                "exposure_time": "1/500",
+                "aperture": "2.8",
+                "focal_length": "40.0",
+                "iso": 100
+              }
+            },
+            "hash": "d09dc11087b1fb93881ba61c75831e29c39d74191e505e95c82d63a922a3ea87",
+            "fileDate": "2023-01-16T21:35:04Z",
+            "photoDate": "2023-01-16T21:35:04Z"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "ops": [
+    {
+      "id": "63e9c6399164637613e9ef45",
+      "ops": [
+        {
+          "type": "set",
+          "fields": {
+            "_id": "63e9c6399164637613e9ef45",
+            "origFileName": "b2873V_RcEw.jpg",
+            "contentType": "image/jpeg",
+            "thumbContentType": "image/jpeg",
+            "displayContentType": "image/jpeg",
+            "width": 3740,
+            "height": 4675,
+            "description": "a brown cow standing in a snow covered field",
+            "location": "Puy-de-Dôme, France",
+            "searchText": " a brown cow standing in a snow covered field Puy-de-Dôme, France",
+            "properties": {
+              "exif": {
+                "make": null,
+                "model": null,
+                "name": null,
+                "exposure_time": null,
+                "aperture": null,
+                "focal_length": null,
+                "iso": null
+              }
+            },
+            "hash": "c30c32312c81396af09ab7d49b230d51ee97124b6f2532a2a556db36d71a501b",
+            "fileDate": "2023-01-31T17:24:52Z",
+            "photoDate": "2023-01-31T17:24:52Z"
+          }
+        }
+      ]
+    }
+  ]
+}
