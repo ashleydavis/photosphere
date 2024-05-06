@@ -275,7 +275,7 @@ Authorization: Bearer {{token}}
 # Pops a value on an array.
 #
 
-PUT {{base_url}}/operations
+POST {{base_url}}/operations
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -313,15 +313,29 @@ Authorization: Bearer {{token}}
 # Gets journal operations for a collection.
 #
 
-GET {{base_url}}/operations?col={{collection}}
+PUT {{base_url}}/operations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "lastUpdateIds": {}
+}
 
 ###
 # Gets journal operations after a certain update.
 #
 
-@last_update = 30788784010399
+@last_update = 15
 
-GET {{base_url}}/operations?col={{collection}}&id={{last_update}}
+PUT {{base_url}}/operations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "lastUpdateIds": {
+        "test-collection": "{{last_update}}"
+    }
+}
 
 ###
 # Check if an asset with a particular hash has been uploaded.
