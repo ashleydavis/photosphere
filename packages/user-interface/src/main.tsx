@@ -5,7 +5,7 @@ import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
 import { useSearch } from "./context/search-context";
-import { useAuth } from "./context/auth-context";
+import { isProduction, useAuth } from "./context/auth-context";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -94,8 +94,7 @@ export function Main({ computerPage }: IMainProps) {
     }
 
 
-    const isProd = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
-    if (isProd) {       
+    if (isProduction) {       
         if (isLoading) {
             return (
                 <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">

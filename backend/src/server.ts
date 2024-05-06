@@ -47,7 +47,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         next();
     });
 
-    if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+    const isProduction = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
+    if (isProduction) {
         
         const checkJwt = auth({
             audience: process.env.AUTH0_AUDIENCE as string,
