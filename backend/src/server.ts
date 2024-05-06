@@ -38,12 +38,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        // Check if the token exists in the query parameters.
-        if (!req.headers.authorization && req.query && req.query.tok) {
-            // Add the token to the Authorization header.
-            req.headers.authorization = `Bearer ${req.query.tok}`;
-        }
-        
         next();
     });
 

@@ -122,11 +122,6 @@ export interface IApiContext {
     getUser(): Promise<IUser>;
 
     //
-    // Makes a full URL to a route in the REST API.
-    //
-    makeUrl(collectionId: string, route: string): string;
-
-    //
     // Retreives the list of assets from the backend.
     //
     getAssets(collectionId: string): Promise<IGalleryItem[]>;
@@ -217,20 +212,10 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Makes a full URL to a route in the REST API.
-    //
-    function makeUrl(collectionId: string, route: string): string {
-        let url = `${BASE_URL}${route}&col=${collectionId}`;
-        url += `&tok=${getToken()}`;
-        return url;
-    }
-
-    //
     // Retreives the list of assets from the backend.
     //
     async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
         let url = `${BASE_URL}/assets?col=${collectionId}`;
-
         await loadToken();
         const token = getToken();
         const { data } = await axios.get(
@@ -257,9 +242,14 @@ export function ApiContextProvider({ children }: IProps) {
     // Retreives the data for an asset from the backend.
     //
     async function getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob> {
-        const assetUrl = makeUrl(collectionId, `/asset?id=${assetId}&type=${assetType}`);
-        const response = await axios.get(assetUrl, { //todo: Token needs to be passed in header.
-            responseType: 'blob'
+        const url = `${BASE_URL}/asset?id=${assetId}&type=${assetType}&col=${collectionId}`; //todo: Some of these parameters might be better as headers.
+        await loadToken();
+        const token = getToken();
+        const response = await axios.get(url, {
+            responseType: "blob",
+            headers: {                  
+                Authorization: `Bearer ${token}`,
+            },
         });
     
         return response.data;
@@ -400,11 +390,9 @@ export function ApiContextProvider({ children }: IProps) {
         return response.data; //todo: Need to care about the "next" field here to get the next page.
     }
 
-
     const value: IApiContext = {
     	isInitialised,
         getUser,
-        makeUrl,
         getAssets,
         getAsset,
         checkAsset,
