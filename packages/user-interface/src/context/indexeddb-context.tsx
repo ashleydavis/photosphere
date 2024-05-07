@@ -14,6 +14,9 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
+//
+// Collections to create in the database.
+//
 const collectionNames = [
     "thumb",
     "display",
