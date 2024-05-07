@@ -2,10 +2,8 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import React, { createContext, ReactNode, useContext, useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { IGallerySink } from "./gallery-sink";
-import { getRecord, storeAsset, storeRecord } from "../../lib/indexeddb";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
 import { ICollectionOps } from "../../def/ops";
@@ -15,17 +13,13 @@ import { ICollectionOps } from "../../def/ops";
 //
 export function useIndexeddbGallerySink(): IGallerySink {
 
-    const { db } = useIndexeddb();
+    const { getRecord, storeAsset, storeRecord } = useIndexeddb();
 
     //
     // Uploads an asset.
     //
     async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, assetData: Blob): Promise<void> {
-        if (db === undefined) {
-            throw new Error("Database not open");
-        }
-
-        await storeAsset(db, assetType, assetId, { //todo: Make use of collection id.
+        await storeAsset(`collection-${collectionId}`, assetType, assetId, {
             contentType,
             data: assetData,        
         });
@@ -50,13 +44,9 @@ export function useIndexeddbGallerySink(): IGallerySink {
     // Updates the configuration of the asset.
     //
     async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
-        if (db === undefined) {
-            throw new Error("Database not open");
-        }
-
         for (const assetOps of collectionOps.ops) {
             const assetId = assetOps.id;
-            const asset = await getRecord<IAsset>(db, "metadata", assetId);
+            const asset = await getRecord<IAsset>(`collection-${collectionOps.id}`, "metadata", assetId);
             let fields = asset as any || {};
             if (!asset) {
                 // Set the asset id when upserting.
@@ -94,7 +84,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
                 }
             }
 
-            await storeRecord<IAsset>(db, "metadata", fields);
+            await storeRecord<IAsset>(`collection-${collectionOps.id}`, "metadata", fields);
         }        
     }
 
@@ -102,11 +92,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
     // Check that asset that has already been uploaded with a particular hash.
     //
     async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
-        if (db === undefined) {
-            throw new Error("Database not open");
-        }
-
-        const hashRecord = await getRecord<IHashRecord>(db, "hashes", hash);
+        const hashRecord = await getRecord<IHashRecord>(`collection-${collectionId}`, "hashes", hash);
         if (!hashRecord) {
             return undefined;
         }

@@ -50,7 +50,7 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, assetType: string): void {
+    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
         //TODO:
     }
 

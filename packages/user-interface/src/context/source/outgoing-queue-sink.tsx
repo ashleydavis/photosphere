@@ -2,7 +2,6 @@
 // Provides a sink that stores outgoing assets in indexeddb and queues them for upload to the cloud.
 //
 
-import { storeRecord } from "../../lib/indexeddb";
 import { IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 import { useIndexeddb } from "../indexeddb-context";
@@ -63,17 +62,13 @@ export interface IAssetUpdateRecord {
 //
 export function useOutgoingQueueSink(): IGallerySink {
 
-    const { db } = useIndexeddb();
+    const { storeRecord } = useIndexeddb();
 
     //
     // Uploads an asset.
     //
     async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        if (db === undefined) {
-            throw new Error("Database not open");
-        }
-
-        await storeRecord<IAssetUploadRecord>(db, "outgoing-asset-upload", {
+        await storeRecord<IAssetUploadRecord>("user", "outgoing-asset-upload", {
             _id: uuid(),
             collectionId,
             assetId,
@@ -87,11 +82,7 @@ export function useOutgoingQueueSink(): IGallerySink {
     // Updates the configuration of the asset.
     //
     async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
-        if (db === undefined) {
-            throw new Error("Database not open");
-        }
-
-        await storeRecord<IAssetUpdateRecord>(db, "outgoing-asset-update", {
+        await storeRecord<IAssetUpdateRecord>("user", "outgoing-asset-update", {
             _id: uuid(),
             collectionOps,
         });

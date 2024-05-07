@@ -6,7 +6,6 @@ import { IGallerySource } from "./gallery-source";
 import { useEffect, useRef } from "react";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
-import { getAllRecords, getAsset, getRecord } from "../../lib/indexeddb";
 import { useIndexeddb } from "../indexeddb-context";
 import { IUser } from "../../def/user";
 
@@ -42,17 +41,13 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
-    const { db } = useIndexeddb();
+    const { getAllRecords, getAsset, getRecord } = useIndexeddb();
 
     //
     // Loads the user's details.
     //
     async function getUser(): Promise<IUser | undefined> {
-        if (db === undefined) {
-            return undefined;
-        }
-
-        const user = await getRecord<IUser>(db, "user", "config");
+        const user = await getRecord<IUser>("user", "user", "config");
         if (!user) {
             return undefined;
         }
@@ -63,30 +58,22 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     // Retreives assets from the source.
     //
-    async function getAssets(): Promise<IGalleryItem[]> {
-        if (db === undefined) {
-            return [];
-        }
-
-        return await getAllRecords<IGalleryItem>(db, "metadata");
+    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
+        return await getAllRecords<IGalleryItem>(`collection-${collectionId}`, "metadata");
     }
 
     //
     // Loads data for an asset.
     //
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
-        if (db === undefined) {
-            return undefined;
-        }
-
-        const key = `${assetType}/${assetId}`;
+        const key = `${collectionId}/${assetType}/${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await getAsset(db, assetType, assetId); //todo: Make use of collection id.
+        const assetData = await getAsset(`collection-${collectionId}`, assetType, assetId);
         if (!assetData) {
             return undefined;
         }
@@ -103,8 +90,8 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, assetType: string): void {
-        const key = `${assetType}/${assetId}`;
+    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
+        const key = `${collectionId}-${assetType}/${assetId}`;
         const cacheEntry = assetCache.current.get(key);
         if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {
@@ -118,7 +105,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     }
 
     return {
-        isInitialised: db !== undefined,
+        isInitialised: true, // Indexedb is always considered online.
         getUser,
         getAssets,
         loadAsset,

@@ -30,5 +30,5 @@ export interface IGallerySource {
     //
     // Unloads data for an asset.
     //
-    unloadAsset(assetId: string, assetType: string): void;
+    unloadAsset(collectionId: string, assetId: string, assetType: string): void;
 }

@@ -1,11 +1,41 @@
-import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { openDatabase } from "../lib/indexeddb";
+import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
+import { IAssetData, openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord, storeAsset as _storeAsset, getAsset as _getAsset } from "../lib/indexeddb";
 
 export interface IIndexeddbContext {
     //
-    // The database (when open).
+    // Stores a record in the database.
     //
-    db: IDBDatabase | undefined;
+    storeRecord<RecordT>(databaseName: string, collectionName: string, record: RecordT): Promise<void>;    
+
+    //
+    // Gets a record from the database.
+    //
+    getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT>;
+
+    //
+    // Gets the least recent record from the database.
+    //
+    getLeastRecentRecord<RecordT>(databaseName: string, collectionName: string): Promise<RecordT | undefined>;
+
+    //
+    // Gets all records from the database.
+    //
+    getAllRecords<RecordT>(databaseName: string, collectionName: string): Promise<RecordT[]>;
+
+    //
+    // Deletes a record.
+    //
+    deleteRecord(databaseName: string, collectionName: string, assetId: string): Promise<void>;
+
+    //
+    // Stores an asset in the database.
+    //
+    storeAsset(databaseName: string, collectionName: string, assetId: string, assetData: IAssetData): Promise<void>;
+
+    //
+    // Gets an asset from the database.
+    //
+    getAsset(databaseName: string, collectionName: string, assetId: string): Promise<IAssetData | undefined>;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -15,47 +45,163 @@ export interface IProps {
 }
 
 //
-// Collections to create in the database.
+// Configures a database.
 //
-const collectionNames = [
-    "thumb",
-    "display",
-    "asset",
-    "hashes",
-    "metadata",
-    "outgoing-asset-upload",
-    "outgoing-asset-update",
-    "last-update-id",
-    "user",
-];
+interface IDatabaseConfiguration {
+    //
+    // The names of the collections in the database.
+    //
+    collectionNames: string[];
+}
+
+//
+// Look up database configurations by name.
+//
+interface IDatabaseConfigurations {
+    [databaseName: string]: IDatabaseConfiguration;
+}
+
+//
+// The configuration for each type of database.
+//
+const databaseConfigurations: IDatabaseConfigurations = {
+    "collection": {
+        collectionNames: [
+            "thumb",
+            "display",
+            "asset",
+            "hashes",
+            "metadata",
+        ],
+    },
+    "user": {    
+        collectionNames: [
+            "outgoing-asset-upload",
+            "outgoing-asset-update",
+            "last-update-id",
+            "user",
+        ],
+    },
+};
+
+//
+// The version of the database.
+// This need to be incremented when the schema changes.
+//
+const databaseVersion = 1;
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
-    const [db, setDb] = useState<IDBDatabase | undefined>(undefined);
+    const dbCache = useRef<Map<string, IDBDatabase>>(new Map<string, IDBDatabase>());
 
     useEffect(() => {
-
-        async function openDb() {
-            const databaseName = `photosphere-test-5`;
-            setDb(await openDatabase(databaseName, 1, collectionNames));
-        }
-
-        openDb()
-            .catch(err => {
-                console.error(`Failed to open indexeddb:`);
-                console.error(err);
-            });
-
         return () => {
-            if (db) {
-                db.close();
-                setDb(undefined);
+            //
+            // Close all database connections.
+            //
+
+            if (dbCache.current) {
+                for (const db of dbCache.current!.values()) {
+                    db.close();
+                }
+    
+                dbCache.current!.clear();
             }
         };
     }, []);
 
+    //
+    // Opens the database.
+    //
+    async function openDatabase(databaseName: string): Promise<IDBDatabase> {
+        if (!dbCache.current) {
+            throw new Error(`Database cache not initialised.`);
+        }
+        
+        let db = dbCache.current.get(databaseName);
+        if (db) {
+            return db;
+        }
+
+        const databaseNameParts = databaseName.split("-");
+        if (databaseNameParts.length === 0) {
+            throw new Error(`Invalid database name: "${databaseName}"`);
+        }
+        const baseDatabaseName = databaseNameParts[0];
+        const databaseConfiguration = databaseConfigurations[baseDatabaseName];
+        if (!databaseConfiguration) {
+            throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
+        }
+
+        db = await _openDatabase(`photosphere-${databaseName}`, databaseVersion, databaseConfiguration.collectionNames);
+        dbCache.current.set(databaseName, db);
+        return db;
+    }
+
+    //
+    // Stores a record in the database.
+    //
+    async function storeRecord<RecordT>(databaseName: string, collectionName: string, record: RecordT): Promise<void> {
+        const db = await openDatabase(databaseName);
+        await _storeRecord(db, collectionName, record);
+    }
+
+    //
+    // Gets a record from the database.
+    //
+    async function getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT> {
+        const db = await openDatabase(databaseName);
+        return await _getRecord(db, collectionName, recordId);
+    }
+
+    //
+    // Gets the least recent record from the database.
+    //
+    async function getLeastRecentRecord<RecordT>(databaseName: string, collectionName: string): Promise<RecordT | undefined> {  
+        const db = await openDatabase(databaseName);
+        return await _getLeastRecentRecord(db, collectionName);
+    }
+
+    //
+    // Gets all records from the database.
+    //
+    async function getAllRecords<RecordT>(databaseName: string, collectionName: string): Promise<RecordT[]> {
+        const db = await openDatabase(databaseName);
+        return await _getAllRecords(db, collectionName);
+    }
+
+    //
+    // Deletes a record.
+    //
+    async function deleteRecord(databaseName: string, collectionName: string, recordId: string): Promise<void> {
+        const db = await openDatabase(databaseName);
+        await _deleteRecord(db, collectionName, recordId);
+    }
+
+    //
+    // Stores an asset in the database.
+    //
+    async function storeAsset(databaseName: string, collectionName: string, assetId: string, assetData: IAssetData): Promise<void> {
+        const db = await openDatabase(databaseName);
+        await _storeAsset(db, collectionName, assetId, assetData);
+    }
+
+    //
+    // Gets an asset from the database.
+    //
+    async function getAsset(databaseName: string, collectionName: string, assetId: string): Promise<IAssetData | undefined> {
+        const db = await openDatabase(databaseName);
+        return await _getAsset(db, collectionName, assetId);
+    }
+
     const value: IIndexeddbContext = {
-        db,
+        storeRecord,
+        getRecord,
+        getLeastRecentRecord,
+        getAllRecords,
+        deleteRecord,
+        storeAsset,
+        getAsset,
     };
     
     return (

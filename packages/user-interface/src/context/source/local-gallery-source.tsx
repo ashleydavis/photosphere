@@ -48,9 +48,9 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, assetType: string): void {
-        indexeddbSource.unloadAsset(assetId, assetType);
-        cloudSource.unloadAsset(assetId, assetType);
+    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
+        indexeddbSource.unloadAsset(collectionId, assetId, assetType);
+        cloudSource.unloadAsset(collectionId, assetId, assetType);
     }
 
     return {

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useOnline } from "../../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./outgoing-queue-sink";
-import { getLeastRecentRecord, deleteRecord, storeRecord, getRecord } from "../../lib/indexeddb";
 import { IGallerySink } from "./gallery-sink";
 import { useIndexeddb } from "../indexeddb-context";
 import { ICollectionUpdateIds, useApi } from "../api-context";
@@ -22,7 +21,7 @@ interface ILastUpdateIds {
 export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { cloudSink: IGallerySink, indexeddbSink: IGallerySink, localSource: IGallerySource }) {
     
     const { isOnline } = useOnline();
-    const { db } = useIndexeddb();
+    const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord } = useIndexeddb();
     const api = useApi();
 
     //
@@ -30,34 +29,30 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
     //
     async function syncOutgoing() {
         try {
-            if (db === undefined) {
-                throw new Error("Database not open");
-            }
-
             //
             // Flush the queue of outgoing asset uploads.
             //
             while (true) {
-                const outgoingUpload = await getLeastRecentRecord<IAssetUploadRecord>(db, "outgoing-asset-upload");
+                const outgoingUpload = await getLeastRecentRecord<IAssetUploadRecord>("user", "outgoing-asset-upload");
                 if (!outgoingUpload) {
                     break;
                 }
 
                 await cloudSink.uploadAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.contentType, outgoingUpload.data);
-                await deleteRecord(db, "outgoing-asset-upload", outgoingUpload._id);
+                await deleteRecord("user", "outgoing-asset-upload", outgoingUpload._id);
             }
 
             //
             // Flush the queue of outgoing asset updates.
             //
             while (true) {
-                const outgoingUpdate = await getLeastRecentRecord<IAssetUpdateRecord>(db, "outgoing-asset-update");
+                const outgoingUpdate = await getLeastRecentRecord<IAssetUpdateRecord>("user", "outgoing-asset-update");
                 if (!outgoingUpdate) {
                     break;
                 }
 
                 await cloudSink.updateAsset(outgoingUpdate.collectionOps);
-                await deleteRecord(db, "outgoing-asset-update", outgoingUpdate._id);
+                await deleteRecord("user", "outgoing-asset-update", outgoingUpdate._id);
             }
         }
         catch (err) {
@@ -72,10 +67,6 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
     async function syncIncoming() {
 
         try {
-            if (!db) {
-                throw new Error("Database not open");
-            }
-
             //
             // Collate the last update ids for each collection.
             //
@@ -87,7 +78,7 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
             const collectionIds = user.collections.access;
             const lastUpdateIds: ICollectionUpdateIds = {};
             for (const collectionId of collectionIds) {
-                const lastUpdateForCollection = await getRecord<ILastUpdateIds>(db, "last-update-id", collectionId);
+                const lastUpdateForCollection = await getRecord<ILastUpdateIds>("user", "last-update-id", collectionId);
                 if (lastUpdateForCollection) {
                     lastUpdateIds[collectionId] = lastUpdateForCollection.latestUpdateId;
                 }
@@ -109,7 +100,7 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
                     //
                     // Record the latest update that was received.
                     //
-                    await storeRecord<ILastUpdateIds>(db, "last-update-id", {
+                    await storeRecord<ILastUpdateIds>("user", "last-update-id", {
                         _id: collectionOp.collectionOps.id, 
                         latestUpdateId: collectionOp.latestUpdateId
                     });
@@ -126,7 +117,7 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
         let timer: NodeJS.Timeout | undefined = undefined;
         let done = false;
        
-        if (db && isOnline) {
+        if (isOnline) {
             // 
             // Periodic database synchronization.
             //
@@ -164,5 +155,5 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
             }
         };
 
-    }, [db, isOnline]);
+    }, [isOnline]);
 }

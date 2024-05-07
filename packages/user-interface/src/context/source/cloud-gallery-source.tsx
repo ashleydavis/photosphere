@@ -72,8 +72,8 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Unloads data for an asset.
     //
-    function unloadAsset(assetId: string, assetType: string): void {
-        const key = `${assetType}/${assetId}`;
+    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
+        const key = `${collectionId}-${assetType}/${assetId}`;
         const cacheEntry = assetCache.current.get(key);
         if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {
