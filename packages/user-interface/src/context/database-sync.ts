@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { useOnline } from "../../lib/use-online";
-import { IAssetUpdateRecord, IAssetUploadRecord } from "./outgoing-queue-sink";
-import { IGallerySink } from "./gallery-sink";
-import { useIndexeddb } from "../indexeddb-context";
-import { ICollectionUpdateIds, useApi } from "../api-context";
-import { IGallerySource } from "./gallery-source";
+import { useOnline } from "../lib/use-online";
+import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
+import { IGallerySink } from "./source/gallery-sink";
+import { useIndexeddb } from "./indexeddb-context";
+import { ICollectionUpdateIds, useApi } from "./api-context";
+import { IGallerySource } from "./source/gallery-source";
 
 const SYNC_POLL_PERIOD = 1000;
 
