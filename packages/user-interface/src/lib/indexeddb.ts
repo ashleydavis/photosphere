@@ -41,11 +41,11 @@ export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, re
 //
 // Gets a record from the database.
 //
-export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, assetId: string): Promise<RecordT> {
+export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string): Promise<RecordT> {
     return new Promise<RecordT>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readonly');
         const store = transaction.objectStore(collectionName);
-        const request = store.get(assetId);
+        const request = store.get(recordId);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
     });
@@ -88,11 +88,11 @@ export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string):
 //
 // Deletes a record.
 //
-export function deleteRecord(db: IDBDatabase, collectionName: string, assetId: string): Promise<void> {
+export function deleteRecord(db: IDBDatabase, collectionName: string, recordId: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readwrite');
         const store = transaction.objectStore(collectionName);
-        const request = store.delete(assetId);
+        const request = store.delete(recordId);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve();
     });
