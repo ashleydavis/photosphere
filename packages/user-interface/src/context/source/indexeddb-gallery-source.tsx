@@ -8,6 +8,7 @@ import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
 import { useIndexeddb } from "../indexeddb-context";
 import { IUser } from "../../def/user";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -41,7 +42,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
-    const { getAllRecords, getAsset, getRecord } = useIndexeddb();
+    const { getAllRecords, getRecord } = useIndexeddb();
 
     //
     // Loads the user's details.
@@ -73,7 +74,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await getAsset(`collection-${collectionId}`, assetType, assetId);
+        const assetData = await getRecord<IAssetData>(`collection-${collectionId}`, assetType, assetId);
         if (!assetData) {
             return undefined;
         }

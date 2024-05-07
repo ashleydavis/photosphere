@@ -7,19 +7,21 @@ import { IGallerySink } from "./gallery-sink";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
 import { ICollectionOps } from "../../def/ops";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Use the "Indexeddb sink" in a component.
 //
 export function useIndexeddbGallerySink(): IGallerySink {
 
-    const { getRecord, storeAsset, storeRecord } = useIndexeddb();
+    const { getRecord, storeRecord } = useIndexeddb();
 
     //
     // Uploads an asset.
     //
     async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, assetData: Blob): Promise<void> {
-        await storeAsset(`collection-${collectionId}`, assetType, assetId, {
+        await storeRecord<IAssetData>(`collection-${collectionId}`, assetType, {
+            _id: assetId,
             contentType,
             data: assetData,        
         });

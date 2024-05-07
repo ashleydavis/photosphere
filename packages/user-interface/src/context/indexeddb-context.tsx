@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
-import { IAssetData, openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord, storeAsset as _storeAsset, getAsset as _getAsset } from "../lib/indexeddb";
+import { openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord } from "../lib/indexeddb";
 
 export interface IIndexeddbContext {
     //
@@ -26,16 +26,6 @@ export interface IIndexeddbContext {
     // Deletes a record.
     //
     deleteRecord(databaseName: string, collectionName: string, assetId: string): Promise<void>;
-
-    //
-    // Stores an asset in the database.
-    //
-    storeAsset(databaseName: string, collectionName: string, assetId: string, assetData: IAssetData): Promise<void>;
-
-    //
-    // Gets an asset from the database.
-    //
-    getAsset(databaseName: string, collectionName: string, assetId: string): Promise<IAssetData | undefined>;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -178,30 +168,12 @@ export function IndexeddbContextProvider({ children }: IProps) {
         await _deleteRecord(db, collectionName, recordId);
     }
 
-    //
-    // Stores an asset in the database.
-    //
-    async function storeAsset(databaseName: string, collectionName: string, assetId: string, assetData: IAssetData): Promise<void> {
-        const db = await openDatabase(databaseName);
-        await _storeAsset(db, collectionName, assetId, assetData);
-    }
-
-    //
-    // Gets an asset from the database.
-    //
-    async function getAsset(databaseName: string, collectionName: string, assetId: string): Promise<IAssetData | undefined> {
-        const db = await openDatabase(databaseName);
-        return await _getAsset(db, collectionName, assetId);
-    }
-
     const value: IIndexeddbContext = {
         storeRecord,
         getRecord,
         getLeastRecentRecord,
         getAllRecords,
         deleteRecord,
-        storeAsset,
-        getAsset,
     };
     
     return (
