@@ -14,6 +14,18 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
+const collectionNames = [
+    "thumb",
+    "display",
+    "asset",
+    "hashes",
+    "metadata",
+    "outgoing-asset-upload",
+    "outgoing-asset-update",
+    "last-update-id",
+    "user",
+];
+
 export function IndexeddbContextProvider({ children }: IProps) {
 
     const [db, setDb] = useState<IDBDatabase | undefined>(undefined);
@@ -22,17 +34,7 @@ export function IndexeddbContextProvider({ children }: IProps) {
 
         async function openDb() {
             const databaseName = `photosphere-test-5`;
-            setDb(await openDatabase(databaseName, 1, [
-                "thumb",
-                "display",
-                "asset",
-                "hashes",
-                "metadata",
-                "outgoing-asset-upload",
-                "outgoing-asset-update",
-                "last-update-id",
-                "user",
-            ]));
+            setDb(await openDatabase(databaseName, 1, collectionNames));
         }
 
         openDb()
