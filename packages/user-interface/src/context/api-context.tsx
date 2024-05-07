@@ -282,13 +282,14 @@ export function ApiContextProvider({ children }: IProps) {
         const token = getToken();
 
         await axios.post(
-            `${BASE_URL}/${assetType}`, 
+            `${BASE_URL}/asset`, 
             data, 
             {
                 headers: {
                     "content-type": contentType,
                     col: collectionId,
                     id: assetId,
+                    "asset-type": assetType,
                     Authorization: `Bearer ${token}`,
                 },
             }
