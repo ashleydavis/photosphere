@@ -303,7 +303,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
         if (!collectionId) {
-            throw new Error(`Cannot add asset without a collection id.`);
+            throw new Error(`Cannot load asset without a collection id.`);
         }
 
         return await source.loadAsset(collectionId, assetId, assetType);
@@ -313,7 +313,11 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // Unloads data for an asset.
     //
     function unloadAsset(assetId: string, assetType: string): void {
-        source.unloadAsset(assetId, assetType);
+        if (!collectionId) {
+            throw new Error(`Cannot unload asset without a collection id.`);
+        }
+
+        source.unloadAsset(collectionId, assetId, assetType);
     }
 
     //
