@@ -17,7 +17,7 @@ export function openDatabase(databaseName: string, versionNumber: number, collec
 //
 // Creates object store only if they don't already exist.
 //
-async function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
+function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
     for (const collectionName of collectionNames) {
         if (!db.objectStoreNames.contains(collectionName)) {
             db.createObjectStore(collectionName, { keyPath: "_id" });
@@ -88,7 +88,7 @@ export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string):
 //
 // Deletes a record.
 //
-export async function deleteRecord(db: IDBDatabase, collectionName: string, assetId: string): Promise<void> {
+export function deleteRecord(db: IDBDatabase, collectionName: string, assetId: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readwrite');
         const store = transaction.objectStore(collectionName);
