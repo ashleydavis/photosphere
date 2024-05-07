@@ -3,8 +3,11 @@ import { BrowserRouter } from "react-router-dom";
 import { Main, ApiContextProvider, UploadContextProvider, SearchContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync, IndexeddbContextProvider } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
-function GallerySetup() {
 
+//
+// Creates a particular database strategy for the app.
+//
+function useDatabaseStrategy() {
     const indexeddbSource = useIndexeddbGallerySource();
     const indexeddbSink = useIndexeddbGallerySink();
 
@@ -17,11 +20,18 @@ function GallerySetup() {
 
     useDatabaseSync({ cloudSink, indexeddbSink, localSource });
 
+    return { source: localSource, sink: localSink };
+}
+
+function GallerySetup() {
+
+    const { source, sink } = useDatabaseStrategy();
+
     return (
         <SearchContextProvider>
             <GalleryContextProvider 
-                source={localSource}
-                sink={localSink}
+                source={source} // The source of assets to display in the gallery.
+                sink={sink}     // The sink for outgoing asset uploads and edits.
                 >
                 <UploadContextProvider>
                     <Main />
