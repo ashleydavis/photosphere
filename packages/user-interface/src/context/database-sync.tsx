@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { ReactNode, createContext, useContext, useEffect } from "react";
 import { useOnline } from "../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
 import { IGallerySink } from "./source/gallery-sink";
@@ -15,10 +15,20 @@ interface ILastUpdateIds {
     [collectionId: string]: string;
 }
 
-//
-// Periodically synchorize the local database with the cloud database.
-//
-export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { cloudSink: IGallerySink, indexeddbSink: IGallerySink, localSource: IGallerySource }) {
+export interface IDbSyncContext {
+}
+
+const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
+
+export interface IProps {
+    cloudSink: IGallerySink;
+    indexeddbSink: IGallerySink;
+    localSource: IGallerySource;
+
+    children: ReactNode | ReactNode[];
+}
+
+export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, children }: IProps) {
     
     const { isOnline } = useOnline();
     const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord } = useIndexeddb();
@@ -156,4 +166,24 @@ export function useDatabaseSync({ cloudSink, indexeddbSink, localSource }: { clo
         };
 
     }, [isOnline]);
+
+    const value: IDbSyncContext = {
+    };
+    
+    return (
+        <DbSyncContext.Provider value={value} >
+            {children}
+        </DbSyncContext.Provider>
+    );
+}
+
+//
+// Periodically synchorize the local database with the cloud database.
+//
+export function useDatabaseSync() {
+    const context = useContext(DbSyncContext);
+    if (!context) {
+        throw new Error(`DbSyncContext is not set! Add DbSyncContext to the component tree.`);
+    }
+    return context;
 }
