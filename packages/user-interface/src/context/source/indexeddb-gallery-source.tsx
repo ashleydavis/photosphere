@@ -2,13 +2,13 @@
 // Provides a source of assets for the gallery from indexeddb.
 //
 
+import { useRef } from "react";
 import { IGallerySource } from "./gallery-source";
-import { useEffect, useRef } from "react";
-import { IGalleryItem } from "../../lib/gallery-item";
 import { useApi } from "../api-context";
 import { useIndexeddb } from "../indexeddb-context";
 import { IUser } from "../../def/user";
 import { IAssetData } from "../../def/asset-data";
+import { IAsset } from "../../def/asset";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -59,8 +59,8 @@ export function useIndexeddbGallerySource(): IGallerySource {
     //
     // Retreives assets from the source.
     //
-    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
-        return await getAllRecords<IGalleryItem>(`collection-${collectionId}`, "metadata");
+    async function getAssets(collectionId: string): Promise<IAsset[]> {
+        return await getAllRecords<IAsset>(`collection-${collectionId}`, "metadata");
     }
 
     //

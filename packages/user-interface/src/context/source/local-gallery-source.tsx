@@ -3,8 +3,8 @@
 //
 
 import { IGallerySource } from "./gallery-source";
-import { IGalleryItem } from "../../lib/gallery-item";
 import { IUser } from "../../def/user";
+import { IAsset } from "../../def/asset";
 
 //
 // Use the "Local source" in a component.
@@ -27,7 +27,7 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
     //
     // Retreives assets from the source.
     //
-    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
+    async function getAssets(collectionId: string): Promise<IAsset[]> {
         return await indexeddbSource.getAssets(collectionId);
     }
 

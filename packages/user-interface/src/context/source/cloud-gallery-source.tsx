@@ -3,10 +3,10 @@
 //
 
 import { IGallerySource } from "./gallery-source";
-import { useApi } from "../api-context";
+import { IGetAssetsResult, useApi } from "../api-context";
 import { useRef } from "react";
-import { IGalleryItem } from "../../lib/gallery-item";
 import { IUser } from "../../def/user";
+import { IAsset } from "../../def/asset";
 
 //
 // Use the "Cloud source" in a component.
@@ -48,8 +48,23 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Retreives assets from the source.
     //
-    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
-        return await api.getAssets(collectionId);
+    async function getAssets(collectionId: string): Promise<IAsset[]> {
+        let assets: IAsset[] = [];
+        let next: string | undefined = undefined;
+
+        //
+        // Load all assets into memory via the paginated REST API.
+        //
+        while (true) {
+            const result: IGetAssetsResult = await api.getAssets(collectionId, next);
+            assets = assets.concat(result.assets);            
+            next = result.next;
+            if (next === undefined) {
+                break;
+            }
+        }
+
+        return assets;        
     }
 
     //

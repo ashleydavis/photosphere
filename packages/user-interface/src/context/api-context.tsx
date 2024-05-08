@@ -1,6 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
-import dayjs from "dayjs";
 import { useAuth } from "./auth-context";
 import { IAssetOps, ICollectionOps, IDbOps } from "../def/ops";
 import { IUser } from "../def/user";
@@ -109,6 +108,23 @@ export interface IDpOpsResult {
     collectionOps: ICollectionOpsResult[];
 }
 
+//
+// The result of the get assets request.
+//
+export interface IGetAssetsResult {
+    //
+    // Assets returned from this request.
+    // Set to an empty array if no more assets.
+    //
+    assets: IAsset[];
+
+    //
+    // Continuation token for the next page of assets.
+    // Set to undefined when no more pages.
+    //
+    next?: string;
+}
+
 export interface IApiContext {
 
     //
@@ -124,7 +140,7 @@ export interface IApiContext {
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(collectionId: string): Promise<IAsset[]>;
+    getAssets(collectionId: string, next?: string): Promise<IGetAssetsResult>;
 
     //
     // Retreives the latest update id for a collection.
@@ -219,8 +235,12 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(collectionId: string): Promise<IAsset[]> {
+    async function getAssets(collectionId: string, next?: string): Promise<IGetAssetsResult> {
         let url = `${BASE_URL}/assets?col=${collectionId}`;
+        if (next) {
+            url += `&next=${next}`;
+        }
+
         await loadToken();
         const token = getToken();
         const { data } = await axios.get(
@@ -233,7 +253,7 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
 
-        return data.assets; //todo: Need to care about the "next" field here to get the next page.
+        return data;
     }
 
     //
