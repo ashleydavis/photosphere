@@ -1,4 +1,4 @@
-import { createReverseChronoTimestamp } from "../timestamp";
+import { createReverseChronoTimestamp } from "../../lib/timestamp";
 
 describe('timestamp', () => {
 
