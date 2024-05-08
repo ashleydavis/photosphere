@@ -536,6 +536,103 @@ importers:
         specifier: ^4.9.4
         version: 4.9.5
 
+  testbed:
+    dependencies:
+      '@react-hook/resize-observer':
+        specifier: ^1.2.6
+        version: 1.2.6(react@18.2.0)
+      axios:
+        specifier: ^0.27.2
+        version: 0.27.2
+      blob-util:
+        specifier: ^2.0.2
+        version: 2.0.2
+      dayjs:
+        specifier: ^1.11.7
+        version: 1.11.10
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+      react-router-dom:
+        specifier: ^6.4.1
+        version: 6.22.2(react-dom@18.2.0)(react@18.2.0)
+    devDependencies:
+      '@fortawesome/fontawesome-free':
+        specifier: ^6.2.1
+        version: 6.5.1
+      '@playwright/test':
+        specifier: ^1.30.0
+        version: 1.42.0
+      '@types/fs-extra':
+        specifier: ^11.0.1
+        version: 11.0.4
+      '@types/node':
+        specifier: ^20.3.1
+        version: 20.11.24
+      '@types/react':
+        specifier: ^18.0.27
+        version: 18.2.61
+      '@types/react-dom':
+        specifier: ^18.0.10
+        version: 18.2.19
+      autoprefixer:
+        specifier: ^10.4.18
+        version: 10.4.18(postcss@8.4.35)
+      concurrently:
+        specifier: ^8.2.2
+        version: 8.2.2
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
+      crypto-browserify:
+        specifier: ^3.12.0
+        version: 3.12.0
+      css-loader:
+        specifier: ^6.10.0
+        version: 6.10.0(webpack@5.90.3)
+      fs-extra:
+        specifier: ^11.1.0
+        version: 11.2.0
+      html-webpack-plugin:
+        specifier: ^5.6.0
+        version: 5.6.0(webpack@5.90.3)
+      postcss:
+        specifier: ^8.4.35
+        version: 8.4.35
+      postcss-loader:
+        specifier: ^8.1.1
+        version: 8.1.1(postcss@8.4.35)(typescript@4.9.5)(webpack@5.90.3)
+      style-loader:
+        specifier: ^3.3.4
+        version: 3.3.4(webpack@5.90.3)
+      tailwindcss:
+        specifier: ^3.4.1
+        version: 3.4.1
+      ts-loader:
+        specifier: ^9.5.1
+        version: 9.5.1(typescript@4.9.5)(webpack@5.90.3)
+      typescript:
+        specifier: ^4.9.5
+        version: 4.9.5
+      user-interface:
+        specifier: workspace:*
+        version: link:../packages/user-interface
+      webpack:
+        specifier: ^5.90.3
+        version: 5.90.3(webpack-cli@5.1.4)
+      webpack-cli:
+        specifier: ^5.1.4
+        version: 5.1.4(webpack-dev-server@5.0.2)(webpack@5.90.3)
+      webpack-dev-server:
+        specifier: ^5.0.2
+        version: 5.0.2(webpack-cli@5.1.4)(webpack@5.90.3)
+
 packages:
 
   /7zip-bin@5.2.0:

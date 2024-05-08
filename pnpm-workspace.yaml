@@ -6,3 +6,4 @@ packages:
   - "electron/frontend"
   - "mobile"
   - "mobile/frontend"
+  - "testbed"

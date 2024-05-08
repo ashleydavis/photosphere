@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Links */
+
+p a {
+    @apply underline text-blue-600 hover:text-blue-800 visited:text-purple-600
+}
