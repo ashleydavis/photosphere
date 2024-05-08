@@ -37,24 +37,6 @@ export async function loadBlobToImage(blob: Blob): Promise<HTMLImageElement> {
 }
 
 //
-// Loads an image to an object URL.
-//
-export async function loadImageAsObjectURL(imageUrl: string): Promise<string>  {
-    const response = await axios.get(imageUrl, {
-        responseType: 'blob'
-    });
-
-    return URL.createObjectURL(response.data);
-}
-
-//
-// Frees up memory used by an object URL.
-//
-export function unloadObjectURL(objectURL: string) {
-    URL.revokeObjectURL(objectURL);
-}
-
-//
 // Represents the resolution of the image or video.
 //
 export interface IResolution {
