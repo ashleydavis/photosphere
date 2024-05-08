@@ -135,7 +135,11 @@ export async function reverseGeocode(location: ILocation): Promise<string | unde
     // throw new Error("Reverse geocoding - fake error.");
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.lat},${location.lng}&key=${GOOGLE_API_KEY}`
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, {
+        headers: {
+            Accept: "application/json",
+        },
+    });
 
     if (data.results && data.results.length > 0) {
         return data.results[0].formatted_address;

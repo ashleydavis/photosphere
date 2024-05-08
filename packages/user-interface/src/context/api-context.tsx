@@ -208,6 +208,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -232,6 +233,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {                     
                     col: collectionId,
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -252,6 +254,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     col: collectionId,
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -270,6 +273,7 @@ export function ApiContextProvider({ children }: IProps) {
             responseType: "blob",
             headers: {                  
                 Authorization: `Bearer ${token}`,
+                Accept: "image/*",
             },
         });
     
@@ -289,6 +293,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     col: collectionId,
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -312,6 +317,7 @@ export function ApiContextProvider({ children }: IProps) {
                     id: assetId,
                     "asset-type": assetType,
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -344,6 +350,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -366,6 +373,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );
@@ -386,6 +394,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             }
         );    
@@ -408,6 +417,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
             },
         );
