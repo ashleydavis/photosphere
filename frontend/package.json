@@ -8,6 +8,7 @@
     "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
     "start:prod": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --open --mode production --devtool source-map",
     "start:no-open": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve",
+    "b": "pnpm build",
     "build": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au webpack --mode production --devtool source-map",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
@@ -16,6 +17,8 @@
     "start-for-e2e-tests": "concurrently --kill-others --names \"backend,frontend\" \"pnpm run start-backend-for-e2e-tests\" \"pnpm run start-frontend-for-e2e-tests\"",
     "test-e2e": "playwright test",
     "test-e2e:debug": "playwright test --debug",
+    "c": "pnpm compile",
+    "cw": "pnpm compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf dist build"

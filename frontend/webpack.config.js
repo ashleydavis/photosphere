@@ -3,7 +3,14 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-    entry: './src/index.tsx',
+    entry: {
+        'bundle': './src/index.tsx',
+        'service-worker': './src/service-worker.ts',
+    },
+    output: {
+        filename: '[name].js',
+        path: path.resolve(__dirname, 'dist'),
+    },
     devtool: 'inline-source-map',
     mode: 'development',
     target: 'web',
@@ -48,16 +55,13 @@ module.exports = {
             "crypto-browserify": require.resolve('crypto-browserify'),
         },
     },
-    output: {
-        filename: 'bundle.js',
-        path: path.resolve(__dirname, 'dist'),
-    },
     plugins: [
         new webpack.EnvironmentPlugin({
             ...process.env,
         }),
         new HtmlWebpackPlugin({
             template: 'src/index.html',
+            excludeChunks: [ 'service-worker' ],
         }),
     ],
 };
