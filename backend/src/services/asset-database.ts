@@ -10,6 +10,7 @@ import { ICollectionMetadata } from "../lib/collection";
 import { createReverseChronoTimestamp } from "../lib/timestamp";
 import dayjs from "dayjs";
 import { IAssetOps, ICollectionOps, IDbOps } from "../lib/ops";
+import { binarySearch } from "../lib/binary-search";
 
 export interface IAssetStream {
     //
@@ -262,12 +263,7 @@ export class AssetDatabase {
         // Only deliver updates that are newer than the record that was last seen.
         //
         if (lastUpdateId !== undefined) {
-            for (let i = 0; i < journalRecordIds.length; i++) { //todo: This can be optimized with a binary search.
-                if (journalRecordIds[i] === lastUpdateId) {
-                    cutOffIndex = i;
-                    break;
-                }
-            }
+            cutOffIndex = binarySearch(journalRecordIds, lastUpdateId);
         }
 
         let next: string | undefined = result.next;
