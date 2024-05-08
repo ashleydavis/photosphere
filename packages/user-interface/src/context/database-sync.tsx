@@ -5,6 +5,7 @@ import { IGallerySink } from "./source/gallery-sink";
 import { useIndexeddb } from "./indexeddb-context";
 import { ICollectionUpdateIds, useApi } from "./api-context";
 import { IGallerySource } from "./source/gallery-source";
+import { ICollectionOps } from "../def/ops";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -72,19 +73,17 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                     // Assume that no records means we need to get all records down.
                     //
                     const assets = await cloudSource.getAssets(collectionId);
-
-                    for (const asset of assets) {
-                        await indexeddbSink.submitOperations({
-                            id: collectionId,
+                    const collectionOps: ICollectionOps = {
+                        id: collectionId,
+                        ops: assets.map(asset => ({
+                            id: asset._id,
                             ops: [{
-                                id: asset._id,
-                                ops: [{
-                                    type: "set",
-                                    fields: asset,
-                                }],
-                            }]
-                        });
-                    }
+                                type: "set",
+                                fields: asset,
+                            }],
+                        })),
+                    };
+                    await indexeddbSink.submitOperations(collectionOps);
 
                     //
                     // Records the latest update id for the collection.
