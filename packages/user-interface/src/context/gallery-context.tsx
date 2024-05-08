@@ -5,6 +5,7 @@ import { useSearch } from "./search-context";
 import { IGallerySink } from "./source/gallery-sink";
 import dayjs from "dayjs";
 import { IAsset } from "../def/asset";
+import { useDatabaseSync } from "./database-sync";
 
 export interface IGalleryContext {
 
@@ -94,6 +95,16 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
 
     //
+    // Gets search text.
+    //
+    const { searchText } = useSearch();
+
+    // 
+    // Interface to database sync.
+    //
+    const { isInitialized } = useDatabaseSync();
+
+    //
     // The collection currently being viewed.
     //
     const [ collectionId, setCollectionId ] = useState<string | undefined>(undefined);
@@ -104,14 +115,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
-    // Gets search text.
-    //
-    const { searchText } = useSearch();
-
-    //
     // The item in the gallery that is currently selected.
     //
     const [selectedItem, setSelectedItem] = useState<ISelectedGalleryItem | undefined>(undefined);
+
 
     //
     // Clears the selection when search text changes.
@@ -125,10 +132,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // Loads assets on mount.
     //
     useEffect(() => {
-        if (source.isInitialised) {
+        if (isInitialized && source.isInitialised) {
             loadAssets();
         }
-    }, [source.isInitialised]);
+    }, [isInitialized, source.isInitialised]);
 
 
     //
