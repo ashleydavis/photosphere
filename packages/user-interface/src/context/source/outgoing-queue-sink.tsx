@@ -79,9 +79,9 @@ export function useOutgoingQueueSink(): IGallerySink {
     }
 
     //
-    // Updates the configuration of the asset.
+    // Submits operations to change the database.
     //
-    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
+    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
         await storeRecord<IAssetUpdateRecord>("user", "outgoing-asset-update", {
             _id: uuid(),
             collectionOps,
@@ -97,7 +97,7 @@ export function useOutgoingQueueSink(): IGallerySink {
 
     return {
         uploadAsset,
-        updateAsset,
+        submitOperations,
         checkAsset,
     };
 }

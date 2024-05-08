@@ -26,18 +26,18 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
     }
 
     //
-    // Updates the configuration of the asset.
+    // Submits operations to change the database.
     //
-    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
+    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
         //
         // Update the asset locally.
         //
-        await indexeddbSink.updateAsset(collectionOps);
+        await indexeddbSink.submitOperations(collectionOps);
 
         //
         // Queue the update for upload to the cloud.
         //
-        await outgoingSink.updateAsset(collectionOps);
+        await outgoingSink.submitOperations(collectionOps);
     }
 
     //
@@ -54,7 +54,7 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
 
     return {
         uploadAsset,
-        updateAsset,
+        submitOperations,
         checkAsset,
     };
 }

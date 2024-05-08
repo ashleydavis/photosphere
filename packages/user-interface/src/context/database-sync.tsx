@@ -61,7 +61,7 @@ export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, c
                     break;
                 }
 
-                await cloudSink.updateAsset(outgoingUpdate.collectionOps);
+                await cloudSink.submitOperations(outgoingUpdate.collectionOps);
                 await deleteRecord("user", "outgoing-asset-update", outgoingUpdate._id);
             }
         }
@@ -104,7 +104,7 @@ export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, c
                 //
                 // Apply incoming changes to the local database.
                 //
-                indexeddbSink.updateAsset(collectionOp.collectionOps);
+                indexeddbSink.submitOperations(collectionOp.collectionOps);
         
                 if (collectionOp.latestUpdateId !== undefined) {
                     //

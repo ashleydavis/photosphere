@@ -24,9 +24,9 @@ export function useCloudGallerySink(): IGallerySink {
     }
 
     //
-    // Updates the configuration of the asset.
+    // Submits operations to change the database.
     //
-    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
+    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
         await api.submitOperations({
             ops: [ collectionOps ],
         });
@@ -41,7 +41,7 @@ export function useCloudGallerySink(): IGallerySink {
 
     return {
         uploadAsset,
-        updateAsset,
+        submitOperations,
         checkAsset,
     };
 }

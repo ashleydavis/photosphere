@@ -43,9 +43,9 @@ export function useIndexeddbGallerySink(): IGallerySink {
     }
 
     //
-    // Updates the configuration of the asset.
+    // Submits operations to change the database.
     //
-    async function updateAsset(collectionOps: ICollectionOps): Promise<void> {
+    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
         for (const assetOps of collectionOps.ops) {
             const assetId = assetOps.id;
             const asset = await getRecord<IAsset>(`collection-${collectionOps.id}`, "metadata", assetId);
@@ -108,7 +108,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
     return {
         uploadAsset,
-        updateAsset,
+        submitOperations,
         checkAsset,
     };
 }
