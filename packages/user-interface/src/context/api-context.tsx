@@ -1,10 +1,10 @@
-import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { IGalleryItem } from "../lib/gallery-item";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useAuth } from "./auth-context";
 import { IAssetOps, ICollectionOps, IDbOps } from "../def/ops";
 import { IUser } from "../def/user";
+import { IAsset } from "../def/asset";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -124,7 +124,7 @@ export interface IApiContext {
     //
     // Retreives the list of assets from the backend.
     //
-    getAssets(collectionId: string): Promise<IGalleryItem[]>;
+    getAssets(collectionId: string): Promise<IAsset[]>;
 
     //
     // Retreives the data for an asset from the backend.
@@ -214,7 +214,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the list of assets from the backend.
     //
-    async function getAssets(collectionId: string): Promise<IGalleryItem[]> {
+    async function getAssets(collectionId: string): Promise<IAsset[]> {
         let url = `${BASE_URL}/assets?col=${collectionId}`;
         await loadToken();
         const token = getToken();
@@ -228,14 +228,7 @@ export function ApiContextProvider({ children }: IProps) {
             }
         );
 
-        const { assets } = data; //todo: Need to care about the "next" field here to get the next page.
-        
-        for (const asset of assets) {
-            //TODO: This should be configurable.
-            asset.group = dayjs(asset.sortDate).format("MMM, YYYY")
-        }
-
-        return assets;
+        return data.assets; //todo: Need to care about the "next" field here to get the next page.
     }
 
     //

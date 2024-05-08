@@ -2,8 +2,8 @@
 // Interface for the a "source" of assets.
 //
 
+import { IAsset } from "../../def/asset";
 import { IUser } from "../../def/user";
-import { IGalleryItem } from "../../lib/gallery-item";
 
 export interface IGallerySource {
 
@@ -20,7 +20,7 @@ export interface IGallerySource {
     //
     // Retreives assets from the source.
     //
-    getAssets(collectionId: string): Promise<IGalleryItem[]>;
+    getAssets(collectionId: string): Promise<IAsset[]>;
 
     //
     // Loads data for an asset.

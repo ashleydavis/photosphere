@@ -147,7 +147,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         }
 
         const newAssets = await source.getAssets(_collectionId);
-        setAssets(newAssets);
+        const galleryItems = newAssets.map(assetToGalleryItem);
+        setAssets(galleryItems);
     }
 
     //
@@ -176,11 +177,21 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
                 id: galleryItem._id,
                 ops: [{
                     type: "set",
-                    fields: galleryItemToAsset(galleryItem),
+                    fields: galleryItem,
                 }]
             }],
         });
 
+    }
+
+    //
+    // Converts an asset to a gallery item.
+    //
+    function assetToGalleryItem(asset: IAsset): IGalleryItem {
+        return {
+            ...asset,
+            group: dayjs(asset.sortDate).format("MMM, YYYY"),
+        };
     }
 
     //
@@ -194,10 +205,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             origFileName: galleryItem.origFileName,
             hash: galleryItem.hash,
             location: galleryItem.location,
-            fileDate: dayjs(galleryItem.fileDate).toDate(),
-            photoDate: dayjs(galleryItem.photoDate).toDate(),
-            sortDate: dayjs(galleryItem.sortDate).toDate(),
-            uploadDate: dayjs().toDate(),
+            fileDate: galleryItem.fileDate,
+            photoDate: galleryItem.photoDate,
+            sortDate: galleryItem.sortDate,
+            uploadDate: dayjs().toISOString(),
             properties: galleryItem.properties,
             labels: galleryItem.labels,
             description: galleryItem.description,
@@ -214,10 +225,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             origFileName: partialGalleryItem.origFileName,
             hash: partialGalleryItem.hash,
             location: partialGalleryItem.location,
-            fileDate: partialGalleryItem.fileDate ? dayjs(partialGalleryItem.fileDate).toDate() : undefined,
-            photoDate: partialGalleryItem.photoDate ? dayjs(partialGalleryItem.photoDate).toDate() : undefined,
-            sortDate: partialGalleryItem.sortDate ? dayjs(partialGalleryItem.sortDate).toDate() : undefined,
-            uploadDate: partialGalleryItem.uploadDate ? dayjs(partialGalleryItem.uploadDate).toDate() : undefined,
+            fileDate: partialGalleryItem.fileDate,
+            photoDate: partialGalleryItem.photoDate,
+            sortDate: partialGalleryItem.sortDate,
+            uploadDate: partialGalleryItem.uploadDate,
             properties: partialGalleryItem.properties,
             labels: partialGalleryItem.labels,
             description: partialGalleryItem.description,

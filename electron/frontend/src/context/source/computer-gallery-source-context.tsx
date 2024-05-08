@@ -5,7 +5,7 @@
 import React, { createContext, ReactNode, useContext, useState } from "react";
 import { IGallerySource } from "user-interface/src/context/source/gallery-source";
 import { useScan } from "../scan-context";
-import { IGalleryItem, IUser } from "user-interface";
+import { IAsset, IUser } from "user-interface";
 
 //
 // Use the "computer source" in a component.
@@ -27,7 +27,7 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Retreives assets from the source.
     //
-    async function getAssets(): Promise<IGalleryItem[]> {
+    async function getAssets(): Promise<IAsset[]> {
         //TODO:
         return [];
     }

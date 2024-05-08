@@ -1,5 +1,6 @@
 export { Main } from './main';
 export { IUser } from './def/user';
+export { IAsset } from './def/asset';
 export { AuthContextProvider, isProduction } from './context/auth-context';
 export { ApiContextProvider } from './context/api-context';
 export { SearchContextProvider } from './context/search-context';

@@ -1,37 +1,10 @@
-//
-// Represents a photographer.
-//
-export interface IPhotographer {
-    //
-    // The name of the photographer.
-    //
-    name: string;
 
-    //
-    // The URL of the photographer's website.
-    //
-    url: string;
-}
+import { IAsset } from "../def/asset";
 
 //
 // Represents an asset that can be displayed in the gallery.
 //
-export interface IGalleryItem {
-
-    //
-    // The ID of the asset.
-    //
-    _id: string;
-
-    //
-    // The width of the item.
-    //
-    width: number;
-
-    //
-    // The height of item.
-    //
-    height: number;
+export interface IGalleryItem extends IAsset {
 
     //
     // The computed width of the thumbnail.
@@ -52,56 +25,6 @@ export interface IGalleryItem {
     // The group that this item is a part of, if any.
     //
     group?: string;
-
-    //
-    // The original name of the asset before it was uploaded.
-    //
-    origFileName: string;
-
-    //
-    // The hash of the asset.
-    //
-    hash: string;
-
-    //
-    // Reverse geocoded location of the asset, if known.
-    //
-    location?: string;
-
-    //
-    // The date the file was created.
-    //
-    fileDate: string;
-
-    //
-    // The date the photo was taken, if known.
-    //
-    photoDate?: string;
-
-    //
-    /// The date the asset is sorted by in the backend.
-    //
-    sortDate: string;
-
-    //
-    /// The date the asset was uploaded.
-    //
-    uploadDate: string;
-
-    //
-    // Optional properties, like exif data.
-    //
-    properties?: any;
-
-    //
-    // Labels that have been added to the asset.
-    //
-    labels?: string[];
-
-    //
-    // Description of the asset, once it has been set by the user.
-    //
-    description?: string;
 }
 
 //

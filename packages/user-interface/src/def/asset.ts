@@ -42,22 +42,22 @@ export interface IAsset {
     //
     // The date the file was created.
     //
-    fileDate: Date;
+    fileDate: string;
 
     //
     // The date the photo was taken, if known.
     //
-    photoDate?: Date;
+    photoDate?: string;
 
     //
     // Date by which to sort the asset.
     //
-    sortDate: Date;
+    sortDate: string;
 
     //
     /// The date the asset was uploaded.
     //
-    uploadDate: Date;
+    uploadDate: string;
 
     //
     // Optional extra properties for the asset, like exif data.
