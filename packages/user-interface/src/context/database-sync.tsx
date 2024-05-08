@@ -6,6 +6,8 @@ import { useIndexeddb } from "./indexeddb-context";
 import { ICollectionUpdateIds, useApi } from "./api-context";
 import { IGallerySource } from "./source/gallery-source";
 import { ICollectionOps } from "../def/ops";
+import { isProduction } from "./auth-context";
+import { uuid } from "../lib/uuid";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -85,6 +87,10 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                     };
                     await indexeddbSink.submitOperations(collectionOps);
 
+                    if (!isProduction) {
+                        await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), collectionOps });
+                    }
+
                     //
                     // Records the latest update id for the collection.
                     //
@@ -123,6 +129,10 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
 
                 await cloudSink.uploadAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.contentType, outgoingUpload.data);
                 await deleteRecord("user", "outgoing-asset-upload", outgoingUpload._id);
+
+                if (!isProduction) {
+                    await storeRecord<any>("debug", "updates-sent", { _id: uuid(), upload: outgoingUpload });
+                }
             }
 
             //
@@ -136,6 +146,10 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
 
                 await cloudSink.submitOperations(outgoingUpdate.collectionOps);
                 await deleteRecord("user", "outgoing-asset-update", outgoingUpdate._id);
+
+                if (!isProduction) {
+                    await storeRecord<any>("debug", "updates-sent", { _id: uuid(), update: outgoingUpdate });
+                }
             }
         }
         catch (err) {
@@ -178,7 +192,11 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                 // Apply incoming changes to the local database.
                 //
                 indexeddbSink.submitOperations(collectionOp.collectionOps);
-        
+
+                if (!isProduction && collectionOp.collectionOps.ops.length > 0) {
+                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: collectionOp });
+                }
+
                 if (collectionOp.latestUpdateId !== undefined) {
                     //
                     // Record the latest update that was received.

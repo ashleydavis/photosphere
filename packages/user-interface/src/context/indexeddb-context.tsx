@@ -60,7 +60,7 @@ interface IDatabaseConfigurations {
 // The configuration for each type of database.
 //
 const databaseConfigurations: IDatabaseConfigurations = {
-    "collection": {
+    collection: {
         collectionNames: [
             "thumb",
             "display",
@@ -69,7 +69,7 @@ const databaseConfigurations: IDatabaseConfigurations = {
             "metadata",
         ],
     },
-    "user": {    
+    user: {    
         collectionNames: [
             "outgoing-asset-upload",
             "outgoing-asset-update",
@@ -77,13 +77,20 @@ const databaseConfigurations: IDatabaseConfigurations = {
             "user",
         ],
     },
+    debug: { // For debugging.
+        collectionNames: [                 
+            "updates-recieved",
+            "updates-sent",
+            "initial-sync-recieved",
+        ],
+    },     
 };
 
 //
 // The version of the database.
 // This need to be incremented when the schema changes.
 //
-const databaseVersion = 1;
+const databaseVersion = 2;
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
