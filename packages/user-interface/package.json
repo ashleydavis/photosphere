@@ -4,8 +4,12 @@
   "description": "The user-interface for the Photosphere application.",
   "main": "build/index.js",
   "scripts": {
+    "t": "pnpm run test",
+    "tw": "pnpm run test:watch",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
+    "c": "pnpm run compile",
+    "cw": "pnpm run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build"
