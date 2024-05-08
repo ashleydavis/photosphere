@@ -111,6 +111,11 @@ export interface IAssetDatabase {
     retreiveOperations(collectionIds: string[], lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult>;
 
     //
+    // Retreives the latest update id for a collection.
+    //
+    getLatestUpdateId(collectionId: string): Promise<string | undefined>;
+
+    //
     // Gets the metadata for an asset.
     //
     getMetadata(collectionId: string, assetId: string): Promise<IAsset | undefined>;
@@ -322,6 +327,18 @@ export class AssetDatabase {
         return {
             collectionOps,
         };
+    }
+
+    //
+    // Retreives the latest update id for a collection.
+    //
+    async getLatestUpdateId(collectionId: string): Promise<string | undefined> {
+        const journalIdsPage = await this.journal.listAll(`collections/${collectionId}/journal`, 1, undefined);
+        if (journalIdsPage.records.length === 0) {
+            return undefined;
+        }
+
+        return journalIdsPage.records[0];
     }
 
     //

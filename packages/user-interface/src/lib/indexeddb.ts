@@ -97,3 +97,18 @@ export function deleteRecord(db: IDBDatabase, collectionName: string, recordId: 
         request.onsuccess = () => resolve();
     });
 }
+
+//
+// Gets the number of records in the collection.
+//
+export function getNumRecords(db: IDBDatabase, collectionName: string): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+        const transaction = db.transaction([collectionName], 'readonly');
+        const store = transaction.objectStore(collectionName);
+        const request = store.count();
+        request.onsuccess = () => {
+            resolve(request.result);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}

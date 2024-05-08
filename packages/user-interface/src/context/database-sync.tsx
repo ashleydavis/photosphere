@@ -1,4 +1,4 @@
-import React, { ReactNode, createContext, useContext, useEffect } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useOnline } from "../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
 import { IGallerySink } from "./source/gallery-sink";
@@ -16,11 +16,21 @@ interface ILastUpdateIds {
 }
 
 export interface IDbSyncContext {
+    //
+    // Set to true when the database synchronization is initialized.
+    //
+    isInitialized: boolean;
+
+    //
+    // Set to true when the database is syncing.
+    //
+    isSyncing: boolean;
 }
 
 const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
 
 export interface IProps {
+    cloudSource: IGallerySource;
     cloudSink: IGallerySink;
     indexeddbSink: IGallerySink;
     localSource: IGallerySource;
@@ -28,11 +38,75 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, children }: IProps) {
+export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, localSource, children }: IProps) {
     
     const { isOnline } = useOnline();
-    const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord } = useIndexeddb();
+    const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord, getNumRecords } = useIndexeddb();
     const api = useApi();
+
+    //
+    // Set to true when the database synchronization is initialized.
+    //
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    //
+    // Set to true when the database is syncing.
+    //
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    //
+    // Perform the initial synchronization.
+    //
+    async function initialSync() {
+        
+        try {
+            const user = await localSource.getUser();
+            if (!user) {
+                throw new Error("User not found");
+            }
+
+            for (const collectionId of user.collections.access) {
+                const numRecords = await getNumRecords(`collection-${collectionId}`, "metadata");
+                if (numRecords === 0) {
+                    //
+                    // Assume that no records means we need to get all records down.
+                    //
+                    const assets = await cloudSource.getAssets(collectionId);
+
+                    for (const asset of assets) {
+                        await indexeddbSink.submitOperations({
+                            id: collectionId,
+                            ops: [{
+                                id: asset._id,
+                                ops: [{
+                                    type: "set",
+                                    fields: asset,
+                                }],
+                            }]
+                        });
+                    }
+
+                    //
+                    // Records the latest update id for the collection.
+                    //
+                    const latestUpdateId = await api.getLatestUpdateId(collectionId);
+                    if (latestUpdateId !== undefined) {
+                        //
+                        // Record the latest update that was received.
+                        //
+                        await storeRecord<ILastUpdateIds>("user", "last-update-id", {
+                            _id: collectionId,
+                            latestUpdateId,
+                        });
+                    }    
+                }
+            }
+        }
+        catch (err) {
+            console.error(`Initial sync failed:`);
+            console.error(err);
+        }
+    }
 
     //
     // Send outgoing asset uploads and updates to the cloud.
@@ -138,8 +212,15 @@ export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, c
                     return;
                 }
 
-                await syncOutgoing();
-                await syncIncoming();
+                setIsSyncing(true);
+
+                try {
+                    await syncOutgoing();
+                    await syncIncoming();
+                }
+                finally {
+                    setIsSyncing(false);
+                }
 
                 timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
             }
@@ -148,10 +229,18 @@ export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, c
             // Starts the database synchronization process.
             //
             async function startSync() {
+
+                try {
+                    await initialSync();
+                }
+                finally {
+                    setIsInitialized(true);
+                }
+
                 //
                 // Starts the periodic syncrhonization process.
                 //
-                timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
+                await periodicSync();
             }
 
             startSync();
@@ -168,6 +257,8 @@ export function DbSyncContextProvider({ cloudSink, indexeddbSink, localSource, c
     }, [isOnline]);
 
     const value: IDbSyncContext = {
+    	isInitialized,
+        isSyncing,
     };
     
     return (

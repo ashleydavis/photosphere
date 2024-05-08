@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
-import { openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord } from "../lib/indexeddb";
+import { openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord, getNumRecords as _getNumRecords } from "../lib/indexeddb";
 
 export interface IIndexeddbContext {
     //
@@ -26,6 +26,11 @@ export interface IIndexeddbContext {
     // Deletes a record.
     //
     deleteRecord(databaseName: string, collectionName: string, assetId: string): Promise<void>;
+
+    //
+    // Gets the number of records in the collection.
+    //
+    getNumRecords(databaseName: string, collectionName: string): Promise<number>;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -168,12 +173,21 @@ export function IndexeddbContextProvider({ children }: IProps) {
         await _deleteRecord(db, collectionName, recordId);
     }
 
+    //
+    // Gets the number of records in the collection.
+    //
+    async function getNumRecords(databaseName: string, collectionName: string): Promise<number> {
+        const db = await openDatabase(databaseName);
+        return await _getNumRecords(db, collectionName);
+    }
+
     const value: IIndexeddbContext = {
         storeRecord,
         getRecord,
         getLeastRecentRecord,
         getAllRecords,
         deleteRecord,
+        getNumRecords,
     };
     
     return (

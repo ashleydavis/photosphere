@@ -262,6 +262,17 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
+    // Retreives the latest update id for a collection.
+    //
+    app.get("/latest-update-id", asyncErrorHandler(async (req, res) => {
+        const collectionId = getHeader(req, "col");
+        const latestUpdateId = await assetDatabase.getLatestUpdateId(collectionId);
+        res.json({
+            latestUpdateId: latestUpdateId,
+        });
+    }));
+
+    //
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {

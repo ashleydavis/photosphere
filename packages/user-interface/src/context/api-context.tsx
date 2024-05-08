@@ -127,6 +127,11 @@ export interface IApiContext {
     getAssets(collectionId: string): Promise<IAsset[]>;
 
     //
+    // Retreives the latest update id for a collection.
+    //
+    getLatestUpdateId(collectionId: string): Promise<string | undefined>;
+
+    //
     // Retreives the data for an asset from the backend.
     //
     getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob>;
@@ -230,6 +235,26 @@ export function ApiContextProvider({ children }: IProps) {
 
         return data.assets; //todo: Need to care about the "next" field here to get the next page.
     }
+
+    //
+    // Retreives the latest update id for a collection.
+    //
+    async function getLatestUpdateId(collectionId: string): Promise<string | undefined> {
+        await loadToken();
+        const token = getToken();
+        const url = `${BASE_URL}/latest-update-id`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    col: collectionId,
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        return response.data.latestUpdateId;
+    }    
 
     //
     // Retreives the data for an asset from the backend.
@@ -388,6 +413,7 @@ export function ApiContextProvider({ children }: IProps) {
     	isInitialised,
         getUser,
         getAssets,
+        getLatestUpdateId,
         getAsset,
         checkAsset,
         uploadSingleAsset,
