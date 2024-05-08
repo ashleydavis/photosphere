@@ -67,23 +67,6 @@ export interface ICollectionOpsResult {
     next?: string;
 }
 
-//
-// Collection of the last update ids for each collection.
-//
-export interface ICollectionUpdateIds {
-    //
-    // The latest update id for each collection.
-    //
-    [collectionId: string]: string;
-}
-
-export interface IDpOpsResult {
-    //
-    // Operations to apply to the database.
-    //
-    collectionOps: ICollectionOpsResult[];
-}
-
 export interface IAssetDatabase {
     //
     // Gets collection metadata.
@@ -108,7 +91,7 @@ export interface IAssetDatabase {
     //
     // Retreives operations from the database.
     //
-    retreiveOperations(collectionIds: string[], lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult>;
+    retreiveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult>;
 
     //
     // Retreives the latest update id for a collection.
@@ -270,7 +253,7 @@ export class AssetDatabase {
     //
     // Retreives operations for a particular collection.
     //
-    private async retrieveOperationsForCollection(collectionId: string, lastUpdateId: string | undefined): Promise<ICollectionOpsResult> { 
+    async retreiveOperations(collectionId: string, lastUpdateId: string | undefined): Promise<ICollectionOpsResult> { 
         const result = await this.journal.listAll(`collections/${collectionId}/journal`, 1000);
         let journalRecordIds = result.records;
         let cutOffIndex: number | undefined = undefined;
@@ -311,21 +294,6 @@ export class AssetDatabase {
                     .reverse(), // Operations are pull out in reverse chronological order, puts them in chronological order.
             },
             latestUpdateId: journalRecordIds.length > 0 ? journalRecordIds[0] : undefined,
-        };
-    }
-
-    //
-    // Retreives operations from the database.
-    //
-    async retreiveOperations(collectionIds: string[], lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult> {
-        const collectionOps = await Promise.all(
-            collectionIds.map(collectionId => 
-                this.retrieveOperationsForCollection(collectionId, lastUpdateIds[collectionId])
-            )
-        );
-
-        return {
-            collectionOps,
         };
     }
 

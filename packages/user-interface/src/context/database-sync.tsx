@@ -3,7 +3,7 @@ import { useOnline } from "../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
 import { IGallerySink } from "./source/gallery-sink";
 import { useIndexeddb } from "./indexeddb-context";
-import { ICollectionUpdateIds, useApi } from "./api-context";
+import { useApi } from "./api-context";
 import { IGallerySource } from "./source/gallery-source";
 import { ICollectionOps } from "../def/ops";
 import { isProduction } from "./auth-context";
@@ -14,8 +14,16 @@ const SYNC_POLL_PERIOD = 1000;
 //
 // Records last update ids for each collection in the local database.
 //
-interface ILastUpdateIds {
-    [collectionId: string]: string;
+interface IUpdateIdRecord {
+    //
+    // The ID of the record.
+    //
+    _id: string;
+
+    //
+    // The last update id for the collection.
+    //
+    lastUpdateId: string;
 }
 
 export interface IDbSyncContext {
@@ -99,9 +107,9 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                         //
                         // Record the latest update that was received.
                         //
-                        await storeRecord<ILastUpdateIds>("user", "last-update-id", {
+                        await storeRecord<IUpdateIdRecord>("user", "last-update-id", {
                             _id: collectionId,
-                            latestUpdateId,
+                            lastUpdateId: latestUpdateId,
                         });
                     }    
                 }
@@ -173,40 +181,34 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
             }
 
             const collectionIds = user.collections.access;
-            const lastUpdateIds: ICollectionUpdateIds = {};
-            for (const collectionId of collectionIds) {
-                const lastUpdateForCollection = await getRecord<ILastUpdateIds>("user", "last-update-id", collectionId);
-                if (lastUpdateForCollection) {
-                    lastUpdateIds[collectionId] = lastUpdateForCollection.latestUpdateId;
-                }
-            }
 
             //
             // Retreive updates for the collections we have access to, but only
             // from the latest update that was received.
             //
-            const { collectionOps } = await api.retrieveOperations(lastUpdateIds);
+            for (const collectionId of collectionIds) {
+                const lastUpdateIdRecord = await getRecord<IUpdateIdRecord>("user", "last-update-id", collectionId);
+                const collectionOpsResult = await api.retrieveOperations(collectionId, lastUpdateIdRecord?.lastUpdateId);
 
-            for (const collectionOp of collectionOps) {
                 //
                 // Apply incoming changes to the local database.
                 //
-                indexeddbSink.submitOperations(collectionOp.collectionOps);
+                indexeddbSink.submitOperations(collectionOpsResult.collectionOps);
 
-                if (!isProduction && collectionOp.collectionOps.ops.length > 0) {
-                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: collectionOp });
+                if (!isProduction && collectionOpsResult.collectionOps.ops.length > 0) {
+                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: collectionOpsResult });
                 }
 
-                if (collectionOp.latestUpdateId !== undefined) {
+                if (collectionOpsResult.latestUpdateId !== undefined) {
                     //
                     // Record the latest update that was received.
                     //
-                    await storeRecord<ILastUpdateIds>("user", "last-update-id", {
-                        _id: collectionOp.collectionOps.id, 
-                        latestUpdateId: collectionOp.latestUpdateId
+                    await storeRecord<IUpdateIdRecord>("user", "last-update-id", {
+                        _id: collectionId, 
+                        lastUpdateId: collectionOpsResult.latestUpdateId,
                     });
                 }
-            }    
+            }
         }
         catch (err) {
             console.error(`Incoming sync failed:`);

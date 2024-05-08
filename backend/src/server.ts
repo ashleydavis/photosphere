@@ -256,8 +256,9 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     // I had to make this PUT instead of GET so that it could have a request body.
     //
     app.put("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        const { lastUpdateIds } = req.body;
-        const result = await assetDatabase.retreiveOperations(req.user!.collections.access, lastUpdateIds);
+        const collectionId = getValue<string>(req.body, "col");
+        const lastUpdateId = getValue<string>(req.body, "id");
+        const result = await assetDatabase.retreiveOperations(collectionId, lastUpdateId);
         res.json(result);
     }));
 

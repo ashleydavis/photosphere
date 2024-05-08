@@ -92,23 +92,6 @@ export interface ICollectionOpsResult {
 }
 
 //
-// Collection of the last update ids for each collection.
-//
-export interface ICollectionUpdateIds {
-    //
-    // The latest update id for each collection.
-    //
-    [collectionId: string]: string;
-}
-
-export interface IDpOpsResult {
-    //
-    // Operations to apply to the database.
-    //
-    collectionOps: ICollectionOpsResult[];
-}
-
-//
 // The result of the get assets request.
 //
 export interface IGetAssetsResult {
@@ -182,9 +165,9 @@ export interface IApiContext {
     submitOperations(dbOps: IDbOps): Promise<void>;
 
     //
-    // Retreives latest database operations from the cloud.
+    // Retreives latest database operations for a collection from the cloud.
     //
-    retrieveOperations(lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult>;
+    retrieveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -409,16 +392,19 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Retreives latest database operations from the cloud.
+    // Retreives latest database operations for a collection from the cloud.
     //
-    async function retrieveOperations(lastUpdateIds: ICollectionUpdateIds): Promise<IDpOpsResult> {
+    async function retrieveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult> {
         await loadToken();
         const token = getToken();
 
         const url = `${BASE_URL}/operations`;
         const response = await axios.put(
             url, 
-            { lastUpdateIds },
+            {
+                col: collectionId,
+                id: lastUpdateId,
+            },
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -426,7 +412,7 @@ export function ApiContextProvider({ children }: IProps) {
             },
         );
 
-        return response.data; //todo: Need to care about the "next" field here to get the next page.
+        return response.data;
     }
 
     const value: IApiContext = {
