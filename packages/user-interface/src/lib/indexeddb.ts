@@ -112,3 +112,15 @@ export function getNumRecords(db: IDBDatabase, collectionName: string): Promise<
         request.onerror = () => reject(request.error);
     });
 }
+
+//
+// Deletes the database.
+//
+export function deleteDatabase(databaseName: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error("Database deletion is blocked"));
+    });
+}

@@ -23,3 +23,4 @@ export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";
 export * from "./lib/file";
 export * from "./lib/sleep";
+export * as indexeddb from "./lib/indexeddb";
