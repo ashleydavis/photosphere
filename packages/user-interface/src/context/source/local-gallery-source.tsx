@@ -5,23 +5,39 @@
 import { IGallerySource } from "./gallery-source";
 import { IUser } from "../../def/user";
 import { IAsset } from "../../def/asset";
+import { useOnline } from "../../lib/use-online";
+import { useIndexeddb } from "../indexeddb-context";
 
 //
 // Use the "Local source" in a component.
 //
 export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexeddbSource: IGallerySource, cloudSource: IGallerySource }): IGallerySource {
 
+    const { isOnline } = useOnline();
+    const { storeRecord } = useIndexeddb();
+
     //
     // Loads the user's details.
     //
     async function getUser(): Promise<IUser | undefined> {
+        if (isOnline) {
+            // Not able to load user details offline.
+            const user = await cloudSource.getUser();
+            if (user) {
+                //
+                // Store user locally for offline use.
+                //
+                await storeRecord("user", "user", user);
+                localStorage.setItem("userId", user._id);
+                return user;
+            }
+        }
+
+        // Fallback to indexeddb.
         const user = await indexeddbSource.getUser();
         if (user) {
             return user;
         }
-
-        // Fallback to cloud.
-        return await cloudSource.getUser();
     }
 
     //
@@ -39,6 +55,10 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
         const localAsset = await indexeddbSource.loadAsset(collectionId, assetId, assetType);
         if (localAsset) {
             return localAsset;
+        }
+
+        if (!isOnline) {
+            return undefined;
         }
         
         // Fallback to cloud.

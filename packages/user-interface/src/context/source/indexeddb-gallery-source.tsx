@@ -48,7 +48,12 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Loads the user's details.
     //
     async function getUser(): Promise<IUser | undefined> {
-        const user = await getRecord<IUser>("user", "user", "config");
+        const userId = localStorage.getI("userId");
+        if (!userId) {
+            return undefined;
+        }
+
+        const user = await getRecord<IUser>("user", "user", userId);
         if (!user) {
             return undefined;
         }
