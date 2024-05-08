@@ -255,41 +255,54 @@ export class AssetDatabase {
     // Retreives operations for a particular collection.
     //
     async retreiveOperations(collectionId: string, lastUpdateId: string | undefined): Promise<ICollectionOpsResult> { 
-        const result = await this.journal.listAll(`collections/${collectionId}/journal`, 1000);
-        let journalRecordIds = result.records;
-        let cutOffIndex: number | undefined = undefined;
 
-        //
-        // Only deliver updates that are newer than the record that was last seen.
-        //
-        if (lastUpdateId !== undefined) {
-            cutOffIndex = binarySearch(journalRecordIds, lastUpdateId);
+        let ops: IAssetOps[] = [];
+        let done = false;
+        let latestUpdateId: string | undefined = undefined;
+        let next: string | undefined = undefined;
+
+        while (!done) {
+            const result = await this.journal.listAll(`collections/${collectionId}/journal`, 1000, next);
+            next = result.next;
+            
+            let journalRecordIds = result.records;
+            if (latestUpdateId === undefined && journalRecordIds.length > 0) {
+                latestUpdateId = journalRecordIds[0];
+            }
+    
+            //
+            // Only deliver updates that are newer than the record that was last seen.
+            //
+            if (lastUpdateId !== undefined) {
+                const cutOffIndex = binarySearch(journalRecordIds, lastUpdateId);
+                if (cutOffIndex !== undefined) {
+                    journalRecordIds = journalRecordIds.slice(0, cutOffIndex);
+                    done = true; // We found the requested update id, no need to continue searching through the journal. 
+                }
+            }
+
+            const journalRecordPromises = journalRecordIds.map(id => 
+                this.journal.getOne(`collections/${collectionId}/journal`, id)
+            );
+            const journalRecords = await Promise.all(journalRecordPromises);
+            ops = ops.concat(journalRecords
+                .filter(journalRecord => journalRecord !== undefined)
+                .map(journalRecord => journalRecord!.ops)
+                .flat()
+            );
         }
 
-        let next: string | undefined = result.next;
-
-        if (cutOffIndex !== undefined) {
-            journalRecordIds = journalRecordIds.slice(0, cutOffIndex);
-            next = undefined; // No more to retreive.
-        }
-
-        const journalRecords = await Promise.all(
-            journalRecordIds
-                .map(id => 
-                    this.journal.getOne(`collections/${collectionId}/journal`, id)
-                )
-        );
+        //
+        // Operations are pulled out in reverse chronological order, this puts them in chronological order.
+        //
+        ops.reverse(); 
 
         return {
             collectionOps: {
                 id: collectionId,
-                ops: journalRecords
-                    .filter(journalRecord => journalRecord !== undefined)
-                    .map(journalRecord => journalRecord!.ops)
-                    .flat()
-                    .reverse(), // Operations are pull out in reverse chronological order, puts them in chronological order.
+                ops,
             },
-            latestUpdateId: journalRecordIds.length > 0 ? journalRecordIds[0] : undefined,
+            latestUpdateId,
         };
     }
 
