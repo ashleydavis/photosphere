@@ -8,6 +8,7 @@ import { IGallerySource } from "./source/gallery-source";
 import { ICollectionOps } from "../def/ops";
 import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
+import { IAsset } from "../def/asset";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -119,24 +120,29 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 // Pre-cache all thumbnails.
                 //
                 const assets = await indexeddbSource.getAssets(collectionId);
-                for (const asset of assets) { //todo: do this in parallel.
-                    const localThumbData = await indexeddbSource.loadAsset(collectionId, asset._id, "thumb");
-                    if (localThumbData === undefined) {
-                        const assetData = await cloudSource.loadAsset(collectionId, asset._id, "thumb");
-                        if (assetData) {
-                            await indexeddbSink.storeAsset(collectionId, "thumb", assetData);
-                            console.log(`Cached thumbnail for ${collectionId}/${asset._id}`); //fio:
-                        }
-                    }
-                    else {
-                        console.log(`Thumbnail for ${collectionId}/${asset._id} already cached`); //fio:                        
-                    }
-                }                
+                await Promise.all(assets.map(asset => cacheThumbnail(collectionId, asset)));
             }
         }
         catch (err) {
             console.error(`Initial sync failed:`);
             console.error(err);
+        }
+    }
+
+    //
+    // Pre-caches a thumbnail.
+    //
+    async function cacheThumbnail(collectionId: string, asset: IAsset) {
+        const localThumbData = await indexeddbSource.loadAsset(collectionId, asset._id, "thumb");
+        if (localThumbData === undefined) {
+            const assetData = await cloudSource.loadAsset(collectionId, asset._id, "thumb");
+            if (assetData) {
+                await indexeddbSink.storeAsset(collectionId, "thumb", assetData);
+                // console.log(`Cached thumbnail for ${collectionId}/${asset._id}`);
+            }
+        }
+        else {
+            // console.log(`Thumbnail for ${collectionId}/${asset._id} already cached`);
         }
     }
 
