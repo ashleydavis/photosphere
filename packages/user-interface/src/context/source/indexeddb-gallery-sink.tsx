@@ -2,7 +2,6 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import { IGalleryItem } from "../../lib/gallery-item";
 import { IGallerySink } from "./gallery-sink";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";

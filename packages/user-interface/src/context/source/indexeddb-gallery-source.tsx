@@ -2,7 +2,6 @@
 // Provides a source of assets for the gallery from indexeddb.
 //
 
-import { useRef } from "react";
 import { IGallerySource } from "./gallery-source";
 import { useApi } from "../api-context";
 import { useIndexeddb } from "../indexeddb-context";
