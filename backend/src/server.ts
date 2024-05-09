@@ -257,7 +257,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.put("/operations", express.json(), asyncErrorHandler(async (req, res) => {
         const collectionId = getValue<string>(req.body, "col");
-        const lastUpdateId = getValue<string>(req.body, "id");
+        const lastUpdateId = req.body.id;
         const result = await assetDatabase.retreiveOperations(collectionId, lastUpdateId);
         res.json(result);
     }));
