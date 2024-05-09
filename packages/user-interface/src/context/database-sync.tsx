@@ -264,6 +264,9 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
 
             startSync();
         }
+        else {
+            setIsInitialized(true);
+        }
 
         return () => {
             done = true;
