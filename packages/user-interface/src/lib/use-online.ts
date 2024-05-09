@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 // Checks if the user is online.
 //
 export function useOnline() {
+    // https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
     useEffect(() => {
-        const updateOnlineStatus = () => {
+        function updateOnlineStatus() {
             setIsOnline(navigator.onLine);
-        };
+        }
 
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
