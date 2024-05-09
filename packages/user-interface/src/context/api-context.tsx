@@ -273,7 +273,7 @@ export function ApiContextProvider({ children }: IProps) {
             responseType: "blob",
             headers: {                  
                 Authorization: `Bearer ${token}`,
-                Accept: "image/*",
+                Accept: "image/*,video/*",
             },
         });
     
