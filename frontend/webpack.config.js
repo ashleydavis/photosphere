@@ -1,14 +1,12 @@
 const webpack = require('webpack');
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
-    entry: {
-        'bundle': './src/index.tsx',
-        'service-worker': './src/service-worker.ts',
-    },
+    entry: './src/index.tsx',
     output: {
-        filename: '[name].js',
+        filename: '[name].[contenthash].js',
         path: path.resolve(__dirname, 'dist'),
     },
     devtool: 'inline-source-map',
@@ -62,6 +60,11 @@ module.exports = {
         new HtmlWebpackPlugin({
             template: 'src/index.html',
             excludeChunks: [ 'service-worker' ],
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: 'src/service-worker.js', to: './' },
+            ],
         }),
     ],
 };

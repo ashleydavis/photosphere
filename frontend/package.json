@@ -37,6 +37,7 @@
     "autoprefixer": "^10.4.18",
     "canvas": "^2.11.2",
     "concurrently": "^8.2.2",
+    "copy-webpack-plugin": "^12.0.2",
     "cross-env": "^7.0.3",
     "crypto-browserify": "^3.12.0",
     "css-loader": "^6.10.0",
