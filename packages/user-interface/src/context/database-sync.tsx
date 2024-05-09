@@ -135,7 +135,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                     break;
                 }
 
-                await cloudSink.uploadAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.contentType, outgoingUpload.data);
+                await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetType, outgoingUpload.assetData);
                 await deleteRecord("user", "outgoing-asset-upload", outgoingUpload._id);
 
                 if (!isProduction) {

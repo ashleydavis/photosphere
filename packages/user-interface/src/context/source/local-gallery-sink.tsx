@@ -2,7 +2,8 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import { ICollectionOps, IOpSelection } from "../../def/ops";
+import { IAssetData } from "../../def/asset-data";
+import { ICollectionOps } from "../../def/ops";
 import { IGallerySink } from "./gallery-sink";
 
 //
@@ -11,18 +12,18 @@ import { IGallerySink } from "./gallery-sink";
 export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddbSink: IGallerySink, outgoingSink: IGallerySink }): IGallerySink {
 
     //
-    // Uploads an asset.
+    // Stores an asset.
     //
-    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
         // 
         // Store the asset locally.
         //
-        await indexeddbSink.uploadAsset(collectionId, assetId, assetType, contentType, data);
+        await indexeddbSink.storeAsset(collectionId, assetType, assetData);
 
         // 
         // Queue the asset for upload to the cloud.
         //
-        await outgoingSink.uploadAsset(collectionId, assetId, assetType, contentType, data);
+        await outgoingSink.storeAsset(collectionId, assetType, assetData);
     }
 
     //
@@ -53,7 +54,7 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
     }
 
     return {
-        uploadAsset,
+        storeAsset,
         submitOperations,
         checkAsset,
     };

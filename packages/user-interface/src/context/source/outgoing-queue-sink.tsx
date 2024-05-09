@@ -6,6 +6,7 @@ import { IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 import { useIndexeddb } from "../indexeddb-context";
 import { ICollectionOps } from "../../def/ops";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Records an asset upload in the outgoing queue.
@@ -22,24 +23,14 @@ export interface IAssetUploadRecord {
     collectionId: string;
 
     //
-    // ID of the asset.
-    //
-    assetId: string;
-
-    //
     // Type of the asset.
     //    
     assetType: string;
     
     //
-    // Content type of the asset.
-    //
-    contentType: string;
-    
-    //
     // Data of the asset.
     //
-    data: Blob;
+    assetData: IAssetData;
 }
 
 //
@@ -65,16 +56,14 @@ export function useOutgoingQueueSink(): IGallerySink {
     const { storeRecord } = useIndexeddb();
 
     //
-    // Uploads an asset.
+    // Stores an asset.
     //
-    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await storeRecord<IAssetUploadRecord>("user", "outgoing-asset-upload", {
             _id: uuid(),
             collectionId,
-            assetId,
             assetType,
-            contentType,
-            data,
+            assetData,
         });
     }
 
@@ -96,7 +85,7 @@ export function useOutgoingQueueSink(): IGallerySink {
     }
 
     return {
-        uploadAsset,
+        storeAsset,
         submitOperations,
         checkAsset,
     };

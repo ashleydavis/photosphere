@@ -336,7 +336,11 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot add asset without a collection id.`);
         }
 
-        await sink.uploadAsset(collectionId, assetId, assetType, contentType, data);
+        await sink.storeAsset(collectionId, assetType, {
+            _id: assetId, 
+            contentType, 
+            data
+        });
     }
 
     //

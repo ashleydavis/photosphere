@@ -4,6 +4,7 @@ import { useAuth } from "./auth-context";
 import { IAssetOps, ICollectionOps, IDbOps } from "../def/ops";
 import { IUser } from "../def/user";
 import { IAsset } from "../def/asset";
+import { IAssetData } from "../def/asset-data";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -143,7 +144,7 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadSingleAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
+    uploadSingleAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void>;
 
     //
     // TODO: Deprecated in favor of database options.
@@ -303,18 +304,18 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
+    async function uploadSingleAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await loadToken();
         const token = getToken();
 
         await axios.post(
             `${BASE_URL}/asset`, 
-            data, 
+            assetData.data, 
             {
                 headers: {
-                    "content-type": contentType,
+                    "content-type": assetData.contentType,
                     col: collectionId,
-                    id: assetId,
+                    id: assetData._id,
                     "asset-type": assetType,
                     Authorization: `Bearer ${token}`,
                     Accept: "application/json",

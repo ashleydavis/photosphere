@@ -66,7 +66,7 @@ export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSou
         const assetData = await cloudSource.loadAsset(collectionId, assetId, assetType);
         if (assetData) {
             // Cache the asset in indexeddb.
-            await indexeddbSink.uploadAsset(collectionId, assetId, assetType, assetData.contentType, assetData.data);
+            await indexeddbSink.storeAsset(collectionId, assetType, assetData);
         }
         return assetData;
     }

@@ -17,13 +17,13 @@ export function useIndexeddbGallerySink(): IGallerySink {
     const { getRecord, storeRecord } = useIndexeddb();
 
     //
-    // Uploads an asset.
+    // Stores an asset.
     //
-    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, assetData: Blob): Promise<void> {
+    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await storeRecord<IAssetData>(`collection-${collectionId}`, assetType, {
-            _id: assetId,
-            contentType,
-            data: assetData,        
+            _id: assetData._id,
+            contentType: assetData.contentType,
+            data: assetData.data,        
         });
     }
 
@@ -107,7 +107,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
     }
 
     return {
-        uploadAsset,
+        storeAsset,
         submitOperations,
         checkAsset,
     };

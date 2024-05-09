@@ -5,6 +5,7 @@
 import { useApi } from "../api-context";
 import { IGallerySink } from "./gallery-sink";
 import { ICollectionOps } from "../../def/ops";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Use the "Cloud sink" in a component.
@@ -17,10 +18,10 @@ export function useCloudGallerySink(): IGallerySink {
     const api = useApi();
 
     //
-    // Uploads an asset.
+    // Stores an asset.
     //
-    async function uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        await api.uploadSingleAsset(collectionId, assetId, assetType, contentType, data);
+    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
+        await api.uploadSingleAsset(collectionId, assetType, assetData);
     }
 
     //
@@ -40,7 +41,7 @@ export function useCloudGallerySink(): IGallerySink {
     }    
 
     return {
-        uploadAsset,
+        storeAsset,
         submitOperations,
         checkAsset,
     };

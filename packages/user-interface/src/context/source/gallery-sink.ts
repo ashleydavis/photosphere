@@ -2,13 +2,14 @@
 // Interface for uploading and updating assets.
 //
 
+import { IAssetData } from "../../def/asset-data";
 import { ICollectionOps } from "../../def/ops";
 
 export interface IGallerySink {
     //
-    // Uploads an asset.
+    // Stores an asset.
     //
-    uploadAsset(collectionId: string, assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
+    storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void>;
 
     //
     // Submits operations to change the database.
