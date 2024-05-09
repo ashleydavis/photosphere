@@ -56,7 +56,7 @@ function isCacheable(destination) {
         }
     }
 
-    console.log(`## Uncacheable destination: ${destination}`);
+    // console.log(`## Uncacheable destination: ${destination}`);
     return false;
 }
 
@@ -95,7 +95,12 @@ async function networkFirst(request) {
                     });
             }
             else {
-                console.log(`!! Not caching request with destination: ${request.destination || "unknown"}`);
+                if (request.destination) {
+                    console.log(`!! Not caching request with destination: ${request.destination || "unknown"}`);
+                }
+                else {
+                    // console.log(`!! Not caching request with unknown destination. Request = ${request.url}`);
+                }
             }
         }
 
