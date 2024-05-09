@@ -10,7 +10,7 @@ export interface IIndexeddbContext {
     //
     // Gets a record from the database.
     //
-    getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT>;
+    getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT | undefined>;
 
     //
     // Gets the least recent record from the database.
@@ -151,7 +151,7 @@ export function IndexeddbContextProvider({ children }: IProps) {
     //
     // Gets a record from the database.
     //
-    async function getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT> {
+    async function getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT | undefined> {
         const db = await openDatabase(databaseName);
         return await _getRecord(db, collectionName, recordId);
     }

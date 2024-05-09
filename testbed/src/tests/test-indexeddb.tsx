@@ -33,6 +33,17 @@ export function TestIndexeddb() {
                 "test-collection",
             ]);
 
+            //
+            // Getting a non-existent record returns undefined.
+            //
+            const nonExistentRecord = await indexeddb.getRecord<any>(db, "test-collection", "non-existent-id");
+            if (nonExistentRecord !== undefined) {
+                throw new Error("Expected non-existent record to return undefined.");
+            }
+            else {
+                console.log("Non-existing record returns undefined.");
+            }
+
             const testRecords = [
                 { _id: "02", name: "test-2" },
                                 
@@ -49,6 +60,9 @@ export function TestIndexeddb() {
                 await indexeddb.storeRecord<any>(db, "test-collection", testRecord);
             }
 
+            //
+            // Can get least recent record.
+            //
             const leastRecentRecord = await indexeddb.getLeastRecentRecord<any>(db, "test-collection");
             console.log(`Load least recent record:`);
             console.log(JSON.stringify(leastRecentRecord));
@@ -57,6 +71,9 @@ export function TestIndexeddb() {
                 throw new Error("Expected 03 to be the least recent record.");
             }
 
+            //
+            // Can get all records in the correct order.
+            //
             const allRecords = await indexeddb.getAllRecords<any>(db, "test-collection");
             const allRecordIds = allRecords.map(record => record._id);
             if (!arraysEqual(allRecordIds, ["01", "02", "03"])) {

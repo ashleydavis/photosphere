@@ -41,7 +41,7 @@ export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, re
 //
 // Gets a record from the database.
 //
-export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string): Promise<RecordT> {
+export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string): Promise<RecordT | undefined> {
     return new Promise<RecordT>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readonly');
         const store = transaction.objectStore(collectionName);
