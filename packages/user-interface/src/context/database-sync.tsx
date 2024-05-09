@@ -98,7 +98,9 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     await indexeddbSink.submitOperations(collectionOps);
 
                     if (!isProduction) {
-                        await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), collectionOps });
+                        if (collectionOps.ops.length > 0) {
+                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), collectionOps });
+                        }
                     }
 
                     //
