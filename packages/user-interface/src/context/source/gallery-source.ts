@@ -3,6 +3,7 @@
 //
 
 import { IAsset } from "../../def/asset";
+import { IAssetData } from "../../def/asset-data";
 import { IUser } from "../../def/user";
 
 export interface IGallerySource {
@@ -25,10 +26,5 @@ export interface IGallerySource {
     //
     // Loads data for an asset.
     //
-    loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined>;
-
-    //
-    // Unloads data for an asset.
-    //
-    unloadAsset(collectionId: string, assetId: string, assetType: string): void;
+    loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined>;
 }

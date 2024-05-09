@@ -4,9 +4,9 @@
 
 import { IGallerySource } from "./gallery-source";
 import { IGetAssetsResult, useApi } from "../api-context";
-import { useRef } from "react";
 import { IUser } from "../../def/user";
 import { IAsset } from "../../def/asset";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Use the "Cloud source" in a component.
@@ -17,26 +17,6 @@ export function useCloudGallerySource(): IGallerySource {
     // Interface to the backend.
     //
     const api = useApi();
-
-    //
-    // A cache entry for a loaded asset.
-    //
-    interface IAssetCacheEntry {
-        //
-        // Number of references to this asset.
-        //
-        numRefs: number;
-
-        //
-        // Object URL for the asset.
-        //
-        objectUrl: string;
-    }
-
-    //
-    // Caches loaded assets.
-    //
-    const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
 
     //
     // Loads the user's details.
@@ -70,42 +50,20 @@ export function useCloudGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
-        const key = `${assetType}/${assetId}`;
-        const existingCacheEntry = assetCache.current.get(key);
-        if (existingCacheEntry) {
-            existingCacheEntry.numRefs += 1;
-            return existingCacheEntry.objectUrl;
-        }
-
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
         const assetBlob = await api.getAsset(collectionId, assetId, assetType);
-        const objectUrl = URL.createObjectURL(assetBlob);
-        assetCache.current.set(key, { numRefs: 1, objectUrl });
-        return objectUrl;
-    }
+        return {
+            _id: assetId,
+            contentType: assetBlob.type,
+            data: assetBlob,
+        };
+   }
 
-    //
-    // Unloads data for an asset.
-    //
-    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
-        const key = `${collectionId}-${assetType}/${assetId}`;
-        const cacheEntry = assetCache.current.get(key);
-        if (cacheEntry) {
-            if (cacheEntry.numRefs === 1) {
-                URL.revokeObjectURL(cacheEntry.objectUrl);
-                assetCache.current.delete(key);
-            }
-            else {
-                cacheEntry.numRefs -= 1;
-            }
-        }
-    }
 
     return {
         isInitialised: api.isInitialised,
         getUser,
         getAssets,
         loadAsset,
-        unloadAsset,
     };
 }

@@ -7,6 +7,7 @@ import { IUser } from "../../def/user";
 import { IAsset } from "../../def/asset";
 import { useOnline } from "../../lib/use-online";
 import { useIndexeddb } from "../indexeddb-context";
+import { IAssetData } from "../../def/asset-data";
 
 //
 // Use the "Local source" in a component.
@@ -50,8 +51,7 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
-
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
         const localAsset = await indexeddbSource.loadAsset(collectionId, assetId, assetType);
         if (localAsset) {
             return localAsset;
@@ -62,15 +62,7 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
         }
         
         // Fallback to cloud.
-        return await cloudSource.loadAsset(collectionId, assetId, assetType);        
-    }
-
-    //
-    // Unloads data for an asset.
-    //
-    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
-        indexeddbSource.unloadAsset(collectionId, assetId, assetType);
-        cloudSource.unloadAsset(collectionId, assetId, assetType);
+        return await cloudSource.loadAsset(collectionId, assetId, assetType);
     }
 
     return {
@@ -78,6 +70,5 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
         getUser,
         getAssets,
         loadAsset,
-        unloadAsset,
     };
 }

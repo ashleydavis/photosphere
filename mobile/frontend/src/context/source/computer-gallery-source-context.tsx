@@ -2,10 +2,10 @@
 // Provides a source of assets for the gallery from the local computer.
 //
 
-import React, { createContext, ReactNode, useContext, useState } from "react";
 import { IGallerySource } from "user-interface/src/context/source/gallery-source";
 import { useScan } from "../scan-context";
 import { IAsset, IUser } from "user-interface";
+import { IAssetData } from "user-interface/build/def/asset-data";
 
 //
 // Use the "computer source" in a component.
@@ -42,16 +42,9 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<string | undefined> {
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
         //TODO: 
         return undefined;
-    }
-
-    //
-    // Unloads data for an asset.
-    //
-    function unloadAsset(collectionId: string, assetId: string, assetType: string): void {
-        //TODO:
     }
 
     return {
@@ -59,6 +52,5 @@ export function useComputerGallerySource(): IGallerySource {
         getUser,
         getAssets,
         loadAsset,
-        unloadAsset,
     };
 }
