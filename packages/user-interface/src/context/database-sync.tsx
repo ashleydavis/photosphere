@@ -43,13 +43,14 @@ const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
 export interface IProps {
     cloudSource: IGallerySource;
     cloudSink: IGallerySink;
+    indexeddbSource: IGallerySource;
     indexeddbSink: IGallerySink;
     localSource: IGallerySource;
 
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, localSource, children }: IProps) {
+export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource, indexeddbSink, localSource, children }: IProps) {
     
     const { isOnline } = useOnline();
     const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord, getNumRecords } = useIndexeddb();
@@ -111,8 +112,26 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSink, l
                             _id: collectionId,
                             lastUpdateId: latestUpdateId,
                         });
-                    }    
+                    }
                 }
+
+                //
+                // Pre-cache all thumbnails.
+                //
+                const assets = await indexeddbSource.getAssets(collectionId);
+                for (const asset of assets) { //todo: do this in parallel.
+                    const localThumbData = await indexeddbSource.loadAsset(collectionId, asset._id, "thumb");
+                    if (localThumbData === undefined) {
+                        const assetData = await cloudSource.loadAsset(collectionId, asset._id, "thumb");
+                        if (assetData) {
+                            await indexeddbSink.storeAsset(collectionId, "thumb", assetData);
+                            console.log(`Cached thumbnail for ${collectionId}/${asset._id}`); //fio:
+                        }
+                    }
+                    else {
+                        console.log(`Thumbnail for ${collectionId}/${asset._id} already cached`); //fio:                        
+                    }
+                }                
             }
         }
         catch (err) {

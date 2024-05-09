@@ -137,6 +137,8 @@ export function IndexeddbContextProvider({ children }: IProps) {
 
         db = await _openDatabase(`photosphere-${databaseName}`, databaseVersion, databaseConfiguration.collectionNames);
         dbCache.current.set(databaseName, db);
+
+        console.log(`Opened database ${databaseName}`); //fio:
         return db;
     }
 
@@ -152,8 +154,14 @@ export function IndexeddbContextProvider({ children }: IProps) {
     // Gets a record from the database.
     //
     async function getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT | undefined> {
-        const db = await openDatabase(databaseName);
-        return await _getRecord(db, collectionName, recordId);
+        try {
+            const db = await openDatabase(databaseName);
+            return await _getRecord(db, collectionName, recordId);
+        }
+        catch (error) {
+            console.error(`Error getting record: ${databaseName}:${collectionName}/${recordId}`);
+            throw error;
+        }
     }
 
     //

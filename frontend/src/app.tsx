@@ -20,6 +20,7 @@ function GallerySetup() {
             <DbSyncContextProvider
                 cloudSource={cloudSource}
                 cloudSink={cloudSink}
+                indexeddbSource={indexeddbSource}
                 indexeddbSink={indexeddbSink}
                 localSource={localSource}
                 >
