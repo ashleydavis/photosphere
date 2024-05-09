@@ -8,11 +8,12 @@ import { IAsset } from "../../def/asset";
 import { useOnline } from "../../lib/use-online";
 import { useIndexeddb } from "../indexeddb-context";
 import { IAssetData } from "../../def/asset-data";
+import { IGallerySink } from "./gallery-sink";
 
 //
 // Use the "Local source" in a component.
 //
-export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexeddbSource: IGallerySource, cloudSource: IGallerySource }): IGallerySource {
+export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource }: { indexeddbSource: IGallerySource, indexeddbSink: IGallerySink, cloudSource: IGallerySource }): IGallerySource {
 
     const { isOnline } = useOnline();
     const { storeRecord } = useIndexeddb();
@@ -62,7 +63,12 @@ export function useLocalGallerySource({ indexeddbSource, cloudSource }: { indexe
         }
         
         // Fallback to cloud.
-        return await cloudSource.loadAsset(collectionId, assetId, assetType);
+        const assetData = await cloudSource.loadAsset(collectionId, assetId, assetType);
+        if (assetData) {
+            // Cache the asset in indexeddb.
+            await indexeddbSink.uploadAsset(collectionId, assetId, assetType, assetData.contentType, assetData.data);
+        }
+        return assetData;
     }
 
     return {

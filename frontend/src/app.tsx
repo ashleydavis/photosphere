@@ -12,7 +12,7 @@ function GallerySetup() {
     const cloudSink = useCloudGallerySink();
 
     const outgoingSink = useOutgoingQueueSink();
-    const localSource = useLocalGallerySource({ indexeddbSource, cloudSource });
+    const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
     const localSink = useLocalGallerySink({ indexeddbSink, outgoingSink });
 
     return (
