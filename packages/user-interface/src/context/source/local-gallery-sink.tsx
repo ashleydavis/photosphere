@@ -14,16 +14,16 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
     //
     // Stores an asset.
     //
-    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
         // 
         // Store the asset locally.
         //
-        await indexeddbSink.storeAsset(collectionId, assetType, assetData);
+        await indexeddbSink.storeAsset(collectionId, assetId, assetType, assetData);
 
         // 
         // Queue the asset for upload to the cloud.
         //
-        await outgoingSink.storeAsset(collectionId, assetType, assetData);
+        await outgoingSink.storeAsset(collectionId, assetId, assetType, assetData);
     }
 
     //

@@ -8,6 +8,7 @@ import { useIndexeddb } from "../indexeddb-context";
 import { IUser } from "../../def/user";
 import { IAssetData } from "../../def/asset-data";
 import { IAsset } from "../../def/asset";
+import { IAssetRecord } from "../../def/asset-record";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -46,7 +47,12 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Loads data for an asset.
     //
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
-        return await getRecord<IAssetData>(`collection-${collectionId}`, assetType, assetId);
+        const assetRecord = await getRecord<IAssetRecord>(`collection-${collectionId}`, assetType, assetId);
+        if (!assetRecord) {
+            return undefined;
+        }
+
+        return assetRecord.assetData;
     }
 
     return {

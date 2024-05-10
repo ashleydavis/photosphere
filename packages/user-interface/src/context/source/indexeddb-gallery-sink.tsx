@@ -7,6 +7,7 @@ import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
 import { ICollectionOps } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
+import { IAssetRecord } from "../../def/asset-record";
 
 //
 // Use the "Indexeddb sink" in a component.
@@ -18,11 +19,11 @@ export function useIndexeddbGallerySink(): IGallerySink {
     //
     // Stores an asset.
     //
-    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        await storeRecord<IAssetData>(`collection-${collectionId}`, assetType, {
-            _id: assetData._id,
-            contentType: assetData.contentType,
-            data: assetData.data,        
+    async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+        await storeRecord<IAssetRecord>(`collection-${collectionId}`, assetType, {
+            _id: assetId,
+            storeDate: new Date(),
+            assetData,
         });
     }
 

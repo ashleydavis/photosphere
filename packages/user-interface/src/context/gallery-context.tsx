@@ -315,8 +315,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             throw new Error(`Cannot add asset without a collection id.`);
         }
 
-        await sink.storeAsset(collectionId, assetType, {
-            _id: assetId, 
+        await sink.storeAsset(collectionId, assetId, assetType, {
             contentType, 
             data
         });

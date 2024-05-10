@@ -144,7 +144,7 @@ export interface IApiContext {
     //
     // Uploads an asset to the backend.
     //
-    uploadSingleAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void>;
+    uploadSingleAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
 
     //
     // TODO: Deprecated in favor of database options.
@@ -304,7 +304,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function uploadSingleAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await loadToken();
         const token = getToken();
 
@@ -315,7 +315,7 @@ export function ApiContextProvider({ children }: IProps) {
                 headers: {
                     "content-type": assetData.contentType,
                     col: collectionId,
-                    id: assetData._id,
+                    id: assetId,
                     "asset-type": assetType,
                     Authorization: `Bearer ${token}`,
                     Accept: "application/json",

@@ -9,7 +9,7 @@ export interface IGallerySink {
     //
     // Stores an asset.
     //
-    storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void>;
+    storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
 
     //
     // Submits operations to change the database.

@@ -20,8 +20,8 @@ export function useCloudGallerySink(): IGallerySink {
     //
     // Stores an asset.
     //
-    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        await api.uploadSingleAsset(collectionId, assetType, assetData);
+    async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+        await api.uploadSingleAsset(collectionId, assetId, assetType, assetData);
     }
 
     //

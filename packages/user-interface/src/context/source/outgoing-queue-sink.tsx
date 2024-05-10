@@ -23,6 +23,11 @@ export interface IAssetUploadRecord {
     collectionId: string;
 
     //
+    // ID of the asset.
+    //
+    assetId: string;
+
+    //
     // Type of the asset.
     //    
     assetType: string;
@@ -58,10 +63,11 @@ export function useOutgoingQueueSink(): IGallerySink {
     //
     // Stores an asset.
     //
-    async function storeAsset(collectionId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await storeRecord<IAssetUploadRecord>("user", "outgoing-asset-upload", {
             _id: uuid(),
             collectionId,
+            assetId,
             assetType,
             assetData,
         });

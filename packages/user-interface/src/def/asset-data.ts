@@ -1,12 +1,7 @@
 //
-// Specifies the data for an asset.
+// Packages the data for an asset.
 // 
 export interface IAssetData {
-    //
-    // The ID of the asset.
-    //
-    _id: string;
-
     //
     // The content type of the asset.
     //

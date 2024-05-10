@@ -53,12 +53,10 @@ export function useCloudGallerySource(): IGallerySource {
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
         const assetBlob = await api.getAsset(collectionId, assetId, assetType);
         return {
-            _id: assetId,
             contentType: assetBlob.type,
             data: assetBlob,
         };
    }
-
 
     return {
         isInitialised: api.isInitialised,

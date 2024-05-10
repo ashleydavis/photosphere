@@ -25,13 +25,6 @@ export function useComputerGallerySource(): IGallerySource {
     }
 
     //
-    // Loads the users default collection.
-    //
-    async function loadCollectionId(): Promise<string | undefined> {
-        return undefined;
-    }
-
-    //
     // Retreives assets from the source.
     //
     async function getAssets(): Promise<IAsset[]> {

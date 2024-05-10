@@ -129,7 +129,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
         if (localThumbData === undefined) {
             const assetData = await cloudSource.loadAsset(collectionId, asset._id, "thumb");
             if (assetData) {
-                await indexeddbSink.storeAsset(collectionId, "thumb", assetData);
+                await indexeddbSink.storeAsset(collectionId, asset._id, "thumb", assetData);
                 // console.log(`Cached thumbnail for ${collectionId}/${asset._id}`);
             }
         }
@@ -152,7 +152,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     break;
                 }
 
-                await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetType, outgoingUpload.assetData);
+                await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.assetData);
                 await deleteRecord("user", "outgoing-asset-upload", outgoingUpload._id);
 
                 if (!isProduction) {
