@@ -370,6 +370,7 @@ export function UploadContextProvider({ children }: IProps) {
                 properties: uploadDetails.properties,
                 labels: uploadDetails.labels,
                 description: "",
+                group: "Uploaded",
             });
 
             //
