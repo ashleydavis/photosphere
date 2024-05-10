@@ -13,6 +13,8 @@
         "start-watch": "cross-env NODE_ENV=development PORT=3000 ts-node-dev --respawn src/index.ts",
         "start-for-e2e-tests": "pnpm run clean-uploads && pnpm run start:dev-no-assets",
         "build": "pnpm install --production=false && pnpm run compile",
+        "c": "pnpm run compile",
+        "cw": "pnpm run compile:watch",
         "compile": "tsc",
         "compile:watch": "tsc --watch --preserveWatchOutput",
         "clean-uploads": "rm -rf files",
