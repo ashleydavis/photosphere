@@ -32,11 +32,6 @@ export interface IDbSyncContext {
     // Set to true when the database synchronization is initialized.
     //
     isInitialized: boolean;
-
-    //
-    // Set to true when the database is syncing.
-    //
-    isSyncing: boolean;
 }
 
 const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
@@ -61,11 +56,6 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
     // Set to true when the database synchronization is initialized.
     //
     const [isInitialized, setIsInitialized] = useState(false);
-
-    //
-    // Set to true when the database is syncing.
-    //
-    const [isSyncing, setIsSyncing] = useState(false);
 
     //
     // Perform the initial synchronization.
@@ -258,15 +248,8 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     return;
                 }
 
-                setIsSyncing(true);
-
-                try {
-                    await syncOutgoing();
-                    await syncIncoming();
-                }
-                finally {
-                    setIsSyncing(false);
-                }
+                await syncOutgoing();
+                await syncIncoming();
 
                 timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
             }
@@ -307,7 +290,6 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
 
     const value: IDbSyncContext = {
     	isInitialized,
-        isSyncing,
     };
     
     return (
