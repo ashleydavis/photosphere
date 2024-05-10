@@ -354,6 +354,23 @@ export function UploadContextProvider({ children }: IProps) {
             const assetId = uuid();
 
             //
+            // Uploads the full asset.
+            //
+            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
+
+            //
+            // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
+            //
+            const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
+            await uploadAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
+
+            //
+            // Uploads the display asset separately for simplicity and no restriction on size.
+            //
+            const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
+            await uploadAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
+            
+            //
             // Add asset to the gallery.
             //
             await addAsset({
@@ -373,23 +390,6 @@ export function UploadContextProvider({ children }: IProps) {
                 group: "Uploaded",
             });
 
-            //
-            // Uploads the full asset.
-            //
-            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
-
-            //
-            // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
-            //
-            const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
-            await uploadAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
-
-            //
-            // Uploads the display asset separately for simplicity and no restriction on size.
-            //
-            const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
-            await uploadAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
-            
             console.log(`Uploaded ${assetId}`);
 
             //
