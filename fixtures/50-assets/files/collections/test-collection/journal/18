@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c6399164637613e9ef44",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c6399164637613e9ef44",
-            "origFileName": "sW8AATej1Xc.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 4000,
-            "height": 6000,
-            "description": "a man kneeling down on top of a green holding a golf club",
-            "location": null,
-            "searchText": " a man kneeling down on top of a green holding a golf club",
-            "properties": {
-              "exif": {
-                "make": null,
-                "model": null,
-                "name": null,
-                "exposure_time": null,
-                "aperture": null,
-                "focal_length": null,
-                "iso": null
-              }
-            },
-            "hash": "ba21e6dadd970312facdd2ce412c311151476de2eedcc1dcc3a6c6f0ae415934",
-            "fileDate": "2023-01-30T19:46:02Z",
-            "photoDate": "2023-01-30T19:46:02Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c6399164637613e9ef44",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "sW8AATej1Xc.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 4000,
+      "height": 6000,
+      "description": "a man kneeling down on top of a green holding a golf club",
+      "location": null,
+      "searchText": " a man kneeling down on top of a green holding a golf club",
+      "properties": {
+        "exif": {
+          "make": null,
+          "model": null,
+          "name": null,
+          "exposure_time": null,
+          "aperture": null,
+          "focal_length": null,
+          "iso": null
         }
-      ]
+      },
+      "hash": "ba21e6dadd970312facdd2ce412c311151476de2eedcc1dcc3a6c6f0ae415934",
+      "fileDate": "2023-01-30T19:46:02Z",
+      "photoDate": "2023-01-30T19:46:02Z"
     }
-  ]
+  }
 }

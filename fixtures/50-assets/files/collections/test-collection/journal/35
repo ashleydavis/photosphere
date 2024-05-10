@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c63b9164637613e9ef55",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c63b9164637613e9ef55",
-            "origFileName": "WWEFneQ5XAk.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 5464,
-            "height": 8192,
-            "description": "journaling bible open to psalm 63 with notes",
-            "location": null,
-            "searchText": " journaling bible open to psalm 63 with notes",
-            "properties": {
-              "exif": {
-                "make": "Canon",
-                "model": " EOS R5",
-                "name": "Canon, EOS R5",
-                "exposure_time": "1/1250",
-                "aperture": "2.8",
-                "focal_length": "35.0",
-                "iso": 800
-              }
-            },
-            "hash": "c70b2a0ebd7b97ba256b0e82677a28afd647fb0520c148cd51193f60a927568e",
-            "fileDate": "2023-01-17T18:25:14Z",
-            "photoDate": "2023-01-17T18:25:14Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c63b9164637613e9ef55",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "WWEFneQ5XAk.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 5464,
+      "height": 8192,
+      "description": "journaling bible open to psalm 63 with notes",
+      "location": null,
+      "searchText": " journaling bible open to psalm 63 with notes",
+      "properties": {
+        "exif": {
+          "make": "Canon",
+          "model": " EOS R5",
+          "name": "Canon, EOS R5",
+          "exposure_time": "1/1250",
+          "aperture": "2.8",
+          "focal_length": "35.0",
+          "iso": 800
         }
-      ]
+      },
+      "hash": "c70b2a0ebd7b97ba256b0e82677a28afd647fb0520c148cd51193f60a927568e",
+      "fileDate": "2023-01-17T18:25:14Z",
+      "photoDate": "2023-01-17T18:25:14Z"
     }
-  ]
+  }
 }

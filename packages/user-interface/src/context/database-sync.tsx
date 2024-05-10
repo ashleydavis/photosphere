@@ -5,10 +5,10 @@ import { IGallerySink } from "./source/gallery-sink";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
 import { IGallerySource } from "./source/gallery-source";
-import { ICollectionOps } from "../def/ops";
 import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
+import { IAssetOp } from "../def/ops";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -75,21 +75,21 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     // Assume that no records means we need to get all records down.
                     //
                     const assets = await cloudSource.getAssets(collectionId);
-                    const collectionOps: ICollectionOps = {
-                        id: collectionId,
-                        ops: assets.map(asset => ({
-                            id: asset._id,
-                            ops: [{
-                                type: "set",
-                                fields: asset,
-                            }],
-                        })),
-                    };
-                    await indexeddbSink.submitOperations(collectionOps);
+                    console.log(`Initial sync for ${collectionId}: ${assets.length} assets`);
+
+                    const ops: IAssetOp[] = assets.map(asset => ({ 
+                        collectionId,
+                        assetId: asset._id,
+                        op: {
+                            type: "set",
+                            fields: asset,
+                        },
+                    }));
+                    await indexeddbSink.submitOperations(ops);
 
                     if (!isProduction) {
-                        if (collectionOps.ops.length > 0) {
-                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), collectionOps });
+                        if (ops.length > 0) {
+                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), ops: ops });
                         }
                     }
 
@@ -158,6 +158,8 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 if (!isProduction) {
                     await storeRecord<any>("debug", "updates-sent", { _id: uuid(), upload: outgoingUpload });
                 }
+
+                console.log(`Processed outgoing upload: ${outgoingUpload.collectionId}/${outgoingUpload.assetType}/${outgoingUpload.assetId}`);
             }
 
             //
@@ -169,12 +171,14 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     break;
                 }
 
-                await cloudSink.submitOperations(outgoingUpdate.collectionOps);
+                await cloudSink.submitOperations([outgoingUpdate.op]);
                 await deleteRecord("user", "outgoing-asset-update", outgoingUpdate._id);
 
                 if (!isProduction) {
                     await storeRecord<any>("debug", "updates-sent", { _id: uuid(), update: outgoingUpdate });
                 }
+
+                console.log(`Processed outgoing update: ${outgoingUpdate.op.collectionId}/${outgoingUpdate.op.assetId}`);
             }
         }
         catch (err) {
@@ -205,26 +209,38 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             //
             for (const collectionId of collectionIds) {
                 const lastUpdateIdRecord = await getRecord<IUpdateIdRecord>("user", "last-update-id", collectionId);
-                const collectionOpsResult = await api.retrieveOperations(collectionId, lastUpdateIdRecord?.lastUpdateId);
+                const journalResult = await api.getJournal(collectionId, lastUpdateIdRecord?.lastUpdateId);
+
+                if (journalResult.ops.length === 0) {
+                    // Nothing to do.
+                    break;
+                }
 
                 //
                 // Apply incoming changes to the local database.
                 //
-                indexeddbSink.submitOperations(collectionOpsResult.collectionOps);
+                indexeddbSink.submitOperations(journalResult.ops.map(journalRecord => ({
+                    collectionId,
+                    assetId: journalRecord.assetId,
+                    op: journalRecord.op,
+                })));
 
-                if (!isProduction && collectionOpsResult.collectionOps.ops.length > 0) {
-                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: collectionOpsResult });
+                    
+                if (!isProduction) {
+                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: journalResult });
                 }
 
-                if (collectionOpsResult.latestUpdateId !== undefined) {
+                if (journalResult.latestUpdateId !== undefined) {
                     //
                     // Record the latest update that was received.
                     //
                     await storeRecord<IUpdateIdRecord>("user", "last-update-id", {
                         _id: collectionId, 
-                        lastUpdateId: collectionOpsResult.latestUpdateId,
+                        lastUpdateId: journalResult.latestUpdateId,
                     });
                 }
+               
+                console.log(`Processed incoming updates for ${collectionId}: ${journalResult.ops.length} ops`);
             }
         }
         catch (err) {
@@ -247,6 +263,8 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 if (done) {
                     return;
                 }
+
+                console.log(`Periodic sync...`);
 
                 await syncOutgoing();
                 await syncIncoming();

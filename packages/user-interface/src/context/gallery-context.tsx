@@ -201,17 +201,14 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Add the asset to the database.
         //
-        await sink.submitOperations({
-            id: collectionId,
-            ops: [{
-                id: galleryItem._id,
-                ops: [{
-                    type: "set",
-                    fields: galleryItem,
-                }]
-            }],
-        });
-
+        await sink.submitOperations([{
+            collectionId,
+            assetId: galleryItem._id,
+            op: {
+                type: "set",
+                fields: galleryItem,
+            },
+        }]);
     }
 
     //
@@ -253,7 +250,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         }
 
         if (!collectionId) {
-            throw new Error(`Cannot add asset without a collection id.`);
+            throw new Error(`Cannot edit asset without a collection id.`);
         }
 
         //
@@ -276,16 +273,14 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         const assetId = assets[assetIndex]._id;
 
-        await sink.submitOperations({
-            id: collectionId,
-            ops: [{
-                id: assetId,
-                ops: [{
-                    type: "set",
-                    fields: partialGalleryItemToAsset(assetUpdate),
-                }]
-            }],
-        });
+        await sink.submitOperations([{
+            collectionId,
+            assetId: assetId,
+            op: {
+                type: "set",
+                fields: partialGalleryItemToAsset(assetUpdate),
+            },
+        }]);
     }
 
     //

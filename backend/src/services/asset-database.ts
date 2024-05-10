@@ -9,7 +9,7 @@ import { IStorage } from "./storage";
 import { ICollectionMetadata } from "../lib/collection";
 import { createReverseChronoTimestamp } from "../lib/timestamp";
 import dayjs from "dayjs";
-import { IAssetOps, ICollectionOps, IDbOps } from "../lib/ops";
+import { IAssetOp, IAssetOpRecord, IOpSelection } from "../lib/ops";
 import { binarySearch } from "../lib/binary-search";
 
 export interface IAssetStream {
@@ -37,35 +37,30 @@ export interface IAssetsResult {
 }
 
 //
-// Records updates to assets in the collection.
+// Records an operation against a particular asset.
 //
-export interface IJournalRecord {
+export interface IAssetOpResult {
     //
-    // The date the server received the operation.
+    // The id of the asset to which the operation is applied.
     //
-    serverTime: string;
-    
+    assetId: string;
+
     //
-    // Operations to apply to assets in the collection.
+    // The operation that was applied to the asset.
     //
-    ops: IAssetOps[];
+    op: IOpSelection;
 }
 
-export interface ICollectionOpsResult {
+export interface IJournalResult {
     //
-    // Operations against the collection.
+    // Operations recorded against the collection.
     //
-    collectionOps: ICollectionOps;
+    ops: IAssetOpResult[];
 
     //
-    // The id of the latest asset that has been retreived.
+    // The id of the latest update that has been retreived.
     //
     latestUpdateId?: string;
-
-    //
-    // Continuation token for the next page of operations.
-    //
-    next?: string;
 }
 
 export interface IAssetDatabase {
@@ -87,15 +82,15 @@ export interface IAssetDatabase {
     //
     // Applies a set of operations to the database.
     //
-    applyOperations(ops: IDbOps): Promise<void>;
+    applyOperations(ops: IAssetOp[], clientId: string): Promise<void>;
 
     //
-    // Retreives operations from the database.
+    // Gets the journal of operations that have been applied to the database.
     //
-    retreiveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult>;
+    getJournal(collectionId: string, clientId: string, lastUpdateId?: string): Promise<IJournalResult>;
 
     //
-    // Retreives the latest update id for a collection.
+    // gETS the latest update id for a collection.
     //
     getLatestUpdateId(collectionId: string): Promise<string | undefined>;
 
@@ -127,12 +122,12 @@ export interface IAssetDatabase {
 
 export class AssetDatabase {
 
-    private journal: IDatabaseCollection<IJournalRecord>;
+    private journal: IDatabaseCollection<IAssetOpRecord>;
     private database: IDatabaseCollection<IAsset>;
 
     constructor(private storage: IStorage) {
         this.database = new DatabaseCollection<IAsset>(storage);
-        this.journal = new DatabaseCollection<IJournalRecord>(storage);
+        this.journal = new DatabaseCollection<IAssetOpRecord>(storage);
     }
 
     //
@@ -190,73 +185,75 @@ export class AssetDatabase {
     //
     // Applies a set of operations to the database.
     //
-    async applyOperations(dbOps: IDbOps): Promise<void> {
+    async applyOperations(ops: IAssetOp[], clientId: string): Promise<void> {
 
-        for (const collectionOps of dbOps.ops) {
-            const collectionId = collectionOps.id;
-
-            //
-            // Updates the journal for the collection.
-            //
-            const journalRecordId = createReverseChronoTimestamp(new Date());
-            const journalRecord: IJournalRecord = {
+        for (const assetOp of ops) {
+            const assetId = assetOp.assetId;
+            const assetOpRecord: IAssetOpRecord = {
                 serverTime: dayjs().toISOString(),
-                ops: collectionOps.ops,
+                clientId,
+                assetId,
+                op: assetOp.op,
             };
-            await this.journal.setOne(`collections/${collectionId}/journal`, journalRecordId, journalRecord);
+            
+            const collectionId = assetOp.collectionId;
+            const journalRecordId = createReverseChronoTimestamp(new Date());
+            await this.journal.setOne(`collections/${collectionId}/journal`, journalRecordId, assetOpRecord);
 
-            for (const assetOps of collectionOps.ops) {
-                const assetId = assetOps.id;
-                const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
-                let fields = asset as any || {};
+            const asset = await this.database.getOne(`collections/${collectionId}/metadata`, assetId);
+            let fields = asset as any || {};
 
-                if (!asset) {
-                    // Set the asset id when upserting.
-                    fields._id = assetId;
+            if (!asset) {
+                // Set the asset id when upserting.
+                fields._id = assetId;
+            }
+
+            this.applyOperation(assetOp.op, fields);
+
+            await this.database.setOne(`collections/${collectionId}/metadata`, assetId, fields);
+        }
+    }
+
+    //
+    // Applies a single database operation to the field set for an asset.
+    //
+    private applyOperation(op: IOpSelection, fields: any): void {
+        switch (op.type) {
+            case "set": {
+                for (const [name, value] of Object.entries(op.fields)) {
+                    fields[name] = value;
                 }
+                break;
+            }
 
-                for (const assetOp of assetOps.ops) {
-                    switch (assetOp.type) {
-                        case "set": {
-                            for (const [name, value] of Object.entries(assetOp.fields)) {
-                                fields[name] = value;
-                            }
-                            break;
-                        }
-
-                        case "push": {
-                            if (!fields[assetOp.field]) {
-                                fields[assetOp.field] = [];
-                            }
-                            fields[assetOp.field].push(assetOp.value);
-                            break;
-                        }
-
-                        case "pull": {
-                            if (!fields[assetOp.field]) {
-                                fields[assetOp.field] = [];
-                            }
-                            fields[assetOp.field] = fields[assetOp.field].filter((v: any) => v !== assetOp.value);
-                            break;
-                        }
-
-                        default: {
-                            throw new Error(`Invalid operation type: ${(assetOp as any).type}`);
-                        }
-                    }
+            case "push": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
                 }
+                fields[op.field].push(op.value);
+                break;
+            }
 
-                await this.database.setOne(`collections/${collectionId}/metadata`, assetId, fields);
+            case "pull": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
+                }
+                fields[op.field] = fields[op.field].filter((v: any) => v !== op.value);
+                break;
+            }
+
+            default: {
+                throw new Error(`Invalid operation type: ${(op as any).type}`);
             }
         }
     }
 
     //
-    // Retreives operations for a particular collection.
+    // Gets the journal of operations that have been applied to the database.
     //
-    async retreiveOperations(collectionId: string, lastUpdateId: string | undefined): Promise<ICollectionOpsResult> { 
+    async getJournal(collectionId: string, clientId: string, lastUpdateId?: string): Promise<IJournalResult> {
 
-        let ops: IAssetOps[] = [];
+        let allRecords: IAssetOpRecord[] = [];
         let done = false;
         let latestUpdateId: string | undefined = undefined;
         let next: string | undefined = undefined;
@@ -281,27 +278,28 @@ export class AssetDatabase {
                 }
             }
 
-            const journalRecordPromises = journalRecordIds.map(id => 
-                this.journal.getOne(`collections/${collectionId}/journal`, id)
-            );
-            const journalRecords = await Promise.all(journalRecordPromises);
-            ops = ops.concat(journalRecords
-                .filter(journalRecord => journalRecord !== undefined)
-                .map(journalRecord => journalRecord!.ops)
-                .flat()
-            );
+            const journalRecordPromises = journalRecordIds.map(async id => {
+                const assetRecord = await this.journal.getOne(`collections/${collectionId}/journal`, id);
+                return assetRecord!; // These records should always exist, since we just looked them up.
+            });
+            let journalRecords = await Promise.all(journalRecordPromises);
+            // Don't deliver updates that originated from the requesting client.
+            journalRecords = journalRecords.filter(journalRecord => journalRecord.clientId !== clientId); 
+            allRecords = allRecords.concat(journalRecords);
         }
 
         //
         // Operations are pulled out in reverse chronological order, this puts them in chronological order.
         //
-        ops.reverse(); 
+        allRecords.reverse(); 
 
         return {
-            collectionOps: {
-                id: collectionId,
-                ops,
-            },
+            ops: allRecords.map(journalRecord => {
+                return {
+                    assetId: journalRecord.assetId,
+                    op: journalRecord.op,
+                };
+            }),
             latestUpdateId,
         };
     }

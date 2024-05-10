@@ -5,7 +5,7 @@
 import { IGallerySink } from "./gallery-sink";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
-import { ICollectionOps } from "../../def/ops";
+import { IAssetOp, IOpSelection } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
 
@@ -45,49 +45,55 @@ export function useIndexeddbGallerySink(): IGallerySink {
     //
     // Submits operations to change the database.
     //
-    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
-        for (const assetOps of collectionOps.ops) {
-            const assetId = assetOps.id;
-            const asset = await getRecord<IAsset>(`collection-${collectionOps.id}`, "metadata", assetId);
+    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+
+        for (const assetOp of ops) {
+            const assetId = assetOp.assetId;
+            const asset = await getRecord<IAsset>(`collection-${assetOp.collectionId}`, "metadata", assetId);
             let fields = asset as any || {};
             if (!asset) {
                 // Set the asset id when upserting.
                 fields._id = assetId;
             }
 
-            for (const assetOp of assetOps.ops) {
-                switch (assetOp.type) { //todo: This code could definitely be shared with the asset-database in the backend.
-                    case "set": {
-                        for (const [name, value] of Object.entries(assetOp.fields)) {
-                            fields[name] = value;
-                        }
-                        break;
-                    }
+            applyOperation(assetOp.op, fields);
 
-                    case "push": {
-                        if (!fields[assetOp.field]) {
-                            fields[assetOp.field] = [];
-                        }
-                        fields[assetOp.field].push(assetOp.value);
-                        break;
-                    }
+            await storeRecord<IAsset>(`collection-${assetOp.collectionId}`, "metadata", fields);
+        }        
+    }
 
-                    case "pull": {
-                        if (!fields[assetOp.field]) {
-                            fields[assetOp.field] = [];
-                        }
-                        fields[assetOp.field] = fields[assetOp.field].filter((v: any) => v !== assetOp.value);
-                        break;
-                    }
-
-                    default: {
-                        throw new Error(`Invalid operation type: ${(assetOp as any).type}`);
-                    }
+    //
+    // Apply an operation to a set of fields.
+    //
+    function applyOperation(op: IOpSelection, fields: any): void {
+        switch (op.type) { //todo: This code could definitely be shared with the asset-database in the backend.
+            case "set": {
+                for (const [name, value] of Object.entries(op.fields)) {
+                    fields[name] = value;
                 }
+                break;
             }
 
-            await storeRecord<IAsset>(`collection-${collectionOps.id}`, "metadata", fields);
-        }        
+            case "push": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
+                }
+                fields[op.field].push(op.value);
+                break;
+            }
+
+            case "pull": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
+                }
+                fields[op.field] = fields[op.field].filter((v: any) => v !== op.value);
+                break;
+            }
+
+            default: {
+                throw new Error(`Invalid operation type: ${(op as any).type}`);
+            }
+        }
     }
 
     //

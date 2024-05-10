@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c63c9164637613e9ef62",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c63c9164637613e9ef62",
-            "origFileName": "7oMcrpVYVwM.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 4695,
-            "height": 5869,
-            "description": "a woman sitting at a table with a plate of food",
-            "location": null,
-            "searchText": " a woman sitting at a table with a plate of food",
-            "properties": {
-              "exif": {
-                "make": "Canon",
-                "model": " EOS R5",
-                "name": "Canon, EOS R5",
-                "exposure_time": "1/125",
-                "aperture": "4.0",
-                "focal_length": "70.0",
-                "iso": 200
-              }
-            },
-            "hash": "25bc960e37a49183fc5dd8aef81aa53d603565e7bdbb3bf8b0d835c2db5a8ead",
-            "fileDate": "2023-01-30T05:16:59Z",
-            "photoDate": "2023-01-30T05:16:59Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c63c9164637613e9ef62",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "7oMcrpVYVwM.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 4695,
+      "height": 5869,
+      "description": "a woman sitting at a table with a plate of food",
+      "location": null,
+      "searchText": " a woman sitting at a table with a plate of food",
+      "properties": {
+        "exif": {
+          "make": "Canon",
+          "model": " EOS R5",
+          "name": "Canon, EOS R5",
+          "exposure_time": "1/125",
+          "aperture": "4.0",
+          "focal_length": "70.0",
+          "iso": 200
         }
-      ]
+      },
+      "hash": "25bc960e37a49183fc5dd8aef81aa53d603565e7bdbb3bf8b0d835c2db5a8ead",
+      "fileDate": "2023-01-30T05:16:59Z",
+      "photoDate": "2023-01-30T05:16:59Z"
     }
-  ]
+  }
 }

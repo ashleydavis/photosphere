@@ -73,42 +73,44 @@ export interface IPullOp extends IOp {
 //
 export type IOpSelection = ISetOp | IPushOp | IPullOp;
 
-//
-// A set of operations to apply to a particular asset.
-//
-export interface IAssetOps {
+export interface IAssetOp {
+    //
+    // The id of the collection to which this operation is applied.
+    //
+    collectionId: string; 
+
     //
     // The id of the asset to which operations are applied.
     //
-    id: string;
+    assetId: string;    
 
     //
-    // Operations to apply to this asset.
+    // The operation to apply to the asset.
     //
-    ops: IOpSelection[];
+    op: IOpSelection;
 }
 
 //
-// A set of operations to apply to a particular collection.
+// Records an operation against a particular asset.
 //
-export interface ICollectionOps {
+export interface IAssetOpRecord {
     //
-    // The id of the collection to which operations are applied.
+    // The date the server received the operation.
     //
-    id: string; 
+    serverTime: string;
 
     //
-    // Operations to apply to assets in the collection.
+    // The client where the operation originated.
     //
-    ops: IAssetOps[];
-}
+    clientId: string;
 
-//
-// A set of operations to apply to the database.
-//
-export interface IDbOps {
     //
-    // Operations to apply to collections in the database.
+    // The id of the asset to which the operation is applied.
     //
-    ops: ICollectionOps[];
+    assetId: string;
+
+    //
+    // The operation that was applied to the asset.
+    //
+    op: IOpSelection;
 }

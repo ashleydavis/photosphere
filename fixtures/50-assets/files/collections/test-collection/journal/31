@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c63a9164637613e9ef51",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c63a9164637613e9ef51",
-            "origFileName": "L0Bte153mM8.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 2955,
-            "height": 2364,
-            "description": "a herd of horses standing next to each other",
-            "location": null,
-            "searchText": " a herd of horses standing next to each other",
-            "properties": {
-              "exif": {
-                "make": null,
-                "model": null,
-                "name": null,
-                "exposure_time": null,
-                "aperture": null,
-                "focal_length": null,
-                "iso": null
-              }
-            },
-            "hash": "c5c8c7a95c777994e1c7dec0b830e8fc29a6ee25881bb10492897727e02d02bf",
-            "fileDate": "2023-01-13T14:11:04Z",
-            "photoDate": "2023-01-13T14:11:04Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c63a9164637613e9ef51",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "L0Bte153mM8.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 2955,
+      "height": 2364,
+      "description": "a herd of horses standing next to each other",
+      "location": null,
+      "searchText": " a herd of horses standing next to each other",
+      "properties": {
+        "exif": {
+          "make": null,
+          "model": null,
+          "name": null,
+          "exposure_time": null,
+          "aperture": null,
+          "focal_length": null,
+          "iso": null
         }
-      ]
+      },
+      "hash": "c5c8c7a95c777994e1c7dec0b830e8fc29a6ee25881bb10492897727e02d02bf",
+      "fileDate": "2023-01-13T14:11:04Z",
+      "photoDate": "2023-01-13T14:11:04Z"
     }
-  ]
+  }
 }

@@ -6,6 +6,7 @@ import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IDatabaseCollection } from "./services/database-collection";
 import { IUser } from "./lib/user";
+import { IAssetOp } from "./lib/ops";
 
 declare global {
     namespace Express {
@@ -246,19 +247,20 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        const { dbOps } = req.body;
-        await assetDatabase.applyOperations(dbOps);
+        const ops = getValue<IAssetOp[]>(req.body, "ops");
+        const clientId = getValue<string>(req.body, "clientId");
+        await assetDatabase.applyOperations(ops, clientId);
         res.sendStatus(200);
     }));
 
     //
-    // Retreives a set of operations from the asset database.
-    // I had to make this PUT instead of GET so that it could have a request body.
+    // Gets the journal of operations that have been applied to the database.
     //
-    app.put("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        const collectionId = getValue<string>(req.body, "col");
-        const lastUpdateId = req.body.id;
-        const result = await assetDatabase.retreiveOperations(collectionId, lastUpdateId);
+    app.post("/journal", express.json(), asyncErrorHandler(async (req, res) => {
+        const collectionId = getValue<string>(req.body, "collectionId");
+        const clientId = getValue<string>(req.body, "clientId");
+        const lastUpdateId = req.body.lastUpdateId;
+        const result = await assetDatabase.getJournal(collectionId, clientId, lastUpdateId);
         res.json(result);
     }));
 

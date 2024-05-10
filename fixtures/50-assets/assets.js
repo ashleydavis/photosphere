@@ -1418,18 +1418,17 @@ for (let i = 0; i < assets.length; i++) {
     
 
     // for (let i = 1; i <= maxNumber; i++) {
+
+    const clone = { ...asset };
+    delete clone._id;
+
     const paddedNumber = String(i).padStart(maxLength, '0');
     fs.writeFileSync(`./files/collections/test-collection/journal/${paddedNumber}`, JSON.stringify({ 
-        ops: [
-            {
-                id: asset._id,
-                "ops": [
-                    {
-                        type: "set",
-                        fields: asset,
-                    },
-                ],
-            },
-        ],
+        clientId: "some-client-id",
+        id: asset._id,
+        op: {
+            type: "set",
+            fields: clone,
+        },
      }, null, 2));
 }

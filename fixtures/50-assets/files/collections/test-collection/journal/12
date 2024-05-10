@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c6389164637613e9ef3e",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c6389164637613e9ef3e",
-            "origFileName": "XpIsQWpxXps.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 4236,
-            "height": 2829,
-            "description": "a person standing on a balcony of a building",
-            "location": null,
-            "searchText": " a person standing on a balcony of a building",
-            "properties": {
-              "exif": {
-                "make": "SONY",
-                "model": "ILCE-7SM3",
-                "name": "SONY, ILCE-7SM3",
-                "exposure_time": "1/60",
-                "aperture": "5.0",
-                "focal_length": "85.0",
-                "iso": 800
-              }
-            },
-            "hash": "a7db9b6e45bf43114c6ea9a38a9c0fbc44368ab96aee5687e44c9fe9a3cc8e1f",
-            "fileDate": "2023-01-25T02:36:35Z",
-            "photoDate": "2023-01-25T02:36:35Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c6389164637613e9ef3e",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "XpIsQWpxXps.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 4236,
+      "height": 2829,
+      "description": "a person standing on a balcony of a building",
+      "location": null,
+      "searchText": " a person standing on a balcony of a building",
+      "properties": {
+        "exif": {
+          "make": "SONY",
+          "model": "ILCE-7SM3",
+          "name": "SONY, ILCE-7SM3",
+          "exposure_time": "1/60",
+          "aperture": "5.0",
+          "focal_length": "85.0",
+          "iso": 800
         }
-      ]
+      },
+      "hash": "a7db9b6e45bf43114c6ea9a38a9c0fbc44368ab96aee5687e44c9fe9a3cc8e1f",
+      "fileDate": "2023-01-25T02:36:35Z",
+      "photoDate": "2023-01-25T02:36:35Z"
     }
-  ]
+  }
 }

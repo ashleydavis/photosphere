@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c63c9164637613e9ef63",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c63c9164637613e9ef63",
-            "origFileName": "rrkau-m9Yec.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 2141,
-            "height": 3211,
-            "description": "Sydney Tower Eye",
-            "location": "悉尼, 悉尼, 澳大利亚",
-            "searchText": " Sydney Tower Eye 悉尼, 悉尼, 澳大利亚",
-            "properties": {
-              "exif": {
-                "make": "Canon",
-                "model": " EOS R6",
-                "name": "Canon, EOS R6",
-                "exposure_time": "1/2500",
-                "aperture": "2.8",
-                "focal_length": "50.0",
-                "iso": 100
-              }
-            },
-            "hash": "76a3438febf8a96a1fd0b1515017dc5ca3d7f3372ee69e84ce4de58cd3327501",
-            "fileDate": "2023-01-30T05:37:55Z",
-            "photoDate": "2023-01-30T05:37:55Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c63c9164637613e9ef63",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "rrkau-m9Yec.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 2141,
+      "height": 3211,
+      "description": "Sydney Tower Eye",
+      "location": "悉尼, 悉尼, 澳大利亚",
+      "searchText": " Sydney Tower Eye 悉尼, 悉尼, 澳大利亚",
+      "properties": {
+        "exif": {
+          "make": "Canon",
+          "model": " EOS R6",
+          "name": "Canon, EOS R6",
+          "exposure_time": "1/2500",
+          "aperture": "2.8",
+          "focal_length": "50.0",
+          "iso": 100
         }
-      ]
+      },
+      "hash": "76a3438febf8a96a1fd0b1515017dc5ca3d7f3372ee69e84ce4de58cd3327501",
+      "fileDate": "2023-01-30T05:37:55Z",
+      "photoDate": "2023-01-30T05:37:55Z"
     }
-  ]
+  }
 }

@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c6389164637613e9ef41",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c6389164637613e9ef41",
-            "origFileName": "TJ3Xl4YgHVs.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 4928,
-            "height": 3264,
-            "description": "a large body of water surrounded by mountains",
-            "location": "Norway",
-            "searchText": " a large body of water surrounded by mountains Norway",
-            "properties": {
-              "exif": {
-                "make": null,
-                "model": null,
-                "name": null,
-                "exposure_time": null,
-                "aperture": null,
-                "focal_length": null,
-                "iso": null
-              }
-            },
-            "hash": "17228a9a2757e30fbb12a23f2cdc564758dd509c7d947173c4b7d018f9a750cb",
-            "fileDate": "2023-01-28T19:37:15Z",
-            "photoDate": "2023-01-28T19:37:15Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c6389164637613e9ef41",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "TJ3Xl4YgHVs.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 4928,
+      "height": 3264,
+      "description": "a large body of water surrounded by mountains",
+      "location": "Norway",
+      "searchText": " a large body of water surrounded by mountains Norway",
+      "properties": {
+        "exif": {
+          "make": null,
+          "model": null,
+          "name": null,
+          "exposure_time": null,
+          "aperture": null,
+          "focal_length": null,
+          "iso": null
         }
-      ]
+      },
+      "hash": "17228a9a2757e30fbb12a23f2cdc564758dd509c7d947173c4b7d018f9a750cb",
+      "fileDate": "2023-01-28T19:37:15Z",
+      "photoDate": "2023-01-28T19:37:15Z"
     }
-  ]
+  }
 }

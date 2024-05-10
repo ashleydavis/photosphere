@@ -1,10 +1,11 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "./auth-context";
-import { IAssetOps, ICollectionOps, IDbOps } from "../def/ops";
+import { IAssetOp, IOpSelection } from "../def/ops";
 import { IUser } from "../def/user";
 import { IAsset } from "../def/asset";
 import { IAssetData } from "../def/asset-data";
+import { useClientId } from "../lib/use-client-id";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -61,25 +62,26 @@ export interface IAssetMetadata {
 }
 
 //
-// Records updates to assets in the collection.
 //
-export interface IJournalRecord {
+// Records an operation against a particular asset.
+//
+export interface IAssetOpResult {
     //
-    // The date the server received the operation.
+    // The id of the asset to which the operation is applied.
     //
-    serverTime: string;
-    
+    assetId: string;
+
     //
-    // Operations to apply to assets in the collection.
+    // The operation that was applied to the asset.
     //
-    ops: IAssetOps[];
+    op: IOpSelection;
 }
 
-export interface ICollectionOpsResult {
+export interface IJournalResult {
     //
-    // Operations against the collection.
+    // Operations recorded against the collection.
     //
-    collectionOps: ICollectionOps;
+    ops: IAssetOpResult[];
 
     //
     // The id of the latest asset that has been retreived.
@@ -163,12 +165,12 @@ export interface IApiContext {
     //
     // Submits database operations to the cloud.
     //
-    submitOperations(dbOps: IDbOps): Promise<void>;
+    submitOperations(ops: IAssetOp[]): Promise<void>;
 
     //
-    // Retreives latest database operations for a collection from the cloud.
+    // Gets the journal of operations that have been applied to the database.
     //
-    retrieveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult>;
+    getJournal(collectionId: string, lastUpdateId?: string): Promise<IJournalResult>;
 }
 
 const ApiContext = createContext<IApiContext | undefined>(undefined);
@@ -184,6 +186,8 @@ export function ApiContextProvider({ children }: IProps) {
         loadToken,
         getToken,
     } = useAuth();
+
+    const { clientId } = useClientId();
 
     //
     // Set true once authenticated and when the token is loaded.
@@ -383,14 +387,20 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Submits database operations to the cloud.
     //
-    async function submitOperations(dbOps: IDbOps): Promise<void> {
+    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+
+        if (!clientId) {
+            throw new Error(`Client id not set.`);
+        }
+
         await loadToken();
         const token = getToken();
 
         await axios.post(
             `${BASE_URL}/operations`, 
             {
-                dbOps,
+                ops,
+                clientId,
             },
             {
                 headers: {
@@ -402,18 +412,24 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Retreives latest database operations for a collection from the cloud.
+    // Gets the journal of operations that have been applied to the database.
     //
-    async function retrieveOperations(collectionId: string, lastUpdateId?: string): Promise<ICollectionOpsResult> {
+    async function getJournal(collectionId: string, lastUpdateId?: string): Promise<IJournalResult> {
+        
+        if (!clientId) {
+            throw new Error(`Client id not set.`);
+        }
+
         await loadToken();
         const token = getToken();
 
-        const url = `${BASE_URL}/operations`;
-        const response = await axios.put(
+        const url = `${BASE_URL}/journal`;
+        const response = await axios.post(
             url, 
             {
-                col: collectionId,
-                id: lastUpdateId,
+                collectionId,
+                lastUpdateId,
+                clientId,
             },
             {
                 headers: {
@@ -437,7 +453,7 @@ export function ApiContextProvider({ children }: IProps) {
         uploadAssetMetadata,
         updateAssetMetadata,
         submitOperations,
-        retrieveOperations,
+        getJournal,
     };
     
     return (

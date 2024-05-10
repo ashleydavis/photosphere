@@ -313,12 +313,12 @@ Authorization: Bearer {{token}}
 # Gets journal operations for a collection.
 #
 
-PUT {{base_url}}/operations
+POST {{base_url}}/journal
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "lastUpdateIds": {}
+    "col": "{{collection}}"
 }
 
 ###
@@ -327,14 +327,13 @@ Authorization: Bearer {{token}}
 
 @last_update = 15
 
-PUT {{base_url}}/operations
+POST {{base_url}}/journal
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "lastUpdateIds": {
-        "test-collection": "{{last_update}}"
-    }
+    "col": "{{collection}}",
+    "id": "{{last_update}}"
 }
 
 ###

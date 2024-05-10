@@ -3,7 +3,7 @@
 //
 
 import { IAssetData } from "../../def/asset-data";
-import { ICollectionOps } from "../../def/ops";
+import { IAssetOp } from "../../def/ops";
 import { IGallerySink } from "./gallery-sink";
 
 //
@@ -29,16 +29,16 @@ export function useLocalGallerySink({ indexeddbSink, outgoingSink }: { indexeddb
     //
     // Submits operations to change the database.
     //
-    async function submitOperations(collectionOps: ICollectionOps): Promise<void> {
+    async function submitOperations(ops: IAssetOp[]): Promise<void> {
         //
         // Update the asset locally.
         //
-        await indexeddbSink.submitOperations(collectionOps);
+        await indexeddbSink.submitOperations(ops);
 
         //
         // Queue the update for upload to the cloud.
         //
-        await outgoingSink.submitOperations(collectionOps);
+        await outgoingSink.submitOperations(ops);
     }
 
     //

@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c6399164637613e9ef47",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c6399164637613e9ef47",
-            "origFileName": "Wlvi9rtFOm8.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 4419,
-            "height": 6628,
-            "description": "a fountain in the middle of a courtyard",
-            "location": null,
-            "searchText": " a fountain in the middle of a courtyard",
-            "properties": {
-              "exif": {
-                "make": "SONY",
-                "model": "ILCE-7M4",
-                "name": "SONY, ILCE-7M4",
-                "exposure_time": "1/400",
-                "aperture": "2.8",
-                "focal_length": "35.0",
-                "iso": 125
-              }
-            },
-            "hash": "64743a92a61a587730ceb444ccfcb535126315e993ae2932224a0716aa544c09",
-            "fileDate": "2023-02-01T17:35:29Z",
-            "photoDate": "2023-02-01T17:35:29Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c6399164637613e9ef47",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "Wlvi9rtFOm8.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 4419,
+      "height": 6628,
+      "description": "a fountain in the middle of a courtyard",
+      "location": null,
+      "searchText": " a fountain in the middle of a courtyard",
+      "properties": {
+        "exif": {
+          "make": "SONY",
+          "model": "ILCE-7M4",
+          "name": "SONY, ILCE-7M4",
+          "exposure_time": "1/400",
+          "aperture": "2.8",
+          "focal_length": "35.0",
+          "iso": 125
         }
-      ]
+      },
+      "hash": "64743a92a61a587730ceb444ccfcb535126315e993ae2932224a0716aa544c09",
+      "fileDate": "2023-02-01T17:35:29Z",
+      "photoDate": "2023-02-01T17:35:29Z"
     }
-  ]
+  }
 }

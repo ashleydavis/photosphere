@@ -1,38 +1,32 @@
 {
-  "ops": [
-    {
-      "id": "63e9c6389164637613e9ef3f",
-      "ops": [
-        {
-          "type": "set",
-          "fields": {
-            "_id": "63e9c6389164637613e9ef3f",
-            "origFileName": "mx3RynEbCV4.jpg",
-            "contentType": "image/jpeg",
-            "thumbContentType": "image/jpeg",
-            "displayContentType": "image/jpeg",
-            "width": 5464,
-            "height": 3640,
-            "description": "a winding road in the middle of a snow covered forest",
-            "location": "Weinheim, Deutschland",
-            "searchText": " a winding road in the middle of a snow covered forest Weinheim, Deutschland",
-            "properties": {
-              "exif": {
-                "make": "DJI",
-                "model": "FC3411",
-                "name": "DJI, FC3411",
-                "exposure_time": "1/640",
-                "aperture": "2.8",
-                "focal_length": "8.4",
-                "iso": 100
-              }
-            },
-            "hash": "07e825f74bd7841abd03e1eda0ffcdb045abd19fcb3ebf2661daec1afc94b85b",
-            "fileDate": "2023-01-27T22:48:28Z",
-            "photoDate": "2023-01-27T22:48:28Z"
-          }
+  "clientId": "some-client-id",
+  "id": "63e9c6389164637613e9ef3f",
+  "op": {
+    "type": "set",
+    "fields": {
+      "origFileName": "mx3RynEbCV4.jpg",
+      "contentType": "image/jpeg",
+      "thumbContentType": "image/jpeg",
+      "displayContentType": "image/jpeg",
+      "width": 5464,
+      "height": 3640,
+      "description": "a winding road in the middle of a snow covered forest",
+      "location": "Weinheim, Deutschland",
+      "searchText": " a winding road in the middle of a snow covered forest Weinheim, Deutschland",
+      "properties": {
+        "exif": {
+          "make": "DJI",
+          "model": "FC3411",
+          "name": "DJI, FC3411",
+          "exposure_time": "1/640",
+          "aperture": "2.8",
+          "focal_length": "8.4",
+          "iso": 100
         }
-      ]
+      },
+      "hash": "07e825f74bd7841abd03e1eda0ffcdb045abd19fcb3ebf2661daec1afc94b85b",
+      "fileDate": "2023-01-27T22:48:28Z",
+      "photoDate": "2023-01-27T22:48:28Z"
     }
-  ]
+  }
 }
