@@ -206,7 +206,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             assetId: galleryItem._id,
             op: {
                 type: "set",
-                fields: galleryItem,
+                fields: galleryItemToAsset(galleryItem),
             },
         }]);
     }
@@ -218,6 +218,27 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         return {
             ...asset,
             group: dayjs(asset.sortDate).format("MMM, YYYY"),
+        };
+    }
+
+    //
+    // Converts a gallery item to an asset.
+    //
+    function galleryItemToAsset(galleryItem: IGalleryItem): IAsset {
+        return {
+            _id: galleryItem._id,
+            width: galleryItem.width,
+            height: galleryItem.height,
+            origFileName: galleryItem.origFileName,
+            hash: galleryItem.hash,
+            location: galleryItem.location,
+            fileDate: galleryItem.fileDate,
+            photoDate: galleryItem.photoDate,
+            sortDate: galleryItem.sortDate,
+            uploadDate: dayjs().toISOString(),
+            properties: galleryItem.properties,
+            labels: galleryItem.labels,
+            description: galleryItem.description,
         };
     }
 
