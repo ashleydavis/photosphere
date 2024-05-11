@@ -4,7 +4,7 @@
 
 import { useApi } from "../api-context";
 import { IGallerySink } from "./gallery-sink";
-import { IAssetOp } from "../../def/ops";
+import { IDatabaseOp } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
 
 //
@@ -27,7 +27,7 @@ export function useCloudGallerySink(): IGallerySink {
     //
     // Submits operations to change the database.
     //
-    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
         await api.submitOperations(ops);
     }
 

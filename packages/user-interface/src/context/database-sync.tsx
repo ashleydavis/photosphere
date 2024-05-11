@@ -8,7 +8,7 @@ import { IGallerySource } from "./source/gallery-source";
 import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
-import { IAssetOp } from "../def/ops";
+import { IDatabaseOp } from "../def/ops";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -77,19 +77,20 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     const assets = await cloudSource.getAssets(collectionId);
                     console.log(`Initial sync for ${collectionId}: ${assets.length} assets`);
 
-                    const ops: IAssetOp[] = assets.map(asset => ({ 
+                    const databaseOps: IDatabaseOp[] = assets.map(asset => ({ 
                         collectionId,
-                        assetId: asset._id,
+                        collectionName: "metadata",
+                        recordId: asset._id,
                         op: {
                             type: "set",
                             fields: asset,
                         },
                     }));
-                    await indexeddbSink.submitOperations(ops);
+                    await indexeddbSink.submitOperations(databaseOps);
 
                     if (!isProduction) {
-                        if (ops.length > 0) {
-                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), ops: ops });
+                        if (databaseOps.length > 0) {
+                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), ops: databaseOps });
                         }
                     }
 
@@ -178,7 +179,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     await storeRecord<any>("debug", "updates-sent", { _id: uuid(), update: outgoingUpdate });
                 }
 
-                console.log(`Processed outgoing update: ${outgoingUpdate.op.collectionId}/${outgoingUpdate.op.assetId}`);
+                console.log(`Processed outgoing update: ${outgoingUpdate.op.collectionId}/${outgoingUpdate.op.recordId}`);
             }
         }
         catch (err) {
@@ -221,10 +222,10 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 //
                 indexeddbSink.submitOperations(journalResult.ops.map(journalRecord => ({
                     collectionId,
-                    assetId: journalRecord.assetId,
+                    collectionName: journalRecord.collectionName,
+                    recordId: journalRecord.recordId,
                     op: journalRecord.op,
                 })));
-
                     
                 if (!isProduction) {
                     await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: journalResult });

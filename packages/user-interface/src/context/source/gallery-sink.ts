@@ -3,7 +3,7 @@
 //
 
 import { IAssetData } from "../../def/asset-data";
-import { IAssetOp } from "../../def/ops";
+import { IDatabaseOp } from "../../def/ops";
 
 export interface IGallerySink {
     //
@@ -14,7 +14,7 @@ export interface IGallerySink {
     //
     // Submits operations to change the database.
     //
-    submitOperations(ops: IAssetOp[]): Promise<void>;
+    submitOperations(ops: IDatabaseOp[]): Promise<void>;
 
     //
     // Check if the asset that has already been uploaded with a particular hash.

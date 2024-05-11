@@ -1,5 +1,5 @@
 //
-// An operation to apply to an asset.
+// An operation to apply to a database record.
 //
 export interface IOp {
     //
@@ -12,7 +12,7 @@ export interface IOp {
 }
 
 //
-// An operation to set a field on an asset.
+// An operation to set a field on a database record.
 //
 export interface ISetOp extends IOp {
     //
@@ -73,16 +73,21 @@ export interface IPullOp extends IOp {
 //
 export type IOpSelection = ISetOp | IPushOp | IPullOp;
 
-export interface IAssetOp {
+export interface IDatabaseOp {
     //
     // The id of the collection to which this operation is applied.
     //
     collectionId: string; 
 
     //
+    // The name of the database collection to which the operation is applied.
+    //
+    collectionName: string;
+
+    //
     // The id of the asset to which operations are applied.
     //
-    assetId: string;    
+    recordId: string;
 
     //
     // The operation to apply to the asset.
@@ -91,9 +96,9 @@ export interface IAssetOp {
 }
 
 //
-// Records an operation against a particular asset.
+// Records an operation against a particular database record.
 //
-export interface IAssetOpRecord {
+export interface IDatabaseOpRecord {
     //
     // The date the server received the operation.
     //
@@ -105,9 +110,14 @@ export interface IAssetOpRecord {
     clientId: string;
 
     //
-    // The id of the asset to which the operation is applied.
+    // The name of the database collection to which the operation is applied.
     //
-    assetId: string;
+    collectionName: string;
+
+    //
+    // The id of the database record to which the operation is applied.
+    //
+    recordId: string;
 
     //
     // The operation that was applied to the asset.

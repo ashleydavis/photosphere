@@ -2,6 +2,7 @@
 // Implements the database on top of storage.
 //
 
+import { IDatabaseOp, IOpSelection } from "../lib/ops";
 import { IStorage } from "./storage";
 
 //
@@ -19,50 +20,61 @@ export interface IPage<RecordT> {
     next?: string;
 }
 
+//
+// Implements a collection of records in the database.
+//
 export interface IDatabaseCollection<RecordT = any> {
     //
     // Sets a new record to the database.
     //
-    setOne(path: string, id: string, record: RecordT): Promise<void>;
+    setOne(id: string, record: RecordT): Promise<void>;
 
     //
     // Gets one record by id.
     //
-    getOne(path: string, id: string): Promise<RecordT | undefined>;
+    getOne(id: string): Promise<RecordT | undefined>;
 
     //
     // Updates a record in the database.
     //
-    updateOne(path: string, id: string, recordUpdate: Partial<RecordT>): Promise<void>;
+    updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void>;
+
+    //
+    // Applies an operation to the database.
+    //
+    applyOperation(databaseOp: IDatabaseOp): Promise<void>;
 
     //
     // Lists all records in the database.
     //
-    listAll(path: string, max: number, next?: string): Promise<IPage<string>>;
+    listAll(max: number, next?: string): Promise<IPage<string>>;
 
     //
     // Gets a page of records from the database.
     //
-    getAll(path: string, max: number, next?: string): Promise<IPage<RecordT>>;
+    getAll(max: number, next?: string): Promise<IPage<RecordT>>;
 }
 
-export class DatabaseCollection<RecordT = any> implements IDatabaseCollection<RecordT> {
+//
+// Read and write the database to storage.
+//
+export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollection<RecordT> {
 
-    constructor(private storage: IStorage) {
+    constructor(private storage: IStorage, private path: string) {
     }
 
     //
     // Sets a new record to the database.
     //
-    async setOne(path: string, id: string, record: RecordT): Promise<void> {
-        await this.storage.write(path, id, "application/json", Buffer.from(JSON.stringify(record)));
+    async setOne(id: string, record: RecordT): Promise<void> {
+        await this.storage.write(this.path, id, "application/json", Buffer.from(JSON.stringify(record)));
     }
 
     //
     // Gets one record by id.
     // 
-    async getOne(path: string, id: string): Promise<RecordT | undefined> {
-        const buffer = await this.storage.read(path, id);
+    async getOne(id: string): Promise<RecordT | undefined> {
+        const buffer = await this.storage.read(this.path, id);
         if (!buffer) {
             return undefined;
         }
@@ -73,18 +85,70 @@ export class DatabaseCollection<RecordT = any> implements IDatabaseCollection<Re
     // 
     // Updates a record in the database.
     //
-    async updateOne(path: string, id: string, recordUpdate: Partial<RecordT>): Promise<void> {
-        const buffer = await this.storage.read(path, id);
+    async updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void> {
+        const buffer = await this.storage.read(this.path, id);
         const asset = JSON.parse(buffer!.toString('utf-8'));
         const updated = Object.assign({}, asset, recordUpdate);
-        await this.storage.write(path, id, "application/json", Buffer.from(JSON.stringify(updated)));    
+        await this.storage.write(this.path, id, "application/json", Buffer.from(JSON.stringify(updated)));    
     }
 
     //
-    // Lists all recores in the database.
+    // Applies an operation to the database.
     //
-    async listAll(path: string, max: number, next?: string): Promise<IPage<string>> {
-        const listResult = await this.storage.list(path, max, next);
+    async applyOperation(databaseOp: IDatabaseOp): Promise<void> {
+        const record = await this.getOne(databaseOp.recordId);
+
+        let updatedAsset = record as any || {};
+
+        if (!record) {
+            // Set the asset id when upserting.
+            updatedAsset._id = databaseOp.recordId;
+        }
+
+        this._applyOperation(databaseOp.op, updatedAsset);
+
+        await this.setOne(databaseOp.recordId, updatedAsset);
+    }
+
+    //
+    // Applies a single database operation to the field set for an asset.
+    //
+    private _applyOperation(op: IOpSelection, fields: any): void {
+        switch (op.type) {
+            case "set": {
+                for (const [name, value] of Object.entries(op.fields)) {
+                    fields[name] = value;
+                }
+                break;
+            }
+
+            case "push": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
+                }
+                fields[op.field].push(op.value);
+                break;
+            }
+
+            case "pull": {
+                if (!fields[op.field]) {
+                    fields[op.field] = [];
+                }
+                fields[op.field] = fields[op.field].filter((v: any) => v !== op.value);
+                break;
+            }
+
+            default: {
+                throw new Error(`Invalid operation type: ${(op as any).type}`);
+            }
+        }
+    }
+    
+    //
+    // Lists all records in the database.
+    //
+    async listAll(max: number, next?: string): Promise<IPage<string>> {
+        const listResult = await this.storage.list(this.path, max, next);
         return {
             records: listResult.assetIds,
             next: listResult.continuation,
@@ -94,11 +158,11 @@ export class DatabaseCollection<RecordT = any> implements IDatabaseCollection<Re
     //
     // Gets a page of records from the database.
     //
-    async getAll(path: string, max: number, next?: string): Promise<IPage<RecordT>> {
-        const listResult = await this.storage.list(path, max, next);
+    async getAll(max: number, next?: string): Promise<IPage<RecordT>> {
+        const listResult = await this.storage.list(this.path, max, next);
         const records: RecordT[] = [];
         for (const assetId of listResult.assetIds) {
-            records.push((await this.getOne(path, assetId))!);
+            records.push((await this.getOne(assetId))!);
         }
         
         return {

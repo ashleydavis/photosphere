@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "./auth-context";
-import { IAssetOp, IOpSelection } from "../def/ops";
+import { IDatabaseOp, IOpSelection } from "../def/ops";
 import { IUser } from "../def/user";
 import { IAsset } from "../def/asset";
 import { IAssetData } from "../def/asset-data";
@@ -65,11 +65,16 @@ export interface IAssetMetadata {
 //
 // Records an operation against a particular asset.
 //
-export interface IAssetOpResult {
+export interface IDatabaseOpResult {
     //
-    // The id of the asset to which the operation is applied.
+    // The name of the collection to which the operation is applied.
     //
-    assetId: string;
+    collectionName: string;
+
+    //
+    // The id of the record to which the operation is applied.
+    //
+    recordId: string;
 
     //
     // The operation that was applied to the asset.
@@ -81,7 +86,7 @@ export interface IJournalResult {
     //
     // Operations recorded against the collection.
     //
-    ops: IAssetOpResult[];
+    ops: IDatabaseOpResult[];
 
     //
     // The id of the latest asset that has been retreived.
@@ -165,7 +170,7 @@ export interface IApiContext {
     //
     // Submits database operations to the cloud.
     //
-    submitOperations(ops: IAssetOp[]): Promise<void>;
+    submitOperations(ops: IDatabaseOp[]): Promise<void>;
 
     //
     // Gets the journal of operations that have been applied to the database.
@@ -387,7 +392,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Submits database operations to the cloud.
     //
-    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
 
         if (!clientId) {
             throw new Error(`Client id not set.`);

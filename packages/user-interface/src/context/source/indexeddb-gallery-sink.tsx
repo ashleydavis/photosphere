@@ -5,7 +5,7 @@
 import { IGallerySink } from "./gallery-sink";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
-import { IAssetOp, IOpSelection } from "../../def/ops";
+import { IDatabaseOp, IOpSelection } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
 
@@ -45,20 +45,20 @@ export function useIndexeddbGallerySink(): IGallerySink {
     //
     // Submits operations to change the database.
     //
-    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+    async function submitOperations(databaseOps: IDatabaseOp[]): Promise<void> {
 
-        for (const assetOp of ops) {
-            const assetId = assetOp.assetId;
-            const asset = await getRecord<IAsset>(`collection-${assetOp.collectionId}`, "metadata", assetId);
+        for (const databaseOp of databaseOps) {
+            const recordId = databaseOp.recordId;
+            const asset = await getRecord<IAsset>(`collection-${databaseOp.collectionId}`, databaseOp.collectionName, recordId);
             let fields = asset as any || {};
             if (!asset) {
-                // Set the asset id when upserting.
-                fields._id = assetId;
+                // Set the record id when upserting.
+                fields._id = recordId;
             }
 
-            applyOperation(assetOp.op, fields);
+            applyOperation(databaseOp.op, fields);
 
-            await storeRecord<IAsset>(`collection-${assetOp.collectionId}`, "metadata", fields);
+            await storeRecord<IAsset>(`collection-${databaseOp.collectionId}`, databaseOp.collectionName, fields);
         }        
     }
 

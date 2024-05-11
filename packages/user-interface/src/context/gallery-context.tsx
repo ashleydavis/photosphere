@@ -242,7 +242,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         await sink.submitOperations([{
             collectionId,
-            assetId: galleryItem._id,
+            collectionName: "metadata",
+            recordId: galleryItem._id,
             op: {
                 type: "set",
                 fields: galleryItemToAsset(galleryItem),
@@ -331,7 +332,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         await sink.submitOperations([{
             collectionId,
-            assetId: assetId,
+            collectionName: "metadata",
+            recordId: assetId,
             op: {
                 type: "set",
                 fields: partialGalleryItemToAsset(assetUpdate),

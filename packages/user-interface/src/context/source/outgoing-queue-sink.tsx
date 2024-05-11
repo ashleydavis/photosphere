@@ -5,7 +5,7 @@
 import { IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 import { useIndexeddb } from "../indexeddb-context";
-import { IAssetOp } from "../../def/ops";
+import { IDatabaseOp } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
 
 //
@@ -50,7 +50,7 @@ export interface IAssetUpdateRecord {
     //
     // Operations to apply to the database.
     //
-    op: IAssetOp;
+    op: IDatabaseOp;
 }
 
 //
@@ -76,7 +76,7 @@ export function useOutgoingQueueSink(): IGallerySink {
     //
     // Submits operations to change the database.
     //
-    async function submitOperations(ops: IAssetOp[]): Promise<void> {
+    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
         for (const op of ops) {
             await storeRecord<IAssetUpdateRecord>("user", "outgoing-asset-update", {
                 _id: uuid(),
