@@ -4,8 +4,8 @@
 
 import { useApi } from "../api-context";
 import { IGallerySink } from "./gallery-sink";
-import { IDatabaseOp } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
+import { IDatabaseOp } from "database";
 
 //
 // Use the "Cloud sink" in a component.

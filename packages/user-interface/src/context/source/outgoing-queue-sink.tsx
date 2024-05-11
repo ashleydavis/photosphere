@@ -5,8 +5,8 @@
 import { IGallerySink } from "./gallery-sink";
 import { uuid } from "../../lib/uuid";
 import { useIndexeddb } from "../indexeddb-context";
-import { IDatabaseOp } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
+import { IDatabaseOp } from "database";
 
 //
 // Records an asset upload in the outgoing queue.

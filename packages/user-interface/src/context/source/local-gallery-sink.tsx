@@ -2,8 +2,8 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
+import { IDatabaseOp } from "database";
 import { IAssetData } from "../../def/asset-data";
-import { IDatabaseOp } from "../../def/ops";
 import { IGallerySink } from "./gallery-sink";
 
 //

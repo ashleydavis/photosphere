@@ -5,8 +5,7 @@ import dayjs from "dayjs";
 import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IUser } from "./lib/user";
-import { IDatabase } from "./services/database";
-import { IDatabaseOp } from "database";
+import { IDatabase, IDatabaseOp } from "database";
 
 declare global {
     namespace Express {

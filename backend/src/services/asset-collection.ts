@@ -6,8 +6,7 @@ import { Readable } from "stream";
 import { IAsset } from "../lib/asset";
 import { IStorage } from "./storage";
 import { binarySearch } from "../lib/binary-search";
-import { IDatabase } from "./database";
-import { IDatabaseOp, IDatabaseOpRecord, IOpSelection } from "database";
+import { IDatabase, IDatabaseOp, IDatabaseOpRecord, IOpSelection, applyOperationToDb } from "database";
 
 export interface IAssetStream {
     //
@@ -168,7 +167,7 @@ export class AssetCollection implements IAssetCollection {
     // Applies an operation to the database.
     //
     async applyOperation(databaseOp: IDatabaseOp, clientId: string): Promise<void> {
-        await this.database.applyOperation(databaseOp, clientId);
+        await applyOperationToDb(this.database, databaseOp, clientId);
     }
 
     //

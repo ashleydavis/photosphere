@@ -1,4 +1,5 @@
-import { applyOperation } from "../../lib/apply-operation";
+import exp from "constants";
+import { applyOperation, applyOperationToCollection, applyOperationToDb } from "../../lib/apply-operation";
 
 describe("apply operation", () => {
     test("can set field", () => {
@@ -41,5 +42,77 @@ describe("apply operation", () => {
         const fields = {};
         applyOperation({ type: "pull", field: "tags", value: "foo" }, fields);
         expect(fields).toEqual({ tags: [] });
+    });
+});
+
+describe("apply operation to collection", () => {
+    test("can apply operation", async () => {
+        const mockCollection: any = {
+            getOne: async () => ({}),
+            setOne: jest.fn(),
+        };
+        await applyOperationToCollection(mockCollection, {
+            collectionId: "XYZ",
+            collectionName: "ABC",
+            recordId: "123",
+            op: {
+                type: "set",
+                fields: {
+                    name: "Alice"
+                },
+            }
+        });
+        expect(mockCollection.setOne).toHaveBeenCalledWith("123", { name: "Alice" });
+    });
+
+});
+
+describe("apply operation to database", () => {
+    test("can apply operation", async () => {
+        const mockJournal: any = {
+            setOne: jest.fn(),
+        };
+        const mockCollection: any = {
+            getOne: async () => ({}),
+            setOne: jest.fn(),
+        };
+        const mockDatabase: any = {
+            collection(collectionName: string) {
+                if (collectionName === "journal") {
+                    return mockJournal;
+                }
+
+                if (collectionName === "ABC") {
+                    return mockCollection;
+                }
+
+                throw new Error(`Unknown collection: ${collectionName}`);
+            },
+        };
+        await applyOperationToDb(mockDatabase, {
+            collectionId: "XYZ",
+            collectionName: "ABC",
+            recordId: "123",
+            op: {
+                type: "set",
+                fields: {
+                    name: "Alice"
+                },
+            }
+        }, "some-client");
+
+        expect(mockJournal.setOne).toHaveBeenCalledWith(expect.any(String), {
+            clientId: "some-client",
+            collectionName: "ABC",
+            recordId: "123",
+            op: {
+                type: "set",
+                fields: {
+                    name: "Alice",
+                },
+            },            
+            serverTime: expect.any(String),
+        });
+        expect(mockCollection.setOne).toHaveBeenCalledWith("123", { name: "Alice" });
     });
 });

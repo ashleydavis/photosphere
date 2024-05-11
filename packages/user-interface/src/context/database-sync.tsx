@@ -8,7 +8,7 @@ import { IGallerySource } from "./source/gallery-source";
 import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
-import { IDatabaseOp } from "../def/ops";
+import { IDatabaseOp } from "database";
 
 const SYNC_POLL_PERIOD = 1000;
 

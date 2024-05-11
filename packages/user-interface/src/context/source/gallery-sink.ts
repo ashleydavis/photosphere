@@ -2,8 +2,8 @@
 // Interface for uploading and updating assets.
 //
 
+import { IDatabaseOp } from "database";
 import { IAssetData } from "../../def/asset-data";
-import { IDatabaseOp } from "../../def/ops";
 
 export interface IGallerySink {
     //
