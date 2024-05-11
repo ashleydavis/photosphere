@@ -5,6 +5,7 @@ import { IGallerySink } from "./source/gallery-sink";
 import dayjs from "dayjs";
 import { IAsset } from "../def/asset";
 import { useDatabaseSync } from "./database-sync";
+import flexsearch from "flexsearch";
 
 export interface IGalleryContext {
 
@@ -119,7 +120,13 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     const [ collectionId, setCollectionId ] = useState<string | undefined>(undefined);
 
     //
-    // Assets that have been loaded from the backend.
+    // Asset that have been loaded from storage.
+    // These assets are unsorted.
+    //
+    const loadedAssets = useRef<Map<string, IGalleryItem>>(new Map<string, IGalleryItem>());
+
+    //
+    // Assets produced by the search and sorted.
     //
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
@@ -127,6 +134,17 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // The item in the gallery that is currently selected.
     //
     const [selectedItem, setSelectedItem] = useState<ISelectedGalleryItem | undefined>(undefined);
+
+    //
+    // References the search index.
+    //
+    const searchIndexRef = useRef<flexsearch.Document<IGalleryItem, true>>(new flexsearch.Document<IGalleryItem, true>({
+        preset: "memory",
+        document: {
+            id: "_", // Set when adding a document.
+            index: [ "location", "description", "labels" ],
+        },
+    }));
 
     //
     // A cache entry for a loaded asset.
@@ -163,7 +181,6 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     useEffect(() => {
         setSelectedItem(undefined);
-
     }, [searchText]);
 
     //
@@ -192,7 +209,13 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
 
         const newAssets = await source.getAssets(_collectionId);
         const galleryItems = newAssets.map(assetToGalleryItem);
-        setAssets(galleryItems);
+        for (let assetIndex = 0; assetIndex < galleryItems.length; assetIndex++) {
+            const item = galleryItems[assetIndex];
+            loadedAssets.current.set(item._id, item);
+            searchIndexRef.current.add(item._id, item);
+        }
+
+        setAssets(applySort(galleryItems));
     }
 
     //
@@ -210,6 +233,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Add the asset for display in the UI.
         //
+        loadedAssets.current.set(galleryItem._id, galleryItem);
+        searchIndexRef.current.add(galleryItem._id, galleryItem);
         setAssets([ galleryItem, ...assets ]);
 
         //
@@ -291,23 +316,19 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Update assets in memory for display in the UI.
         //
-        setAssets(prevAssets => {
-            const updatedGalleryItem = {
-                ...prevAssets[assetIndex],
-                ...assetUpdate,
-            };
-            return [
-                ...prevAssets.slice(0, assetIndex),
-                updatedGalleryItem,
-                ...prevAssets.slice(assetIndex + 1),
-            ];
-        });
+        const assetId = assets[assetIndex]._id;
+        const updatedItem: IGalleryItem = { ...loadedAssets.current.get(assetId)!, ...assetUpdate };
+        loadedAssets.current.set(assetId, updatedItem);
+        searchIndexRef.current.add(assetId, updatedItem);
+        setAssets([
+            ...assets.slice(0, assetIndex),
+            updatedItem,
+            ...assets.slice(assetIndex + 1),
+        ]);
 
         //
         // Update the asset in the database.
         //
-        const assetId = assets[assetIndex]._id;
-
         await sink.submitOperations([{
             collectionId,
             assetId: assetId,
@@ -465,6 +486,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             return;
         }
 
+        setAssets(applySort(searchAssets(newSearchText)));
         setSearchText(newSearchText);
     }
 
@@ -473,6 +495,54 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     async function clearSearch(): Promise<void> {
         await search("");
+    }
+
+    //
+    // Sort all assets.
+    //
+    function applySort(items: IGalleryItem[]): IGalleryItem[] {
+        return items.sort((a, b) => { // Warning: this mutates the array. Should be ok.
+            if (a.sortDate < b.sortDate) {
+                return 1;
+            }
+            else if (a.sortDate > b.sortDate) {
+                return -1;
+            }
+            else {
+                return 0;
+            }
+        });
+    }
+
+    //
+    // Search for assets based on text input.
+    // 
+    function searchAssets(searchText: string): IGalleryItem[] {
+        if (searchText === "") {
+            return Array.from(loadedAssets.current.values());
+        }
+
+        const searchResult = searchIndexRef.current.search(searchText);
+
+        let searchedAssets: IGalleryItem[] = [];
+
+        let searchedSet = new Set<string>();
+
+        for (const searchTerm of searchResult) {
+            for (const result of searchTerm.result) {
+                const assetId = result as string;
+                if (searchedSet.has(assetId)) {
+                    // There search can return the same result multiple times.
+                    // We don't want to include an asset more than once though.
+                    continue;
+                }
+
+                searchedSet.add(assetId);
+                searchedAssets.push(loadedAssets.current.get(assetId)!);
+            }
+        }        
+
+        return searchedAssets
     }
 
     const value: IGalleryContext = {
