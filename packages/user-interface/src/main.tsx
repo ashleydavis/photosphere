@@ -128,10 +128,10 @@ export function Main({ computerPage }: IMainProps) {
                             <i className="fa-solid fa-bars"></i>
                         </button>
 
-                        <h1 className="ml-1 sm:ml-4">Photosphere</h1>
+                        <h1 className="ml-3 sm:ml-4">Photosphere</h1>
 
                         <button
-                            className="ml-2 mr-1 sm:ml-8 sm:mr-3"
+                            className="ml-4 mr-1 sm:ml-8 sm:mr-3"
                         	onClick={event => {
                             	setOpenSearch(true);
                             }}
@@ -175,7 +175,7 @@ export function Main({ computerPage }: IMainProps) {
                         </NavLink>
 
                         {!isAuthenticated && (
-                            <div className="ml-auto mr-1 sm:mr-4">
+                            <div className="ml-auto mr-2 sm:mr-4">
                                 <button
                                     onClick={login}
                                     >
@@ -186,7 +186,7 @@ export function Main({ computerPage }: IMainProps) {
                         )}
 
                         {isAuthenticated && (
-                            <div className="ml-auto mr-1 sm:mr-4">
+                            <div className="ml-auto mr-2 sm:mr-4">
                                 <button
                                     onClick={logout}
                                     >
