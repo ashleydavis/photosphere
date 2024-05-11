@@ -241,7 +241,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         // Add the asset to the database.
         //
         await sink.submitOperations([{
-            collectionId,
+            databaseName: collectionId,
             collectionName: "metadata",
             recordId: galleryItem._id,
             op: {
@@ -331,7 +331,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         // Update the asset in the database.
         //
         await sink.submitOperations([{
-            collectionId,
+            databaseName: collectionId,
             collectionName: "metadata",
             recordId: assetId,
             op: {

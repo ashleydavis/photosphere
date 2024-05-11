@@ -36,7 +36,7 @@ export class StorageAssetDatabase implements IAssetDatabase {
     //
     async applyOperations(ops: IDatabaseOp[], clientId: string): Promise<void> {
         for (const op of ops) {
-            const assetCollection = this.assetCollection(op.collectionId);
+            const assetCollection = this.assetCollection(op.databaseName);
             await assetCollection.applyOperation(op, clientId);
         }
     }

@@ -49,7 +49,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
         for (const databaseOp of databaseOps) {
             const recordId = databaseOp.recordId;
-            const asset = await getRecord<IAsset>(`collection-${databaseOp.collectionId}`, databaseOp.collectionName, recordId);
+            const asset = await getRecord<IAsset>(`collection-${databaseOp.databaseName}`, databaseOp.collectionName, recordId);
             let fields = asset as any || {};
             if (!asset) {
                 // Set the record id when upserting.
@@ -58,7 +58,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
             applyOperation(databaseOp.op, fields);
 
-            await storeRecord<IAsset>(`collection-${databaseOp.collectionId}`, databaseOp.collectionName, fields);
+            await storeRecord<IAsset>(`collection-${databaseOp.databaseName}`, databaseOp.collectionName, fields);
         }        
     }
 

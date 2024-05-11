@@ -78,7 +78,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     console.log(`Initial sync for ${collectionId}: ${assets.length} assets`);
 
                     const databaseOps: IDatabaseOp[] = assets.map(asset => ({ 
-                        collectionId,
+                        databaseName: collectionId,
                         collectionName: "metadata",
                         recordId: asset._id,
                         op: {
@@ -179,7 +179,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                     await storeRecord<any>("debug", "updates-sent", { _id: uuid(), update: outgoingUpdate });
                 }
 
-                console.log(`Processed outgoing update: ${outgoingUpdate.op.collectionId}/${outgoingUpdate.op.recordId}`);
+                console.log(`Processed outgoing update: ${outgoingUpdate.op.databaseName}/${outgoingUpdate.op.recordId}`);
             }
         }
         catch (err) {
@@ -221,7 +221,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 // Apply incoming changes to the local database.
                 //
                 indexeddbSink.submitOperations(journalResult.ops.map(journalRecord => ({
-                    collectionId,
+                    databaseName: collectionId,
                     collectionName: journalRecord.collectionName,
                     recordId: journalRecord.recordId,
                     op: journalRecord.op,

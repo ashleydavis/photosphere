@@ -75,9 +75,9 @@ export type IOpSelection = ISetOp | IPushOp | IPullOp;
 
 export interface IDatabaseOp {
     //
-    // The id of the collection to which this operation is applied.
+    // The name of the database to which this operation is applied.
     //
-    collectionId: string; 
+    databaseName: string; 
 
     //
     // The name of the database collection to which the operation is applied.

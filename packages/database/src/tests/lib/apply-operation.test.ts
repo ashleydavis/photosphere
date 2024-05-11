@@ -52,7 +52,7 @@ describe("apply operation to collection", () => {
             setOne: jest.fn(),
         };
         await applyOperationToCollection(mockCollection, {
-            collectionId: "XYZ",
+            databaseName: "XYZ",
             collectionName: "ABC",
             recordId: "123",
             op: {
@@ -90,7 +90,7 @@ describe("apply operation to database", () => {
             },
         };
         await applyOperationToDb(mockDatabase, {
-            collectionId: "XYZ",
+            databaseName: "XYZ",
             collectionName: "ABC",
             recordId: "123",
             op: {
