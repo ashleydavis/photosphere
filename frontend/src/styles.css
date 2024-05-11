@@ -22,7 +22,6 @@ body {
 #main {
     width: 100vw;
     height: calc(100vh - 51px);
-    padding-top: 51px;
     overflow: hidden;
 }
 
