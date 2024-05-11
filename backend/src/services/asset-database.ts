@@ -258,9 +258,14 @@ export class AssetDatabase {
         let latestUpdateId: string | undefined = undefined;
         let next: string | undefined = undefined;
 
-        while (!done) {
+        while (!done) { 
             const result = await this.journal.listAll(`collections/${collectionId}/journal`, 1000, next);
             next = result.next;
+           
+            if (result.next === undefined) {
+                // No more journal records to fetch.
+                done = true;
+            }
             
             let journalRecordIds = result.records;
             if (latestUpdateId === undefined && journalRecordIds.length > 0) {
