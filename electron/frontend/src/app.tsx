@@ -1,8 +1,6 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AuthContextProvider, GalleryContextProvider, Main, SearchContextProvider, UploadContextProvider, useCloudGallerySink, useCloudGallerySource } from "user-interface";
-import { ComputerPage } from "./pages/computer";
-import { ScanContextProvider } from "./context/scan-context";
+import { ApiContextProvider, AuthContextProvider, GalleryContextProvider, Main, UploadContextProvider, useCloudGallerySink, useCloudGallerySource } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 function GallerySetup() {
@@ -11,16 +9,14 @@ function GallerySetup() {
     const sink = useCloudGallerySink();
 
     return (
-        <SearchContextProvider>
-            <GalleryContextProvider 
-                source={source}
-                sink={sink}
-                >
-                <UploadContextProvider>
-                    <Main />
-                </UploadContextProvider>
-            </GalleryContextProvider>
-        </SearchContextProvider>
+        <GalleryContextProvider 
+            source={source}
+            sink={sink}
+            >
+            <UploadContextProvider>
+                <Main />
+            </UploadContextProvider>
+        </GalleryContextProvider>
     );
 }
 

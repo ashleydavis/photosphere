@@ -1,8 +1,6 @@
 import React, { useEffect } from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AuthContextProvider, GalleryContextProvider, Main, SearchContextProvider, UploadContextProvider, useCloudGallerySink, useCloudGallerySource } from "user-interface";
-import { ComputerPage } from "./pages/computer";
-import { ScanContextProvider } from "./context/scan-context";
+import { ApiContextProvider, AuthContextProvider, GalleryContextProvider, Main, UploadContextProvider, useCloudGallerySink, useCloudGallerySource } from "user-interface";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -13,16 +11,14 @@ function GallerySetup() {
     const sink = useCloudGallerySink();
 
     return (
-        <SearchContextProvider>
-            <GalleryContextProvider 
-                source={source}
-                sink={sink}
-                >
-                <UploadContextProvider>
-                    <Main />
-                </UploadContextProvider>
-            </GalleryContextProvider>
-        </SearchContextProvider>
+        <GalleryContextProvider 
+            source={source}
+            sink={sink}
+            >
+            <UploadContextProvider>
+                <Main />
+            </UploadContextProvider>
+        </GalleryContextProvider>
     );
 }
 

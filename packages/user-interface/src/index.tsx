@@ -3,7 +3,6 @@ export { IUser } from './def/user';
 export { IAsset } from './def/asset';
 export { AuthContextProvider, isProduction } from './context/auth-context';
 export { ApiContextProvider } from './context/api-context';
-export { SearchContextProvider } from './context/search-context';
 export { IGallerySource as IGallerySourceContext } from './context/source/gallery-source';
 export { useCloudGallerySource } from './context/source/cloud-gallery-source';
 export { useCloudGallerySink } from './context/source/cloud-gallery-sink';

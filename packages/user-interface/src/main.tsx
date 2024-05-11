@@ -4,8 +4,8 @@ import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
-import { useSearch } from "./context/search-context";
 import { isProduction, useAuth } from "./context/auth-context";
+import { useGallery } from "./context/gallery-context";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -40,7 +40,7 @@ export function Main({ computerPage }: IMainProps) {
         searchText,
         search,
         clearSearch,
-    } = useSearch();
+    } = useGallery();
 
     //
     // Interface to the upload context.

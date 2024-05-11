@@ -1,7 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { IGallerySource } from "./source/gallery-source";
-import { useSearch } from "./search-context";
 import { IGallerySink } from "./source/gallery-sink";
 import dayjs from "dayjs";
 import { IAsset } from "../def/asset";
@@ -73,6 +72,21 @@ export interface IGalleryContext {
     // Clears the currently selected gallery item.
     //
     clearSelectedItem(): void;
+
+    //
+    // The current search text.
+    //
+    searchText: string;
+
+    //
+    // Search for assets based on text input.
+    //
+    search(searchText: string): Promise<void>;
+
+    //
+    // Clears the current search.
+    //
+    clearSearch(): Promise<void>;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -93,11 +107,6 @@ export interface IGalleryContextProviderProps {
 }
 
 export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
-
-    //
-    // Gets search text.
-    //
-    const { searchText } = useSearch();
 
     // 
     // Interface to database sync.
@@ -143,6 +152,11 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // Caches loaded assets.
     //
     const assetCache = useRef<Map<string, IAssetCacheEntry>>(new Map<string, IAssetCacheEntry>());
+
+    //
+    // The current search that has been executed.
+    //
+    const [ searchText, setSearchText ] = useState<string>("");
 
     //
     // Clears the selection when search text changes.
@@ -435,7 +449,34 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         setSelectedItem(undefined);
     }
 
+    //
+    // Sets the search text for finding assets.
+    // Passing in empty string or undefined gets all assets.
+    // This does a gallery reset when the search term has changed.
+    //
+    async function search(newSearchText: string): Promise<void> {
+        
+        console.log(`Setting asset search ${newSearchText}`);
+
+        if (searchText === newSearchText) {
+            //
+            // No change.
+            //
+            return;
+        }
+
+        setSearchText(newSearchText);
+    }
+
+    //
+    // Clears the current search.
+    //
+    async function clearSearch(): Promise<void> {
+        await search("");
+    }
+
     const value: IGalleryContext = {
+        searchText,
         assets,
         loadAssets,
         addAsset,
@@ -449,6 +490,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         selectedItem,
         setSelectedItem,
         clearSelectedItem,
+        search,
+        clearSearch,
     };
     
     return (
