@@ -11,3 +11,4 @@ mobile/frontend/build
 frontend/playwright-report
 electron/tmp
 testbed/build
+packages/database/build

@@ -5,9 +5,9 @@
 import { Readable } from "stream";
 import { IAsset } from "../lib/asset";
 import { IStorage } from "./storage";
-import { IDatabaseOp, IDatabaseOpRecord, IOpSelection } from "../lib/ops";
 import { binarySearch } from "../lib/binary-search";
 import { IDatabase } from "./database";
+import { IDatabaseOp, IDatabaseOpRecord, IOpSelection } from "database";
 
 export interface IAssetStream {
     //

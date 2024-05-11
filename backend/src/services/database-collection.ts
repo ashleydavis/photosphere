@@ -2,7 +2,7 @@
 // Implements the database on top of storage.
 //
 
-import { IDatabaseOp, IOpSelection } from "../lib/ops";
+import { IDatabaseOp, applyOperation } from "database";
 import { IStorage } from "./storage";
 
 //
@@ -105,45 +105,12 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
             updatedAsset._id = databaseOp.recordId;
         }
 
-        this._applyOperation(databaseOp.op, updatedAsset);
+        applyOperation(databaseOp.op, updatedAsset);
 
         await this.setOne(databaseOp.recordId, updatedAsset);
     }
 
-    //
-    // Applies a single database operation to the field set for an asset.
-    //
-    private _applyOperation(op: IOpSelection, fields: any): void {
-        switch (op.type) {
-            case "set": {
-                for (const [name, value] of Object.entries(op.fields)) {
-                    fields[name] = value;
-                }
-                break;
-            }
 
-            case "push": {
-                if (!fields[op.field]) {
-                    fields[op.field] = [];
-                }
-                fields[op.field].push(op.value);
-                break;
-            }
-
-            case "pull": {
-                if (!fields[op.field]) {
-                    fields[op.field] = [];
-                }
-                fields[op.field] = fields[op.field].filter((v: any) => v !== op.value);
-                break;
-            }
-
-            default: {
-                throw new Error(`Invalid operation type: ${(op as any).type}`);
-            }
-        }
-    }
-    
     //
     // Lists all records in the database.
     //

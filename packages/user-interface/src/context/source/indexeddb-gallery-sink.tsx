@@ -5,9 +5,9 @@
 import { IGallerySink } from "./gallery-sink";
 import { IAsset } from "../../def/asset";
 import { useIndexeddb } from "../indexeddb-context";
-import { IDatabaseOp, IOpSelection } from "../../def/ops";
 import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
+import { IDatabaseOp, applyOperation } from "database";
 
 //
 // Use the "Indexeddb sink" in a component.
@@ -60,40 +60,6 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
             await storeRecord<IAsset>(`collection-${databaseOp.collectionId}`, databaseOp.collectionName, fields);
         }        
-    }
-
-    //
-    // Apply an operation to a set of fields.
-    //
-    function applyOperation(op: IOpSelection, fields: any): void {
-        switch (op.type) { //todo: This code could definitely be shared with the asset-database in the backend.
-            case "set": {
-                for (const [name, value] of Object.entries(op.fields)) {
-                    fields[name] = value;
-                }
-                break;
-            }
-
-            case "push": {
-                if (!fields[op.field]) {
-                    fields[op.field] = [];
-                }
-                fields[op.field].push(op.value);
-                break;
-            }
-
-            case "pull": {
-                if (!fields[op.field]) {
-                    fields[op.field] = [];
-                }
-                fields[op.field] = fields[op.field].filter((v: any) => v !== op.value);
-                break;
-            }
-
-            default: {
-                throw new Error(`Invalid operation type: ${(op as any).type}`);
-            }
-        }
     }
 
     //

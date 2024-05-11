@@ -1,11 +1,11 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "./auth-context";
-import { IDatabaseOp, IOpSelection } from "../def/ops";
 import { IUser } from "../def/user";
 import { IAsset } from "../def/asset";
 import { IAssetData } from "../def/asset-data";
 import { useClientId } from "../lib/use-client-id";
+import { IDatabaseOp, IOpSelection } from "database";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {

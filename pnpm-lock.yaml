@@ -469,6 +469,9 @@ importers:
         specifier: ^1.11.7
         version: 1.11.10
     devDependencies:
+      '@types/jest':
+        specifier: ^29.4.0
+        version: 29.5.12
       '@types/node':
         specifier: ^20.3.1
         version: 20.11.24
