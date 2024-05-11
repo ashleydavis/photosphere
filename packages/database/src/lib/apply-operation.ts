@@ -16,6 +16,10 @@ export function applyOperation(op: IOpSelection, fields: any): void {
             if (!fields[op.field]) {
                 fields[op.field] = [];
             }
+            if (fields[op.field].includes(op.value)) {
+                // Do not push the same value more than once.
+                break;
+            }
             fields[op.field].push(op.value);
             break;
         }

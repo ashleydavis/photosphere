@@ -13,6 +13,12 @@ describe("apply operation", () => {
         expect(fields).toEqual({ tags: ["foo"] });
     });
 
+    test("can push value on existing array", () => {
+        const fields = { tags: ["foo"] };
+        applyOperation({ type: "push", field: "tags", value: "bar" }, fields);
+        expect(fields).toEqual({ tags: ["foo", "bar"] });
+    });
+
     test("pushing value more than once has no effect", () => {
         const fields = { tags: ["foo"] };
         applyOperation({ type: "push", field: "tags", value: "foo" }, fields);
