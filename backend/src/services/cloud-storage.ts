@@ -51,7 +51,10 @@ export class CloudStorage implements IStorage {
         };
 
         const response = await this.s3.listObjectsV2(listParams).promise();
-        const assetNames = response.Contents?.map(object => object.Key?.split("/")[1] as string) ?? [];
+        const assetNames = response.Contents?.map(item => {
+            const nameParts = item.Key!.split("/");
+            return nameParts[nameParts.length - 1]; // The last part is the file name or asset ID.
+        }) || [];
 
         return {
             assetIds: assetNames,
