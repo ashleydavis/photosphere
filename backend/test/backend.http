@@ -318,7 +318,8 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "col": "{{collection}}"
+    "collectionId": "{{collection}}",
+    "clientId": "a-client-id"
 }
 
 ###
@@ -332,7 +333,8 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "col": "{{collection}}",
+    "collectionId": "{{collection}}",
+    "clientId": "a-client-id",
     "id": "{{last_update}}"
 }
 
