@@ -1,5 +1,5 @@
-import { IDatabaseCollection, IDatabaseOp, IPage, applyOperation } from "database";
-import { IStorage } from "./storage";
+import { IDatabaseCollection, IPage } from "../database-collection";
+import { IStorage } from "../storage/storage";
 
 //
 // Read and write the database to storage.

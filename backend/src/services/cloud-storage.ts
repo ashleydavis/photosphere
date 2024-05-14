@@ -1,4 +1,4 @@
-import { IAssetInfo, IListResult, IStorage } from "./storage";
+import { IAssetInfo, IListResult, IStorage } from "database";
 import { Readable } from "stream";
 import aws from "aws-sdk";
 

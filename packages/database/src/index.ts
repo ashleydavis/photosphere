@@ -6,3 +6,7 @@ export * from "./lib/databases";
 export * as indexeddb from "./lib/indexeddb/indexeddb";
 export * from "./lib/indexeddb/indexeddb-database-collection";
 export * from "./lib/indexeddb/indexeddb-databases";
+export * from "./lib/storage/storage";
+export * from "./lib/storage/storage-directory";
+export * from "./lib/storagedb/storage-database-collection";
+export * from "./lib/storagedb/storage-database";

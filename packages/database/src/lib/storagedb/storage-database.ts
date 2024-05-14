@@ -1,7 +1,8 @@
-import { IDatabase, IDatabaseCollection } from "database";
-import { StorageDatabaseCollection } from "./database-collection";
-import { IStorage } from "./storage";
-import { StorageDirectory } from "./storage-directory";
+import { StorageDatabaseCollection } from "./storage-database-collection";
+import { IStorage } from "../storage/storage";
+import { IDatabase } from "../database";
+import { IDatabaseCollection } from "../database-collection";
+import { StorageDirectory } from "../storage/storage-directory";
 
 //
 // Implements a database on file storage.

@@ -4,7 +4,7 @@
 
 import { Readable } from "stream";
 import { IAsset } from "../lib/asset";
-import { IStorage } from "./storage";
+import { IStorage } from "database";
 import { binarySearch } from "../lib/binary-search";
 import { IDatabase, IDatabaseOp, IDatabaseOpRecord, IOpSelection, applyOperationToDb } from "database";
 

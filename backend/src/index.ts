@@ -1,8 +1,7 @@
+import { StorageDatabase } from "database";
 import { createServer } from "./server";
 import { StorageAssetDatabase } from "./services/asset-database";
 import { CloudStorage } from "./services/cloud-storage";
-import { StorageDatabase } from "./services/database";
-import { StorageDatabaseCollection } from "./services/database-collection";
 import { FileStorage } from "./services/file-storage";
 
 async function main() {
