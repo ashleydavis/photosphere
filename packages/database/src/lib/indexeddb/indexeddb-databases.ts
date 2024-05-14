@@ -44,7 +44,7 @@ export class IndexeddbDatabases implements IDatabases {
     }
     
     //
-    // Gets a database by nane.
+    // Gets a database by name.
     //   
     async database(databaseName: string): Promise<IDatabase> {
         const db = await this.openDatabase(databaseName);

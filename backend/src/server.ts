@@ -1,11 +1,9 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
-import { IAsset } from "./lib/asset";
-import dayjs from "dayjs";
-import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IUser } from "./lib/user";
-import { IDatabase, IDatabaseOp, IStorage } from "database";
+import { IDatabaseCollection, IDatabaseOp, IDatabaseOpRecord, IDatabases, IStorage, applyOperationToDb, getJournal } from "database";
+import { IAsset } from "./lib/asset";
 
 declare global {
     namespace Express {
@@ -19,7 +17,7 @@ declare global {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, database: IDatabase, storage: IStorage) {
+export async function createServer(now: () => Date, databases: IDatabases, userCollection: IDatabaseCollection<IUser>, storage: IStorage) {
 
     const app = express();
     app.use(cors());
@@ -85,7 +83,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             // Removes the auth0| prefix the user id.
             userId = userId.substring(6);
         }
-        const user = await database.collection<IUser>("users").getOne(userId);
+        const user = await userCollection.getOne(userId);
         if (!user) {
             console.log(`User not found: ${userId}`);
             res.sendStatus(401);
@@ -172,7 +170,9 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const metadata = await assetDatabase.assetCollection(collectionId).getMetadata(assetId);
+        const assetCollection = await databases.database(collectionId);
+        const metadataCollection = assetCollection.collection<IAsset>("metadata");
+        const metadata = await metadataCollection.getOne(assetId);
         if (!metadata) {
             res.sendStatus(404);
             return;
@@ -188,8 +188,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         const clientId = getValue<string>(req.body, "clientId");
         for (const op of ops) {
-            const assetCollection = assetDatabase.assetCollection(op.databaseName);
-            await assetCollection.applyOperation(op, clientId);
+            const assetCollection = await databases.database(op.databaseName);
+            await applyOperationToDb(assetCollection, op, clientId);
         }
         res.sendStatus(200);
     }));
@@ -201,7 +201,8 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const collectionId = getValue<string>(req.body, "collectionId");
         const clientId = getValue<string>(req.body, "clientId");
         const lastUpdateId = req.body.lastUpdateId;
-        const result = await assetDatabase.assetCollection(collectionId).getJournal(clientId, lastUpdateId);
+        const assetCollection = await databases.database(collectionId);
+        const result = await getJournal(assetCollection, clientId, lastUpdateId);
         res.json(result);
     }));
 
@@ -210,7 +211,17 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     //
     app.get("/latest-update-id", asyncErrorHandler(async (req, res) => {
         const collectionId = getHeader(req, "col");
-        const latestUpdateId = await assetDatabase.assetCollection(collectionId).getLatestUpdateId();
+        const assetCollection = await databases.database(collectionId);
+        const journalCollection = assetCollection.collection<IDatabaseOpRecord>("journal");
+        const journalIdsPage = await journalCollection.listAll(1);
+        if (journalIdsPage.records.length === 0) {
+            res.json({
+                latestUpdateId: undefined,
+            });
+            return
+        }
+
+        const latestUpdateId = journalIdsPage.records[0];
         res.json({
             latestUpdateId: latestUpdateId,
         });
@@ -268,15 +279,18 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         }
 
         // Read the hash map.
-        const assetId = await assetDatabase.assetCollection(collectionId).checkAsset(hash);
-        if (assetId) {
-            // The asset exists.
-            res.json({ assetId: assetId });
-        }
-        else {
-            // The asset doesn't exist.
+        const assetCollection = await databases.database(collectionId);
+        const hashesCollection = assetCollection.collection<string[]>("hashes");
+        const assetIds =  await hashesCollection.getOne(hash);
+        if (!assetIds || assetIds.length === 0) {
             res.json({ assetId: undefined });
+            return;
         }
+
+        const assetId = assetIds[0]; //todo: This should return the array of assetIds.
+
+        // The asset exists.
+        res.json({ assetId: assetId });
     }));
 
     //
@@ -306,11 +320,13 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         //     return;
         // }
 
-        const result = await assetDatabase.assetCollection(collectionId).getAssets(next);
+        const assetCollection = await databases.database(collectionId);
+        const metadataCollection = assetCollection.collection<IAsset>("metadata");
+        const result = await metadataCollection.getAll(1000, next);
         res.json({
-            assets: result.assets,
+            assets: result.records,
             next: result.next,
-        });    
+        });
     }));
 
     return app;

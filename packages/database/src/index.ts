@@ -1,5 +1,6 @@
 export * from "./defs/ops";
 export * from "./lib/apply-operation";
+export * from "./lib/get-journal";
 export * from "./lib/database-collection";
 export * from "./lib/database";
 export * from "./lib/databases";
@@ -10,3 +11,4 @@ export * from "./lib/storage/storage";
 export * from "./lib/storage/storage-directory";
 export * from "./lib/storagedb/storage-database-collection";
 export * from "./lib/storagedb/storage-database";
+export * from "./lib/storagedb/storage-databases";
