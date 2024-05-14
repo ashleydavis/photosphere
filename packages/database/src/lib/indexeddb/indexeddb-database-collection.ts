@@ -2,23 +2,25 @@ import { get } from "http";
 import { IDatabaseCollection, IPage } from "../database-collection";
 import { deleteRecord, getAllKeys, getAllRecords, getLeastRecentRecord, getNumRecords, getRecord, storeRecord } from "./indexeddb";
 
-export class IIndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection<RecordT> {
+export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection<RecordT> {
 
-    constructor(private indexedDB: IDBDatabase, private collectionName: string) {
+    constructor(private collectionName: string, private openDb: () => Promise<IDBDatabase>) {
     }
 
     //
     // Sets a new record to the database.
     //
     async setOne(id: string, record: RecordT): Promise<void> { //NOTE: That ID is not used in this implementation. It must be _id in the object.
-        await storeRecord<RecordT>(this.indexedDB, this.collectionName, record);
+        const db = await this.openDb();
+        await storeRecord<RecordT>(db, this.collectionName, record);
     }
 
     //
     // Gets one record by id.
     //
     async getOne(id: string): Promise<RecordT | undefined> {
-        return await getRecord<RecordT>(this.indexedDB, this.collectionName, id);
+        const db = await this.openDb();
+        return await getRecord<RecordT>(db, this.collectionName, id);
        
     }
 
@@ -26,8 +28,9 @@ export class IIndexeddbDatabaseCollection<RecordT> implements IDatabaseCollectio
     // Lists all records in the database.
     //
     async listAll(max: number, next?: string): Promise<IPage<string>> {
+        const db = await this.openDb();
         return {
-            records: await getAllKeys(this.indexedDB, this.collectionName),
+            records: await getAllKeys(db, this.collectionName),
             next: undefined
         };
     }
@@ -36,8 +39,9 @@ export class IIndexeddbDatabaseCollection<RecordT> implements IDatabaseCollectio
     // Gets a page of records from the database.
     //
     async getAll(max: number, next?: string): Promise<IPage<RecordT>> {
+        const db = await this.openDb();
         return {
-            records: await getAllRecords<RecordT>(this.indexedDB, this.collectionName),
+            records: await getAllRecords<RecordT>(db, this.collectionName),
             next: undefined
         };
     }
@@ -46,14 +50,16 @@ export class IIndexeddbDatabaseCollection<RecordT> implements IDatabaseCollectio
     // Deletes a database record.
     //
     async deleteOne(recordId: string): Promise<void> {
-        await deleteRecord(this.indexedDB, this.collectionName, recordId);
+        const db = await this.openDb();
+        await deleteRecord(db, this.collectionName, recordId);
     }
 
     //
     // Returns true if there are no records in the collection.
     //
     async none(): Promise<boolean> {
-        const numRecords = await getNumRecords(this.indexedDB, this.collectionName);
+        const db = await this.openDb();
+        const numRecords = await getNumRecords(db, this.collectionName);
         return numRecords === 0;
     }
 
@@ -61,7 +67,8 @@ export class IIndexeddbDatabaseCollection<RecordT> implements IDatabaseCollectio
     // Gets the oldest record in the collection.
     //
     async getLeastRecentRecord(): Promise<RecordT | undefined> {
-        return await getLeastRecentRecord<RecordT>(this.indexedDB, this.collectionName);
+        const db = await this.openDb();
+        return await getLeastRecentRecord<RecordT>(db, this.collectionName);
     }
 
 }

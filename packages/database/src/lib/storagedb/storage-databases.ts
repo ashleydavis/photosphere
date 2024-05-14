@@ -12,7 +12,7 @@ export class StorageDatabases implements IDatabases {
     //
     // Gets a database by name.
     //   
-    async database(databaseName: string): Promise<IDatabase> {
+    database(databaseName: string): IDatabase {
         return new StorageDatabase(this.storage, databaseName);
     }
 }

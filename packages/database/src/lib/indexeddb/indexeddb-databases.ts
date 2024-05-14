@@ -1,7 +1,7 @@
 import { IDatabase } from "../database";
 import { IDatabases } from "../databases";
 import { openDatabase } from "./indexeddb";
-import { IIndexeddbDatabase } from "./indexeddb-database";
+import { IndexeddbDatabase } from "./indexeddb-database";
 
 //
 // Configures a database.
@@ -46,9 +46,8 @@ export class IndexeddbDatabases implements IDatabases {
     //
     // Gets a database by name.
     //   
-    async database(databaseName: string): Promise<IDatabase> {
-        const db = await this.openDatabase(databaseName);
-        return new IIndexeddbDatabase(db);
+    database(databaseName: string): IDatabase {
+        return new IndexeddbDatabase(() => this.openDatabase(databaseName));
     }
 
     //
