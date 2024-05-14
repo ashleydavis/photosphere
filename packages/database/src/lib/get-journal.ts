@@ -8,9 +8,14 @@ import { IPage } from "./database-collection";
 //
 export interface IDatabaseOpResult {
     //
-    // The id of the asset to which the operation is applied.
+    // The name of the database collection to which the operation is applied.
     //
-    assetId: string;
+    collectionName: string;
+
+    //
+    // The id of the database record to which the operation is applied.
+    //
+    recordId: string;
 
     //
     // The operation that was applied to the record.
@@ -89,7 +94,8 @@ export async function getJournal(database: IDatabase, clientId: string, lastUpda
     return {
         ops: allRecords.map(journalRecord => {
             return {
-                assetId: journalRecord.recordId,
+                collectionName: journalRecord.collectionName,
+                recordId: journalRecord.recordId,
                 op: journalRecord.op,
             };
         }),

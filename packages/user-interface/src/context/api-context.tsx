@@ -5,7 +5,7 @@ import { IUser } from "../def/user";
 import { IAsset } from "../def/asset";
 import { IAssetData } from "../def/asset-data";
 import { useClientId } from "../lib/use-client-id";
-import { IDatabaseOp, IOpSelection } from "database";
+import { IDatabaseOp, IJournalResult, IOpSelection } from "database";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -59,44 +59,6 @@ export interface IAssetMetadata {
     // Labels to add to the uploaded asset, if any.
     //
     labels: string[];
-}
-
-//
-//
-// Records an operation against a particular asset.
-//
-export interface IDatabaseOpResult {
-    //
-    // The name of the collection to which the operation is applied.
-    //
-    collectionName: string;
-
-    //
-    // The id of the record to which the operation is applied.
-    //
-    recordId: string;
-
-    //
-    // The operation that was applied to the asset.
-    //
-    op: IOpSelection;
-}
-
-export interface IJournalResult {
-    //
-    // Operations recorded against the collection.
-    //
-    ops: IDatabaseOpResult[];
-
-    //
-    // The id of the latest asset that has been retreived.
-    //
-    latestUpdateId?: string;
-
-    //
-    // Continuation token for the next page of operations.
-    //
-    next?: string;
 }
 
 //
