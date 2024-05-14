@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { IAssetDatabase } from "./services/asset-database";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IUser } from "./lib/user";
-import { IDatabase, IDatabaseOp } from "database";
+import { IDatabase, IDatabaseOp, IStorage } from "database";
 
 declare global {
     namespace Express {
@@ -19,7 +19,7 @@ declare global {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, database: IDatabase) {
+export async function createServer(now: () => Date, assetDatabase: IAssetDatabase, database: IDatabase, storage: IStorage) {
 
     const app = express();
     app.use(cors());
@@ -285,7 +285,7 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
         const collectionId = getHeader(req, "col");
         const contentType = getHeader(req, "content-type");
         const assetType = getHeader(req, "asset-type");
-        await assetDatabase.assetCollection(collectionId).uploadAsset(assetId, assetType, contentType, req);
+        await storage.writeStream(`collections/${collectionId}/${assetType}`, assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -302,17 +302,18 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
             return;
         }
 
-        const assetStream = await assetDatabase.assetCollection(collectionId).streamAsset(assetId, assetType);
-        if (!assetStream) {
+        const info = await storage.info(`collections/${collectionId}/${assetType}`, assetId);
+        if (!info) {
             res.sendStatus(404);
             return;
         }
 
         res.writeHead(200, {
-            "Content-Type": assetStream.contentType,
+            "Content-Type": info.contentType,
         });
 
-        assetStream.stream.pipe(res);
+        storage.readStream(`collections/${collectionId}/${assetType}`, assetId)
+            .pipe(res);
     }));
 
     //

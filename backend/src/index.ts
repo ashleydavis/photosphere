@@ -18,7 +18,7 @@ async function main() {
         : new FileStorage();
     const assetDatabase = new StorageAssetDatabase(storage);
     const database = new StorageDatabase(storage);
-    const app = await createServer(() => new Date(Date.now()), assetDatabase, database);
+    const app = await createServer(() => new Date(Date.now()), assetDatabase, database, storage);
 
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);

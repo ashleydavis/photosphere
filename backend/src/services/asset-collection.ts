@@ -91,16 +91,6 @@ export interface IAssetCollection {
     getMetadata(assetId: string): Promise<IAsset | undefined>;
 
     //
-    // Upload an asset.
-    //
-    uploadAsset(assetId: string, assetType: string, contentType: string, inputStream: Readable): Promise<void>;
-
-    //
-    // Streams am asset asset.
-    //
-    streamAsset(assetId: string, assetType: string): Promise<IAssetStream | undefined>;
-
-    //
     // Checks if the asset exists based on a hash.
     //
     checkAsset(hash: string): Promise<string | undefined>;
@@ -253,28 +243,6 @@ export class AssetCollection implements IAssetCollection {
     async getMetadata(assetId: string): Promise<IAsset | undefined> {
         const metadataCollection = this.database.collection<IAsset>("metadata");
         return await metadataCollection.getOne(assetId);
-    }
-
-    //
-    // Uploads an asset.
-    //
-    async uploadAsset(assetId: string, assetType: string, contentType: string, inputStream: Readable): Promise<void> {
-        await this.storage.writeStream(`collections/${this.collectionId}/${assetType}`, assetId, contentType, inputStream);
-    }
-
-    //
-    // Streams an asset.
-    //
-    async streamAsset(assetId: string, assetType: string): Promise<IAssetStream | undefined> {
-        const info = await this.storage.info(`collections/${this.collectionId}/${assetType}`, assetId);
-        if (!info) {
-            return undefined;
-        }
-
-        return {
-            contentType: info.contentType,
-            stream: this.storage.readStream(`collections/${this.collectionId}/${assetType}`, assetId),
-        };
     }
 
     //

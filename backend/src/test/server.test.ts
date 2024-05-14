@@ -23,7 +23,8 @@ describe("photosphere backend", () => {
             getOne: () => ({
             }),
         };
-        const app = await createServer(() => dateNow, mockAssetDatabase, mockUserDatabase);
+        const mockStorage: any = {};
+        const app = await createServer(() => dateNow, mockAssetDatabase, mockUserDatabase, mockStorage);
 
         const server = app.listen();
         servers.push(server);

@@ -2,7 +2,7 @@
 // Implements the asset database.
 //
 
-import { IDatabaseOp, IStorage, StorageDatabase, StorageDirectory } from "database";
+import { IStorage, StorageDatabase, StorageDirectory } from "database";
 import { AssetCollection, IAssetCollection } from "./asset-collection";
 
 export interface IAssetDatabase {
