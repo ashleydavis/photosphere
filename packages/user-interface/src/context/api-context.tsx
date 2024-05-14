@@ -14,53 +14,6 @@ if (!BASE_URL) {
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 
-export interface IAssetMetadata {
-    //
-    // The name of the file.
-    //
-    fileName: string;
-
-    //
-    // The width of the image or video.
-    //
-    width: number;
-
-    //
-    // The height of the image or video.
-    //
-    height: number;
-
-    //
-    // Hash of the data.
-    //
-    hash: string;
-
-    //
-    // Optional properties, like exif data.
-    //
-    properties?: any;
-
-    //
-    // Reverse geocoded location of the asset, if known.
-    //
-    location?: string;
-
-    //
-    // The data the file was created.
-    //
-    fileDate: string;
-
-    //
-    // The data the photo was taken if known.
-    //
-    photoDate?: string;
-
-    //
-    // Labels to add to the uploaded asset, if any.
-    //
-    labels: string[];
-}
-
 //
 // The result of the get assets request.
 //
@@ -114,20 +67,6 @@ export interface IApiContext {
     // Uploads an asset to the backend.
     //
     uploadSingleAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
-
-    //
-    // TODO: Deprecated in favor of database options.
-    //
-    // Uploads an asset's metadata to the backend.
-    //
-    uploadAssetMetadata(collectionId: string, assetId: string, assetMetadata: IAssetMetadata): Promise<void>;
-
-    //
-    // TODO: Deprecated in favor of database options.
-    //
-    // Updates an asset's metadata.
-    //
-    updateAssetMetadata(collectionId: string, id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void>;
 
     //
     // Submits database operations to the cloud.
@@ -296,62 +235,6 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // TODO: Deprecated in favor of database options.
-    //
-    // Uploads an asset's metadata to the backend.
-    //
-    async function uploadAssetMetadata(collectionId: string, assetId: string, assetMetadata: IAssetMetadata): Promise<void> {
-        await loadToken();
-        const token = getToken();
-        
-        await axios.post(
-            `${BASE_URL}/metadata`, 
-            {
-                col: collectionId,
-                id: assetId,
-                fileName: assetMetadata.fileName,
-                width: assetMetadata.width,
-                height: assetMetadata.height,
-                hash: assetMetadata.hash,
-                properties: assetMetadata.properties,
-                location: assetMetadata.location,
-                fileDate: assetMetadata.fileDate,
-                photoDate: assetMetadata.photoDate,
-                labels: assetMetadata.labels,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-    }
-
-    //
-    // TODO: Deprecated in favor of database options.
-    //
-    // Updates an asset's metadata.
-    //
-    async function updateAssetMetadata(collectionId: string, id: string, assetMetadata: Partial<IAssetMetadata>): Promise<void> {
-        await loadToken();
-        const token = getToken();
-        await axios.patch(`${BASE_URL}/metadata`, 
-            {
-                col: collectionId,
-                id: id,
-                update: assetMetadata,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-    }
-
-    //
     // Submits database operations to the cloud.
     //
     async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
@@ -417,8 +300,6 @@ export function ApiContextProvider({ children }: IProps) {
         getAsset,
         checkAsset,
         uploadSingleAsset,
-        uploadAssetMetadata,
-        updateAssetMetadata,
         submitOperations,
         getJournal,
     };
