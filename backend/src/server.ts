@@ -248,7 +248,10 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         const clientId = getValue<string>(req.body, "clientId");
-        await assetDatabase.applyOperations(ops, clientId);
+        for (const op of ops) {
+            const assetCollection = assetDatabase.assetCollection(op.databaseName);
+            await assetCollection.applyOperation(op, clientId);
+        }
         res.sendStatus(200);
     }));
 

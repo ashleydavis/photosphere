@@ -11,11 +11,6 @@ export interface IAssetDatabase {
     // Gets a collection of assets by id.
     //
     assetCollection(collectionId: string): IAssetCollection;
-
-    //
-    // Applies a set of operations to the database.
-    //
-    applyOperations(ops: IDatabaseOp[], clientId: string): Promise<void>;
 }
 
 export class StorageAssetDatabase implements IAssetDatabase {
@@ -26,15 +21,5 @@ export class StorageAssetDatabase implements IAssetDatabase {
         const storageDirectory = new StorageDirectory(this.storage, `collections/${collectionId}`);
         const storageDatabase = new StorageDatabase(storageDirectory, `collections/${collectionId}`);
         return new AssetCollection(collectionId, storageDirectory, storageDatabase);
-    }
-
-    //
-    // Applies a set of operations to the database.
-    //
-    async applyOperations(ops: IDatabaseOp[], clientId: string): Promise<void> {
-        for (const op of ops) {
-            const assetCollection = this.assetCollection(op.databaseName);
-            await assetCollection.applyOperation(op, clientId);
-        }
     }
 }
