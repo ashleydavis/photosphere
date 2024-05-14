@@ -161,67 +161,6 @@ export async function createServer(now: () => Date, assetDatabase: IAssetDatabas
     }));
 
     //
-    // TODO: Deprecated in favor of database options.
-    //
-    // Uploads metadata for an asset and allocates a new asset id.
-    //
-    app.post("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
-
-        const metadata = req.body;
-        const collectionId = getValue<string>(metadata, "col");
-        const assetId = getValue<string>(req.body, "id");
-        const fileName = getValue<string>(metadata, "fileName");
-        const width = getValue<number>(metadata, "width");
-        const height = getValue<number>(metadata, "height");
-        const hash = getValue<string>(metadata, "hash");
-        const fileDate = dayjs(getValue<string>(metadata, "fileDate")).toDate();
-        const labels = metadata.labels || [];
-        const photoDate = metadata.photoDate ? dayjs(metadata.photoDate).toDate() : undefined;
-        const uploadDate = now();
-        const sortDate = photoDate || fileDate || uploadDate;
-
-        const newAsset: IAsset = {
-            _id: assetId,
-            origFileName: fileName,
-            width: width,
-            height: height,
-            hash: hash,
-            fileDate: fileDate,
-            photoDate: photoDate,
-            sortDate: sortDate,
-            uploadDate: uploadDate,
-            labels: labels,
-        };
-
-        if (metadata.location) {
-            newAsset.location = metadata.location; 
-        }
-
-        if (metadata.properties) {
-            newAsset.properties = metadata.properties;
-        }
-
-        await assetDatabase.assetCollection(collectionId).addMetadata(assetId, hash, newAsset);
-
-        res.json({
-            assetId: assetId,
-        });
-    }));
-
-    //
-    // TODO: Deprecated in favor of database options.
-    // 
-    // Applies a partial metdata update to an asset.
-    //
-    app.patch("/metadata", express.json(), asyncErrorHandler(async (req, res) => {
-        const collectionId = getValue<string>(req.body, "col");
-        const assetId = getValue<string>(req.body, "id");
-        const update: Partial<IAsset> = req.body.update;
-        await assetDatabase.assetCollection(collectionId).updateMetadata(assetId, update);
-        res.sendStatus(200);
-    }));
-
-    //
     // Gets the metadata for an asset by id.
     //
     app.get("/metadata", asyncErrorHandler(async (req, res) => {
