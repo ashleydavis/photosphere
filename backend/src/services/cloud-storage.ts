@@ -1,4 +1,4 @@
-import { IAssetInfo, IListResult, IStorage } from "database";
+import { IFileInfo, IListResult, IStorage } from "database";
 import { Readable } from "stream";
 import aws from "aws-sdk";
 
@@ -42,33 +42,33 @@ export class CloudStorage implements IStorage {
     //
     // List files in storage.
     //
-    async list(path: string, max: number, continuationToken?: string): Promise<IListResult> {    
+    async list(path: string, max: number, next?: string): Promise<IListResult> {    
         const listParams: aws.S3.Types.ListObjectsV2Request = {
             Bucket: this.bucket,
             Prefix: `${path}/`,
             MaxKeys: max,
-            ContinuationToken: continuationToken,
+            ContinuationToken: next,
         };
 
         const response = await this.s3.listObjectsV2(listParams).promise();
-        const assetNames = response.Contents?.map(item => {
+        const fileNames = response.Contents?.map(item => {
             const nameParts = item.Key!.split("/");
             return nameParts[nameParts.length - 1]; // The last part is the file name or asset ID.
         }) || [];
 
         return {
-            assetIds: assetNames,
-            continuation: response.NextContinuationToken,
+            fileNames,
+            next: response.NextContinuationToken,
         };
     }
 
     //
-    // Returns true if the specified asset exists.
+    // Returns true if the specified file exists.
     //
-    async exists(path: string, assetId: string): Promise<boolean> {
+    async exists(path: string, fileName: string): Promise<boolean> {
         const headParams: aws.S3.Types.HeadObjectRequest = {
             Bucket: this.bucket,
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
         };
         try {
             await this.s3.headObject(headParams).promise();
@@ -85,10 +85,10 @@ export class CloudStorage implements IStorage {
     //
     // Gets info about an asset.
     //
-    async info(path: string, assetId: string): Promise<IAssetInfo> {
+    async info(path: string, fileName: string): Promise<IFileInfo> {
         const headParams: aws.S3.Types.HeadObjectRequest = {
             Bucket: this.bucket,
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
         };
         const headResult = await this.s3.headObject(headParams).promise();
         return {
@@ -101,10 +101,10 @@ export class CloudStorage implements IStorage {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    async read(path: string, assetId: string): Promise<Buffer | undefined> {
+    async read(path: string, fileName: string): Promise<Buffer | undefined> {
         const getParams: aws.S3.Types.GetObjectRequest = {
             Bucket: this.bucket, 
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
         };
         try {
             const getObjectOutput = await this.s3.getObject(getParams).promise();
@@ -121,10 +121,10 @@ export class CloudStorage implements IStorage {
     //
     // Writes a file to storage.
     //
-    async write(path: string, assetId: string, contentType: string, data: Buffer): Promise<void> {
+    async write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void> {
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
             Body: data,
             ContentType: contentType,
         };    
@@ -134,10 +134,10 @@ export class CloudStorage implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, assetId: string): Readable {
+    readStream(path: string, fileName: string): Readable {
         const getParams: aws.S3.Types.GetObjectRequest = {
             Bucket: this.bucket, 
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
         };
         return this.s3.getObject(getParams).createReadStream();
     }
@@ -145,10 +145,10 @@ export class CloudStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
-    async writeStream(path: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+    async writeStream(path: string, fileName: string, contentType: string, inputStream: Readable): Promise<void> {
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
             Body: inputStream,
             ContentType: contentType,
         };    
@@ -158,10 +158,10 @@ export class CloudStorage implements IStorage {
     //
     // Deletes the file from storage.
     //
-    async delete(path: string, assetId: string): Promise<void> {
+    async delete(path: string, fileName: string): Promise<void> {
         const deleteParams: aws.S3.Types.DeleteObjectRequest = {
             Bucket: this.bucket,
-            Key: `${path}/${assetId}`,
+            Key: `${path}/${fileName}`,
         };
         await this.s3.deleteObject(deleteParams).promise();
     }

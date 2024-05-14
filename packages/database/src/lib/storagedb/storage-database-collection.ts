@@ -34,8 +34,8 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
     async listAll(max: number, next?: string): Promise<IPage<string>> {
         const listResult = await this.storage.list(this.path, max, next);
         return {
-            records: listResult.assetIds,
-            next: listResult.continuation,
+            records: listResult.fileNames,
+            next: listResult.next,
         };
     }
 
@@ -45,13 +45,13 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
     async getAll(max: number, next?: string): Promise<IPage<RecordT>> {
         const listResult = await this.storage.list(this.path, max, next);
         const records: RecordT[] = [];
-        for (const assetId of listResult.assetIds) {
+        for (const assetId of listResult.fileNames) {
             records.push((await this.getOne(assetId))!);
         }
         
         return {
             records,
-            next: listResult.continuation,
+            next: listResult.next,
         };
     }
 

@@ -5,27 +5,27 @@ import { Readable } from "stream";
 //
 export interface IListResult {
     //
-    // The IDs of assets that were found.
+    // The list of file names found in storage.
     //
-    assetIds: string[];
+    fileNames: string[];
 
     //
     // If there are more assets to read the contination token is set.
     //
-    continuation?: string;
+    next?: string;
 }
 
 //
-// Information about an asset.
+// Information about a file.
 //
-export interface IAssetInfo {
+export interface IFileInfo {
     //
-    // The content type of the asset.
+    // The content type of the file.
     //
     contentType: string;
 
     //
-    // The length of the asset in bytes.
+    // The length of the file in bytes.
     //
     length: number;
 }
@@ -35,41 +35,41 @@ export interface IStorage {
     //
     // List files in storage.
     //
-    list(path: string, max: number, continuationToken?: string): Promise<IListResult>;
+    list(path: string, max: number, next?: string): Promise<IListResult>;
 
     //
-    // Returns true if the specified asset exists.
+    // Returns true if the specified file exists.
     //
-    exists(path: string, assetId: string): Promise<boolean>;
+    exists(path: string, ffileName: string): Promise<boolean>;
 
     //
-    // Gets info about an asset.
+    // Gets info about a file.
     //
-    info(path: string, assetId: string): Promise<IAssetInfo>;
+    info(path: string, fileName: string): Promise<IFileInfo>;
     
     //
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    read(path: string, assetId: string): Promise<Buffer | undefined>;
+    read(path: string, fileName: string): Promise<Buffer | undefined>;
 
     //
     // Writes a file to storage.
     //
-    write(path: string, assetId: string, contentType: string, data: Buffer): Promise<void>;
+    write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void>;
 
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, assetId: string): Readable;
+    readStream(path: string, fileName: string): Readable;
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(path: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+    writeStream(path: string, fileName: string, contentType: string, inputStream: Readable): Promise<void>;
 
     //
     // Deletes the file from storage.
     //
-    delete(path: string, assetId: string): Promise<void>;
+    delete(path: string, fileName: string): Promise<void>;
 }

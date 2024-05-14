@@ -1,6 +1,6 @@
 import * as fs from "fs-extra";
 import { join, dirname } from "path";
-import { IAssetInfo, IListResult, IStorage } from "database";
+import { IFileInfo, IListResult, IStorage } from "database";
 import { Readable } from "stream";
 
 export class FileStorage implements IStorage {
@@ -8,48 +8,50 @@ export class FileStorage implements IStorage {
     //
     // List files in storage.
     //
-    async list(path: string, max: number, continuationToken?: string): Promise<IListResult> {
+    async list(path: string, max: number, next?: string): Promise<IListResult> {
         const dir = join("files", path);
         if (!await fs.pathExists(dir)) {
             return {
-                assetIds: [],
+                fileNames: [],
+                next: undefined,
             };
         }
 
-        let files = await fs.readdir(dir);
-        files = files.filter(file => !file.endsWith(".info"));
+        let fileNames = await fs.readdir(dir);
+        fileNames = fileNames.filter(file => !file.endsWith(".info"));
         return {
-            assetIds: files,
+            fileNames,
+            next: undefined,
         };        
     }
 
     //
-    // Determines the local file name for an asset.
+    // Determines the local file name for a file.
     //
-    getLocalFileName(path: string, assetId: string): string {
-        return join("files", path, assetId);
+    getLocalFileName(path: string, fileName: string): string {
+        return join("files", path, fileName);
     }
 
     //
-    // Determines the local info file for an asset.
+    // Determines the local info file for a file.
     //    
-    getInfoFileName(path: string, assetId: string): string {
-        return this.getLocalFileName(path, assetId) + `.info`;
+    getInfoFileName(path: string, fileName: string): string {
+        return this.getLocalFileName(path, fileName) + `.info`;
     }
 
     //
-    // Returns true if the specified asset exists.
+    // Returns true if the specified file exists.
     //
-    async exists(path: string, assetId: string): Promise<boolean> {
-        return await fs.pathExists(this.getLocalFileName(path, assetId));
+    async exists(path: string, fileName: string): Promise<boolean> {
+        return await fs.pathExists(this.getLocalFileName(path, fileName));
     }
 
     //
-    // Gets info about an asset.
+    // Gets info about a file.
     //
-    async info(path: string, assetId: string): Promise<IAssetInfo> {
-        const info = JSON.parse(await fs.readFile(this.getInfoFileName(path, assetId), "utf8"));
-        const stat = await fs.stat(this.getLocalFileName(path, assetId));
+    async info(path: string, fileName: string): Promise<IFileInfo> {
+        const info = JSON.parse(await fs.readFile(this.getInfoFileName(path, fileName), "utf8"));
+        const stat = await fs.stat(this.getLocalFileName(path, fileName));
         return {
             contentType: info.contentType,
             length: stat.size,
@@ -60,24 +62,23 @@ export class FileStorage implements IStorage {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    async read(path: string, assetId: string): Promise<Buffer | undefined> {
-
-        const fileName = this.getLocalFileName(path, assetId);
-        if (!await fs.pathExists(fileName)) {
+    async read(path: string, fileName: string): Promise<Buffer | undefined> {
+        const filePath = this.getLocalFileName(path, fileName);
+        if (!await fs.pathExists(filePath)) {
             // Returns undefined if the file doesn't exist.
             return undefined;
         }
         
-        return await fs.readFile(fileName);
+        return await fs.readFile(filePath);
     }
 
     //
     // Writes a file to storage.
     //
-    async write(path: string, assetId: string, contentType: string, data: Buffer): Promise<void> {
+    async write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void> {
         await fs.ensureDir(join("files", path));
-        await fs.writeFile(this.getLocalFileName(path, assetId), data);
-        await fs.writeFile(this.getInfoFileName(path, assetId), JSON.stringify({
+        await fs.writeFile(this.getLocalFileName(path, fileName), data);
+        await fs.writeFile(this.getInfoFileName(path, fileName), JSON.stringify({
             contentType: contentType,
         }, null, 2));
     }
@@ -85,23 +86,23 @@ export class FileStorage implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, assetId: string): Readable {
-        return fs.createReadStream(this.getLocalFileName(path, assetId));
+    readStream(path: string, fileName: string): Readable {
+        return fs.createReadStream(this.getLocalFileName(path, fileName));
     }
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(path: string, assetId: string, contentType: string, inputStream: Readable): Promise<void> {
+    writeStream(path: string, fileName: string, contentType: string, inputStream: Readable): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const infoFileName = this.getInfoFileName(path, assetId);
+            const infoFileName = this.getInfoFileName(path, fileName);
             fs.ensureDir(dirname(infoFileName))
                 .then(() => {
                     return fs.writeFile(infoFileName, JSON.stringify({
                         contentType: contentType,
                     }, null, 2))
                     .then(() => {
-                        const localFileName = this.getLocalFileName(path, assetId);
+                        const localFileName = this.getLocalFileName(path, fileName);
                         const fileWriteStream = fs.createWriteStream(localFileName);
                         inputStream.pipe(fileWriteStream)
                             .on("error", (err: any) => {
@@ -122,8 +123,8 @@ export class FileStorage implements IStorage {
     //
     // Deletes the file from storage.
     //
-    async delete(path: string, assetId: string): Promise<void> {
-        await fs.unlink(this.getLocalFileName(path, assetId));
-        await fs.unlink(this.getInfoFileName(path, assetId));
+    async delete(path: string, fileName: string): Promise<void> {
+        await fs.unlink(this.getLocalFileName(path, fileName));
+        await fs.unlink(this.getInfoFileName(path, fileName));
     }
 }

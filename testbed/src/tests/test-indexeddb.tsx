@@ -57,7 +57,7 @@ export function TestIndexeddb() {
             ]
 
             for (const testRecord of testRecords) {
-                await indexeddb.storeRecord<any>(db, "test-collection", testRecord);
+                await indexeddb.storeRecord<any>(db, "test-collection", testRecord._id, testRecord);
             }
 
             //
