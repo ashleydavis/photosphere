@@ -630,6 +630,9 @@ importers:
       css-loader:
         specifier: ^6.10.0
         version: 6.10.0(webpack@5.90.3)
+      database:
+        specifier: workspace:*
+        version: link:../packages/database
       fs-extra:
         specifier: ^11.1.0
         version: 11.2.0

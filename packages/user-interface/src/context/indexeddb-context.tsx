@@ -1,59 +1,18 @@
+import { IDatabase, IDatabaseConfigurations, IndexeddbDatabases } from "database";
+import { version } from "os";
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
-import { openDatabase as _openDatabase, storeRecord as _storeRecord, getRecord as _getRecord, getLeastRecentRecord as _getLeastRecentRecord, getAllRecords as _getAllRecords, deleteRecord as _deleteRecord, getNumRecords as _getNumRecords } from "../lib/indexeddb";
 
 export interface IIndexeddbContext {
     //
-    // Stores a record in the database.
+    // Gets an indexedb database.
     //
-    storeRecord<RecordT>(databaseName: string, collectionName: string, record: RecordT): Promise<void>;    
-
-    //
-    // Gets a record from the database.
-    //
-    getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT | undefined>;
-
-    //
-    // Gets the least recent record from the database.
-    //
-    getLeastRecentRecord<RecordT>(databaseName: string, collectionName: string): Promise<RecordT | undefined>;
-
-    //
-    // Gets all records from the database.
-    //
-    getAllRecords<RecordT>(databaseName: string, collectionName: string): Promise<RecordT[]>;
-
-    //
-    // Deletes a record.
-    //
-    deleteRecord(databaseName: string, collectionName: string, assetId: string): Promise<void>;
-
-    //
-    // Gets the number of records in the collection.
-    //
-    getNumRecords(databaseName: string, collectionName: string): Promise<number>;
+    database(databaseName: string): Promise<IDatabase>;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
 
 export interface IProps {
     children: ReactNode | ReactNode[];
-}
-
-//
-// Configures a database.
-//
-interface IDatabaseConfiguration {
-    //
-    // The names of the collections in the database.
-    //
-    collectionNames: string[];
-}
-
-//
-// Look up database configurations by name.
-//
-interface IDatabaseConfigurations {
-    [databaseName: string]: IDatabaseConfiguration;
 }
 
 //
@@ -68,6 +27,7 @@ const databaseConfigurations: IDatabaseConfigurations = {
             "hashes",
             "metadata",
         ],
+        versionNumber: 1,
     },
     user: {    
         collectionNames: [
@@ -76,6 +36,7 @@ const databaseConfigurations: IDatabaseConfigurations = {
             "last-update-id",
             "user",
         ],
+        versionNumber: 1,
     },
     debug: { // For debugging.
         collectionNames: [                 
@@ -83,6 +44,7 @@ const databaseConfigurations: IDatabaseConfigurations = {
             "updates-sent",
             "initial-sync-recieved",
         ],
+        versionNumber: 1,
     },     
 };
 
@@ -94,115 +56,26 @@ const databaseVersion = 2;
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
-    const dbCache = useRef<Map<string, IDBDatabase>>(new Map<string, IDBDatabase>());
+    const dbCache = useRef<IndexeddbDatabases>(new IndexeddbDatabases(databaseConfigurations));
 
     useEffect(() => {
         return () => {
             //
             // Close all database connections.
             //
-
-            if (dbCache.current) {
-                for (const db of dbCache.current!.values()) {
-                    db.close();
-                }
-    
-                dbCache.current!.clear();
-            }
+            dbCache.current.shutdown();
         };
     }, []);
 
     //
-    // Opens the database.
+    // Gets an indexedb database.
     //
-    async function openDatabase(databaseName: string): Promise<IDBDatabase> {
-        if (!dbCache.current) {
-            throw new Error(`Database cache not initialised.`);
-        }
-        
-        let db = dbCache.current.get(databaseName);
-        if (db) {
-            return db;
-        }
-
-        const databaseNameParts = databaseName.split("-");
-        if (databaseNameParts.length === 0) {
-            throw new Error(`Invalid database name: "${databaseName}"`);
-        }
-        const baseDatabaseName = databaseNameParts[0];
-        const databaseConfiguration = databaseConfigurations[baseDatabaseName];
-        if (!databaseConfiguration) {
-            throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
-        }
-
-        db = await _openDatabase(`photosphere-${databaseName}`, databaseVersion, databaseConfiguration.collectionNames);
-        dbCache.current.set(databaseName, db);
-
-        console.log(`Opened database ${databaseName}`); //fio:
-        return db;
-    }
-
-    //
-    // Stores a record in the database.
-    //
-    async function storeRecord<RecordT>(databaseName: string, collectionName: string, record: RecordT): Promise<void> {
-        const db = await openDatabase(databaseName);
-        await _storeRecord(db, collectionName, record);
-    }
-
-    //
-    // Gets a record from the database.
-    //
-    async function getRecord<RecordT>(databaseName: string, collectionName: string, recordId: string): Promise<RecordT | undefined> {
-        try {
-            const db = await openDatabase(databaseName);
-            return await _getRecord(db, collectionName, recordId);
-        }
-        catch (error) {
-            console.error(`Error getting record: ${databaseName}:${collectionName}/${recordId}`);
-            throw error;
-        }
-    }
-
-    //
-    // Gets the least recent record from the database.
-    //
-    async function getLeastRecentRecord<RecordT>(databaseName: string, collectionName: string): Promise<RecordT | undefined> {  
-        const db = await openDatabase(databaseName);
-        return await _getLeastRecentRecord(db, collectionName);
-    }
-
-    //
-    // Gets all records from the database.
-    //
-    async function getAllRecords<RecordT>(databaseName: string, collectionName: string): Promise<RecordT[]> {
-        const db = await openDatabase(databaseName);
-        return await _getAllRecords(db, collectionName);
-    }
-
-    //
-    // Deletes a record.
-    //
-    async function deleteRecord(databaseName: string, collectionName: string, recordId: string): Promise<void> {
-        const db = await openDatabase(databaseName);
-        await _deleteRecord(db, collectionName, recordId);
-    }
-
-    //
-    // Gets the number of records in the collection.
-    //
-    async function getNumRecords(databaseName: string, collectionName: string): Promise<number> {
-        const db = await openDatabase(databaseName);
-        return await _getNumRecords(db, collectionName);
+    async function database(databaseName: string): Promise<IDatabase> {
+        return await dbCache.current.database(databaseName);    
     }
 
     const value: IIndexeddbContext = {
-        storeRecord,
-        getRecord,
-        getLeastRecentRecord,
-        getAllRecords,
-        deleteRecord,
-        getNumRecords,
+        database,
     };
     
     return (

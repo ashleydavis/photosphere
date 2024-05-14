@@ -67,4 +67,9 @@ export interface IStorage {
     // Writes an input stream to storage.
     //
     writeStream(path: string, assetId: string, contentType: string, inputStream: Readable): Promise<void>;
+
+    //
+    // Deletes the file from storage.
+    //
+    delete(path: string, assetId: string): Promise<void>;
 }

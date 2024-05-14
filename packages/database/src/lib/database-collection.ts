@@ -31,11 +31,6 @@ export interface IDatabaseCollection<RecordT = any> {
     getOne(id: string): Promise<RecordT | undefined>;
 
     //
-    // Updates a record in the database.
-    //
-    updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void>;
-
-    //
     // Lists all records in the database.
     //
     listAll(max: number, next?: string): Promise<IPage<string>>;
@@ -44,4 +39,19 @@ export interface IDatabaseCollection<RecordT = any> {
     // Gets a page of records from the database.
     //
     getAll(max: number, next?: string): Promise<IPage<RecordT>>;
+
+    //
+    // Deletes a record from the database.
+    //
+    deleteOne(id: string): Promise<void>;
+
+    //
+    // Returns true if there are no records in the collection.
+    //
+    none(): Promise<boolean>;
+
+    // 
+    // Gets the oldest record in the collection.
+    //
+    getLeastRecentRecord(): Promise<RecordT | undefined>;
 }

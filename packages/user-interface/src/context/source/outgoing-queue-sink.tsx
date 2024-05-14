@@ -58,13 +58,15 @@ export interface IAssetUpdateRecord {
 //
 export function useOutgoingQueueSink(): IGallerySink {
 
-    const { storeRecord } = useIndexeddb();
+    const indexeddb = useIndexeddb();
 
     //
     // Stores an asset.
     //
     async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        await storeRecord<IAssetUploadRecord>("user", "outgoing-asset-upload", {
+        const userDatabase = await indexeddb.database("user");
+        const id = uuid();
+        await userDatabase.collection("outgoing-asset-upload").setOne(uuid(), {
             _id: uuid(),
             collectionId,
             assetId,
@@ -77,9 +79,12 @@ export function useOutgoingQueueSink(): IGallerySink {
     // Submits operations to change the database.
     //
     async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
+        const userDatabase = await indexeddb.database("user");
+        const updateCollection = await userDatabase.collection("outgoing-asset-update");
         for (const op of ops) {
-            await storeRecord<IAssetUpdateRecord>("user", "outgoing-asset-update", {
-                _id: uuid(),
+            const id = uuid();
+            await updateCollection.setOne(id, {
+                _id: id,
                 op,
             });
         }

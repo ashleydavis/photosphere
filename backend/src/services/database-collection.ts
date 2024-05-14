@@ -28,16 +28,6 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
         return JSON.parse(buffer.toString('utf-8'));
     }
 
-    // 
-    // Updates a record in the database.
-    //
-    async updateOne(id: string, recordUpdate: Partial<RecordT>): Promise<void> {
-        const buffer = await this.storage.read(this.path, id);
-        const asset = JSON.parse(buffer!.toString('utf-8'));
-        const updated = Object.assign({}, asset, recordUpdate);
-        await this.storage.write(this.path, id, "application/json", Buffer.from(JSON.stringify(updated)));    
-    }
-
     //
     // Lists all records in the database.
     //
@@ -63,5 +53,27 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
             records,
             next: listResult.continuation,
         };
+    }
+
+    //
+    // Deletes a record from the database.
+    //
+    async deleteOne(id: string): Promise<void> {
+        await this.storage.delete(this.path, id);
+    }
+
+    //
+    // Returns true if there are no records in the collection.
+    //
+    async none(): Promise<boolean> {
+        const result = await this.getAll(1, undefined);
+        return result.records.length === 0;
+    }
+
+    // 
+    // Gets the oldest record in the collection.
+    //
+    async getLeastRecentRecord(): Promise<RecordT | undefined> {
+        throw new Error("Not implemented for storage. The implementation would be too expensive.");
     }
 }

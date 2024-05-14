@@ -49,7 +49,7 @@ export interface IProps {
 export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource, indexeddbSink, localSource, children }: IProps) {
     
     const { isOnline } = useOnline();
-    const { getLeastRecentRecord, deleteRecord, getRecord, storeRecord, getNumRecords } = useIndexeddb();
+    const indexeddb = useIndexeddb();
     const api = useApi();
 
     //
@@ -69,8 +69,9 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             }
 
             for (const collectionId of user.collections.access) {
-                const numRecords = await getNumRecords(`collection-${collectionId}`, "metadata");
-                if (numRecords === 0) {
+                const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+                const noRecords = await assetCollection.collection("metadata").none();
+                if (noRecords) {
                     //
                     // Assume that no records means we need to get all records down.
                     //
@@ -90,7 +91,8 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
 
                     if (!isProduction) {
                         if (databaseOps.length > 0) {
-                            await storeRecord<any>("debug", "initial-sync-recieved", { _id: uuid(), ops: databaseOps });
+                            const debugDatabase = await indexeddb.database("debug");
+                            debugDatabase.collection<any>("initial-sync-recieved").setOne(uuid(), { ops: databaseOps });
                         }
                     }
 
@@ -102,10 +104,8 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                         //
                         // Record the latest update that was received.
                         //
-                        await storeRecord<IUpdateIdRecord>("user", "last-update-id", {
-                            _id: collectionId,
-                            lastUpdateId: latestUpdateId,
-                        });
+                        const userDatabase = await indexeddb.database("user");
+                        userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
                     }
                 }
 
@@ -144,20 +144,23 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
     //
     async function syncOutgoing() {
         try {
+            const userDatabase = await indexeddb.database("user");
+
             //
             // Flush the queue of outgoing asset uploads.
             //
             while (true) {
-                const outgoingUpload = await getLeastRecentRecord<IAssetUploadRecord>("user", "outgoing-asset-upload");
+                const outgoingUpload = await userDatabase.collection<IAssetUploadRecord>("outgoing-asset-upload").getLeastRecentRecord();
                 if (!outgoingUpload) {
                     break;
                 }
 
                 await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.assetData);
-                await deleteRecord("user", "outgoing-asset-upload", outgoingUpload._id);
+                await userDatabase.collection("outgoing-asset-upload").deleteOne(outgoingUpload._id);
 
                 if (!isProduction) {
-                    await storeRecord<any>("debug", "updates-sent", { _id: uuid(), upload: outgoingUpload });
+                    const debugDatabase = await indexeddb.database("debug");
+                    await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { upload: outgoingUpload });
                 }
 
                 console.log(`Processed outgoing upload: ${outgoingUpload.collectionId}/${outgoingUpload.assetType}/${outgoingUpload.assetId}`);
@@ -167,16 +170,17 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             // Flush the queue of outgoing asset updates.
             //
             while (true) {
-                const outgoingUpdate = await getLeastRecentRecord<IAssetUpdateRecord>("user", "outgoing-asset-update");
+                const outgoingUpdate = await userDatabase.collection<IAssetUpdateRecord>("outgoing-asset-update").getLeastRecentRecord();
                 if (!outgoingUpdate) {
                     break;
                 }
 
                 await cloudSink.submitOperations([outgoingUpdate.op]);
-                await deleteRecord("user", "outgoing-asset-update", outgoingUpdate._id);
+                await userDatabase.collection("outgoing-asset-update").deleteOne(outgoingUpdate._id);
 
                 if (!isProduction) {
-                    await storeRecord<any>("debug", "updates-sent", { _id: uuid(), update: outgoingUpdate });
+                    const debugDatabase = await indexeddb.database("debug");
+                    await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { update: outgoingUpdate });
                 }
 
                 console.log(`Processed outgoing update: ${outgoingUpdate.op.databaseName}/${outgoingUpdate.op.recordId}`);
@@ -204,12 +208,14 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
 
             const collectionIds = user.collections.access;
 
+            const userDatabase = await indexeddb.database("user");
+
             //
             // Retreive updates for the collections we have access to, but only
             // from the latest update that was received.
             //
             for (const collectionId of collectionIds) {
-                const lastUpdateIdRecord = await getRecord<IUpdateIdRecord>("user", "last-update-id", collectionId);
+                const lastUpdateIdRecord = await userDatabase.collection<IUpdateIdRecord>("last-update-id").getOne(collectionId);
                 const journalResult = await api.getJournal(collectionId, lastUpdateIdRecord?.lastUpdateId);
 
                 if (journalResult.ops.length === 0) {
@@ -228,16 +234,17 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 })));
                     
                 if (!isProduction) {
-                    await storeRecord<any>("debug", "updates-recieved", { _id: uuid(), update: journalResult });
+                    const debugDatabase = await indexeddb.database("debug");
+                    await debugDatabase.collection<any>("updates-recieved").setOne(uuid(), { update: journalResult });
                 }
 
                 if (journalResult.latestUpdateId !== undefined) {
                     //
                     // Record the latest update that was received.
                     //
-                    await storeRecord<IUpdateIdRecord>("user", "last-update-id", {
+                    await userDatabase.collection<IUpdateIdRecord>("last-update-id").setOne(collectionId, { 
                         _id: collectionId, 
-                        lastUpdateId: journalResult.latestUpdateId,
+                        lastUpdateId: journalResult.latestUpdateId 
                     });
                 }
                

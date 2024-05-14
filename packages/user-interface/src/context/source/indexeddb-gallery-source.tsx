@@ -16,8 +16,7 @@ import { IAssetRecord } from "../../def/asset-record";
 export function useIndexeddbGallerySource(): IGallerySource {
 
     const api = useApi();
-
-    const { getAllRecords, getRecord } = useIndexeddb();
+    const indexeddb = useIndexeddb();
 
     //
     // Loads the user's details.
@@ -28,7 +27,8 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return undefined;
         }
 
-        const user = await getRecord<IUser>("user", "user", userId);
+        const userDatabase = await indexeddb.database("user");
+        const user = await userDatabase.collection<IUser>("user").getOne(userId);
         if (!user) {
             return undefined;
         }
@@ -40,14 +40,17 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Retreives assets from the source.
     //
     async function getAssets(collectionId: string): Promise<IAsset[]> {
-        return await getAllRecords<IAsset>(`collection-${collectionId}`, "metadata");
+        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const result = await assetCollection.collection<IAsset>("metadata").getAll(1000, undefined); //todo: pagination needs to be passed on
+        return result.records;
     }
 
     //
     // Loads data for an asset.
     //
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
-        const assetRecord = await getRecord<IAssetRecord>(`collection-${collectionId}`, assetType, assetId);
+        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const assetRecord = await assetCollection.collection<IAssetRecord>(assetType).getOne(assetId);
         if (!assetRecord) {
             return undefined;
         }

@@ -16,7 +16,7 @@ import { IGallerySink } from "./gallery-sink";
 export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource }: { indexeddbSource: IGallerySource, indexeddbSink: IGallerySink, cloudSource: IGallerySource }): IGallerySource {
 
     const { isOnline } = useOnline();
-    const { storeRecord } = useIndexeddb();
+    const indexeddb = useIndexeddb();
 
     //
     // Loads the user's details.
@@ -29,7 +29,8 @@ export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSou
                 //
                 // Store user locally for offline use.
                 //
-                await storeRecord("user", "user", user);
+                const userDatabase = await indexeddb.database("user");
+                await userDatabase.collection("user").setOne("user", user);
                 localStorage.setItem("userId", user._id);
                 return user;
             }

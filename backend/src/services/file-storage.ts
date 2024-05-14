@@ -118,4 +118,12 @@ export class FileStorage implements IStorage {
                 });
         });
     }
+
+    //
+    // Deletes the file from storage.
+    //
+    async delete(path: string, assetId: string): Promise<void> {
+        await fs.unlink(this.getLocalFileName(path, assetId));
+        await fs.unlink(this.getInfoFileName(path, assetId));
+    }
 }

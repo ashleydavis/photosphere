@@ -73,6 +73,19 @@ export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: s
 }
 
 //
+// Gets all record keys from the database.
+//
+export function getAllKeys(db: IDBDatabase, collectionName: string): Promise<string[]> {
+    return new Promise<string[]>((resolve, reject) => {
+        const transaction = db.transaction([collectionName], "readonly");
+        const store = transaction.objectStore(collectionName);
+        const allRecordsRequest = store.getAllKeys(); 
+        allRecordsRequest.onsuccess = () => resolve(Array.from(allRecordsRequest.result as string[]));
+        allRecordsRequest.onerror = () => reject(allRecordsRequest.error);
+    });
+}
+
+//
 // Gets all records from the database.
 //
 export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string): Promise<RecordT[]> {

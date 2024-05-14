@@ -59,4 +59,10 @@ export class StorageDirectory implements IStorage {
         return this.storage.writeStream(`${this.path}/${path}`, assetId, contentType, inputStream);
     }
 
+    //
+    // Deletes the file from storage.
+    //
+    delete(path: string, assetId: string): Promise<void> {
+        return this.storage.delete(`${this.path}/${path}`, assetId);
+    }
 }

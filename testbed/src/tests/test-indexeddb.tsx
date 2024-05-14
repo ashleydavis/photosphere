@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { indexeddb } from "user-interface";
+import { indexeddb } from "database";
 
 //
 // Checks for equality between two arrays.

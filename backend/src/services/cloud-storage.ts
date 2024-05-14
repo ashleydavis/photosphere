@@ -155,4 +155,15 @@ export class CloudStorage implements IStorage {
         await this.s3.upload(params).promise();
     }
 
+    //
+    // Deletes the file from storage.
+    //
+    async delete(path: string, assetId: string): Promise<void> {
+        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+            Bucket: this.bucket,
+            Key: `${path}/${assetId}`,
+        };
+        await this.s3.deleteObject(deleteParams).promise();
+    }
+
 }

@@ -14,13 +14,14 @@ import { IDatabaseOp, applyOperation } from "database";
 //
 export function useIndexeddbGallerySink(): IGallerySink {
 
-    const { getRecord, storeRecord } = useIndexeddb();
+    const indexedb = useIndexeddb();
 
     //
     // Stores an asset.
     //
     async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        await storeRecord<IAssetRecord>(`collection-${collectionId}`, assetType, {
+        const assetCollection = await indexedb.database(`collection-${collectionId}`);
+        await assetCollection.collection<IAssetRecord>(assetType).setOne(assetId, {
             _id: assetId,
             storeDate: new Date(),
             assetData,
@@ -49,7 +50,8 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
         for (const databaseOp of databaseOps) {
             const recordId = databaseOp.recordId;
-            const asset = await getRecord<IAsset>(`collection-${databaseOp.databaseName}`, databaseOp.collectionName, recordId);
+            const assetCollection = await indexedb.database(`collection-${databaseOp.databaseName}`);
+            const asset = await assetCollection.collection<IAssetRecord>(databaseOp.collectionName).getOne(recordId);
             let fields = asset as any || {};
             if (!asset) {
                 // Set the record id when upserting.
@@ -58,7 +60,7 @@ export function useIndexeddbGallerySink(): IGallerySink {
 
             applyOperation(databaseOp.op, fields);
 
-            await storeRecord<IAsset>(`collection-${databaseOp.databaseName}`, databaseOp.collectionName, fields);
+            await assetCollection.collection<IAssetRecord>(databaseOp.collectionName).setOne(recordId, fields);
         }        
     }
 
@@ -66,7 +68,8 @@ export function useIndexeddbGallerySink(): IGallerySink {
     // Check that asset that has already been uploaded with a particular hash.
     //
     async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
-        const hashRecord = await getRecord<IHashRecord>(`collection-${collectionId}`, "hashes", hash);
+        const assetCollection = await indexedb.database(`collection-${collectionId}`);
+        const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
         if (!hashRecord) {
             return undefined;
         }
