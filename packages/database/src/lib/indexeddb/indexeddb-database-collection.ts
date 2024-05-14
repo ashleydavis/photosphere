@@ -31,7 +31,7 @@ export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection
         const db = await this.openDb();
         return {
             records: await getAllKeys(db, this.collectionName),
-            next: undefined
+            next: undefined, // Indexeddb doesn't support pagination.
         };
     }
 
@@ -42,7 +42,7 @@ export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection
         const db = await this.openDb();
         return {
             records: await getAllRecords<RecordT>(db, this.collectionName),
-            next: undefined
+            next: undefined, // Indexeddb doesn't support pagination.
         };
     }
 
