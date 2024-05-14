@@ -10,9 +10,9 @@ export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection
     //
     // Sets a new record to the database.
     //
-    async setOne(id: string, record: RecordT): Promise<void> { //NOTE: That ID is not used in this implementation. It must be _id in the object.
+    async setOne(id: string, record: RecordT): Promise<void> {
         const db = await this.openDb();
-        await storeRecord<RecordT>(db, this.collectionName, record);
+        await storeRecord<RecordT>(db, this.collectionName, id, record);
     }
 
     //

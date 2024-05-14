@@ -20,7 +20,7 @@ export function openDatabase(databaseName: string, versionNumber: number, collec
 function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
     for (const collectionName of collectionNames) {
         if (!db.objectStoreNames.contains(collectionName)) {
-            db.createObjectStore(collectionName, { keyPath: "_id" });
+            db.createObjectStore(collectionName);
         }
     }
 }
@@ -28,11 +28,11 @@ function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
 //
 // Stores a record in the database.
 //
-export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, record: RecordT): Promise<void> {
+export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string, record: RecordT): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readwrite');
         const store = transaction.objectStore(collectionName);
-        const request = store.put(record);
+        const request = store.put(record, recordId);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve();
     });
