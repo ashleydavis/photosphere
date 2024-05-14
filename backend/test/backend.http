@@ -23,27 +23,36 @@ Authorization: Bearer {{token}}
 # Uploads the metadata for the asset.
 #
 
-POST {{base_url}}/metadata
+POST {{base_url}}/operations
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
-{ 
-    "col": "{{collection}}",
-    "id": "{{asset}}",
-    "contentType": "image/jpeg", 
-    "fileName": "./test-assets/1.jpeg", 
-    "width": 4160, 
-    "height": 6240, 
-    "hash": "1234", 
-    "fileDate": "2023-02-08T01:27:01.419Z", 
-    "photoDate": "2023-02-08T01:27:01.419Z", 
-    "location": "Somewhere1", 
-    "properties": { 
-        "a": "property" 
-    }, 
-    "labels": [ 
-        "Cool photo" 
-    ] 
+{
+    "clientId": "a-client-id",
+    "ops": [{
+        "databaseName": "{{collection}}",
+        "collectionName": "metadata",
+        "recordId": "{{asset}}",
+        "op": {
+            "type": "set",
+            "fields": {
+                "contentType": "image/jpeg", 
+                "fileName": "./test-assets/1.jpeg", 
+                "width": 4160, 
+                "height": 6240, 
+                "hash": "1234", 
+                "fileDate": "2023-02-08T01:27:01.419Z", 
+                "photoDate": "2023-02-08T01:27:01.419Z", 
+                "location": "Somewhere1", 
+                "properties": { 
+                    "a": "property" 
+                }, 
+                "labels": [ 
+                    "Cool photo" 
+                ] 
+            }
+        }
+    }]
 }
 
 ###
@@ -51,11 +60,9 @@ Authorization: Bearer {{token}}
 # Uploads the full content for the asset.
 #
 
-@upload_asset_id = {{upload_asset.response.body.assetId}}
-
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-id: {{upload_asset_id}}
+id: {{asset}}
 col: {{collection}}
 asset-type: original
 Authorization: Bearer {{token}}
@@ -67,7 +74,7 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=original
+GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=original
 
 ###
 #
@@ -76,7 +83,7 @@ GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&t
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-id: {{upload_asset_id}}
+id: {{asset}}
 col: {{collection}}
 asset-type: thumb
 Authorization: Bearer {{token}}
@@ -87,7 +94,7 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=thumb
+GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=thumb
 
 ###
 #
@@ -96,7 +103,7 @@ GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&t
 
 POST {{base_url}}/asset
 Content-Type: image/jpeg
-id: {{upload_asset_id}}
+id: {{asset}}
 col: {{collection}}
 asset-type: display
 Authorization: Bearer {{token}}
@@ -107,90 +114,13 @@ Authorization: Bearer {{token}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/asset?id={{upload_asset_id}}&col={{collection}}&tok={{token}}&type=display
+GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=display
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-### 
-# Sets labels for an asset.
-#
-
-PATCH {{base_url}}/metadata
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-    "id": "{{upload_asset_id}}",
-    "col": "{{collection}}",
-    "update": {
-        "labels": [ "A great label" ]
-    }
-}
-
-
-###
-# Gets metadata for an asset.
-#
-
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-
-### 
-# Clears label from an asset.
-#
-
-PATCH {{base_url}}/metadata
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-    "id": "{{upload_asset_id}}",
-    "col": "{{collection}}",
-    "update": {
-        "labels": []
-    }
-}
-
-
-###
-# Gets metadata for an asset.
-#
-
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-
-### 
-# Sets a description for an asset.
-#
-
-PATCH {{base_url}}/metadata
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-    "id": "{{upload_asset_id}}",
-    "col": "{{collection}}",
-    "update": {
-        "description": "A great description"
-    }
-}
-
-
-###
-# Gets metadata for an asset.
-#
-
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -203,33 +133,25 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "dbOps": {
-        "ops": [
-            {
-                "id": "{{collection}}",
-                "ops": [
-                    {
-                        "id": "{{upload_asset_id}}",
-                        "ops": [
-                            {
-                                "type": "set",
-                                "fields": {
-                                    "aField": "aValue"
-                                }
-                            }
-                        ]
-                    }
-                ]
+    "clientId": "a-client-id",
+    "ops": [{
+        "databaseName": "{{collection}}",
+        "collectionName": "metadata",
+        "recordId": "{{asset}}",
+        "op": {
+            "type": "set",
+            "fields": {
+                "aField": "aValue"
             }
-        ]
-    }
+        }
+    }]
 }
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -242,32 +164,24 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "dbOps": {
-        "ops": [
-            {
-                "id": "{{collection}}",
-                "ops": [
-                    {
-                        "id": "{{upload_asset_id}}",
-                        "ops": [
-                            {
-                                "type": "push",
-                                "field": "anArray",
-                                "value": "anElementValue"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    }
+    "clientId": "a-client-id",
+    "ops": [{
+        "databaseName": "{{collection}}",
+        "collectionName": "metadata",
+        "recordId": "{{asset}}",
+        "op": {
+            "type": "push",
+            "field": "anArray",
+            "value": "anElementValue"
+       }
+    }]
 }
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -280,32 +194,24 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "dbOps": {
-        "ops": [
-            {
-                "id": "{{collection}}",
-                "ops": [
-                    {
-                        "id": "{{upload_asset_id}}",
-                        "ops": [
-                            {
-                                "type": "pull",
-                                "field": "anArray",
-                                "value": "anElementValue"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    }
+    "clientId": "a-client-id",
+    "ops": [{
+        "databaseName": "{{collection}}",
+        "collectionName": "metadata",
+        "recordId": "{{asset}}",
+        "op": {
+            "type": "pull",
+            "field": "anArray",
+            "value": "anElementValue"
+       }
+    }]
 }
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{upload_asset_id}}&col={{collection}}
+GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -326,7 +232,7 @@ Authorization: Bearer {{token}}
 # Gets journal operations after a certain update.
 #
 
-@last_update = 15
+@last_update = 16
 
 POST {{base_url}}/journal
 Content-Type: application/json
@@ -335,7 +241,7 @@ Authorization: Bearer {{token}}
 {
     "collectionId": "{{collection}}",
     "clientId": "a-client-id",
-    "id": "{{last_update}}"
+    "lastUpdateId": "{{last_update}}"
 }
 
 ###
