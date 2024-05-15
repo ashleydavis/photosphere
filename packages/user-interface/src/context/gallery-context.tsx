@@ -240,15 +240,27 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Add the asset to the database.
         //
-        await sink.submitOperations([{
-            databaseName: collectionId,
-            collectionName: "metadata",
-            recordId: galleryItem._id,
-            op: {
-                type: "set",
-                fields: galleryItemToAsset(galleryItem),
+        await sink.submitOperations([
+            {
+                databaseName: collectionId,
+                collectionName: "metadata",
+                recordId: galleryItem._id,
+                op: {
+                    type: "set",
+                    fields: galleryItemToAsset(galleryItem),
+                },
             },
-        }]);
+            {
+                databaseName: collectionId,
+                collectionName: "hashes",
+                recordId: galleryItem.hash,
+                op: {
+                    type: "push",
+                    field: "assetIds",
+                    value: galleryItem._id,
+                },
+            }
+        ]);
     }
 
     //
