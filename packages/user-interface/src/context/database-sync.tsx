@@ -73,6 +73,19 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 const noRecords = await assetCollection.collection("metadata").none();
                 if (noRecords) {
                     //
+                    // Records the latest update id for the collection.
+                    // This should be done before the initial sync to avoid missing updates.
+                    //
+                    const latestUpdateId = await api.getLatestUpdateId(collectionId);
+                    if (latestUpdateId !== undefined) {
+                        //
+                        // Record the latest update that was received.
+                        //
+                        const userDatabase = await indexeddb.database("user");
+                        userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
+                    }
+
+                    //
                     // Assume that no records means we need to get all records down.
                     //
                     const assets = await cloudSource.getAssets(collectionId);
@@ -94,18 +107,6 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                             const debugDatabase = await indexeddb.database("debug");
                             debugDatabase.collection<any>("initial-sync-recieved").setOne(uuid(), { ops: databaseOps });
                         }
-                    }
-
-                    //
-                    // Records the latest update id for the collection.
-                    //
-                    const latestUpdateId = await api.getLatestUpdateId(collectionId);
-                    if (latestUpdateId !== undefined) {
-                        //
-                        // Record the latest update that was received.
-                        //
-                        const userDatabase = await indexeddb.database("user");
-                        userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
                     }
                 }
 
