@@ -31,16 +31,8 @@ export function useCloudGallerySink(): IGallerySink {
         await api.submitOperations(ops);
     }
 
-    //
-    // Check that asset that has already been uploaded with a particular hash.
-    //
-    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
-        return await api.checkAsset(collectionId, hash);
-    }    
-
     return {
         storeAsset,
         submitOperations,
-        checkAsset,
     };
 }

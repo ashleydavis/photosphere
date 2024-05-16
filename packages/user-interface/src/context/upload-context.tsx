@@ -83,7 +83,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset, uploadAsset, checkAsset } = useGallery();
+    const { addAsset, uploadAsset, checkAssets } = useGallery();
 
     //
     // List of uploads that failed.
@@ -269,9 +269,9 @@ export function UploadContextProvider({ children }: IProps) {
         // }
 
         const hash = await computeHash(nextUpload.file);
-        const existingAssetId = await checkAsset(hash);
-        if (existingAssetId) {
-            console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, uploaded to ${existingAssetId}`);
+        const existingAssetIds = await checkAssets(hash);
+        if (existingAssetIds && existingAssetIds.length > 0) {
+            console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, to assets ${existingAssetIds.join(',')}`);
 
             setUploadStatus("already-uploaded", uploadIndex);
             setNumUploaded(numUploaded + 1);

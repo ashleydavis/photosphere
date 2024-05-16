@@ -15,9 +15,4 @@ export interface IGallerySink {
     // Submits operations to change the database.
     //
     submitOperations(ops: IDatabaseOp[]): Promise<void>;
-
-    //
-    // Check if the asset that has already been uploaded with a particular hash.
-    //
-    checkAsset(collectionId: string, hash: string): Promise<string | undefined>;
 }

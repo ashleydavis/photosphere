@@ -281,16 +281,8 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
         // Read the hash map.
         const assetCollection = await databases.database(collectionId);
         const hashesCollection = assetCollection.collection<string[]>("hashes");
-        const assetIds =  await hashesCollection.getOne(hash);
-        if (!assetIds || assetIds.length === 0) {
-            res.json({ assetId: undefined });
-            return;
-        }
-
-        const assetId = assetIds[0]; //todo: This should return the array of assetIds.
-
-        // The asset exists.
-        res.json({ assetId: assetId });
+        const assetIds = await hashesCollection.getOne(hash);
+        res.json({ assetIds });
     }));
 
     //

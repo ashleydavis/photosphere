@@ -12,7 +12,7 @@ import { IDatabaseOp, applyOperation } from "database";
 //
 // Use the "Indexeddb sink" in a component.
 //
-export function useIndexeddbGallerySink(): IGallerySink {
+export function useIndexeddbGallerySink(): IGallerySink { //todo: can this just be merged up?
 
     const indexedb = useIndexeddb();
 
@@ -26,21 +26,6 @@ export function useIndexeddbGallerySink(): IGallerySink {
             storeDate: new Date(),
             assetData,
         });
-    }
-
-    //
-    // Maps hashes to assets.
-    //
-    interface IHashRecord {
-        //
-        // ID of the record.
-        //
-        _id: string;
-
-        //
-        // Asset ids that map to this hash.
-        //
-        assetIds: string[];
     }
 
     //
@@ -64,26 +49,8 @@ export function useIndexeddbGallerySink(): IGallerySink {
         }        
     }
 
-    //
-    // Check that asset that has already been uploaded with a particular hash.
-    //
-    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
-        const assetCollection = await indexedb.database(`collection-${collectionId}`);
-        const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
-        if (!hashRecord) {
-            return undefined;
-        }
-
-        if (hashRecord.assetIds.length < 1) { 
-            return undefined;
-        }
-
-        return hashRecord.assetIds[0]; //TODO: This make this cope with hash collisions.
-    }
-
     return {
         storeAsset,
         submitOperations,
-        checkAsset,
     };
 }

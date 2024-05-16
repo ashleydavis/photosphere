@@ -72,10 +72,18 @@ export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSou
         return assetData;
     }
 
+    //
+    // Gets the assets already uploaded with a particular hash.
+    //
+    async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
+        return await indexeddbSource.checkAssets(collectionId, hash);
+    }
+
     return {
         isInitialised: indexeddbSource.isInitialised,
         getUser,
         getAssets,
         loadAsset,
+        checkAssets,
     };
 }

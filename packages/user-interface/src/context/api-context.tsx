@@ -59,9 +59,9 @@ export interface IApiContext {
     getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob>;
 
     //
-    // Check if an asset is already uploaded using its hash.
+    // Gets the assets already uploaded with a particular hash.
     //
-    checkAsset(collectionId: string, hash: string): Promise<string | undefined>;
+    checkAssets(collectionId: string, hash: string): Promise<string[] | undefined>;
 
     //
     // Uploads an asset to the backend.
@@ -192,9 +192,9 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Check if an asset is already uploaded using its hash.
+    // Gets the assets already uploaded with a particular hash.
     //
-    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> {
+    async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
         await loadToken();
         const token = getToken();
         const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
@@ -208,7 +208,7 @@ export function ApiContextProvider({ children }: IProps) {
                 },
             }
         );
-        return response.data.assetId;
+        return response.data.assetIds;
     }
 
     //
@@ -298,7 +298,7 @@ export function ApiContextProvider({ children }: IProps) {
         getAssets,
         getLatestUpdateId,
         getAsset,
-        checkAsset,
+        checkAssets,
         uploadSingleAsset,
         submitOperations,
         getJournal,

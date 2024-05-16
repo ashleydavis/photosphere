@@ -65,18 +65,8 @@ export function useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, o
         });
     }
 
-    //
-    // Check if asset has already been uploaded with a particular hash.
-    //
-    async function checkAsset(collectionId: string, hash: string): Promise<string | undefined> { //todo: should this move to the cloud source?
-        return await indexeddbSink.checkAsset(collectionId, hash);
-
-        //todo: should this check the cloud source?
-    }
-
     return {
         storeAsset,
         submitOperations,
-        checkAsset,
     };
 }

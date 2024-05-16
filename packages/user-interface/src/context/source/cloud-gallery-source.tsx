@@ -56,12 +56,20 @@ export function useCloudGallerySource(): IGallerySource {
             contentType: assetBlob.type,
             data: assetBlob,
         };
-   }
+    }
+
+    //
+    // Gets the assets already uploaded with a particular hash.
+    //
+    async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
+        return await api.checkAssets(collectionId, hash);
+    }    
 
     return {
         isInitialised: api.isInitialised,
         getUser,
         getAssets,
         loadAsset,
+        checkAssets,
     };
 }

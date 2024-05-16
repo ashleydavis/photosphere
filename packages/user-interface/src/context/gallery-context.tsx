@@ -30,9 +30,9 @@ export interface IGalleryContext {
     updateAsset(assetIndex: number, asset: Partial<IGalleryItem>): Promise<void>;
 
     //
-    // Check that asset that has already been uploaded with a particular hash.
+    // Gets the assets already uploaded with a particular hash.
     //
-    checkAsset(hash: string): Promise<string | undefined>;
+    checkAssets(hash: string): Promise<string[] | undefined>;
 
     //
     // Uploads an asset.
@@ -354,18 +354,14 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     }
 
     //
-    // Check that asset that has already been uploaded with a particular hash.
+    // Gets the assets already uploaded with a particular hash.
     //
-    async function checkAsset(hash: string): Promise<string | undefined> {
-        if (!sink) {
-            throw new Error(`Cannot check asset in readonly gallery.`);
-        }
-
+    async function checkAssets(hash: string): Promise<string[] | undefined> {
         if (!collectionId) {
             throw new Error(`Cannot add asset without a collection id.`);
         }
 
-        return await sink.checkAsset(collectionId, hash);
+        return await source.checkAssets(collectionId, hash);
     }    
 
     //
@@ -565,7 +561,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         loadAssets,
         addAsset,
         updateAsset,
-        checkAsset, 
+        checkAssets, 
         uploadAsset,
         loadAsset,
         unloadAsset,

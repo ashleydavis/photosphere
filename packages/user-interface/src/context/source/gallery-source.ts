@@ -27,4 +27,9 @@ export interface IGallerySource {
     // Loads data for an asset.
     //
     loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined>;
+
+    //
+    // Gets the assets already uploaded with a particular hash.
+    //
+    checkAssets(collectionId: string, hash: string): Promise<string[] | undefined>;
 }

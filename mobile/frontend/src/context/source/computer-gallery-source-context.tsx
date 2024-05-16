@@ -45,5 +45,6 @@ export function useComputerGallerySource(): IGallerySource {
         getUser,
         getAssets,
         loadAsset,
+        checkAssets: async () => [],
     };
 }

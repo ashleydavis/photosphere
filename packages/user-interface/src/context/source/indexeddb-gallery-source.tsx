@@ -9,6 +9,7 @@ import { IUser } from "../../def/user";
 import { IAssetData } from "../../def/asset-data";
 import { IAsset } from "../../def/asset";
 import { IAssetRecord } from "../../def/asset-record";
+import { IHashRecord } from "../../def/hash-record";
 
 //
 // Use the "Indexeddb source" in a component.
@@ -58,10 +59,29 @@ export function useIndexeddbGallerySource(): IGallerySource {
         return assetRecord.assetData;
     }
 
+    //
+    // Gets the assets already uploaded with a particular hash.
+    //
+    async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
+        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
+        if (!hashRecord) {
+            return undefined;
+        }
+
+        if (hashRecord.assetIds.length < 1) { 
+            return undefined;
+        }
+
+        return hashRecord.assetIds;
+    }
+
+
     return {
         isInitialised: true, // Indexedb is always considered online.
         getUser,
         getAssets,
         loadAsset,
+        checkAssets,
     };
 }
