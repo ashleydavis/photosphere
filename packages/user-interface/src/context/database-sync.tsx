@@ -8,7 +8,7 @@ import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
 import { IDatabaseOp } from "database";
-import { IPersistentQueue, useOutgoingUpdateQueue } from "./persistent-queue";
+import { IPersistentQueue } from "./persistent-queue";
 import { IAssetUploadRecord } from "../def/asset-upload-record";
 import { IAssetUpdateRecord } from "../def/asset-update-record";
 

@@ -1,10 +1,34 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, useOutgoingUpdateQueue, IAssetUpdateRecord, IAssetUploadRecord } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue, IPersistentQueue } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
+
+//
+// Use the outgoing queue as a React hook.
+//
+export function useOutgoingUpdateQueue<RecordT>(databaseName: string, databaseVersion: number, collectionName: string): IPersistentQueue<RecordT> {
+
+    const queue = useRef<PersistentQueue<RecordT>>(new PersistentQueue<RecordT>(databaseName, databaseVersion, collectionName));
+
+    useEffect(() => {
+        queue.current.open()
+            .catch(err => {
+                console.error("Failed to open outgoing update queue")
+                console.error(err);
+            });
+
+        return () => {
+            queue.current.close();
+        }
+
+    }, [])
+
+    return queue.current;
+}
 
 function GallerySetup() {
 
+    
     const indexeddbSource = useIndexeddbGallerySource();
     const indexeddbSink = useIndexeddbGallerySink();
 

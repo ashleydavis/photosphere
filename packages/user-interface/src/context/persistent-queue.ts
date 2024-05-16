@@ -1,5 +1,4 @@
 import { createReverseChronoTimestamp, indexeddb } from "database";
-import { useEffect, useRef } from "react";
 
 //
 // Queues updates to be sent to the server.
@@ -104,27 +103,4 @@ export class PersistentQueue<RecordT> implements IPersistentQueue<RecordT> {
         const id = createReverseChronoTimestamp(new Date());
         await indexeddb.storeRecord<RecordT>(this.db, this.collectionName, id, record);
     }
-}
-
-//
-// Use the outgoing queue as a React hook.
-//
-export function useOutgoingUpdateQueue<RecordT>(databaseName: string, databaseVersion: number, collectionName: string): IPersistentQueue<RecordT> {
-
-    const queue = useRef<PersistentQueue<RecordT>>(new PersistentQueue<RecordT>(databaseName, databaseVersion, collectionName));
-
-    useEffect(() => {
-        queue.current.open()
-            .catch(err => {
-                console.error("Failed to open outgoing update queue")
-                console.error(err);
-            });
-
-        return () => {
-            queue.current.close();
-        }
-
-    }, [])
-
-    return queue.current;
 }
