@@ -6,7 +6,7 @@ export interface IIndexeddbContext {
     //
     // Gets an indexedb database.
     //
-    database(databaseName: string): Promise<IDatabase>;
+    database(databaseName: string): IDatabase;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -68,8 +68,8 @@ export function IndexeddbContextProvider({ children }: IProps) {
     //
     // Gets an indexedb database.
     //
-    async function database(databaseName: string): Promise<IDatabase> {
-        return await dbCache.current.database(databaseName);    
+    function database(databaseName: string): IDatabase {
+        return dbCache.current.database(databaseName);    
     }
 
     const value: IIndexeddbContext = {

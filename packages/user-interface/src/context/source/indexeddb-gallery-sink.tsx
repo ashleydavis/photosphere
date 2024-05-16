@@ -20,7 +20,7 @@ export function useIndexeddbGallerySink(): IGallerySink { //todo: can this just 
     // Stores an asset.
     //
     async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        const assetCollection = await indexedb.database(`collection-${collectionId}`);
+        const assetCollection = indexedb.database(`collection-${collectionId}`);
         await assetCollection.collection<IAssetRecord>(assetType).setOne(assetId, {
             _id: assetId,
             storeDate: new Date(),
@@ -35,7 +35,7 @@ export function useIndexeddbGallerySink(): IGallerySink { //todo: can this just 
 
         for (const databaseOp of databaseOps) {
             const recordId = databaseOp.recordId;
-            const assetCollection = await indexedb.database(`collection-${databaseOp.databaseName}`);
+            const assetCollection = indexedb.database(`collection-${databaseOp.databaseName}`);
             const asset = await assetCollection.collection<IAssetRecord>(databaseOp.collectionName).getOne(recordId);
             let fields = asset as any || {};
             if (!asset) {

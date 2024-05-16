@@ -3,7 +3,6 @@
 //
 
 import { IGallerySource } from "./gallery-source";
-import { useApi } from "../api-context";
 import { useIndexeddb } from "../indexeddb-context";
 import { IUser } from "../../def/user";
 import { IAssetData } from "../../def/asset-data";
@@ -16,7 +15,6 @@ import { IHashRecord } from "../../def/hash-record";
 //
 export function useIndexeddbGallerySource(): IGallerySource {
 
-    const api = useApi();
     const indexeddb = useIndexeddb();
 
     //
@@ -28,7 +26,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return undefined;
         }
 
-        const userDatabase = await indexeddb.database("user");
+        const userDatabase = indexeddb.database("user");
         const user = await userDatabase.collection<IUser>("user").getOne(userId);
         if (!user) {
             return undefined;
@@ -41,7 +39,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Retreives assets from the source.
     //
     async function getAssets(collectionId: string): Promise<IAsset[]> {
-        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.database(`collection-${collectionId}`);
         const result = await assetCollection.collection<IAsset>("metadata").getAll(1000, undefined); //todo: pagination needs to be passed on
         return result.records;
     }
@@ -50,7 +48,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Loads data for an asset.
     //
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
-        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.database(`collection-${collectionId}`);
         const assetRecord = await assetCollection.collection<IAssetRecord>(assetType).getOne(assetId);
         if (!assetRecord) {
             return undefined;
@@ -63,7 +61,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Gets the assets already uploaded with a particular hash.
     //
     async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
-        const assetCollection = await indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.database(`collection-${collectionId}`);
         const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
         if (!hashRecord) {
             return undefined;
