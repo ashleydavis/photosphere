@@ -49,9 +49,4 @@ export interface IDatabaseCollection<RecordT = any> {
     // Returns true if there are no records in the collection.
     //
     none(): Promise<boolean>;
-
-    // 
-    // Gets the oldest record in the collection.
-    //
-    getLeastRecentRecord(): Promise<RecordT | undefined>;
 }

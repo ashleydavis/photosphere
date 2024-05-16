@@ -69,11 +69,4 @@ export class StorageDatabaseCollection<RecordT = any> implements IDatabaseCollec
         const result = await this.getAll(1, undefined);
         return result.records.length === 0;
     }
-
-    // 
-    // Gets the oldest record in the collection.
-    //
-    async getLeastRecentRecord(): Promise<RecordT | undefined> {
-        throw new Error("Not implemented for storage. The implementation would be too expensive.");
-    }
 }

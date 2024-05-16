@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, useOutgoingUpdateQueue, IAssetUploadRecord, IAssetUpdateRecord } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 function GallerySetup() {
@@ -11,7 +11,9 @@ function GallerySetup() {
     const cloudSource = useCloudGallerySource();
     const cloudSink = useCloudGallerySink();
 
-    const outgoingSink = useOutgoingQueueSink();
+    const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>("outgoing-asset-upload", 1, "outgoing-asset-upload");
+    const outgoingAssetUpdateQueue = useOutgoingUpdateQueue<IAssetUpdateRecord>("outgoing-asset-update", 1, "outgoing-asset-update");
+    const outgoingSink = useOutgoingQueueSink({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue});
     const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
     const localSink = useLocalGallerySink({ indexeddbSink, outgoingSink });
 
@@ -22,6 +24,8 @@ function GallerySetup() {
             indexeddbSource={indexeddbSource}
             indexeddbSink={indexeddbSink}
             localSource={localSource}
+            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue}
+            outgoingAssetUploadQueue={outgoingAssetUploadQueue}
             >
             <GalleryContextProvider 
                 source={localSource} // The source of assets to display in the gallery.

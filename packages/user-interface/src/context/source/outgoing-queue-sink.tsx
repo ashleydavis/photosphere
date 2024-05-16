@@ -3,20 +3,14 @@
 //
 
 import { IGallerySink } from "./gallery-sink";
-import { uuid } from "../../lib/uuid";
-import { useIndexeddb } from "../indexeddb-context";
 import { IAssetData } from "../../def/asset-data";
 import { IDatabaseOp } from "database";
+import { IPersistentQueue } from "../persistent-queue";
 
 //
 // Records an asset upload in the outgoing queue.
 //
 export interface IAssetUploadRecord {
-    //
-    // ID of the database record.
-    //
-    _id: string;
-
     //
     // ID of the collection to upload to.
     //
@@ -43,51 +37,47 @@ export interface IAssetUploadRecord {
 //
 export interface IAssetUpdateRecord {
     //
-    // ID of the database record.
-    //
-    _id: string;
-
-    //
     // Operations to apply to the database.
     //
-    op: IDatabaseOp;
+    ops: IDatabaseOp[];
+}
+
+export interface IProps {
+    //
+    // Queues outgoing asset uploads.
+    //
+    outgoingAssetUploadQueue: IPersistentQueue<IAssetUploadRecord>;
+
+    //
+    // Queues outgoing asset updates.
+    //
+    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
 }
 
 //
 // Use the outgoing queue sink in a component.
 //
-export function useOutgoingQueueSink(): IGallerySink {
-
-    const indexeddb = useIndexeddb();
+export function useOutgoingQueueSink({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue }: IProps): IGallerySink {
 
     //
     // Stores an asset.
     //
     async function storeAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        const userDatabase = await indexeddb.database("user");
-        const id = uuid();
-        await userDatabase.collection("outgoing-asset-upload").setOne(uuid(), {
-            _id: uuid(),
+        await outgoingAssetUploadQueue.add({
             collectionId,
             assetId,
             assetType,
             assetData,
-        });
+         });
     }
 
     //
     // Submits operations to change the database.
     //
     async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
-        const userDatabase = await indexeddb.database("user");
-        const updateCollection = await userDatabase.collection("outgoing-asset-update");
-        for (const op of ops) {
-            const id = uuid();
-            await updateCollection.setOne(id, {
-                _id: id,
-                op,
-            });
-        }
+        await outgoingAssetUpdateQueue.add({
+            ops,
+        });
     }
 
     //

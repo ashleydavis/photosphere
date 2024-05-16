@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { indexeddb } from "database";
+import { PersistentQueue } from "user-interface";
 
 //
 // Checks for equality between two arrays.
@@ -67,7 +68,7 @@ export function TestIndexeddb() {
             console.log(`Load least recent record:`);
             console.log(JSON.stringify(leastRecentRecord));
 
-            if (!leastRecentRecord || leastRecentRecord._id !== "03") {
+            if (!leastRecentRecord || leastRecentRecord[0] !== "03") {
                 throw new Error("Expected 03 to be the least recent record.");
             }
 
@@ -79,6 +80,36 @@ export function TestIndexeddb() {
             if (!arraysEqual(allRecordIds, ["01", "02", "03"])) {
                 throw new Error("Expected all records to be in ascending order.");
             }
+
+            await indexeddb.deleteDatabase("photosphere-queue-test");
+
+            //
+            // Can queue.
+            // 
+            const queue = new PersistentQueue<any>("photosphere-queue-test", 1, "test-queue");
+            await queue.open();
+            await queue.add({ test: "B" });
+            await queue.add({ test: "Z" });
+            await queue.add({ test: "A" });
+            const record1 = await queue.getNext();
+            if (record1 && record1.test !== "B") {
+                throw new Error(`Expected B to be the first record. Got ${JSON.stringify(record1)}`);
+            }
+            await queue.removeNext();
+            const record2 = await queue.getNext();
+            if (record2 && record2.test !== "Z") {
+                throw new Error(`Expected Z to be the second record. Got ${JSON.stringify(record2)}`);
+            }
+            await queue.removeNext();
+            const record3 = await queue.getNext();
+            if (record3 && record3.test !== "A") {
+                throw new Error(`Expected A to be the third record. Got ${JSON.stringify(record3)}`);
+            }
+            await queue.removeNext();
+            const undefinedFinalRecord = await queue.getNext();
+            if (undefinedFinalRecord !== undefined) {
+                throw new Error("Expected no more records.");
+            }           
         }
 
         testDb()

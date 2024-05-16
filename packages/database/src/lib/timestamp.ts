@@ -1,3 +1,7 @@
+//
+// The addition of the sequence number to the timestamp is a simple way to ensure that timestamps are unique.
+//
+let sequenceNo = 999;
 
 //
 // Creates a timestamp that is counting down to the year 3000.
@@ -8,5 +12,10 @@ export function createReverseChronoTimestamp(currentDate: Date): string {
 
     // Calculate the difference in milliseconds
     const diff = targetDate.getTime() - currentDate.getTime();
-    return diff.toString().padStart(20, '0');
+    const timestamp = diff.toString().padStart(20, '0') + '-' + sequenceNo.toString().padStart(3, '0');
+    sequenceNo -= 1;
+    if (sequenceNo <= 0) {
+        sequenceNo = 999; // Reset.
+    }
+    return timestamp;
 }

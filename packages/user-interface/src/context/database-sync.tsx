@@ -1,4 +1,4 @@
-import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { useOnline } from "../lib/use-online";
 import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
 import { IGallerySink } from "./source/gallery-sink";
@@ -9,6 +9,7 @@ import { isProduction } from "./auth-context";
 import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
 import { IDatabaseOp } from "database";
+import { IPersistentQueue, useOutgoingUpdateQueue } from "./persistent-queue";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -43,10 +44,20 @@ export interface IProps {
     indexeddbSink: IGallerySink;
     localSource: IGallerySource;
 
+    //
+    // Queues outgoing asset uploads.
+    //
+    outgoingAssetUploadQueue: IPersistentQueue<IAssetUploadRecord>;
+
+    //
+    // Queues outgoing asset updates.
+    //
+    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
+
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource, indexeddbSink, localSource, children }: IProps) {
+export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource, indexeddbSink, localSource, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, children }: IProps) {
     
     const { isOnline } = useOnline();
     const indexeddb = useIndexeddb();
@@ -151,14 +162,13 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             // Flush the queue of outgoing asset uploads.
             //
             while (true) {
-                const outgoingUploads = userDatabase.collection<IAssetUploadRecord>("outgoing-asset-upload");
-                const outgoingUpload = await outgoingUploads.getLeastRecentRecord();
+                const outgoingUpload = await outgoingAssetUploadQueue.getNext();
                 if (!outgoingUpload) {
                     break;
                 }
 
                 await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.assetData);
-                await outgoingUploads.deleteOne(outgoingUpload._id);
+                await outgoingAssetUploadQueue.removeNext();
 
                 if (!isProduction) {
                     const debugDatabase = await indexeddb.database("debug");
@@ -172,21 +182,23 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             // Flush the queue of outgoing asset updates.
             //
             while (true) {
-                const outgoingUpdates = userDatabase.collection<IAssetUpdateRecord>("outgoing-asset-update");
-                const outgoingUpdate = await outgoingUpdates.getLeastRecentRecord();
+                const outgoingUpdate = await outgoingAssetUpdateQueue.getNext();
                 if (!outgoingUpdate) {
                     break;
                 }
 
-                await cloudSink.submitOperations([outgoingUpdate.op]);
-                await outgoingUpdates.deleteOne(outgoingUpdate._id);
-
+                await cloudSink.submitOperations(outgoingUpdate.ops);
+                await outgoingAssetUpdateQueue.removeNext();
+ 
                 if (!isProduction) {
                     const debugDatabase = await indexeddb.database("debug");
                     await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { update: outgoingUpdate });
                 }
 
-                console.log(`Processed outgoing update: ${outgoingUpdate.op.databaseName}/${outgoingUpdate.op.recordId}`);
+                console.log(`Processed outgoing updates:`);
+                for (const op of outgoingUpdate.ops) {
+                    console.log(`  ${op.databaseName}/${op.collectionName}/${op.recordId}`);
+                }
             }
         }
         catch (err) {

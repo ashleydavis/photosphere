@@ -31,8 +31,6 @@ const databaseConfigurations: IDatabaseConfigurations = {
     },
     user: {    
         collectionNames: [
-            "outgoing-asset-upload",
-            "outgoing-asset-update",
             "last-update-id",
             "user",
         ],

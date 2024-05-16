@@ -53,9 +53,10 @@ export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, reco
 
 //
 // Gets the least recent record from the database.
+// This relies on the ids being timestamps in reverse chronological order.
 //
-export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: string): Promise<RecordT | undefined> {  
-    return new Promise<RecordT | undefined>((resolve, reject) => {
+export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: string): Promise<[string, RecordT] | undefined> {  
+    return new Promise<[string, RecordT] | undefined>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readonly');
         const store = transaction.objectStore(collectionName);
         const request = store.openCursor(null, 'prev');
@@ -63,7 +64,7 @@ export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: s
         request.onsuccess = event => {
             const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
             if (cursor) {
-                resolve(cursor.value);
+                resolve([cursor.key as string, cursor.value]);
             } 
             else {
                 resolve(undefined);

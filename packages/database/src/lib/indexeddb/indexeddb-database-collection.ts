@@ -21,7 +21,6 @@ export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection
     async getOne(id: string): Promise<RecordT | undefined> {
         const db = await this.openDb();
         return await getRecord<RecordT>(db, this.collectionName, id);
-       
     }
 
     //
@@ -62,13 +61,4 @@ export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection
         const numRecords = await getNumRecords(db, this.collectionName);
         return numRecords === 0;
     }
-
-    // 
-    // Gets the oldest record in the collection.
-    //
-    async getLeastRecentRecord(): Promise<RecordT | undefined> {
-        const db = await this.openDb();
-        return await getLeastRecentRecord<RecordT>(db, this.collectionName);
-    }
-
 }

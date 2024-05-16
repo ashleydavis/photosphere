@@ -4,6 +4,7 @@ export * from "./lib/get-journal";
 export * from "./lib/database-collection";
 export * from "./lib/database";
 export * from "./lib/databases";
+export * from "./lib/timestamp";
 export * as indexeddb from "./lib/indexeddb/indexeddb";
 export * from "./lib/indexeddb/indexeddb-database-collection";
 export * from "./lib/indexeddb/indexeddb-databases";
