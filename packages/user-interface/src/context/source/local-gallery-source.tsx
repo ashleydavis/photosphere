@@ -29,7 +29,7 @@ export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSou
                 //
                 // Store user locally for offline use.
                 //
-                const userDatabase = indexeddb.database("user");
+                const userDatabase = indexeddb.databases.database("user");
                 await userDatabase.collection("user").setOne("user", user);
                 localStorage.setItem("userId", user._id);
                 return user;

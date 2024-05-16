@@ -81,7 +81,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             }
 
             for (const collectionId of user.collections.access) {
-                const assetCollection = indexeddb.database(`collection-${collectionId}`);
+                const assetCollection = indexeddb.databases.database(`collection-${collectionId}`);
                 const noRecords = await assetCollection.collection("metadata").none();
                 if (noRecords) {
                     //
@@ -93,7 +93,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                         //
                         // Record the latest update that was received.
                         //
-                        const userDatabase = indexeddb.database("user");
+                        const userDatabase = indexeddb.databases.database("user");
                         userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
                     }
 
@@ -116,7 +116,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
 
                     if (!isProduction) {
                         if (databaseOps.length > 0) {
-                            const debugDatabase = indexeddb.database("debug");
+                            const debugDatabase = indexeddb.databases.database("debug");
                             debugDatabase.collection<any>("initial-sync-recieved").setOne(uuid(), { ops: databaseOps });
                         }
                     }
@@ -157,7 +157,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
     //
     async function syncOutgoing() {
         try {
-            const userDatabase = indexeddb.database("user");
+            const userDatabase = indexeddb.databases.database("user");
 
             //
             // Flush the queue of outgoing asset uploads.
@@ -172,7 +172,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 await outgoingAssetUploadQueue.removeNext();
 
                 if (!isProduction) {
-                    const debugDatabase = indexeddb.database("debug");
+                    const debugDatabase = indexeddb.databases.database("debug");
                     await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { upload: outgoingUpload });
                 }
 
@@ -192,7 +192,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 await outgoingAssetUpdateQueue.removeNext();
  
                 if (!isProduction) {
-                    const debugDatabase = indexeddb.database("debug");
+                    const debugDatabase = indexeddb.databases.database("debug");
                     await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { update: outgoingUpdate });
                 }
 
@@ -224,7 +224,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
 
             const collectionIds = user.collections.access;
 
-            const userDatabase = indexeddb.database("user");
+            const userDatabase = indexeddb.databases.database("user");
 
             //
             // Retreive updates for the collections we have access to, but only
@@ -251,7 +251,7 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
                 })));
                     
                 if (!isProduction) {
-                    const debugDatabase = indexeddb.database("debug");
+                    const debugDatabase = indexeddb.databases.database("debug");
                     await debugDatabase.collection<any>("updates-recieved").setOne(uuid(), { update: journalResult });
                 }
 

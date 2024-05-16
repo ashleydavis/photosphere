@@ -1,7 +1,7 @@
 import { IDatabase } from "../database";
 import { IDatabases } from "../databases";
 import { openDatabase } from "./indexeddb";
-import { IndexeddbDatabase } from "./indexeddb-database";
+import { IIndexeddbDatabase, IndexeddbDatabase } from "./indexeddb-database";
 
 //
 // Configures a database.
@@ -25,7 +25,14 @@ export interface IDatabaseConfigurations {
     [databaseName: string]: IDatabaseConfiguration;
 }
 
-export class IndexeddbDatabases implements IDatabases {
+export interface IIndexeddbDatabases extends IDatabases {
+    //
+    // Gets a database by name.
+    //   
+    database(databaseName: string): IIndexeddbDatabase;
+}
+
+export class IndexeddbDatabases implements IIndexeddbDatabases {
 
     private dbCache = new Map<string, IDBDatabase>();
 
@@ -46,7 +53,7 @@ export class IndexeddbDatabases implements IDatabases {
     //
     // Gets a database by name.
     //   
-    database(databaseName: string): IDatabase {
+    database(databaseName: string): IIndexeddbDatabase {
         return new IndexeddbDatabase(() => this.openDatabase(databaseName));
     }
 

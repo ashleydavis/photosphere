@@ -1,12 +1,11 @@
-import { IDatabase, IDatabaseConfigurations, IndexeddbDatabases } from "database";
-import { version } from "os";
-import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
+import { IDatabase, IDatabaseConfigurations, IIndexeddbDatabases, IndexeddbDatabases } from "database";
+import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
 
 export interface IIndexeddbContext {
     //
-    // Gets an indexedb database.
+    // Interface for retieving databases.
     //
-    database(databaseName: string): IDatabase;
+    databases: IIndexeddbDatabases;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -31,6 +30,8 @@ const databaseConfigurations: IDatabaseConfigurations = {
     },
     user: {    
         collectionNames: [
+            "outgoing-asset-upload",
+            "outgoing-asset-update",
             "last-update-id",
             "user",
         ],
@@ -65,15 +66,8 @@ export function IndexeddbContextProvider({ children }: IProps) {
         };
     }, []);
 
-    //
-    // Gets an indexedb database.
-    //
-    function database(databaseName: string): IDatabase {
-        return dbCache.current.database(databaseName);    
-    }
-
     const value: IIndexeddbContext = {
-        database,
+        databases: dbCache.current,
     };
     
     return (

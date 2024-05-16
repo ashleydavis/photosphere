@@ -7,6 +7,7 @@ export * from "./lib/databases";
 export * from "./lib/timestamp";
 export * as indexeddb from "./lib/indexeddb/indexeddb";
 export * from "./lib/indexeddb/indexeddb-database-collection";
+export * from "./lib/indexeddb/indexeddb-database";
 export * from "./lib/indexeddb/indexeddb-databases";
 export * from "./lib/storage/storage";
 export * from "./lib/storage/storage-directory";

@@ -1,4 +1,4 @@
-import { createReverseChronoTimestamp, indexeddb } from "database";
+import { IIndexeddbDatabase, createReverseChronoTimestamp, indexeddb } from "database";
 
 //
 // Queues updates to be sent to the server.
@@ -26,47 +26,19 @@ export interface IPersistentQueue<RecordT> {
 export class PersistentQueue<RecordT> implements IPersistentQueue<RecordT> {
 
     //
-    // The database that contains the queue.
-    //
-    private db: IDBDatabase | undefined = undefined;
-
-    //
     // The key for the next record to be removed.
     //
-    private key: string | undefined = undefined
+    private key: string | undefined = undefined;
 
-
-    constructor(private databaseName: string, private databaseVersion: number, private collectionName: string) {
-    }
-
-    //
-    // Opens the database connection.
-    //
-    async open(): Promise<void> {
-        if (this.db === undefined) {
-            this.db = await indexeddb.openDatabase(this.databaseName, this.databaseVersion, [ this.collectionName ]);
-        }        
-    }
-
-    //
-    // Closes the database connection.
-    //
-    close(): void {
-        if (this.db) {
-            this.db.close();
-            this.db = undefined;
-        }
+    constructor(private database: IIndexeddbDatabase, private collectionName: string) {
     }
 
     //
     // Gets the next record in the queue.
     //
     async getNext(): Promise<RecordT | undefined> {
-        if (this.db === undefined) {
-            throw new Error("Database is not open");
-        }
-
-        const result = await indexeddb.getLeastRecentRecord<RecordT>(this.db, this.collectionName);
+        const db = await this.database.getIndexedDb();
+        const result = await indexeddb.getLeastRecentRecord<RecordT>(db, this.collectionName);
         if (!result) {
             return undefined;
         }
@@ -80,15 +52,13 @@ export class PersistentQueue<RecordT> implements IPersistentQueue<RecordT> {
     // Removes the next record in the queue.
     //
     async removeNext(): Promise<void> {
-        if (this.db === undefined) {
-            throw new Error("Database is not open");
-        }
-
+       
         if (this.key === undefined) {
             throw new Error("No key to remove, call getNext first.");
         }
-
-        await indexeddb.deleteRecord(this.db, this.collectionName, this.key);
+        
+        const db = await this.database.getIndexedDb();
+        await indexeddb.deleteRecord(db, this.collectionName, this.key);
         this.key = undefined;
     }
 
@@ -96,11 +66,8 @@ export class PersistentQueue<RecordT> implements IPersistentQueue<RecordT> {
     // Adds a record to the queue.
     //
     async add(record: RecordT): Promise<void> {
-        if (this.db === undefined) {
-            throw new Error("Database is not open");
-        }
-
+        const db = await this.database.getIndexedDb();
         const id = createReverseChronoTimestamp(new Date());
-        await indexeddb.storeRecord<RecordT>(this.db, this.collectionName, id, record);
+        await indexeddb.storeRecord<RecordT>(db, this.collectionName, id, record);
     }
 }

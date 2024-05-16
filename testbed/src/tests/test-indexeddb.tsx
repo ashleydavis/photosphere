@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { indexeddb } from "database";
+import { IndexeddbDatabases, indexeddb } from "database";
 import { PersistentQueue } from "user-interface";
 
 //
@@ -86,8 +86,13 @@ export function TestIndexeddb() {
             //
             // Can queue.
             // 
-            const queue = new PersistentQueue<any>("photosphere-queue-test", 1, "test-queue");
-            await queue.open();
+            const databases = new IndexeddbDatabases({
+                "photosphere-queue-test": {
+                    collectionNames: [ "test-queue" ],
+                    versionNumber: 1,
+                }
+            });
+            const queue = new PersistentQueue<any>(databases.database("photosphere-queue-test"), "test-queue");
             await queue.add({ test: "B" });
             await queue.add({ test: "Z" });
             await queue.add({ test: "A" });
@@ -109,7 +114,8 @@ export function TestIndexeddb() {
             const undefinedFinalRecord = await queue.getNext();
             if (undefinedFinalRecord !== undefined) {
                 throw new Error("Expected no more records.");
-            }           
+            }
+            await databases.shutdown();
         }
 
         testDb()

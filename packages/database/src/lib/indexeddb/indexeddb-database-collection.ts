@@ -2,7 +2,10 @@ import { get } from "http";
 import { IDatabaseCollection, IPage } from "../database-collection";
 import { deleteRecord, getAllKeys, getAllRecords, getLeastRecentRecord, getNumRecords, getRecord, storeRecord } from "./indexeddb";
 
-export class IndexeddbDatabaseCollection<RecordT> implements IDatabaseCollection<RecordT> {
+export interface IIndexeddbDatabaseCollection<RecordT> extends IDatabaseCollection<RecordT> {
+}
+
+export class IndexeddbDatabaseCollection<RecordT> implements IIndexeddbDatabaseCollection<RecordT> {
 
     constructor(private collectionName: string, private openDb: () => Promise<IDBDatabase>) {
     }

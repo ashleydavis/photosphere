@@ -26,7 +26,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
             return undefined;
         }
 
-        const userDatabase = indexeddb.database("user");
+        const userDatabase = indexeddb.databases.database("user");
         const user = await userDatabase.collection<IUser>("user").getOne(userId);
         if (!user) {
             return undefined;
@@ -39,7 +39,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Retreives assets from the source.
     //
     async function getAssets(collectionId: string): Promise<IAsset[]> {
-        const assetCollection = indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.databases.database(`collection-${collectionId}`);
         const result = await assetCollection.collection<IAsset>("metadata").getAll(1000, undefined); //todo: pagination needs to be passed on
         return result.records;
     }
@@ -48,7 +48,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Loads data for an asset.
     //
     async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
-        const assetCollection = indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.databases.database(`collection-${collectionId}`);
         const assetRecord = await assetCollection.collection<IAssetRecord>(assetType).getOne(assetId);
         if (!assetRecord) {
             return undefined;
@@ -61,7 +61,7 @@ export function useIndexeddbGallerySource(): IGallerySource {
     // Gets the assets already uploaded with a particular hash.
     //
     async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
-        const assetCollection = indexeddb.database(`collection-${collectionId}`);
+        const assetCollection = indexeddb.databases.database(`collection-${collectionId}`);
         const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
         if (!hashRecord) {
             return undefined;
