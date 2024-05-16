@@ -1,6 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { useOnline } from "../lib/use-online";
-import { IAssetUpdateRecord, IAssetUploadRecord } from "./source/outgoing-queue-sink";
 import { IGallerySink } from "./source/gallery-sink";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
@@ -10,6 +9,8 @@ import { uuid } from "../lib/uuid";
 import { IAsset } from "../def/asset";
 import { IDatabaseOp } from "database";
 import { IPersistentQueue, useOutgoingUpdateQueue } from "./persistent-queue";
+import { IAssetUploadRecord } from "../def/asset-upload-record";
+import { IAssetUpdateRecord } from "../def/asset-update-record";
 
 const SYNC_POLL_PERIOD = 1000;
 

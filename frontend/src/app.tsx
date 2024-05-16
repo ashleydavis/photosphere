@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useOutgoingQueueSink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, useOutgoingUpdateQueue, IAssetUploadRecord, IAssetUpdateRecord } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, useOutgoingUpdateQueue, IAssetUpdateRecord, IAssetUploadRecord } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 function GallerySetup() {
@@ -11,11 +11,10 @@ function GallerySetup() {
     const cloudSource = useCloudGallerySource();
     const cloudSink = useCloudGallerySink();
 
-    const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>("outgoing-asset-upload", 1, "outgoing-asset-upload");
+    const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>("outgoing-asset-upload", 1, "outgoing-asset-upload"); //todo: Both should be in the same db!
     const outgoingAssetUpdateQueue = useOutgoingUpdateQueue<IAssetUpdateRecord>("outgoing-asset-update", 1, "outgoing-asset-update");
-    const outgoingSink = useOutgoingQueueSink({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue});
     const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
-    const localSink = useLocalGallerySink({ indexeddbSink, outgoingSink });
+    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue });
 
     return (
         <DbSyncContextProvider

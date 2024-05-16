@@ -1,6 +1,8 @@
 export { Main } from './main';
 export { IUser } from './def/user';
 export { IAsset } from './def/asset';
+export * from './def/asset-upload-record';
+export * from './def/asset-update-record';
 export { AuthContextProvider, isProduction } from './context/auth-context';
 export { ApiContextProvider } from './context/api-context';
 export { IGallerySource as IGallerySourceContext } from './context/source/gallery-source';
@@ -10,7 +12,6 @@ export { useLocalGallerySource } from './context/source/local-gallery-source';
 export { useLocalGallerySink } from './context/source/local-gallery-sink';
 export { useIndexeddbGallerySource } from './context/source/indexeddb-gallery-source';
 export { useIndexeddbGallerySink } from './context/source/indexeddb-gallery-sink';
-export * from './context/source/outgoing-queue-sink';
 export { useDatabaseSync } from './context/database-sync';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
