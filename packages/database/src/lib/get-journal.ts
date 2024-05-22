@@ -1,7 +1,7 @@
 import { IDatabaseOpRecord, IOpSelection } from "../defs/ops";
+import { IPage } from "../defs/page";
 import { binarySearch } from "./binary-search";
 import { IDatabase } from "./database";
-import { IPage } from "./database-collection";
 
 //
 // Records a database operation against a particular record.

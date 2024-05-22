@@ -1,5 +1,5 @@
-import { get } from "http";
-import { IDatabaseCollection, IPage } from "../database-collection";
+import { IPage } from "../../defs/page";
+import { IDatabaseCollection } from "../database-collection";
 import { deleteRecord, getAllKeys, getAllRecords, getLeastRecentRecord, getNumRecords, getRecord, storeRecord } from "./indexeddb";
 
 export interface IIndexeddbDatabaseCollection<RecordT> extends IDatabaseCollection<RecordT> {

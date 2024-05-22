@@ -1,11 +1,9 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
-import { IGallerySource } from "./source/gallery-source";
-import { IGallerySink } from "./source/gallery-sink";
 import dayjs from "dayjs";
-import { IAsset } from "../def/asset";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
+import { IAsset, IAssetSink, IAssetSource, IDatabase, IDatabases, IHashRecord, IPage } from "database";
 
 export interface IGalleryContext {
 
@@ -97,22 +95,27 @@ export interface IGalleryContextProviderProps {
     //
     // The source that loads asset into the gallery.
     //
-    source: IGallerySource;
+    source: IAssetSource;
 
     //
     // The sink that uploads and updates assets.
     //
-    sink?: IGallerySink;
+    sink?: IAssetSink;
+
+    //
+    // The database that contains asset metadata.
+    //
+    databases: IDatabases;
 
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, databases, children }: IGalleryContextProviderProps) {
 
     // 
     // Interface to database sync.
     //
-    const { isInitialized } = useDatabaseSync();
+    const { isInitialized, user } = useDatabaseSync();
 
     //
     // The collection currently being viewed.
@@ -187,10 +190,10 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // Loads assets on mount.
     //
     useEffect(() => {
-        if (isInitialized && source.isInitialised) {
+        if (user && isInitialized && source.isInitialised) {
             loadAssets();
         }
-    }, [isInitialized, source.isInitialised]);
+    }, [isInitialized, source.isInitialised, user]);
 
     //
     // Loads assets into the gallery.
@@ -198,21 +201,32 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     async function loadAssets(): Promise<void> {
         let _collectionId = collectionId;
         if (_collectionId === undefined) {
-            const user = await source.getUser();
             if (user === undefined) {
-                return;
+                throw new Error(`Expected to know the user when loading assets.`);
             }
             
             _collectionId = user.collections.default;
             setCollectionId(_collectionId);
         }
 
-        const newAssets = await source.getAssets(_collectionId);
-        const galleryItems = newAssets.map(assetToGalleryItem);
-        for (let assetIndex = 0; assetIndex < galleryItems.length; assetIndex++) {
-            const item = galleryItems[assetIndex];
-            loadedAssets.current.set(item._id, item);
-            searchIndexRef.current.add(item._id, item);
+        console.log(`Have collection id ${_collectionId}`); //fio:
+
+        const galleryItems: IGalleryItem[] = [];
+        const metadataCollection = databases.database(_collectionId).collection<IAsset>("metadata");
+        let next: string | undefined = undefined;
+        while (true) {
+            const page: IPage<IAsset> = await metadataCollection.getAll(1000, next);
+            next = page.next;
+            for (const asset of page.records) {
+                const item = assetToGalleryItem(asset);
+                loadedAssets.current.set(item._id, item);
+                searchIndexRef.current.add(item._id, item);
+                galleryItems.push(item);
+            }
+
+            if (next === undefined) {
+                break; // No more metadata.
+            }
         }
 
         setAssets(applySort(galleryItems));
@@ -240,7 +254,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Add the asset to the database.
         //
-        await sink.submitOperations([
+        await databases.submitOperations([
             {
                 databaseName: collectionId,
                 collectionName: "metadata",
@@ -342,7 +356,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         //
         // Update the asset in the database.
         //
-        await sink.submitOperations([{
+        await databases.submitOperations([{
             databaseName: collectionId,
             collectionName: "metadata",
             recordId: assetId,
@@ -358,10 +372,20 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     async function checkAssets(hash: string): Promise<string[] | undefined> {
         if (!collectionId) {
-            throw new Error(`Cannot add asset without a collection id.`);
+            throw new Error(`Cannot check asset without a collection id.`);
         }
 
-        return await source.checkAssets(collectionId, hash);
+        const assetCollection = databases.database(collectionId);
+        const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
+        if (!hashRecord) {
+            return undefined;
+        }
+
+        if (hashRecord.assetIds.length < 1) { 
+            return undefined;
+        }
+
+        return hashRecord.assetIds;
     }    
 
     //
@@ -373,7 +397,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
         }
 
         if (!collectionId) {
-            throw new Error(`Cannot add asset without a collection id.`);
+            throw new Error(`Cannot upload asset without a collection id.`);
         }
 
         await sink.storeAsset(collectionId, assetId, assetType, {

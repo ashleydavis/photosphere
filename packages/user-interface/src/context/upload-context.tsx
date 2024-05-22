@@ -13,7 +13,7 @@ import mimeTypes from "mime-types";
 import { retry } from "../lib/retry";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
-import { uuid } from "../lib/uuid";
+import { uuid } from "database";
 
 //
 // Size of the thumbnail to generate and display during uploaded.

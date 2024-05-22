@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IUser } from "./lib/user";
-import { IDatabaseCollection, IDatabaseOp, IDatabaseOpRecord, IDatabases, IStorage, applyOperationToDb, getJournal } from "database";
+import { IDatabaseCollection, IDatabaseOp, IDatabaseOpRecord, IDatabases, IHashRecord, IStorage, applyOperationToDb, getJournal } from "database";
 import { IAsset } from "./lib/asset";
 
 declare global {
@@ -159,29 +159,6 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     }));
 
     //
-    // Gets the metadata for an asset by id.
-    //
-    app.get("/metadata", asyncErrorHandler(async (req, res) => {
-
-        const assetId = req.query.id as string;
-        const collectionId = req.query.col as string;
-        if (!assetId || !collectionId) {
-            res.sendStatus(400);
-            return;
-        }
-
-        const assetCollection = await databases.database(collectionId);
-        const metadataCollection = assetCollection.collection<IAsset>("metadata");
-        const metadata = await metadataCollection.getOne(assetId);
-        if (!metadata) {
-            res.sendStatus(404);
-            return;
-        }
-
-        res.json(metadata);
-    }));
-
-    //
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
@@ -267,39 +244,64 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     }));
 
     //
-    // Checks if an asset has already been upload by its hash.
+    // Sets a record in the database.
     //
-    app.get("/check-asset", asyncErrorHandler(async (req, res) => {
-
-        const hash = req.query.hash as string;
-        const collectionId = req.query.col as string;
-        if (!hash || !collectionId) {
-            res.sendStatus(400);
-            return;
-        }
-
-        // Read the hash map.
-        const assetCollection = await databases.database(collectionId);
-        const hashesCollection = assetCollection.collection<string[]>("hashes");
-        const assetIds = await hashesCollection.getOne(hash);
-        res.json({ assetIds });
+    app.get("/set-one", asyncErrorHandler(async (req, res) => {
+        const databaseName = getValue<string>(req.body, "databaseName");
+        const collectionName = getValue<string>(req.body, "collectionName");
+        const recordId = getValue<string>(req.body, "recordId");
+        const record = getValue<any>(req.body, "record");
+        const collection = databases.database(databaseName);
+        const dbCollection = collection.collection(collectionName);
+        await dbCollection.setOne(recordId, record);
+        res.sendStatus(200);
     }));
 
     //
-    // Gets a paginated list of all assets.
+    // Gets a record from the database.
     //
-    app.get("/assets", asyncErrorHandler(async (req, res) => {
-        const next = req.query.next as string;
-        const collectionId = req.query.col as string;
-        if (!collectionId) {
-            res.sendStatus(400);
+    app.get("/get-one", asyncErrorHandler(async (req, res) => {
+        const databaseName = getValue<string>(req.query, "db");
+        const collectionName = getValue<string>(req.query, "col");
+        const recordId = getValue<string>(req.query, "id");
+        const collection = databases.database(databaseName);
+        const dbCollection = collection.collection(collectionName);
+        const record = await dbCollection.getOne(recordId);
+        if (!record) {
+            res.sendStatus(404);
             return;
         }
+
+        res.json(record);
+    }));
+
+    //
+    // Lists all records in the database.
+    //
+    app.get("/list-all", asyncErrorHandler(async (req, res) => {
+        const databaseName = getValue<string>(req.query, "db");
+        const collectionName = getValue<string>(req.query, "col");
+        const max = getIntQueryParam(req, "max");
+        const next = req.query.next as string;
+        const collection = databases.database(databaseName);
+        const dbCollection = collection.collection(collectionName);
+        const page = await dbCollection.listAll(max, next);
+        res.json(page);
+    }));
+
+    //
+    // Gets all records in the database.
+    //
+    app.get("/get-all", asyncErrorHandler(async (req, res) => {
+        const databaseName = getValue<string>(req.query, "db");
+        const collectionName = getValue<string>(req.query, "col");
+        const max = getIntQueryParam(req, "max");
+        const next = req.query.next as string;
 
         //
         // TODO: bring this online later.
         //
-        // const collectionMetdata = await assetDatabase.getCollectionMetadata(collectionId);
+        // const collectionMetdata = await assetDatabase.getCollectionMetadata(databaseName);
         // if (!collectionMetdata) {
         //     res.sendStatus(404);
         //     return;
@@ -312,13 +314,23 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
         //     return;
         // }
 
-        const assetCollection = await databases.database(collectionId);
-        const metadataCollection = assetCollection.collection<IAsset>("metadata");
-        const result = await metadataCollection.getAll(1000, next);
-        res.json({
-            assets: result.records,
-            next: result.next,
-        });
+        const collection = databases.database(databaseName);
+        const dbCollection = collection.collection(collectionName);
+        const page = await dbCollection.getAll(max, next);
+        res.json(page);
+    }));
+
+    //
+    // Deletes a record from the database.
+    //
+    app.get("/delete-one", asyncErrorHandler(async (req, res) => {
+        const databaseName = getValue<string>(req.query, "databaseName");
+        const collectionName = getValue<string>(req.query, "collectionName");
+        const recordId = getValue<string>(req.query, "recordId");
+        const collection = databases.database(databaseName);
+        const dbCollection = collection.collection(collectionName);
+        await dbCollection.deleteOne(recordId);
+        res.sendStatus(200);
     }));
 
     return app;

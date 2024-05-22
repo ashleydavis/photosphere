@@ -3,6 +3,7 @@
 @token = not needed
 @collection = test-collection
 @asset = 1234
+@hash = ABCD
 
 ###
 
@@ -29,31 +30,59 @@ Authorization: Bearer {{token}}
 
 {
     "clientId": "a-client-id",
-    "ops": [{
-        "databaseName": "{{collection}}",
-        "collectionName": "metadata",
-        "recordId": "{{asset}}",
-        "op": {
-            "type": "set",
-            "fields": {
-                "contentType": "image/jpeg", 
-                "fileName": "./test-assets/1.jpeg", 
-                "width": 4160, 
-                "height": 6240, 
-                "hash": "1234", 
-                "fileDate": "2023-02-08T01:27:01.419Z", 
-                "photoDate": "2023-02-08T01:27:01.419Z", 
-                "location": "Somewhere1", 
-                "properties": { 
-                    "a": "property" 
-                }, 
-                "labels": [ 
-                    "Cool photo" 
-                ] 
+    "ops": [
+        {
+            "databaseName": "{{collection}}",
+            "collectionName": "metadata",
+            "recordId": "{{asset}}",
+            "op": {
+                "type": "set",
+                "fields": {
+                    "contentType": "image/jpeg", 
+                    "fileName": "./test-assets/1.jpeg", 
+                    "width": 4160, 
+                    "height": 6240, 
+                    "hash": "{{hash}}", 
+                    "fileDate": "2023-02-08T01:27:01.419Z", 
+                    "photoDate": "2023-02-08T01:27:01.419Z", 
+                    "location": "Somewhere1", 
+                    "properties": { 
+                        "a": "property" 
+                    }, 
+                    "labels": [ 
+                        "Cool photo" 
+                    ] 
+                }
+            }
+        },
+        {
+            "databaseName": "{{collection}}",
+            "collectionName": "hashes",
+            "recordId": "{{hash}}",
+            "op": {
+                "type": "push",
+                "field": "assetIds",
+                "value": "{{asset}}"
             }
         }
-    }]
+    ]
 }
+
+###
+# Gets metadata for an asset.
+#
+
+GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+Authorization: Bearer {{token}}
+
+
+###
+# Gets hashes for an asset.
+
+
+GET {{base_url}}/get-one?id={{hash}}&db={{collection}}&col=hashes
+Authorization: Bearer {{token}}
+
 
 ###
 # 
@@ -120,8 +149,7 @@ GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=displa
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
-Content-Type: application/json
+GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -151,8 +179,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
-Content-Type: application/json
+GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -181,8 +208,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
-Content-Type: application/json
+GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -211,8 +237,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/metadata?id={{asset}}&col={{collection}}
-Content-Type: application/json
+GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
 Authorization: Bearer {{token}}
 
 ###
@@ -245,16 +270,15 @@ Authorization: Bearer {{token}}
 }
 
 ###
-# Check if an asset with a particular hash has been uploaded.
+# Lists a page of assets.
+#
 
-@hash = 1234
-
-GET {{base_url}}/check-asset?hash={{hash}}&col={{collection}}
+GET {{base_url}}/list-all?db={{collection}}&col=metadata&max=5
 Authorization: Bearer {{token}}
 
 ###
-# Retrieve a page of assets.
+# Gets a page of assets.
 #
 
-GET {{base_url}}/assets?col={{collection}}
+GET {{base_url}}/get-all?db={{collection}}&col=metadata&max=5
 Authorization: Bearer {{token}}

@@ -1,4 +1,6 @@
-import { IIndexeddbDatabase, createReverseChronoTimestamp, indexeddb } from "database";
+import { IIndexeddbDatabase } from "../indexeddb/indexeddb-database";
+import * as indexeddb from "../indexeddb/indexeddb";
+import { createReverseChronoTimestamp } from "../timestamp";
 
 //
 // Queues updates to be sent to the server.

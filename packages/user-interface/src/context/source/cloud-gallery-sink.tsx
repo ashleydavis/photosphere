@@ -2,20 +2,12 @@
 // Provides a sink for adding/updating assets in the cloud.
 //
 
-import { useApi } from "../api-context";
-import { IGallerySink } from "./gallery-sink";
-import { IAssetData } from "../../def/asset-data";
-import { IDatabaseOp } from "database";
+import { IApi, IAssetData, IAssetSink } from "database";
 
 //
 // Use the "Cloud sink" in a component.
 //
-export function useCloudGallerySink(): IGallerySink {
-
-    //
-    // Interface to the backend.
-    //
-    const api = useApi();
+export function useCloudGallerySink({ api }: { api: IApi }): IAssetSink {
 
     //
     // Stores an asset.
@@ -24,15 +16,8 @@ export function useCloudGallerySink(): IGallerySink {
         await api.uploadSingleAsset(collectionId, assetId, assetType, assetData);
     }
 
-    //
-    // Submits operations to change the database.
-    //
-    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
-        await api.submitOperations(ops);
-    }
 
     return {
         storeAsset,
-        submitOperations,
     };
 }

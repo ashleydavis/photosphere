@@ -1,4 +1,4 @@
-import { IDatabase, IDatabaseConfigurations, IIndexeddbDatabases, IndexeddbDatabases } from "database";
+import { IDatabaseConfigurations, IIndexeddbDatabases, IndexeddbDatabases } from "database";
 import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
 
 export interface IIndexeddbContext {
@@ -55,7 +55,7 @@ const databaseVersion = 2;
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
-    const dbCache = useRef<IndexeddbDatabases>(new IndexeddbDatabases(databaseConfigurations));
+    const dbCache = useRef<IndexeddbDatabases>(new IndexeddbDatabases(databaseConfigurations, "collection"));
 
     useEffect(() => {
         return () => {

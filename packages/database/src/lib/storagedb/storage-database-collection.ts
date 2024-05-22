@@ -1,4 +1,5 @@
-import { IDatabaseCollection, IPage } from "../database-collection";
+import { IPage } from "../../defs/page";
+import { IDatabaseCollection } from "../database-collection";
 import { IStorage } from "../storage/storage";
 
 //

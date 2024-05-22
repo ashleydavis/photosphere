@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
-import { IndexeddbDatabases, indexeddb } from "database";
-import { PersistentQueue } from "user-interface";
+import { IndexeddbDatabases, indexeddb, PersistentQueue } from "database";
 
 //
 // Checks for equality between two arrays.

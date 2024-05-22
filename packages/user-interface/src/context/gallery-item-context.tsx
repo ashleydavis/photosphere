@@ -1,8 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
-import { useApi } from "./api-context";
-import { IGallerySource } from "./source/gallery-source";
-import { IGallerySink } from "./source/gallery-sink";
 import { useGallery } from "./gallery-context";
 
 export interface IGalleryItemContext {

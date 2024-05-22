@@ -2,15 +2,13 @@
 // Provides a sink for adding/updating assets to indexeddb.
 //
 
-import { IDatabaseOp } from "database";
-import { IAssetData } from "../../def/asset-data";
-import { IGallerySink } from "./gallery-sink";
-import { IPersistentQueue } from "../persistent-queue";
-import { IAssetUploadRecord } from "../../def/asset-upload-record";
-import { IAssetUpdateRecord } from "../../def/asset-update-record";
+import { IAssetData, IAssetSink, IAssetUpdateRecord, IAssetUploadRecord, IPersistentQueue } from "database";
 
 export interface IProps { 
-    indexeddbSink: IGallerySink;
+    //
+    // Used to forward assets and updates to indexeddb.
+    //
+    indexeddbSink: IAssetSink;
 
     //
     // Queues outgoing asset uploads.
@@ -20,13 +18,14 @@ export interface IProps {
     //
     // Queues outgoing asset updates.
     //
-    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
+    //fio:
+    // outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
 };
 
 //
 // Use the "Local sink" in a component.
 //
-export function useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue }: IProps): IGallerySink {
+export function useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue }: IProps): IAssetSink {
 
     //
     // Stores an asset.
@@ -48,25 +47,7 @@ export function useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, o
         });
     }
 
-    //
-    // Submits operations to change the database.
-    //
-    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
-        //
-        // Update the asset locally.
-        //
-        await indexeddbSink.submitOperations(ops);
-
-        //
-        // Queue the update for upload to the cloud.
-        //
-        await outgoingAssetUpdateQueue.add({
-            ops,
-        });
-    }
-
     return {
         storeAsset,
-        submitOperations,
     };
 }

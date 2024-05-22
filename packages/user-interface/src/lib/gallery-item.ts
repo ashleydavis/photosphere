@@ -1,8 +1,8 @@
-
-import { IAsset } from "../def/asset";
-
 //
 // Represents an asset that can be displayed in the gallery.
+
+import { IAsset } from "database";
+
 //
 export interface IGalleryItem extends IAsset {
 

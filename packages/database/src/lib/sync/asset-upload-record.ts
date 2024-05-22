@@ -1,4 +1,4 @@
-import { IAssetData } from "./asset-data";
+import { IAssetData } from "../../defs/asset-data";
 
 //
 // Records an asset upload in the outgoing queue.

@@ -113,6 +113,9 @@ importers:
       blob-util:
         specifier: ^2.0.2
         version: 2.0.2
+      database:
+        specifier: workspace:*
+        version: link:../../packages/database
       dayjs:
         specifier: ^1.11.7
         version: 1.11.10
@@ -280,6 +283,9 @@ importers:
       css-loader:
         specifier: ^6.10.0
         version: 6.10.0(webpack@5.90.3)
+      database:
+        specifier: workspace:*
+        version: link:../packages/database
       fs-extra:
         specifier: ^11.1.0
         version: 11.2.0
@@ -368,6 +374,9 @@ importers:
       blob-util:
         specifier: ^2.0.2
         version: 2.0.2
+      database:
+        specifier: workspace:*
+        version: link:../../packages/database
       dayjs:
         specifier: ^1.11.7
         version: 1.11.10

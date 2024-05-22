@@ -7,5 +7,5 @@ export interface IDatabase {
     //
     // Gets a database collection by name.
     //
-    collection<RecordT>(name: string): IDatabaseCollection<RecordT>;
+    collection<RecordT = any>(name: string): IDatabaseCollection<RecordT>;
 }

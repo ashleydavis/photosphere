@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, useDatabaseSync, IndexeddbContextProvider, DbSyncContextProvider, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue, IPersistentQueue, useIndexeddb } from "user-interface";
+import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, IndexeddbContextProvider, DbSyncContextProvider, useIndexeddb, useApi } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
-import { IIndexeddbDatabase } from "../../packages/database/build";
+import { IIndexeddbDatabase, IPersistentQueue, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord, CloudDatabases } from "database";
 
 //
 // Use the outgoing queue as a React hook.
@@ -14,23 +14,28 @@ export function useOutgoingUpdateQueue<RecordT>(database: IIndexeddbDatabase, co
 
 function GallerySetup() {
 
-    const indexeddbSource = useIndexeddbGallerySource();
-    const indexeddbSink = useIndexeddbGallerySink();
-
-    const cloudSource = useCloudGallerySource();
-    const cloudSink = useCloudGallerySink();
+    const api = useApi();
+    const cloudDatabases = new CloudDatabases(api);
 
     const indexeddb = useIndexeddb();
+    const indexeddbSource = useIndexeddbGallerySource({ indexeddbDatabases: indexeddb.databases });
+    const indexeddbSink = useIndexeddbGallerySink({ indexeddbDatabases: indexeddb.databases });
+
+    const cloudSource = useCloudGallerySource({ api });
+    const cloudSink = useCloudGallerySink({ api });
+
     const userDatabase = indexeddb.databases.database("user");
     const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload");
     const outgoingAssetUpdateQueue = useOutgoingUpdateQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update");
     const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
-    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue });
+    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue }); //fio, outgoingAssetUpdateQueue });
 
     return (
         <DbSyncContextProvider
+            cloudDatabases={cloudDatabases}
             cloudSource={cloudSource}
             cloudSink={cloudSink}
+            indexeddbDatabases={indexeddb.databases}
             indexeddbSource={indexeddbSource}
             indexeddbSink={indexeddbSink}
             localSource={localSource}
@@ -40,6 +45,8 @@ function GallerySetup() {
             <GalleryContextProvider 
                 source={localSource} // The source of assets to display in the gallery.
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
+                //todo: When this gets an update it needs to be queue for sending to the cloud.
+                databases={indexeddb.databases} // The local databases. 
                 >
                 <UploadContextProvider>
                     <Main />

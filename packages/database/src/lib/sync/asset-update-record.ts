@@ -1,9 +1,7 @@
+import { IDatabaseOp } from "../../defs/ops";
 
 //
 // Records an asset update in the outgoing queue.
-
-import { IDatabaseOp } from "database";
-
 //
 export interface IAssetUpdateRecord {
     //

@@ -1,49 +1,42 @@
-import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useOnline } from "../lib/use-online";
-import { IGallerySink } from "./source/gallery-sink";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
-import { IGallerySource } from "./source/gallery-source";
-import { isProduction } from "./auth-context";
-import { uuid } from "../lib/uuid";
-import { IAsset } from "../def/asset";
-import { IDatabaseOp } from "database";
-import { IPersistentQueue } from "./persistent-queue";
-import { IAssetUploadRecord } from "../def/asset-upload-record";
-import { IAssetUpdateRecord } from "../def/asset-update-record";
+import { IAsset, IAssetUpdateRecord, IAssetUploadRecord, IAssetSink, IAssetSource, IPersistentQueue, syncIncoming, syncOutgoing, initialSync, IDatabases, IIndexeddbDatabases, IUser } from "database";
 
 const SYNC_POLL_PERIOD = 1000;
-
-//
-// Records last update ids for each collection in the local database.
-//
-interface IUpdateIdRecord {
-    //
-    // The ID of the record.
-    //
-    _id: string;
-
-    //
-    // The last update id for the collection.
-    //
-    lastUpdateId: string;
-}
 
 export interface IDbSyncContext {
     //
     // Set to true when the database synchronization is initialized.
     //
     isInitialized: boolean;
+
+    //
+    // The current user, if known.
+    //
+    user: IUser | undefined;
 }
 
 const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
 
 export interface IProps {
-    cloudSource: IGallerySource;
-    cloudSink: IGallerySink;
-    indexeddbSource: IGallerySource;
-    indexeddbSink: IGallerySink;
-    localSource: IGallerySource;
+
+    //
+    // Interface to the database in the cloud.
+    //
+    cloudDatabases: IDatabases;
+
+    //
+    // Interface to the local indexeddb databases.
+    //
+    indexeddbDatabases: IIndexeddbDatabases;
+
+    cloudSource: IAssetSource;
+    cloudSink: IAssetSink;
+    indexeddbSource: IAssetSource;
+    indexeddbSink: IAssetSink;
+    localSource: IAssetSource;
 
     //
     // Queues outgoing asset uploads.
@@ -58,11 +51,12 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource, indexeddbSink, localSource, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, children }: IProps) {
+export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, indexeddbDatabases, indexeddbSource, indexeddbSink, localSource, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, children }: IProps) {
     
     const { isOnline } = useOnline();
     const indexeddb = useIndexeddb();
     const api = useApi();
+    const [ user, setUser ] = useState<IUser | undefined>(undefined);
 
     //
     // Set to true when the database synchronization is initialized.
@@ -70,252 +64,132 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
     const [isInitialized, setIsInitialized] = useState(false);
 
     //
-    // Perform the initial synchronization.
+    // Loads the local user's details.
     //
-    async function initialSync() {
-        
-        try {
-            const user = await localSource.getUser();
-            if (!user) {
-                throw new Error("User not found");
-            }
-
-            for (const collectionId of user.collections.access) {
-                const assetCollection = indexeddb.databases.database(`collection-${collectionId}`);
-                const noRecords = await assetCollection.collection("metadata").none();
-                if (noRecords) {
-                    //
-                    // Records the latest update id for the collection.
-                    // This should be done before the initial sync to avoid missing updates.
-                    //
-                    const latestUpdateId = await api.getLatestUpdateId(collectionId);
-                    if (latestUpdateId !== undefined) {
-                        //
-                        // Record the latest update that was received.
-                        //
-                        const userDatabase = indexeddb.databases.database("user");
-                        userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
-                    }
-
-                    //
-                    // Assume that no records means we need to get all records down.
-                    //
-                    const assets = await cloudSource.getAssets(collectionId);
-                    console.log(`Initial sync for ${collectionId}: ${assets.length} assets`);
-
-                    const databaseOps: IDatabaseOp[] = assets.map(asset => ({ 
-                        databaseName: collectionId,
-                        collectionName: "metadata",
-                        recordId: asset._id,
-                        op: {
-                            type: "set",
-                            fields: asset,
-                        },
-                    }));
-                    await indexeddbSink.submitOperations(databaseOps);
-
-                    if (!isProduction) {
-                        if (databaseOps.length > 0) {
-                            const debugDatabase = indexeddb.databases.database("debug");
-                            debugDatabase.collection<any>("initial-sync-recieved").setOne(uuid(), { ops: databaseOps });
-                        }
-                    }
-                }
-
-                //
-                // Pre-cache all thumbnails.
-                //
-                const assets = await indexeddbSource.getAssets(collectionId);
-                await Promise.all(assets.map(asset => cacheThumbnail(collectionId, asset)));
-            }
+    async function loadLocalUser(): Promise<void> {
+        const userId = localStorage.getItem("userId");
+        if (!userId) {
+            return undefined;
         }
-        catch (err) {
-            console.error(`Initial sync failed:`);
-            console.error(err);
-        }
-    }
 
-    //
-    // Pre-caches a thumbnail.
-    //
-    async function cacheThumbnail(collectionId: string, asset: IAsset) {
-        const localThumbData = await indexeddbSource.loadAsset(collectionId, asset._id, "thumb");
-        if (localThumbData === undefined) {
-            const assetData = await cloudSource.loadAsset(collectionId, asset._id, "thumb");
-            if (assetData) {
-                await indexeddbSink.storeAsset(collectionId, asset._id, "thumb", assetData);
-                // console.log(`Cached thumbnail for ${collectionId}/${asset._id}`);
-            }
+        const userDatabase = indexeddb.databases.database("user");
+        const user = await userDatabase.collection<IUser>("user").getOne(userId);
+        if (user) {
+            setUser(user);
         }
         else {
-            // console.log(`Thumbnail for ${collectionId}/${asset._id} already cached`);
+            setUser(undefined);
         }
     }
 
     //
-    // Send outgoing asset uploads and updates to the cloud.
+    // Loads the user's details.
     //
-    async function syncOutgoing() {
-        try {
-            const userDatabase = indexeddb.databases.database("user");
-
-            //
-            // Flush the queue of outgoing asset uploads.
-            //
-            while (true) {
-                const outgoingUpload = await outgoingAssetUploadQueue.getNext();
-                if (!outgoingUpload) {
-                    break;
-                }
-
-                await cloudSink.storeAsset(outgoingUpload.collectionId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.assetData);
-                await outgoingAssetUploadQueue.removeNext();
-
-                if (!isProduction) {
-                    const debugDatabase = indexeddb.databases.database("debug");
-                    await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { upload: outgoingUpload });
-                }
-
-                console.log(`Processed outgoing upload: ${outgoingUpload.collectionId}/${outgoingUpload.assetType}/${outgoingUpload.assetId}`);
-            }
-
-            //
-            // Flush the queue of outgoing asset updates.
-            //
-            while (true) {
-                const outgoingUpdate = await outgoingAssetUpdateQueue.getNext();
-                if (!outgoingUpdate) {
-                    break;
-                }
-
-                await cloudSink.submitOperations(outgoingUpdate.ops);
-                await outgoingAssetUpdateQueue.removeNext();
- 
-                if (!isProduction) {
-                    const debugDatabase = indexeddb.databases.database("debug");
-                    await debugDatabase.collection<any>("updates-sent").setOne(uuid(), { update: outgoingUpdate });
-                }
-
-                console.log(`Processed outgoing updates:`);
-                for (const op of outgoingUpdate.ops) {
-                    console.log(`  ${op.databaseName}/${op.collectionName}/${op.recordId}`);
-                }
-            }
-        }
-        catch (err) {
-            console.error(`Outgoing sync failed:`);
-            console.error(err);
-        }
-    }    
-
-    //
-    // Receive incoming asset uploads and updates from the cloud.
-    //
-    async function syncIncoming() {
-
-        try {
-            //
-            // Collate the last update ids for each collection.
-            //
-            const user = await localSource.getUser();
-            if (!user) {
-                throw new Error("User not found");
-            }
-
-            const collectionIds = user.collections.access;
-
-            const userDatabase = indexeddb.databases.database("user");
-
-            //
-            // Retreive updates for the collections we have access to, but only
-            // from the latest update that was received.
-            //
-            for (const collectionId of collectionIds) {
-                const lastUpdateIdCollection = userDatabase.collection<IUpdateIdRecord>("last-update-id");
-                const lastUpdateIdRecord = await lastUpdateIdCollection.getOne(collectionId);
-                const journalResult = await api.getJournal(collectionId, lastUpdateIdRecord?.lastUpdateId);
-
-                if (journalResult.ops.length === 0) {
-                    // Nothing to do.
-                    break;
-                }
-
+    async function loadUser(): Promise<void> {
+        if (isOnline) {
+            // Not able to load user details offline.
+            const user = await await api.getUser();
+            if (user) {
                 //
-                // Apply incoming changes to the local database.
+                // Store user locally for offline use.
                 //
-                indexeddbSink.submitOperations(journalResult.ops.map(journalRecord => ({
-                    databaseName: collectionId,
-                    collectionName: journalRecord.collectionName,
-                    recordId: journalRecord.recordId,
-                    op: journalRecord.op,
-                })));
-                    
-                if (!isProduction) {
-                    const debugDatabase = indexeddb.databases.database("debug");
-                    await debugDatabase.collection<any>("updates-recieved").setOne(uuid(), { update: journalResult });
-                }
-
-                if (journalResult.latestUpdateId !== undefined) {
-                    //
-                    // Record the latest update that was received.
-                    //
-                    await lastUpdateIdCollection.setOne(collectionId, { 
-                        _id: collectionId, 
-                        lastUpdateId: journalResult.latestUpdateId 
-                    });
-                }
-               
-                console.log(`Processed incoming updates for ${collectionId}: ${journalResult.ops.length} ops`);
+                const userDatabase = indexeddb.databases.database("user");
+                await userDatabase.collection("user").setOne("user", user);
+                localStorage.setItem("userId", user._id);
+                setUser(user);
+                return;
             }
         }
-        catch (err) {
-            console.error(`Incoming sync failed:`);
-            console.error(err);
-        }
+
+        // Fallback to local user.
+        await loadLocalUser();
     }
+
+    useEffect(() => {
+        loadUser()
+            .catch(err => {
+                console.error(`Failed to load user:`);
+                console.error(err)            
+            });
+    }, [api.isInitialised, isOnline]);
 
     useEffect(() => {
         let timer: NodeJS.Timeout | undefined = undefined;
         let done = false;
        
         if (isOnline) {
-            // 
-            // Periodic database synchronization.
-            //
-            async function periodicSync() {
-                timer = undefined;
-
-                if (done) {
-                    return;
-                }
-
-                console.log(`Periodic sync...`);
-
-                await syncOutgoing();
-                await syncIncoming();
-
-                timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
-            }
-
-            //
-            // Starts the database synchronization process.
-            //
-            async function startSync() {
-
-                try {
-                    await initialSync();
-                }
-                finally {
-                    setIsInitialized(true);
-                }
-
+            if (user) {
+                // 
+                // Periodic database synchronization.
                 //
-                // Starts the periodic syncrhonization process.
+                async function periodicSync() {
+                    timer = undefined;
+    
+                    if (done) {
+                        return;
+                    }
+    
+                    console.log(`Periodic sync...`);
+    
+                    try {
+                        await syncOutgoing({
+                            cloudSink,
+                            cloudDatabases,
+                            outgoingAssetUploadQueue,
+                            outgoingAssetUpdateQueue,
+                        });
+                    }
+                    catch (err) {
+                        console.error(`Outgoing sync failed:`);
+                        console.error(err);
+                    }
+                
+                    try {
+                        //
+                        // Collate the last update ids for each collection.
+                        //
+                        const collectionIds = user!.collections.access;
+                        const userDatabase = indexeddb.databases.database("user");
+                        await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink, cloudDatabases });
+                    }
+                    catch (err) {
+                        console.error(`Outgoing sync failed:`);
+                        console.error(err);
+                    }
+        
+                    timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
+                }
+    
                 //
-                await periodicSync();
+                // Starts the database synchronization process.
+                //
+                async function startSync() {
+    
+                    try {
+                        //
+                        // Collate the last update ids for each collection.
+                        //
+                        const collectionIds = user!.collections.access;
+    
+                        await initialSync({ collectionIds, api, cloudDatabases, cloudSource, indexeddbDatabases, indexeddbSource, indexeddbSink });
+                    }
+                    catch (err) {
+                        console.error(`Initial sync failed:`);
+                        console.error(err);
+                    }
+                    finally {
+                        console.log(`Marking isInitialized as true.`); //fio:
+                        setIsInitialized(true);
+                    }
+    
+                    //
+                    // Starts the periodic syncrhonization process.
+                    //
+                    await periodicSync();
+                }
+    
+                startSync();
             }
-
-            startSync();
         }
         else {
             setIsInitialized(true);
@@ -329,10 +203,11 @@ export function DbSyncContextProvider({ cloudSource, cloudSink, indexeddbSource,
             }
         };
 
-    }, [isOnline]);
+    }, [isOnline, user]);
 
     const value: IDbSyncContext = {
     	isInitialized,
+        user,
     };
     
     return (

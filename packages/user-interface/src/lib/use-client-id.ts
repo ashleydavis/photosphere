@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react"
-import { uuid } from "./uuid";
+import { uuid } from "database";
 
 function getClientId() {
     const existingClientId = localStorage.getItem("clientId");

@@ -1,11 +1,9 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "./auth-context";
-import { IUser } from "../def/user";
-import { IAsset } from "../def/asset";
-import { IAssetData } from "../def/asset-data";
 import { useClientId } from "../lib/use-client-id";
-import { IDatabaseOp, IJournalResult, IOpSelection } from "database";
+import { IAsset, IAssetData, IDatabaseOp, IJournalResult, IOpSelection, IUser, IApi, IGetAssetsResult } from "database";
+import { IPage } from "database/build/defs/page";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -14,72 +12,7 @@ if (!BASE_URL) {
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 
-//
-// The result of the get assets request.
-//
-export interface IGetAssetsResult {
-    //
-    // Assets returned from this request.
-    // Set to an empty array if no more assets.
-    //
-    assets: IAsset[];
-
-    //
-    // Continuation token for the next page of assets.
-    // Set to undefined when no more pages.
-    //
-    next?: string;
-}
-
-export interface IApiContext {
-
-    //
-    // Set to true once the api is ready to use.
-    //
-    isInitialised: boolean;
-
-    //
-    // Loads the user's details.
-    //
-    getUser(): Promise<IUser>;
-
-    //
-    // Retreives the list of assets from the backend.
-    //
-    getAssets(collectionId: string, next?: string): Promise<IGetAssetsResult>;
-
-    //
-    // Retreives the latest update id for a collection.
-    //
-    getLatestUpdateId(collectionId: string): Promise<string | undefined>;
-
-    //
-    // Retreives the data for an asset from the backend.
-    //
-    getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob>;
-
-    //
-    // Gets the assets already uploaded with a particular hash.
-    //
-    checkAssets(collectionId: string, hash: string): Promise<string[] | undefined>;
-
-    //
-    // Uploads an asset to the backend.
-    //
-    uploadSingleAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
-
-    //
-    // Submits database operations to the cloud.
-    //
-    submitOperations(ops: IDatabaseOp[]): Promise<void>;
-
-    //
-    // Gets the journal of operations that have been applied to the database.
-    //
-    getJournal(collectionId: string, lastUpdateId?: string): Promise<IJournalResult>;
-}
-
-const ApiContext = createContext<IApiContext | undefined>(undefined);
+const ApiContext = createContext<IApi | undefined>(undefined);
 
 export interface IProps {
     children: ReactNode | ReactNode[];
@@ -128,31 +61,6 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Retreives the list of assets from the backend.
-    //
-    async function getAssets(collectionId: string, next?: string): Promise<IGetAssetsResult> {
-        let url = `${BASE_URL}/assets?col=${collectionId}`;
-        if (next) {
-            url += `&next=${next}`;
-        }
-
-        await loadToken();
-        const token = getToken();
-        const { data } = await axios.get(
-            url, 
-            { 
-                headers: {                     
-                    col: collectionId,
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-
-        return data;
-    }
-
-    //
     // Retreives the latest update id for a collection.
     //
     async function getLatestUpdateId(collectionId: string): Promise<string | undefined> {
@@ -189,26 +97,6 @@ export function ApiContextProvider({ children }: IProps) {
         });
     
         return response.data;
-    }
-
-    //
-    // Gets the assets already uploaded with a particular hash.
-    //
-    async function checkAssets(collectionId: string, hash: string): Promise<string[] | undefined> {
-        await loadToken();
-        const token = getToken();
-        const url = `${BASE_URL}/check-asset?hash=${hash}&col=${collectionId}`;
-        const response = await axios.get(
-            url, 
-            {
-                headers: {
-                    col: collectionId,
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-        return response.data.assetIds;
     }
 
     //
@@ -292,16 +180,126 @@ export function ApiContextProvider({ children }: IProps) {
         return response.data;
     }
 
-    const value: IApiContext = {
+    //
+    // Sets a new record to the database.
+    //
+    async function setOne(databaseName: string, collectionName: string, recordId: string, record: any): Promise<void> {
+        await loadToken();
+        const token = getToken();
+
+        const url = `${BASE_URL}/set-one`;
+        const response = await axios.post(
+            url, 
+            {
+                databaseName,
+                collectionName,
+                recordId,
+                record,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            },
+        );
+
+        return response.data;
+    }
+
+    //
+    // Gets one record by id.
+    //
+    async function getOne(databaseName: string, collectionName: string, recordId: string): Promise<any> {
+        await loadToken();
+        const token = getToken();
+        const url = `${BASE_URL}/get-one?db=${databaseName}&col=${collectionName}&id=${recordId}`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+        return response.data;
+    }
+
+    //
+    // Lists all records in the database.
+    //
+    async function listAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<string>> {
+        await loadToken();
+        const token = getToken();
+        const url = `${BASE_URL}/list-all?db=${databaseName}&col=${collectionName}&max=${max}&next=${next}`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+        return response.data;
+    }
+
+    //
+    // Gets a page of records from the database.
+    //
+    async function getAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<any>> {
+        await loadToken();
+        const token = getToken();
+        const url = `${BASE_URL}/get-all?db=${databaseName}&col=${collectionName}&max=${max}&next=${next}`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+        return response.data;
+    }
+
+    //
+    // Deletes a database record.
+    //
+    async function deleteOne(databaseName: string, collectionName: string, recordId: string): Promise<void> {
+        await loadToken();
+        const token = getToken();
+        const url = `${BASE_URL}/delete-one`;
+        const response = await axios.post(
+            url, 
+            {
+                databaseName,
+                collectionName,
+                recordId,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+    }
+
+    const value: IApi = {
     	isInitialised,
         getUser,
-        getAssets,
         getLatestUpdateId,
         getAsset,
-        checkAssets,
         uploadSingleAsset,
         submitOperations,
         getJournal,
+        setOne,
+        getOne,
+        listAll,
+        getAll,
+        deleteOne,
     };
     
     return (
@@ -314,7 +312,7 @@ export function ApiContextProvider({ children }: IProps) {
 //
 // Use the API context in a component.
 //
-export function useApi(): IApiContext {
+export function useApi(): IApi {
     const context = useContext(ApiContext);
     if (!context) {
         throw new Error(`API context is not set! Add ApiContextProvider to the component tree.`);

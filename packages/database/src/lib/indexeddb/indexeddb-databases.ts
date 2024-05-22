@@ -1,5 +1,4 @@
-import { IDatabase } from "../database";
-import { IDatabases } from "../databases";
+import { AbstractDatabases, IDatabases } from "../databases";
 import { openDatabase } from "./indexeddb";
 import { IIndexeddbDatabase, IndexeddbDatabase } from "./indexeddb-database";
 
@@ -32,11 +31,12 @@ export interface IIndexeddbDatabases extends IDatabases {
     database(databaseName: string): IIndexeddbDatabase;
 }
 
-export class IndexeddbDatabases implements IIndexeddbDatabases {
+export class IndexeddbDatabases extends AbstractDatabases implements IIndexeddbDatabases {
 
     private dbCache = new Map<string, IDBDatabase>();
 
-    constructor(private databaseConfigurations: IDatabaseConfigurations) {
+    constructor(private databaseConfigurations: IDatabaseConfigurations, private defaultConfigurationName: string) {
+        super();
     }
 
     // 
@@ -57,6 +57,7 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
         return new IndexeddbDatabase(() => this.openDatabase(databaseName));
     }
 
+
     //
     // Opens a particular database.
     //
@@ -75,7 +76,7 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
             throw new Error(`Invalid database name: "${databaseName}"`);
         }
         const baseDatabaseName = databaseNameParts[0];
-        const databaseConfiguration = this.databaseConfigurations[baseDatabaseName];
+        const databaseConfiguration = this.databaseConfigurations[baseDatabaseName] || this.databaseConfigurations[this.defaultConfigurationName];
         if (!databaseConfiguration) {
             throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
         }
