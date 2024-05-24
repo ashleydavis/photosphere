@@ -1,6 +1,5 @@
 import { IApi } from "../api";
 import { IDatabase } from "../database";
-import { IDatabaseCollection } from "../database-collection";
 import { ICloudDatabaseCollection, CloudDatabaseCollection } from "./cloud-database-collection";
 
 export interface ICloudDatabase extends IDatabase {

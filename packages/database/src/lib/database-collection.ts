@@ -1,7 +1,6 @@
 //
 // A page of records from the database.
 
-import { IDatabaseOp } from "../defs/ops";
 import { IPage } from "../defs/page";
 
 //

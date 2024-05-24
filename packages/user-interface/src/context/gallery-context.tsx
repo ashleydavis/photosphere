@@ -3,7 +3,7 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { IAsset, IAssetSink, IAssetSource, IDatabase, IDatabases, IHashRecord, IPage } from "database";
+import { IAsset, IAssetSink, IAssetSource, IAssetUpdateRecord, IDatabase, IDatabaseOp, IDatabases, IHashRecord, IPage, IPersistentQueue } from "database";
 
 export interface IGalleryContext {
 
@@ -107,10 +107,15 @@ export interface IGalleryContextProviderProps {
     //
     databases: IDatabases;
 
+    //
+    // Outgoing queue for asset updates.
+    //
+    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
+
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, databases, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, databases, outgoingAssetUpdateQueue, children }: IGalleryContextProviderProps) {
 
     // 
     // Interface to database sync.
@@ -254,7 +259,7 @@ export function GalleryContextProvider({ source, sink, databases, children }: IG
         //
         // Add the asset to the database.
         //
-        await databases.submitOperations([
+        const ops: IDatabaseOp[] = [
             {
                 databaseName: collectionId,
                 collectionName: "metadata",
@@ -274,7 +279,9 @@ export function GalleryContextProvider({ source, sink, databases, children }: IG
                     value: galleryItem._id,
                 },
             }
-        ]);
+        ];
+        await databases.submitOperations(ops);
+        await outgoingAssetUpdateQueue.add({ ops });
     }
 
     //
@@ -356,7 +363,7 @@ export function GalleryContextProvider({ source, sink, databases, children }: IG
         //
         // Update the asset in the database.
         //
-        await databases.submitOperations([{
+        const ops: IDatabaseOp[] = [{
             databaseName: collectionId,
             collectionName: "metadata",
             recordId: assetId,
@@ -364,7 +371,9 @@ export function GalleryContextProvider({ source, sink, databases, children }: IG
                 type: "set",
                 fields: partialGalleryItemToAsset(assetUpdate),
             },
-        }]);
+        }]
+        await databases.submitOperations(ops);
+        await outgoingAssetUpdateQueue.add({ ops });
     }
 
     //
