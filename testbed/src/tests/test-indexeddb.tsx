@@ -90,7 +90,7 @@ export function TestIndexeddb() {
                     collectionNames: [ "test-queue" ],
                     versionNumber: 1,
                 }
-            });
+            }, "");
             const queue = new PersistentQueue<any>(databases.database("photosphere-queue-test"), "test-queue");
             await queue.add({ test: "B" });
             await queue.add({ test: "Z" });
