@@ -1,4 +1,4 @@
-import { AbstractDatabases, IDatabases } from "../databases";
+import { IDatabases } from "../databases";
 import { openDatabase } from "./indexeddb";
 import { IIndexeddbDatabase, IndexeddbDatabase } from "./indexeddb-database";
 
@@ -31,12 +31,11 @@ export interface IIndexeddbDatabases extends IDatabases {
     database(databaseName: string): IIndexeddbDatabase;
 }
 
-export class IndexeddbDatabases extends AbstractDatabases implements IIndexeddbDatabases {
+export class IndexeddbDatabases implements IIndexeddbDatabases {
 
     private dbCache = new Map<string, IDBDatabase>();
 
     constructor(private databaseConfigurations: IDatabaseConfigurations, private defaultConfigurationName: string) {
-        super();
     }
 
     // 

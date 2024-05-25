@@ -1,5 +1,5 @@
 import { IApi } from "../api";
-import { IAssetSink } from "../asset-sink";
+import { applyOperations } from "../apply-operation";
 import { IDatabase } from "../database";
 import { IDatabases } from "../databases";
 import { IUpdateIdRecord } from "./update-id-record";
@@ -21,20 +21,15 @@ interface IProps {
     userDatabase: IDatabase;
 
     //
-    // For recording incoming updates to the local database.
+    // Interface to local indexeddb databases.
     //
-    indexeddbSink: IAssetSink;
-
-    //
-    // Interface to cloud databases.
-    //
-    cloudDatabases: IDatabases;
+    indexeddbDatabases: IDatabases;
 }
 
 //
 // Receive incoming asset uploads and updates from the cloud.
 //
-export async function syncIncoming({ collectionIds, api, userDatabase, indexeddbSink, cloudDatabases }: IProps): Promise<void> {
+export async function syncIncoming({ collectionIds, api, userDatabase, indexeddbDatabases }: IProps): Promise<void> {
     //
     // Retreive updates for the collections we have access to, but only
     // from the latest update that was received.
@@ -52,7 +47,7 @@ export async function syncIncoming({ collectionIds, api, userDatabase, indexeddb
         //
         // Apply incoming changes to the local database.
         //
-        cloudDatabases.submitOperations(journalResult.ops.map(journalRecord => ({
+        applyOperations(indexeddbDatabases, journalResult.ops.map(journalRecord => ({
             databaseName: collectionId,
             collectionName: journalRecord.collectionName,
             recordId: journalRecord.recordId,

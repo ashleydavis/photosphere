@@ -3,7 +3,7 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { IAsset, IAssetSink, IAssetSource, IAssetUpdateRecord, IDatabase, IDatabaseOp, IDatabases, IHashRecord, IPage, IPersistentQueue } from "database";
+import { applyOperations, IAsset, IAssetSink, IAssetSource, IAssetUpdateRecord, IDatabase, IDatabaseOp, IDatabases, IHashRecord, IPage, IPersistentQueue } from "database";
 
 export interface IGalleryContext {
 
@@ -280,7 +280,7 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
                 },
             }
         ];
-        await databases.submitOperations(ops);
+        await applyOperations(databases, ops);
         await outgoingAssetUpdateQueue.add({ ops });
     }
 
@@ -372,7 +372,7 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
                 fields: partialGalleryItemToAsset(assetUpdate),
             },
         }]
-        await databases.submitOperations(ops);
+        await applyOperations(databases, ops);
         await outgoingAssetUpdateQueue.add({ ops });
     }
 

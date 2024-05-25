@@ -1,13 +1,12 @@
 import { IDatabase } from "../database";
-import { AbstractDatabases, IDatabases } from "../databases";
+import { IDatabases } from "../databases";
 import { IStorage } from "../storage/storage";
 import { StorageDatabase } from "./storage-database";
 
 
-export class StorageDatabases extends AbstractDatabases implements IDatabases {
+export class StorageDatabases implements IDatabases {
 
     constructor(private storage: IStorage) {
-        super();
     }
 
     //
