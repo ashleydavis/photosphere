@@ -65,12 +65,12 @@ export interface IApi {
     //
     // Sets a new record to the database.
     //
-    setOne(databaseName: string, collectionName: string, id: string, record: any): Promise<void>;
+    setOne<RecordT = any>(databaseName: string, collectionName: string, id: string, record: RecordT): Promise<void>;
 
     //
     // Gets one record by id.
     //
-    getOne(databaseName: string, collectionName: string, id: string): Promise<any>;
+    getOne<RecordT = any>(databaseName: string, collectionName: string, id: string): Promise<RecordT>;
 
     //
     // Lists all records in the database.
@@ -80,7 +80,7 @@ export interface IApi {
     //
     // Gets a page of records from the database.
     //
-    getAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<any>>;
+    getAll<RecordT = any>(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<RecordT>>;
 
     //
     // Deletes a database record.

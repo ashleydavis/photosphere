@@ -1,5 +1,5 @@
 import { IApi } from "../api";
-import { AbstractDatabases, IDatabases } from "../databases";
+import { IDatabases } from "../databases";
 import { ICloudDatabase, CloudDatabase } from "./cloud-database";
 
 export interface ICloudDatabases extends IDatabases {
@@ -9,10 +9,9 @@ export interface ICloudDatabases extends IDatabases {
     database(databaseName: string): ICloudDatabase;
 }
 
-export class CloudDatabases extends AbstractDatabases implements ICloudDatabases {
+export class CloudDatabases implements ICloudDatabases {
 
     constructor(private api: IApi) {
-        super();
     }
 
     //

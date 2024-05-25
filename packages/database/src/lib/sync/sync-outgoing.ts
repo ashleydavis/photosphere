@@ -1,5 +1,4 @@
 import { IAssetSink } from "../asset-sink";
-import { IDatabases } from "../databases";
 import { IAssetUpdateRecord } from "./asset-update-record";
 import { IAssetUploadRecord } from "./asset-upload-record";
 import { IPersistentQueue } from "./persistent-queue";
@@ -9,11 +8,6 @@ interface IProps {
     // Sink for sending assets and updates to the cloud.
     //
     cloudSink: IAssetSink;
-
-    //
-    // Interface to the cloud databases.
-    //
-    cloudDatabases: IDatabases;
 
     //
     // Queue of outgoing asset uploads.
@@ -29,7 +23,7 @@ interface IProps {
 //
 // Send outgoing asset uploads and updates to the cloud.
 //
-export async function syncOutgoing({ cloudSink, cloudDatabases, outgoingAssetUploadQueue, outgoingAssetUpdateQueue }: IProps): Promise<void> {
+export async function syncOutgoing({ cloudSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue }: IProps): Promise<void> {
     //
     // Flush the queue of outgoing asset uploads.
     //
@@ -54,7 +48,7 @@ export async function syncOutgoing({ cloudSink, cloudDatabases, outgoingAssetUpl
             break;
         }
 
-        await cloudDatabases.submitOperations(outgoingUpdate.ops);
+        await cloudSink.submitOperations(outgoingUpdate.ops);
         await outgoingAssetUpdateQueue.removeNext();
 
         console.log(`Processed outgoing updates:`);

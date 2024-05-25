@@ -28,7 +28,7 @@ function GallerySetup() {
     const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload");
     const outgoingAssetUpdateQueue = useOutgoingUpdateQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update");
     const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
-    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue });
+    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue });
 
     return (
         <DbSyncContextProvider
@@ -45,8 +45,6 @@ function GallerySetup() {
             <GalleryContextProvider 
                 source={localSource} // The source of assets to display in the gallery.
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
-                databases={indexeddb.databases} // The local databases. 
-                outgoingAssetUpdateQueue={outgoingAssetUpdateQueue} // The queue for outgoing asset updates.
                 >
                 <UploadContextProvider>
                     <Main />

@@ -83,7 +83,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset, uploadAsset, checkAssets } = useGallery();
+    const { addAsset, uploadAsset, mapHashToAssets: checkAssets } = useGallery();
 
     //
     // List of uploads that failed.

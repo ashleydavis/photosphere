@@ -3,12 +3,19 @@
 //
 
 import { IAssetRecord } from "../../def/asset-record";
-import { IAssetData, IAssetSink, IIndexeddbDatabases } from "database";
+import { IAssetData, IAssetSink, IDatabaseOp, IIndexeddbDatabases, applyOperations } from "database";
 
 //
 // Use the "Indexeddb sink" in a component.
 //
 export function useIndexeddbGallerySink({ indexeddbDatabases }: { indexeddbDatabases: IIndexeddbDatabases }): IAssetSink {
+
+    //
+    // Submits operations to change the database.
+    //
+    async function submitOperations(ops: IDatabaseOp[]): Promise<void> {
+        await applyOperations(indexeddbDatabases, ops);        
+    }
 
     //
     // Stores an asset.
@@ -23,6 +30,7 @@ export function useIndexeddbGallerySink({ indexeddbDatabases }: { indexeddbDatab
     }
 
     return {
+        submitOperations,
         storeAsset,
     };
 }

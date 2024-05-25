@@ -3,7 +3,7 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { applyOperations, IAsset, IAssetSink, IAssetSource, IAssetUpdateRecord, IDatabase, IDatabaseOp, IDatabases, IHashRecord, IPage, IPersistentQueue } from "database";
+import { IAsset, IAssetSink, IAssetSource, IDatabaseOp, IPage } from "database";
 
 export interface IGalleryContext {
 
@@ -28,9 +28,9 @@ export interface IGalleryContext {
     updateAsset(assetIndex: number, asset: Partial<IGalleryItem>): Promise<void>;
 
     //
-    // Gets the assets already uploaded with a particular hash.
+    // Maps a hash to the assets already uploaded.
     //
-    checkAssets(hash: string): Promise<string[] | undefined>;
+    mapHashToAssets(hash: string): Promise<string[]>;
 
     //
     // Uploads an asset.
@@ -102,20 +102,10 @@ export interface IGalleryContextProviderProps {
     //
     sink?: IAssetSink;
 
-    //
-    // The database that contains asset metadata.
-    //
-    databases: IDatabases;
-
-    //
-    // Outgoing queue for asset updates.
-    //
-    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
-
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, databases, outgoingAssetUpdateQueue, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
 
     // 
     // Interface to database sync.
@@ -214,13 +204,10 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
             setCollectionId(_collectionId);
         }
 
-        console.log(`Have collection id ${_collectionId}`); //fio:
-
-        const galleryItems: IGalleryItem[] = [];
-        const metadataCollection = databases.database(_collectionId).collection<IAsset>("metadata");
+        const galleryItems: IGalleryItem[] = []; 
         let next: string | undefined = undefined;
         while (true) {
-            const page: IPage<IAsset> = await metadataCollection.getAll(1000, next);
+            const page: IPage<IAsset> = await source.loadAssets(_collectionId, 1000, next);
             next = page.next;
             for (const asset of page.records) {
                 const item = assetToGalleryItem(asset);
@@ -280,8 +267,7 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
                 },
             }
         ];
-        await applyOperations(databases, ops);
-        await outgoingAssetUpdateQueue.add({ ops });
+        await sink.submitOperations(ops);
     }
 
     //
@@ -372,30 +358,19 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
                 fields: partialGalleryItemToAsset(assetUpdate),
             },
         }]
-        await applyOperations(databases, ops);
-        await outgoingAssetUpdateQueue.add({ ops });
+        await sink.submitOperations(ops);
     }
 
     //
-    // Gets the assets already uploaded with a particular hash.
+    // Maps a hash to the assets already uploaded.
     //
-    async function checkAssets(hash: string): Promise<string[] | undefined> {
+    async function mapHashToAssets(hash: string): Promise<string[]> {
         if (!collectionId) {
             throw new Error(`Cannot check asset without a collection id.`);
         }
 
-        const assetCollection = databases.database(collectionId);
-        const hashRecord = await assetCollection.collection<IHashRecord>("hashes").getOne(hash);
-        if (!hashRecord) {
-            return undefined;
-        }
-
-        if (hashRecord.assetIds.length < 1) { 
-            return undefined;
-        }
-
-        return hashRecord.assetIds;
-    }    
+        return await source.mapHashToAssets(collectionId, hash);
+    }
 
     //
     // Uploads an asset.
@@ -594,7 +569,7 @@ export function GalleryContextProvider({ source, sink, databases, outgoingAssetU
         loadAssets,
         addAsset,
         updateAsset,
-        checkAssets, 
+        mapHashToAssets, 
         uploadAsset,
         loadAsset,
         unloadAsset,

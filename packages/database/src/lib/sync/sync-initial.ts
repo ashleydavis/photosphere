@@ -61,16 +61,16 @@ export async function initialSync({ collectionIds, api, indexeddbDatabases, clou
             userDatabase.collection<any>("last-update-id").setOne(collectionId, { lastUpdateId: latestUpdateId });
         }
 
-        const cloudDatabase = cloudDatabases.database(collectionId);
-        const assetCollection = indexeddbDatabases.database(collectionId);
+        const cloudAssetDatabase = cloudDatabases.database(collectionId);
+        const localAssetDatabase = indexeddbDatabases.database(collectionId);
         for (const collectionName of ["metadata", "hashes"]) {
-            const localCollection = assetCollection.collection(collectionName);
+            const localCollection = localAssetDatabase.collection(collectionName);
             const noRecords = await localCollection.none();
             if (noRecords) {    
                 //
                 // Assume that no records locally means we need to get all records down for this collection.
                 //
-                await visitRecords<IAsset>(cloudDatabase, collectionName, async (id, record) => {
+                await visitRecords<IAsset>(cloudAssetDatabase, collectionName, async (id, record) => {
                     await localCollection.setOne(id, record); // Store it locally.
                 });
             }
@@ -79,8 +79,8 @@ export async function initialSync({ collectionIds, api, indexeddbDatabases, clou
         //
         // Pre-cache all thumbnails.
         //
-        await visitRecords<IAsset>(cloudDatabase, "metadata", async (id, record) => {
-            await cacheThumbnail(collectionId, id, record, indexeddbSource, indexeddbSink, cloudSource);
+        await visitRecords<IAsset>(cloudAssetDatabase, "metadata", async (id, record) => {
+            await cacheThumbnail(collectionId, id, indexeddbSource, indexeddbSink, cloudSource);
         });
     }
 }
@@ -88,7 +88,7 @@ export async function initialSync({ collectionIds, api, indexeddbDatabases, clou
 //
 // Pre-caches a thumbnail.
 //
-async function cacheThumbnail(collectionId: string, assetId: string, asset: IAsset, indexeddbSource: IAssetSource, indexeddbSink: IAssetSink, cloudSource: IAssetSource) {
+async function cacheThumbnail(collectionId: string, assetId: string, indexeddbSource: IAssetSource, indexeddbSink: IAssetSink, cloudSource: IAssetSource) {
     const localThumbData = await indexeddbSource.loadAsset(collectionId, assetId, "thumb");
     if (localThumbData === undefined) {
         const assetData = await cloudSource.loadAsset(collectionId, assetId, "thumb");

@@ -134,7 +134,6 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                     try {
                         await syncOutgoing({
                             cloudSink,
-                            cloudDatabases,
                             outgoingAssetUploadQueue,
                             outgoingAssetUpdateQueue,
                         });
@@ -150,7 +149,7 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                         //
                         const collectionIds = user!.collections.access;
                         const userDatabase = indexeddb.databases.database("user");
-                        await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink, cloudDatabases });
+                        await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink });
                     }
                     catch (err) {
                         console.error(`Outgoing sync failed:`);

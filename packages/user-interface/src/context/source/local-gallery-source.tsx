@@ -2,7 +2,7 @@
 // Provides a source of assets for the gallery from indexeddb.
 //
 
-import { IAssetData, IAssetSink, IAssetSource } from "database";
+import { IAsset, IAssetData, IAssetSink, IAssetSource, IPage } from "database";
 import { useOnline } from "../../lib/use-online";
 
 //
@@ -11,6 +11,20 @@ import { useOnline } from "../../lib/use-online";
 export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource }: { indexeddbSource: IAssetSource, indexeddbSink: IAssetSink, cloudSource: IAssetSource }): IAssetSource {
 
     const { isOnline } = useOnline();
+
+    //
+    // Loads metadata for all assets.
+    //
+    async function loadAssets(collectionId: string, max: number, next?: string): Promise<IPage<IAsset>> {
+        return await indexeddbSource.loadAssets(collectionId, max, next);
+    }
+
+    //
+    // Maps a hash to the assets already uploaded.
+    //
+    async function mapHashToAssets(collectionId: string, hash: string): Promise<string[]> {
+        return await indexeddbSource.mapHashToAssets(collectionId, hash);
+    }
 
     //
     // Loads data for an asset.
@@ -36,6 +50,8 @@ export function useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSou
 
     return {
         isInitialised: indexeddbSource.isInitialised,
+        loadAssets,
+        mapHashToAssets,
         loadAsset,
     };
 }
