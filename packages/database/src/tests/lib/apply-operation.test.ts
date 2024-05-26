@@ -8,6 +8,33 @@ describe("apply operation", () => {
         expect(fields).toEqual({ name: "Alice" });
     });
 
+    test("setting a field leaves other fields in tact", () => {
+        const fields = {
+            A: 1,
+            B: 2,
+        };
+        applyOperation({ type: "set", fields: { name: "Alice" } }, fields);
+        expect(fields).toEqual({ 
+            name: "Alice",
+            A: 1,
+            B: 2,
+        });
+    });
+
+    test("setting a field to a bad value doesn't change the field", () => {
+        const fields = {
+            name: "Alice",
+        };
+        applyOperation({ type: "set", fields: { name: null } }, fields);
+        expect(fields).toEqual({ name: "Alice" });
+
+        applyOperation({ type: "set", fields: { name: undefined } }, fields);
+        expect(fields).toEqual({ name: "Alice" });
+
+        applyOperation({ type: "set", fields: { name: NaN } }, fields);
+        expect(fields).toEqual({ name: "Alice" });
+    });
+
     test("can push value on empty array", () => {
         const fields = {};
         applyOperation({ type: "push", field: "tags", value: "foo" }, fields);

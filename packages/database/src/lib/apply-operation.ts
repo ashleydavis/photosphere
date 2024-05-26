@@ -12,6 +12,9 @@ export function applyOperation(op: IOpSelection, fields: any): void {
     switch (op.type) {
         case "set": {
             for (const [name, value] of Object.entries(op.fields)) {
+                if (value === null || value === undefined || Number.isNaN(value)) {
+                    continue; // Do not set null or undefined values.
+                }
                 fields[name] = value;
             }
             break;
