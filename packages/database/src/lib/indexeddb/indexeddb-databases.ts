@@ -79,7 +79,7 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
             throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
         }
 
-        db = await openDatabase(`photosphere-${databaseName}`, databaseConfiguration.versionNumber, databaseConfiguration.collectionNames);
+        db = await openDatabase(databaseName, databaseConfiguration.versionNumber, databaseConfiguration.collectionNames);
         this.dbCache.set(databaseName, db);
         return db;
     }

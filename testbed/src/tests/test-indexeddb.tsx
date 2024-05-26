@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { IndexeddbDatabases, indexeddb, PersistentQueue } from "database";
+import { IndexeddbDatabases, indexeddb, PersistentQueue, IAsset, IPage } from "database";
 
 //
 // Checks for equality between two arrays.
@@ -89,8 +89,18 @@ export function TestIndexeddb() {
                 "photosphere-queue-test": {
                     collectionNames: [ "test-queue" ],
                     versionNumber: 1,
-                }
-            }, "");
+                },
+                collection: {
+                    collectionNames: [
+                        "thumb",
+                        "display",
+                        "asset",
+                        "hashes",
+                        "metadata",
+                    ],
+                    versionNumber: 1,
+                },            
+            }, "collection");
             const queue = new PersistentQueue<any>(databases.database("photosphere-queue-test"), "test-queue");
             await queue.add({ test: "B" });
             await queue.add({ test: "Z" });
@@ -114,6 +124,19 @@ export function TestIndexeddb() {
             if (undefinedFinalRecord !== undefined) {
                 throw new Error("Expected no more records.");
             }
+
+            console.log(`!! All recoreds in test collection:`);
+            const metadataCollection = databases.database("test-collection").collection("metadata");
+            let next: string | undefined = undefined;
+            while (true) {
+                const page: IPage<IAsset> = await metadataCollection.getAll(1000, next)
+                console.log(page.records);
+                next = page.next;
+                if (!next) {
+                    break;
+                }
+            }
+
             await databases.shutdown();
         }
 
