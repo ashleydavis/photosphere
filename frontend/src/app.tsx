@@ -4,14 +4,6 @@ import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, i
 import { Auth0Provider } from "@auth0/auth0-react";
 import { IIndexeddbDatabase, IPersistentQueue, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord, CloudDatabases } from "database";
 
-//
-// Use the outgoing queue as a React hook.
-//
-export function useOutgoingUpdateQueue<RecordT>(database: IIndexeddbDatabase, collectionName: string): IPersistentQueue<RecordT> {
-    const queue = useRef<PersistentQueue<RecordT>>(new PersistentQueue<RecordT>(database, collectionName));
-    return queue.current;
-}
-
 function GallerySetup() {
 
     const api = useApi();
@@ -25,10 +17,10 @@ function GallerySetup() {
     const cloudSink = useCloudGallerySink({ api });
 
     const userDatabase = indexeddb.databases.database("user");
-    const outgoingAssetUploadQueue = useOutgoingUpdateQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload");
-    const outgoingAssetUpdateQueue = useOutgoingUpdateQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update");
+    const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload"));
+    const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update"));
     const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
-    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue, outgoingAssetUpdateQueue });
+    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current });
 
     return (
         <DbSyncContextProvider
@@ -39,8 +31,8 @@ function GallerySetup() {
             indexeddbSource={indexeddbSource}
             indexeddbSink={indexeddbSink}
             localSource={localSource}
-            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue}
-            outgoingAssetUploadQueue={outgoingAssetUploadQueue}
+            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
+            outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
             >
             <GalleryContextProvider 
                 source={localSource} // The source of assets to display in the gallery.
