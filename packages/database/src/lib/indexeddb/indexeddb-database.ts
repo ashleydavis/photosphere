@@ -1,5 +1,4 @@
 import { IDatabase } from "../database";
-import { IDatabaseCollection } from "../database-collection";
 import { IIndexeddbDatabaseCollection, IndexeddbDatabaseCollection } from "./indexeddb-database-collection";
 
 export interface IIndexeddbDatabase extends IDatabase {
