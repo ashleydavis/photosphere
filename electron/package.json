@@ -7,6 +7,7 @@
         "pack-web-page": "pnpm run --filter electron-frontend build",
         "start:prod:static": "pnm run pack-web-page && electron .",
         "start:prod": "concurrently --names=\"dev-server,electron\" \"pnpm --filter electron-frontend run start:prod\" \"pnpm run electron:dev\"",
+        "sd": "pnpm run start:dev",
         "start:dev": "concurrently --names=\"dev-server,electron\" \"pnpm --filter electron-frontend run start\" \"wait-on --interval 5000 http://localhost:8080 && cross-env HTML_PAGE=http://localhost:8080 electron .\"",
         "start": "pnpm run start:dev",
         "package-electron": "npx electron-builder -c.mac.identity=null --publish=never",
