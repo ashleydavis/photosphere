@@ -91,15 +91,17 @@ export async function applyOperations(databases: IDatabases, databaseOps: IDatab
     for (const databaseOp of databaseOps) {
         const recordId = databaseOp.recordId;
         const database = databases.database(databaseOp.databaseName);
-        const asset = await database.collection(databaseOp.collectionName).getOne(recordId);
-        let fields = asset as any || {};
-        if (!asset) {
-            // Set the record id when upserting.
+        const collection = database.collection(databaseOp.collectionName)
+        const record = await collection.getOne(recordId);
+
+        let fields = record as any || {};
+        if (!record) {
+            // Set the record id when upserting. 
             fields._id = recordId;
         }
 
         applyOperation(databaseOp.op, fields);
 
-        await database.collection(databaseOp.collectionName).setOne(recordId, fields);
+        await collection.setOne(recordId, fields);
     }
 }    
