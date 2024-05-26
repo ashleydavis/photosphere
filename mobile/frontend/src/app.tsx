@@ -5,6 +5,7 @@ import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { CloudDatabases, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord } from "database";
+import { ComputerPage } from "./pages/computer";
 
 function GallerySetup() {
 
@@ -41,7 +42,9 @@ function GallerySetup() {
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
                 >
                 <UploadContextProvider>
-                    <Main />
+                    <Main
+                        computerPage={<ComputerPage />} 
+                        />
                 </UploadContextProvider>
             </GalleryContextProvider>
         </DbSyncContextProvider>

@@ -3,6 +3,7 @@ import { HashRouter } from "react-router-dom";
 import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, isProduction, useApi, useCloudGallerySink, useCloudGallerySource, useIndexeddb, useIndexeddbGallerySink, useIndexeddbGallerySource, useLocalGallerySink, useLocalGallerySource } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { CloudDatabases, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue } from "database";
+import { ComputerPage } from "./pages/computer";
 
 function GallerySetup() {
 
@@ -39,7 +40,9 @@ function GallerySetup() {
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
                 >
                 <UploadContextProvider>
-                    <Main />
+                    <Main
+                        computerPage={<ComputerPage />} 
+                        />
                 </UploadContextProvider>
             </GalleryContextProvider>
         </DbSyncContextProvider>
