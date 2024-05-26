@@ -1,0 +1,7 @@
+{
+    "collections": {
+        "upload": "test-collection",
+        "default": "test-collection",
+        "access": [ "test-collection" ]
+    }
+}
