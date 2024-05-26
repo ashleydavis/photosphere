@@ -302,26 +302,6 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     }
 
     //
-    // Converts a partial gallery item to a partial asset.
-    //
-    function partialGalleryItemToAsset(partialGalleryItem: Partial<IGalleryItem>): Partial<IAsset> {
-        return {
-            width: partialGalleryItem.width,
-            height: partialGalleryItem.height,
-            origFileName: partialGalleryItem.origFileName,
-            hash: partialGalleryItem.hash,
-            location: partialGalleryItem.location,
-            fileDate: partialGalleryItem.fileDate,
-            photoDate: partialGalleryItem.photoDate,
-            sortDate: partialGalleryItem.sortDate,
-            uploadDate: partialGalleryItem.uploadDate,
-            properties: partialGalleryItem.properties,
-            labels: partialGalleryItem.labels,
-            description: partialGalleryItem.description,
-        };
-    }
-
-    //
     // Updates an asset in the gallery by index.
     //
     async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
@@ -355,7 +335,7 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
             recordId: assetId,
             op: {
                 type: "set",
-                fields: partialGalleryItemToAsset(assetUpdate),
+                fields: assetUpdate,
             },
         }]
         await sink.submitOperations(ops);
