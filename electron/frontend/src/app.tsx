@@ -4,6 +4,7 @@ import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, Gallery
 import { Auth0Provider } from "@auth0/auth0-react";
 import { CloudDatabases, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue } from "database";
 import { ComputerPage } from "./pages/computer";
+import { ScanContextProvider } from "./context/scan-context";
 
 function GallerySetup() {
 
@@ -24,28 +25,30 @@ function GallerySetup() {
     const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current });
 
     return (
-        <DbSyncContextProvider
-            cloudDatabases={cloudDatabases}
-            cloudSource={cloudSource}
-            cloudSink={cloudSink}
-            indexeddbDatabases={indexeddb.databases}
-            indexeddbSource={indexeddbSource}
-            indexeddbSink={indexeddbSink}
-            localSource={localSource}
-            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
-            outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
-            >
-            <GalleryContextProvider 
-                source={localSource} // The source of assets to display in the gallery.
-                sink={localSink}     // The sink for outgoing asset uploads and edits.
+        <ScanContextProvider>
+            <DbSyncContextProvider
+                cloudDatabases={cloudDatabases}
+                cloudSource={cloudSource}
+                cloudSink={cloudSink}
+                indexeddbDatabases={indexeddb.databases}
+                indexeddbSource={indexeddbSource}
+                indexeddbSink={indexeddbSink}
+                localSource={localSource}
+                outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
+                outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
                 >
-                <UploadContextProvider>
-                    <Main
-                        computerPage={<ComputerPage />} 
-                        />
-                </UploadContextProvider>
-            </GalleryContextProvider>
-        </DbSyncContextProvider>
+                <GalleryContextProvider 
+                    source={localSource} // The source of assets to display in the gallery.
+                    sink={localSink}     // The sink for outgoing asset uploads and edits.
+                    >
+                    <UploadContextProvider>
+                        <Main
+                            computerPage={<ComputerPage />} 
+                            />
+                    </UploadContextProvider>
+                </GalleryContextProvider>
+            </DbSyncContextProvider>
+        </ScanContextProvider>
     );
 }
 
