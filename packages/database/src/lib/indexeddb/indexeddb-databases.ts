@@ -56,7 +56,6 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
         return new IndexeddbDatabase(() => this.openDatabase(databaseName));
     }
 
-
     //
     // Opens a particular database.
     //
@@ -75,7 +74,7 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
             throw new Error(`Invalid database name: "${databaseName}"`);
         }
         const baseDatabaseName = databaseNameParts[0];
-        const databaseConfiguration = this.databaseConfigurations[baseDatabaseName] || this.databaseConfigurations[this.defaultConfigurationName];
+        const databaseConfiguration = this.databaseConfigurations[databaseName] || this.databaseConfigurations[baseDatabaseName] || this.databaseConfigurations[this.defaultConfigurationName];
         if (!databaseConfiguration) {
             throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
         }
