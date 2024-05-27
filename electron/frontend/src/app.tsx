@@ -5,6 +5,7 @@ import { Auth0Provider } from "@auth0/auth0-react";
 import { CloudDatabases, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue } from "database";
 import { ComputerPage } from "./pages/computer";
 import { ScanContextProvider } from "./context/scan-context";
+import dayjs from "dayjs";
 
 function GallerySetup() {
 
@@ -40,6 +41,8 @@ function GallerySetup() {
                 <GalleryContextProvider 
                     source={localSource} // The source of assets to display in the gallery.
                     sink={localSink}     // The sink for outgoing asset uploads and edits.
+                    sortFn={asset => dayjs(asset.sortDate).toDate()}
+                    groupFn={asset => dayjs(asset.sortDate).format("MMM, YYYY")}
                     >
                     <UploadContextProvider>
                         <Main

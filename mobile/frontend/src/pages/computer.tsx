@@ -6,6 +6,7 @@ import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
 import { Gallery, GalleryContextProvider } from "user-interface";
 import { useComputerGallerySource } from "../context/source/computer-gallery-source-context";
+import path from "path";
 
 export function ComputerPage() {
 
@@ -27,6 +28,8 @@ export function ComputerPage() {
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider 
                 source={computerGallerySource}
+                sortFn={asset => path.dirname(asset.origFileName)}
+                groupFn={asset => path.dirname(asset.origFileName)}
                 >
                 <Gallery
                     targetRowHeight={150}

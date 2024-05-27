@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, useIndexeddbGallerySource, useIndexeddbGallerySink, useCloudGallerySource, useCloudGallerySink, IndexeddbContextProvider, DbSyncContextProvider, useIndexeddb, useApi } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { IIndexeddbDatabase, IPersistentQueue, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord, CloudDatabases } from "database";
+import dayjs from "dayjs";
 
 function GallerySetup() {
 
@@ -37,6 +38,8 @@ function GallerySetup() {
             <GalleryContextProvider 
                 source={localSource} // The source of assets to display in the gallery.
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
+                sortFn={asset => dayjs(asset.sortDate).toDate()}
+                groupFn={asset => dayjs(asset.sortDate).format("MMM, YYYY")}
                 >
                 <UploadContextProvider>
                     <Main />

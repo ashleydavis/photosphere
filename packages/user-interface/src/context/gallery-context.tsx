@@ -4,6 +4,17 @@ import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
 import { IAsset, IAssetSink, IAssetSource, IDatabaseOp, IPage } from "database";
+import { sleep } from "../lib/sleep";
+
+//
+// Gets the sorting value from the asset.
+//
+export type SortFn = (asset: IAsset) => any;
+
+//
+// Gets the grouping value from the asset.
+//
+export type GroupFn = (asset: IAsset) => string;
 
 export interface IGalleryContext {
 
@@ -102,10 +113,20 @@ export interface IGalleryContextProviderProps {
     //
     sink?: IAssetSink;
 
+    //
+    // Sets the sorting function for the gallery.
+    //
+    sortFn: SortFn;
+
+    //
+    // Sets the grouping function for the gallery.
+    //
+    groupFn: GroupFn;
+
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, sortFn, groupFn, children }: IGalleryContextProviderProps) {
 
     // 
     // Interface to database sync.
@@ -283,14 +304,15 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     function assetToGalleryItem(asset: IAsset): IGalleryItem {
         return {
             ...asset,
-            group: dayjs(asset.sortDate).format("MMM, YYYY"),
+            group: groupFn(asset), 
+            //fio: dayjs(asset.sortDate).format("MMM, YYYY"),
         };
     }
 
     //
     // Converts a gallery item to an asset.
     //
-    function galleryItemToAsset(galleryItem: IGalleryItem): IAsset {
+    function galleryItemToAsset(galleryItem: IGalleryItem): IAsset { //todo: pull this up. No need for a sep function.
         return {
             _id: galleryItem._id,
             width: galleryItem.width,
@@ -507,8 +529,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     //
     function applySort(items: IGalleryItem[]): IGalleryItem[] {
         const clone = items.slice();
-        return clone.sort((a, b) => { // Warning: this mutates the array. Should be ok.
-            if (a.sortDate < b.sortDate) {
+        return clone.sort((a, b) => { // Warning: this mutates the array we just cloned.
+            if (sortFn(a) < sortFn(b)) {
                 return 1;
             }
             else if (a.sortDate > b.sortDate) {
