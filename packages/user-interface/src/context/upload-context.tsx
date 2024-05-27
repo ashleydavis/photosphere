@@ -303,7 +303,7 @@ export function UploadContextProvider({ children }: IProps) {
                 resolution: imageResolution,
                 thumbnail: thumbnailData,
                 thumbContentType: thumbContentType,
-                display: displayData,
+                display: displayData, //todo: change to blob.
                 displayContentType: displayContentType,
                 hash: hash,
             };
