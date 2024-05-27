@@ -20,7 +20,6 @@ export function ComputerPage() {
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider 
-                id="computer-gallery"
                 source={scan}
                 >
                 <Gallery
