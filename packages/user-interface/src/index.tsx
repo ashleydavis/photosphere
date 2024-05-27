@@ -17,4 +17,5 @@ export { IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";
 export * from "./lib/file";
+export * from "./lib/image";
 export * from "./lib/sleep";

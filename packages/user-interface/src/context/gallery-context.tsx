@@ -216,12 +216,19 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
                 galleryItems.push(item);
             }
 
+            // Renders the assets that we know about already.
+            setAssets(applySort(galleryItems));
+
             if (next === undefined) {
                 break; // No more metadata.
             }
-        }
-
-        setAssets(applySort(galleryItems));
+            else {
+                if (page.records.length === 0) {
+                    // Assets are still loading, let them continue loading.
+                    await sleep(500);
+                }
+            }
+        }        
     }
 
     //

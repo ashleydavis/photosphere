@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as EXIF from './exif-js/exif';
+import { contentType } from 'mime-types';
 
 //
 // Loads URL or source data to an image element.
@@ -66,7 +67,7 @@ export function getImageResolution(image: HTMLImageElement): IResolution {
 //
 // https://stackoverflow.com/a/43354901/25868
 //
-export function resizeImage(image: HTMLImageElement, minSize: number): string {
+export function resizeImage(image: HTMLImageElement, minSize: number): string { 
     const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
     const octx = oc.getContext('2d')!;
     oc.width = image.width;
@@ -86,6 +87,35 @@ export function resizeImage(image: HTMLImageElement, minSize: number): string {
     octx.drawImage(oc, 0, 0, oc.width, oc.height);
     octx.drawImage(image, 0, 0, oc.width, oc.height);
     return oc.toDataURL();
+}
+
+//
+// Resizes an image to outputs a blobg.
+//
+// https://stackoverflow.com/a/43354901/25868
+//
+export function resizeImageToBlob(image: HTMLImageElement, minSize: number): Promise<Blob> { 
+    return new Promise<Blob>(resolve => {
+        const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
+        const octx = oc.getContext('2d')!;
+        oc.width = image.width;
+        oc.height = image.height;
+        octx.drawImage(image, 0, 0);
+
+        // Commented out code could be useful.
+        if( image.width > image.height) {
+            oc.height = minSize;
+            oc.width = (image.width / image.height) * minSize;
+        } 
+        else {
+            oc.height = (image.height / image.width) * minSize;
+            oc.width = minSize;
+        }
+
+        octx.drawImage(oc, 0, 0, oc.width, oc.height);
+        octx.drawImage(image, 0, 0, oc.width, oc.height);
+        oc.toBlob(blob => resolve(blob!));
+    });
 }
 
 //

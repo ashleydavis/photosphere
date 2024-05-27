@@ -5,28 +5,23 @@
 import React, { useEffect, useState } from "react";
 import { useScan } from "../context/scan-context";
 import { Gallery, GalleryContextProvider } from "user-interface";
-import { useComputerGallerySource } from "../context/source/computer-gallery-source-context";
 
 export function ComputerPage() {
 
     //
-    // Reterives assets from the local computer.
-    //
-    const computerGallerySource = useComputerGallerySource();
-
-    //
     // The interface for scanning local files.
     //
-    const { scanImages } = useScan();
+    const scan = useScan();
 
     useEffect(() => {
-        scanImages();
+        scan.scanImages();
     }, []);
         
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider 
-                source={computerGallerySource}
+                id="computer-gallery"
+                source={scan}
                 >
                 <Gallery
                     targetRowHeight={150}

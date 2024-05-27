@@ -2,25 +2,13 @@
 // This context implements scanning the file system for assets.
 //
 
-import React, { createContext, ReactNode, useContext, useState } from "react";
-import { computeHash, IGalleryItem } from "user-interface";
-import { scanImages as _scanImages } from "../lib/scan";
+import React, { createContext, ReactNode, useContext, useRef, useState } from "react";
+import { scanImages as _scanImages, getContentType } from "../lib/scan";
 import dayjs from "dayjs";
-import fs from "fs";
-import { getImageResolution, IResolution, loadBlobToDataURL, loadBlobToImage, resizeImage } from "user-interface/build/lib/image";
+import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
+import { IAsset, IAssetData, IAssetSource, IPage } from "database";
 
-//
-// Size of the thumbnail to generate and display during uploaded.
-//
-const PREVIEW_THUMBNAIL_MIN_SIZE = 120;
-
-export interface IScanContext {
-
-    //
-    // Assets that have been scanned.
-    //
-    assets: IGalleryItem[];
-
+export interface IScanContext extends IAssetSource {
     //
     // Scan the file system for assets.
     //
@@ -38,71 +26,94 @@ export function ScanContextProvider({ children }: IProps) {
     //
     // Assets that have been scanned.
     //
-    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
+    const assets = useRef<IAsset[]>([]);
 
     //
-    // Loads a local file into a blob.
+    // Set to true while scanning.
     //
-    async function loadFileToBlob(filePath: string, contentType: string): Promise<Blob> {
-        const buffer = await fs.promises.readFile(filePath);
-
-        return new Blob([buffer], { type: contentType });
-    }
-
-    //
-    // Loads a thumbnail from a local file.
-    //
-    async function loadThumbnail(filePath: string, contentType: string): Promise<{ thumbnail: string, resolution: IResolution, hash: string }> {
-        const blob = await loadFileToBlob(filePath, contentType);
-        const image = await loadBlobToImage(blob);
-        return {
-            thumbnail: resizeImage(image, PREVIEW_THUMBNAIL_MIN_SIZE),
-            resolution: getImageResolution(image),
-            hash: await computeHash(blob),
-        };
-    }
-
-    //
-    // Loads the full resolution version of a local file.
-    //
-    async function loadHighRes(filePath: string, contentType: string): Promise<string> {
-        const blob = await loadFileToBlob(filePath, contentType);
-        return loadBlobToDataURL(blob);
-    }   
+    const isScanning = useRef<boolean>(true);
 
     //
     // Scan the file system for assets.
     //
     function scanImages(): void {
-        //
-        //todo: This will be a bit different using local storage.
-        //
-        //
-        // _scanImages(async fileDetails => {
-        //     const { thumbnail, resolution, hash } = await loadThumbnail(fileDetails.path, fileDetails.contentType);
-        //     const newAsset: IGalleryItem = {
-        //         _id: `local://${fileDetails.path}`,
-        //         width: resolution.width,
-        //         height: resolution.height,
-        //         origFileName: fileDetails.path,
-        //         hash,
-        //         fileDate: dayjs().toISOString(),
-        //         sortDate: dayjs().toISOString(),
-        //         uploadDate: dayjs().toISOString(),
-        //         url: thumbnail,
-        //         makeFullUrl: async () => {
-        //             return await loadHighRes(fileDetails.path, fileDetails.contentType);
-        //         },
-        //     };
-        //     setAssets(prev => prev.concat([ newAsset ]));
-        // })
-        // .then(() => console.log('Scanning complete'))
-        // .catch(error => console.error('Error scanning images', error));
+        _scanImages(async fileDetails => {
+            const { resolution, hash } = await loadFileInfo(fileDetails.path, fileDetails.contentType);
+            const newAsset: IAsset = {
+                _id: fileDetails.path,
+                width: resolution.width,
+                height: resolution.height,
+                origFileName: fileDetails.path,
+                hash,
+                fileDate: dayjs().toISOString(),
+                sortDate: dayjs().toISOString(),
+                uploadDate: dayjs().toISOString(),
+            };
+            assets.current.push(newAsset);
+        })
+        .then(() => {
+            isScanning.current = false;
+            console.log('Scanning complete');
+        })
+        .catch(error => {
+            isScanning.current = false;
+            console.error('Error scanning images', error);
+        });
     }
 
+    //
+    // Loads metadata for all assets.
+    //
+    async function loadAssets(collectionId: string, max: number, next?: string): Promise<IPage<IAsset>> {
+        return {
+            records: next !== undefined ? assets.current.slice(parseInt(next), assets.current.length) : assets.current,
+            next: isScanning.current ? assets.current.length.toString() : undefined,
+        };
+    }
+
+    //
+    // Maps a hash to the assets already uploaded.
+    //
+    async function mapHashToAssets(collectionId: string, hash: string): Promise<string[]> {
+        return [];
+    }
+
+    //
+    // Loads data for an asset.
+    //
+    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
+        const contentType = getContentType(assetId);
+        if (!contentType) {
+            throw new Error(`Unknown content type for asset ${assetId}`);
+        }
+
+        switch (assetType) {
+            case "thumb": {
+                return {
+                    data: await loadFileToThumbnail(assetId, contentType),
+                    contentType: "image/png", // Thumbnail always png.
+                };
+            }
+
+            case "display": {
+                return {
+                    data: await loadFileToBlob(assetId, contentType),
+                    contentType,
+                };
+            }
+
+            default: {
+                throw new Error(`Unknown asset type ${assetType}`);
+            }
+        }
+    }
+        
     const value: IScanContext = {
-        assets,
+        isInitialised: true,
         scanImages,
+        loadAssets,
+        mapHashToAssets,
+        loadAsset,
     };
 
     return (

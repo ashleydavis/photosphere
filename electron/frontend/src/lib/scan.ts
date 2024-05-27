@@ -67,8 +67,16 @@ const imageExtensions: any = {
     '.gif': "image/gif", 
     '.bmp': "image/bmp", 
     '.tiff': "image/tiff", 
-    // '.webp': "image/webp",
+    '.webp': "image/webp",
 };
+
+//
+// Gets the content type for a file based on its extension.
+//
+export function getContentType(filePath: string): string | undefined {
+    const ext = path.extname(filePath).toLowerCase();
+    return imageExtensions[ext];
+}
 
 //
 // Search a directory for image files.

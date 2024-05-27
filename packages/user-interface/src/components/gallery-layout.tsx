@@ -1,7 +1,6 @@
 import React from "react";
 import { createLayout } from "../lib/create-layout";
-import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
-import { useApi } from "../context/api-context";
+import { ISelectedGalleryItem } from "../lib/gallery-item";
 import { Image } from "./image";
 import { useGallery } from "../context/gallery-context";
 
@@ -30,11 +29,6 @@ export function GalleryLayout({
 	targetRowHeight = 150, 
     onItemClick = undefined,
     }: IGalleryLayoutProps) {
-
-    //
-    // Interface to the API.
-    //
-    const api = useApi();
 
     const { assets } = useGallery();
     
