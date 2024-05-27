@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { sleep } from 'user-interface';
 
 //
 // Information on a file.
@@ -86,6 +87,42 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
     try {
         const files = await fs.promises.readdir(directory, { withFileTypes: true });
 
+        //
+        // Sleep to give the UI time to be responsive.
+        //
+        await sleep(10);
+
+        //
+        // Process files in this directory.
+        // Files are processed first to main stability of the gallery without having to sort the assets.
+        //
+        for (const file of files) {
+            const filePath = path.join(directory, file.name);
+            if (file.isDirectory()) {
+                // Do directories on the next pass.
+                continue;
+            }
+            else {
+                // Check if the file is an image based on its extension.
+                const ext = path.extname(file.name).toLowerCase();
+                const contentType = imageExtensions[ext];
+                if (contentType) {
+                    await fileFound({ 
+                        path: path.join(file.path, file.name),
+                        contentType,
+                    });
+
+                    //
+                    // Sleep to give the UI time to be responsive.
+                    //
+                    await sleep(10);
+                }
+            }
+        }
+
+        //
+        // Process subdirectories in this directory.
+        //
         for (const file of files) {
             const filePath = path.join(directory, file.name);
             if (file.isDirectory()) {
@@ -97,15 +134,8 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
                 await findImageFiles(filePath, fileFound);
             }
             else {
-                // Check if the file is an image based on its extension.
-                const ext = path.extname(file.name).toLowerCase();
-                const contentType = imageExtensions[ext];
-                if (contentType) {
-                    await fileFound({ 
-                        path: path.join(file.path, file.name),
-                        contentType,
-                    });
-                }
+                // Did files on the previous pass.
+                continue;
             }
         }
     }
