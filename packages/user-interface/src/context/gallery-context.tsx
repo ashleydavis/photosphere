@@ -506,7 +506,8 @@ export function GalleryContextProvider({ source, sink, children }: IGalleryConte
     // Sort all assets.
     //
     function applySort(items: IGalleryItem[]): IGalleryItem[] {
-        return items.sort((a, b) => { // Warning: this mutates the array. Should be ok.
+        const clone = items.slice();
+        return clone.sort((a, b) => { // Warning: this mutates the array. Should be ok.
             if (a.sortDate < b.sortDate) {
                 return 1;
             }
