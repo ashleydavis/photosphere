@@ -116,12 +116,12 @@ export interface IGalleryContextProviderProps {
     //
     // Sets the sorting function for the gallery.
     //
-    sortFn: SortFn;
+    sortFn?: SortFn;
 
     //
     // Sets the grouping function for the gallery.
     //
-    groupFn: GroupFn;
+    groupFn?: GroupFn;
 
     children: ReactNode | ReactNode[];
 }
@@ -304,8 +304,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     function assetToGalleryItem(asset: IAsset): IGalleryItem {
         return {
             ...asset,
-            group: groupFn(asset), 
-            //fio: dayjs(asset.sortDate).format("MMM, YYYY"),
+            group: groupFn && groupFn(asset) || undefined,
         };
     }
 
@@ -529,6 +528,11 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     //
     function applySort(items: IGalleryItem[]): IGalleryItem[] {
         const clone = items.slice();
+        if (sortFn === undefined) {
+            // No sort required.
+            // We still clone it because the array must be different to trigger a render.
+            return clone;
+        }
         return clone.sort((a, b) => { // Warning: this mutates the array we just cloned.
             if (sortFn(a) < sortFn(b)) {
                 return 1;

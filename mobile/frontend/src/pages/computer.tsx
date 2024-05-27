@@ -28,8 +28,6 @@ export function ComputerPage() {
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider 
                 source={computerGallerySource}
-                sortFn={asset => path.dirname(asset.origFileName)}
-                groupFn={asset => path.dirname(asset.origFileName)}
                 >
                 <Gallery
                     targetRowHeight={150}
