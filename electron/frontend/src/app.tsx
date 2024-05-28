@@ -26,32 +26,32 @@ function GallerySetup() {
     const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current });
 
     return (
-        <ScanContextProvider>
-            <DbSyncContextProvider
-                cloudDatabases={cloudDatabases}
-                cloudSource={cloudSource}
-                cloudSink={cloudSink}
-                indexeddbDatabases={indexeddb.databases}
-                indexeddbSource={indexeddbSource}
-                indexeddbSink={indexeddbSink}
-                localSource={localSource}
-                outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
-                outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
+        <DbSyncContextProvider
+            cloudDatabases={cloudDatabases}
+            cloudSource={cloudSource}
+            cloudSink={cloudSink}
+            indexeddbDatabases={indexeddb.databases}
+            indexeddbSource={indexeddbSource}
+            indexeddbSink={indexeddbSink}
+            localSource={localSource}
+            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
+            outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
+            >
+            <GalleryContextProvider 
+                source={localSource} // The source of assets to display in the gallery.
+                sink={localSink}     // The sink for outgoing asset uploads and edits.
+                sortFn={asset => dayjs(asset.sortDate).toDate()}
+                groupFn={asset => dayjs(asset.sortDate).format("MMM, YYYY")}
                 >
-                <GalleryContextProvider 
-                    source={localSource} // The source of assets to display in the gallery.
-                    sink={localSink}     // The sink for outgoing asset uploads and edits.
-                    sortFn={asset => dayjs(asset.sortDate).toDate()}
-                    groupFn={asset => dayjs(asset.sortDate).format("MMM, YYYY")}
-                    >
-                    <UploadContextProvider>
+                <UploadContextProvider>
+                    <ScanContextProvider>
                         <Main
                             computerPage={<ComputerPage />} 
                             />
-                    </UploadContextProvider>
-                </GalleryContextProvider>
-            </DbSyncContextProvider>
-        </ScanContextProvider>
+                    </ScanContextProvider>
+                </UploadContextProvider>
+            </GalleryContextProvider>
+        </DbSyncContextProvider>
     );
 }
 

@@ -13,12 +13,14 @@ export async function loadFileToBlob(filePath: string, contentType: string): Pro
 //
 // Loads information about a local file.
 //
-export async function loadFileInfo(filePath: string, contentType: string): Promise<{ resolution: IResolution, hash: string }> {
+export async function loadFileInfo(filePath: string, contentType: string): Promise<{ resolution: IResolution, hash: string, fileDate: Date }> {
+    const stats = await fs.promises.stat(filePath);
     const blob = await loadFileToBlob(filePath, contentType);
     const image = await loadBlobToImage(blob);
     return {
         resolution: getImageResolution(image),
         hash: await computeHash(blob),
+        fileDate: stats.birthtime,
     };
 }
 

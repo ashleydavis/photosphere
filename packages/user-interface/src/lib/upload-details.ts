@@ -17,12 +17,9 @@ export interface IQueuedUpload {
     fileName: string;
 
     //
-    // The original file to upload.
+    // Loads the file into a blob.
     //
-    // This isn't set for assets automatically extracted from zip files because
-    // I don't want to hold that data in memory unless I have to.
-    //
-    file: Blob;
+    loadData: () => Promise<Blob>;
 
     //
     // The content type of the asset.

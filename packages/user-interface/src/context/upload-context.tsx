@@ -32,6 +32,11 @@ const DISPLAY_MIN_SIZE = 1000;
 
 export interface IUploadContext {
     //
+    // Queues the upload of a file.
+    //
+    queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, labels: string[]): Promise<void>;
+
+    //
     // Uploads a collection of files.
     //
     uploadFiles(dataTransfer: { items?: DataTransferItemList, files?: File[] }): Promise<void>;
@@ -83,7 +88,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset, uploadAsset, mapHashToAssets: checkAssets } = useGallery();
+    const { addAsset, uploadAsset, mapHashToAssets } = useGallery();
 
     //
     // List of uploads that failed.
@@ -201,17 +206,16 @@ export function UploadContextProvider({ children }: IProps) {
                 // TODO. This can't load zip files bigger than 2GB in the browser. I need to handle errors better for this kind of thing.
                 //
                 const zip = new JSZip();
-                const unpacked = await zip.loadAsync(nextUpload.file);
+                const unpacked = await zip.loadAsync(await nextUpload.loadData());
                 for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
                     if (!zipObject.dir) {
                         //
                         // Found a file in the zip file.
                         //
-                        const blob = await zipObject.async("blob"); //todo: this forces much data to be stored in memory at the same time.
                         const contentType = mimeTypes.lookup(fileName);
                         if (contentType) {
                             const fullFileName = `${nextUpload.fileName}/${fileName}`;
-                            await queueUpload(fullFileName, blob, contentType, zipObject.date, nextUpload.labels.concat(["From zip file", nextUpload.fileName]));
+                            await queueUpload(fullFileName, () => zipObject.async("blob"), contentType, zipObject.date, nextUpload.labels.concat(["From zip file", nextUpload.fileName]));
                         }
                     }
                 }
@@ -268,8 +272,9 @@ export function UploadContextProvider({ children }: IProps) {
         //     throw new Error("Smeg");
         // }
 
-        const hash = await computeHash(nextUpload.file);
-        const existingAssetIds = await checkAssets(hash);
+        const fileData = await nextUpload.loadData();
+        const hash = await computeHash(fileData);
+        const existingAssetIds = await mapHashToAssets(hash);
         if (existingAssetIds && existingAssetIds.length > 0) {
             console.log(`Already uploaded ${nextUpload.fileName} with hash ${hash}, to assets ${existingAssetIds.join(',')}`);
 
@@ -284,7 +289,7 @@ export function UploadContextProvider({ children }: IProps) {
             // otherwise we get an out of memory error when trying to
             // upload 1000s of assets.
             //
-            const imageData = await loadDataURL(nextUpload.file);
+            const imageData = await loadDataURL(fileData);
             const image = await loadImage(imageData);
             const imageResolution = await getImageResolution(image);
             const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
@@ -296,7 +301,7 @@ export function UploadContextProvider({ children }: IProps) {
             const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
             const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
             const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
-            const exif = await getExifData(nextUpload.file);
+            const exif = await getExifData(fileData);
 
             const uploadDetails: IUploadDetails = {
                 ...nextUpload,
@@ -356,7 +361,7 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Uploads the full asset.
             //
-            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, uploadDetails.file);
+            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, fileData);
 
             //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
@@ -405,9 +410,9 @@ export function UploadContextProvider({ children }: IProps) {
     }
 
     //
-    // Queue the upload of a file.
+    // Queues the upload of a file.
     //
-    async function queueUpload(fileName: string, file: Blob, contentType: string, fileDate: Date, labels: string[]) {
+    async function queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, labels: string[]): Promise<void> {
 
         if (contentType !== "image/png" && contentType !== "image/jpeg" && contentType !== "application/zip") {
             // Only accept png, jpg and zip files for upload.
@@ -421,7 +426,7 @@ export function UploadContextProvider({ children }: IProps) {
         // Do minimal work and store minimal details when queuing an asset for upload.
         //
         const uploadDetails: IQueuedUpload = {
-            file: file, //todo: don't want to store this for zip files!
+            loadData,
             fileName: fileName,
             assetContentType: contentType,
             status: "pending",
@@ -436,7 +441,7 @@ export function UploadContextProvider({ children }: IProps) {
             // result in an out of memory error when we attempt to upload
             // 1000s of assets.
             //
-            previewThumbnail: await createThumbnail(contentType, file),
+            previewThumbnail: await createThumbnail(contentType, loadData),
         };
 
         setUploads(uploads => [ ...uploads, uploadDetails ]);
@@ -456,12 +461,12 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Creates a thumbnail for the file.
     //
-    async function createThumbnail(contentType: string, file: Blob): Promise<JSX.Element | undefined> {
+    async function createThumbnail(contentType: string, blobLoader: () => Promise<Blob>): Promise<JSX.Element | undefined> {
         if (contentType.startsWith("image/")) {
             return (
                 <img
                     className="w-28 h-28 object-cover"
-                    src={resizeImage(await loadImage(await loadDataURL(file)), PREVIEW_THUMBNAIL_MIN_SIZE)}
+                    src={resizeImage(await loadImage(await loadDataURL(await blobLoader())), PREVIEW_THUMBNAIL_MIN_SIZE)}
                 />
             );
         }
@@ -508,8 +513,8 @@ export function UploadContextProvider({ children }: IProps) {
     async function traverseFileSystem(item: FileSystemEntry, path: string[]): Promise<void> {
         if (item.isFile) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry
-            const file = await getFile(item as FileSystemFileEntry);
-            await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), path);
+            const file = await getFile(item as FileSystemFileEntry); //todo: Could delay loading of this, but it might not work.
+            await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), path);
         }
         else if (item.isDirectory) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
@@ -565,7 +570,7 @@ export function UploadContextProvider({ children }: IProps) {
                 const files = dataTransfer.files;
                 if (files) {
                     for (const file of files) {
-                        await queueUpload(file.name, file, file.type, dayjs(file.lastModified).toDate(), []);
+                        await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), []);
                     }
                 }
             }
@@ -606,6 +611,7 @@ export function UploadContextProvider({ children }: IProps) {
     }
 
     const value: IUploadContext = {
+        queueUpload,
         uploadFiles,
         retryFailedUploads,
         numScans,

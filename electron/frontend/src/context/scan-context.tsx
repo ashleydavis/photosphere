@@ -6,7 +6,9 @@ import React, { createContext, ReactNode, useContext, useRef, useState } from "r
 import { scanImages as _scanImages, getContentType } from "../lib/scan";
 import dayjs from "dayjs";
 import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
-import { IAsset, IAssetData, IAssetSource, IPage } from "database";
+import { IAsset, IAssetData, IAssetSource, IPage, uuid } from "database";
+import { useUpload } from "user-interface";
+import path from "path";
 
 export interface IScanContext extends IAssetSource {
     //
@@ -33,23 +35,33 @@ export function ScanContextProvider({ children }: IProps) {
     //
     const isScanning = useRef<boolean>(true);
 
+    const { queueUpload } = useUpload();
+
     //
     // Scan the file system for assets.
     //
     function scanImages(): void {
         _scanImages(async fileDetails => {
-            const { resolution, hash } = await loadFileInfo(fileDetails.path, fileDetails.contentType);
+            const { resolution, hash, fileDate } = await loadFileInfo(fileDetails.path, fileDetails.contentType);
             const newAsset: IAsset = {
                 _id: fileDetails.path,
                 width: resolution.width,
                 height: resolution.height,
                 origFileName: fileDetails.path,
                 hash,
-                fileDate: dayjs().toISOString(),
-                sortDate: dayjs().toISOString(),
+                fileDate: dayjs(fileDate).toISOString(),
+                sortDate: dayjs(fileDate).toISOString(),
                 uploadDate: dayjs().toISOString(),
             };
             assets.current.push(newAsset);
+
+            await queueUpload(
+                fileDetails.path,
+                () => loadFileToBlob(fileDetails.path, fileDetails.contentType),
+                fileDetails.contentType,
+                fileDate,
+                path.dirname(fileDetails.path).split("/")
+            );  
         })
         .then(() => {
             isScanning.current = false;
