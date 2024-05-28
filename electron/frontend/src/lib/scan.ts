@@ -97,7 +97,6 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
         // Files are processed first to main stability of the gallery without having to sort the assets.
         //
         for (const file of files) {
-            const filePath = path.join(directory, file.name);
             if (file.isDirectory()) {
                 // Do directories on the next pass.
                 continue;
@@ -107,8 +106,9 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
                 const ext = path.extname(file.name).toLowerCase();
                 const contentType = imageExtensions[ext];
                 if (contentType) {
+                    const filePath = path.join(directory, file.name);
                     await fileFound({ 
-                        path: path.join(file.path, file.name),
+                        path: filePath,
                         contentType,
                     });
 
@@ -124,14 +124,14 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
         // Process subdirectories in this directory.
         //
         for (const file of files) {
-            const filePath = path.join(directory, file.name);
             if (file.isDirectory()) {
                 if (file.name.toLowerCase() === "$recycle.bin") {
                     continue;
                 }
-
+                
                 // If the file is a directory, recursively search it.
-                await findImageFiles(filePath, fileFound);
+                const dirPath = path.join(directory, file.name);
+                await findImageFiles(dirPath, fileFound);
             }
             else {
                 // Did files on the previous pass.
