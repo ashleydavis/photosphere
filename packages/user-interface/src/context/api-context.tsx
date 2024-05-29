@@ -232,7 +232,10 @@ export function ApiContextProvider({ children }: IProps) {
     async function listAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<string>> {
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/list-all?db=${databaseName}&col=${collectionName}&max=${max}&next=${next}`;
+        let url = `${BASE_URL}/list-all?db=${databaseName}&col=${collectionName}&max=${max}`;
+        if (next) {
+            url += `&next=${next}`;
+        }
         const response = await axios.get(
             url, 
             {
@@ -251,7 +254,10 @@ export function ApiContextProvider({ children }: IProps) {
     async function getAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<any>> {
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/get-all?db=${databaseName}&col=${collectionName}&max=${max}&next=${next}`;
+        let url = `${BASE_URL}/get-all?db=${databaseName}&col=${collectionName}&max=${max}`;
+        if (next) {
+            url += `&next=${next}`;
+        }
         const response = await axios.get(
             url, 
             {
