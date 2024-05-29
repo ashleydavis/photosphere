@@ -2,6 +2,8 @@
 # @base_url = https://photosphere-api.codecapers.com.au
 @token = not needed
 @collection = test-collection
+# @collection = test-collection
+@collection = d5a75330-61ca-487d-b81b-0d2aeaa74c76
 @asset = 1234
 @hash = ABCD
 
