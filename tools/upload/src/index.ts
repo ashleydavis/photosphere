@@ -1,5 +1,5 @@
 import * as config from "./config";
-import { IFileDetails, findAssets } from "./scan";
+import { findAssets } from "./scan";
 import { IAsset, IDatabaseOp, uuid } from "database";
 import axios from "axios";
 import fs from "fs";
@@ -37,25 +37,25 @@ let numFailed = 0;
 //
 // Processes and uploads a single asset.
 //
-async function uploadAsset(file: IFileDetails): Promise<void> {
+async function uploadAsset(filePath: string, contentType: string): Promise<void> {
     //
     // Load file data.
     // 
-    const fileData = await fs.promises.readFile(file.path);
+    const fileData = await fs.promises.readFile(filePath);
 
     //
     // Computes the hash and checks if we already uploaded this file.
     //
     const hash = await computeHash(fileData);    
     if (await checkUploaded(config.uploadCollectionId, hash)) {
-        console.log(`Already uploaded asset ${file.path} with hash ${hash}`);
+        console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
         return;
     }    
     
     const assetId = uuid();
 
-    // console.log(`Uploading asset ${file.path} with id ${assetId} and hash ${hash}`);
+    // console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
 
     //
     // Get image resolution.
@@ -63,13 +63,13 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
     const fullImage = sharp(fileData);
     const { width, height } = await fullImage.metadata();
     if (width === undefined || height === undefined) {
-        throw new Error(`Failed to get image resolution for ${file.path}`);
+        throw new Error(`Failed to get image resolution for ${filePath}`);
     }
 
     //
     // Uploads the full asset.
     //
-    await uploadAssetData(config.uploadCollectionId, assetId, "asset", file.contentType, fileData);
+    await uploadAssetData(config.uploadCollectionId, assetId, "asset", contentType, fileData);
 
     //
     // Uploads the thumbnail.
@@ -87,7 +87,7 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
     let location: string | undefined = undefined;
     let photoDate: string | undefined = undefined;
 
-    if (file.contentType === "image/jpeg" || file.contentType === "image/jpg") {
+    if (contentType === "image/jpeg" || contentType === "image/jpg") {
         const parser = exifParser.create(fileData.buffer);
         parser.enableSimpleValues(false);
         const exif = parser.parse();
@@ -98,7 +98,7 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
                 location = await retry(() => reverseGeocode(coordinates), 3, 1500);
             }
             else {
-                console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${file.path}.`);
+                console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
             }
         }
 
@@ -120,9 +120,9 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
     //
     // Read the date of the file.
     //
-    const stats = await fs.promises.stat(file.path);
+    const stats = await fs.promises.stat(filePath);
     const fileDate = dayjs(stats.birthtime).toISOString();
-    const fileDir = path.dirname(file.path);
+    const fileDir = path.dirname(filePath);
     const labels = fileDir.replace(/\\/g, "/")
         .split("/")
         .filter(label => label)
@@ -142,7 +142,7 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
         _id: assetId,
         width,
         height,
-        origFileName: path.basename(file.path),
+        origFileName: path.basename(filePath),
         origPath: fileDir,
         hash,
         location,
@@ -157,34 +157,69 @@ async function uploadAsset(file: IFileDetails): Promise<void> {
 
     numUploads += 1;
 
-    console.log(`Uploaded asset ${file.path} with id ${assetId} and hash ${hash}`);
+    console.log(`Uploaded asset ${filePath} with id ${assetId} and hash ${hash}`);
+}
+
+//
+// Maps supported file extensions to content type.
+//
+const extMap: { [index: string]: string } = {
+    '.jpg': "image/jpeg", 
+    '.jpeg': "image/jpeg", 
+    '.png': "image/png", 
+    '.gif': "image/gif", 
+    // '.bmp': "image/bmp", Not supported by sharp.
+    '.tiff': "image/tiff", 
+    '.webp': "image/webp",
+};
+
+//
+// Gets the content type for a file based on its extension.
+//
+export function getContentType(filePath: string): string | undefined {
+    const ext = path.extname(filePath).toLowerCase();
+    return extMap[ext];
 }
 
 async function main(): Promise<void> {
 
-    const failures: { file: IFileDetails, error: any }[] = [];
+    const failures: { filePath: string, error: any }[] = [];
+    const filesNotHandled: string[] = [];
 
-    for (const path of config.paths) {        
-        console.log(`Scanning path: ${path}`);
-        await findAssets(path, async file => {
-            // console.log(`Found asset: ${file.path}`);
+    for (const scanPath of config.paths) {        
+        console.log(`Scanning path: ${scanPath}`);
+        await findAssets(scanPath, async filePath => {
+            // console.log(`Found asset: ${filePath}`);
+
+            // Check if the file is a supported asset based on its extension.
+            const ext = path.extname(filePath).toLowerCase();
+            const contentType = extMap[ext];
+            if (!contentType) {
+                filesNotHandled.push(filePath);
+                return;
+            }
 
             try {
-               await retry(() => uploadAsset(file), 3, 100);
+               await retry(() => uploadAsset(filePath, contentType), 3, 100);
             }
             catch (error) {
-                console.error(`Failed to upload asset: ${file.path}`);
+                console.error(`Failed to upload asset: ${filePath}`);
                 console.error(error);
                 numFailed += 1; 
-                failures.push({ file, error });                
+                failures.push({ filePath, error });                
             }
         });
     }    
 
     console.log(`-- Failures --`);
     for (const failure of failures) {
-        console.error(`Failed to upload asset: ${failure.file.path}`);
+        console.error(`Failed to upload asset: ${failure.filePath}`);
         console.error(failure.error);
+    }
+
+    console.log(`-- Files not handled --`);
+    for (const filePath of filesNotHandled) {
+        console.log(filePath);
     }
 
     console.log(`-- Summary --`);
