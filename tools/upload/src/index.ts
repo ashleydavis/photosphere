@@ -35,6 +35,14 @@ let numAlreadyUploaded = 0;
 let numFailed = 0;
 
 //
+// File extensions for files to ignore.
+//
+const ignoreExts = [
+    "ini",
+    "db",
+];
+
+//
 // Processes and uploads a single asset.
 //
 async function uploadAsset(filePath: string, contentType: string): Promise<void> {
@@ -191,8 +199,13 @@ async function main(): Promise<void> {
         await findAssets(scanPath, async filePath => {
             // console.log(`Found asset: ${filePath}`);
 
-            // Check if the file is a supported asset based on its extension.
             const ext = path.extname(filePath).toLowerCase();
+            if (ignoreExts.includes(ext)) {
+                // Certain extensions can be ignored and we just don't need to know about them.
+                return;
+            }
+
+            // Check if the file is a supported asset based on its extension.
             const contentType = extMap[ext];
             if (!contentType) {
                 filesNotHandled.push(filePath);
