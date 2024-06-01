@@ -37,12 +37,17 @@ type GPSCoordinateFraction = { numerator: number, denominator: number  };
 //
 type GPSCoordinateNumber
     = number                 // A regular number.
-    | GPSCoordinateFraction; // A number composed of a fraction.
+    | GPSCoordinateFraction  // A number composed of a fraction.
+    | [number, number];      // A number composed of a fraction.
 
 function convertNumber(value: GPSCoordinateNumber): number {
+    if (Array.isArray(value)) {
+        return value[0] / value[1]; // Convert fraction to a regular number.
+    }
+
     const fraction = value as GPSCoordinateFraction;
     if (fraction.numerator !== undefined && fraction.denominator !== undefined) {
-        return fraction.numerator / fraction.denominator; // Convert to a regular number.
+        return fraction.numerator / fraction.denominator; // Convert fraction to a regular number.
     }
     else {
         return value as number; // It is just a regular number.

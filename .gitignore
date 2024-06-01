@@ -12,3 +12,5 @@ frontend/playwright-report
 electron/tmp
 testbed/build
 packages/database/build
+tools/upload/build
+packages/exif-js/build

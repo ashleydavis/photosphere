@@ -26,7 +26,7 @@ const PREVIEW_THUMBNAIL_MIN_SIZE = 60;
 const THUMBNAIL_MIN_SIZE = 300;
 
 //
-// Size of the display asset to generated and uploaded to the backend.
+// Size of the display asset to generate and upload to the backend.
 //
 const DISPLAY_MIN_SIZE = 1000;
 
@@ -383,6 +383,7 @@ export function UploadContextProvider({ children }: IProps) {
                 width: imageResolution.width,
                 height: imageResolution.height,
                 origFileName: uploadDetails.fileName,
+                origPath: "",
                 hash: uploadDetails.hash,
                 location: uploadDetails.location,
                 fileDate: uploadDetails.fileDate,

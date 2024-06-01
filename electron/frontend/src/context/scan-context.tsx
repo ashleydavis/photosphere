@@ -48,6 +48,7 @@ export function ScanContextProvider({ children }: IProps) {
                 width: resolution.width,
                 height: resolution.height,
                 origFileName: fileDetails.path,
+                origPath: "",
                 hash,
                 fileDate: dayjs(fileDate).toISOString(),
                 sortDate: dayjs(fileDate).toISOString(),

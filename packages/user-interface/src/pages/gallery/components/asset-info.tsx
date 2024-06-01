@@ -216,7 +216,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
-                                    {asset.origFileName}
+                                {asset.origPath} {asset.origFileName}
                                 </div>
                                 <div className="text-sm flex flex-row" >
                                     <div>{asset.width} × {asset.height}</div>

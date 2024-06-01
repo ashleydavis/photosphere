@@ -19,6 +19,12 @@ export interface IAsset {
     //
     origFileName: string;
 
+
+    //
+    // The original directory of the asset before it was uploaded.
+    //
+    origPath: string;
+
     //
     // Width of the image or video.
     //

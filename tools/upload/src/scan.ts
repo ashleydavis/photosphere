@@ -1,7 +1,5 @@
-import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { sleep } from 'user-interface';
 
 //
 // Information on a file.
@@ -24,49 +22,14 @@ export interface IFileDetails {
 export type FileFoundFn = (fileDetails: IFileDetails) => Promise<void>;
 
 //
-// Scans the file system for images.
+// Maps supported file extensions to content type.
 //
-export async function scanImages(fileFound: FileFoundFn): Promise<void> {
-    const fileSystems = await getFileSystems();
-    for (const fileSystem of fileSystems) {
-        await findImageFiles(fileSystem, fileFound);
-    }
-}
-
-//
-// Get a list of file systems.
-//
-async function getFileSystems(): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
-        if (process.platform === 'win32') {
-            // For Windows
-            exec('wmic logicaldisk get name', (error: any, stdout: string) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-                const drives = stdout.split('\n')
-                    .slice(1)
-                    .map(drive => `${drive.trim()}/`)
-                    .filter(drive => drive)
-                resolve(drives);
-            });
-        }
-        else {
-            resolve(["/"]);
-        }
-    });
-}
-
-//
-// List of image file extensions to find.
-//
-const imageExtensions: { [index: string]: string } = {
+const extMap: { [index: string]: string } = {
     '.jpg': "image/jpeg", 
     '.jpeg': "image/jpeg", 
     '.png': "image/png", 
     '.gif': "image/gif", 
-    '.bmp': "image/bmp", 
+    // '.bmp': "image/bmp", Not supported by sharp.
     '.tiff': "image/tiff", 
     '.webp': "image/webp",
 };
@@ -76,21 +39,15 @@ const imageExtensions: { [index: string]: string } = {
 //
 export function getContentType(filePath: string): string | undefined {
     const ext = path.extname(filePath).toLowerCase();
-    return imageExtensions[ext];
+    return extMap[ext];
 }
-
 //
-// Search a directory for image files.
+// Search a directory for assets to upload.
 //
-async function findImageFiles(directory: string, fileFound: FileFoundFn): Promise<void> {
+export async function findAssets(directory: string, fileFound: FileFoundFn): Promise<void> {
 
     try {
         const files = await fs.promises.readdir(directory, { withFileTypes: true });
-
-        //
-        // Sleep to give the UI time to be responsive.
-        //
-        await sleep(10);
 
         //
         // Process files in this directory.
@@ -102,20 +59,15 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
                 continue;
             }
             else {
-                // Check if the file is an image based on its extension.
+                // Check if the file is a supported asset based on its extension.
                 const ext = path.extname(file.name).toLowerCase();
-                const contentType = imageExtensions[ext];
+                const contentType = extMap[ext];
                 if (contentType) {
                     const filePath = path.join(directory, file.name);
                     await fileFound({ 
                         path: filePath,
                         contentType,
                     });
-
-                    //
-                    // Sleep to give the UI time to be responsive.
-                    //
-                    await sleep(10);
                 }
             }
         }
@@ -131,7 +83,7 @@ async function findImageFiles(directory: string, fileFound: FileFoundFn): Promis
                 
                 // If the file is a directory, recursively search it.
                 const dirPath = path.join(directory, file.name);
-                await findImageFiles(dirPath, fileFound);
+                await findAssets(dirPath, fileFound);
             }
             else {
                 // Did files on the previous pass.
