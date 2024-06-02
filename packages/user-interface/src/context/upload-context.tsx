@@ -384,6 +384,7 @@ export function UploadContextProvider({ children }: IProps) {
                 height: imageResolution.height,
                 origFileName: uploadDetails.fileName,
                 origPath: "",
+                contentType: uploadDetails.assetContentType,
                 hash: uploadDetails.hash,
                 location: uploadDetails.location,
                 fileDate: uploadDetails.fileDate,

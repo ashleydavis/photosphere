@@ -26,6 +26,11 @@ export interface IAsset {
     origPath: string;
 
     //
+    // Content type of the original asset.
+    //
+    contentType: string;
+
+    //
     // Width of the image or video.
     //
     width: number;

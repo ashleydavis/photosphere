@@ -318,6 +318,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
             height: galleryItem.height,
             origFileName: galleryItem.origFileName,
             origPath: galleryItem.origPath,
+            contentType: galleryItem.contentType,
             hash: galleryItem.hash,
             location: galleryItem.location,
             fileDate: galleryItem.fileDate,

@@ -170,6 +170,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
         height: resolution.height,
         origFileName: path.basename(filePath),
         origPath: fileDir,
+        contentType,
         hash,
         location,
         fileDate,
