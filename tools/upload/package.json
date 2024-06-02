@@ -16,10 +16,12 @@
   "dependencies": {
     "axios": "^0.27.2",
     "database": "workspace:*",
-    "user-interface": "workspace:*",
     "dayjs": "^1.11.7",
     "exif-parser": "^0.1.12",
-    "sharp": "^0.33.4"
+    "ffmpeg-ffprobe-static": "^6.1.1",
+    "fluent-ffmpeg": "^2.1.3",
+    "sharp": "^0.33.4",
+    "user-interface": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.3.1",

@@ -5,9 +5,14 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import os from "os";
 import dayjs from "dayjs";
-import { convertExifCoordinates, isLocationInRange, retry, reverseGeocode } from "user-interface";
+import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode } from "user-interface";
 const exifParser = require("exif-parser");
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPaths = require('ffmpeg-ffprobe-static');
+ffmpeg.setFfmpegPath(ffmpegPaths.ffmpegPath);
+ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 
 //
 // Size of the thumbnail.
@@ -46,6 +51,7 @@ const ignoreExts = [
 // Processes and uploads a single asset.
 //
 async function uploadAsset(filePath: string, contentType: string): Promise<void> {
+
     //
     // Load file data.
     // 
@@ -65,13 +71,16 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
 
     // console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
 
+    let resolution: IResolution | undefined = undefined;
+
     //
-    // Get image resolution.
+    // Get asset resolution.
     //
-    const fullImage = sharp(fileData);
-    const { width, height } = await fullImage.metadata();
-    if (width === undefined || height === undefined) {
-        throw new Error(`Failed to get image resolution for ${filePath}`);
+    if (contentType.startsWith("video")) {
+        resolution = await getVideoResolution(filePath);
+    }
+    else {
+        resolution = await getImageResolution(filePath, fileData);
     }
 
     //
@@ -79,17 +88,26 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     await uploadAssetData(config.uploadCollectionId, assetId, "asset", contentType, fileData);
 
-    //
-    // Uploads the thumbnail.
-    //
-    const thumbnailData = await resizeImage(fileData, { width, height }, THUMBNAIL_MIN_SIZE);
-    await uploadAssetData(config.uploadCollectionId, assetId, "thumb", "image/jpg", thumbnailData);
+    if (contentType.startsWith("video")) {
+        //
+        // Uploads the thumbnail.
+        //
+        const thumbnailData = await getVideoThumbnail(filePath, resolution, THUMBNAIL_MIN_SIZE);
+        await uploadAssetData(config.uploadCollectionId, assetId, "thumb", "image/jpg", thumbnailData);
+    }
+    else {
+        //
+        // Uploads the thumbnail.
+        //
+        const thumbnailData = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
+        await uploadAssetData(config.uploadCollectionId, assetId, "thumb", "image/jpg", thumbnailData);
 
-    //
-    // Uploads the display asset separately for simplicity and no restriction on size.
-    //
-    const displayData = await resizeImage(fileData, { width, height }, DISPLAY_MIN_SIZE);
-    await uploadAssetData(config.uploadCollectionId, assetId, "display", "image/jpg", displayData);
+        //
+        // Uploads the display asset separately for simplicity and no restriction on size.
+        //
+        const displayData = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE);
+        await uploadAssetData(config.uploadCollectionId, assetId, "display", "image/jpg", displayData);
+    }
 
     const properties: any = {};
     let location: string | undefined = undefined;
@@ -148,8 +166,8 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     await addAsset(config.uploadCollectionId, {
         _id: assetId,
-        width,
-        height,
+        width: resolution.width,
+        height: resolution.height,
         origFileName: path.basename(filePath),
         origPath: fileDir,
         hash,
@@ -165,7 +183,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
 
     numUploads += 1;
 
-    console.log(`Uploaded asset ${filePath} with id ${assetId} and hash ${hash}`);
+    console.log(`Uploaded asset ${filePath} (${contentType}) with id ${assetId} and hash ${hash}`);
 }
 
 //
@@ -179,6 +197,8 @@ const extMap: { [index: string]: string } = {
     // '.bmp': "image/bmp", Not supported by sharp.
     '.tiff': "image/tiff", 
     '.webp': "image/webp",
+    '.mpg': "video/mpeg",
+    '.mpeg': "video/mpeg",
 };
 
 //
@@ -246,6 +266,80 @@ main()
         console.error(`Failed:`);
         console.error(err && err.stack || err);
     });
+
+//
+// Gets the resolution of a video.
+//
+function getVideoResolution(videoPath: string): Promise<IResolution> {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+            const videoStream = metadata.streams.find((stream: any) => stream.codec_type === 'video');
+            if (videoStream) {
+                const resolution = {
+                    width: videoStream.width,
+                    height: videoStream.height,
+                };
+                resolve(resolution);
+            } else {
+                reject(new Error('No video stream found'));
+            }
+        });
+    });
+}
+
+//
+// Gets a thumbnail for a video.
+//
+function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+        let width: number;
+        let height: number;
+    
+        if (resolution.width > resolution.height) {
+            height = minSize;
+            width = Math.trunc((resolution.width / resolution.height) * minSize);
+        } 
+        else {
+            height = Math.trunc((resolution.height / resolution.width) * minSize);
+            width = minSize;
+        }
+    
+        const thumbnailFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpg');
+        ffmpeg(videoPath)
+            .on('end', () => {
+                resolve(fs.readFileSync(thumbnailFilePath));
+            })
+            .on('error', (err: any) => {
+                reject(err);
+            })
+            .screenshots({
+                count: 1,
+                folder: path.dirname(thumbnailFilePath),
+                filename: path.basename(thumbnailFilePath),
+                size: `${width}x${height}`, 
+            });
+    });
+}
+
+//
+// Gets the resolution of an image.
+//
+async function getImageResolution(filePath: string, fileData: Buffer): Promise<IResolution> {
+    //
+    // Get image resolution.
+    //
+    const fullImage = sharp(fileData);
+    const { width, height } = await fullImage.metadata();
+    if (width === undefined || height === undefined) {
+        throw new Error(`Failed to get image resolution for ${filePath}`);
+    }
+
+    return { width, height };
+}  
 
 //
 // Computes a hash for a file or blob of data.
