@@ -79,25 +79,25 @@ export async function initialSync({ collectionIds, api, indexeddbDatabases, clou
         //
         // Pre-cache all thumbnails.
         //
-        await visitRecords<IAsset>(cloudAssetDatabase, "metadata", async (id, record) => {
-            await cacheThumbnail(collectionId, id, indexeddbSource, indexeddbSink, cloudSource);
-        });
+        // await visitRecords<IAsset>(cloudAssetDatabase, "metadata", async (id, record) => {
+        //     await cacheThumbnail(collectionId, id, indexeddbSource, indexeddbSink, cloudSource);
+        // });
     }
 }
 
 //
 // Pre-caches a thumbnail.
 //
-async function cacheThumbnail(collectionId: string, assetId: string, indexeddbSource: IAssetSource, indexeddbSink: IAssetSink, cloudSource: IAssetSource) {
-    const localThumbData = await indexeddbSource.loadAsset(collectionId, assetId, "thumb");
-    if (localThumbData === undefined) {
-        const assetData = await cloudSource.loadAsset(collectionId, assetId, "thumb");
-        if (assetData) {
-            await indexeddbSink.storeAsset(collectionId, assetId, "thumb", assetData);
-            // console.log(`Cached thumbnail for ${collectionId}/${assetId}`);
-        }
-    }
-    else {
-        // console.log(`Thumbnail for ${collectionId}/${assetId} already cached`);
-    }
-}
+// async function cacheThumbnail(collectionId: string, assetId: string, indexeddbSource: IAssetSource, indexeddbSink: IAssetSink, cloudSource: IAssetSource) {
+//     const localThumbData = await indexeddbSource.loadAsset(collectionId, assetId, "thumb");
+//     if (localThumbData === undefined) {
+//         const assetData = await cloudSource.loadAsset(collectionId, assetId, "thumb");
+//         if (assetData) {
+//             await indexeddbSink.storeAsset(collectionId, assetId, "thumb", assetData);
+//             // console.log(`Cached thumbnail for ${collectionId}/${assetId}`);
+//         }
+//     }
+//     else {
+//         // console.log(`Thumbnail for ${collectionId}/${assetId} already cached`);
+//     }
+// }
