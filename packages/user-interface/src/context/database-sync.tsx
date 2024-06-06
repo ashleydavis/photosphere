@@ -1,4 +1,4 @@
-import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
@@ -57,6 +57,8 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
     const indexeddb = useIndexeddb();
     const api = useApi();
     const [ user, setUser ] = useState<IUser | undefined>(undefined);
+    const initialSyncStarted = useRef(false);
+    const periodicSyncStart = useRef(false);
 
     //
     // Set to true when the database synchronization is initialized.
@@ -112,59 +114,25 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                 console.error(err)            
             });
     }, [api.isInitialised, isOnline]);
+    
 
     useEffect(() => {
-        let timer: NodeJS.Timeout | undefined = undefined;
-        let done = false;
-       
+        if (initialSyncStarted.current) {
+            console.log(`Already doing the initial sync.`);
+            return;
+        }
+
         if (isOnline) {
             if (user) {
-                // 
-                // Periodic database synchronization.
-                //
-                async function periodicSync() {
-                    timer = undefined;
-    
-                    if (done) {
-                        return;
-                    }
-    
-                    console.log(`Periodic sync...`);
-    
-                    try {
-                        await syncOutgoing({
-                            cloudSink,
-                            outgoingAssetUploadQueue,
-                            outgoingAssetUpdateQueue,
-                        });
-                    }
-                    catch (err) {
-                        console.error(`Outgoing sync failed:`);
-                        console.error(err);
-                    }
-                
-                    try {
-                        //
-                        // Collate the last update ids for each collection.
-                        //
-                        const collectionIds = user!.collections.access;
-                        const userDatabase = indexeddb.databases.database("user");
-                        await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink });
-                    }
-                    catch (err) {
-                        console.error(`Outgoing sync failed:`);
-                        console.error(err);
-                    }
-        
-                    timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
-                }
-    
+                initialSyncStarted.current = true;
+
                 //
                 // Starts the database synchronization process.
                 //
                 async function startSync() {
-    
                     try {
+                        console.log(`Doing initial sync...`);
+
                         //
                         // Collate the last update ids for each collection.
                         //
@@ -177,14 +145,11 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                         console.error(err);
                     }
                     finally {
-                        console.log(`Marking isInitialized as true.`); //fio:
+                        console.log(`Finished initial sync`);
                         setIsInitialized(true);
+
+                        initialSyncStarted.current = false;
                     }
-    
-                    //
-                    // Starts the periodic syncrhonization process.
-                    //
-                    await periodicSync();
                 }
     
                 startSync();
@@ -194,15 +159,77 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
             setIsInitialized(true);
         }
 
+    }, [isOnline, user]);
+
+    useEffect(() => {
+
+        if (periodicSyncStart.current) {
+            console.log(`Periodic sync already started.`);
+            return;
+        }
+
+        let timer: NodeJS.Timeout | undefined = undefined;
+        let done = false;
+        
+        if (isInitialized && isOnline && user) {
+            periodicSyncStart.current = true;
+
+            // 
+            // Periodic database synchronization.
+            //
+            async function periodicSync() {
+                timer = undefined;
+
+                if (done) {
+                    return;
+                }
+
+                console.log(`Periodic sync...`);
+
+                try {
+                    await syncOutgoing({
+                        cloudSink,
+                        outgoingAssetUploadQueue,
+                        outgoingAssetUpdateQueue,
+                    });
+                }
+                catch (err) {
+                    console.error(`Outgoing sync failed:`);
+                    console.error(err);
+                }
+            
+                try {
+                    //
+                    // Collate the last update ids for each collection.
+                    //
+                    const collectionIds = user!.collections.access;
+                    const userDatabase = indexeddb.databases.database("user");
+                    await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink });
+                }
+                catch (err) {
+                    console.error(`Outgoing sync failed:`);
+                    console.error(err);
+                }
+    
+                timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
+            }
+
+            //
+            // Starts the periodic syncrhonization process.
+            //
+            periodicSync();
+        }
+
         return () => {
             done = true;
+            periodicSyncStart.current = false;
             if (timer) {
                 clearTimeout(timer);
                 timer = undefined;
             }
         };
 
-    }, [isOnline, user]);
+    }, [isInitialized, isOnline, user]);
 
     const value: IDbSyncContext = {
     	isInitialized,
