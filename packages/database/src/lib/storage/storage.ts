@@ -40,7 +40,7 @@ export interface IStorage {
     //
     // Returns true if the specified file exists.
     //
-    exists(path: string, ffileName: string): Promise<boolean>;
+    exists(path: string, fileName: string): Promise<boolean>;
 
     //
     // Gets info about a file.
