@@ -43,7 +43,7 @@ const databaseConfigurations: IDatabaseConfigurations = {
 // The version of the database.
 // This need to be incremented when the schema changes.
 //
-const databaseVersion = 2;
+const databaseVersion = 1;
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
