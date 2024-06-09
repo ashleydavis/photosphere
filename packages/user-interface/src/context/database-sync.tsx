@@ -2,7 +2,6 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
-import { IDatabases } from "../lib/databases";
 import { IIndexeddbDatabases } from "../lib/indexeddb/indexeddb-databases";
 import { IAssetUpdateRecord } from "../lib/sync/asset-update-record";
 import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
@@ -12,7 +11,7 @@ import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IUser } from "../def/user";
 import { initialSync } from "../lib/sync/sync-initial";
 
-const SYNC_POLL_PERIOD = 1000;
+const SYNC_POLL_PERIOD = 5000;
 
 export interface IDbSyncContext {
     //
