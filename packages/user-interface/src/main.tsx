@@ -6,8 +6,8 @@ import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
 import { isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
-import { useDatabaseSync } from "./context/database-sync";
 import classNames from "classnames";
+import { useUser } from "./context/user-context";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -66,7 +66,7 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [ searchInput, setSearchInput ] = React.useState<string>("");
 
-    const { user } = useDatabaseSync();
+    const { user } = useUser();
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");

@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, IndexeddbContextProvider, DbSyncContextProvider, useIndexeddb, useApi, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord } from "user-interface";
+import { UserContextProvider, Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, IndexeddbContextProvider, DbSyncContextProvider, useIndexeddb, useApi, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import dayjs from "dayjs";
 
@@ -38,7 +38,9 @@ function ApiSetup() {
         <AuthContextProvider>
             <ApiContextProvider>
                 <IndexeddbContextProvider>
-                    <GallerySetup />
+                    <UserContextProvider>
+                        <GallerySetup />
+                    </UserContextProvider>
                 </IndexeddbContextProvider>
             </ApiContextProvider>
         </AuthContextProvider>

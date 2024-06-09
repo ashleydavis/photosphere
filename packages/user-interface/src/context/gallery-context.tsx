@@ -8,6 +8,7 @@ import { IAssetSource } from "../lib/asset-source";
 import { IAssetSink } from "../lib/asset-sink";
 import { IDatabaseOp } from "defs";
 import { uuid } from "../lib/uuid";
+import { useUser } from "./user-context";
 
 //
 // Gets the sorting value from the gallery item.
@@ -141,10 +142,8 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ source, sink, sortFn, groupFn, children }: IGalleryContextProviderProps) {
 
-    // 
-    // Interface to database sync.
-    //
-    const { isInitialized, user } = useDatabaseSync();
+    const { isInitialized } = useDatabaseSync();
+    const { user } = useUser();
 
     //
     // The collection currently being viewed.

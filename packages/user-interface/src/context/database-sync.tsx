@@ -10,6 +10,7 @@ import { syncIncoming } from "../lib/sync/sync-incoming";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IUser } from "../def/user";
 import { initialSync } from "../lib/sync/sync-initial";
+import { useUser } from "./user-context";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -18,11 +19,6 @@ export interface IDbSyncContext {
     // Set to true when the database synchronization is initialized.
     //
     isInitialized: boolean;
-
-    //
-    // The current user, if known.
-    //
-    user: IUser | undefined;
 }
 
 const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
@@ -50,66 +46,15 @@ export interface IProps {
 export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, indexeddbDatabases, children }: IProps) {
     
     const { isOnline } = useOnline();
-    const indexeddb = useIndexeddb();
     const api = useApi();
-    const [ user, setUser ] = useState<IUser | undefined>(undefined);
     const initialSyncStarted = useRef(false);
     const periodicSyncStart = useRef(false);
+    const { user } = useUser();
 
     //
     // Set to true when the database synchronization is initialized.
     //
     const [isInitialized, setIsInitialized] = useState(false);
-
-    //
-    // Loads the local user's details.
-    //
-    async function loadLocalUser(): Promise<void> {
-        const userId = localStorage.getItem("userId");
-        if (!userId) {
-            return undefined;
-        }
-
-        const userDatabase = indexeddb.databases.database("user");
-        const user = await userDatabase.collection<IUser>("user").getOne(userId);
-        if (user) {
-            setUser(user);
-        }
-        else {
-            setUser(undefined);
-        }
-    }
-
-    //
-    // Loads the user's details.
-    //
-    async function loadUser(): Promise<void> {
-        if (isOnline) {
-            // Not able to load user details offline.
-            const user = await await api.getUser();
-            if (user) {
-                //
-                // Store user locally for offline use.
-                //
-                const userDatabase = indexeddb.databases.database("user");
-                await userDatabase.collection("user").setOne("user", user);
-                localStorage.setItem("userId", user._id);
-                setUser(user);
-                return;
-            }
-        }
-
-        // Fallback to local user.
-        await loadLocalUser();
-    }
-
-    useEffect(() => {
-        loadUser()
-            .catch(err => {
-                console.error(`Failed to load user:`);
-                console.error(err)            
-            });
-    }, [api.isInitialised, isOnline]);
 
     useEffect(() => {
         if (initialSyncStarted.current) {
@@ -222,7 +167,6 @@ export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetU
 
     const value: IDbSyncContext = {
     	isInitialized,
-        user,
     };
     
     return (
