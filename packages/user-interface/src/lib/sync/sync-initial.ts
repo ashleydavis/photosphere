@@ -1,4 +1,4 @@
-import { IApi } from "../api";
+import { IApi } from "../../context/api-context";
 import { IIndexeddbDatabases } from "../indexeddb/indexeddb-databases";
 import { uuid } from "../uuid";
 import { ILastUpdateRecord } from "./last-update-record";

@@ -1,4 +1,4 @@
-import { IApi } from "../api";
+import { IApi } from "../../context/api-context";
 import { IAssetUpdateRecord } from "./asset-update-record";
 import { IAssetUploadRecord } from "./asset-upload-record";
 import { IPersistentQueue } from "./persistent-queue";

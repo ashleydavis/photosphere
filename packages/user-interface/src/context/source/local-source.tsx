@@ -6,10 +6,10 @@ import { IAsset } from "defs";
 import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
 import { IHashRecord } from "../../def/hash-record";
-import { IApi } from "../../lib/api";
 import { IAssetSource } from "../../lib/asset-source";
 import { IIndexeddbDatabases } from "../../lib/indexeddb/indexeddb-databases";
 import { useOnline } from "../../lib/use-online";
+import { IApi } from "../api-context";
 
 //
 // Use the "Local source" in a component.
