@@ -7,7 +7,7 @@ import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
 import { IHashRecord } from "../../def/hash-record";
 import { IGallerySource } from "../../lib/gallery-source";
-import { IIndexeddbDatabases } from "../../lib/indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases } from "../../lib/database/indexeddb/indexeddb-databases";
 import { useOnline } from "../../lib/use-online";
 import { IApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";

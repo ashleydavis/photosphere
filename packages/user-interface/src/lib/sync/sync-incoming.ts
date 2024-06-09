@@ -1,6 +1,6 @@
 import { IApi } from "../../context/api-context";
 import { applyOperations } from "../apply-operation";
-import { IIndexeddbDatabases } from "../indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases } from "../database/indexeddb/indexeddb-databases";
 import { ILastUpdateRecord } from "./last-update-record";
 
 interface IProps {

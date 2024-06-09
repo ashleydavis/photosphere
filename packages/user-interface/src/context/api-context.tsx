@@ -5,7 +5,7 @@ import { useClientId } from "../lib/use-client-id";
 import { IUser } from "../def/user";
 import { IAssetData } from "../def/asset-data";
 import { IDatabaseOp } from "defs";
-import { IRecord } from "../lib/database-collection";
+import { IRecord } from "../lib/database/database-collection";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {

@@ -1,5 +1,5 @@
 import { IApi } from "../../context/api-context";
-import { IIndexeddbDatabases } from "../indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases } from "../database/indexeddb/indexeddb-databases";
 import { uuid } from "../uuid";
 import { ILastUpdateRecord } from "./last-update-record";
 

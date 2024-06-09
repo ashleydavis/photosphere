@@ -2,7 +2,7 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
-import { IIndexeddbDatabases } from "../lib/indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases } from "../lib/database/indexeddb/indexeddb-databases";
 import { IAssetUpdateRecord } from "../lib/sync/asset-update-record";
 import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
 import { IPersistentQueue } from "../lib/sync/persistent-queue";

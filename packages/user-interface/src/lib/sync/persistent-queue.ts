@@ -1,5 +1,5 @@
-import { IIndexeddbDatabase } from "../indexeddb/indexeddb-database";
-import * as indexeddb from "../indexeddb/indexeddb";
+import { IIndexeddbDatabase } from "../database/indexeddb/indexeddb-database";
+import * as indexeddb from "../database/indexeddb/indexeddb";
 import { createReverseChronoTimestamp } from "../timestamp";
 
 //

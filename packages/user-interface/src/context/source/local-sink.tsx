@@ -8,7 +8,7 @@ import { IPersistentQueue } from "../../lib/sync/persistent-queue";
 import { IAssetUploadRecord } from "../../lib/sync/asset-upload-record";
 import { IAssetUpdateRecord } from "../../lib/sync/asset-update-record";
 import { IAssetData } from "../../def/asset-data";
-import { IIndexeddbDatabases } from "../../lib/indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases } from "../../lib/database/indexeddb/indexeddb-databases";
 import { applyOperations } from "../../lib/apply-operation";
 import { IAssetRecord } from "../../def/asset-record";
 import { IGalleryItem } from "../../lib/gallery-item";

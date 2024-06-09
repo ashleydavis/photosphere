@@ -1,6 +1,6 @@
 import { createReverseChronoTimestamp } from "./timestamp";
-import { IDatabase } from "./database";
-import { IDatabases } from "./databases";
+import { IDatabase } from "./database/database";
+import { IDatabases } from "./database/databases";
 import { uuid } from "./uuid";
 import { IDatabaseOp, IDatabaseOpRecord, IOpSelection } from "defs";
 

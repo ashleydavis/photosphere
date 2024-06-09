@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
-import { IIndexeddbDatabases, IDatabaseConfigurations, IndexeddbDatabases } from "../lib/indexeddb/indexeddb-databases";
+import { IIndexeddbDatabases, IDatabaseConfigurations, IndexeddbDatabases } from "../lib/database/indexeddb/indexeddb-databases";
 
 export interface IIndexeddbContext {
     //
