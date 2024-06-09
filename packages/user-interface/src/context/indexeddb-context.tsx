@@ -1,5 +1,5 @@
-import { IDatabaseConfigurations, IIndexeddbDatabases, IndexeddbDatabases } from "database";
 import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
+import { IIndexeddbDatabases, IDatabaseConfigurations, IndexeddbDatabases } from "../lib/indexeddb/indexeddb-databases";
 
 export interface IIndexeddbContext {
     //
@@ -32,19 +32,11 @@ const databaseConfigurations: IDatabaseConfigurations = {
         collectionNames: [
             "outgoing-asset-upload",
             "outgoing-asset-update",
-            "last-update-id",
+            "last-update",
             "user",
         ],
         versionNumber: 1,
     },
-    debug: { // For debugging.
-        collectionNames: [                 
-            "updates-recieved",
-            "updates-sent",
-            "initial-sync-recieved",
-        ],
-        versionNumber: 1,
-    },     
 };
 
 //

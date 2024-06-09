@@ -1,10 +1,10 @@
 //
 // Represents an asset that can be displayed in the gallery.
-
-import { IAsset } from "database";
-
 //
-export interface IGalleryItem extends IAsset {
+
+import { IAsset } from "defs";
+
+export interface IGalleryItem extends Omit<IAsset, "setId"> {
 
     //
     // The computed width of the thumbnail.
@@ -51,7 +51,6 @@ export interface IGalleryRow {
     // The group displayed in this row of items, if any.
     //
     group?: string;
-
 }
 
 //

@@ -37,7 +37,6 @@
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5",
     "user-interface": "workspace:*",
-    "database": "workspace:*",
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.2"

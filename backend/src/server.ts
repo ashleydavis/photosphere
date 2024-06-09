@@ -2,8 +2,10 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IUser } from "./lib/user";
-import { IDatabaseCollection, IDatabaseOp, IDatabaseOpRecord, IDatabases, IHashRecord, IStorage, applyOperationToDb, getJournal } from "database";
-import { IAsset } from "./lib/asset";
+import { Db } from "mongodb";
+import { IStorage } from "./lib/storage/storage";
+import { IDatabaseOp, IDatabaseOpRecord } from "defs";
+import { uuid } from "./lib/uuid";
 
 declare global {
     namespace Express {
@@ -17,7 +19,7 @@ declare global {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, databases: IDatabases, userCollection: IDatabaseCollection<IUser>, storage: IStorage) {
+export async function createServer(now: () => Date, db: Db, storage: IStorage) {
 
     const app = express();
     app.use(cors());
@@ -58,7 +60,6 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
         // Mocks a JWT token.
         //
         app.use((req, res, next) => {
-
             req.auth = { 
                 payload: { 
                     sub: "test-user", // Test user.
@@ -83,7 +84,7 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
             // Removes the auth0| prefix the user id.
             userId = userId.substring(6);
         }
-        const user = await userCollection.getOne(userId);
+        const user = await db.collection<IUser>("users").findOne({ _id: userId });
         if (!user) {
             console.log(`User not found: ${userId}`);
             res.sendStatus(401);
@@ -154,19 +155,63 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     //
     // Gets the user's metadata.
     //
-    app.get("/user", asyncErrorHandler(async (req, res) => { //todo: test me .http and jest
+    app.get("/user", asyncErrorHandler(async (req, res) => {
         res.json(req.user);
     }));
-
+    
     //
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         const clientId = getValue<string>(req.body, "clientId");
+        let sequence = 0;
         for (const op of ops) {
-            const assetCollection = await databases.database(op.databaseName);
-            await applyOperationToDb(assetCollection, op, clientId);
+            const databaseOpRecord: IDatabaseOpRecord = {
+                _id: uuid(),
+                serverTime: new Date(),
+                sequence,
+                clientId,
+                collectionName: op.collectionName,
+                recordId: op.recordId,
+                op: op.op,
+            };
+
+            sequence += 1;
+            
+            const journalCollection = db.collection<IDatabaseOpRecord>("journal");
+            await journalCollection.insertOne(databaseOpRecord);
+
+            const recordCollection = db.collection(op.collectionName);
+            if (op.op.type === "set") {
+                await recordCollection.updateOne(
+                    { _id: op.recordId },
+                    { $set: op.op.fields },
+                    { upsert: true }
+                );
+            }
+            else if (op.op.type === "push") {
+                await recordCollection.updateOne(
+                    { _id: op.recordId },
+                    { 
+                        $push: {
+                            [op.op.field]: op.op.value,                           
+                        },
+                    },
+                    { upsert: true }
+                );
+            }
+            else if (op.op.type === "pull") {
+                await recordCollection.updateOne(
+                    { _id: op.recordId },
+                    { 
+                        $pull: {
+                            [op.op.field]: op.op.value,                           
+                        },
+                    },
+                    { upsert: true }
+                );
+            }
         }
         res.sendStatus(200);
     }));
@@ -175,44 +220,54 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     // Gets the journal of operations that have been applied to the database.
     //
     app.post("/journal", express.json(), asyncErrorHandler(async (req, res) => {
-        const collectionId = getValue<string>(req.body, "collectionId");
         const clientId = getValue<string>(req.body, "clientId");
-        const lastUpdateId = req.body.lastUpdateId;
-        const assetCollection = await databases.database(collectionId);
-        const result = await getJournal(assetCollection, clientId, lastUpdateId);
-        res.json(result);
+        let lastUpdateTime = req.body.lastUpdateTime;
+        if (lastUpdateTime !== undefined) {
+            lastUpdateTime = new Date(lastUpdateTime);
+        }
+
+        const journalCollection = db.collection<IDatabaseOpRecord>("journal");
+        let query: any = {};
+        if (lastUpdateTime !== undefined) {
+            query.serverTime = { $gt: lastUpdateTime };
+        }
+
+        const serverTimeNow = new Date();
+        let journalRecords = await journalCollection.find(query) 
+            .sort({ serverTime: 1, sequence: 1 })
+            .toArray(); //TODO: Want pagination.
+
+        //TODO: Filter collections the user doesn't have access to.
+
+        // 
+        // Filter out records from the same client.
+        //
+        journalRecords = journalRecords.filter((record) => record.clientId !== clientId);
+
+        res.json({
+            journalRecords,
+            latestTime: serverTimeNow,
+        });
     }));
 
     //
     // Retreives the latest update id for a collection.
     //
-    app.get("/latest-update-id", asyncErrorHandler(async (req, res) => {
-        const collectionId = getHeader(req, "col");
-        const assetCollection = await databases.database(collectionId);
-        const journalCollection = assetCollection.collection<IDatabaseOpRecord>("journal");
-        const journalIdsPage = await journalCollection.listAll(1);
-        if (journalIdsPage.records.length === 0) {
-            res.json({
-                latestUpdateId: undefined,
-            });
-            return
-        }
-
-        const latestUpdateId = journalIdsPage.records[0];
+    app.get("/latest-time", asyncErrorHandler(async (req, res) => {
+        const serverTimeNow = new Date();
         res.json({
-            latestUpdateId: latestUpdateId,
+            latestTime: serverTimeNow,
         });
     }));
-
     //
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
         const assetId = getHeader(req, "id");
-        const collectionId = getHeader(req, "col");
+        const setId = getHeader(req, "set");
         const contentType = getHeader(req, "content-type");
         const assetType = getHeader(req, "asset-type");
-        await storage.writeStream(`collections/${collectionId}/${assetType}`, assetId, contentType, req);
+        await storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, req);
         res.sendStatus(200);
     }));
 
@@ -220,16 +275,15 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     // Gets a particular asset by id.
     //
     app.get("/asset", asyncErrorHandler(async (req, res) => {
-
         const assetId = req.query.id as string;
-        const collectionId = req.query.col as string;
+        const setId = req.query.set as string;
         const assetType = req.query.type as string;
-        if (!assetId || !collectionId || !assetType) {
+        if (!assetId || !setId || !assetType) {
             res.sendStatus(400);
             return;
         }
 
-        const info = await storage.info(`collections/${collectionId}/${assetType}`, assetId);
+        const info = await storage.info(`collections/${setId}/${assetType}`, assetId);
         if (!info) {
             res.sendStatus(404);
             return;
@@ -239,34 +293,18 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
             "Content-Type": info.contentType,
         });
 
-        storage.readStream(`collections/${collectionId}/${assetType}`, assetId)
+        storage.readStream(`collections/${setId}/${assetType}`, assetId)
             .pipe(res);
-    }));
-
-    //
-    // Sets a record in the database.
-    //
-    app.get("/set-one", asyncErrorHandler(async (req, res) => {
-        const databaseName = getValue<string>(req.body, "databaseName");
-        const collectionName = getValue<string>(req.body, "collectionName");
-        const recordId = getValue<string>(req.body, "recordId");
-        const record = getValue<any>(req.body, "record");
-        const collection = databases.database(databaseName);
-        const dbCollection = collection.collection(collectionName);
-        await dbCollection.setOne(recordId, record);
-        res.sendStatus(200);
     }));
 
     //
     // Gets a record from the database.
     //
     app.get("/get-one", asyncErrorHandler(async (req, res) => {
-        const databaseName = getValue<string>(req.query, "db");
         const collectionName = getValue<string>(req.query, "col");
         const recordId = getValue<string>(req.query, "id");
-        const collection = databases.database(databaseName);
-        const dbCollection = collection.collection(collectionName);
-        const record = await dbCollection.getOne(recordId);
+        const collection = db.collection(collectionName);
+        const record = await collection.findOne({ _id: recordId });
         if (!record) {
             res.sendStatus(404);
             return;
@@ -276,27 +314,16 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
     }));
 
     //
-    // Lists all records in the database.
-    //
-    app.get("/list-all", asyncErrorHandler(async (req, res) => {
-        const databaseName = getValue<string>(req.query, "db");
-        const collectionName = getValue<string>(req.query, "col");
-        const max = getIntQueryParam(req, "max");
-        const next = req.query.next as string;
-        const collection = databases.database(databaseName);
-        const dbCollection = collection.collection(collectionName);
-        const page = await dbCollection.listAll(max, next);
-        res.json(page);
-    }));
-
-    //
     // Gets all records in the database.
     //
     app.get("/get-all", asyncErrorHandler(async (req, res) => {
-        const databaseName = getValue<string>(req.query, "db");
+        const setId = getValue<string>(req.query, "set");
         const collectionName = getValue<string>(req.query, "col");
-        const max = getIntQueryParam(req, "max");
-        const next = req.query.next as string;
+        const skip = getIntQueryParam(req, "skip");
+        const limit = getIntQueryParam(req, "limit");
+
+        //TODO: black list/white list collections the client access access.
+        //TODO: Ensure the user can access the set.
 
         //
         // TODO: bring this online later.
@@ -314,23 +341,13 @@ export async function createServer(now: () => Date, databases: IDatabases, userC
         //     return;
         // }
 
-        const collection = databases.database(databaseName);
-        const dbCollection = collection.collection(collectionName);
-        const page = await dbCollection.getAll(max, next);
-        res.json(page);
-    }));
+        const collection = db.collection(collectionName);
+        const records = await collection.find({ setId })
+            .skip(skip)
+            .limit(limit)
+            .toArray();
 
-    //
-    // Deletes a record from the database.
-    //
-    app.get("/delete-one", asyncErrorHandler(async (req, res) => {
-        const databaseName = getValue<string>(req.query, "databaseName");
-        const collectionName = getValue<string>(req.query, "collectionName");
-        const recordId = getValue<string>(req.query, "recordId");
-        const collection = databases.database(databaseName);
-        const dbCollection = collection.collection(collectionName);
-        await dbCollection.deleteOne(recordId);
-        res.sendStatus(200);
+        res.json(records);
     }));
 
     return app;

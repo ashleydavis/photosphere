@@ -2,7 +2,15 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
-import { IAsset, IAssetUpdateRecord, IAssetUploadRecord, IAssetSink, IAssetSource, IPersistentQueue, syncIncoming, syncOutgoing, initialSync, IDatabases, IIndexeddbDatabases, IUser } from "database";
+import { IDatabases } from "../lib/databases";
+import { IIndexeddbDatabases } from "../lib/indexeddb/indexeddb-databases";
+import { IAssetUpdateRecord } from "../lib/sync/asset-update-record";
+import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
+import { IPersistentQueue } from "../lib/sync/persistent-queue";
+import { syncIncoming } from "../lib/sync/sync-incoming";
+import { syncOutgoing } from "../lib/sync/sync-outgoing";
+import { IUser } from "../def/user";
+import { initialSync } from "../lib/sync/sync-initial";
 
 const SYNC_POLL_PERIOD = 1000;
 
@@ -23,20 +31,9 @@ const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
 export interface IProps {
 
     //
-    // Interface to the database in the cloud.
-    //
-    cloudDatabases: IDatabases;
-
-    //
     // Interface to the local indexeddb databases.
     //
     indexeddbDatabases: IIndexeddbDatabases;
-
-    cloudSource: IAssetSource;
-    cloudSink: IAssetSink;
-    indexeddbSource: IAssetSource;
-    indexeddbSink: IAssetSink;
-    localSource: IAssetSource;
 
     //
     // Queues outgoing asset uploads.
@@ -51,7 +48,7 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, indexeddbDatabases, indexeddbSource, indexeddbSink, localSource, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, children }: IProps) {
+export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, indexeddbDatabases, children }: IProps) {
     
     const { isOnline } = useOnline();
     const indexeddb = useIndexeddb();
@@ -114,7 +111,6 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                 console.error(err)            
             });
     }, [api.isInitialised, isOnline]);
-    
 
     useEffect(() => {
         if (initialSyncStarted.current) {
@@ -133,12 +129,8 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                     try {
                         console.log(`Doing initial sync...`);
 
-                        //
-                        // Collate the last update ids for each collection.
-                        //
-                        const collectionIds = user!.collections.access;
-    
-                        await initialSync({ collectionIds, api, cloudDatabases, cloudSource, indexeddbDatabases, indexeddbSource, indexeddbSink });
+                        const setIds = user!.sets.access;    
+                        await initialSync({ setIds, api, indexeddbDatabases });
                     }
                     catch (err) {
                         console.error(`Initial sync failed:`);
@@ -162,7 +154,6 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
     }, [isOnline, user]);
 
     useEffect(() => {
-
         if (periodicSyncStart.current) {
             console.log(`Periodic sync already started.`);
             return;
@@ -188,9 +179,9 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
 
                 try {
                     await syncOutgoing({
-                        cloudSink,
                         outgoingAssetUploadQueue,
                         outgoingAssetUpdateQueue,
+                        api,
                     });
                 }
                 catch (err) {
@@ -202,12 +193,11 @@ export function DbSyncContextProvider({ cloudDatabases, cloudSource, cloudSink, 
                     //
                     // Collate the last update ids for each collection.
                     //
-                    const collectionIds = user!.collections.access;
-                    const userDatabase = indexeddb.databases.database("user");
-                    await syncIncoming({ collectionIds, api, userDatabase, indexeddbSink });
+                    const setIds = user!.sets.access;    
+                    await syncIncoming({ setIds, indexeddbDatabases, api });
                 }
                 catch (err) {
-                    console.error(`Outgoing sync failed:`);
+                    console.error(`Incoming sync failed:`);
                     console.error(err);
                 }
     

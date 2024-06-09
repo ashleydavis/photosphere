@@ -3,13 +3,16 @@ import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { IAsset, IAssetSink, IAssetSource, IDatabaseOp, IPage } from "database";
-import { sleep } from "../lib/sleep";
+import { IAsset } from "defs";
+import { IAssetSource } from "../lib/asset-source";
+import { IAssetSink } from "../lib/asset-sink";
+import { IDatabaseOp } from "defs";
+import { uuid } from "../lib/uuid";
 
 //
-// Gets the sorting value from the asset.
+// Gets the sorting value from the gallery item.
 //
-export type SortFn = (asset: IAsset) => any;
+export type SortFn = (galleryItem: IGalleryItem) => any;
 
 //
 // Gets the grouping value from the asset.
@@ -136,7 +139,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     //
     // The collection currently being viewed.
     //
-    const [ collectionId, setCollectionId ] = useState<string | undefined>(undefined);
+    const [ setId, setSetid ] = useState<string | undefined>(undefined);
 
     //
     // Asset that have been loaded from storage.
@@ -206,50 +209,37 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Loads assets on mount.
     //
     useEffect(() => {
-        if (user && isInitialized && source.isInitialised) {
+        if (user && isInitialized) {
             loadAssets();
         }
-    }, [isInitialized, source.isInitialised, user]);
+    }, [isInitialized, user]);
 
     //
     // Loads assets into the gallery.
     //
     async function loadAssets(): Promise<void> {
-        let _collectionId = collectionId;
+        let _collectionId = setId;
         if (_collectionId === undefined) {
             if (user === undefined) {
                 throw new Error(`Expected to know the user when loading assets.`);
             }
             
-            _collectionId = user.collections.default;
-            setCollectionId(_collectionId);
+            _collectionId = user.sets.default;
+            setSetid(_collectionId);
         }
 
+        const assets = await source.loadAssets(_collectionId!);
         const galleryItems: IGalleryItem[] = []; 
-        let next: string | undefined = undefined;
-        while (true) {
-            const page: IPage<IAsset> = await source.loadAssets(_collectionId, 1000, next);
-            next = page.next;
-            for (const asset of page.records) {
-                const item = assetToGalleryItem(asset);
-                loadedAssets.current.set(item._id, item);
-                searchIndexRef.current.add(item._id, item);
-                galleryItems.push(item);
-            }
 
-            // Renders the assets that we know about already.
-            setAssets(applySort(galleryItems));
+        for (const asset of assets) {
+            const item = assetToGalleryItem(asset);
+            loadedAssets.current.set(item._id, item);
+            searchIndexRef.current.add(item._id, item);
+            galleryItems.push(item);
+        }
 
-            if (next === undefined) {
-                break; // No more metadata.
-            }
-            else {
-                if (page.records.length === 0) {
-                    // Assets are still loading, let them continue loading.
-                    await sleep(500);
-                }
-            }
-        }        
+        // Renders the assets that we know about already.
+        setAssets(applySort(galleryItems));
     }
 
     //
@@ -260,7 +250,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
             throw new Error(`Cannot edit readonly gallery.`); 
         }
 
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot add asset without a collection id.`);
         }
 
@@ -276,22 +266,41 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
         //
         const ops: IDatabaseOp[] = [
             {
-                databaseName: collectionId,
                 collectionName: "metadata",
+                setId,
                 recordId: galleryItem._id,
                 op: {
                     type: "set",
-                    fields: galleryItemToAsset(galleryItem),
+                    fields: {
+                        _id: galleryItem._id,
+                        width: galleryItem.width,
+                        height: galleryItem.height,
+                        origFileName: galleryItem.origFileName,
+                        origPath: galleryItem.origPath,
+                        contentType: galleryItem.contentType,
+                        hash: galleryItem.hash,
+                        location: galleryItem.location,
+                        fileDate: galleryItem.fileDate,
+                        photoDate: galleryItem.photoDate,
+                        sortDate: galleryItem.sortDate,
+                        uploadDate: dayjs().toISOString(),
+                        properties: galleryItem.properties,
+                        labels: galleryItem.labels,
+                        description: galleryItem.description,
+                        setId,
+                    },
                 },
             },
             {
-                databaseName: collectionId,
                 collectionName: "hashes",
-                recordId: galleryItem.hash,
+                setId,
+                recordId: uuid(),
                 op: {
-                    type: "push",
-                    field: "assetIds",
-                    value: galleryItem._id,
+                    type: "set",
+                    fields: {
+                        assetId: galleryItem._id,
+                        setId,
+                    },
                 },
             }
         ];
@@ -309,29 +318,6 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     }
 
     //
-    // Converts a gallery item to an asset.
-    //
-    function galleryItemToAsset(galleryItem: IGalleryItem): IAsset { //todo: pull this up. No need for a sep function.
-        return {
-            _id: galleryItem._id,
-            width: galleryItem.width,
-            height: galleryItem.height,
-            origFileName: galleryItem.origFileName,
-            origPath: galleryItem.origPath,
-            contentType: galleryItem.contentType,
-            hash: galleryItem.hash,
-            location: galleryItem.location,
-            fileDate: galleryItem.fileDate,
-            photoDate: galleryItem.photoDate,
-            sortDate: galleryItem.sortDate,
-            uploadDate: dayjs().toISOString(),
-            properties: galleryItem.properties,
-            labels: galleryItem.labels,
-            description: galleryItem.description,
-        };
-    }
-
-    //
     // Updates an asset in the gallery by index.
     //
     async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
@@ -339,7 +325,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
             throw new Error(`Cannot edit readonly gallery.`); 
         }
 
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot edit asset without a collection id.`);
         }
 
@@ -360,8 +346,8 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
         // Update the asset in the database.
         //
         const ops: IDatabaseOp[] = [{
-            databaseName: collectionId,
             collectionName: "metadata",
+            setId,
             recordId: assetId,
             op: {
                 type: "set",
@@ -375,11 +361,11 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Maps a hash to the assets already uploaded.
     //
     async function mapHashToAssets(hash: string): Promise<string[]> {
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot check asset without a collection id.`);
         }
 
-        return await source.mapHashToAssets(collectionId, hash);
+        return await source.mapHashToAssets(setId, hash);
     }
 
     //
@@ -390,11 +376,11 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
             throw new Error(`Cannot upload to readonly gallery.`); 
         }
 
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot upload asset without a collection id.`);
         }
 
-        await sink.storeAsset(collectionId, assetId, assetType, {
+        await sink.storeAsset(setId, assetId, assetType, {
             contentType, 
             data
         });
@@ -404,18 +390,18 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Loads data for an asset.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot load asset without a collection id.`);
         }
 
-        const key = `${collectionId}-${assetType}-${assetId}`;
+        const key = `${setId}-${assetType}-${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await source.loadAsset(collectionId, assetId, assetType);
+        const assetData = await source.loadAsset(setId, assetId, assetType);
         if (!assetData) {
             return undefined;
         }
@@ -433,11 +419,11 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Unloads data for an asset.
     //
     function unloadAsset(assetId: string, assetType: string): void {
-        if (!collectionId) {
+        if (!setId) {
             throw new Error(`Cannot unload asset without a collection id.`);
         }
 
-        const key = `${collectionId}-${assetType}-${assetId}`;
+        const key = `${setId}-${assetType}-${assetId}`;
         const cacheEntry = assetCache.current.get(key);
         if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {

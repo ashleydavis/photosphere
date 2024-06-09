@@ -1,4 +1,4 @@
-import { uuid } from "database";
+import { uuid } from "./uuid";
 
 function getClientId() {
     const existingClientId = localStorage.getItem("clientId");

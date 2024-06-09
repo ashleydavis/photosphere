@@ -53,7 +53,6 @@
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5",
     "user-interface": "workspace:*",
-    "database": "workspace:*",
     "wait-port": "^1.0.4",
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4",

@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
 import { useGallery } from "../context/gallery-context";

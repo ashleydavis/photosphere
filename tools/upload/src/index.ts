@@ -1,13 +1,13 @@
 import * as config from "./config";
 import { findAssets } from "./scan";
-import { IAsset, IDatabaseOp, uuid } from "database";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import os from "os";
 import dayjs from "dayjs";
-import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode } from "user-interface";
+import { IAsset, IDatabaseOp } from "defs";
+import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -166,6 +166,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     await addAsset(config.uploadCollectionId, {
         _id: assetId,
+        setId: config.uploadCollectionId,
         width: resolution.width,
         height: resolution.height,
         origFileName: path.basename(filePath),
@@ -428,13 +429,13 @@ async function uploadAssetData(collectionId: string, assetId: string, assetType:
 //
 // Adds an asset to the start of the gallery.
 //
-async function addAsset(collectionId: string, asset: IAsset): Promise<void> {
+async function addAsset(setId: string, asset: IAsset): Promise<void> {
     //
     // Add the asset to the database.
     //
     const ops: IDatabaseOp[] = [
         {
-            databaseName: collectionId,
+            setId,
             collectionName: "metadata",
             recordId: asset._id,
             op: {
@@ -443,7 +444,7 @@ async function addAsset(collectionId: string, asset: IAsset): Promise<void> {
             },
         },
         {
-            databaseName: collectionId,
+            setId,
             collectionName: "hashes",
             recordId: asset.hash,
             op: {

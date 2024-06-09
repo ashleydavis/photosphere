@@ -6,9 +6,9 @@ import React, { createContext, ReactNode, useContext, useRef, useState } from "r
 import { scanImages as _scanImages, getContentType } from "../lib/scan";
 import dayjs from "dayjs";
 import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
-import { IAsset, IAssetData, IAssetSource, IPage, uuid } from "database";
-import { useUpload } from "user-interface";
+import { IAssetData, IAssetSource, useUpload } from "user-interface";
 import path from "path";
+import { IAsset } from "defs";
 
 export interface IScanContext extends IAssetSource {
     //
@@ -49,10 +49,12 @@ export function ScanContextProvider({ children }: IProps) {
                 height: resolution.height,
                 origFileName: fileDetails.path,
                 origPath: "",
+                contentType: fileDetails.contentType,
                 hash,
                 fileDate: dayjs(fileDate).toISOString(),
                 sortDate: dayjs(fileDate).toISOString(),
                 uploadDate: dayjs().toISOString(),
+                setId: "this doesn't make sense here"
             };
             assets.current.push(newAsset);
 
@@ -77,11 +79,8 @@ export function ScanContextProvider({ children }: IProps) {
     //
     // Loads metadata for all assets.
     //
-    async function loadAssets(collectionId: string, max: number, next?: string): Promise<IPage<IAsset>> {
-        return {
-            records: next !== undefined ? assets.current.slice(parseInt(next), assets.current.length) : assets.current,
-            next: isScanning.current ? assets.current.length.toString() : undefined,
-        };
+    async function loadAssets(collectionId: string): Promise<IAsset[]> {
+        return assets.current;
     }
 
     //
@@ -122,7 +121,6 @@ export function ScanContextProvider({ children }: IProps) {
     }
         
     const value: IScanContext = {
-        isInitialised: true,
         scanImages,
         loadAssets,
         mapHashToAssets,

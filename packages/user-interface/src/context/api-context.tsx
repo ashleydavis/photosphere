@@ -2,8 +2,11 @@ import React, { createContext, ReactNode, useContext, useEffect, useState } from
 import axios from "axios";
 import { useAuth } from "./auth-context";
 import { useClientId } from "../lib/use-client-id";
-import { IAsset, IAssetData, IDatabaseOp, IJournalResult, IOpSelection, IUser, IApi, IGetAssetsResult } from "database";
-import { IPage } from "database/build/defs/page";
+import { IApi, IJournalResult } from "../lib/api";
+import { IUser } from "../def/user";
+import { IAssetData } from "../def/asset-data";
+import { IDatabaseOp } from "defs";
+import { IRecord } from "../lib/database-collection";
 
 const BASE_URL = process.env.BASE_URL as string;
 if (!BASE_URL) {
@@ -61,31 +64,30 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Retreives the latest update id for a collection.
+    // Retreives the latest server time.
     //
-    async function getLatestUpdateId(collectionId: string): Promise<string | undefined> {
+    async function getLatestTime(): Promise<string | undefined> {
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/latest-update-id`;
+        const url = `${BASE_URL}/latest-time`;
         const response = await axios.get(
             url, 
             {
                 headers: {
-                    col: collectionId,
                     Authorization: `Bearer ${token}`,
                     Accept: "application/json",
                 },
             }
         );
 
-        return response.data.latestUpdateId;
+        return response.data.latestTime;
     }    
 
     //
     // Retreives the data for an asset from the backend.
     //
-    async function getAsset(collectionId: string, assetId: string, assetType: string): Promise<Blob> {
-        const url = `${BASE_URL}/asset?id=${assetId}&type=${assetType}&col=${collectionId}`; //todo: Some of these parameters might be better as headers.
+    async function getAsset(setId: string, assetId: string, assetType: string): Promise<Blob> {
+        const url = `${BASE_URL}/asset?id=${assetId}&type=${assetType}&set=${setId}`;
         await loadToken();
         const token = getToken();
         const response = await axios.get(url, {
@@ -102,7 +104,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(collectionId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function uploadSingleAsset(setId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
         await loadToken();
         const token = getToken();
 
@@ -112,7 +114,7 @@ export function ApiContextProvider({ children }: IProps) {
             {
                 headers: {
                     "content-type": assetData.contentType,
-                    col: collectionId,
+                    set: setId,
                     id: assetId,
                     "asset-type": assetType,
                     Authorization: `Bearer ${token}`,
@@ -152,7 +154,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Gets the journal of operations that have been applied to the database.
     //
-    async function getJournal(collectionId: string, lastUpdateId?: string): Promise<IJournalResult> {
+    async function getJournal(lastUpdateTime?: string): Promise<IJournalResult> {
         
         if (!clientId) {
             throw new Error(`Client id not set.`);
@@ -165,36 +167,8 @@ export function ApiContextProvider({ children }: IProps) {
         const response = await axios.post(
             url, 
             {
-                collectionId,
-                lastUpdateId,
+                lastUpdateTime,
                 clientId,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            },
-        );
-
-        return response.data;
-    }
-
-    //
-    // Sets a new record to the database.
-    //
-    async function setOne(databaseName: string, collectionName: string, recordId: string, record: any): Promise<void> {
-        await loadToken();
-        const token = getToken();
-
-        const url = `${BASE_URL}/set-one`;
-        const response = await axios.post(
-            url, 
-            {
-                databaseName,
-                collectionName,
-                recordId,
-                record,
             },
             {
                 headers: {
@@ -210,32 +184,10 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Gets one record by id.
     //
-    async function getOne(databaseName: string, collectionName: string, recordId: string): Promise<any> {
+    async function getOne(collectionName: string, recordId: string): Promise<any> {
         await loadToken();
         const token = getToken();
-        const url = `${BASE_URL}/get-one?db=${databaseName}&col=${collectionName}&id=${recordId}`;
-        const response = await axios.get(
-            url, 
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-        return response.data;
-    }
-
-    //
-    // Lists all records in the database.
-    //
-    async function listAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<string>> {
-        await loadToken();
-        const token = getToken();
-        let url = `${BASE_URL}/list-all?db=${databaseName}&col=${collectionName}&max=${max}`;
-        if (next) {
-            url += `&next=${next}`;
-        }
+        const url = `${BASE_URL}/get-one?col=${collectionName}&id=${recordId}`;
         const response = await axios.get(
             url, 
             {
@@ -251,13 +203,10 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Gets a page of records from the database.
     //
-    async function getAll(databaseName: string, collectionName: string, max: number, next?: string): Promise<IPage<any>> {
+    async function getAll<RecordT extends IRecord>(setId: string, collectionName: string, skip: number, limit: number): Promise<RecordT[]> {
         await loadToken();
         const token = getToken();
-        let url = `${BASE_URL}/get-all?db=${databaseName}&col=${collectionName}&max=${max}`;
-        if (next) {
-            url += `&next=${next}`;
-        }
+        const url = `${BASE_URL}/get-all?set=${setId}&col=${collectionName}&skip=${skip}&limit=${limit}`;
         const response = await axios.get(
             url, 
             {
@@ -270,42 +219,16 @@ export function ApiContextProvider({ children }: IProps) {
         return response.data;
     }
 
-    //
-    // Deletes a database record.
-    //
-    async function deleteOne(databaseName: string, collectionName: string, recordId: string): Promise<void> {
-        await loadToken();
-        const token = getToken();
-        const url = `${BASE_URL}/delete-one`;
-        const response = await axios.post(
-            url, 
-            {
-                databaseName,
-                collectionName,
-                recordId,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            }
-        );
-    }
-
     const value: IApi = {
     	isInitialised,
         getUser,
-        getLatestUpdateId,
+        getLatestTime,
         getAsset,
         uploadSingleAsset,
         submitOperations,
         getJournal,
-        setOne,
         getOne,
-        listAll,
         getAll,
-        deleteOne,
     };
     
     return (

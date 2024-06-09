@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { IndexeddbDatabases, indexeddb, PersistentQueue, IAsset, IPage } from "database";
+import { IndexeddbDatabases, indexeddb, PersistentQueue } from "user-interface";
 
 //
 // Checks for equality between two arrays.
@@ -127,15 +127,8 @@ export function TestIndexeddb() {
 
             console.log(`!! All recoreds in test collection:`);
             const metadataCollection = databases.database("test-collection").collection("metadata");
-            let next: string | undefined = undefined;
-            while (true) {
-                const page: IPage<IAsset> = await metadataCollection.getAll(1000, next)
-                console.log(page.records);
-                next = page.next;
-                if (!next) {
-                    break;
-                }
-            }
+            const records = await metadataCollection.getAll();
+            console.log(records);
 
             await databases.shutdown();
         }

@@ -1,4 +1,4 @@
-import { IAssetData } from "database";
+import { IAssetData } from "./asset-data";
 
 //
 // Specifies the local record for an asset.

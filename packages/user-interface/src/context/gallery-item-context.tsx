@@ -43,10 +43,6 @@ export interface IProps {
 
 export function GalleryItemContextProvider({ children, asset, assetIndex }: IProps) {
 
-    //
-    // todo: Register for update to the asset from the source to trigger a render.
-    //
-
     const { updateAsset: updateGalleryAsset } = useGallery();
 
     //

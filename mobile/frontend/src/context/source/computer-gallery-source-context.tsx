@@ -2,8 +2,9 @@
 // Provides a source of assets for the gallery from the local computer.
 //
 
+import { IAssetData, IAssetSource } from "user-interface";
+import { IAsset } from "defs";
 import { useScan } from "../scan-context";
-import { IAsset, IAssetData, IAssetSource, IPage } from "database";
 
 //
 // Use the "computer source" in a component.
@@ -18,11 +19,8 @@ export function useComputerGallerySource(): IAssetSource {
     //
     // Loads metadata for all assets.
     //
-    async function loadAssets(collectionId: string, max: number, next?: string): Promise<IPage<IAsset>> {
-        return {
-            records: [],
-            next: undefined,
-        };
+    async function loadAssets(collectionId: string): Promise<IAsset[]> {
+        return [];
     }
 
     //
@@ -41,7 +39,6 @@ export function useComputerGallerySource(): IAssetSource {
     }
 
     return {
-        isInitialised: false,
         loadAssets,
         mapHashToAssets,
         loadAsset,

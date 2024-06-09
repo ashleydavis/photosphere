@@ -23,6 +23,11 @@ export interface ICollections {
 //
 export interface IUser {
     //
+    // The user id.
+    //
+    _id: string;
+
+    //
     // Metadata for the user's collections.
     //
     collections: ICollections;

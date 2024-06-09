@@ -1,39 +1,23 @@
 import React, { useRef } from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, isProduction, useApi, useCloudGallerySink, useCloudGallerySource, useIndexeddb, useIndexeddbGallerySink, useIndexeddbGallerySource, useLocalGallerySink, useLocalGallerySource } from "user-interface";
+import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, GalleryContextProvider, IAssetUpdateRecord, IAssetUploadRecord, IndexeddbContextProvider, Main, PersistentQueue, UploadContextProvider, isProduction, useApi, useIndexeddb, useLocalGallerySink, useLocalGallerySource } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
-import { CloudDatabases, IAssetUpdateRecord, IAssetUploadRecord, PersistentQueue } from "database";
 import { ComputerPage } from "./pages/computer";
 import { ScanContextProvider } from "./context/scan-context";
 import dayjs from "dayjs";
 
 function GallerySetup() {
-
     const api = useApi();
-    const cloudDatabases = new CloudDatabases(api);
-
     const indexeddb = useIndexeddb();
-    const indexeddbSource = useIndexeddbGallerySource({ indexeddbDatabases: indexeddb.databases });
-    const indexeddbSink = useIndexeddbGallerySink({ indexeddbDatabases: indexeddb.databases });
-
-    const cloudSource = useCloudGallerySource({ api });
-    const cloudSink = useCloudGallerySink({ api });
-
     const userDatabase = indexeddb.databases.database("user");
     const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload"));
     const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update"));
-    const localSource = useLocalGallerySource({ indexeddbSource, indexeddbSink, cloudSource });
-    const localSink = useLocalGallerySink({ indexeddbSink, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current });
+    const localSource = useLocalGallerySource({ indexeddbDatabases: indexeddb.databases, api });
+    const localSink = useLocalGallerySink({ outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, indexeddbDatabases: indexeddb.databases });
 
     return (
         <DbSyncContextProvider
-            cloudDatabases={cloudDatabases}
-            cloudSource={cloudSource}
-            cloudSink={cloudSink}
             indexeddbDatabases={indexeddb.databases}
-            indexeddbSource={indexeddbSource}
-            indexeddbSink={indexeddbSink}
-            localSource={localSource}
             outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
             outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
             >

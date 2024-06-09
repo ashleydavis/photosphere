@@ -1,10 +1,10 @@
 @base_url = http://localhost:3000
 # @base_url = https://photosphere-api.codecapers.com.au
 @token = not needed
-@collection = test-collection
-# @collection = test-collection
-@collection = d5a75330-61ca-487d-b81b-0d2aeaa74c76
+@setId = test-collection
+#@collection = d5a75330-61ca-487d-b81b-0d2aeaa74c76
 @asset = 1234
+@hash_id = 4567
 @hash = ABCD
 
 ###
@@ -34,12 +34,12 @@ Authorization: Bearer {{token}}
     "clientId": "a-client-id",
     "ops": [
         {
-            "databaseName": "{{collection}}",
             "collectionName": "metadata",
             "recordId": "{{asset}}",
             "op": {
                 "type": "set",
                 "fields": {
+                    "setId": "{{setId}}",
                     "contentType": "image/jpeg", 
                     "fileName": "./test-assets/1.jpeg", 
                     "width": 4160, 
@@ -58,13 +58,15 @@ Authorization: Bearer {{token}}
             }
         },
         {
-            "databaseName": "{{collection}}",
-            "collectionName": "hashes",
-            "recordId": "{{hash}}",
+            "collectionName": "hashes", 
+            "recordId": "{{hash_id}}",
             "op": {
-                "type": "push",
-                "field": "assetIds",
-                "value": "{{asset}}"
+                "type": "set",
+                "fields": {
+                    "hash": "{{hash}}",
+                    "assetId": "{{asset}}",
+                    "setId": "{{setId}}"
+                }
             }
         }
     ]
@@ -74,15 +76,14 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 
 ###
 # Gets hashes for an asset.
 
-
-GET {{base_url}}/get-one?id={{hash}}&db={{collection}}&col=hashes
+GET {{base_url}}/get-one?id={{hash_id}}&col=hashes
 Authorization: Bearer {{token}}
 
 
@@ -94,7 +95,7 @@ Authorization: Bearer {{token}}
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-col: {{collection}}
+set: {{setId}}
 asset-type: original
 Authorization: Bearer {{token}}
 
@@ -105,7 +106,7 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=original
+GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=original
 
 ###
 #
@@ -115,7 +116,7 @@ GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=origin
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-col: {{collection}}
+set: {{setId}}
 asset-type: thumb
 Authorization: Bearer {{token}}
 
@@ -125,7 +126,7 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=thumb
+GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=thumb
 
 ###
 #
@@ -135,7 +136,7 @@ GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=thumb
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-col: {{collection}}
+set: {{setId}}
 asset-type: display
 Authorization: Bearer {{token}}
 
@@ -145,13 +146,13 @@ Authorization: Bearer {{token}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/asset?id={{asset}}&col={{collection}}&tok={{token}}&type=display
+GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=display
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -165,7 +166,6 @@ Authorization: Bearer {{token}}
 {
     "clientId": "a-client-id",
     "ops": [{
-        "databaseName": "{{collection}}",
         "collectionName": "metadata",
         "recordId": "{{asset}}",
         "op": {
@@ -181,7 +181,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -195,7 +195,6 @@ Authorization: Bearer {{token}}
 {
     "clientId": "a-client-id",
     "ops": [{
-        "databaseName": "{{collection}}",
         "collectionName": "metadata",
         "recordId": "{{asset}}",
         "op": {
@@ -210,7 +209,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -224,7 +223,6 @@ Authorization: Bearer {{token}}
 {
     "clientId": "a-client-id",
     "ops": [{
-        "databaseName": "{{collection}}",
         "collectionName": "metadata",
         "recordId": "{{asset}}",
         "op": {
@@ -239,10 +237,11 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&db={{collection}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 ###
+# @name get_journal
 # Gets journal operations for a collection.
 #
 
@@ -251,36 +250,36 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "collectionId": "{{collection}}",
-    "clientId": "a-client-id"
+    "collectionId": "{{setId}}",
+    "clientId": "a-different-client-id"
 }
 
 ###
 # Gets journal operations after a certain update.
 #
 
-@last_update = 16
+@last_update_time = {get_journal.repsonse.body.latestTime}
 
 POST {{base_url}}/journal
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "collectionId": "{{collection}}",
+    "collectionId": "{{setId}}",
     "clientId": "a-client-id",
-    "lastUpdateId": "{{last_update}}"
+    "lastUpdateTime": "{{last_update_time}}"
 }
 
 ###
-# Lists a page of assets.
+# Gets the latest server time.
 #
 
-GET {{base_url}}/list-all?db={{collection}}&col=metadata&max=5
+GET {{base_url}}/latest-time
 Authorization: Bearer {{token}}
 
 ###
 # Gets a page of assets.
 #
 
-GET {{base_url}}/get-all?db={{collection}}&col=metadata&max=5
+GET {{base_url}}/get-all?set={{setId}}&col=metadata&skip=0&limit=5
 Authorization: Bearer {{token}}

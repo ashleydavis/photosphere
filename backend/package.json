@@ -8,11 +8,14 @@
         "sd": "pnpm run start:dev",
         "start": "node build/index.js",
         "start:prod": "pnpm run clean-uploads && pnpm run copy-no-assets && cross-env NODE_ENV=production PORT=3000 ts-node-dev --respawn src/index.ts",
-        "start:dev": "pnpm run clean-uploads && pnpm run copy-50-assets && cross-env NODE_ENV=development pnpm run start-watch",
-        "start:dev-no-assets": "pnpm run clean-uploads  && pnpm run copy-no-assets &&  cross-env NODE_ENV=development pnpm run start-watch",
-        "start:dev-1-asset": "pnpm run clean-uploads  && pnpm run copy-1-asset &&  cross-env NODE_ENV=development pnpm run start-watch",
-        "start-watch": "cross-env NODE_ENV=development PORT=3000 ts-node-dev --respawn src/index.ts",
+        "start:dev": "pnpm run clean-uploads && pnpm run copy-50-assets && concurrently --names \"db,be\" \"npm run start-db-50-assets\" \"npm run start-watch\"",
+        "start:dev-no-assets": "pnpm run clean-uploads  && pnpm run copy-no-assets && concurrently --names \"db,be\" \"npm run start-db-no-assets\" \"npm run start-watch\"",
+        "start:dev-1-asset": "pnpm run clean-uploads  && pnpm run copy-1-asset && concurrently --names \"db,be\" \"npm run start-db-1-asset\" \"npm run start-watch\"",
+        "start-watch": "cross-env DB_CONNECTION_STRING=mongodb://localhost:7001 NODE_ENV=development PORT=3000 ts-node-dev --respawn src/index.ts",
         "start-for-e2e-tests": "pnpm run clean-uploads && pnpm run start:dev-no-assets",
+        "start-db-50-assets": "insta-mongo --db-port=7001 --rest-port=7000 --load=50-assets --fixtures=../fixtures --db=photosphere",
+        "start-db-no-assets": "insta-mongo --db-port=7001 --rest-port=7000 --load=no-assets --fixtures=../fixtures --db=photosphere",
+        "start-db-1-asset": "insta-mongo --db-port=7001 --rest-port=7000 --load=1-asset --fixtures=../fixtures --db=photosphere",
         "build": "pnpm install --production=false && pnpm run compile",
         "c": "pnpm run compile",
         "cw": "pnpm run compile:watch",
@@ -39,7 +42,8 @@
         "@types/node": "^18.19.15",
         "axios": "^0.27.2",
         "concurrently": "^8.2.2",
-        "cross-env": "^7.0.3",        
+        "cross-env": "^7.0.3",   
+        "insta-mongo": "^0.0.6",     
         "jest": "^29.4.1",
         "nodemon": "^2.0.16",
         "supertest": "^6.3.3",
@@ -54,6 +58,7 @@
         "express": "^5.0.0-beta.1",
         "express-oauth2-jwt-bearer": "^1.6.0",
         "fs-extra": "^11.1.0",
-        "database": "workspace:*"
+        "defs": "workspace:*",
+        "mongodb": "^4.7.0"
     }
 }

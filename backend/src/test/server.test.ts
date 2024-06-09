@@ -9,7 +9,7 @@ import http, { IncomingMessage } from "http";
 describe("photosphere backend", () => {
 
     const dateNow = dayjs("2023-02-08T01:27:01.419Z").toDate();
-    const collectionId = "automated-tests-collection";
+    const setId = "automated-tests-collection";
 
     let servers: http.Server[] = [];
 
@@ -18,13 +18,48 @@ describe("photosphere backend", () => {
     //
     async function initServer() {
 
-        const mockUserCollection: any = {
-            getOne: () => ({
+        const mockUser = {
+            _id: "test-user",
+            sets: {
+                upload: "upload",
+                default: "default",
+                access: [ "access" ],
+            },
+        };
+    
+        const mockStorage: any = {};
+        const mockUsersCollection = {
+            findOne: async () => mockUser,
+        };
+        const mockJournalCollection = {
+            insertOne: jest.fn(),
+        };
+        const mockMetadataCollection = {
+            updateOne: jest.fn(),
+            find: () => ({
+                skip: () => ({
+                    limit: () => ({
+                        toArray: async () => [],
+                    }),
+                }),
             }),
         };
-        const mockDatabases: any = {};
-        const mockStorage: any = {};
-        const app = await createServer(() => dateNow, mockDatabases, mockUserCollection, mockStorage);
+        const collections: any = {
+            users: mockUsersCollection,
+            metadata: mockMetadataCollection,
+            journal: mockJournalCollection,
+        };
+        const mockDatabase: any = {
+            collection: (name: string) => {
+                const collection = collections[name];
+                if (!collection) {
+                    throw new Error(`No mock collection for ${name}`);
+                }
+                return collection;
+            },
+        };
+
+        const app = await createServer(() => dateNow, mockDatabase, mockStorage);
 
         const server = app.listen();
         servers.push(server);
@@ -32,7 +67,16 @@ describe("photosphere backend", () => {
         const address = server.address() as AddressInfo;
         const baseUrl = `http://localhost:${address.port}`;
 
-        return { app, server, baseUrl, mockStorage, mockDatabases, mockUserCollection };        
+        return { 
+            app, 
+            server, 
+            baseUrl, 
+            mockDatabase, 
+            mockStorage, 
+            mockUser,
+            mockJournalCollection,
+            mockMetadataCollection,
+         };
     }
 
     beforeAll(() => {
@@ -68,17 +112,7 @@ describe("photosphere backend", () => {
     }
 
     test("user metadata", async () => {
-        const { baseUrl, mockUserCollection: mockUserDatabase } = await initServer();
-
-        const mockUser = {
-            _id: "test-user",
-            collections: {
-                upload: "upload",
-                default: "default",
-                access: [ "access" ],
-            },
-        };
-        mockUserDatabase.getOne = async () => mockUser;
+        const { baseUrl, mockUser } = await initServer();
 
         const response = await axios.get(`${baseUrl}/user`);
         expect(response.status).toBe(200);
@@ -86,40 +120,33 @@ describe("photosphere backend", () => {
     });
     
     test("no assets", async () => {
-        const { baseUrl, mockDatabases } = await initServer();
+        const { baseUrl } = await initServer();
 
-        const mockCollection: any = {
-            getAll: async () => ({ records: [] }),
-        };
-        const mockDatabase: any = {
-            collection: () => mockCollection,
-        };
-        mockDatabases.database = async () => mockDatabase;
-
-        const response = await axios.get(`${baseUrl}/assets?col=${collectionId}`);
-
+        const response = await axios.get(`${baseUrl}/get-all?set=${setId}&col=metadata&skip=0&limit=100`);
         expect(response.status).toBe(200);
-        expect(response.data).toEqual({ assets: [] });
+        expect(response.data).toEqual([]);
     });
 
     test("upload asset metadata", async () => {
 
-        const { baseUrl, mockDatabases } = await initServer();
+        const { baseUrl, mockMetadataCollection, mockJournalCollection } = await initServer();
 
-        const mockCollection: any = {
-            getOne: async () => undefined,
-            setOne: jest.fn(),
-        };
-        const mockDatabase: any = {
-            collection: () => mockCollection,
-        };
-        mockDatabases.database = async () => mockDatabase;
+        //fio:
+        // const mockCollection: any = {
+        //     getOne: async () => undefined,
+        //     setOne: jest.fn(),
+        // };
+        // const mockDatabase: any = {
+        //     collection: () => mockCollection,
+        // };
+        //todo:
+        // mockDatabases.database = async () => mockDatabase;
 
         const assetId = "1234";
         const hash = "ACBD";
         const metadata = {
             _id: assetId,
-            col: collectionId,
+            col: setId,
             fileName: "a-test-file.jpg",
             contentType: "image/jpeg",
             width: 256,
@@ -139,8 +166,8 @@ describe("photosphere backend", () => {
         const response = await axios.post(`${baseUrl}/operations`, {
             clientId: "test-client",
             ops: [{
-                databaseName: collectionId,
                 collectionName: "metadata",
+                setId,
                 recordId: assetId,
                 op: {
                     type: "set",
@@ -151,23 +178,27 @@ describe("photosphere backend", () => {
 
         expect(response.status).toBe(200);
 
-        expect(mockCollection.setOne).toHaveBeenCalledTimes(2);
-        expect(mockCollection.setOne).toHaveBeenCalledWith(expect.any(String), {
-            clientId: "test-client", 
-            collectionName: "metadata", 
-            op: {
-                fields: {
-                    ...metadata,
-
-                }, 
-                type: "set"
-            }, 
-            recordId: "1234", 
-            serverTime: expect.any(String),
-        });
-        expect(mockCollection.setOne).toHaveBeenCalledWith(assetId, {
-            ...metadata,
-        });
+        expect(mockMetadataCollection.updateOne).toHaveBeenCalledTimes(1);
+        expect(mockMetadataCollection.updateOne).toHaveBeenCalledWith(
+            { _id: assetId },
+            { $set: metadata },
+            { upsert: true }
+        );
+        expect(mockJournalCollection.insertOne).toHaveBeenCalledTimes(1);
+        expect(mockJournalCollection.insertOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                _id: expect.any(String),
+                serverTime: expect.any(String),
+                sequence: expect.any(Number),
+                clientId: "test-client",
+                collectionName: "metadata",
+                recordId: assetId,
+                op: {
+                    type: "set",
+                    fields: metadata,
+                },
+            })
+        );
     });
 
     test("upload asset data", async () => {
@@ -185,7 +216,7 @@ describe("photosphere backend", () => {
             fs.readFileSync("./test/test-assets/1.jpeg"),
             {
                 headers: { 
-                    "col": collectionId,
+                    "col": setId,
                     "id": assetId,
                     "Content-Type": contentType,
                     "asset-type": assetType,
@@ -197,7 +228,7 @@ describe("photosphere backend", () => {
 
         expect(mockStorage.writeStream).toHaveBeenCalledTimes(1);
         expect(mockStorage.writeStream).toHaveBeenCalledWith(
-            `collections/${collectionId}/${assetType}`, assetId, contentType, expect.any(IncomingMessage)
+            `collections/${setId}/${assetType}`, assetId, contentType, expect.any(IncomingMessage)
         );
     });
 
@@ -211,7 +242,7 @@ describe("photosphere backend", () => {
         mockStorage.info = async () => ({ contentType });
         mockStorage.readStream = () => stringStream(content);
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=original`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${setId}&type=original`);
         expect(response.status).toBe(200);
         expect(response.headers["content-type"]).toBe(contentType);
         expect(response.data).toEqual(content);
@@ -224,7 +255,7 @@ describe("photosphere backend", () => {
 
         mockStorage.info = async () => undefined;
 
-        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${collectionId}&type=original`);
+        const response = await axios.get(`${baseUrl}/asset?id=${assetId}&col=${setId}&type=original`);
         expect(response.status).toBe(404);
     });
 
@@ -232,14 +263,14 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/asset?col=${collectionId}&type=original`);
+        const response = await axios.get(`${baseUrl}/asset?col=${setId}&type=original`);
         expect(response.status).toBe(400);
     });
 
     test("check for existing asset by hash", async () => {
 
         const assetId = "1234";
-        const { baseUrl, mockDatabases } = await initServer();
+        const { baseUrl } = await initServer();
 
         const mockCollection: any = {
             getOne: async () => [ assetId ],
@@ -247,18 +278,16 @@ describe("photosphere backend", () => {
         const mockDatabase: any = {
             collection: () => mockCollection,
         };
-        mockDatabases.database = async () => mockDatabase;
-
        
         const hash = "ABCD";
-        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&col=${setId}`);
         expect(response.status).toBe(200);
         expect(response.data.assetId).toEqual(assetId);
     });
 
     test("check for non-existing asset by hash", async () => {
 
-        const { baseUrl, mockDatabases } = await initServer();
+        const { baseUrl } = await initServer();
         
         const mockCollection: any = {
             getOne: async () => undefined,
@@ -266,10 +295,9 @@ describe("photosphere backend", () => {
         const mockDatabase: any = {
             collection: () => mockCollection,
         };
-        mockDatabases.database = async () => mockDatabase;
 
         const hash = "1234";
-        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/check-asset?hash=${hash}&col=${setId}`);
         expect(response.status).toBe(200);
         expect(response.data.assetId).toBeUndefined();
     });
@@ -278,13 +306,13 @@ describe("photosphere backend", () => {
 
         const { baseUrl } = await initServer();
 
-        const response = await axios.get(`${baseUrl}/check-asset?col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/check-asset?col=${setId}`);
         expect(response.status).toBe(400);
     });
 
     test("can get assets", async () => {
 
-        const { baseUrl, mockDatabases } = await initServer();
+        const { baseUrl } = await initServer();
 
         const mockAsset1: any = {
             contentType: "image/jpeg",
@@ -300,9 +328,8 @@ describe("photosphere backend", () => {
         const mockDatabase: any = {
             collection: () => mockCollection,
         };
-        mockDatabases.database = async () => mockDatabase;
 
-        const response = await axios.get(`${baseUrl}/assets?col=${collectionId}`);
+        const response = await axios.get(`${baseUrl}/assets?col=${setId}`);
         
         expect(response.status).toBe(200);
         expect(response.data).toEqual({
