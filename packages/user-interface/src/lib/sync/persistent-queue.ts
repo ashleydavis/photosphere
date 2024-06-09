@@ -3,14 +3,26 @@ import * as indexeddb from "../database/indexeddb/indexeddb";
 import { createReverseChronoTimestamp } from "../timestamp";
 import { IRecord } from "../database/database-collection";
 
+export interface IPersistentRecord<DataT> {
+    //
+    // The ID of the record.
+    //
+    _id: string;
+
+    //
+    // Data contained in the record.
+    //
+    data: DataT;
+}
+
 //
 // Queues updates to be sent to the server.
 //
-export interface IPersistentQueue<RecordT> {
+export interface IPersistentQueue<DataT> {
     //
     // Gets the next record in the queue.
     //
-    getNext(): Promise<RecordT | undefined>;
+    getNext(): Promise<DataT | undefined>;
 
     //
     // Removes the next record in the queue.
@@ -20,13 +32,13 @@ export interface IPersistentQueue<RecordT> {
     //
     // Adds a record to the queue.
     //
-    add(record: RecordT): Promise<void>;
+    add(data: DataT): Promise<void>;
 }
 
 //
 // Queues updates to be sent to the server.
 //
-export class PersistentQueue<RecordT extends IRecord> implements IPersistentQueue<RecordT> {
+export class PersistentQueue<DataT> implements IPersistentQueue<DataT> {
 
     //
     // The key for the next record to be removed.
@@ -39,16 +51,16 @@ export class PersistentQueue<RecordT extends IRecord> implements IPersistentQueu
     //
     // Gets the next record in the queue.
     //
-    async getNext(): Promise<RecordT | undefined> {
+    async getNext(): Promise<DataT | undefined> {
         const db = await this.database.getIndexedDb();
-        const result = await indexeddb.getLeastRecentRecord<RecordT>(db, this.collectionName);
+        const result = await indexeddb.getLeastRecentRecord<IPersistentRecord<DataT>>(db, this.collectionName);
         if (!result) {
             return undefined;
         }
 
         const [key, record] = result;
         this.key = key;
-        return record;      
+        return record.data;
     }
 
     //
@@ -68,9 +80,12 @@ export class PersistentQueue<RecordT extends IRecord> implements IPersistentQueu
     //
     // Adds a record to the queue.
     //
-    async add(record: RecordT): Promise<void> {
+    async add(data: DataT): Promise<void> {
         const db = await this.database.getIndexedDb();
-        const id = createReverseChronoTimestamp(new Date());
-        await indexeddb.storeRecord<RecordT>(db, this.collectionName, id, record);
+        const _id = createReverseChronoTimestamp(new Date());
+        await indexeddb.storeRecord<IPersistentRecord<DataT>>(db, this.collectionName, {
+            _id,
+            data,
+        });
     }
 }

@@ -100,7 +100,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // Queue the updates for upload to the cloud.
         //
         await outgoingAssetUpdateQueue.add({ 
-            _id: uuid(),
             ops,
         });       
     }
@@ -132,7 +131,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // Queue the updates for upload to the cloud.
         //
         await outgoingAssetUpdateQueue.add({ 
-            _id: uuid(),
             ops,
         });
     }
@@ -149,7 +147,7 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // Store the asset locally.
         //
         const assetSet = indexeddbDatabases.database(setId);
-        await assetSet.collection<IAssetRecord>(assetType).setOne(assetId, {
+        await assetSet.collection<IAssetRecord>(assetType).setOne({
             _id: assetId,
             storeDate: new Date(),
             assetData,
@@ -159,7 +157,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // Queue the asset for upload to the cloud.
         //
         await outgoingAssetUploadQueue.add({
-            _id: uuid(),
             setId,
             assetId,
             assetType,

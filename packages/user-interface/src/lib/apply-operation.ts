@@ -63,6 +63,6 @@ export async function applyOperations(databases: IDatabases, databaseOps: IDatab
 
         applyOperation(databaseOp.op, fields);
 
-        await collection.setOne(databaseOp.recordId, fields);
+        await collection.setOne(fields);
     }
 }    

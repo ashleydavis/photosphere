@@ -5,11 +5,6 @@ import { IDatabaseOp } from "defs";
 //
 export interface IAssetUpdateRecord {
     //
-    // ID of the record.
-    //
-    _id: string;
-
-    //
     // Operations to apply to the database.
     //
     ops: IDatabaseOp[];

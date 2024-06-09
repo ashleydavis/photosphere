@@ -74,7 +74,10 @@ export function AppContextProvider({ children }: IProps) {
                 // Store user locally for offline use.
                 //
                 const userDatabase = indexeddb.databases.database("user");
-                await userDatabase.collection("user").setOne("user", user);
+                await userDatabase.collection("user").setOne({
+                    ...user,
+                    _id: "user",
+                });
                 localStorage.setItem("userId", user._id);
                 setUser(user);
                 return;

@@ -42,7 +42,7 @@ export async function syncIncoming({ setIds, api, indexeddbDatabases }: IProps):
             //
             // Record the latest update that was received.
             //
-            await lastUpdateCollection.setOne(setId, { 
+            await lastUpdateCollection.setOne({ 
                 _id: setId, 
                 lastUpdateTime: journalResult.latestTime 
             });

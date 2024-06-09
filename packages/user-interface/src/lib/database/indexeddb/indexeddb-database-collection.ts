@@ -1,20 +1,17 @@
 import { IDatabaseCollection, IRecord } from "../database-collection";
 import { deleteRecord, getAllRecords, getRecord, storeRecord } from "./indexeddb";
 
-export interface IIndexeddbDatabaseCollection<RecordT extends IRecord> extends IDatabaseCollection<RecordT> {
-}
-
-export class IndexeddbDatabaseCollection<RecordT extends IRecord> implements IIndexeddbDatabaseCollection<RecordT> {
+export class IndexeddbDatabaseCollection<RecordT extends IRecord> implements IDatabaseCollection<RecordT> {
 
     constructor(private collectionName: string, private openDb: () => Promise<IDBDatabase>) {
     }
 
     //
-    // Sets a new record to the database.
+    // Sets a new record in the database.
     //
-    async setOne(id: string, record: RecordT): Promise<void> {
+    async setOne(record: RecordT): Promise<void> {
         const db = await this.openDb();
-        await storeRecord<RecordT>(db, this.collectionName, id, record);
+        await storeRecord<RecordT>(db, this.collectionName, record);
     }
 
     //

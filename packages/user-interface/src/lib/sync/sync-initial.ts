@@ -45,8 +45,8 @@ export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): 
             //
             // Record the latest time where updates were received.
             //
-            userDatabase.collection<ILastUpdateRecord>("last-update").setOne(setId, { 
-                _id: uuid(),
+            userDatabase.collection<ILastUpdateRecord>("last-update").setOne({ 
+                _id: setId,
                 lastUpdateTime: latestTime,
             });
         }
@@ -65,7 +65,7 @@ export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): 
 
                 const localCollection = localDatabase.collection(collectionName);
                 for (const record of records) {
-                    await localCollection.setOne(record._id, record); // Store it locally.
+                    await localCollection.setOne(record); // Store it locally.
                 }
             }
         }

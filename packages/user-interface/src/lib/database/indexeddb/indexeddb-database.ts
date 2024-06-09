@@ -1,6 +1,6 @@
 import { IDatabase } from "../database";
-import { IRecord } from "../database-collection";
-import { IIndexeddbDatabaseCollection, IndexeddbDatabaseCollection } from "./indexeddb-database-collection";
+import { IDatabaseCollection, IRecord } from "../database-collection";
+import { IndexeddbDatabaseCollection } from "./indexeddb-database-collection";
 
 export interface IIndexeddbDatabase extends IDatabase {
     //
@@ -19,7 +19,7 @@ export class IndexeddbDatabase implements IIndexeddbDatabase {
     //
     // Gets a database collection by name.
     //
-    collection<RecordT extends IRecord>(collectionName: string): IIndexeddbDatabaseCollection<RecordT> {
+    collection<RecordT extends IRecord>(collectionName: string): IDatabaseCollection<RecordT> {
         return new IndexeddbDatabaseCollection<RecordT>(collectionName, this.openDb);
     }
 

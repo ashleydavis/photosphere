@@ -11,9 +11,9 @@ export interface IRecord {
 export interface IDatabaseCollection<RecordT extends IRecord> {
     
     //
-    // Sets a new record to the database.
+    // Sets a new record in the database.
     //
-    setOne(id: string, record: RecordT): Promise<void>;
+    setOne(record: RecordT): Promise<void>;
 
     //
     // Gets one record by id.
