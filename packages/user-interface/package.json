@@ -38,14 +38,15 @@
     "@react-hook/resize-observer": "^1.2.6",
     "axios": "^0.27.2",
     "blob-util": "^2.0.2",
+    "classnames": "^2.5.1",
     "dayjs": "^1.11.7",
+    "defs": "workspace:*",
     "flexsearch": "^0.7.43",
     "jszip": "^3.10.1",
     "mime-types": "^2.1.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-fps-stats": "^0.3.1",
-    "react-router-dom": "^6.4.1",
-    "defs": "workspace:*"
+    "react-router-dom": "^6.4.1"
   }
 }

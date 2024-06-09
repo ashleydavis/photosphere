@@ -27,9 +27,19 @@ export interface IGalleryContext {
     assets: IGalleryItem[];
 
     //
+    // The currently viewed set.
+    //
+    setId: string | undefined;
+
+    //
     // Loads assets into the gallery.
     //
     loadAssets(): Promise<void>;
+
+    //
+    // Sets the viewed set.
+    //
+    setSetId(setId: string): void;
 
     //
     // Adds an asset to the start of the gallery.
@@ -139,7 +149,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     //
     // The collection currently being viewed.
     //
-    const [ setId, setSetid ] = useState<string | undefined>(undefined);
+    const [ setId, setSetId ] = useState<string | undefined>(undefined);
 
     //
     // Asset that have been loaded from storage.
@@ -212,23 +222,23 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
         if (user && isInitialized) {
             loadAssets();
         }
-    }, [isInitialized, user]);
+    }, [isInitialized, user, setId]);
 
     //
     // Loads assets into the gallery.
     //
     async function loadAssets(): Promise<void> {
-        let _collectionId = setId;
-        if (_collectionId === undefined) {
+        let _setId = setId;
+        if (_setId === undefined) {
             if (user === undefined) {
                 throw new Error(`Expected to know the user when loading assets.`);
             }
             
-            _collectionId = user.sets.default;
-            setSetid(_collectionId);
+            _setId = user.sets.default;
+            setSetId(_setId);
         }
 
-        const assets = await source.loadAssets(_collectionId!);
+        const assets = await source.loadAssets(_setId!);
         const galleryItems: IGalleryItem[] = []; 
 
         for (const asset of assets) {
@@ -568,7 +578,9 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     const value: IGalleryContext = {
         searchText,
         assets,
+        setId,
         loadAssets,
+        setSetId,
         addAsset,
         updateAsset,
         mapHashToAssets, 

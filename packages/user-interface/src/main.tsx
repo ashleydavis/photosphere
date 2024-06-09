@@ -6,6 +6,8 @@ import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
 import { isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
+import { useDatabaseSync } from "./context/database-sync";
+import classNames from "classnames";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -40,6 +42,8 @@ export function Main({ computerPage }: IMainProps) {
         searchText,
         search,
         clearSearch,
+        setId,
+        setSetId,
     } = useGallery();
 
     //
@@ -61,6 +65,8 @@ export function Main({ computerPage }: IMainProps) {
     // The search currently being typed by the user.
     //
     const [ searchInput, setSearchInput ] = React.useState<string>("");
+
+    const { user } = useDatabaseSync();
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
@@ -307,6 +313,30 @@ export function Main({ computerPage }: IMainProps) {
                     <i className="w-12 text-center fa-regular fa-trash-can"></i>
                     <div className="">Trash</div>
                 </button> */}
+
+                <div className="flex flex-col pl-1 mt-4 mb-8">
+                    <h2 className="text-lg">
+                        Sets
+                    </h2>
+
+                    {user?.sets.access.map(set => {
+                        return (
+                            <button
+                                key={set}
+                                className="flex flex-row items-center cursor-pointer"
+                                onClick={() => setSetId(set)}
+                                >
+                                <div className="flex flex-row items-center pl-1 mt-8">
+                                    <i className={classNames("w-12 text-center fa-solid fa-folder", {
+                                        "fa-folder": setId !== set,
+                                        "fa-folder-open": setId === set,
+                                    })}></i>
+                                    <div className="">{set}</div>
+                                </div>
+                            </button>
+                        );                    
+                    })}
+                </div>
             </div>
 
             <div id="main">
