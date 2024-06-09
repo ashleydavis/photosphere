@@ -1,5 +1,8 @@
 //
 // Opens the database.
+
+import { IRecord } from "../database-collection";
+
 //
 export function openDatabase(databaseName: string, versionNumber: number, collectionNames: string[]): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
@@ -28,7 +31,7 @@ function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
 //
 // Stores a record in the database.
 //
-export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string, record: RecordT): Promise<void> {
+export function storeRecord<RecordT extends IRecord>(db: IDBDatabase, collectionName: string, recordId: string, record: RecordT): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readwrite');
         const store = transaction.objectStore(collectionName);
@@ -41,7 +44,7 @@ export function storeRecord<RecordT>(db: IDBDatabase, collectionName: string, re
 //
 // Gets a record from the database.
 //
-export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, recordId: string): Promise<RecordT | undefined> {
+export function getRecord<RecordT extends IRecord>(db: IDBDatabase, collectionName: string, recordId: string): Promise<RecordT | undefined> {
     return new Promise<RecordT>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readonly');
         const store = transaction.objectStore(collectionName);
@@ -55,7 +58,7 @@ export function getRecord<RecordT>(db: IDBDatabase, collectionName: string, reco
 // Gets the least recent record from the database.
 // This relies on the ids being timestamps in reverse chronological order.
 //
-export function getLeastRecentRecord<RecordT>(db: IDBDatabase, collectionName: string): Promise<[string, RecordT] | undefined> {  
+export function getLeastRecentRecord<RecordT extends IRecord>(db: IDBDatabase, collectionName: string): Promise<[string, RecordT] | undefined> {  
     return new Promise<[string, RecordT] | undefined>((resolve, reject) => {
         const transaction = db.transaction(collectionName, 'readonly');
         const store = transaction.objectStore(collectionName);
@@ -89,7 +92,7 @@ export function getAllKeys(db: IDBDatabase, collectionName: string): Promise<str
 //
 // Gets all records from the database.
 //
-export function getAllRecords<RecordT>(db: IDBDatabase, collectionName: string): Promise<RecordT[]> {
+export function getAllRecords<RecordT extends IRecord>(db: IDBDatabase, collectionName: string): Promise<RecordT[]> {
     return new Promise<RecordT[]>((resolve, reject) => {
         const transaction = db.transaction([collectionName], "readonly");
         const store = transaction.objectStore(collectionName);

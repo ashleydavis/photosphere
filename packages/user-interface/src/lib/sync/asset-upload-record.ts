@@ -5,6 +5,11 @@ import { IAssetData } from "../../def/asset-data";
 //
 export interface IAssetUploadRecord {
     //
+    // ID of the record.
+    //
+    _id: string;
+
+    //
     // ID of the collection to upload to.
     //
     setId: string;

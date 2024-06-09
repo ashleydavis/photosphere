@@ -1,6 +1,7 @@
 import { IIndexeddbDatabase } from "../database/indexeddb/indexeddb-database";
 import * as indexeddb from "../database/indexeddb/indexeddb";
 import { createReverseChronoTimestamp } from "../timestamp";
+import { IRecord } from "../database/database-collection";
 
 //
 // Queues updates to be sent to the server.
@@ -25,7 +26,7 @@ export interface IPersistentQueue<RecordT> {
 //
 // Queues updates to be sent to the server.
 //
-export class PersistentQueue<RecordT> implements IPersistentQueue<RecordT> {
+export class PersistentQueue<RecordT extends IRecord> implements IPersistentQueue<RecordT> {
 
     //
     // The key for the next record to be removed.

@@ -99,7 +99,10 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         //
         // Queue the updates for upload to the cloud.
         //
-        await outgoingAssetUpdateQueue.add({ ops });       
+        await outgoingAssetUpdateQueue.add({ 
+            _id: uuid(),
+            ops,
+        });       
     }
 
     //
@@ -128,8 +131,10 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         //
         // Queue the updates for upload to the cloud.
         //
-        await outgoingAssetUpdateQueue.add({ ops });       
-
+        await outgoingAssetUpdateQueue.add({ 
+            _id: uuid(),
+            ops,
+        });
     }
 
     //
@@ -154,6 +159,7 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // Queue the asset for upload to the cloud.
         //
         await outgoingAssetUploadQueue.add({
+            _id: uuid(),
             setId,
             assetId,
             assetType,
