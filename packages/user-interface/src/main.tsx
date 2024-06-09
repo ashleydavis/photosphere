@@ -7,7 +7,7 @@ import { useUpload } from "./context/upload-context";
 import { isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
-import { useUser } from "./context/user-context";
+import { useApp } from "./context/app-context";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -35,16 +35,16 @@ export function Main({ computerPage }: IMainProps) {
     //
 	const navigate = useNavigate();
 	
-    //
-    // Interface to the gallery.
-    //
     const { 
         searchText,
         search,
         clearSearch,
+    } = useGallery();
+
+    const {
         setId,
         setSetId,
-    } = useGallery();
+    } = useApp();
 
     //
     // Interface to the upload context.
@@ -66,7 +66,7 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [ searchInput, setSearchInput ] = React.useState<string>("");
 
-    const { user } = useUser();
+    const { user } = useApp();
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");

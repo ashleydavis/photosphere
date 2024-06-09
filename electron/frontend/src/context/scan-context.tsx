@@ -6,11 +6,11 @@ import React, { createContext, ReactNode, useContext, useRef, useState } from "r
 import { scanImages as _scanImages, getContentType } from "../lib/scan";
 import dayjs from "dayjs";
 import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
-import { IAssetData, IAssetSource, useUpload } from "user-interface";
 import path from "path";
 import { IAsset } from "defs";
+import { IAssetData, IGalleryItem, IGallerySource, useUpload } from "user-interface";
 
-export interface IScanContext extends IAssetSource {
+export interface IScanContext extends IGallerySource {
     //
     // Scan the file system for assets.
     //
@@ -79,21 +79,21 @@ export function ScanContextProvider({ children }: IProps) {
     //
     // Loads metadata for all assets.
     //
-    async function loadAssets(collectionId: string): Promise<IAsset[]> {
+    async function loadGalleryItems(): Promise<IGalleryItem[]> {
         return assets.current;
     }
 
     //
     // Maps a hash to the assets already uploaded.
     //
-    async function mapHashToAssets(collectionId: string, hash: string): Promise<string[]> {
+    async function mapHashToAssets(hash: string): Promise<string[]> {
         return [];
     }
 
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
         const contentType = getContentType(assetId);
         if (!contentType) {
             throw new Error(`Unknown content type for asset ${assetId}`);
@@ -122,7 +122,7 @@ export function ScanContextProvider({ children }: IProps) {
         
     const value: IScanContext = {
         scanImages,
-        loadAssets,
+        loadGalleryItems,
         mapHashToAssets,
         loadAsset,
     };

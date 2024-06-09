@@ -1,14 +1,12 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
-import dayjs from "dayjs";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
 import { IAsset } from "defs";
-import { IAssetSource } from "../lib/asset-source";
-import { IAssetSink } from "../lib/asset-sink";
+import { IGallerySource } from "../lib/gallery-source";
+import { IGallerySink } from "../lib/gallery-sink";
 import { IDatabaseOp } from "defs";
-import { uuid } from "../lib/uuid";
-import { useUser } from "./user-context";
+import { useApp } from "./app-context";
 
 //
 // Gets the sorting value from the gallery item.
@@ -16,9 +14,9 @@ import { useUser } from "./user-context";
 export type SortFn = (galleryItem: IGalleryItem) => any;
 
 //
-// Gets the grouping value from the asset.
+// Gets the grouping value from the gallery item.
 //
-export type GroupFn = (asset: IAsset) => string;
+export type GroupFn = (galleryItem: IGalleryItem) => string;
 
 export interface IGalleryContext {
 
@@ -28,29 +26,14 @@ export interface IGalleryContext {
     assets: IGalleryItem[];
 
     //
-    // The currently viewed set.
+    // Adds an item to the the gallery.
     //
-    setId: string | undefined;
+    addGalleryItem(galleryItem: IGalleryItem): Promise<void>;
 
     //
-    // Loads assets into the gallery.
+    // Updates an item in the gallery by index.
     //
-    loadAssets(): Promise<void>;
-
-    //
-    // Sets the viewed set.
-    //
-    setSetId(setId: string): void;
-
-    //
-    // Adds an asset to the start of the gallery.
-    //
-    addAsset(asset: IGalleryItem): Promise<void>;
-
-    //
-    // Updates an asset in the gallery by index.
-    //
-    updateAsset(assetIndex: number, asset: Partial<IGalleryItem>): Promise<void>;
+    updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
 
     //
     // Maps a hash to the assets already uploaded.
@@ -120,12 +103,12 @@ export interface IGalleryContextProviderProps {
     //
     // The source that loads asset into the gallery.
     //
-    source: IAssetSource;
+    source: IGallerySource;
 
     //
     // The sink that uploads and updates assets.
     //
-    sink?: IAssetSink;
+    sink?: IGallerySink;
 
     //
     // Sets the sorting function for the gallery.
@@ -143,12 +126,7 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ source, sink, sortFn, groupFn, children }: IGalleryContextProviderProps) {
 
     const { isInitialized } = useDatabaseSync();
-    const { user } = useUser();
-
-    //
-    // The collection currently being viewed.
-    //
-    const [ setId, setSetId ] = useState<string | undefined>(undefined);
+    const { user } = useApp();
 
     //
     // Asset that have been loaded from storage.
@@ -219,32 +197,19 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     //
     useEffect(() => {
         if (user && isInitialized) {
-            loadAssets();
+            loadGallery();
         }
-    }, [isInitialized, user, setId]);
+    }, [isInitialized, user]);
 
     //
-    // Loads assets into the gallery.
+    // Loads items into the gallery.
     //
-    async function loadAssets(): Promise<void> {
-        let _setId = setId;
-        if (_setId === undefined) {
-            if (user === undefined) {
-                throw new Error(`Expected to know the user when loading assets.`);
-            }
-            
-            _setId = user.sets.default;
-            setSetId(_setId);
-        }
-
-        const assets = await source.loadAssets(_setId!);
-        const galleryItems: IGalleryItem[] = []; 
-
-        for (const asset of assets) {
-            const item = assetToGalleryItem(asset);
-            loadedAssets.current.set(item._id, item);
-            searchIndexRef.current.add(item._id, item);
-            galleryItems.push(item);
+    async function loadGallery(): Promise<void> {
+        const galleryItems = await source.loadGalleryItems();
+        for (const galleryItem of galleryItems) {
+            galleryItem.group = groupFn && groupFn(galleryItem) || undefined,
+            loadedAssets.current.set(galleryItem._id, galleryItem);
+            searchIndexRef.current.add(galleryItem._id, galleryItem);
         }
 
         // Renders the assets that we know about already.
@@ -254,13 +219,9 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     //
     // Adds an asset to the start of the gallery.
     //
-    async function addAsset(galleryItem: IGalleryItem): Promise<void> {
+    async function addGalleryItem(galleryItem: IGalleryItem): Promise<void> {
         if (!sink) {
             throw new Error(`Cannot edit readonly gallery.`); 
-        }
-
-        if (!setId) {
-            throw new Error(`Cannot add asset without a collection id.`);
         }
 
         //
@@ -270,111 +231,38 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
         searchIndexRef.current.add(galleryItem._id, galleryItem);
         setAssets([ galleryItem, ...assets ]);
 
-        //
-        // Add the asset to the database.
-        //
-        const ops: IDatabaseOp[] = [
-            {
-                collectionName: "metadata",
-                setId,
-                recordId: galleryItem._id,
-                op: {
-                    type: "set",
-                    fields: {
-                        _id: galleryItem._id,
-                        width: galleryItem.width,
-                        height: galleryItem.height,
-                        origFileName: galleryItem.origFileName,
-                        origPath: galleryItem.origPath,
-                        contentType: galleryItem.contentType,
-                        hash: galleryItem.hash,
-                        location: galleryItem.location,
-                        fileDate: galleryItem.fileDate,
-                        photoDate: galleryItem.photoDate,
-                        sortDate: galleryItem.sortDate,
-                        uploadDate: dayjs().toISOString(),
-                        properties: galleryItem.properties,
-                        labels: galleryItem.labels,
-                        description: galleryItem.description,
-                        setId,
-                    },
-                },
-            },
-            {
-                collectionName: "hashes",
-                setId,
-                recordId: uuid(),
-                op: {
-                    type: "set",
-                    fields: {
-                        assetId: galleryItem._id,
-                        setId,
-                    },
-                },
-            }
-        ];
-        await sink.submitOperations(ops);
-    }
-
-    //
-    // Converts an asset to a gallery item.
-    //
-    function assetToGalleryItem(asset: IAsset): IGalleryItem {
-        return {
-            ...asset,
-            group: groupFn && groupFn(asset) || undefined,
-        };
+        await sink.addGalleryItem(galleryItem);
     }
 
     //
     // Updates an asset in the gallery by index.
     //
-    async function updateAsset(assetIndex: number, assetUpdate: Partial<IGalleryItem>): Promise<void> {
+    async function updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
         if (!sink) {
             throw new Error(`Cannot edit readonly gallery.`); 
-        }
-
-        if (!setId) {
-            throw new Error(`Cannot edit asset without a collection id.`);
         }
 
         //
         // Update assets in memory for display in the UI.
         //
-        const assetId = assets[assetIndex]._id;
-        const updatedItem: IGalleryItem = { ...loadedAssets.current.get(assetId)!, ...assetUpdate };
+        const assetId = assets[galleryItemIndex]._id;
+        const updatedItem: IGalleryItem = { ...loadedAssets.current.get(assetId)!, ...partialGalleryItem };
         loadedAssets.current.set(assetId, updatedItem);
         searchIndexRef.current.add(assetId, updatedItem);
         setAssets([
-            ...assets.slice(0, assetIndex),
+            ...assets.slice(0, galleryItemIndex),
             updatedItem,
-            ...assets.slice(assetIndex + 1),
+            ...assets.slice(galleryItemIndex + 1),
         ]);
 
-        //
-        // Update the asset in the database.
-        //
-        const ops: IDatabaseOp[] = [{
-            collectionName: "metadata",
-            setId,
-            recordId: assetId,
-            op: {
-                type: "set",
-                fields: assetUpdate,
-            },
-        }]
-        await sink.submitOperations(ops);
+        await sink.updateGalleryItem(assetId, partialGalleryItem);
     }
 
     //
     // Maps a hash to the assets already uploaded.
     //
     async function mapHashToAssets(hash: string): Promise<string[]> {
-        if (!setId) {
-            throw new Error(`Cannot check asset without a collection id.`);
-        }
-
-        return await source.mapHashToAssets(setId, hash);
+        return await source.mapHashToAssets(hash);
     }
 
     //
@@ -385,11 +273,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
             throw new Error(`Cannot upload to readonly gallery.`); 
         }
 
-        if (!setId) {
-            throw new Error(`Cannot upload asset without a collection id.`);
-        }
-
-        await sink.storeAsset(setId, assetId, assetType, {
+        await sink.storeAsset(assetId, assetType, {
             contentType, 
             data
         });
@@ -399,18 +283,14 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Loads data for an asset.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
-        if (!setId) {
-            throw new Error(`Cannot load asset without a collection id.`);
-        }
-
-        const key = `${setId}-${assetType}-${assetId}`;
+        const key = `${assetType}-${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await source.loadAsset(setId, assetId, assetType);
+        const assetData = await source.loadAsset(assetId, assetType);
         if (!assetData) {
             return undefined;
         }
@@ -428,11 +308,7 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     // Unloads data for an asset.
     //
     function unloadAsset(assetId: string, assetType: string): void {
-        if (!setId) {
-            throw new Error(`Cannot unload asset without a collection id.`);
-        }
-
-        const key = `${setId}-${assetType}-${assetId}`;
+        const key = `${assetType}-${assetId}`;
         const cacheEntry = assetCache.current.get(key);
         if (cacheEntry) {
             if (cacheEntry.numRefs === 1) {
@@ -577,11 +453,8 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     const value: IGalleryContext = {
         searchText,
         assets,
-        setId,
-        loadAssets,
-        setSetId,
-        addAsset,
-        updateAsset,
+        addGalleryItem,
+        updateGalleryItem,
         mapHashToAssets, 
         uploadAsset,
         loadAsset,

@@ -43,7 +43,7 @@ export interface IProps {
 
 export function GalleryItemContextProvider({ children, asset, assetIndex }: IProps) {
 
-    const { updateAsset: updateGalleryAsset } = useGallery();
+    const { updateGalleryItem: updateGalleryAsset } = useGallery();
 
     //
     // The asset being edited.

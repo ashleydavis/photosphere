@@ -1,19 +1,20 @@
 import React, { useRef } from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, GalleryContextProvider, IAssetUpdateRecord, IAssetUploadRecord, IndexeddbContextProvider, Main, PersistentQueue, UploadContextProvider, isProduction, useApi, useIndexeddb, useLocalGallerySink, useLocalGallerySource } from "user-interface";
+import { ApiContextProvider, AuthContextProvider, DbSyncContextProvider, GalleryContextProvider, IAssetUpdateRecord, IAssetUploadRecord, IndexeddbContextProvider, Main, PersistentQueue, UploadContextProvider, isProduction, useApi, useApp, useIndexeddb, useLocalGallerySink, useLocalGallerySource } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { ComputerPage } from "./pages/computer";
 import { ScanContextProvider } from "./context/scan-context";
 import dayjs from "dayjs";
 
 function GallerySetup() {
+    const { setId } = useApp();
     const api = useApi();
     const indexeddb = useIndexeddb();
     const userDatabase = indexeddb.databases.database("user");
     const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload"));
     const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update"));
-    const localSource = useLocalGallerySource({ indexeddbDatabases: indexeddb.databases, api });
-    const localSink = useLocalGallerySink({ outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, indexeddbDatabases: indexeddb.databases });
+    const localSource = useLocalGallerySource({ setId, indexeddbDatabases: indexeddb.databases, api });
+    const localSink = useLocalGallerySink({ setId, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, indexeddbDatabases: indexeddb.databases });
 
     return (
         <DbSyncContextProvider

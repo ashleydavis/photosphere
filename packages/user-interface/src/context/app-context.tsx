@@ -4,25 +4,44 @@ import { useIndexeddb } from "./indexeddb-context";
 import { useOnline } from "../lib/use-online";
 import { useApi } from "./api-context";
 
-export interface IUserContext {
+export interface IAppContext {
     //
     // The current user, if known.
     //
     user: IUser | undefined;
+
+    //
+    // The currently viewed set.
+    //
+    setId: string | undefined;
+
+    //
+    // Sets the viewed set.
+    //
+    setSetId(setId: string): void;
 }
 
-const UserContext = createContext<IUserContext | undefined>(undefined);
+const AppContext = createContext<IAppContext | undefined>(undefined);
 
 export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-export function UserContextProvider({ children }: IProps) {
+export function AppContextProvider({ children }: IProps) {
     
     const { isOnline } = useOnline();
     const indexeddb = useIndexeddb();
     const api = useApi();
+
+    //
+    // The current user.
+    //
     const [ user, setUser ] = useState<IUser | undefined>(undefined);
+
+    //
+    // The collection currently being viewed.
+    //
+    const [ setId, setSetId ] = useState<string | undefined>(undefined);
 
     //
     // Loads the local user's details.
@@ -74,24 +93,26 @@ export function UserContextProvider({ children }: IProps) {
             });
     }, [api.isInitialised, isOnline]);
 
-    const value: IUserContext = {
+    const value: IAppContext = {
         user,
+        setId,
+        setSetId,
     };
     
     return (
-        <UserContext.Provider value={value} >
+        <AppContext.Provider value={value} >
             {children}
-        </UserContext.Provider>
+        </AppContext.Provider>
     );
 }
 
 //
-// Get the user object.
+// Get the app context.
 //
-export function useUser() {
-    const context = useContext(UserContext);
+export function useApp() {
+    const context = useContext(AppContext);
     if (!context) {
-        throw new Error(`UserContext is not set! Add UserContext to the component tree.`);
+        throw new Error(`AppContext is not set! Add AppContext to the component tree.`);
     }
     return context;
 }

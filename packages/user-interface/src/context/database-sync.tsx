@@ -10,7 +10,7 @@ import { syncIncoming } from "../lib/sync/sync-incoming";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IUser } from "../def/user";
 import { initialSync } from "../lib/sync/sync-initial";
-import { useUser } from "./user-context";
+import { useApp } from "./app-context";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -49,7 +49,7 @@ export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetU
     const api = useApi();
     const initialSyncStarted = useRef(false);
     const periodicSyncStart = useRef(false);
-    const { user } = useUser();
+    const { user } = useApp();
 
     //
     // Set to true when the database synchronization is initialized.

@@ -88,7 +88,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Interface to the gallery.
     //
-    const { addAsset, uploadAsset, mapHashToAssets } = useGallery();
+    const { addGalleryItem, uploadAsset, mapHashToAssets } = useGallery();
 
     //
     // List of uploads that failed.
@@ -378,7 +378,7 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Add asset to the gallery.
             //
-            await addAsset({
+            await addGalleryItem({
                 _id: assetId,
                 width: imageResolution.width,
                 height: imageResolution.height,

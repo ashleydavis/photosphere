@@ -9,7 +9,7 @@ export interface IDatabaseOp {
     //
     // The set to apply the operation to.
     //
-    setId: string;
+    setId: string; //todo: want to get rid of this.
 
     //
     // The id of the asset to which operations are applied.

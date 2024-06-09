@@ -2,14 +2,13 @@
 // Provides a source of assets for the gallery from the local computer.
 //
 
-import { IAssetData, IAssetSource } from "user-interface";
-import { IAsset } from "defs";
+import { IAssetData, IGalleryItem, IGallerySource } from "user-interface";
 import { useScan } from "../scan-context";
 
 //
 // Use the "computer source" in a component.
 //
-export function useComputerGallerySource(): IAssetSource {
+export function useComputerGallerySource(): IGallerySource {
 
     //
     // The interface to file system scanning.
@@ -19,27 +18,27 @@ export function useComputerGallerySource(): IAssetSource {
     //
     // Loads metadata for all assets.
     //
-    async function loadAssets(collectionId: string): Promise<IAsset[]> {
+    async function loadGalleryItems(): Promise<IGalleryItem[]> {
         return [];
     }
 
     //
     // Maps a hash to the assets already uploaded.
     //
-    async function mapHashToAssets(collectionId: string, hash: string): Promise<string[]> {
+    async function mapHashToAssets(hash: string): Promise<string[]> {
         return [];
     }
 
     //
     // Loads data for an asset.
     //
-    async function loadAsset(collectionId: string, assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
         //TODO: 
         return undefined;
     }
 
     return {
-        loadAssets,
+        loadGalleryItems,
         mapHashToAssets,
         loadAsset,
     };
