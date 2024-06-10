@@ -26,6 +26,17 @@ export interface IDatabaseCollection<RecordT extends IRecord> {
     getAll(): Promise<RecordT[]>;
 
     //
+    // Gets records from the database that match the requested index.
+    //
+    getAllByIndex(indexName: string, indexValue: any): Promise<RecordT[]>;
+
+    //
+    // Gets the least recent record from the database.
+    // This relies on the ids being timestamps in reverse chronological order.
+    //
+    getLeastRecentRecord(collectionName: string): Promise<[string, RecordT] | undefined>;
+
+    //
     // Deletes a record from the database.
     //
     deleteOne(id: string): Promise<void>;

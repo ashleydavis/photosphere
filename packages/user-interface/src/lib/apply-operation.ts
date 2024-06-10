@@ -1,8 +1,5 @@
-import { createReverseChronoTimestamp } from "./timestamp";
 import { IDatabase } from "./database/database";
-import { IDatabases } from "./database/databases";
-import { uuid } from "./uuid";
-import { IDatabaseOp, IDatabaseOpRecord, IOpSelection } from "defs";
+import { IDatabaseOp, IOpSelection } from "defs";
 
 //
 // Applies a single database operation to the field set for a database record.
@@ -48,9 +45,8 @@ export function applyOperation(op: IOpSelection, fields: any): void {
 //
 // Submits operations to change various databases.
 //
-export async function applyOperations(databases: IDatabases, databaseOps: IDatabaseOp[]): Promise<void> {
+export async function applyOperations(database: IDatabase, databaseOps: IDatabaseOp[]): Promise<void> {
     for (const databaseOp of databaseOps) {
-        const database = databases.database(databaseOp.setId);
         const collection = database.collection(databaseOp.collectionName)
         const record = await collection.getOne(databaseOp.recordId);
 
@@ -58,7 +54,6 @@ export async function applyOperations(databases: IDatabases, databaseOps: IDatab
         if (!record) {
             // Set the record id when upserting. 
             fields._id = databaseOp.recordId;
-            fields.setId = databaseOp.setId;
         }
 
         applyOperation(databaseOp.op, fields);

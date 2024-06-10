@@ -1,7 +1,7 @@
-import { IIndexeddbDatabase } from "../database/indexeddb/indexeddb-database";
 import * as indexeddb from "../database/indexeddb/indexeddb";
 import { createReverseChronoTimestamp } from "../timestamp";
 import { IRecord } from "../database/database-collection";
+import { IDatabase } from "../database/database";
 
 export interface IPersistentRecord<DataT> {
     //
@@ -45,15 +45,14 @@ export class PersistentQueue<DataT> implements IPersistentQueue<DataT> {
     //
     private key: string | undefined = undefined;
 
-    constructor(private database: IIndexeddbDatabase, private collectionName: string) {
+    constructor(private database: IDatabase, private collectionName: string) {
     }
 
     //
     // Gets the next record in the queue.
     //
     async getNext(): Promise<DataT | undefined> {
-        const db = await this.database.getIndexedDb();
-        const result = await indexeddb.getLeastRecentRecord<IPersistentRecord<DataT>>(db, this.collectionName);
+        const result = await this.database.collection<IPersistentRecord<DataT>>(this.collectionName).getLeastRecentRecord(this.collectionName);
         if (!result) {
             return undefined;
         }
@@ -72,8 +71,7 @@ export class PersistentQueue<DataT> implements IPersistentQueue<DataT> {
             throw new Error("No key to remove, call getNext first.");
         }
         
-        const db = await this.database.getIndexedDb();
-        await indexeddb.deleteRecord(db, this.collectionName, this.key);
+        await this.database.collection(this.collectionName).deleteOne(this.key);
         this.key = undefined;
     }
 
@@ -81,9 +79,8 @@ export class PersistentQueue<DataT> implements IPersistentQueue<DataT> {
     // Adds a record to the queue.
     //
     async add(data: DataT): Promise<void> {
-        const db = await this.database.getIndexedDb();
         const _id = createReverseChronoTimestamp(new Date());
-        await indexeddb.storeRecord<IPersistentRecord<DataT>>(db, this.collectionName, {
+        await await this.database.collection<IPersistentRecord<DataT>>(this.collectionName).setOne({
             _id,
             data,
         });

@@ -164,7 +164,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     // Add asset to the gallery.
     //
-    await addAsset(config.uploadCollectionId, {
+    await addAsset({
         _id: assetId,
         setId: config.uploadCollectionId,
         width: resolution.width,
@@ -429,13 +429,12 @@ async function uploadAssetData(collectionId: string, assetId: string, assetType:
 //
 // Adds an asset to the start of the gallery.
 //
-async function addAsset(setId: string, asset: IAsset): Promise<void> {
+async function addAsset(asset: IAsset): Promise<void> {
     //
     // Add the asset to the database.
     //
     const ops: IDatabaseOp[] = [
         {
-            setId,
             collectionName: "metadata",
             recordId: asset._id,
             op: {
@@ -444,7 +443,6 @@ async function addAsset(setId: string, asset: IAsset): Promise<void> {
             },
         },
         {
-            setId,
             collectionName: "hashes",
             recordId: asset.hash,
             op: {

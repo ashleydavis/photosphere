@@ -2,17 +2,10 @@ import { IDatabase } from "../database";
 import { IDatabaseCollection, IRecord } from "../database-collection";
 import { IndexeddbDatabaseCollection } from "./indexeddb-database-collection";
 
-export interface IIndexeddbDatabase extends IDatabase {
-    //
-    // Unwraps the indexeddb database.
-    //
-    getIndexedDb(): Promise<IDBDatabase>;
-}
-
 //
 // Implements a database.
 //
-export class IndexeddbDatabase implements IIndexeddbDatabase {
+export class IndexeddbDatabase implements IDatabase {
     constructor(private openDb: () => Promise<IDBDatabase>) {
     }
 

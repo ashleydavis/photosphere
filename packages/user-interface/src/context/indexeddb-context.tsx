@@ -1,11 +1,47 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
-import { IIndexeddbDatabases, IDatabaseConfigurations, IndexeddbDatabases } from "../lib/database/indexeddb/indexeddb-databases";
+import { IIndexeddbDatabaseConfiguration, openDatabase } from "../lib/database/indexeddb/indexeddb";
+import { IDatabase } from "../lib/database/database";
+import { IndexeddbDatabase } from "../lib/database/indexeddb/indexeddb-database";
+
+const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
+    collections: [
+        {
+            name: "thumb",
+        },
+        {
+            name: "display",
+        },
+        {
+            name: "asset",
+        },
+        {
+            name: "hashes",
+        },
+        {
+            name: "metadata",
+            indexKeys: [ "setId" ],
+        },
+        {
+            name: "outgoing-asset-upload",
+        },
+        {
+            name: "outgoing-asset-update",
+        },
+        {
+            name: "last-update",
+        },
+        {
+            name: "users",
+        },
+    ],
+    versionNumber: 1,
+}
 
 export interface IIndexeddbContext {
     //
-    // Interface for retieving databases.
+    // The application's database.
     //
-    databases: IIndexeddbDatabases;
+    database: IDatabase;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -14,71 +50,31 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-//
-// The configuration for each type of database.
-//
-const databaseConfigurations: IDatabaseConfigurations = {
-    collection: {
-        collections: [
-            {
-                name: "thumb",
-            },
-            {
-                name: "display",
-            },
-            {
-                name: "asset",
-            },
-            {
-                name: "hashes",
-            },
-            {
-                name: "metadata",
-                indexKeys: [ "setId" ],
-            },
-        ],
-        versionNumber: 1,
-    },
-    user: {    
-        collections: [
-            {
-                name: "outgoing-asset-upload",
-            },
-            {
-                name: "outgoing-asset-update",
-            },
-            {
-                name: "last-update",
-            },
-            {
-                name: "user",
-            },
-        ],
-        versionNumber: 1,
-    },
-};
-
-//
-// The version of the database.
-// This need to be incremented when the schema changes.
-//
-const databaseVersion = 1;
-
 export function IndexeddbContextProvider({ children }: IProps) {
 
-    const dbCache = useRef<IndexeddbDatabases>(new IndexeddbDatabases(databaseConfigurations, "collection"));
+    const database = useRef<IDatabase | undefined>(new IndexeddbDatabase(
+        async () => {
+            indexeddb.current = await openDatabase("photosphere", databaseConfiguration);
+            return indexeddb.current;
+        }
+    ));
+    const indexeddb = useRef<IDBDatabase | undefined>(undefined);
 
     useEffect(() => {
         return () => {
-            //
-            // Close all database connections.
-            //
-            dbCache.current.shutdown();
+            if (indexeddb.current) {
+                indexeddb.current.close();
+                indexeddb.current = undefined;
+            }
+
+            if (database.current) {
+                database.current = undefined;
+            }
         };
     }, []);
 
     const value: IIndexeddbContext = {
-        databases: dbCache.current,
+        database: database.current!,
     };
     
     return (

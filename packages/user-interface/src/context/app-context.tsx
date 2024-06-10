@@ -30,7 +30,7 @@ export interface IProps {
 export function AppContextProvider({ children }: IProps) {
     
     const { isOnline } = useOnline();
-    const indexeddb = useIndexeddb();
+    const { database } = useIndexeddb();
     const api = useApi();
 
     //
@@ -52,12 +52,13 @@ export function AppContextProvider({ children }: IProps) {
             return undefined;
         }
 
-        const userDatabase = indexeddb.databases.database("user");
-        const user = await userDatabase.collection<IUser>("user").getOne(userId);
+        const user = await database.collection<IUser>("users").getOne(userId);
         if (user) {
+            setSetId(user.sets.default);
             setUser(user);
         }
         else {
+            setSetId(undefined);
             setUser(undefined);
         }
     }
@@ -73,9 +74,9 @@ export function AppContextProvider({ children }: IProps) {
                 //
                 // Store user locally for offline use.
                 //
-                const userDatabase = indexeddb.databases.database("user");
-                await userDatabase.collection("user").setOne(user);
+                await database.collection("users").setOne(user);
                 localStorage.setItem("userId", user._id);
+                setSetId(user.sets.default);
                 setUser(user);
                 return;
             }

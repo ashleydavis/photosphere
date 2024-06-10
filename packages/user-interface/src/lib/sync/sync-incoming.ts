@@ -1,6 +1,6 @@
 import { IApi } from "../../context/api-context";
 import { applyOperations } from "../apply-operation";
-import { IIndexeddbDatabases } from "../database/indexeddb/indexeddb-databases";
+import { IDatabase } from "../database/database";
 import { ILastUpdateRecord } from "./last-update-record";
 
 interface IProps {
@@ -17,16 +17,15 @@ interface IProps {
     //
     // Indexeddb databases.
     //
-    indexeddbDatabases: IIndexeddbDatabases;
+    database: IDatabase;
 }
 
 //
 // Receive incoming asset updates from the cloud.
 //
-export async function syncIncoming({ setIds, api, indexeddbDatabases }: IProps): Promise<void> {
+export async function syncIncoming({ setIds, api, database }: IProps): Promise<void> {
 
-    const userDatabase = indexeddbDatabases.database("user");
-    const lastUpdateCollection = userDatabase.collection<ILastUpdateRecord>("last-update");
+    const lastUpdateCollection = database.collection<ILastUpdateRecord>("last-update");
 
     for (const setId of setIds) {
         const lastUpdateRecord = await lastUpdateCollection.getOne(setId);
@@ -35,7 +34,7 @@ export async function syncIncoming({ setIds, api, indexeddbDatabases }: IProps):
             //
             // Apply incoming changes to the local database.
             //
-            await applyOperations(indexeddbDatabases, journalResult.journalRecords);    
+            await applyOperations(database, journalResult.journalRecords);    
         }
         
         if (journalResult.latestTime !== undefined) {

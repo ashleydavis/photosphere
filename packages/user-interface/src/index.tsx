@@ -19,7 +19,6 @@ export * from "./lib/sleep";
 export * from "./lib/reverse-geocode";
 export * from "./lib/retry";
 export * as indexeddb from "./lib/database/indexeddb/indexeddb";
-export * from "./lib/database/indexeddb/indexeddb-databases";
 export * from "./lib/database/indexeddb/indexeddb-database";
 export * from "./lib/database/indexeddb/indexeddb-database-collection";
 export * from "./lib/sync/persistent-queue";

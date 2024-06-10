@@ -16,15 +16,30 @@ export interface IIndexeddbCollectionConfig {
 }
 
 //
+// Configures a database.
+//
+export interface IIndexeddbDatabaseConfiguration {
+    //
+    // The configuration of the collections in the database.
+    //
+    collections: IIndexeddbCollectionConfig[];
+
+    //
+    // The version number of the database.
+    //
+    versionNumber: number;
+}
+
+//
 // Opens the database.
 //
-export function openDatabase(databaseName: string, versionNumber: number, collections: IIndexeddbCollectionConfig[]): Promise<IDBDatabase> {
+export function openDatabase(databaseName: string, configuration: IIndexeddbDatabaseConfiguration): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(databaseName, versionNumber);
+        const request = indexedDB.open(databaseName, configuration.versionNumber);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
             const db = (event.target as IDBOpenDBRequest).result;
-            createObjectStores(db, collections);
+            createObjectStores(db, configuration.collections);
         };
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);

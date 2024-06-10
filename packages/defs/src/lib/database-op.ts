@@ -7,11 +7,6 @@ export interface IDatabaseOp {
     collectionName: string;
 
     //
-    // The set to apply the operation to.
-    //
-    setId: string; //todo: want to get rid of this.
-
-    //
     // The id of the asset to which operations are applied.
     //
     recordId: string;

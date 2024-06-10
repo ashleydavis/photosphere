@@ -7,10 +7,10 @@ import { IAssetData } from "../../def/asset-data";
 import { IAssetRecord } from "../../def/asset-record";
 import { IHashRecord } from "../../def/hash-record";
 import { IGallerySource } from "../../lib/gallery-source";
-import { IIndexeddbDatabases } from "../../lib/database/indexeddb/indexeddb-databases";
 import { useOnline } from "../../lib/use-online";
 import { IApi } from "../api-context";
 import { IGalleryItem } from "../../lib/gallery-item";
+import { IDatabase } from "../../lib/database/database";
 
 export interface IProps {
     //
@@ -19,9 +19,9 @@ export interface IProps {
     setId: string | undefined;
     
     //
-    // Indexeddb databases.
+    // The local indexeddb database.
     //
-    indexeddbDatabases: IIndexeddbDatabases;
+    database: IDatabase;
 
     //
     // Interface to the backend.
@@ -32,7 +32,7 @@ export interface IProps {
 //
 // Use the "Local source" in a component.
 //
-export function useLocalGallerySource({ setId, indexeddbDatabases, api }: IProps): IGallerySource {
+export function useLocalGallerySource({ setId, database, api }: IProps): IGallerySource {
 
     const { isOnline } = useOnline();
 
@@ -44,8 +44,7 @@ export function useLocalGallerySource({ setId, indexeddbDatabases, api }: IProps
             throw new Error("No set id provided.");
         }
 
-        const assetSet = indexeddbDatabases.database(setId);
-        const assets = await assetSet.collection<IAsset>("metadata").getAll();
+        const assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
         return assets.map((asset) => {
             return {
                 ...asset,
@@ -61,8 +60,7 @@ export function useLocalGallerySource({ setId, indexeddbDatabases, api }: IProps
             throw new Error("No set id provided.");
         }
 
-        const assetSet = indexeddbDatabases.database(setId);
-        const hashRecord = await assetSet.collection<IHashRecord>("hashes").getOne(hash);
+        const hashRecord = await database.collection<IHashRecord>("hashes").getOne(hash);
         if (!hashRecord) {
             return [];
         }
@@ -78,8 +76,7 @@ export function useLocalGallerySource({ setId, indexeddbDatabases, api }: IProps
             throw new Error("No set id provided.");
         }
 
-        const assetSet = indexeddbDatabases.database(setId);
-        const assetRecord = await assetSet.collection<IAssetRecord>(assetType).getOne(assetId);
+        const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
             return assetRecord.assetData;
         }

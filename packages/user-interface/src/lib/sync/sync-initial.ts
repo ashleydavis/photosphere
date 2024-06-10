@@ -1,6 +1,5 @@
 import { IApi } from "../../context/api-context";
-import { IIndexeddbDatabases } from "../database/indexeddb/indexeddb-databases";
-import { uuid } from "../uuid";
+import { IDatabase } from "../database/database";
 import { ILastUpdateRecord } from "./last-update-record";
 
 interface IProps {
@@ -15,17 +14,15 @@ interface IProps {
     api: IApi;
 
     //
-    // Local databases to poplulate.
+    // Local database to poplulate.
     //
-    indexeddbDatabases: IIndexeddbDatabases;
+    database: IDatabase;
 }
 
 //
 // Perform the initial database synchronization.
 //
-export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): Promise<void> {
-
-    const userDatabase = indexeddbDatabases.database("user");
+export async function initialSync({ setIds, api, database }: IProps): Promise<void> {
 
     //
     // Records the time of the latest update for the set.
@@ -34,8 +31,7 @@ export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): 
     const latestTime = await api.getLatestTime();
 
     for (const setId of setIds) {
-        const localDatabase = indexeddbDatabases.database(setId);
-        const assets = await localDatabase.collection("metadata").getAll(); //TODO: There is probably a more efficient way to probe the db.
+        const assets = await database.collection("metadata").getAllByIndex("setId", setId); //TODO: There is probably a more efficient way to probe the db.
         if (assets.length > 0) {
             // If we have assets in this collection we have already sync'd it.
             continue;
@@ -45,7 +41,7 @@ export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): 
             //
             // Record the latest time where updates were received.
             //
-            userDatabase.collection<ILastUpdateRecord>("last-update").setOne({ 
+            database.collection<ILastUpdateRecord>("last-update").setOne({ 
                 _id: setId,
                 lastUpdateTime: latestTime,
             });
@@ -63,7 +59,7 @@ export async function initialSync({ setIds, api, indexeddbDatabases }: IProps): 
 
                 skip += pageSize;
 
-                const localCollection = localDatabase.collection(collectionName);
+                const localCollection = database.collection(collectionName);
                 for (const record of records) {
                     await localCollection.setOne(record); // Store it locally.
                 }

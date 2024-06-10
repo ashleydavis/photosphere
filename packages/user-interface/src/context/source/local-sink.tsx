@@ -8,12 +8,12 @@ import { IPersistentQueue } from "../../lib/sync/persistent-queue";
 import { IAssetUploadRecord } from "../../lib/sync/asset-upload-record";
 import { IAssetUpdateRecord } from "../../lib/sync/asset-update-record";
 import { IAssetData } from "../../def/asset-data";
-import { IIndexeddbDatabases } from "../../lib/database/indexeddb/indexeddb-databases";
 import { applyOperations } from "../../lib/apply-operation";
 import { IAssetRecord } from "../../def/asset-record";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { uuid } from "../../lib/uuid";
 import dayjs from "dayjs";
+import { IDatabase } from "../../lib/database/database";
 
 export interface IProps { 
     //
@@ -32,15 +32,15 @@ export interface IProps {
     outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
 
     //
-    // Indexeddb databases.
+    // The local indexeddb database.
     //
-    indexeddbDatabases: IIndexeddbDatabases;
+    database: IDatabase;
 };
 
 //
 // Use the "Local sink" in a component.
 //
-export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, indexeddbDatabases }: IProps): IGallerySink {
+export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingAssetUpdateQueue, database }: IProps): IGallerySink {
 
     //
     // Adds a new gallery item.
@@ -53,7 +53,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
-                setId,
                 recordId: galleryItem._id,
                 op: {
                     type: "set",
@@ -79,7 +78,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
             },
             {
                 collectionName: "hashes",
-                setId,
                 recordId: uuid(),
                 op: {
                     type: "set",
@@ -94,7 +92,7 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         //
         // Updates the local database.
         //
-        await applyOperations(indexeddbDatabases, ops);        
+        await applyOperations(database, ops);        
 
         //
         // Queue the updates for upload to the cloud.
@@ -108,13 +106,8 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
     // Update a gallery item.
     //
     async function updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
-        if (!setId) {
-            throw new Error("No set is loaded.");
-        }
-
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
-            setId,
             recordId: assetId,
             op: {
                 type: "set",
@@ -125,7 +118,7 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         //
         // Updates the local database.
         //
-        await applyOperations(indexeddbDatabases, ops);        
+        await applyOperations(database, ops);        
 
         //
         // Queue the updates for upload to the cloud.
@@ -146,8 +139,7 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
         // 
         // Store the asset locally.
         //
-        const assetSet = indexeddbDatabases.database(setId);
-        await assetSet.collection<IAssetRecord>(assetType).setOne({
+        await database.collection<IAssetRecord>(assetType).setOne({
             _id: assetId,
             storeDate: new Date(),
             assetData,

@@ -2,15 +2,14 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { useApi } from "./api-context";
-import { IIndexeddbDatabases } from "../lib/database/indexeddb/indexeddb-databases";
 import { IAssetUpdateRecord } from "../lib/sync/asset-update-record";
 import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
 import { IPersistentQueue } from "../lib/sync/persistent-queue";
 import { syncIncoming } from "../lib/sync/sync-incoming";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
-import { IUser } from "../def/user";
 import { initialSync } from "../lib/sync/sync-initial";
 import { useApp } from "./app-context";
+import { IDatabase } from "../lib/database/database";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -26,9 +25,9 @@ const DbSyncContext = createContext<IDbSyncContext | undefined>(undefined);
 export interface IProps {
 
     //
-    // Interface to the local indexeddb databases.
+    // Interface to the local indexeddb database.
     //
-    indexeddbDatabases: IIndexeddbDatabases;
+    database: IDatabase; //todo: can just get this through the context.
 
     //
     // Queues outgoing asset uploads.
@@ -43,7 +42,7 @@ export interface IProps {
     children: ReactNode | ReactNode[];
 }
 
-export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, indexeddbDatabases, children }: IProps) {
+export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, database, children }: IProps) {
     
     const { isOnline } = useOnline();
     const api = useApi();
@@ -74,7 +73,7 @@ export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetU
                         console.log(`Doing initial sync...`);
 
                         const setIds = user!.sets.access;    
-                        await initialSync({ setIds, api, indexeddbDatabases });
+                        await initialSync({ setIds, api, database });
                     }
                     catch (err) {
                         console.error(`Initial sync failed:`);
@@ -138,7 +137,7 @@ export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetU
                     // Collate the last update ids for each collection.
                     //
                     const setIds = user!.sets.access;    
-                    await syncIncoming({ setIds, indexeddbDatabases, api });
+                    await syncIncoming({ setIds, database, api });
                 }
                 catch (err) {
                     console.error(`Incoming sync failed:`);

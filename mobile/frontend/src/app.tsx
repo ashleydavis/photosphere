@@ -11,17 +11,16 @@ import dayjs from "dayjs";
 function GallerySetup() {
     const { setId } = useApp();
     const api = useApi();
-    const indexeddb = useIndexeddb();
-    const userDatabase = indexeddb.databases.database("user");
-    const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(userDatabase, "outgoing-asset-upload"));
-    const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(userDatabase, "outgoing-asset-update"));
-    const localSource = useLocalGallerySource({ setId, indexeddbDatabases: indexeddb.databases, api });
-    const localSink = useLocalGallerySink({ setId, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, indexeddbDatabases: indexeddb.databases });
+    const { database } = useIndexeddb();
+    const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(database, "outgoing-asset-upload"));
+    const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(database, "outgoing-asset-update"));
+    const localSource = useLocalGallerySource({ setId, database, api });
+    const localSink = useLocalGallerySink({ setId, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, database });
 
     return (
         <ScanContextProvider>
             <DbSyncContextProvider
-                indexeddbDatabases={indexeddb.databases}
+                database={database}
                 outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
                 outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
                 >

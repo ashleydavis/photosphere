@@ -259,6 +259,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             latestTime: serverTimeNow,
         });
     }));
+    
     //
     // Uploads a new asset.
     //
