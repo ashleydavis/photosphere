@@ -1,29 +1,47 @@
-//
-// Opens the database.
-
 import { IRecord } from "../database-collection";
 
 //
-export function openDatabase(databaseName: string, versionNumber: number, collectionNames: string[]): Promise<IDBDatabase> {
+// Configuratino for an indexedb collection.
+//
+export interface IIndexeddbCollectionConfig {
+    //
+    // The name of the collection.
+    //
+    name: string;
+
+    //
+    // Keys used to index the collection.
+    //
+    indexKeys?: string[];
+}
+
+//
+// Opens the database.
+//
+export function openDatabase(databaseName: string, versionNumber: number, collections: IIndexeddbCollectionConfig[]): Promise<IDBDatabase> {
     return new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open(databaseName, versionNumber);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
             const db = (event.target as IDBOpenDBRequest).result;
-            createObjectStores(db, collectionNames);
+            createObjectStores(db, collections);
         };
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
     });
 }
-
 //
 // Creates object store only if they don't already exist.
 //
-function createObjectStores(db: IDBDatabase, collectionNames: string[]) {
-    for (const collectionName of collectionNames) {
-        if (!db.objectStoreNames.contains(collectionName)) {
-            db.createObjectStore(collectionName, { keyPath: "_id" });
+function createObjectStores(db: IDBDatabase, collections: IIndexeddbCollectionConfig[]) {
+    for (const collection of collections) {
+        if (!db.objectStoreNames.contains(collection.name)) {
+            const objectStore = db.createObjectStore(collection.name, { keyPath: "_id" });
+            if (collection.indexKeys) {
+                for (const indexKey of collection.indexKeys) {
+                    objectStore.createIndex(indexKey, indexKey, { unique: false });
+                }
+            }
         }
     }
 }
@@ -99,6 +117,20 @@ export function getAllRecords<RecordT extends IRecord>(db: IDBDatabase, collecti
         const allRecordsRequest = store.getAll(); 
         allRecordsRequest.onsuccess = () => resolve(allRecordsRequest.result);
         allRecordsRequest.onerror = () => reject(allRecordsRequest.error);
+    });
+}
+
+//
+// Gets all records matching the requested from the database.
+//
+export function getAllByIndex<RecordT extends IRecord>(db: IDBDatabase, collectionName: string, indexName: string, indexValue: any): Promise<RecordT[]> {
+    return new Promise<RecordT[]>((resolve, reject) => {
+        const transaction = db.transaction([collectionName], "readonly");
+        const store = transaction.objectStore(collectionName);
+        const index = store.index(indexName);
+        const request = index.getAll(indexValue); 
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 }
 

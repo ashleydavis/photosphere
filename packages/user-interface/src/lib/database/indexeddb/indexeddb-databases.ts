@@ -1,5 +1,5 @@
 import { IDatabases } from "../databases";
-import { openDatabase } from "./indexeddb";
+import { IIndexeddbCollectionConfig, openDatabase } from "./indexeddb";
 import { IIndexeddbDatabase, IndexeddbDatabase } from "./indexeddb-database";
 
 //
@@ -7,9 +7,9 @@ import { IIndexeddbDatabase, IndexeddbDatabase } from "./indexeddb-database";
 //
 export interface IDatabaseConfiguration {
     //
-    // The names of the collections in the database.
+    // The configuration of the collections in the database.
     //
-    collectionNames: string[];
+    collections: IIndexeddbCollectionConfig[];
 
     //
     // The version number of the database.
@@ -79,7 +79,7 @@ export class IndexeddbDatabases implements IIndexeddbDatabases {
             throw new Error(`No configuration for database: "${databaseName}" (${baseDatabaseName})`);
         }
 
-        db = await openDatabase(databaseName, databaseConfiguration.versionNumber, databaseConfiguration.collectionNames);
+        db = await openDatabase(databaseName, databaseConfiguration.versionNumber, databaseConfiguration.collections);
         this.dbCache.set(databaseName, db);
         return db;
     }

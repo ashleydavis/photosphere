@@ -19,21 +19,40 @@ export interface IProps {
 //
 const databaseConfigurations: IDatabaseConfigurations = {
     collection: {
-        collectionNames: [
-            "thumb",
-            "display",
-            "asset",
-            "hashes",
-            "metadata",
+        collections: [
+            {
+                name: "thumb",
+            },
+            {
+                name: "display",
+            },
+            {
+                name: "asset",
+            },
+            {
+                name: "hashes",
+            },
+            {
+                name: "metadata",
+                indexKeys: [ "setId" ],
+            },
         ],
         versionNumber: 1,
     },
     user: {    
-        collectionNames: [
-            "outgoing-asset-upload",
-            "outgoing-asset-update",
-            "last-update",
-            "user",
+        collections: [
+            {
+                name: "outgoing-asset-upload",
+            },
+            {
+                name: "outgoing-asset-update",
+            },
+            {
+                name: "last-update",
+            },
+            {
+                name: "user",
+            },
         ],
         versionNumber: 1,
     },

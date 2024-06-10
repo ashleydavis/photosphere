@@ -30,7 +30,7 @@ export function TestIndexeddb() {
             await indexeddb.deleteDatabase("photosphere-test-db");
             
             db = await indexeddb.openDatabase("photosphere-test-db", 1, [
-                "test-collection",
+                { name: "test-collection" }
             ]);
 
             //
@@ -87,16 +87,18 @@ export function TestIndexeddb() {
             // 
             const databases = new IndexeddbDatabases({
                 "photosphere-queue-test": {
-                    collectionNames: [ "test-queue" ],
+                    collections: [ 
+                        { name: "test-queue" }
+                    ],
                     versionNumber: 1,
                 },
                 collection: {
-                    collectionNames: [
-                        "thumb",
-                        "display",
-                        "asset",
-                        "hashes",
-                        "metadata",
+                    collections: [
+                        { name: "thumb" },
+                        { name: "display" },
+                        { name: "asset" },
+                        { name: "hashes" },
+                        { name: "metadata" },
                     ],
                     versionNumber: 1,
                 },            
