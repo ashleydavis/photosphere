@@ -118,7 +118,7 @@ export function DbSyncContextProvider({ outgoingAssetUploadQueue, outgoingAssetU
                     return;
                 }
 
-                console.log(`Periodic sync...`);
+                // console.log(`Periodic sync...`);
 
                 try {
                     await syncOutgoing({

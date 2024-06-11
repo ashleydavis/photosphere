@@ -47,6 +47,6 @@ export async function syncIncoming({ setIds, api, database }: IProps): Promise<v
             });
         }
 
-        console.log(`Processed incoming updates for ${setId}, ${journalResult.journalRecords.length} ops`);
+        // console.log(`Processed incoming updates for ${setId}, ${journalResult.journalRecords.length} ops`);
     }    
 }
