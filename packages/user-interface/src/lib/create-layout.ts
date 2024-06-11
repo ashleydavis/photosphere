@@ -244,7 +244,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     // Computes the offsets of each row and total height of the gallery.
     //
 
-    for (let rowIndex = startingRowIndex; rowIndex < rows.length-1; rowIndex++) {
+    for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
         row.offsetY = layout.galleryHeight;
         layout.galleryHeight += row.height;
