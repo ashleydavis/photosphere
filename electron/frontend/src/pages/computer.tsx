@@ -23,7 +23,6 @@ export function ComputerPage() {
             <GalleryContextProvider 
                 source={scan}
                 sortFn={undefined} // Assets are shown in the order they are found.
-                groupFn={asset => path.dirname(asset.origFileName)} // Assets are grouped by directory.
                 >
                 <Gallery
                     targetRowHeight={150}

@@ -1,4 +1,4 @@
-import { createLayout } from "../../lib/create-layout";
+import { computePartialLayout } from "../../lib/create-layout";
 
 describe("layout", () => {
 
@@ -6,7 +6,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout([], galleryWidth, targetRowHeight);
+        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight);
         expect(rows).toEqual([]);
     });
 
@@ -22,10 +22,10 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout(gallery, galleryWidth, targetRowHeight);
-        expect(rows.length).toBe(1);
+        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight);
+        expect(layout.rows.length).toBe(1);
 
-        const row = rows[0];
+        const row = layout.rows[0];
         expect(row.items.length).toBe(1);
         expect(row.items[0]._id).toBe(1);
     });
@@ -52,10 +52,10 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout(items, galleryWidth, targetRowHeight);
-        expect(rows.length).toBe(1);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        expect(layout.rows.length).toBe(1);
 
-        const row = rows[0];
+        const row = layout.rows[0];
         expect(row.items.length).toBe(3);
         expect(row.items[0]._id).toBe(1);
         expect(row.items[1]._id).toBe(2);
@@ -84,15 +84,15 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout(items, galleryWidth, targetRowHeight);
-        expect(rows.length).toBe(2);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        expect(layout.rows.length).toBe(2);
 
-        const firstRow = rows[0];
+        const firstRow = layout.rows[0];
         expect(firstRow.items.length).toBe(2);
         expect(firstRow.items[0]._id).toBe(1);
         expect(firstRow.items[1]._id).toBe(2);
 
-        const secondRow = rows[1];
+        const secondRow = layout.rows[1];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.items[0]._id).toBe(3);
     });    
@@ -116,8 +116,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout(items, galleryWidth, targetRowHeight);
-        const firstRow = rows[0];
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        const firstRow = layout.rows[0];
         expect(firstRow.items.length).toBe(2);
         expect(firstRow.height).toBeGreaterThan(targetRowHeight);
 
@@ -129,7 +129,7 @@ describe("layout", () => {
         expect(item2.thumbWidth).toBeGreaterThan(items[1].width);
         expect(item2.thumbHeight).toBeGreaterThan(items[1].height);
 
-        const secondRow = rows[1];
+        const secondRow = layout.rows[1];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.height).toBeCloseTo(targetRowHeight);
 
@@ -164,14 +164,14 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = createLayout(items, galleryWidth, targetRowHeight);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
         
-        expect(rows.length).toBe(2);
-        expect(rows[0].items.length).toBe(1);
-        expect(rows[0].items[0]._id).toBe(1);
-        expect(rows[1].items.length).toBe(2);
-        expect(rows[1].items[0]._id).toBe(2);
-        expect(rows[1].items[1]._id).toBe(3);
+        expect(layout.rows.length).toBe(2);
+        expect(layout.rows[0].items.length).toBe(1);
+        expect(layout.rows[0].items[0]._id).toBe(1);
+        expect(layout.rows[1].items.length).toBe(2);
+        expect(layout.rows[1].items[0]._id).toBe(2);
+        expect(layout.rows[1].items[1]._id).toBe(3);
     });
 
 });

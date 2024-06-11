@@ -1,7 +1,6 @@
 //
 // Represents an asset that can be displayed in the gallery.
 //
-
 export interface IGalleryItem {
 
     //
@@ -55,7 +54,7 @@ export interface IGalleryItem {
     photoDate?: string;
 
     //
-    // Date by which to sort the asset.
+    /// The date the asset is sorted by in the backend.
     //
     sortDate: string;
 
@@ -70,14 +69,19 @@ export interface IGalleryItem {
     properties?: any;
 
     //
-    // Labels attached to the asset.
+    // Labels that have been added to the asset.
     //
     labels?: string[];
 
     //
-    // Description of the asset, once the user has set it.
+    // Description of the asset, once it has been set by the user.
     //
-    description?: string;    
+    description?: string;
+
+    //
+    // The horizontal location where the image starts in the gallery.
+    //
+    offsetX?: number;
 
     //
     // The computed width of the thumbnail.
@@ -93,11 +97,6 @@ export interface IGalleryItem {
     // The aspect ratio of them item, once computed.
     //
     aspectRatio?: number;
-
-    //
-    // The group that this item is a part of, if any.
-    //
-    group?: string;
 }
 
 //
@@ -106,9 +105,24 @@ export interface IGalleryItem {
 export interface IGalleryRow {
 
     //
+    // The type of this row.
+    //
+    type?: "heading";
+    
+    //
+    // The index in the gallery of the first asset in this row.
+    //
+    startingIndex: number;
+
+    //
     // Items to display in this row in the gallery.
     //
     items: IGalleryItem[];
+
+    //
+    // The vertical location where the row starts in the gallery.
+    //
+    offsetY: number;
 
     //
     // The width of this row in the gallery.
@@ -121,9 +135,9 @@ export interface IGalleryRow {
     height: number;
 
     //
-    // The group displayed in this row of items, if any.
+    // The headings displayed for this row of items.
     //
-    group?: string;
+    headings: string[];
 }
 
 //

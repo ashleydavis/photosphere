@@ -1,8 +1,72 @@
 import React from "react";
-import { createLayout } from "../lib/create-layout";
-import { ISelectedGalleryItem } from "../lib/gallery-item";
+import { IGalleryRow, ISelectedGalleryItem } from "../lib/gallery-item";
 import { Image } from "./image";
 import { useGallery } from "../context/gallery-context";
+import { computePartialLayout } from "../lib/create-layout";
+import { GalleryImage } from "./gallery-image";
+
+export type ItemClickFn = ((item: ISelectedGalleryItem) => void);
+
+//
+// Renders a row of items in the gallery.
+//
+function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined) {
+    if (row.type === "heading") {
+        //
+        // Renders a heading row.
+        //
+        const heading = row.headings.join(" ");
+        return (
+            <div 
+                key={heading}
+                style={{
+                    fontSize: "0.9rem",
+                    color: "rgb(60,64,67)",
+                    fontWeight: 600,
+                    lineHeight: "1.25rem",
+                    letterSpacing: ".0178571429em",
+                    padding: "1em",
+                    position: "absolute",
+                    top: `${row.offsetY}px`,
+                    height: `${row.height}px`,
+                }}
+                >
+                {heading}
+            </div>
+        );
+    }
+
+    //
+    // Renders a row of gallery items.
+    //
+    return (
+        <div
+            key={rowIndex}
+            >
+            {row.items.map((item, index) => {
+                return (
+                    <GalleryImage
+                        key={item._id}
+                        item={item}
+                        itemIndex={(row.startingIndex + index)}
+                        onClick={() => {
+                            if (onItemClick) {
+                                onItemClick({ 
+                                    item, 
+                                    index: row.startingIndex + index 
+                                });
+                            }
+                        }}
+                        x={item.offsetX!}
+                        y={row.offsetY}
+                        width={item.thumbWidth!}
+                        height={item.thumbHeight!}
+                        />
+                );
+            })}
+        </div>        
+    );
+}
 
 export interface IGalleryLayoutProps { 
     //
@@ -18,7 +82,7 @@ export interface IGalleryLayoutProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
-    onItemClick: ((item: ISelectedGalleryItem) => void) | undefined;
+    onItemClick: ItemClickFn | undefined;
 }
 
 //
@@ -32,38 +96,19 @@ export function GalleryLayout({
 
     const { assets } = useGallery();
     
-    const rows = createLayout(assets, galleryWidth, targetRowHeight);
-
-    let prevGroup: string | undefined = undefined;
+    const galleryLayout = computePartialLayout(undefined, assets, galleryWidth, targetRowHeight);
 
     return (
         <div
             style={{
                 width: `${galleryWidth}px`,
+                height: `${galleryLayout?.galleryHeight}px`,
                 overflowX: "hidden",
+                position: "relative",
             }}
             >
-            {rows.map((row, rowIndex) => {
-                const items = [];
-                if (row.group !== prevGroup) {
-                    items.push(
-                        <div 
-                            key={row.group}
-                            style={{
-                                fontSize: "0.9rem",
-                                color: "rgb(60,64,67)",
-                                fontWeight: 600,
-                                lineHeight: "1.25rem",
-                                letterSpacing: ".0178571429em",
-                                padding: "1em",
-                            }}
-                            >
-                            {row.group}
-                        </div>
-                    );
-                    prevGroup = row.group;
-                }
-                items.push(
+            {galleryLayout.rows.map((row, rowIndex) => {
+                return (
                     <div
                         key={rowIndex}
                         style={{
@@ -72,25 +117,9 @@ export function GalleryLayout({
                             height: `${row.height}px`,
                         }}
                         >
-                        {row.items.map((item, index) => {
-                            return (
-                               <Image
-                                    key={item._id}
-                                    testId="gallery-thumb"
-                                    imgClassName="gallery-thumb"
-                                    asset={item}
-                                    assetType="thumb"
-                                    onClick={() =>{
-                                        if (onItemClick) {
-                                            onItemClick({ item, index });
-                                        }
-                                    }}
-                                    />
-                            );
-                        })}
+                        {renderRow(row, rowIndex, onItemClick)}
                     </div>
                 );
-                return items;
             })}
 
         </div>

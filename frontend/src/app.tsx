@@ -24,7 +24,6 @@ function GallerySetup() {
                 source={localSource} // The source of assets to display in the gallery.
                 sink={localSink}     // The sink for outgoing asset uploads and edits.
                 sortFn={galleryItem => dayjs(galleryItem.sortDate).toDate()}
-                groupFn={galleryItem => dayjs(galleryItem.sortDate).format("MMM, YYYY")}
                 >
                 <UploadContextProvider>
                     <Main />

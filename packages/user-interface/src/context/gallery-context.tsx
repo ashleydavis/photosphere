@@ -13,11 +13,6 @@ import { useApp } from "./app-context";
 //
 export type SortFn = (galleryItem: IGalleryItem) => any;
 
-//
-// Gets the grouping value from the gallery item.
-//
-export type GroupFn = (galleryItem: IGalleryItem) => string;
-
 export interface IGalleryContext {
 
     //
@@ -115,15 +110,10 @@ export interface IGalleryContextProviderProps {
     //
     sortFn?: SortFn;
 
-    //
-    // Sets the grouping function for the gallery.
-    //
-    groupFn?: GroupFn;
-
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, sortFn, groupFn, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ source, sink, sortFn, children }: IGalleryContextProviderProps) {
 
     const { isInitialized } = useDatabaseSync();
     const { user } = useApp();
@@ -207,7 +197,6 @@ export function GalleryContextProvider({ source, sink, sortFn, groupFn, children
     async function loadGallery(): Promise<void> {
         const galleryItems = await source.loadGalleryItems();
         for (const galleryItem of galleryItems) {
-            galleryItem.group = groupFn && groupFn(galleryItem) || undefined,
             loadedAssets.current.set(galleryItem._id, galleryItem);
             searchIndexRef.current.add(galleryItem._id, galleryItem);
         }

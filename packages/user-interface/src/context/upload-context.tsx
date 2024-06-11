@@ -393,8 +393,7 @@ export function UploadContextProvider({ children }: IProps) {
                 uploadDate: dayjs().toISOString(),
                 properties: uploadDetails.properties,
                 labels: uploadDetails.labels,
-                description: "",
-                group: "Uploaded",
+                description: ""
             });
 
             console.log(`Uploaded ${assetId}`);
