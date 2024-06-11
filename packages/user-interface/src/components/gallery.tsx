@@ -58,6 +58,9 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
         <div 
         	className="pl-1" 
         	ref={containerRef}
+            style={{
+                height: "100%",
+            }}
         	>
         	<GalleryLayout
                 galleryWidth={galleryWidth}

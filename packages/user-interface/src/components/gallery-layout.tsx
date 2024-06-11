@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { IGalleryRow, ISelectedGalleryItem } from "../lib/gallery-item";
-import { Image } from "./image";
 import { useGallery } from "../context/gallery-context";
-import { computePartialLayout } from "../lib/create-layout";
+import { IGalleryLayout, computePartialLayout } from "../lib/create-layout";
 import { GalleryImage } from "./gallery-image";
+import { throttle } from "lodash";
+import { IApi } from "../context/api-context";
 
 export type ItemClickFn = ((item: ISelectedGalleryItem) => void);
 
@@ -68,6 +69,80 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
     );
 }
 
+//
+// Represents a range of rows in the gallery.
+//
+interface IRange {
+    //
+    // The index of the first row to render.
+    //
+    startIndex: number;
+
+    // 
+    // The index of the last row to render.
+    //
+    endIndex: number;
+}
+
+//
+// Determines the range of visible items.
+//
+function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: number, contentHeight: number): IRange | undefined {
+    if (!galleryLayout) {
+        return undefined;
+    }
+
+    const buffer = 2; // Number of items to render outside the viewport, above and below
+    const startIndex = Math.max(0, galleryLayout.rows.findIndex(row => row.offsetY >= scrollTop) - buffer);
+
+    let endIndex = startIndex+1;
+    while (endIndex < galleryLayout.rows.length) {
+        const row = galleryLayout.rows[endIndex];
+        if (row.offsetY - scrollTop > contentHeight) {
+            break;
+        }
+        endIndex++;
+    }
+
+    endIndex = Math.min(galleryLayout.rows.length-1, endIndex + buffer);
+
+    return {
+        startIndex,
+        endIndex,
+    };      
+}    
+
+//
+// Renders rows in the visible range.
+//
+function renderVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: number, contentHeight: number | undefined, onItemClick: ItemClickFn | undefined) {
+    if (!contentHeight || !galleryLayout) {
+        return [];
+    }
+
+    const range = findVisibleRange(galleryLayout, scrollTop, contentHeight);
+    if (!range) {
+        return [];
+    }
+
+    const renderedRows: JSX.Element[] = [];
+
+    //
+    //  rows actually on screen with a higher priority.
+    //
+    for (let rowIndex = range.startIndex; rowIndex <= range.endIndex; rowIndex++) {
+        const row = galleryLayout.rows[rowIndex];
+
+        //
+        // Only render rows actually on screen.
+        //
+        renderedRows.push(renderRow(row, rowIndex, onItemClick));
+    }
+
+    return renderedRows;
+}
+
+
 export interface IGalleryLayoutProps { 
     //
     // The width of the gallery.
@@ -96,32 +171,52 @@ export function GalleryLayout({
 
     const { assets } = useGallery();
     
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [ scrollTop, setScrollTop ] = useState(0);
+    
     const galleryLayout = computePartialLayout(undefined, assets, galleryWidth, targetRowHeight);
+
+    //
+    // Handles scrolling.
+    //
+    useEffect(() => {
+        if (!containerRef.current) {
+            return;
+        }
+
+        const container = containerRef.current;
+
+        const onScroll = throttle(() => {
+            setScrollTop(container.scrollTop);
+        }, 10);
+        
+        container.addEventListener('scroll', onScroll);
+    
+        return () => {
+            container.removeEventListener('scroll', onScroll);
+        };
+    }, []);
 
     return (
         <div
+            className="gallery-scroller"
+            ref={containerRef}
             style={{
-                width: `${galleryWidth}px`,
-                height: `${galleryLayout?.galleryHeight}px`,
                 overflowX: "hidden",
+                height: "100%",
                 position: "relative",
             }}
             >
-            {galleryLayout.rows.map((row, rowIndex) => {
-                return (
-                    <div
-                        key={rowIndex}
-                        style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            height: `${row.height}px`,
-                        }}
-                        >
-                        {renderRow(row, rowIndex, onItemClick)}
-                    </div>
-                );
-            })}
-
+            <div
+                style={{
+                    width: `${galleryWidth}px`,
+                    height: `${galleryLayout?.galleryHeight}px`,
+                    overflowX: "hidden",
+                    position: "relative",
+                }}
+                >
+                {renderVisibleRange(galleryLayout, scrollTop, containerRef.current?.clientHeight, onItemClick)}
+            </div>
         </div>
     );
 }
