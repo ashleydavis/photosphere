@@ -19,7 +19,7 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
         },
         {
             name: "metadata",
-            indexKeys: [ "setId" ],
+            indexKeys: [ "setId", "hash" ],
         },
         {
             name: "outgoing-asset-upload",
@@ -34,7 +34,7 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
             name: "users",
         },
     ],
-    versionNumber: 1,
+    versionNumber: 2,
 }
 
 export interface IIndexeddbContext {

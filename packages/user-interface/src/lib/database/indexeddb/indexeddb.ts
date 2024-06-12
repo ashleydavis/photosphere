@@ -38,8 +38,7 @@ export function openDatabase(databaseName: string, configuration: IIndexeddbData
         const request = indexedDB.open(databaseName, configuration.versionNumber);
 
         request.onupgradeneeded = event => { // This is called when the version field above is incremented.
-            const db = (event.target as IDBOpenDBRequest).result;
-            createObjectStores(db, configuration.collections);
+            createObjectStores(event.target as IDBOpenDBRequest, configuration.collections);
         };
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
@@ -48,12 +47,22 @@ export function openDatabase(databaseName: string, configuration: IIndexeddbData
 //
 // Creates object store only if they don't already exist.
 //
-function createObjectStores(db: IDBDatabase, collections: IIndexeddbCollectionConfig[]) {
+function createObjectStores(dbOpenRequest: IDBOpenDBRequest, collections: IIndexeddbCollectionConfig[]) {
+    const db = dbOpenRequest.result;
     for (const collection of collections) {
+        let objectStore: IDBObjectStore;
         if (!db.objectStoreNames.contains(collection.name)) {
-            const objectStore = db.createObjectStore(collection.name, { keyPath: "_id" });
-            if (collection.indexKeys) {
-                for (const indexKey of collection.indexKeys) {
+            // Creates the collection.
+            objectStore = db.createObjectStore(collection.name, { keyPath: "_id" });
+        }
+        else {
+            // Gets the collection.
+            objectStore = dbOpenRequest.transaction!.objectStore(collection.name);
+        }
+        if (collection.indexKeys) {
+            // Add indexes.
+            for (const indexKey of collection.indexKeys) {
+                if (!objectStore.indexNames.contains(indexKey)) {
                     objectStore.createIndex(indexKey, indexKey, { unique: false });
                 }
             }
