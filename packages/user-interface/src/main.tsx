@@ -36,6 +36,7 @@ export function Main({ computerPage }: IMainProps) {
 	const navigate = useNavigate();
 	
     const { 
+        assets,
         searchText,
         search,
         clearSearch,
@@ -180,8 +181,14 @@ export function Main({ computerPage }: IMainProps) {
                             </div>
                         </NavLink>
 
+                        <div
+                            className="ml-auto mr-2 sm:mr-8 text-xs sm:text-sm"
+                            >
+                            {assets.length} photos
+                        </div>
+
                         {!isAuthenticated && (
-                            <div className="ml-auto mr-2 sm:mr-4">
+                            <div className="ml-1 mr-2 sm:mr-4">
                                 <button
                                     onClick={login}
                                     >
@@ -192,7 +199,7 @@ export function Main({ computerPage }: IMainProps) {
                         )}
 
                         {isAuthenticated && (
-                            <div className="ml-auto mr-2 sm:mr-4">
+                            <div className="ml-1 mr-2 sm:mr-4">
                                 <button
                                     onClick={logout}
                                     >
