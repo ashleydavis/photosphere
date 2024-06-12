@@ -15,9 +15,6 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
             name: "asset",
         },
         {
-            name: "hashes",
-        },
-        {
             name: "metadata",
             indexKeys: [ "setId", "hash" ],
         },

@@ -56,18 +56,6 @@ Authorization: Bearer {{token}}
                     ] 
                 }
             }
-        },
-        {
-            "collectionName": "hashes", 
-            "recordId": "{{hash_id}}",
-            "op": {
-                "type": "set",
-                "fields": {
-                    "hash": "{{hash}}",
-                    "assetId": "{{asset}}",
-                    "setId": "{{setId}}"
-                }
-            }
         }
     ]
 }

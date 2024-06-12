@@ -97,7 +97,6 @@ export function TestIndexeddb() {
             //             { name: "thumb" },
             //             { name: "display" },
             //             { name: "asset" },
-            //             { name: "hashes" },
             //             { name: "metadata" },
             //         ],
             //         versionNumber: 1,

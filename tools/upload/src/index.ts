@@ -441,15 +441,6 @@ async function addAsset(asset: IAsset): Promise<void> {
                 type: "set",
                 fields: asset,
             },
-        },
-        {
-            collectionName: "hashes",
-            recordId: asset.hash,
-            op: {
-                type: "push",
-                field: "assetIds",
-                value: asset._id,
-            },
         }
     ];
 

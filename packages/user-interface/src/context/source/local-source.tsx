@@ -53,19 +53,15 @@ export function useLocalGallerySource({ setId, database, api }: IProps): IGaller
     }
 
     //
-    // Maps a hash to the assets already uploaded.
+    // Checks if an asset is already uploaded.
     //
-    async function mapHashToAssets(hash: string): Promise<string[]> {
+    async function checkAssetHash(hash: string): Promise<boolean> {
         if (!setId) {
             throw new Error("No set id provided.");
         }
 
-        const hashRecord = await database.collection<IHashRecord>("hashes").getOne(hash);
-        if (!hashRecord) {
-            return [];
-        }
-
-        return hashRecord.assetIds;
+        const assets = await database.collection<IAsset>("metadata").getAllByIndex("hash", hash);
+        return assets.length > 0;
     }
 
     //
@@ -95,7 +91,7 @@ export function useLocalGallerySource({ setId, database, api }: IProps): IGaller
 
     return {
         loadGalleryItems,
-        mapHashToAssets,
+        checkAssetHash,
         loadAsset,
     };
 }

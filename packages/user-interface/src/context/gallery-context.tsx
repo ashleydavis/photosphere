@@ -31,9 +31,9 @@ export interface IGalleryContext {
     updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
 
     //
-    // Maps a hash to the assets already uploaded.
+    // Checks if an asset is already uploaded.
     //
-    mapHashToAssets(hash: string): Promise<string[]>;
+    checkAssetHash(hash: string): Promise<boolean>;
 
     //
     // Uploads an asset.
@@ -248,10 +248,10 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
     }
 
     //
-    // Maps a hash to the assets already uploaded.
+    // Checks if an asset is already uploaded.
     //
-    async function mapHashToAssets(hash: string): Promise<string[]> {
-        return await source.mapHashToAssets(hash);
+    async function checkAssetHash(hash: string): Promise<boolean> {
+        return await source.checkAssetHash(hash);
     }
 
     //
@@ -444,7 +444,7 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
         assets,
         addGalleryItem,
         updateGalleryItem,
-        mapHashToAssets, 
+        checkAssetHash,
         uploadAsset,
         loadAsset,
         unloadAsset,

@@ -75,17 +75,6 @@ export function useLocalGallerySink({ setId, outgoingAssetUploadQueue, outgoingA
                         setId,
                     },
                 },
-            },
-            {
-                collectionName: "hashes",
-                recordId: uuid(),
-                op: {
-                    type: "set",
-                    fields: {
-                        assetId: galleryItem._id,
-                        setId,
-                    },
-                },
             }
         ];
 

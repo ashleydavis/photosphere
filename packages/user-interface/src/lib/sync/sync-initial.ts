@@ -47,7 +47,7 @@ export async function initialSync({ setIds, api, database }: IProps): Promise<vo
             });
         }
 
-        for (const collectionName of ["metadata", "hashes"]) {
+        for (const collectionName of ["metadata"]) {
             let skip = 0;
             const pageSize = 1000;
             while (true) {

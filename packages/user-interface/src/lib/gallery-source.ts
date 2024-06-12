@@ -14,9 +14,9 @@ export interface IGallerySource {
     loadGalleryItems(): Promise<IGalleryItem[]>;
 
     //
-    // Maps a hash to the assets already uploaded.
+    // Checks if an asset is already uploaded.
     //
-    mapHashToAssets(hash: string): Promise<string[]>;
+    checkAssetHash(hash: string): Promise<boolean>;
     
     //
     // Loads data for an asset.
