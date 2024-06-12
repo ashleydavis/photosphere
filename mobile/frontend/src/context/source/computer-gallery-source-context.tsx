@@ -25,8 +25,8 @@ export function useComputerGallerySource(): IGallerySource {
     //
     // Maps a hash to the assets already uploaded.
     //
-    async function mapHashToAssets(hash: string): Promise<string[]> {
-        return [];
+    async function checkAssetHash(hash: string): Promise<boolean> {
+        return false;
     }
 
     //
@@ -39,7 +39,7 @@ export function useComputerGallerySource(): IGallerySource {
 
     return {
         loadGalleryItems,
-        mapHashToAssets,
+        checkAssetHash,
         loadAsset,
     };
 }

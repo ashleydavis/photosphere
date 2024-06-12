@@ -86,8 +86,8 @@ export function ScanContextProvider({ children }: IProps) {
     //
     // Maps a hash to the assets already uploaded.
     //
-    async function mapHashToAssets(hash: string): Promise<string[]> {
-        return [];
+    async function checkAssetHash(hash: string): Promise<boolean> {
+        return false;
     }
 
     //
@@ -123,7 +123,7 @@ export function ScanContextProvider({ children }: IProps) {
     const value: IScanContext = {
         scanImages,
         loadGalleryItems,
-        mapHashToAssets,
+        checkAssetHash,
         loadAsset,
     };
 
