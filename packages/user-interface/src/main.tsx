@@ -290,7 +290,7 @@ export function Main({ computerPage }: IMainProps) {
                 </NavLink>
 
                 {computerPage 
-                    && <NavLink to="/cloud">
+                    && <NavLink to="/computer">
                         <div className="flex flex-row items-center pl-1 mt-8">
                             <i className="w-12 text-center fa-solid fa-computer"></i>
                             <div className="">Computer</div>
