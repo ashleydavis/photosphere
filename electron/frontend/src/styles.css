@@ -138,16 +138,6 @@ i {
     }
 }
 
-.gallery-scroller {
-    overflow-y: auto;
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */   
-}
-
-.gallery-scroller::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
-}
-
 /* Gallery scrollbar */
 
 .gallery-scrollbar {
