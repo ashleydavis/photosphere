@@ -379,6 +379,16 @@ export function Main({ computerPage }: IMainProps) {
                                     />
                             }
                             />
+
+                        <Route
+                            path="/on_login"
+                            element={
+                                <Navigate
+                                    replace
+                                    to="/cloud"
+                                    />
+                            }
+                            />
                     </Routes>
                 </div>
             </div>
