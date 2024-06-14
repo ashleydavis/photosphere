@@ -1,3 +1,4 @@
+import { dir } from 'console';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,9 +10,14 @@ export type FileFoundFn = (filePath: string) => Promise<void>;
 //
 // Search a directory for assets to upload.
 //
-export async function findAssets(directory: string, fileFound: FileFoundFn): Promise<void> {
+export async function findAssets(directory: string, ignoreDirs: string[], fileFound: FileFoundFn): Promise<void> {
 
     try {
+        if (ignoreDirs.includes(directory)) {
+            console.log(`Skipping directory: ${directory}`);
+            return;
+        }
+
         const files = await fs.promises.readdir(directory, { withFileTypes: true });
 
         //
@@ -41,7 +47,7 @@ export async function findAssets(directory: string, fileFound: FileFoundFn): Pro
                 
                 // If the file is a directory, recursively search it.
                 const dirPath = path.join(directory, file.name);
-                await findAssets(dirPath, fileFound);
+                await findAssets(dirPath, ignoreDirs, fileFound);
             }
             else {
                 // Did files on the previous pass.
