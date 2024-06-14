@@ -1,6 +1,6 @@
 export const backend = "http://localhost:3000";
 export const token = "paste jwt here";
-export const uploadCollectionId = "test-collection";
+export const uploadSetId = "test-collection";
 export const paths = [
     "c:/",
 ];
