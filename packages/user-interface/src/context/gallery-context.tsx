@@ -2,10 +2,8 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { IAsset } from "defs";
 import { IGallerySource } from "../lib/gallery-source";
 import { IGallerySink } from "../lib/gallery-sink";
-import { IDatabaseOp } from "defs";
 import { useApp } from "./app-context";
 
 //
