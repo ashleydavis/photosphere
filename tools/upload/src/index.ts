@@ -61,7 +61,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     // Computes the hash and checks if we already uploaded this file.
     //
     const hash = await computeHash(fileData);    
-    if (await checkUploaded(config.uploadCollectionId, hash)) {
+    if (await checkUploaded(config.uploadSetId, hash)) {
         console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
         return;
@@ -86,27 +86,27 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     // Uploads the full asset.
     //
-    await uploadAssetData(config.uploadCollectionId, assetId, "asset", contentType, fileData);
+    await uploadAssetData(config.uploadSetId, assetId, "asset", contentType, fileData);
 
     if (contentType.startsWith("video")) {
         //
         // Uploads the thumbnail.
         //
         const thumbnailData = await getVideoThumbnail(filePath, resolution, THUMBNAIL_MIN_SIZE);
-        await uploadAssetData(config.uploadCollectionId, assetId, "thumb", "image/jpg", thumbnailData);
+        await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", thumbnailData);
     }
     else {
         //
         // Uploads the thumbnail.
         //
         const thumbnailData = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
-        await uploadAssetData(config.uploadCollectionId, assetId, "thumb", "image/jpg", thumbnailData);
+        await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", thumbnailData);
 
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
         const displayData = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE);
-        await uploadAssetData(config.uploadCollectionId, assetId, "display", "image/jpg", displayData);
+        await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", displayData);
     }
 
     const properties: any = {};
@@ -166,7 +166,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     await addAsset({
         _id: assetId,
-        setId: config.uploadCollectionId,
+        setId: config.uploadSetId,
         width: resolution.width,
         height: resolution.height,
         origFileName: path.basename(filePath),
@@ -361,8 +361,8 @@ export async function computeHash(data: Buffer) {
 //
 // Checks if the asset is already uploaded.
 //
-export async function checkUploaded(collectionId: string, hash: string): Promise<boolean> {
-    const url = `${config.backend}/get-one?db=${collectionId}&col=hashes&id=${hash}`;
+export async function checkUploaded(setId: string, hash: string): Promise<boolean> {
+    const url = `${config.backend}/check-hash?hash=${hash}&set=${setId}`;
     const response = await axios.get(
         url, 
         {
@@ -370,14 +370,9 @@ export async function checkUploaded(collectionId: string, hash: string): Promise
                 Authorization: `Bearer ${config.token}`,
                 Accept: "application/json",
             },
-            validateStatus: status => status === 200 || status === 404,
         }
     );
 
-    if (response.status === 404) {
-        return false;
-    }
-    
     return response.data.assetIds.length > 0;
 }
 
@@ -409,14 +404,14 @@ export async function resizeImage(inputData: Buffer, resolution: { width: number
 //
 // Uploads the data for an asset.
 //
-async function uploadAssetData(collectionId: string, assetId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
+async function uploadAssetData(setId: string, assetId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
     await axios.post(
         `${config.backend}/asset`, 
         data, 
         {
             headers: {
                 "content-type": contentType,
-                col: collectionId,
+                set: setId,
                 id: assetId,
                 "asset-type": assetType,
                 Authorization: `Bearer ${config.token}`,

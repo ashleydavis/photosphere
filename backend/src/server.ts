@@ -351,5 +351,18 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         res.json(records);
     }));
 
+    //
+    // Gets a record from the database based on their hash.
+    //
+    app.get("/check-hash", asyncErrorHandler(async (req, res) => {
+        const setId = getValue<string>(req.query, "set");
+        const hash = getValue<string>(req.query, "hash");
+        const collection = db.collection("metadata");
+        const records = await collection.find({ hash, setId }).toArray();
+        res.json({
+            assetIds: records.map(record => record._id),
+        });
+    }));    
+
     return app;
 }
