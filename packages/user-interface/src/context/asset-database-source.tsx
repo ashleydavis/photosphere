@@ -280,6 +280,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     skip += pageSize;
                     assets = assets.concat(records);
                     setAssets(assets);
+
+                    console.log(`Loaded ${assets.length} assets.`)
                 }
                 
                 if (latestTime !== undefined) {
