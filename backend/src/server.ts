@@ -344,6 +344,9 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
 
         const collection = db.collection(collectionName);
         const records = await collection.find({ setId })
+            .sort({
+                sortDate: -1, // Reverse chronological order.
+            })
             .skip(skip)
             .limit(limit)
             .toArray();
