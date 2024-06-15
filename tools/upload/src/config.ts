@@ -4,5 +4,8 @@ export const uploadSetId = "test-collection";
 export const paths = [
     "c:/",
 ];
+export const ignoreDirs = [
+    "z:\\some\\path",
+];
 export const clientId = "paste client id here";
 

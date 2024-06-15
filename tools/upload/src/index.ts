@@ -218,7 +218,7 @@ async function main(): Promise<void> {
 
     for (const scanPath of config.paths) {        
         console.log(`Scanning path: ${scanPath}`);
-        await findAssets(scanPath, async filePath => {
+        await findAssets(scanPath, config.ignoreDirs, async filePath => {
             // console.log(`Found asset: ${filePath}`);
 
             const ext = path.extname(filePath).toLowerCase();
