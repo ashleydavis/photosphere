@@ -96,16 +96,6 @@ const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
 export interface IGalleryContextProviderProps {
 
     //
-    // The source that loads asset into the gallery.
-    //
-    //fio:source: IGallerySource;
-
-    //
-    // The sink that uploads and updates assets.
-    //
-    //fio:sink?: IGallerySink;
-
-    //
     // Sets the sorting function for the gallery.
     //
     sortFn?: SortFn;
@@ -276,6 +266,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             objectUrl, 
             contentType: assetData.contentType,
         });
+
         return objectUrl;
     }
 
