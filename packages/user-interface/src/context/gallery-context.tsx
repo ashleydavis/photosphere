@@ -8,6 +8,18 @@ import { useGallerySource } from "./gallery-source";
 //
 export type SortFn = (galleryItem: IGalleryItem) => any;
 
+export interface IAssetDataLoad {
+    //
+    // The object URL for the asset.
+    //
+    objectUrl: string;
+
+    //
+    // The source of the asset data.
+    //
+    source: "local" | "cloud";
+}
+
 export interface IGalleryContext {
 
     //
@@ -43,7 +55,7 @@ export interface IGalleryContext {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, assetType: string): Promise<string | undefined>;
+    loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined>;
 
     //
     // Unloads data for an asset.
@@ -247,12 +259,15 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<string | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined> {
         const key = `${assetType}-${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
             existingCacheEntry.numRefs += 1;
-            return existingCacheEntry.objectUrl;
+            return {
+                objectUrl: existingCacheEntry.objectUrl,
+                source: "local",
+            };
         }
 
         const assetData = await _loadAsset(assetId, assetType);
@@ -267,7 +282,10 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             contentType: assetData.contentType,
         });
 
-        return objectUrl;
+        return {
+            objectUrl,
+            source: assetData.source
+        };
     }
 
     //

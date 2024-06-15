@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
+import classNames from "classnames";
 
 export interface IGalleryImageProps {
     //
@@ -44,15 +45,17 @@ export interface IGalleryImageProps {
 //
 export function GalleryImage({ item, itemIndex, onClick, x, y, width, height }: IGalleryImageProps) {
 
+    const [source, setSource] = useState<string>();
     const [objectURL, setObjectURL] = useState<string>("");
 
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
         loadAsset(item._id, "thumb")
-            .then(objectURL => {
-                if (objectURL) {
-                    setObjectURL(objectURL);
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setSource(assetLoaded.source);
+                    setObjectURL(assetLoaded.objectUrl);
                 }
             })
             .catch(err => {
@@ -90,7 +93,7 @@ export function GalleryImage({ item, itemIndex, onClick, x, y, width, height }: 
             {objectURL
                 && <img 
                     data-testid="gallery-thumb"
-                    className="gallery-thumb"
+                    className={classNames("gallery-thumb", { "fade-in": source === "cloud" })}                    
                     src={objectURL}
                     style={{
                         position: "absolute",

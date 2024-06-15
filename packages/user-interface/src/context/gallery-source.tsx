@@ -2,6 +2,13 @@ import { createContext, useContext } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
 
+export interface IAssetDataLoad extends IAssetData {
+    //
+    // The source of the asset data.
+    //
+    source: "local" | "cloud";
+}
+
 //
 // Interface that provides assets for a gallery.
 //
@@ -40,7 +47,7 @@ export interface IGallerySource {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined>;
+    loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined>;
 
     //
     // Stores an asset.

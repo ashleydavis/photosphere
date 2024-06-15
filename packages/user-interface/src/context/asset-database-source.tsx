@@ -1,7 +1,7 @@
 import React, { ReactNode, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
-import { GallerySourceContext, IGallerySource } from "./gallery-source";
+import { GallerySourceContext, IAssetDataLoad, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
@@ -126,25 +126,49 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined> {
         if (!setId) {
             throw new Error("No set id provided.");
         }
 
         const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
-            return assetRecord.assetData;
+            return {
+                ...assetRecord.assetData,
+                source: "local",
+            };
         }
 
         if (!isOnline) {
             return undefined;
         }
+
         
+        //
         // Fallback to cloud.
+        //
         const assetBlob = await api.getAsset(setId, assetId, assetType);
+
+        //
+        // Save a local version.
+        //
+        database.collection<IAssetRecord>(assetType).setOne({
+                _id: assetId,
+                storeDate: new Date(),
+                assetData: {
+                    contentType: assetBlob.type,
+                    data: assetBlob,
+                },
+            })
+            .catch(err => {
+                console.error(`Failed to store asset locally:`);
+                console.error(err);            
+            });
+
         return {
             contentType: assetBlob.type,
             data: assetBlob,
+            source: "cloud",
         };
     }
 

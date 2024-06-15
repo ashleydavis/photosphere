@@ -40,9 +40,9 @@ export function Image({ testId, imgClassName, asset, assetType, onClick }: IImag
 
     useEffect(() => {
         loadAsset(asset._id, assetType)
-            .then(objectURL => {
-                if (objectURL) {
-                    setObjectURL(objectURL);
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setObjectURL(assetLoaded.objectUrl);
                 }
             })
             .catch(err => {

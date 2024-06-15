@@ -124,7 +124,7 @@ i {
 
 /* Gallery */
 
-.gallery-thumb {
+.fade-in {
     opacity: 0;
     animation: fadeInAnimation 0.25s ease-in forwards;
 }
