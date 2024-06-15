@@ -1,7 +1,7 @@
 import React, { useState, DragEvent } from "react";
 import { useUpload } from "../context/upload-context";
 import { Spinner } from "../components/spinner";
-import { useDatabaseSync } from "../context/database-sync";
+import { useGallery } from "../context/gallery-context";
 
 export function UploadPage() {
 
@@ -17,7 +17,7 @@ export function UploadPage() {
         numAlreadyUploaded, 
     } = useUpload();
 
-    const { isInitialized } = useDatabaseSync();
+    const { isLoaded } = useGallery();
 
     //
     // Set to true when something is dragged over the upload area.
@@ -54,7 +54,7 @@ export function UploadPage() {
         await uploadFiles({ items: event.dataTransfer.items });
     }
 
-    if (!isInitialized) {
+    if (!isLoaded) {
         return (
             <div className="w-full h-full p-4 flex items-center justify-center">
                 <Spinner show={true} />

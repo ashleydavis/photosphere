@@ -1,35 +1,23 @@
-import React, { useRef } from "react";
+import React from "react";
 import { BrowserRouter } from "react-router-dom";
-import { AppContextProvider, Main, ApiContextProvider, UploadContextProvider, AuthContextProvider, isProduction, GalleryContextProvider, useLocalGallerySource, useLocalGallerySink, IndexeddbContextProvider, DbSyncContextProvider, useIndexeddb, useApi, PersistentQueue, IAssetUploadRecord, IAssetUpdateRecord, useApp } from "user-interface";
+import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider, 
+    AuthContextProvider, isProduction, GalleryContextProvider, 
+    IndexeddbContextProvider, AssetDatabaseProvider 
+    } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import dayjs from "dayjs";
 
 function GallerySetup() {
-    const { setId } = useApp();
-    const api = useApi();
-    const { database } = useIndexeddb();
-    const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(database, "outgoing-asset-upload"));
-    const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(database, "outgoing-asset-update"));
-    const localSource = useLocalGallerySource({ setId, database, api });
-    const localSink = useLocalGallerySink({ setId, outgoingAssetUploadQueue: outgoingAssetUploadQueue.current, outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current, database });
-
     return (
-        <DbSyncContextProvider
-            database={database}
-            outgoingAssetUpdateQueue={outgoingAssetUpdateQueue.current}
-            outgoingAssetUploadQueue={outgoingAssetUploadQueue.current}
-            >
+        <AssetDatabaseProvider>
             <GalleryContextProvider 
-                key={setId}          // Force remount when the set id changes.
-                source={localSource} // The source of assets to display in the gallery.
-                sink={localSink}     // The sink for outgoing asset uploads and edits.
                 sortFn={galleryItem => dayjs(galleryItem.sortDate).toDate()}
                 >
                 <UploadContextProvider>
                     <Main />
                 </UploadContextProvider>
             </GalleryContextProvider>
-        </DbSyncContextProvider>
+        </AssetDatabaseProvider>
     );
 }
 

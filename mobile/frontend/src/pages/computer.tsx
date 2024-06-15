@@ -26,9 +26,7 @@ export function ComputerPage() {
         
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
-            <GalleryContextProvider 
-                source={computerGallerySource}
-                >
+            <GalleryContextProvider>
                 <Gallery
                     targetRowHeight={150}
                     />

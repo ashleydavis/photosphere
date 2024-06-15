@@ -1,16 +1,16 @@
 import React from "react";
 import { Gallery } from "../../components/gallery";
-import { useDatabaseSync } from "../../context/database-sync";
 import { Spinner } from "../../components/spinner";
+import { useGallery } from "../../context/gallery-context";
 
 export interface IGalleryPageProps {
 }
 
 export function GalleryPage({}: IGalleryPageProps) {
 
-    const { isInitialized } = useDatabaseSync();
+    const { isLoaded } = useGallery();
 
-    if (!isInitialized) {
+    if (!isLoaded) {
         return (
             <div className="w-full h-full p-4 flex items-center justify-center">
                 <Spinner show={true} />

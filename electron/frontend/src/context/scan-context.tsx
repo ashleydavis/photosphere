@@ -10,7 +10,7 @@ import path from "path";
 import { IAsset } from "defs";
 import { IAssetData, IGalleryItem, IGallerySource, useUpload } from "user-interface";
 
-export interface IScanContext extends IGallerySource {
+export interface IScanContext {
     //
     // Scan the file system for assets.
     //
@@ -122,9 +122,6 @@ export function ScanContextProvider({ children }: IProps) {
         
     const value: IScanContext = {
         scanImages,
-        loadGalleryItems,
-        checkAssetHash,
-        loadAsset,
     };
 
     return (

@@ -5,7 +5,6 @@
 import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
 import { Gallery, GalleryContextProvider } from "user-interface";
-import path from "path";
 
 export function ComputerPage() {
 
@@ -21,7 +20,6 @@ export function ComputerPage() {
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider 
-                source={scan}
                 sortFn={undefined} // Assets are shown in the order they are found.
                 >
                 <Gallery

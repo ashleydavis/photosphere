@@ -8,7 +8,7 @@ import { useScan } from "../scan-context";
 //
 // Use the "computer source" in a component.
 //
-export function useComputerGallerySource(): IGallerySource {
+export function useComputerGallerySource(): unknown {
 
     //
     // The interface to file system scanning.

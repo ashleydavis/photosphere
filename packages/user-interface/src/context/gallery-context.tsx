@@ -1,10 +1,8 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
-import { useDatabaseSync } from "./database-sync";
 import flexsearch from "flexsearch";
-import { IGallerySource } from "../lib/gallery-source";
-import { IGallerySink } from "../lib/gallery-sink";
 import { useApp } from "./app-context";
+import { useGallerySource } from "./gallery-source";
 
 //
 // Gets the sorting value from the gallery item.
@@ -14,7 +12,12 @@ export type SortFn = (galleryItem: IGalleryItem) => any;
 export interface IGalleryContext {
 
     //
-    // The assets currently loaded.
+    // Set to true when the gallery has loaded.
+    //
+    isLoaded: boolean;
+
+    //
+    // The assets currently loaded. 
     //
     assets: IGalleryItem[];
 
@@ -96,12 +99,12 @@ export interface IGalleryContextProviderProps {
     //
     // The source that loads asset into the gallery.
     //
-    source: IGallerySource;
+    //fio:source: IGallerySource;
 
     //
     // The sink that uploads and updates assets.
     //
-    sink?: IGallerySink;
+    //fio:sink?: IGallerySink;
 
     //
     // Sets the sorting function for the gallery.
@@ -111,10 +114,10 @@ export interface IGalleryContextProviderProps {
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ source, sink, sortFn, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { isInitialized } = useDatabaseSync();
     const { user } = useApp();
+    const { isInitialized, assets, addAsset, updateAsset, checkAssetHash: _checkAssetHash, loadAsset: _loadAsset, storeAsset } = useGallerySource();
 
     //
     // Asset that have been loaded from storage.
@@ -123,9 +126,9 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
     const loadedAssets = useRef<Map<string, IGalleryItem>>(new Map<string, IGalleryItem>());
 
     //
-    // Assets produced by the search and sorted.
+    // Gallery items produced by the search and sorted.
     //
-    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
+    const [ items, setItems ] = useState<IGalleryItem[]>([]);
 
     //
     // The item in the gallery that is currently selected.
@@ -187,80 +190,69 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
         if (user && isInitialized) {
             loadGallery();
         }
-    }, [isInitialized, user]);
+    }, [isInitialized, user, assets]);
 
     //
     // Loads items into the gallery.
     //
     async function loadGallery(): Promise<void> {
-        const galleryItems = await source.loadGalleryItems();
-        for (const galleryItem of galleryItems) {
-            loadedAssets.current.set(galleryItem._id, galleryItem);
-            searchIndexRef.current.add(galleryItem._id, galleryItem);
+        for (const asset of assets) {
+            if (!loadedAssets.current.has(asset._id)) {
+                loadedAssets.current.set(asset._id, asset);
+                searchIndexRef.current.add(asset._id, asset);
+            }
         }
 
         // Renders the assets that we know about already.
-        setAssets(applySort(galleryItems));
+        setItems(applySort(assets));
     }
 
     //
     // Adds an asset to the start of the gallery.
     //
     async function addGalleryItem(galleryItem: IGalleryItem): Promise<void> {
-        if (!sink) {
-            throw new Error(`Cannot edit readonly gallery.`); 
-        }
-
         //
         // Add the asset for display in the UI.
         //
         loadedAssets.current.set(galleryItem._id, galleryItem);
         searchIndexRef.current.add(galleryItem._id, galleryItem);
-        setAssets([ galleryItem, ...assets ]);
+        setItems([ galleryItem, ...items ]);
 
-        await sink.addGalleryItem(galleryItem);
+        addAsset(galleryItem);
     }
 
     //
     // Updates an asset in the gallery by index.
     //
     async function updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
-        if (!sink) {
-            throw new Error(`Cannot edit readonly gallery.`); 
-        }
-
         //
         // Update assets in memory for display in the UI.
         //
-        const assetId = assets[galleryItemIndex]._id;
+        const assetId = items[galleryItemIndex]._id;
         const updatedItem: IGalleryItem = { ...loadedAssets.current.get(assetId)!, ...partialGalleryItem };
         loadedAssets.current.set(assetId, updatedItem);
         searchIndexRef.current.add(assetId, updatedItem);
-        setAssets([
-            ...assets.slice(0, galleryItemIndex),
+        setItems([
+            ...items.slice(0, galleryItemIndex),
             updatedItem,
-            ...assets.slice(galleryItemIndex + 1),
+            ...items.slice(galleryItemIndex + 1),
         ]);
 
-        await sink.updateGalleryItem(assetId, partialGalleryItem);
+        updateAsset(assetId, partialGalleryItem);
     }
 
     //
     // Checks if an asset is already uploaded.
     //
     async function checkAssetHash(hash: string): Promise<boolean> {
-        return await source.checkAssetHash(hash);
+        return await _checkAssetHash(hash);
     }
 
     //
     // Uploads an asset.
     //
     async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        if (!sink) {
-            throw new Error(`Cannot upload to readonly gallery.`); 
-        }
-
-        await sink.storeAsset(assetId, assetType, {
+        await storeAsset(assetId, assetType, { 
             contentType, 
             data
         });
@@ -277,7 +269,7 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
             return existingCacheEntry.objectUrl;
         }
 
-        const assetData = await source.loadAsset(assetId, assetType);
+        const assetData = await _loadAsset(assetId, assetType);
         if (!assetData) {
             return undefined;
         }
@@ -319,7 +311,7 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
         if (selectedItem.index > 0) {
             const prevIndex = selectedItem.index-1;
             return {
-                item: assets[prevIndex],
+                item: items[prevIndex],
                 index: prevIndex,
             };
         }
@@ -337,10 +329,10 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
             return undefined;
         }
 
-        if (selectedItem.index < assets.length-1) {
+        if (selectedItem.index < items.length-1) {
             const nextIndex = selectedItem.index + 1;
             return {
-                item: assets[nextIndex],
+                item: items[nextIndex],
                 index: nextIndex,
             };
         }
@@ -372,7 +364,7 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
             return;
         }
 
-        setAssets(applySort(searchAssets(newSearchText)));
+        setItems(applySort(searchAssets(newSearchText)));
         setSearchText(newSearchText);
     }
 
@@ -438,8 +430,9 @@ export function GalleryContextProvider({ source, sink, sortFn, children }: IGall
     }
 
     const value: IGalleryContext = {
+        isLoaded: isInitialized,
         searchText,
-        assets,
+        assets: items,
         addGalleryItem,
         updateGalleryItem,
         checkAssetHash,
