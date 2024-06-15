@@ -1,7 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
 import flexsearch from "flexsearch";
-import { useApp } from "./app-context";
 import { useGallerySource } from "./gallery-source";
 
 //
@@ -116,7 +115,6 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { user } = useApp();
     const { isLoading, assets, addAsset, updateAsset, checkAssetHash: _checkAssetHash, loadAsset: _loadAsset, storeAsset } = useGallerySource();
 
     //
