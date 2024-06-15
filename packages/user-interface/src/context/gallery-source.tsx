@@ -8,9 +8,9 @@ import { IAssetData } from "../def/asset-data";
 export interface IGallerySource {
     
     //
-    // Set to true when the source is initialized.
+    // Set to true while assets are being loaded.
     //
-    isInitialized: boolean;
+    isLoading: boolean;
 
     //
     // Set to true when the source is readonly and can't be edited.

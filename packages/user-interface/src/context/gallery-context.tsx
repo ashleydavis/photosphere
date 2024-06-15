@@ -12,9 +12,9 @@ export type SortFn = (galleryItem: IGalleryItem) => any;
 export interface IGalleryContext {
 
     //
-    // Set to true when the gallery has loaded.
+    // Set to true when the gallery is loading.
     //
-    isLoaded: boolean;
+    isLoading: boolean;
 
     //
     // The assets currently loaded. 
@@ -117,7 +117,7 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
     const { user } = useApp();
-    const { isInitialized, assets, addAsset, updateAsset, checkAssetHash: _checkAssetHash, loadAsset: _loadAsset, storeAsset } = useGallerySource();
+    const { isLoading, assets, addAsset, updateAsset, checkAssetHash: _checkAssetHash, loadAsset: _loadAsset, storeAsset } = useGallerySource();
 
     //
     // Asset that have been loaded from storage.
@@ -187,10 +187,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Loads assets on mount.
     //
     useEffect(() => {
-        if (user && isInitialized) {
-            loadGallery();
-        }
-    }, [isInitialized, user, assets]);
+        loadGallery();
+    }, [assets]);
 
     //
     // Loads items into the gallery.
@@ -430,7 +428,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     }
 
     const value: IGalleryContext = {
-        isLoaded: isInitialized,
+        isLoading,
         searchText,
         assets: items,
         addGalleryItem,

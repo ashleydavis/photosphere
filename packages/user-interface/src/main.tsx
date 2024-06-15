@@ -36,6 +36,7 @@ export function Main({ computerPage }: IMainProps) {
 	const navigate = useNavigate();
 	
     const { 
+        isLoading: isGalleryLoading,
         assets,
         searchText,
         search,
@@ -181,8 +182,28 @@ export function Main({ computerPage }: IMainProps) {
                             </div>
                         </NavLink>
 
+                        <div className="ml-auto"></div>
+
+                        {(isGalleryLoading)
+                            && <div className="flex flex-row items-center ml-1 mr-2">
+                                <span className="text-sm hidden sm:block mr-1">Loading</span>
+                                <div className="mx-1 sm:mx-2">
+                                    <Spinner show={true} />
+                                </div>
+                            </div>
+                        }
+
+                        {(isUploading || numScans > 0)
+                            && <div className="flex flex-row items-center ml-1 mr-2">
+                                <span className="text-sm hidden sm:block mr-1">Uploading</span>
+                                <div className="mx-1 sm:mx-2">
+                                    <Spinner show={true} />
+                                </div>
+                            </div>
+                        }
+
                         <div
-                            className="ml-auto mr-2 sm:mr-8 text-xs sm:text-sm"
+                            className="mr-2 text-xs sm:text-sm"
                             >
                             {assets.length} photos
                         </div>
@@ -208,15 +229,6 @@ export function Main({ computerPage }: IMainProps) {
                                 </button>
                             </div> 
                         )}
-
-                        {(isUploading || numScans > 0)
-                            && <div className="flex flex-row items-center">
-                                <span className="hidden sm:block">Uploading</span>
-                                <div className="mx-1 sm:mx-2">
-                                    <Spinner show={true} />
-                                </div>
-                            </div>
-                        }
                     </div>
 
                     {openSearch

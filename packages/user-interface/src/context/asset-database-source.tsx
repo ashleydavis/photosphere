@@ -13,9 +13,9 @@ import { useApp } from "./app-context";
 import { applyOperations } from "../lib/apply-operation";
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
-import { initialSync } from "../lib/sync/sync-initial";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { syncIncoming } from "../lib/sync/sync-incoming";
+import { ILastUpdateRecord } from "../lib/sync/last-update-record";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -32,13 +32,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
     const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(database, "outgoing-asset-upload"));
     const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(database, "outgoing-asset-update"));
-    const initialSyncStarted = useRef(false);
-    const periodicSyncStart = useRef(false);
+    const periodicSyncStarted = useRef(false);
 
     //
-    // Set to true when the source is initialized.
+    // Set to true while loading assets.
     //
-    const [ isInitialized, setIsInitialized ] = useState(false);
+    const [ isLoading, setIsLoading ] = useState(true);
 
     //
     // Assets that have been loaded.
@@ -178,54 +177,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Initial synchronization.
-    //
-    useEffect(() => {
-        if (initialSyncStarted.current) {
-            console.log(`Already doing the initial sync.`);
-            return;
-        }
-
-        if (isOnline) {
-            if (user) {
-                initialSyncStarted.current = true;
-
-                //
-                // Starts the database synchronization process.
-                //
-                async function startSync() {
-                    try {
-                        console.log(`Doing initial sync...`);
-
-                        const setIds = user!.sets.access;    
-                        await initialSync({ setIds, api, database });
-                    }
-                    catch (err) {
-                        console.error(`Initial sync failed:`);
-                        console.error(err);
-                    }
-                    finally {
-                        console.log(`Finished initial sync`);
-                        setIsInitialized(true);
-
-                        initialSyncStarted.current = false;
-                    }
-                }
-    
-                startSync();
-            }
-        }
-        else {
-            setIsInitialized(true);
-        }
-
-    }, [isOnline, user]);
-
-    //
     // Periodic synchronization.
     //
     useEffect(() => {
-        if (periodicSyncStart.current) {
+        if (periodicSyncStarted.current) {
             console.log(`Periodic sync already started.`);
             return;
         }
@@ -233,8 +188,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         let timer: NodeJS.Timeout | undefined = undefined;
         let done = false;
         
-        if (isInitialized && isOnline && user) {
-            periodicSyncStart.current = true;
+        if (!isLoading && isOnline && user) {
+            periodicSyncStarted.current = true;
 
             // 
             // Periodic database synchronization.
@@ -283,35 +238,89 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         return () => {
             done = true;
-            periodicSyncStart.current = false;
+            periodicSyncStarted.current = false;
             if (timer) {
                 clearTimeout(timer);
                 timer = undefined;
             }
         };
 
-    }, [isInitialized, isOnline, user]);
+    }, [isLoading, isOnline, user]);
+
+    //
+    // Load assets into memory.
+    //
+    async function loadAssets(setId: string) {
+        try {
+            setIsLoading(true);
+
+            let assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
+            if (assets.length > 0) {
+                setAssets(assets);
+            }
+            else {
+                //
+                // Records the time of the latest update for the set.
+                // This should be done before the initial sync to avoid missing updates.
+                //
+                const latestTime = await api.getLatestTime();
+
+                //
+                // Load the assets from the cloud into memory.
+                //
+                let skip = 0;
+                const pageSize = 1000;
+                while (true) {
+                    const records = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
+                    if (records.length === 0) {
+                        // No more records.
+                        break;
+                    }
+
+                    skip += pageSize;
+                    assets = assets.concat(records);
+                    setAssets(assets);
+                }
+                
+                if (latestTime !== undefined) {
+                    //
+                    // Record the latest time where updates were received.
+                    //
+                    database.collection<ILastUpdateRecord>("last-update").setOne({ 
+                        _id: setId,
+                        lastUpdateTime: latestTime,
+                    });
+                }
+
+                //
+                // Save the assets to the local database.
+                //
+                const localCollection = database.collection("metadata");
+                for (const asset of assets) {
+                    await localCollection.setOne(asset); // Store it locally.
+                }
+            }        
+        }
+        finally {
+            setIsLoading(false);
+        }
+    }
 
     //
     // Load assets.
     //
     useEffect(() => {
-        if (isInitialized) {
-            async function loadAssets() {
-                const assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
-                setAssets(assets);
-            }
-
-            loadAssets()
+        if (setId) {
+            loadAssets(setId)
                 .catch(err => {
                     console.error(`Failed to load assets:`);
                     console.error(err);
                 });
         }
-    }, [isInitialized, setId]);
+    }, [setId]);
 
     const value: IGallerySource = {
-        isInitialized,
+        isLoading,
         isReadOnly: false,
         assets,
         addAsset,

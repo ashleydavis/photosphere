@@ -17,8 +17,6 @@ export function UploadPage() {
         numAlreadyUploaded, 
     } = useUpload();
 
-    const { isLoaded } = useGallery();
-
     //
     // Set to true when something is dragged over the upload area.
     //
@@ -52,14 +50,6 @@ export function UploadPage() {
         event.stopPropagation();
 
         await uploadFiles({ items: event.dataTransfer.items });
-    }
-
-    if (!isLoaded) {
-        return (
-            <div className="w-full h-full p-4 flex items-center justify-center">
-                <Spinner show={true} />
-            </div>
-        );
     }
 
     return (
