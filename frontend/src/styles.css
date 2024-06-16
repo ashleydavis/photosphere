@@ -21,7 +21,7 @@ body {
 
 #main {
     width: 100vw;
-    height: calc(100vh - 51px);
+    height: 100vh;
     overflow: hidden;
 }
 

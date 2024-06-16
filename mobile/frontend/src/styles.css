@@ -21,7 +21,7 @@ body {
 
 #main {
     width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));
-    height: calc(100vh - 51px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     overflow: hidden;
 }
 
