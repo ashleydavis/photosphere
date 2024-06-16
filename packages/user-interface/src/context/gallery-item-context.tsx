@@ -1,6 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "./gallery-context";
+import { set } from "lodash";
 
 export interface IGalleryItemContext {
 
@@ -18,6 +19,16 @@ export interface IGalleryItemContext {
     // Updates the configuration of the asset.
     //
     updateAsset(asset: Partial<IGalleryItem>): Promise<void>;
+
+    //
+    // Adds an array value to the asset.
+    //
+    addArrayValue(key: string, value: string): Promise<void>;
+
+    //
+    // Removes an array value from the asset.
+    //
+    removeArrayValue(key: string, value: string): Promise<void>;
 }
 
 const GalleryItemContext = createContext<IGalleryItemContext | undefined>(undefined);
@@ -33,17 +44,11 @@ export interface IProps {
     // The asset currently loaded.
     //
     asset: IGalleryItem;
-
-    //
-    // Index of the asset in the gallery.
-    // This is required for fast updates for the asset back into the full gallery.
-    //
-    assetIndex: number;
 }
 
-export function GalleryItemContextProvider({ children, asset, assetIndex }: IProps) {
+export function GalleryItemContextProvider({ children, asset }: IProps) {
 
-    const { updateGalleryItem } = useGallery();
+    const { updateGalleryItem, addArrayValue: _addArrayValue, removeArrayValue: _removeArrayValue  } = useGallery();
 
     //
     // The asset being edited.
@@ -54,18 +59,63 @@ export function GalleryItemContextProvider({ children, asset, assetIndex }: IPro
     // Updates the configuration of the asset.
     //
     async function updateAsset(assetUpdate: Partial<IGalleryItem>): Promise<void> {
+        if (asset.setIndex === undefined) {
+            throw new Error(`Asset set index is not set!`);
+        }
+
         setAsset({
             ..._asset,
             ...assetUpdate,
         });
 
-        await updateGalleryItem(assetIndex, assetUpdate);
+        await updateGalleryItem(asset.setIndex, assetUpdate);
+    }
+
+    //
+    // Adds an array value to the asset.
+    //
+    async function addArrayValue(field: string, value: any): Promise<void> {
+        if (asset.setIndex === undefined) {
+            throw new Error(`Asset set index is not set!`);
+        }
+
+        const updatedAsset: any = { ..._asset };
+        if (updatedAsset[field] === undefined) {
+            updatedAsset[field] = [];
+        }
+        updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
+        updatedAsset[field].push(value);
+        setAsset(updatedAsset);
+        console.log(`Updated asset:`); //fio:
+        console.log(updatedAsset); //fio:
+
+        await _addArrayValue(asset.setIndex, field, value);
+    }
+
+    //
+    // Removes an array value from the asset.
+    //
+    async function removeArrayValue(field: string, value: any): Promise<void> {
+        if (asset.setIndex === undefined) {
+            throw new Error(`Asset set index is not set!`);
+        }
+
+        const updatedAsset: any = { ..._asset };
+        if (updatedAsset[field] === undefined) {
+            updatedAsset[field] = [];
+        }
+        updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
+        setAsset(updatedAsset);
+
+        await _removeArrayValue(asset.setIndex, field, value);
     }
 
     const value: IGalleryItemContext = {
         asset: _asset,
         setAsset,
         updateAsset,
+        addArrayValue,
+        removeArrayValue,
     };
 
     return (

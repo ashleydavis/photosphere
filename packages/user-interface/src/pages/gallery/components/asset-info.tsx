@@ -23,7 +23,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     //
     // Interface to the gallery item.
     //
-    const { asset, updateAsset } = useGalleryItem();
+    const { asset, updateAsset, addArrayValue, removeArrayValue } = useGalleryItem();
 
     //
     // Adds a new label to the asset.
@@ -34,28 +34,21 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
             return;
         }
 
-        await updateAsset({
-            labels: [
-                ...(asset.labels || []),
-                labelName,
-            ],
-        });
+        await addArrayValue("labels", labelName);
     }
     
 	//
     // Removes a label from the asset.
     //
     async function onRemoveLabel(labelName: string) {
-        await updateAsset({
-            labels: (asset.labels || []).filter(x => x !== labelName),
-        }); 
+        await removeArrayValue("labels", labelName);
     }
         
     //
     // Event raised when the user has updated the assets description.
     //
     async function onUpdateDescription(description: string): Promise<void> {
-       await updateAsset({
+        await updateAsset({
             description,
         });
     }

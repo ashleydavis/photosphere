@@ -62,7 +62,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         // Add the first row.
         //
         curRow = {
-            startingIndex: 0,
             items: [],
             offsetY: 0,
             height: targetRowHeight,
@@ -108,7 +107,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                 //
                 prevRow = curRow;
                 curRow = {
-                    startingIndex: prevRow && (prevRow.startingIndex + prevRow.items.length) || 0,
                     items: [],
                     offsetY: 0,
                     height: targetRowHeight,
@@ -123,7 +121,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                 //
                 prevRow = curRow;
                 curRow = { //TODO: This should be optional.
-                    startingIndex: prevRow && (prevRow.startingIndex + prevRow.items.length) || 0,
                     items: [],
                     offsetY: 0,
                     height: targetRowHeight,
@@ -227,7 +224,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         if (!headingsMatch(row.headings, prevHeadings)) {
             rows.splice(rowIndex, 0, {
                 type: "heading",
-                startingIndex: row.startingIndex,
                 items: [],
                 offsetY: 0,
                 height: 45,

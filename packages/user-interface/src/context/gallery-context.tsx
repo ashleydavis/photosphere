@@ -40,7 +40,17 @@ export interface IGalleryContext {
     //
     // Updates an item in the gallery by index.
     //
-    updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
+    updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
+
+    //
+    // Adds an array value to the asset.
+    //
+    addArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
+
+    //
+    // Removes an array value from the asset.
+    //
+    removeArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
 
     //
     // Checks if an asset is already uploaded.
@@ -117,7 +127,12 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { isLoading, assets, addAsset, updateAsset, checkAssetHash: _checkAssetHash, loadAsset: _loadAsset, storeAsset } = useGallerySource();
+    const { isLoading, assets, addAsset, updateAsset, 
+        checkAssetHash: _checkAssetHash, 
+        loadAsset: _loadAsset, storeAsset,
+        addArrayValue: _addArrayValue,
+        removeArrayValue: _removeArrayValue 
+        } = useGallerySource();
 
     //
     // Asset that have been loaded from storage.
@@ -203,7 +218,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         }
 
         // Renders the assets that we know about already.
-        setItems(applySort(assets));
+        setItems(applySort(assets.map((asset, index) => ({ ...asset, searchIndex: index }))));
     }
 
     //
@@ -218,6 +233,20 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     async function updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
         updateAsset(assetIndex, partialGalleryItem);
+    }
+
+    //
+    // Adds an array value to the asset.
+    //
+    async function addArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+        await _addArrayValue(assetIndex, field, value);
+    }
+
+    //
+    // Removes an array value from the asset.
+    //
+    async function removeArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+        await _removeArrayValue(assetIndex, field, value);
     }
 
     //
@@ -290,6 +319,10 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Gets the previous asset, or undefined if none.
     //
     function getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
+        if (selectedItem.item.searchIndex === undefined) {
+            throw new Error(`Selected item has no search index!`);
+        }
+
         if (selectedItem.item.searchIndex < 0) {
             return undefined;
         }
@@ -309,6 +342,9 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Gets the next asset, or undefined if none.
     //
     function getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
+        if (selectedItem.item.searchIndex === undefined) {
+            throw new Error(`Selected item has no search index!`);
+        }
         
         if (selectedItem.item.searchIndex < 0) {
             return undefined;
@@ -425,6 +461,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         items,
         addGalleryItem,
         updateGalleryItem,
+        addArrayValue,
+        removeArrayValue,
         checkAssetHash,
         uploadAsset,
         loadAsset,

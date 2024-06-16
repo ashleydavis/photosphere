@@ -121,7 +121,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     lineHeight: "14px",
                 }}
                 >
-                #{item.searchIndex+1}
+                #{item.searchIndex!+1}
             </div>
 
             {/* Renders a debug panel for each image showing it's position and dimensions. */}

@@ -40,6 +40,16 @@ export interface IGallerySource {
     updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void>;
 
     //
+    // Adds an array value to the asset.
+    //
+    addArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
+
+    //
+    // Removes an array value from the asset.
+    //
+    removeArrayValue(assetIndex: number, field: string, value: any): Promise<void>;    
+
+    //
     // Checks if an asset is already uploaded.
     //
     checkAssetHash(hash: string): Promise<boolean>;

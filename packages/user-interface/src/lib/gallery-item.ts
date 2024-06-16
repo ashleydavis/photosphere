@@ -11,12 +11,12 @@ export interface IGalleryItem {
     //
     // The index of the asset in the set.
     //
-    setIndex: number;
+    setIndex?: number;
 
     //
     // The index of the asset in the search results.
     //
-    searchIndex: number;
+    searchIndex?: number;
 
     //
     // The original name of the asset before it was uploaded.

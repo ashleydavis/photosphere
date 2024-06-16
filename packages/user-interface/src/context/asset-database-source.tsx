@@ -49,8 +49,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function addAsset(asset: IGalleryItem): Promise<void> {
 
-        setAssets([ asset, ...assets ]);
-
+        setAssets([ { ...asset, setIndex: 0 } ]
+            .concat(
+                assets.map((asset, index) => ({ ...asset, setIndex: index + 1 }))
+            )
+        );
+            
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
@@ -110,7 +114,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             ...assets.slice(0, assetIndex),
             updatedAsset,
             ...assets.slice(assetIndex + 1),
-        ]);
+        ].map((asset, index) => ({ ...asset, setIndex: index })));
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -139,6 +143,105 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 console.error(`Failed to update asset:`);
                 console.error(err);
             });
+    }
+
+    //
+    // Adds an array value to the asset.
+    //
+    async function addArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+        const assetId = assets[assetIndex]._id;
+        const updatedAsset: any = { ...assets[assetIndex] };
+        if (updatedAsset[field] === undefined) {
+            updatedAsset[field] = [];
+        }
+        updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
+        updatedAsset[field].push(value);
+
+        setAssets([
+            ...assets.slice(0, assetIndex),
+            updatedAsset,
+            ...assets.slice(assetIndex + 1),
+        ].map((asset, index) => ({ ...asset, setIndex: index })));
+
+        const ops: IDatabaseOp[] = [{
+            collectionName: "metadata",
+            recordId: assetId,
+            op: {
+                type: "push",
+                field: field,
+                value,
+            },
+        }];
+
+        //
+        // Don't have to wait for these slow operations to complete.
+        //
+        Promise.all([
+                //
+                // Updates the local database.
+                //
+                applyOperations(database, ops),
+
+                //
+                // Queue the updates for upload to the cloud.
+                //
+                outgoingAssetUpdateQueue.current.add({ ops }),
+            ])
+            .catch(err => {
+                console.error(`Failed to update asset:`);
+                console.error(err);
+            });
+    }
+
+    //
+    // Removes an array value from the asset.
+    //
+    async function removeArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+        const assetId = assets[assetIndex]._id;
+        const updatedAsset: any = { ...assets[assetIndex] };
+        if (updatedAsset[field] === undefined) {
+            updatedAsset[field] = [];
+        }
+        updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
+  
+        setAssets([
+            ...assets.slice(0, assetIndex),
+            updatedAsset,
+            ...assets.slice(assetIndex + 1),
+        ].map((asset, index) => ({ ...asset, setIndex: index })));
+
+        const ops: IDatabaseOp[] = [{
+            collectionName: "metadata",
+            recordId: assetId,
+            op: {
+                type: "pull",
+                field: field,
+                value,
+            },
+        }];
+
+        console.log(`Submitting db ops:`); //fio:
+        console.log(ops);
+
+        //
+        // Don't have to wait for these slow operations to complete.
+        //
+        Promise.all([
+                //
+                // Updates the local database.
+                //
+                applyOperations(database, ops),
+
+                //
+                // Queue the updates for upload to the cloud.
+                //
+                outgoingAssetUpdateQueue.current.add({ ops }),
+            ])
+            //todo:
+            // .catch(err => {
+            //     console.error(`Failed to update asset:`);
+            //     console.error(err);
+            // });
     }
 
     //
@@ -308,7 +411,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 setAssets(assets.map((asset, index) => ({
                     ...asset,
                     setIndex: index,
-                    searchIndex: index,
                 })));
             }
             else {
@@ -335,7 +437,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     setAssets(assets.map((asset, index) => ({
                         ...asset,
                         setIndex: index,
-                        searchIndex: index,
                     })));
 
                     console.log(`Loaded ${assets.length} assets.`)
@@ -384,6 +485,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         assets,
         addAsset,
         updateAsset,
+        addArrayValue,
+        removeArrayValue,
         checkAssetHash,
         loadAsset,
         storeAsset,

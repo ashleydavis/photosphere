@@ -74,7 +74,6 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
             {selectedItem &&
                 <GalleryItemContextProvider 
                     asset={selectedItem.item}
-                    assetIndex={selectedItem.index}
                     key={selectedItem.item._id}
                     >
                     <AssetView
