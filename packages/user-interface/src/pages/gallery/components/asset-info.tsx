@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useCallback, useEffect } from "react";
 import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
+import _ from "lodash";
 
 export interface IAssetInfoProps { 
 
@@ -25,6 +26,8 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     //
     const { asset, updateAsset, addArrayValue, removeArrayValue } = useGalleryItem();
 
+    const [description, setDescription] = React.useState(asset.description);
+
     //
     // Adds a new label to the asset.
     //
@@ -43,14 +46,35 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     async function onRemoveLabel(labelName: string) {
         await removeArrayValue("labels", labelName);
     }
+
+    // 
+    // Debounce the update to prevent too many updates.
+    //
+    const debouncedUpdateDescription = useCallback(_.debounce((description: string) => {
+        updateAsset({
+                description,
+            })
+            .catch(err => {
+                console.error("Failed to update asset description");
+                console.error(err);            
+            });
+    }, 500), []);
+
+    //
+    // Flushes the debounced description update on unmount.
+    //
+    useEffect(() => {
+        return () => {
+            debouncedUpdateDescription.flush();
+        };
+    }, []);
         
     //
     // Event raised when the user has updated the assets description.
     //
     async function onUpdateDescription(description: string): Promise<void> {
-        await updateAsset({
-            description,
-        });
+        setDescription(description);
+        debouncedUpdateDescription(description);
     }
 
     //
@@ -99,7 +123,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             placeholder="Add a description"
                             spellCheck="false"
                             autoComplete="off"
-                            value={asset.description}
+                            value={description}
                             onChange={event => onUpdateDescription(event.target.value)}
                         >
                         </textarea>
