@@ -170,7 +170,17 @@ export function GalleryLayout({
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
     
-    const galleryLayout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+    //
+    // The layout of the gallery.
+    //
+    const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
+
+    //
+    // Computes the gallery layout.
+    //
+    useEffect(() => {
+        setLayout(computePartialLayout(undefined, items, galleryWidth, targetRowHeight));
+    }, [items, galleryWidth, targetRowHeight]);
 
     //
     // Handles scrolling.
@@ -206,12 +216,12 @@ export function GalleryLayout({
             <div
                 style={{
                     width: `${galleryWidth}px`,
-                    height: `${galleryLayout?.galleryHeight}px`,
+                    height: `${layout?.galleryHeight}px`,
                     overflowX: "hidden",
                     position: "relative",
                 }}
                 >
-                {renderVisibleRange(galleryLayout, scrollTop, containerRef.current?.clientHeight, onItemClick)}
+                {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, onItemClick)}
             </div>
         </div>
     );
