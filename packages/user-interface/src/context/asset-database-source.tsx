@@ -45,31 +45,34 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
 
     //
-    // Adds an asset to the source (if not readonly).
+    // Adds an asset to the source.
     //
-    async function addAsset(galleryItem: IGalleryItem): Promise<void> {
+    async function addAsset(asset: IGalleryItem): Promise<void> {
+
+        setAssets([ asset, ...assets ]);
+
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
-                recordId: galleryItem._id,
+                recordId: asset._id,
                 op: {
                     type: "set",
                     fields: {
-                        _id: galleryItem._id,
-                        width: galleryItem.width,
-                        height: galleryItem.height,
-                        origFileName: galleryItem.origFileName,
-                        origPath: galleryItem.origPath,
-                        contentType: galleryItem.contentType,
-                        hash: galleryItem.hash,
-                        location: galleryItem.location,
-                        fileDate: galleryItem.fileDate,
-                        photoDate: galleryItem.photoDate,
-                        sortDate: galleryItem.sortDate,
+                        _id: asset._id,
+                        width: asset.width,
+                        height: asset.height,
+                        origFileName: asset.origFileName,
+                        origPath: asset.origPath,
+                        contentType: asset.contentType,
+                        hash: asset.hash,
+                        location: asset.location,
+                        fileDate: asset.fileDate,
+                        photoDate: asset.photoDate,
+                        sortDate: asset.sortDate,
                         uploadDate: dayjs().toISOString(),
-                        properties: galleryItem.properties,
-                        labels: galleryItem.labels,
-                        description: galleryItem.description,
+                        properties: asset.properties,
+                        labels: asset.labels,
+                        description: asset.description,
                         setId,
                     },
                 },
@@ -77,42 +80,65 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         ];
 
         //
-        // Updates the local database.
+        // Don't have to wait for these slow operations to complete.
         //
-        await applyOperations(database, ops);        
+        Promise.all([
+                //
+                // Updates the local database.
+                //
+                applyOperations(database, ops),
 
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingAssetUpdateQueue.current.add({ 
-            ops,
-        });       
+                //
+                // Queue the updates for upload to the cloud.
+                //
+                outgoingAssetUpdateQueue.current.add({ ops }),
+            ])
+            .catch(err => {
+                console.error(`Failed to add asset:`);
+                console.error(err);
+            });
     }
 
     //
     // Updates an existing asset.
     //
-    async function updateAsset(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
+    async function updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void> {
+
+        const assetId = assets[assetIndex]._id;
+        const updatedAsset = { ...assets[assetIndex], ...partialAsset };
+        setAssets([
+            ...assets.slice(0, assetIndex),
+            updatedAsset,
+            ...assets.slice(assetIndex + 1),
+        ]);
+
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
             op: {
                 type: "set",
-                fields: partialGalleryItem,
+                fields: partialAsset,
             },
-        }]
+        }];
 
         //
-        // Updates the local database.
+        // Don't have to wait for these slow operations to complete.
         //
-        await applyOperations(database, ops);        
+        Promise.all([
+                //
+                // Updates the local database.
+                //
+                applyOperations(database, ops),
 
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingAssetUpdateQueue.current.add({ 
-            ops,
-        });
+                //
+                // Queue the updates for upload to the cloud.
+                //
+                outgoingAssetUpdateQueue.current.add({ ops }),
+            ])
+            .catch(err => {
+                console.error(`Failed to update asset:`);
+                console.error(err);
+            });
     }
 
     //
@@ -142,7 +168,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         if (!isOnline) {
             return undefined;
         }
-
         
         //
         // Fallback to cloud.
@@ -280,7 +305,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
             let assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
             if (assets.length > 0) {
-                setAssets(assets);
+                setAssets(assets.map((asset, index) => ({
+                    ...asset,
+                    setIndex: index,
+                    searchIndex: index,
+                })));
             }
             else {
                 //
@@ -303,7 +332,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
                     skip += pageSize;
                     assets = assets.concat(records);
-                    setAssets(assets);
+                    setAssets(assets.map((asset, index) => ({
+                        ...asset,
+                        setIndex: index,
+                        searchIndex: index,
+                    })));
 
                     console.log(`Loaded ${assets.length} assets.`)
                 }

@@ -30,7 +30,7 @@ export interface IGalleryContext {
     //
     // The assets currently loaded. 
     //
-    assets: IGalleryItem[];
+    items: IGalleryItem[];
 
     //
     // Adds an item to the the gallery.
@@ -123,7 +123,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Asset that have been loaded from storage.
     // These assets are unsorted.
     //
-    const loadedAssets = useRef<Map<string, IGalleryItem>>(new Map<string, IGalleryItem>());
+    const loadedAssets = useRef<Map<string, IGalleryItem>>();
 
     //
     // Gallery items produced by the search and sorted.
@@ -138,13 +138,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // References the search index.
     //
-    const searchIndexRef = useRef<flexsearch.Document<IGalleryItem, true>>(new flexsearch.Document<IGalleryItem, true>({
-        preset: "memory",
-        document: {
-            id: "_", // Set when adding a document.
-            index: [ "location", "description", "labels" ],
-        },
-    }));
+    const searchIndexRef = useRef<flexsearch.Document<IGalleryItem, true>>();
 
     //
     // A cache entry for a loaded asset.
@@ -188,17 +182,24 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     useEffect(() => {
         loadGallery();
-    }, [assets]);
+    }, [assets]); 
 
     //
     // Loads items into the gallery.
     //
     async function loadGallery(): Promise<void> {
+        loadedAssets.current = new Map<string, IGalleryItem>();
+        searchIndexRef.current = new flexsearch.Document<IGalleryItem, true>({
+            preset: "memory",
+            document: {
+                id: "_", // Set when adding a document.
+                index: [ "location", "description", "labels" ],
+            },
+        });
+
         for (const asset of assets) {
-            if (!loadedAssets.current.has(asset._id)) {
-                loadedAssets.current.set(asset._id, asset);
-                searchIndexRef.current.add(asset._id, asset);
-            }
+            loadedAssets.current.set(asset._id, asset);
+            searchIndexRef.current.add(asset._id, asset);
         }
 
         // Renders the assets that we know about already.
@@ -209,34 +210,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Adds an asset to the start of the gallery.
     //
     async function addGalleryItem(galleryItem: IGalleryItem): Promise<void> {
-        //
-        // Add the asset for display in the UI.
-        //
-        loadedAssets.current.set(galleryItem._id, galleryItem);
-        searchIndexRef.current.add(galleryItem._id, galleryItem);
-        setItems([ galleryItem, ...items ]);
-
         addAsset(galleryItem);
     }
 
     //
     // Updates an asset in the gallery by index.
     //
-    async function updateGalleryItem(galleryItemIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
-        //
-        // Update assets in memory for display in the UI.
-        //
-        const assetId = items[galleryItemIndex]._id;
-        const updatedItem: IGalleryItem = { ...loadedAssets.current.get(assetId)!, ...partialGalleryItem };
-        loadedAssets.current.set(assetId, updatedItem);
-        searchIndexRef.current.add(assetId, updatedItem);
-        setItems([
-            ...items.slice(0, galleryItemIndex),
-            updatedItem,
-            ...items.slice(galleryItemIndex + 1),
-        ]);
-
-        updateAsset(assetId, partialGalleryItem);
+    async function updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
+        updateAsset(assetIndex, partialGalleryItem);
     }
 
     //
@@ -309,15 +290,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Gets the previous asset, or undefined if none.
     //
     function getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
-        if (selectedItem.index < 0) {
+        if (selectedItem.item.searchIndex < 0) {
             return undefined;
         }
 
-        if (selectedItem.index > 0) {
-            const prevIndex = selectedItem.index-1;
+        if (selectedItem.item.searchIndex > 0) {
+            const prevIndex = selectedItem.item.searchIndex-1;
             return {
                 item: items[prevIndex],
-                index: prevIndex,
             };
         }
         else {
@@ -330,15 +310,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     function getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
         
-        if (selectedItem.index < 0) {
+        if (selectedItem.item.searchIndex < 0) {
             return undefined;
         }
 
-        if (selectedItem.index < items.length-1) {
-            const nextIndex = selectedItem.index + 1;
+        if (selectedItem.item.searchIndex < items.length-1) {
+            const nextIndex = selectedItem.item.searchIndex + 1;
             return {
                 item: items[nextIndex],
-                index: nextIndex,
             };
         }
         else {
@@ -408,10 +387,13 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // 
     function searchAssets(searchText: string): IGalleryItem[] {
         if (searchText === "") {
-            return Array.from(loadedAssets.current.values());
+            return assets.map((asset, index) => ({
+                ...asset,
+                searchIndex: index,
+            }));
         }
 
-        const searchResult = searchIndexRef.current.search(searchText);
+        const searchResult = searchIndexRef.current!.search(searchText);
 
         let searchedAssets: IGalleryItem[] = [];
 
@@ -427,7 +409,10 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
                 }
 
                 searchedSet.add(assetId);
-                searchedAssets.push(loadedAssets.current.get(assetId)!);
+                searchedAssets.push({
+                    ...loadedAssets.current!.get(assetId)!,
+                    searchIndex: searchedAssets.length,
+                });
             }
         }        
 
@@ -437,7 +422,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     const value: IGalleryContext = {
         isLoading,
         searchText,
-        assets: items,
+        items,
         addGalleryItem,
         updateGalleryItem,
         checkAssetHash,

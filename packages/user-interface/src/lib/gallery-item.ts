@@ -9,6 +9,16 @@ export interface IGalleryItem {
     _id: string;
 
     //
+    // The index of the asset in the set.
+    //
+    setIndex: number;
+
+    //
+    // The index of the asset in the search results.
+    //
+    searchIndex: number;
+
+    //
     // The original name of the asset before it was uploaded.
     //
     origFileName: string;
@@ -110,11 +120,6 @@ export interface IGalleryRow {
     type?: "heading";
     
     //
-    // The index in the gallery of the first asset in this row.
-    //
-    startingIndex: number;
-
-    //
     // Items to display in this row in the gallery.
     //
     items: IGalleryItem[];
@@ -148,9 +153,4 @@ export interface ISelectedGalleryItem {
     // The selected item.
     //
     item: IGalleryItem;
-
-    //
-    // The index of the selected item in the gallery.
-    //
-    index: number;
 }

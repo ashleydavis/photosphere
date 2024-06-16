@@ -30,14 +30,14 @@ export interface IGallerySource {
     assets: IGalleryItem[];
 
     //
-    // Adds an asset to the source (if not readonly).
+    // Adds an asset to the source.
     //
     addAsset(asset: IGalleryItem): Promise<void>;
 
     //
     // Updates an existing asset.
     //
-    updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void>;
+    updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void>;
 
     //
     // Checks if an asset is already uploaded.

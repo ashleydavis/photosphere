@@ -10,11 +10,6 @@ export interface IGalleryImageProps {
     item: IGalleryItem;
 
     //
-    // The global index of the gallery item.
-    //
-    itemIndex: number;
-
-    //
     // Event raised when an item in the gallery has been clicked.
     //
     onClick: (() => void) | undefined;
@@ -43,7 +38,7 @@ export interface IGalleryImageProps {
 //
 // Renders an image for the gallery.
 //
-export function GalleryImage({ item, itemIndex, onClick, x, y, width, height }: IGalleryImageProps) {
+export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
 
     const [source, setSource] = useState<string>();
     const [objectURL, setObjectURL] = useState<string>("");
@@ -126,7 +121,7 @@ export function GalleryImage({ item, itemIndex, onClick, x, y, width, height }: 
                     lineHeight: "14px",
                 }}
                 >
-                #{itemIndex+1}
+                #{item.searchIndex+1}
             </div>
 
             {/* Renders a debug panel for each image showing it's position and dimensions. */}

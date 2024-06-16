@@ -49,13 +49,9 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                     <GalleryImage
                         key={item._id}
                         item={item}
-                        itemIndex={(row.startingIndex + index)}
                         onClick={() => {
                             if (onItemClick) {
-                                onItemClick({ 
-                                    item, 
-                                    index: row.startingIndex + index 
-                                });
+                                onItemClick({ item });
                             }
                         }}
                         x={item.offsetX!}
@@ -169,12 +165,12 @@ export function GalleryLayout({
     onItemClick = undefined,
     }: IGalleryLayoutProps) {
 
-    const { assets } = useGallery();
+    const { items } = useGallery();
     
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
     
-    const galleryLayout = computePartialLayout(undefined, assets, galleryWidth, targetRowHeight);
+    const galleryLayout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
 
     //
     // Handles scrolling.

@@ -37,7 +37,7 @@ export function Main({ computerPage }: IMainProps) {
 	
     const { 
         isLoading: isGalleryLoading,
-        assets,
+        items,
         searchText,
         search,
         clearSearch,
@@ -205,7 +205,7 @@ export function Main({ computerPage }: IMainProps) {
                         <div
                             className="mr-2 text-xs sm:text-sm"
                             >
-                            {assets.length} photos
+                            {items.length} photos
                         </div>
 
                         {!isAuthenticated && (
