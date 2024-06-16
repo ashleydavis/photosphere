@@ -53,7 +53,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
     const rows = layout.rows;
 
-    let prevRow: IGalleryRow | undefined = undefined;
     let curRow: IGalleryRow;
     let startingRowIndex = 0;
 
@@ -77,10 +76,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         //
         startingRowIndex = rows.length-1;
         curRow = rows[startingRowIndex];
-
-        if (rows.length > 1) {
-            prevRow = rows[rows.length-2];
-        }
     }
 
     //
@@ -105,7 +100,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                 //
                 // Break row on width.
                 //
-                prevRow = curRow;
                 curRow = {
                     items: [],
                     offsetY: 0,
@@ -119,7 +113,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                 //
                 // Break row on headings.
                 //
-                prevRow = curRow;
                 curRow = { //TODO: This should be optional.
                     items: [],
                     offsetY: 0,
