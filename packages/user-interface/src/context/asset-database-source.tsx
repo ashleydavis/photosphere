@@ -220,9 +220,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        console.log(`Submitting db ops:`); //fio:
-        console.log(ops);
-
         //
         // Don't have to wait for these slow operations to complete.
         //
@@ -237,11 +234,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 outgoingAssetUpdateQueue.current.add({ ops }),
             ])
-            //todo:
-            // .catch(err => {
-            //     console.error(`Failed to update asset:`);
-            //     console.error(err);
-            // });
+            .catch(err => {
+                console.error(`Failed to update asset:`);
+                console.error(err);
+            });
     }
 
     //
