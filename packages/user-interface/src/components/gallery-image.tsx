@@ -106,8 +106,8 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
             <div
                 style={{
                     position: "absolute",
-                    left: `${x+2}px`,
-                    top: `${y+2}px`,
+                    left: `${x}px`,
+                    top: `${y}px`,
                     padding: "2px",
                     color: "white",
                     backgroundColor: "black",
