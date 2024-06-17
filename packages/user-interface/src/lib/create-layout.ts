@@ -5,6 +5,7 @@
 
 import dayjs from "dayjs";
 import { IGalleryItem, IGalleryRow } from "./gallery-item";
+import { getImageDimensions } from "./image";
 
 export interface IGalleryLayout {
     //
@@ -83,7 +84,8 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
         const item = items[itemIndex];
-        const aspectRatio = item.width / item.height;
+        const resolution = getImageDimensions({ width: item.width, height: item.height }, item.properties?.exif?.Orientation?.[0]);
+        const aspectRatio = resolution.width / resolution.height;
         const computedWidth = targetRowHeight * aspectRatio;
 
         // 

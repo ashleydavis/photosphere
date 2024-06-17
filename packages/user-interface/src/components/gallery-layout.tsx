@@ -4,7 +4,6 @@ import { useGallery } from "../context/gallery-context";
 import { IGalleryLayout, computePartialLayout } from "../lib/create-layout";
 import { GalleryImage } from "./gallery-image";
 import { throttle } from "lodash";
-import { IApi } from "../context/api-context";
 
 export type ItemClickFn = ((item: ISelectedGalleryItem) => void);
 

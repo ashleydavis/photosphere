@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import classNames from "classnames";
+import { getImageTransform } from "../lib/image";
 
 export interface IGalleryImageProps {
     //
@@ -45,6 +46,8 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     const { loadAsset, unloadAsset } = useGallery();
 
+    const gutter = 1;
+
     useEffect(() => {
         loadAsset(item._id, "thumb")
             .then(assetLoaded => {
@@ -65,54 +68,46 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     return (
         <>
-            <div
-                style={{
-                    position: "absolute",
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    width: `${width}px`,
-                    height: `${height}px`,                    
-                    padding: "2px",
-                }}
-                >
-                <div 
-                    style={{ 
-                        backgroundColor: "#E7E9ED", 
-                        width: "100%", 
-                        height: "100%" 
-                    }}
-                    >
-                </div>
-            </div>
-            
             {objectURL
-                && <img 
-                    data-testid="gallery-thumb"
-                    className={classNames("gallery-thumb", { "fade-in": source === "cloud" })}                    
-                    src={objectURL}
+                && <div
                     style={{
                         position: "absolute",
                         left: `${x}px`,
                         top: `${y}px`,
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        padding: "2px",
+                        width: `${width-gutter}px`,
+                        height: `${height-gutter}px`,
+                        overflow: "hidden",
                         // border: "1px solid red",
                     }}
-                    onClick={() => {
-                        if (onClick) {
-                            onClick();
-                        }
-                    }}
-                    />
+                    >
+                    <img 
+                        data-testid="gallery-thumb"
+                        className={classNames("gallery-thumb", { "fade-in": source === "cloud" })}                    
+                        src={objectURL}
+                        style={{
+                            position: "absolute",
+                            left: "0",
+                            top: "0",
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                            transform: getImageTransform(item.properties?.exif?.Orientation?.[0], item.aspectRatio),
+                            transformOrigin: "center",
+                        }}
+                        onClick={() => {
+                            if (onClick) {
+                                onClick();
+                            }
+                        }}
+                        />
+                </div>
             }    
 
             <div
                 style={{
                     position: "absolute",
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    margin: "2px",
+                    left: `${x+2}px`,
+                    top: `${y+2}px`,
                     padding: "2px",
                     color: "white",
                     backgroundColor: "black",

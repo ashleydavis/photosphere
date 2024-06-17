@@ -131,3 +131,100 @@ export function getExifData(file: File | Blob): Promise<any> {
         });
     });
 }
+
+//
+// Swaps resolution of the image based on orientation from the exif data.
+//
+export function getImageDimensions(resolution: IResolution, orientation: number | undefined): IResolution {
+    switch (orientation) {
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+            return {
+                width: resolution.height,
+                height: resolution.width,
+            };
+    }
+
+    return resolution;
+}
+
+//
+// Gets the scale of the image determined from the aspect ratio.
+//
+function getScaleFromAspectRatio(flipX: boolean, aspectRatio: number | undefined): string | undefined {
+    if (aspectRatio !== undefined) {
+        if (flipX) {
+            return `scaleX(${-1.0 / aspectRatio}) scaleY(${1.0 / aspectRatio})`;
+        }
+        else {
+            return `scale(${1.0 / aspectRatio})`;
+        }
+    }
+    else {
+        if (flipX) {
+            return `scaleX(-1)`;
+        } 
+        else {
+            return undefined; // No scaling needed.
+        }
+    }
+}
+
+//
+// Gets the image transfomrationed based on orientation from the exif data.
+//
+export function getImageTransform(orientation: number | undefined, aspectRatio: number | undefined): string | undefined {
+    switch (orientation) {
+        case 1:
+            return undefined;
+
+        case 2:
+            return "scaleX(-1)";
+
+        case 3:
+            return "rotate(180deg)";
+
+        case 4:
+            return "rotate(180deg) scaleX(-1)";
+
+        case 5: {
+            let transform = `rotate(90deg)`;
+            let scale = getScaleFromAspectRatio(true, aspectRatio);
+            if (scale) {
+                transform += ` ` + scale;
+            }
+            return transform;
+        }
+        
+        case 6: {
+            let transform = `rotate(90deg)`;
+            let scale = getScaleFromAspectRatio(false, aspectRatio);
+            if (scale) {
+                transform += ` ` + scale;
+            }
+            return transform;
+        }
+        
+        case 7: {
+            let transform = `rotate(-90deg)`;
+            let scale = getScaleFromAspectRatio(true, aspectRatio);
+            if (scale) {
+                transform += ` ` + scale;
+            }
+            return transform;
+        }
+        
+        case 8: {
+            let transform = `rotate(-90deg)`;
+            let scale = getScaleFromAspectRatio(false, aspectRatio);
+            if (scale) {
+                transform += ` ` + scale;
+            }
+            return transform;
+        }
+    }
+
+    return undefined;
+}

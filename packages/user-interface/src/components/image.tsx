@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
+import { getImageTransform } from "../lib/image";
 
 export interface IImageProps {
     //
@@ -64,6 +65,7 @@ export function Image({ testId, imgClassName, asset, assetType, onClick }: IImag
                     src={objectURL}
                     style={{
                         padding: "2px",
+                        transform: getImageTransform(asset.properties?.exif?.Orientation?.[0], undefined),
                     }}
                     onClick={() => {
                         if (onClick) {
