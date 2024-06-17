@@ -11,15 +11,20 @@ export interface IAssetInfoProps {
     open: boolean;
 
     //
-    // Event raised when the model is closed.
+    // Event raised when the modal is closed.
     //
     onClose: () => void;
+
+    //
+    // Event raised when the asset has been deleted.
+    //
+    onDeleted: () => void;
 }
 
 //
 // Shows info for a particular asset.
 //
-export function AssetInfo({ open, onClose }: IAssetInfoProps) {
+export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
 
     //
     // Interface to the gallery item.
@@ -45,6 +50,16 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
     //
     async function onRemoveLabel(labelName: string) {
         await removeArrayValue("labels", labelName);
+    }
+
+    //
+    // Marks the asset as deleted.
+    //
+    async function onDeleteItem() {
+        await updateAsset({
+            deleted: true,
+        });
+        onDeleted();
     }
 
     // 
@@ -106,7 +121,7 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                         onClick={() => {
                             onClose();
                         }}
-                    >
+                        >
                         <i className="fa-solid fa-close"></i>
                     </button>
 
@@ -252,6 +267,16 @@ export function AssetInfo({ open, onClose }: IAssetInfoProps) {
                             </div>
                         </div>
                         */}
+
+                        <div className="text-base text-red-600 flex flex-row items-center mt-6">
+                            <button
+                                className=""
+                                onClick={onDeleteItem}
+                                >
+                                <i className="w-6 text-2xl pt-1 mr-3 text-red-600 fa-solid fa-trash"></i>
+                                Delete
+                            </button>
+                        </div> 
                     </div>
                 </div>
             </div>

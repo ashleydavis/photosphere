@@ -107,6 +107,11 @@ export interface IGalleryItem {
     // The aspect ratio of them item, once computed.
     //
     aspectRatio?: number;
+
+    //
+    // Marks the asset as deleted if set to true.
+    //
+    deleted?: boolean;
 }
 
 //

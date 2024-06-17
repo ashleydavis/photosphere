@@ -218,7 +218,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         }
 
         // Renders the assets that we know about already.
-        setItems(applySort(assets));
+        setItems(applySort(removeDeletedAssets(assets)));
     }
 
     //
@@ -384,7 +384,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return;
         }
 
-        setItems(applySort(searchAssets(newSearchText)));
+        setItems(applySort(removeDeletedAssets(searchAssets(newSearchText))));
         setSearchText(newSearchText);
     }
 
@@ -393,6 +393,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     async function clearSearch(): Promise<void> {
         await search("");
+    }
+
+    //
+    // Removes deleted assets.
+    // This is a simple way to mark assets as deleted but not remove them from the database.
+    //
+    function removeDeletedAssets(items: IGalleryItem[]): IGalleryItem[] {
+        return items.filter(item => !item.deleted);
     }
 
     //

@@ -115,6 +115,10 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                 onClose={() => {
                     setOpenInfo(false);
                 }}
+                onDeleted={() => {
+                    setOpenInfo(false);
+                    onClose();
+                }}
                 />
         </div>
     );

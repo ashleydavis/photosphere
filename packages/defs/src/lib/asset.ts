@@ -86,4 +86,9 @@ export interface IAsset {
     // Description of the asset, once the user has set it.
     //
     description?: string;
+
+    //
+    // Marks the asset as deleted if set to true.
+    //
+    deleted?: boolean;
 }
