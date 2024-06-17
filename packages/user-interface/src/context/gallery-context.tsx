@@ -218,7 +218,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         }
 
         // Renders the assets that we know about already.
-        setItems(applySort(assets.map((asset, index) => ({ ...asset, searchIndex: index }))));
+        setItems(applySort(assets));
     }
 
     //
@@ -399,23 +399,29 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Sort all assets.
     //
     function applySort(items: IGalleryItem[]): IGalleryItem[] {
-        const clone = items.slice();
-        if (sortFn === undefined) {
+        const sorted = items.slice();
+        if (sortFn !== undefined) {
+            sorted.sort((a, b) => { // Warning: this mutates the array we just cloned.
+                if (sortFn(a) < sortFn(b)) {
+                    return 1;
+                }
+                else if (a.sortDate > b.sortDate) {
+                    return -1;
+                }
+                else {
+                    return 0;
+                }
+            });
+        }
+        else {
             // No sort required.
             // We still clone it because the array must be different to trigger a render.
-            return clone;
         }
-        return clone.sort((a, b) => { // Warning: this mutates the array we just cloned.
-            if (sortFn(a) < sortFn(b)) {
-                return 1;
-            }
-            else if (a.sortDate > b.sortDate) {
-                return -1;
-            }
-            else {
-                return 0;
-            }
-        });
+
+        //
+        // Bake in the search index now that we have sorted the assets.
+        //
+        return sorted.map((asset, index) => ({ ...asset, searchIndex: index }));
     }
 
     //
@@ -423,10 +429,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // 
     function searchAssets(searchText: string): IGalleryItem[] {
         if (searchText === "") {
-            return assets.map((asset, index) => ({
-                ...asset,
-                searchIndex: index,
-            }));
+            return assets;
         }
 
         const searchResult = searchIndexRef.current!.search(searchText);
@@ -445,10 +448,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
                 }
 
                 searchedSet.add(assetId);
-                searchedAssets.push({
-                    ...loadedAssets.current!.get(assetId)!,
-                    searchIndex: searchedAssets.length,
-                });
+                searchedAssets.push(loadedAssets.current!.get(assetId)!);
             }
         }        
 
