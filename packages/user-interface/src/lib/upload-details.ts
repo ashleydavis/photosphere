@@ -17,6 +17,11 @@ export interface IQueuedUpload {
     fileName: string;
 
     //
+    // The path that contains the file, when known.
+    //
+    filePath?: string;
+
+    //
     // Loads the file into a blob.
     //
     loadData: () => Promise<Blob>;

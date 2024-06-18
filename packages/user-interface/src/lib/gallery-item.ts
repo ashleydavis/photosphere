@@ -26,7 +26,7 @@ export interface IGalleryItem {
     //
     // The original directory of the asset before it was uploaded.
     //
-    origPath: string;
+    origPath?: string;
 
     //
     // Content type of the original asset.

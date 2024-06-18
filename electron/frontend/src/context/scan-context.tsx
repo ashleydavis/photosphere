@@ -63,6 +63,7 @@ export function ScanContextProvider({ children }: IProps) {
                 () => loadFileToBlob(fileDetails.path, fileDetails.contentType),
                 fileDetails.contentType,
                 fileDate,
+                undefined,
                 path.dirname(fileDetails.path).split("/")
             );  
         })

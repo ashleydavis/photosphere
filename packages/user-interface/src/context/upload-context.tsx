@@ -34,7 +34,7 @@ export interface IUploadContext {
     //
     // Queues the upload of a file.
     //
-    queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, labels: string[]): Promise<void>;
+    queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, path: string | undefined, labels: string[]): Promise<void>;
 
     //
     // Uploads a collection of files.
@@ -215,7 +215,7 @@ export function UploadContextProvider({ children }: IProps) {
                         const contentType = mimeTypes.lookup(fileName);
                         if (contentType) {
                             const fullFileName = `${nextUpload.fileName}/${fileName}`;
-                            await queueUpload(fullFileName, () => zipObject.async("blob"), contentType, zipObject.date, nextUpload.labels.concat(["From zip file", nextUpload.fileName]));
+                            await queueUpload(fullFileName, () => zipObject.async("blob"), contentType, zipObject.date, nextUpload.filePath, nextUpload.labels.concat(["From zip file", nextUpload.fileName]));
                         }
                     }
                 }
@@ -382,7 +382,7 @@ export function UploadContextProvider({ children }: IProps) {
                 width: imageResolution.width,
                 height: imageResolution.height,
                 origFileName: uploadDetails.fileName,
-                origPath: "",
+                origPath: uploadDetails.filePath,
                 contentType: uploadDetails.assetContentType,
                 hash: uploadDetails.hash,
                 location: uploadDetails.location,
@@ -412,7 +412,7 @@ export function UploadContextProvider({ children }: IProps) {
     //
     // Queues the upload of a file.
     //
-    async function queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, labels: string[]): Promise<void> {
+    async function queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, filePath: string | undefined, labels: string[]): Promise<void> {
 
         if (contentType !== "image/png" && contentType !== "image/jpeg" && contentType !== "application/zip") {
             // Only accept png, jpg and zip files for upload.
@@ -427,7 +427,8 @@ export function UploadContextProvider({ children }: IProps) {
         //
         const uploadDetails: IQueuedUpload = {
             loadData,
-            fileName: fileName,
+            fileName,
+            filePath,
             assetContentType: contentType,
             status: "pending",
             fileDate: dayjs(fileDate).toISOString(),
@@ -514,7 +515,7 @@ export function UploadContextProvider({ children }: IProps) {
         if (item.isFile) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry
             const file = await getFile(item as FileSystemFileEntry); //todo: Could delay loading of this, but it might not work.
-            await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), path);
+            await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), path.join("/"), path);
         }
         else if (item.isDirectory) {
             // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryEntry
@@ -570,7 +571,7 @@ export function UploadContextProvider({ children }: IProps) {
                 const files = dataTransfer.files;
                 if (files) {
                     for (const file of files) {
-                        await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), []);
+                        await queueUpload(file.name, async () => file, file.type, dayjs(file.lastModified).toDate(), undefined, []);
                     }
                 }
             }
