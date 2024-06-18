@@ -181,6 +181,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
         properties,
         labels,
         description: "",
+        userId: config.userId,
     });   
 
     numUploads += 1;

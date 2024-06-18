@@ -8,4 +8,5 @@ export const ignoreDirs = [
     "z:\\some\\path",
 ];
 export const clientId = "paste client id here";
+export const userId = "paste user id here";
 
