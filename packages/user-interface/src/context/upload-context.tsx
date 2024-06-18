@@ -14,6 +14,7 @@ import { retry } from "../lib/retry";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { uuid } from "../lib/uuid";
+import { useApp } from "./app-context";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -84,6 +85,8 @@ export interface IProps {
 }
 
 export function UploadContextProvider({ children }: IProps) {
+
+    const { user } = useApp();
 
     //
     // Interface to the gallery.
@@ -392,7 +395,8 @@ export function UploadContextProvider({ children }: IProps) {
                 uploadDate: dayjs().toISOString(),
                 properties: uploadDetails.properties,
                 labels: uploadDetails.labels,
-                description: ""
+                description: "",
+                userId: user!._id,
             });
 
             console.log(`Uploaded ${assetId}`);

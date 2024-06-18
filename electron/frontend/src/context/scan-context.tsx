@@ -8,7 +8,7 @@ import dayjs from "dayjs";
 import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
 import path from "path";
 import { IAsset } from "defs";
-import { IAssetData, IGalleryItem, IGallerySource, useUpload } from "user-interface";
+import { IAssetData, IGalleryItem, IGallerySource, useApp, useUpload } from "user-interface";
 
 export interface IScanContext {
     //
@@ -24,6 +24,8 @@ export interface IProps {
 }
 
 export function ScanContextProvider({ children }: IProps) {
+
+    const { user } = useApp();
 
     //
     // Assets that have been scanned.
@@ -54,7 +56,8 @@ export function ScanContextProvider({ children }: IProps) {
                 fileDate: dayjs(fileDate).toISOString(),
                 sortDate: dayjs(fileDate).toISOString(),
                 uploadDate: dayjs().toISOString(),
-                setId: "this doesn't make sense here"
+                setId: "this doesn't make sense here",
+                userId: user!._id,
             };
             assets.current.push(newAsset);
 

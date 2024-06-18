@@ -112,6 +112,11 @@ export interface IGalleryItem {
     // Marks the asset as deleted if set to true.
     //
     deleted?: boolean;
+
+    //
+    // The user that uploaded the asset.
+    //
+    userId: string;
 }
 
 //
