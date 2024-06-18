@@ -174,6 +174,7 @@ function getScaleFromAspectRatio(flipX: boolean, aspectRatio: number | undefined
 
 //
 // Gets the image transfomrationed based on orientation from the exif data.
+// https://sirv.com/help/articles/rotate-photos-to-be-upright/
 //
 export function getImageTransform(orientation: number | undefined, aspectRatio: number | undefined): string | undefined {
     switch (orientation) {
