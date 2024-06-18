@@ -16,6 +16,13 @@ declare global {
     }
 }
 
+const dateFields = [
+    "fileDate",
+    "photoDate",
+    "uploadDate",
+    "sortDate",
+];
+
 //
 // Starts the REST API.
 //
@@ -184,9 +191,20 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
 
             const recordCollection = db.collection(op.collectionName);
             if (op.op.type === "set") {
+
+                //
+                // Deserialize date fields.
+                //
+                const fields = Object.assign({}, op.op.fields);
+                for (const dateField of dateFields) {
+                    if (fields[dateField] !== undefined) {
+                        fields[dateField] = new Date(fields[dateField]);
+                    }
+                }
+
                 await recordCollection.updateOne(
                     { _id: op.recordId },
-                    { $set: op.op.fields },
+                    { $set: fields },
                     { upsert: true }
                 );
             }
