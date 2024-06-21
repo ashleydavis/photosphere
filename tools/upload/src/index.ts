@@ -283,25 +283,26 @@ async function main(): Promise<void> {
         }
     }
 
-    console.log(`-- Failures --`);
-    for (const failure of failures) {
-        console.error(`Failed to upload asset: ${failure.filePath}`);
-        console.error(failure.error);
-    }
+    // console.log(`-- Failures --`);
+    // for (const failure of failures) {
+    //     console.error(`Failed to upload asset: ${failure.filePath}`);
+    //     console.error(failure.error);
+    // }
 
-    console.log(`-- Files not handled --`);
-    for (const filePath of filesNotHandled) {
-        console.log(filePath);
-    }
+    // console.log(`-- Files not handled --`);
+    // for (const filePath of filesNotHandled) {
+    //     console.log(filePath);
+    // }
 
     console.log(`-- Summary --`);
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Failed: ${numFailed}`);
+    console.log(`Not handled: ${filesNotHandled.length}`);
 
     await fs.writeFile("./log/failures.json", JSON.stringify(failures, null, 2));
     await fs.writeFile("./log/files-not-handled.json", JSON.stringify(filesNotHandled, null, 2));
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numProcessed, numUploads, numAlreadyUploaded, numFailed }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numProcessed, numUploads, numAlreadyUploaded, numFailed, numNotHandled: filesNotHandled.length }, null, 2));
 }
 
 main()
