@@ -62,7 +62,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     const hash = await computeHash(fileData);    
     if (await checkUploaded(config.uploadSetId, hash)) {
-        console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
+        //console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
         return;
     }    
