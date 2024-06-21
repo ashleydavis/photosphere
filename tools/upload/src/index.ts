@@ -416,6 +416,8 @@ async function uploadAssetData(setId: string, assetId: string, assetType: string
         `${config.backend}/asset`, 
         data, 
         {
+			maxContentLength: Infinity,
+			maxBodyLength: Infinity,
             headers: {
                 "content-type": contentType,
                 set: setId,
