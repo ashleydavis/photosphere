@@ -62,7 +62,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     const hash = await computeHash(fileData);    
     if (await checkUploaded(config.uploadSetId, hash)) {
-        console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
+        //console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
         return;
     }    
@@ -114,33 +114,39 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     let photoDate: string | undefined = undefined;
 
     if (contentType === "image/jpeg" || contentType === "image/jpg") {
-        const parser = exifParser.create(fileData.buffer);
-        parser.enableSimpleValues(false);
-        const exif = parser.parse();
-        properties.exif = exif.tags;
-        if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
-            const coordinates = convertExifCoordinates(exif.tags);
-            if (isLocationInRange(coordinates)) {
-                location = await retry(() => reverseGeocode(coordinates), 3, 1500);
-            }
-            else {
-                console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
-            }
-        }
+		try {
+			const parser = exifParser.create(fileData.buffer);
+			parser.enableSimpleValues(false);
+			const exif = parser.parse();
+			properties.exif = exif.tags;
+			if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
+				const coordinates = convertExifCoordinates(exif.tags);
+				if (isLocationInRange(coordinates)) {
+					location = await retry(() => reverseGeocode(coordinates), 3, 1500);
+				}
+				else {
+					console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
+				}
+			}
 
-        const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-        for (const dateField of dateFields) {
-            const dateStr = exif.tags[dateField];
-            if (dateStr) {
-                try {
-                    photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                }
-                catch (err) {
-                    console.error(`Failed to parse date from ${dateStr}`);
-                    console.error(err);
-                }
-            }
-        }
+			const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+			for (const dateField of dateFields) {
+				const dateStr = exif.tags[dateField];
+				if (dateStr) {
+					try {
+						photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+					}
+					catch (err) {
+						console.error(`Failed to parse date from ${dateStr}`);
+						console.error(err);
+					}
+				}
+			}
+		}
+		catch (err) {
+			console.error(`Failed to get exif data from ${filePath}`);
+			console.error(err);
+		}
     }
 
     //
@@ -216,35 +222,35 @@ async function main(): Promise<void> {
 
     const failures: { filePath: string, error: any }[] = [];
     const filesNotHandled: string[] = [];
+	
+	async function handleAsset(filePath: string): Promise<void> {
+		const ext = path.extname(filePath).toLowerCase();
+		if (ignoreExts.includes(ext)) {
+			// Certain extensions can be ignored and we just don't need to know about them.
+			return;
+		}
+
+		// Check if the file is a supported asset based on its extension.
+		const contentType = extMap[ext];
+		if (!contentType) {
+			filesNotHandled.push(filePath);
+			return;
+		}
+
+		try {
+		   await retry(() => uploadAsset(filePath, contentType), 3, 100);
+		}
+		catch (error: any) {
+			console.error(`Failed to upload asset: ${filePath}`);
+			console.error(error.stack || error.message || error);
+			numFailed += 1; 
+			failures.push({ filePath, error });                
+		}
+	}	
 
     for (const scanPath of config.paths) {        
         console.log(`Scanning path: ${scanPath}`);
-        await findAssets(scanPath, config.ignoreDirs, async filePath => {
-            // console.log(`Found asset: ${filePath}`);
-
-            const ext = path.extname(filePath).toLowerCase();
-            if (ignoreExts.includes(ext)) {
-                // Certain extensions can be ignored and we just don't need to know about them.
-                return;
-            }
-
-            // Check if the file is a supported asset based on its extension.
-            const contentType = extMap[ext];
-            if (!contentType) {
-                filesNotHandled.push(filePath);
-                return;
-            }
-
-            try {
-               await retry(() => uploadAsset(filePath, contentType), 3, 100);
-            }
-            catch (error) {
-                console.error(`Failed to upload asset: ${filePath}`);
-                console.error(error);
-                numFailed += 1; 
-                failures.push({ filePath, error });                
-            }
-        });
+        await findAssets(scanPath, config.ignoreDirs, handleAsset);
     }    
 
     console.log(`-- Failures --`);
@@ -410,6 +416,8 @@ async function uploadAssetData(setId: string, assetId: string, assetType: string
         `${config.backend}/asset`, 
         data, 
         {
+			maxContentLength: Infinity,
+			maxBodyLength: Infinity,
             headers: {
                 "content-type": contentType,
                 set: setId,
