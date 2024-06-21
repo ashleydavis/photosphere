@@ -279,7 +279,7 @@ async function main(): Promise<void> {
 
         numProcessed += chunk.length;
         if ((numProcessed % 100) === 0) {
-            console.log(`Processed ${numProcessed} of ${files.length} assets.`)
+            console.log(`Processed ${numProcessed} of ${files.length} assets.`);
         }
     }
 
@@ -295,6 +295,8 @@ async function main(): Promise<void> {
     // }
 
     console.log(`-- Summary --`);
+    console.log(`Total files found: ${files.length}`);
+    console.log(`Processed: ${numProcessed}`);
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Failed: ${numFailed}`);
@@ -302,7 +304,7 @@ async function main(): Promise<void> {
 
     await fs.writeFile("./log/failures.json", JSON.stringify(failures, null, 2));
     await fs.writeFile("./log/files-not-handled.json", JSON.stringify(filesNotHandled, null, 2));
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numProcessed, numUploads, numAlreadyUploaded, numFailed, numNotHandled: filesNotHandled.length }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numFiles: files.length, numProcessed, numUploads, numAlreadyUploaded, numFailed, numNotHandled: filesNotHandled.length }, null, 2));
 }
 
 main()
