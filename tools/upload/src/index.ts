@@ -1,13 +1,14 @@
 import * as config from "./config";
 import { findAssets } from "./scan";
 import axios from "axios";
-import fs from "fs";
+import fs from "fs-extra";
 import path from "path";
 import sharp from "sharp";
 import os from "os";
 import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
 import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
+import _ from "lodash";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -55,7 +56,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     // Load file data.
     // 
-    const fileData = await fs.promises.readFile(filePath);
+    const fileData = await fs.readFile(filePath);
 
     //
     // Computes the hash and checks if we already uploaded this file.
@@ -152,7 +153,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     // Read the date of the file.
     //
-    const stats = await fs.promises.stat(filePath);
+    const stats = await fs.stat(filePath);
     const fileDate = dayjs(stats.birthtime).toISOString();
     const fileDir = path.dirname(filePath);
     const labels = fileDir.replace(/\\/g, "/")
@@ -220,6 +221,7 @@ export function getContentType(filePath: string): string | undefined {
 
 async function main(): Promise<void> {
 
+    const files: string[] = [];
     const failures: { filePath: string, error: any }[] = [];
     const filesNotHandled: string[] = [];
 	
@@ -248,10 +250,30 @@ async function main(): Promise<void> {
 		}
 	}	
 
+    console.log(`Scanning for assets...`);
+
     for (const scanPath of config.paths) {        
         console.log(`Scanning path: ${scanPath}`);
-        await findAssets(scanPath, config.ignoreDirs, handleAsset);
+        await findAssets(scanPath, config.ignoreDirs, async filePath => { 
+            files.push(filePath) 
+        });
     }    
+
+    await fs.ensureDir("./log");
+    await fs.writeFile("./log/files.json", JSON.stringify(files, null, 2));
+
+    console.log(`Found ${files.length} assets.`);
+
+    let numProcessed = 0;
+
+    for (const chunk of _.chunk(files, 10)) {
+        await Promise.all(chunk.map(handleAsset));
+
+        numProcessed += chunk.length;
+        if ((numProcessed % 100) === 0) {
+            console.log(`Processed ${numProcessed} of ${files.length} assets.`)
+        }
+    }
 
     console.log(`-- Failures --`);
     for (const failure of failures) {
@@ -268,6 +290,10 @@ async function main(): Promise<void> {
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Failed: ${numFailed}`);
+
+    await fs.writeFile("./log/failures.json", JSON.stringify(failures, null, 2));
+    await fs.writeFile("./log/files-not-handled.json", JSON.stringify(filesNotHandled, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numProcessed, numUploads, numAlreadyUploaded, numFailed }, null, 2));
 }
 
 main()

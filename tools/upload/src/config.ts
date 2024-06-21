@@ -10,4 +10,5 @@ export const ignoreDirs = [
 ];
 export const clientId = "paste client id here";
 export const userId = "paste user id here";
+export const batchSize = 10;
 
