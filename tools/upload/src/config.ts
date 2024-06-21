@@ -1,4 +1,5 @@
-export const backend = "http://localhost:3000";
+// export const backend = "http://localhost:3000";
+export const backend = "https://photosphere-api.codecapers.com.au";
 export const token = "paste jwt here";
 export const uploadSetId = "test-collection";
 export const paths = [
