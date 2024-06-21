@@ -209,6 +209,14 @@ const extMap: { [index: string]: string } = {
     '.webp': "image/webp",
     '.mpg': "video/mpeg",
     '.mpeg': "video/mpeg",
+    '.mp4': "video/mp4",
+    '.mov': "video/quicktime",
+    '.avi': "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".wmv": "video/x-ms-wmv",
+    ".webm": "video/webm",
+    ".ogg": "video/ogg",
+    ".ogv": "video/ogg",
 };
 
 //
