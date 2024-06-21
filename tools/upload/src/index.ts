@@ -114,33 +114,39 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     let photoDate: string | undefined = undefined;
 
     if (contentType === "image/jpeg" || contentType === "image/jpg") {
-        const parser = exifParser.create(fileData.buffer);
-        parser.enableSimpleValues(false);
-        const exif = parser.parse();
-        properties.exif = exif.tags;
-        if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
-            const coordinates = convertExifCoordinates(exif.tags);
-            if (isLocationInRange(coordinates)) {
-                location = await retry(() => reverseGeocode(coordinates), 3, 1500);
-            }
-            else {
-                console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
-            }
-        }
+		try {
+			const parser = exifParser.create(fileData.buffer);
+			parser.enableSimpleValues(false);
+			const exif = parser.parse();
+			properties.exif = exif.tags;
+			if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
+				const coordinates = convertExifCoordinates(exif.tags);
+				if (isLocationInRange(coordinates)) {
+					location = await retry(() => reverseGeocode(coordinates), 3, 1500);
+				}
+				else {
+					console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
+				}
+			}
 
-        const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-        for (const dateField of dateFields) {
-            const dateStr = exif.tags[dateField];
-            if (dateStr) {
-                try {
-                    photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                }
-                catch (err) {
-                    console.error(`Failed to parse date from ${dateStr}`);
-                    console.error(err);
-                }
-            }
-        }
+			const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+			for (const dateField of dateFields) {
+				const dateStr = exif.tags[dateField];
+				if (dateStr) {
+					try {
+						photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+					}
+					catch (err) {
+						console.error(`Failed to parse date from ${dateStr}`);
+						console.error(err);
+					}
+				}
+			}
+		}
+		catch (err) {
+			console.error(`Failed to get exif data from ${filePath}`);
+			console.error(err);
+		}
     }
 
     //
