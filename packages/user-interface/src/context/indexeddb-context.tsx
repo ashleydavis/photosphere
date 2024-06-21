@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef } from "react";
-import { IIndexeddbDatabaseConfiguration, openDatabase } from "../lib/database/indexeddb/indexeddb";
+import { IIndexeddbDatabaseConfiguration, deleteDatabase as _deleteDatabase, openDatabase } from "../lib/database/indexeddb/indexeddb";
 import { IDatabase } from "../lib/database/database";
 import { IndexeddbDatabase } from "../lib/database/indexeddb/indexeddb-database";
 
@@ -39,6 +39,11 @@ export interface IIndexeddbContext {
     // The application's database.
     //
     database: IDatabase;
+
+    //
+    // Deletes the local copy of the database.
+    //
+    deleteDatabase(): Promise<void>;
 }
 
 const IndexeddbContext = createContext<IIndexeddbContext | undefined>(undefined);
@@ -49,29 +54,47 @@ export interface IProps {
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
-    const database = useRef<IDatabase | undefined>(new IndexeddbDatabase(
+    const database = useRef<IDatabase>(new IndexeddbDatabase(
         async () => {
+            if (indexeddb.current) {
+                // Database connection is already open.
+                return indexeddb.current; 
+            }
+
+            // Opens the database connection.
             indexeddb.current = await openDatabase("photosphere", databaseConfiguration);
             return indexeddb.current;
         }
     ));
     const indexeddb = useRef<IDBDatabase | undefined>(undefined);
 
+    //
+    // Closes the database connection.
+    //
+    function closeDatabase() {
+        if (indexeddb.current) {
+            indexeddb.current.close();
+            indexeddb.current = undefined;
+        }
+    }    
+
     useEffect(() => {
         return () => {
-            if (indexeddb.current) {
-                indexeddb.current.close();
-                indexeddb.current = undefined;
-            }
-
-            if (database.current) {
-                database.current = undefined;
-            }
+            closeDatabase();
         };
     }, []);
 
+    //
+    // Deletes the local copy of the database.
+    //
+    async function deleteDatabase(): Promise<void> {
+        closeDatabase();
+        await _deleteDatabase("photosphere");
+    }
+
     const value: IIndexeddbContext = {
-        database: database.current!,
+        database: database.current,
+        deleteDatabase,
     };
     
     return (

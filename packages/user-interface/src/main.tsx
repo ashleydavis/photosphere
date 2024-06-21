@@ -8,6 +8,8 @@ import { isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
+import { deleteDatabase } from "./lib/database/indexeddb/indexeddb";
+import { useIndexeddb } from "./context/indexeddb-context";
 const FPSStats = require("react-fps-stats").default;
 
 
@@ -47,6 +49,10 @@ export function Main({ computerPage }: IMainProps) {
         setId,
         setSetId,
     } = useApp();
+
+    const {
+        deleteDatabase
+    } = useIndexeddb();
 
     //
     // Interface to the upload context.
@@ -123,6 +129,12 @@ export function Main({ computerPage }: IMainProps) {
                 </div>
             );
         }
+    }
+
+    async function onLogOut() {
+        await logout();
+
+        await deleteDatabase();
     }
 
     return (
@@ -222,7 +234,7 @@ export function Main({ computerPage }: IMainProps) {
                         {isAuthenticated && (
                             <div className="ml-1 mr-2 sm:mr-4">
                                 <button
-                                    onClick={logout}
+                                    onClick={onLogOut}
                                     >
                                     <i className="w-5 fa-solid fa-right-from-bracket"></i>
                                     <span className="hidden sm:inline ml-1">Log out</span>
@@ -271,7 +283,7 @@ export function Main({ computerPage }: IMainProps) {
                 
             </div>
 
-            <div id="sidebar" className={sidebarOpen ? "open" : ""} >
+            <div id="sidebar" className={classNames("flex flex-col", { "open": sidebarOpen})} >            
                 <div className="flex flex-row items-center mt-4 mb-8">
                     <h1 className="text-xl">
                         Photosphere
@@ -356,6 +368,17 @@ export function Main({ computerPage }: IMainProps) {
                         );                    
                     })}
                 </div>
+
+                <div className="flex-grow" />
+
+                {!isProduction && (
+                    <button 
+                        className="flex flex-row items-center p-2 m-2 cursor-pointer"
+                        onClick={deleteDatabase}
+                        >
+                        Delete local database
+                    </button>
+                )}
             </div>
 
             <div id="main">

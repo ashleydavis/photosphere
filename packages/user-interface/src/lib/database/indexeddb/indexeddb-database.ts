@@ -15,11 +15,4 @@ export class IndexeddbDatabase implements IDatabase {
     collection<RecordT extends IRecord>(collectionName: string): IDatabaseCollection<RecordT> {
         return new IndexeddbDatabaseCollection<RecordT>(collectionName, this.openDb);
     }
-
-    //
-    // Unwraps the indexeddb database.
-    //
-    async getIndexedDb(): Promise<IDBDatabase> {
-        return this.openDb();
-    }
 }
