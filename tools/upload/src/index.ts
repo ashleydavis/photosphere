@@ -222,35 +222,35 @@ async function main(): Promise<void> {
 
     const failures: { filePath: string, error: any }[] = [];
     const filesNotHandled: string[] = [];
+	
+	async function handleAsset(filePath: string): Promise<void> {
+		const ext = path.extname(filePath).toLowerCase();
+		if (ignoreExts.includes(ext)) {
+			// Certain extensions can be ignored and we just don't need to know about them.
+			return;
+		}
+
+		// Check if the file is a supported asset based on its extension.
+		const contentType = extMap[ext];
+		if (!contentType) {
+			filesNotHandled.push(filePath);
+			return;
+		}
+
+		try {
+		   await retry(() => uploadAsset(filePath, contentType), 3, 100);
+		}
+		catch (error: any) {
+			console.error(`Failed to upload asset: ${filePath}`);
+			console.error(error.stack || error.message || error);
+			numFailed += 1; 
+			failures.push({ filePath, error });                
+		}
+	}	
 
     for (const scanPath of config.paths) {        
         console.log(`Scanning path: ${scanPath}`);
-        await findAssets(scanPath, config.ignoreDirs, async filePath => {
-            // console.log(`Found asset: ${filePath}`);
-
-            const ext = path.extname(filePath).toLowerCase();
-            if (ignoreExts.includes(ext)) {
-                // Certain extensions can be ignored and we just don't need to know about them.
-                return;
-            }
-
-            // Check if the file is a supported asset based on its extension.
-            const contentType = extMap[ext];
-            if (!contentType) {
-                filesNotHandled.push(filePath);
-                return;
-            }
-
-            try {
-               await retry(() => uploadAsset(filePath, contentType), 3, 100);
-            }
-            catch (error) {
-                console.error(`Failed to upload asset: ${filePath}`);
-                console.error(error);
-                numFailed += 1; 
-                failures.push({ filePath, error });                
-            }
-        });
+        await findAssets(scanPath, config.ignoreDirs, handleAsset);
     }    
 
     console.log(`-- Failures --`);
