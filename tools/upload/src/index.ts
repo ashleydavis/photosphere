@@ -477,7 +477,7 @@ function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordina
             }
             else {
                 let coordinates: ICoordinates | undefined = undefined;
-                if (metadata.format?.tags.location) {
+                if (metadata.format?.tags?.location) {
                     coordinates = parseVideoLocation(metadata.format.tags.location);
                 }
                 
