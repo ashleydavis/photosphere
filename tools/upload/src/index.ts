@@ -16,6 +16,10 @@ const ffmpegPaths = require('ffmpeg-ffprobe-static');
 ffmpeg.setFfmpegPath(ffmpegPaths.ffmpegPath);
 ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 
+if (!process.env.GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY environment variable not set.");
+}
+
 //
 // Size of the thumbnail.
 //
