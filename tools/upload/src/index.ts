@@ -381,7 +381,13 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
 
     const resolution = await getVideoResolution(videoPath);
     const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
-    return { resolution, thumbnail, ...await getVideoMetadata(videoPath) };
+    const videoDetails = { resolution, thumbnail, ...await getVideoMetadata(videoPath) };
+
+    if (!filePath) {
+        await fs.unlink(videoPath);
+    }
+
+    return videoDetails;
 }
 
 //
@@ -429,6 +435,7 @@ function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: 
         ffmpeg(videoPath)
             .on('end', () => {
                 resolve(fs.readFileSync(thumbnailFilePath));
+                fs.unlinkSync(thumbnailFilePath);
             })
             .on('error', (err: any) => {
                 reject(err);
