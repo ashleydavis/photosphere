@@ -72,16 +72,16 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
 
     // console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
 
-    let resolution: IResolution | undefined = undefined;
+    let assetDetails: IAssetDetails | undefined = undefined;
 
     //
     // Get asset resolution.
     //
     if (contentType.startsWith("video")) {
-        resolution = await getVideoResolution(actualFilePath, fileData);
+        assetDetails = await getVideoDetails(actualFilePath, fileData);
     }
     else {
-        resolution = await getImageResolution(filePath, fileData);
+        assetDetails = await getImageDetails(filePath, fileData);
     }
 
     //
@@ -89,24 +89,16 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     //
     await uploadAssetData(config.uploadSetId, assetId, "asset", contentType, fileData);
 
-    if (contentType.startsWith("video")) {
-        //
-        // Uploads the thumbnail.
-        //
-        const thumbnailData = await getVideoThumbnail(actualFilePath, fileData, resolution, THUMBNAIL_MIN_SIZE);
-        await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", thumbnailData);
-    }
-    else {
-        //
-        // Uploads the thumbnail.
-        //
-        const thumbnailData = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
-        await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", thumbnailData);
+    //
+    // Uploads the thumbnail.
+    //
+    await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
 
+    if (contentType.startsWith("image")) {
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
-        const displayData = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE);
+        const displayData = await resizeImage(fileData, assetDetails.resolution, DISPLAY_MIN_SIZE);
         await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", displayData);
     }
 
@@ -172,8 +164,8 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     await addAsset({
         _id: assetId,
         setId: config.uploadSetId,
-        width: resolution.width,
-        height: resolution.height,
+        width: assetDetails.resolution.width,
+        height: assetDetails.resolution.height,
         origFileName: path.basename(filePath),
         origPath: fileDir,
         contentType,
@@ -377,15 +369,36 @@ main()
         console.error(err && err.stack || err);
     });
 
+export interface IAssetDetails {
+    //
+    // The resolution of the image/video.
+    //
+    resolution: IResolution;
+
+    //
+    // The thumbnail of the image/video.
+    //
+    thumbnail: Buffer;
+}
+
 //
-// Gets the resolution of a video.
-//
-async function getVideoResolution(filePath: string | undefined, fileData: Buffer, ): Promise<IResolution> {
+// Gets the details of a video.
+// 
+async function getVideoDetails(filePath: string | undefined, fileData: Buffer): Promise<IAssetDetails> {
     const videoPath = filePath || path.join(os.tmpdir(), uuid());
     if (!filePath) {
         await fs.writeFile(videoPath, fileData);
     }
 
+    const resolution = await getVideoResolution(videoPath);
+    const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
+    return { resolution, thumbnail };
+}
+
+//
+// Gets the resolution of a video.
+//
+async function getVideoResolution(videoPath: string): Promise<IResolution> {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
             if (err) {
@@ -409,12 +422,7 @@ async function getVideoResolution(filePath: string | undefined, fileData: Buffer
 //
 // Gets a thumbnail for a video.
 //
-async function getVideoThumbnail(filePath: string | undefined, fileData: Buffer, resolution: IResolution, minSize: number): Promise<Buffer> {
-    const videoPath = filePath || path.join(os.tmpdir(), uuid());
-    if (!filePath) {
-        await fs.writeFile(videoPath, fileData);
-    }
-
+async function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
         let width: number;
         let height: number;
@@ -443,6 +451,15 @@ async function getVideoThumbnail(filePath: string | undefined, fileData: Buffer,
                 size: `${width}x${height}`, 
             });
     });
+}
+
+//
+// Gets the details of an image.
+//
+async function getImageDetails(filePath: string, fileData: Buffer): Promise<IAssetDetails> {
+    const resolution = await getImageResolution(filePath, fileData);
+    const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
+    return { resolution, thumbnail };
 }
 
 //
