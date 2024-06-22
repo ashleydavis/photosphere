@@ -48,6 +48,14 @@ export interface IAsset {
     hash: string;
 
     //
+    // The GPS coordinates of the asset, if known.
+    //
+    coordinates?: { 
+        lat: number;
+        lng: number;    
+    }
+
+    //
     // Optional reverse geocoded location for the asset.
     //
     location?: string;

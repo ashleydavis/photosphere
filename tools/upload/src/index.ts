@@ -7,7 +7,7 @@ import sharp from "sharp";
 import os from "os";
 import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
-import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
+import { ILocation as ICoordinates, IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
 import _ from "lodash";
 import JSZip from "jszip";
 const exifParser = require("exif-parser");
@@ -72,7 +72,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
 
     // console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
 
-    let assetDetails: IAssetDetails | undefined = undefined;
+    let assetDetails: IAssetDetails;
 
     //
     // Get asset resolution.
@@ -81,7 +81,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         assetDetails = await getVideoDetails(actualFilePath, fileData);
     }
     else {
-        assetDetails = await getImageDetails(filePath, fileData);
+        assetDetails = await getImageDetails(filePath, fileData, contentType);
     }
 
     //
@@ -103,43 +103,16 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     }
 
     const properties: any = {};
+
+    if (assetDetails.metadata) {
+        properties.metadata = assetDetails.metadata;
+    }
+
+    let coordinates: ICoordinates | undefined = undefined;
     let location: string | undefined = undefined;
-    let photoDate: string | undefined = undefined;
-
-    if (contentType === "image/jpeg" || contentType === "image/jpg") {
-		try {
-			const parser = exifParser.create(fileData.buffer);
-			parser.enableSimpleValues(false);
-			const exif = parser.parse();
-			properties.exif = exif.tags;
-			if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
-				const coordinates = convertExifCoordinates(exif.tags);
-				if (isLocationInRange(coordinates)) {
-					location = await retry(() => reverseGeocode(coordinates), 3, 1500);
-				}
-				else {
-					console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${filePath}.`);
-				}
-			}
-
-			const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-			for (const dateField of dateFields) {
-				const dateStr = exif.tags[dateField];
-				if (dateStr) {
-					try {
-						photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-					}
-					catch (err) {
-						console.error(`Failed to parse date from ${dateStr}`);
-						console.error(err);
-					}
-				}
-			}
-		}
-		catch (err) {
-			console.error(`Failed to get exif data from ${filePath}`);
-			console.error(err);
-		}
+    if (assetDetails.coordinates) {
+        coordinates = assetDetails.coordinates;
+        location = await retry(() => reverseGeocode(assetDetails.coordinates!), 3, 1500);
     }
 
     //
@@ -170,10 +143,11 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         origPath: fileDir,
         contentType,
         hash,
+        coordinates,
         location,
         fileDate,
-        photoDate,
-        sortDate: photoDate || fileDate,
+        photoDate: assetDetails.photoDate,
+        sortDate: assetDetails.photoDate || fileDate,
         uploadDate: dayjs().toISOString(),
         properties,
         labels,
@@ -379,6 +353,21 @@ export interface IAssetDetails {
     // The thumbnail of the image/video.
     //
     thumbnail: Buffer;
+
+    //
+    // Metadata, if any.
+    //
+    metadata?: any;
+
+    //
+    // GPS coordinates of the asset.
+    //
+    coordinates?: ICoordinates;
+
+    //
+    // Date of the asset.
+    //
+    photoDate?: string;
 }
 
 //
@@ -392,7 +381,7 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
 
     const resolution = await getVideoResolution(videoPath);
     const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
-    return { resolution, thumbnail };
+    return { resolution, thumbnail, ...await getVideoMetadata(videoPath) };
 }
 
 //
@@ -422,7 +411,7 @@ async function getVideoResolution(videoPath: string): Promise<IResolution> {
 //
 // Gets a thumbnail for a video.
 //
-async function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
+function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
         let width: number;
         let height: number;
@@ -453,13 +442,60 @@ async function getVideoThumbnail(videoPath: string, resolution: IResolution, min
     });
 }
 
+const videoLocationRegex = /([+-]\d+\.\d+)([+-]\d+\.\d+)/;
+
+//
+// Parses the location of the video.
+//
+function parseVideoLocation(location: string): ICoordinates | undefined {
+    const match = location.match(videoLocationRegex);
+    if (match) {
+        return {
+            lat: parseFloat(match[1]),
+            lng: parseFloat(match[2])
+        };
+    }
+
+    return undefined;
+}
+
+//
+// Gets the metadata data for a video.
+//
+function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ICoordinates, photoDate?: string }> {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                let coordinates: ICoordinates | undefined = undefined;
+                if (metadata.format?.tags.location) {
+                    coordinates = parseVideoLocation(metadata.format.tags.location);
+                }
+                
+                let photoDate: string | undefined = undefined;
+                if (metadata.format?.tags?.creation_time) {
+                    photoDate = metadata.format.tags.creation_time;
+                }
+
+                resolve({
+                    metadata,
+                    coordinates,
+                    photoDate,
+                });
+            }
+        });
+    });
+}
+
 //
 // Gets the details of an image.
 //
-async function getImageDetails(filePath: string, fileData: Buffer): Promise<IAssetDetails> {
+async function getImageDetails(filePath: string, fileData: Buffer, contentType: string): Promise<IAssetDetails> {
     const resolution = await getImageResolution(filePath, fileData);
     const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
-    return { resolution, thumbnail };
+    return { resolution, thumbnail, ...await getImageMetadata(filePath, fileData, contentType) };
 }
 
 //
@@ -476,7 +512,59 @@ async function getImageResolution(filePath: string, fileData: Buffer): Promise<I
     }
 
     return { width, height };
-}  
+}
+
+//
+// Gets the metadata from the image.
+//
+async function getImageMetadata(filePath: string, fileData: Buffer, contentType: string): Promise<{ metadata?: any, coordinates?: ICoordinates, photoDate?: string }> {
+    if (contentType === "image/jpeg" || contentType === "image/jpg") {
+        try {
+            let coordinates: ICoordinates | undefined = undefined;
+            let photoDate: string | undefined = undefined;
+
+            const parser = exifParser.create(fileData.buffer);
+            parser.enableSimpleValues(false);
+            const exif = parser.parse();
+            if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
+                coordinates = convertExifCoordinates(exif.tags);
+                if (!isLocationInRange(coordinates)) {
+                    console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${filePath}.`);
+                    coordinates = undefined;
+                }
+            }
+
+            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+            for (const dateField of dateFields) {
+                const dateStr = exif.tags[dateField];
+                if (dateStr) {
+                    try {
+                        photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                    }
+                    catch (err) {
+                        console.error(`Failed to parse date from ${dateStr}`);
+                        console.error(err);
+                    }
+                }
+            }
+
+            return {
+                metadata: exif.tags,
+                coordinates,
+                photoDate
+            };
+        }
+        catch (err) {
+            console.error(`Failed to get exif data from ${filePath}`);
+            console.error(err);
+
+            return {};
+        }
+    }
+    else {
+        return {};
+    }
+}
 
 //
 // Computes a hash for a file or blob of data.
