@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
 import { IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
 import _ from "lodash";
+import JSZip from "jszip";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -51,12 +52,7 @@ const ignoreExts = [
 //
 // Processes and uploads a single asset.
 //
-async function uploadAsset(filePath: string, contentType: string): Promise<void> {
-
-    //
-    // Load file data.
-    // 
-    const fileData = await fs.readFile(filePath);
+async function uploadAsset(filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer, labels: string[], fileDate: string): Promise<void> {
 
     //
     // Computes the hash and checks if we already uploaded this file.
@@ -78,7 +74,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     // Get asset resolution.
     //
     if (contentType.startsWith("video")) {
-        resolution = await getVideoResolution(filePath);
+        resolution = await getVideoResolution(actualFilePath, fileData);
     }
     else {
         resolution = await getImageResolution(filePath, fileData);
@@ -93,7 +89,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
         //
         // Uploads the thumbnail.
         //
-        const thumbnailData = await getVideoThumbnail(filePath, resolution, THUMBNAIL_MIN_SIZE);
+        const thumbnailData = await getVideoThumbnail(actualFilePath, fileData, resolution, THUMBNAIL_MIN_SIZE);
         await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", thumbnailData);
     }
     else {
@@ -153,10 +149,8 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
     //
     // Read the date of the file.
     //
-    const stats = await fs.stat(filePath);
-    const fileDate = dayjs(stats.birthtime).toISOString();
     const fileDir = path.dirname(filePath);
-    const labels = fileDir.replace(/\\/g, "/")
+    labels = labels.concat(fileDir.replace(/\\/g, "/")
         .split("/")
         .filter(label => label)
         .filter(label => {
@@ -166,7 +160,7 @@ async function uploadAsset(filePath: string, contentType: string): Promise<void>
             }
 
             return true;
-        });
+        }));
 
     //
     // Add asset to the gallery.
@@ -217,6 +211,7 @@ const extMap: { [index: string]: string } = {
     ".webm": "video/webm",
     ".ogg": "video/ogg",
     ".ogv": "video/ogg",
+    ".zip": "application/zip",
 };
 
 //
@@ -232,23 +227,88 @@ async function main(): Promise<void> {
     const files: string[] = [];
     const failures: { filePath: string, error: any }[] = [];
     const filesNotHandled: string[] = [];
-	
-	async function handleAsset(filePath: string): Promise<void> {
-		const ext = path.extname(filePath).toLowerCase();
-		if (ignoreExts.includes(ext)) {
-			// Certain extensions can be ignored and we just don't need to know about them.
-			return;
-		}
 
-		// Check if the file is a supported asset based on its extension.
-		const contentType = extMap[ext];
-		if (!contentType) {
-			filesNotHandled.push(filePath);
-			return;
-		}
+    //
+    // Validates an asset and returns the content type.
+    // Returns undefined if the asset is to be ignored.
+    //
+    function validateAsset(filePath: string): string | undefined {
+        const ext = path.extname(filePath).toLowerCase();
+        if (ignoreExts.includes(ext)) {
+            // Certain extensions can be ignored and we just don't need to know about them.
+            return undefined;
+        }
+
+        // Check if the file is a supported asset based on its extension.
+        const contentType = extMap[ext];
+        if (!contentType) {
+            filesNotHandled.push(filePath);
+            return undefined;
+        }
+
+        return contentType;
+    }
+
+    //
+    // Unpacks a zip file.
+    //
+    async function handleZipFile(filePath: string): Promise<void> {
+        // console.log(`Processing zip file: ${filePath}`);
+
+        const stats = await fs.stat(filePath);
+        const fileDate = dayjs(stats.birthtime).toISOString();
+
+        const zip = new JSZip();
+        const unpacked = await zip.loadAsync(await fs.readFile(filePath));
+        for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
+            if (!zipObject.dir) {
+                const fullPath = `${filePath}/${fileName}`;
+                // console.log(fullPath);
+
+                const contentType = validateAsset(fullPath);
+                if (!contentType) {
+                    continue;
+                }
+
+                try {
+                    const fileData = await zipObject.async("nodebuffer");
+                
+                    await retry(() => uploadAsset(fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
+                }
+                catch (error: any) {
+                    console.error(`Failed to upload asset: ${filePath}`);
+                    console.error(error.stack || error.message || error);
+                    numFailed += 1; 
+                    failures.push({ filePath, error });                
+                }
+            }
+        }
+    }
+	
+    //
+    // Handles a generic asset.
+    //
+	async function handleAsset(filePath: string): Promise<void> {
+        const contentType = validateAsset(filePath);
+        if (!contentType) {
+            return;
+        }
 
 		try {
-		   await retry(() => uploadAsset(filePath, contentType), 3, 100);
+            if (contentType === "application/zip") {
+                await handleZipFile(filePath);
+                return;
+            }
+
+            //
+            // Load file data.
+            // 
+            const fileData = await fs.readFile(filePath);
+
+            const stats = await fs.stat(filePath);
+            const fileDate = dayjs(stats.birthtime).toISOString();
+
+            await retry(() => uploadAsset(filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
 		}
 		catch (error: any) {
 			console.error(`Failed to upload asset: ${filePath}`);
@@ -316,7 +376,12 @@ main()
 //
 // Gets the resolution of a video.
 //
-function getVideoResolution(videoPath: string): Promise<IResolution> {
+async function getVideoResolution(filePath: string | undefined, fileData: Buffer, ): Promise<IResolution> {
+    const videoPath = filePath || path.join(os.tmpdir(), uuid());
+    if (!filePath) {
+        await fs.writeFile(videoPath, fileData);
+    }
+
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
             if (err) {
@@ -340,7 +405,12 @@ function getVideoResolution(videoPath: string): Promise<IResolution> {
 //
 // Gets a thumbnail for a video.
 //
-function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
+async function getVideoThumbnail(filePath: string | undefined, fileData: Buffer, resolution: IResolution, minSize: number): Promise<Buffer> {
+    const videoPath = filePath || path.join(os.tmpdir(), uuid());
+    if (!filePath) {
+        await fs.writeFile(videoPath, fileData);
+    }
+
     return new Promise<Buffer>((resolve, reject) => {
         let width: number;
         let height: number;
@@ -353,7 +423,7 @@ function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: 
             height = Math.trunc((resolution.height / resolution.width) * minSize);
             width = minSize;
         }
-    
+
         const thumbnailFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpg');
         ffmpeg(videoPath)
             .on('end', () => {
