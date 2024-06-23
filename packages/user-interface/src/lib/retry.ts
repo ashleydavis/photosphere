@@ -18,7 +18,7 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
                 //console.error(err && err.stack || err);
             }
             else {
-                console.error("Operation failed, no more retries allowed.");
+                // console.error("Operation failed, no more retries allowed.");
             }
 
             lastError = err;
