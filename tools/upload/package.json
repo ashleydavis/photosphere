@@ -14,7 +14,7 @@
     "clean": "rm -rf build"
   },
   "dependencies": {
-    "axios": "^0.27.2",
+    "axios": "^1.7.2",
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
     "exif-parser": "^0.1.12",
