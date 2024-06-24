@@ -440,7 +440,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return assets;
         }
 
-        const searchResult = searchIndexRef.current!.search(searchText);
+        const searchResult = searchIndexRef.current!.search(searchText, 1_000_000);
 
         let searchedAssets: IGalleryItem[] = [];
 
