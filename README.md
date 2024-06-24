@@ -1,8 +1,13 @@
 # Photosphere
 
-This is the official ongoing monorepo for Photosphere, a cross-platform application for managing your photos (videos coming later).
+This is the official ongoing monorepo for Photosphere, a cross-platform application for managing your photos and videos.
 
-Photosphere is designed to be easy to host for yourself. Host the web page, supply an AWS S3 bucket (other storage providers coming later), and you are ready to go. 
+Photosphere is designed to be self-hosted and requires the following resources:
+- Host the static web page.
+- Host the Docker container.
+- Provide a MongoDB database.
+- Provide an AWS S3 bucket (other storage providers coming later).
+- Provide an Auth0 account for authentication.
 
 Contained herein are the code for Photosphere's:
 - Backend
@@ -11,6 +16,16 @@ Contained herein are the code for Photosphere's:
 - Android and iOS apps
 
 Early development of Photosphere was covered in the book [Rapid Fullstack Development](https://rapidfullstackdevelopment.com/).
+
+## Ingesting assets
+
+Photos, videos and folders can be uploaded via the Upload page in the Web frontend.
+
+Alternatively, [the upload script](./tools/upload/) can be used for bulk uploads.
+
+To move assets from Google Photos:
+- Use Google Takeout to export all your assets to a series of large zip files.
+- Then use the upload script on the directory containing the zip files (it can unpack the zip file for you).
 
 ## Running Photosphere locally for development
 
