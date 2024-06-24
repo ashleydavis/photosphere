@@ -113,13 +113,12 @@ i {
     height: 104px;
 }
 
-
 #main {
     padding-top: 52px;
 }
 
 #main.search {
-    margin-top: 104px;
+    padding-top: 104px;
 }
 
 /* Gallery */

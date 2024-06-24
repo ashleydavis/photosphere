@@ -107,7 +107,6 @@ export function Main({ computerPage }: IMainProps) {
         setOpenSearch(false);
     }
 
-
     if (enableAuth) {       
         if (isLoading) {
             return (
@@ -283,7 +282,7 @@ export function Main({ computerPage }: IMainProps) {
                 
             </div>
 
-            <div id="sidebar" className={classNames("flex flex-col", { "open": sidebarOpen})} >            
+            <div id="sidebar" className={classNames("flex flex-col", { "open": sidebarOpen})} >
                 <div className="flex flex-row items-center mt-4 mb-8">
                     <h1 className="text-xl">
                         Photosphere
@@ -381,8 +380,8 @@ export function Main({ computerPage }: IMainProps) {
                 )}
             </div>
 
-            <div id="main">
-                <div id="content" className={sidebarOpen ? "open" : ""} >
+            <div id="main" className={classNames({ "search": openSearch})} >
+                <div id="content" >
                     <Routes>
                         <Route 
                             path="/cloud" 
