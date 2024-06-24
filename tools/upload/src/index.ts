@@ -246,7 +246,7 @@ async function main(): Promise<void> {
                     await retry(() => uploadAsset(fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
                 }
                 catch (error: any) {
-                    console.error(`Failed to upload asset: ${filePath}`);
+                    console.error(`Failed to upload asset: ${fullPath}`);
                     console.error(error.stack || error.message || error);
                     numFailed += 1; 
                     failures.push({ filePath, error });                
