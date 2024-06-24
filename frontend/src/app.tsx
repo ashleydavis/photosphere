@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider, 
-    AuthContextProvider, isProduction, GalleryContextProvider, 
+    AuthContextProvider, enableAuth, GalleryContextProvider, 
     IndexeddbContextProvider, AssetDatabaseProvider 
     } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
@@ -36,7 +36,7 @@ function ApiSetup() {
 }
 
 export function App() {
-    if (isProduction) {
+    if (enableAuth) {
         // Setup with authentication.
         return (
             <BrowserRouter>

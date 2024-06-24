@@ -4,7 +4,7 @@ import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
-import { isProduction, useAuth } from "./context/auth-context";
+import { enableAuth, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
@@ -108,7 +108,7 @@ export function Main({ computerPage }: IMainProps) {
     }
 
 
-    if (isProduction) {       
+    if (enableAuth) {       
         if (isLoading) {
             return (
                 <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
@@ -371,7 +371,7 @@ export function Main({ computerPage }: IMainProps) {
 
                 <div className="flex-grow" />
 
-                {!isProduction && (
+                {!enableAuth && (
                     <button 
                         className="flex flex-row items-center p-2 m-2 cursor-pointer"
                         onClick={deleteDatabase}

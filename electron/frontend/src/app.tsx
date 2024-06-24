@@ -1,6 +1,6 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, isProduction } from "user-interface";
+import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, enableAuth } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { ComputerPage } from "./pages/computer";
 import { ScanContextProvider } from "./context/scan-context";
@@ -37,7 +37,7 @@ function ApiSetup() {
 }
 
 export function App() {
-    if (isProduction) {
+    if (enableAuth) {
         // Setup with authentication.
         return (
             <HashRouter>

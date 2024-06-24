@@ -9,7 +9,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useAuth0, User } from "@auth0/auth0-react";
 
-export const isProduction = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
+export const enableAuth = process.env.ENABLE_AUTH === "true" || (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
 
 export interface IAuthContext {
 
@@ -89,7 +89,7 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     }, []);
 
     useEffect(() => {
-        if (isProduction) {
+        if (enableAuth) {
             if (isAuthenticated) {
                 console.log(`User is authenticated, loading access token.`);
                 loadToken()
@@ -128,7 +128,7 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     //
     async function loadToken(): Promise<void> {
         if (!token.current) {
-            if (isProduction) {
+            if (enableAuth) {
                 token.current = await getAccessTokenSilently();
             }
             else {
@@ -180,8 +180,8 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
     }
 
     const value: IAuthContext = {
-        isLoading: isProduction ? isLoading : false,
-        isAuthenticated: isProduction ? isAuthenticated : true,
+        isLoading: enableAuth ? isLoading : false,
+        isAuthenticated: enableAuth ? isAuthenticated : true,
         isTokenLoaded,
         user,
         error,
@@ -222,7 +222,7 @@ function checkEnvironmentVariable(name: string, value: any): void {
 // Make sure auth0 settings are enabled.
 //
 function validateAuthSettings() {
-    if (isProduction) {
+    if (enableAuth) {
         checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
         checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
         checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);

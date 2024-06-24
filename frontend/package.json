@@ -6,7 +6,7 @@
   "scripts": {
     "s": "pnpm start",
     "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
-    "start:prod": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --open --mode production --devtool source-map",
+    "start:prod": "cross-env NODE_ENV=development ENABLE_AUTH=true BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --open",
     "sp": "pnpm run start:prod",
     "start:no-open": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve",
     "b": "pnpm build",
