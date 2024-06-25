@@ -19,7 +19,6 @@ GET {{base_url}}/alive
 GET {{base_url}}/user
 Authorization: Bearer {{token}}
 
-
 ###
 # @name upload_asset
 #
@@ -67,13 +66,11 @@ Authorization: Bearer {{token}}
 GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
-
 ###
-# Gets hashes for an asset.
+# Check the asset's hash.
 
-GET {{base_url}}/get-one?id={{hash_id}}&col=hashes
+GET {{base_url}}/check-hash?set={{setId}}&hash={{hash}}
 Authorization: Bearer {{token}}
-
 
 ###
 # 
@@ -94,7 +91,8 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=original
+GET {{base_url}}/asset?id={{asset}}&set={{setId}}&type=original
+Authorization: Bearer {{token}}
 
 ###
 #
@@ -114,7 +112,8 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=thumb
+GET {{base_url}}/asset?id={{asset}}&set={{setId}}&type=thumb
+Authorization: Bearer {{token}}
 
 ###
 #
