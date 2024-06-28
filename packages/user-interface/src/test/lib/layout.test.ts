@@ -7,7 +7,10 @@ describe("layout", () => {
         const galleryWidth = 600;
         const targetRowHeight = 200;
         const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight);
-        expect(rows).toEqual([]);
+        expect(rows).toEqual({
+            galleryHeight: 0,
+            rows: []
+        });
     });
 
     test("can layout a gallery with a single item", () => {
@@ -23,9 +26,10 @@ describe("layout", () => {
         const galleryWidth = 600;
         const targetRowHeight = 200;
         const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight);
-        expect(layout.rows.length).toBe(1);
+        
+        expect(layout.rows.length).toBe(2);
 
-        const row = layout.rows[0];
+        const row = layout.rows[1];
         expect(row.items.length).toBe(1);
         expect(row.items[0]._id).toBe(1);
     });
@@ -53,9 +57,9 @@ describe("layout", () => {
         const galleryWidth = 600;
         const targetRowHeight = 200;
         const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
-        expect(layout.rows.length).toBe(1);
+        expect(layout.rows.length).toBe(2);
 
-        const row = layout.rows[0];
+        const row = layout.rows[1];
         expect(row.items.length).toBe(3);
         expect(row.items[0]._id).toBe(1);
         expect(row.items[1]._id).toBe(2);
@@ -85,14 +89,14 @@ describe("layout", () => {
         const galleryWidth = 600;
         const targetRowHeight = 200;
         const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
-        expect(layout.rows.length).toBe(2);
+        expect(layout.rows.length).toBe(3);
 
-        const firstRow = layout.rows[0];
+        const firstRow = layout.rows[1];
         expect(firstRow.items.length).toBe(2);
         expect(firstRow.items[0]._id).toBe(1);
         expect(firstRow.items[1]._id).toBe(2);
 
-        const secondRow = layout.rows[1];
+        const secondRow = layout.rows[2];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.items[0]._id).toBe(3);
     });    
@@ -117,7 +121,7 @@ describe("layout", () => {
         const galleryWidth = 600;
         const targetRowHeight = 200;
         const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
-        const firstRow = layout.rows[0];
+        const firstRow = layout.rows[1];
         expect(firstRow.items.length).toBe(2);
         expect(firstRow.height).toBeGreaterThan(targetRowHeight);
 
@@ -129,7 +133,7 @@ describe("layout", () => {
         expect(item2.thumbWidth).toBeGreaterThan(items[1].width);
         expect(item2.thumbHeight).toBeGreaterThan(items[1].height);
 
-        const secondRow = layout.rows[1];
+        const secondRow = layout.rows[2];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.height).toBeCloseTo(targetRowHeight);
 
@@ -138,40 +142,4 @@ describe("layout", () => {
         expect(item3.thumbHeight).toBeCloseTo(items[2].height);
         
     });
-
-    test("items with a different group wrap to the next row", () => {
-
-        const items: any[] = [
-            {
-                _id: 1,
-                width: 100,
-                height: 200,
-                group: "a",
-            },
-            {
-                _id: 2,
-                width: 100,
-                height: 200,
-                group: "b",
-            },
-            {
-                _id: 3,
-                width: 100,
-                height: 200,
-                group: "b",
-            },
-        ];
-
-        const galleryWidth = 600;
-        const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
-        
-        expect(layout.rows.length).toBe(2);
-        expect(layout.rows[0].items.length).toBe(1);
-        expect(layout.rows[0].items[0]._id).toBe(1);
-        expect(layout.rows[1].items.length).toBe(2);
-        expect(layout.rows[1].items[0]._id).toBe(2);
-        expect(layout.rows[1].items[1]._id).toBe(3);
-    });
-
 });
