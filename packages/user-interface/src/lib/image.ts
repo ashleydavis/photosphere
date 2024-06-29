@@ -67,26 +67,30 @@ export function getImageResolution(image: HTMLImageElement): IResolution {
 //
 // https://stackoverflow.com/a/43354901/25868
 //
-export function resizeImage(image: HTMLImageElement, minSize: number): string { 
-    const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
-    const octx = oc.getContext('2d')!;
-    oc.width = image.width;
-    oc.height = image.height;
-    octx.drawImage(image, 0, 0);
+export function resizeImage(image: HTMLImageElement, minSize: number): { dataUrl: string, contentType: string } { 
+    const canvas = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
+    const context = canvas.getContext('2d')!;
+    canvas.width = image.width;
+    canvas.height = image.height;
+    context.drawImage(image, 0, 0);
 
-    // Commented out code could be useful.
-    if( image.width > image.height) {
-        oc.height = minSize;
-        oc.width = (image.width / image.height) * minSize;
+    if (image.width > image.height) {
+        canvas.height = minSize;
+        canvas.width = (image.width / image.height) * minSize;
     } 
     else {
-        oc.height = (image.height / image.width) * minSize;
-        oc.width = minSize;
+        canvas.height = (image.height / image.width) * minSize;
+        canvas.width = minSize;
     }
 
-    octx.drawImage(oc, 0, 0, oc.width, oc.height);
-    octx.drawImage(image, 0, 0, oc.width, oc.height);
-    return oc.toDataURL();
+    context.drawImage(canvas, 0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const contentType = "image/jpeg";
+    const dataUrl = canvas.toDataURL(contentType);
+    return {
+        dataUrl,
+        contentType,
+    };
 }
 
 //

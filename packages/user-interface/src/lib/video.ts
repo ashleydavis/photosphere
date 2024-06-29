@@ -1,7 +1,7 @@
 //
-// Loads a file to a video element.
+// Loads a blob to a video element.
 // 
-export function loadVideo(fileData: Blob): Promise<HTMLVideoElement> {
+export function loadVideo(blob: Blob): Promise<HTMLVideoElement> {
     return new Promise<HTMLVideoElement>((resolve, reject) => {
         const video = document.createElement('video');
         video.muted = true;
@@ -17,7 +17,7 @@ export function loadVideo(fileData: Blob): Promise<HTMLVideoElement> {
                 reject(err);
             }
         };
-        video.src = URL.createObjectURL(fileData);
+        video.src = URL.createObjectURL(blob);
         video.load();
     });
 }
@@ -36,16 +36,41 @@ export function unloadVideo(video: HTMLVideoElement) {
 // Captures an image from the video.
 // Returns a data URL.
 //
-export function captureVideoImage(video: HTMLVideoElement): { thumbnailDataUrl: string, contentType: string } {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext('2d')
-    if (!context) {
+export function captureVideoThumbnail(video: HTMLVideoElement, minSize: number): { dataUrl: string, contentType: string } {
+    const captureCanvas = document.createElement('canvas');
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    const captureContext = captureCanvas.getContext('2d')
+    if (!captureContext) {
         throw new Error("Failed to create 2d context.");
     }
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const contentType = "image/png";
-    const thumbnailDataUrl = canvas.toDataURL(contentType);
-    return { thumbnailDataUrl, contentType };
+
+    //
+    // Capture full res image from video.
+    //
+    captureContext.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+    const thumbnailCanvas = document.createElement('canvas');
+    if (video.videoWidth > video.videoHeight) {
+        thumbnailCanvas.height = minSize;
+        thumbnailCanvas.width = (video.videoWidth / video.videoHeight) * minSize;
+    } 
+    else {
+        thumbnailCanvas.height = (video.videoHeight / video.videoWidth) * minSize;
+        thumbnailCanvas.width = minSize;
+    }
+
+    const thumbnailContext = thumbnailCanvas.getContext('2d');
+    if (!thumbnailContext) {
+        throw new Error("Failed to create 2d context for thumbnail.");
+    }
+
+    //
+    // Draw the resized image.
+    //
+    thumbnailContext.drawImage(captureCanvas, 0, 0, captureCanvas.width, captureCanvas.height, 0, 0, thumbnailCanvas.width, thumbnailCanvas.height);
+
+    const contentType = "image/jpeg";
+    const dataUrl = thumbnailCanvas.toDataURL(contentType);
+    return { dataUrl, contentType };
 }

@@ -15,7 +15,7 @@ import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { uuid } from "../lib/uuid";
 import { useApp } from "./app-context";
-import { captureVideoImage, loadVideo, unloadVideo } from "../lib/video";
+import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -303,8 +303,8 @@ export function UploadContextProvider({ children }: IProps) {
             const video = await loadVideo(fileData);
             try {
                 const resolution = { width: video.videoWidth, height: video.videoHeight };
-                const { thumbnailDataUrl, contentType: thumbContentType } = captureVideoImage(video); //todo: also resize it.
-
+                const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = captureVideoThumbnail(video, THUMBNAIL_MIN_SIZE);
+                
                 const contentTypeStart = 5;
                 const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
                 const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
@@ -319,14 +319,12 @@ export function UploadContextProvider({ children }: IProps) {
             const imageData = await loadDataURL(fileData);
             const image = await loadImage(imageData);
             const resolution = await getImageResolution(image);
-            const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
+            const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = resizeImage(image, THUMBNAIL_MIN_SIZE);
             const contentTypeStart = 5;
             const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
-            const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
             const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-            const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
+            const { dataUrl: displayDataUrl, contentType: displayContentType } = resizeImage(image, DISPLAY_MIN_SIZE);
             const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
-            const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
             const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);        
             return { resolution, thumbnail, thumbContentType, displayData, displayContentType };
         }    
@@ -528,10 +526,11 @@ export function UploadContextProvider({ children }: IProps) {
     //
     async function createThumbnail(contentType: string, blobLoader: () => Promise<Blob>): Promise<JSX.Element | undefined> {
         if (contentType.startsWith("image/")) {
+            const { dataUrl } = resizeImage(await loadImage(await loadDataURL(await blobLoader())), PREVIEW_THUMBNAIL_MIN_SIZE)
             return (
                 <img
                     className="w-28 h-28 object-cover"
-                    src={resizeImage(await loadImage(await loadDataURL(await blobLoader())), PREVIEW_THUMBNAIL_MIN_SIZE)}
+                    src={dataUrl}
                 />
             );
         }
