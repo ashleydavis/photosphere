@@ -1,8 +1,8 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { getExifData, getImageResolution, loadImage, resizeImage } from "../lib/image";
+import { getExifData, getImageResolution, IResolution, loadImage, resizeImage } from "../lib/image";
 import { computeHash, loadDataURL } from "../lib/file";
 import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "../lib/reverse-geocode";
-import { IQueuedUpload, IUploadDetails, UploadState } from "../lib/upload-details";
+import { IQueuedUpload, UploadState } from "../lib/upload-details";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -15,6 +15,7 @@ import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { uuid } from "../lib/uuid";
 import { useApp } from "./app-context";
+import { captureVideoImage, loadVideo, unloadVideo } from "../lib/video";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -264,6 +265,74 @@ export function UploadContextProvider({ children }: IProps) {
     }
 
     //
+    // Specifies the details for an asset.
+    //
+    interface IAssetDetails { 
+        //
+        // Size of the asset.
+        //
+        resolution: IResolution;
+
+        // 
+        // Thumbnail for the asset (base 64).
+        //
+        thumbnail: string;
+
+        //
+        // Content type of the thumbnail.
+        //
+        thumbContentType: string;
+
+        //
+        // Optional display asset (base 64).
+        //
+        displayData?: string
+
+        //
+        // Optional content type of the display asset.
+        //
+        displayContentType?: string;
+    }
+
+    //
+    // Loads the details for an asset.
+    //
+    async function loadAssetDetails(fileData: Blob, contentType: string): Promise<IAssetDetails> {
+        if (contentType.startsWith("video/")) {
+            // A video.
+            const video = await loadVideo(fileData);
+            try {
+                const resolution = { width: video.videoWidth, height: video.videoHeight };
+                const { thumbnailDataUrl, contentType: thumbContentType } = captureVideoImage(video); //todo: also resize it.
+
+                const contentTypeStart = 5;
+                const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
+                const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+               return { resolution, thumbnail, thumbContentType };
+            }
+            finally {
+                unloadVideo(video);
+            }
+        }
+        else {
+            // An image.
+            const imageData = await loadDataURL(fileData);
+            const image = await loadImage(imageData);
+            const resolution = await getImageResolution(image);
+            const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
+            const contentTypeStart = 5;
+            const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
+            const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
+            const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+            const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
+            const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
+            const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
+            const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);        
+            return { resolution, thumbnail, thumbContentType, displayData, displayContentType };
+        }    
+    }
+
+    //
     // Uploads a file.
     //
     async function uploadFile(nextUpload: IQueuedUpload, uploadIndex: number): Promise<void> {
@@ -291,55 +360,39 @@ export function UploadContextProvider({ children }: IProps) {
             // otherwise we get an out of memory error when trying to
             // upload 1000s of assets.
             //
-            const imageData = await loadDataURL(fileData);
-            const image = await loadImage(imageData);
-            const imageResolution = await getImageResolution(image);
-            const thumbnailDataUrl = resizeImage(image, THUMBNAIL_MIN_SIZE);
-            const contentTypeStart = 5;
-            const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
-            const thumbContentType = thumbnailDataUrl.slice(contentTypeStart, thumbContentTypeEnd);
-            const thumbnailData = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-            const displayDataUrl = resizeImage(image, DISPLAY_MIN_SIZE);
-            const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
-            const displayContentType = displayDataUrl.slice(contentTypeStart, displayContentTypeEnd);
-            const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);
-            const exif = await getExifData(fileData);
+            const { resolution, thumbnail, thumbContentType, displayData, displayContentType } = 
+                await loadAssetDetails(fileData, nextUpload.assetContentType);
 
-            const uploadDetails: IUploadDetails = {
-                ...nextUpload,
-                resolution: imageResolution,
-                thumbnail: thumbnailData,
-                thumbContentType: thumbContentType,
-                display: displayData, //todo: change to blob.
-                displayContentType: displayContentType,
-                hash: hash,
-            };
+            const properties: any = {};
+            let location: string | undefined = undefined;
+            let photoDate = nextUpload.fileDate;
 
-            if (exif) {
-                uploadDetails.properties = {
-                    exif: exif,
-                };
+            if (nextUpload.assetContentType === "image/jpeg" || nextUpload.assetContentType === "image/jpg") {
+                const exif = await getExifData(fileData);
+                if (exif) {
+                    properties.exif = exif;
 
-                if (exif.GPSLatitude && exif.GPSLongitude) {
-                    const location = convertExifCoordinates(exif);
-                    if (isLocationInRange(location)) {
-                        uploadDetails.location = await retry(() => reverseGeocode(location), 3, 5000);
-                    }
-                    else {
-                        console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(location)}, for asset ${uploadDetails.fileName}.`);
-                    }
-                }
-
-                const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-                for (const dateField of dateFields) {
-                    const dateStr = exif[dateField];
-                    if (dateStr) {
-                        try {
-                            uploadDetails.photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                    if (exif.GPSLatitude && exif.GPSLongitude) {
+                        const coordinates = convertExifCoordinates(exif);
+                        if (isLocationInRange(coordinates)) {
+                            location = await retry(() => reverseGeocode(coordinates), 3, 5000);
                         }
-                        catch (err) {
-                            console.error(`Failed to parse date from ${dateStr}`);
-                            console.error(err);
+                        else {
+                            console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${nextUpload.fileName}.`);
+                        }
+                    }
+
+                    const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+                    for (const dateField of dateFields) {
+                        const dateStr = exif[dateField];
+                        if (dateStr) {
+                            try {
+                                photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                            }
+                            catch (err) {
+                                console.error(`Failed to parse date from ${dateStr}`);
+                                console.error(err);
+                            }
                         }
                     }
                 }
@@ -348,53 +401,54 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Add the month and year as labels.
             //
-            const photoDate = uploadDetails.photoDate || uploadDetails.fileDate;
             const month = dayjs(photoDate).format("MMMM");
             const year = dayjs(photoDate).format("YYYY");
-            uploadDetails.labels = [month, year].concat(uploadDetails.labels);
+            let labels = [month, year].concat(nextUpload.labels);
 
             //
             // Remove duplicate labels, in case month/year already added.
             //
-            uploadDetails.labels = removeDuplicates(uploadDetails.labels);
+            labels = removeDuplicates(labels);
 
             const assetId = uuid();
 
             //
             // Uploads the full asset.
             //
-            await uploadAsset(assetId, "asset", uploadDetails.assetContentType, fileData);
+            await uploadAsset(assetId, "asset", nextUpload.assetContentType, fileData);
 
             //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
             //
-            const thumnailBlob = base64StringToBlob(uploadDetails.thumbnail, uploadDetails.thumbContentType);
-            await uploadAsset(assetId, "thumb", uploadDetails.thumbContentType, thumnailBlob);
+            const thumnailBlob = base64StringToBlob(thumbnail, thumbContentType);
+            await uploadAsset(assetId, "thumb", thumbContentType, thumnailBlob);
 
-            //
-            // Uploads the display asset separately for simplicity and no restriction on size.
-            //
-            const displayBlob = base64StringToBlob(uploadDetails.display, uploadDetails.displayContentType);
-            await uploadAsset(assetId, "display", uploadDetails.displayContentType, displayBlob);
+            if (displayData) {
+                //
+                // Uploads the display asset separately for simplicity and no restriction on size.
+                //
+                const displayBlob = base64StringToBlob(displayData, displayContentType!);
+                await uploadAsset(assetId, "display", displayContentType!, displayBlob);
+            }
             
             //
             // Add asset to the gallery.
             //
             await addGalleryItem({
                 _id: assetId,
-                width: imageResolution.width,
-                height: imageResolution.height,
-                origFileName: uploadDetails.fileName,
-                origPath: uploadDetails.filePath,
-                contentType: uploadDetails.assetContentType,
-                hash: uploadDetails.hash,
-                location: uploadDetails.location,
-                fileDate: uploadDetails.fileDate,
-                photoDate: uploadDetails.photoDate,
-                sortDate: uploadDetails.photoDate || uploadDetails.fileDate,
+                width: resolution.width,
+                height: resolution.height,
+                origFileName: nextUpload.fileName,
+                origPath: nextUpload.filePath,
+                contentType: nextUpload.assetContentType,
+                hash,
+                location,
+                fileDate: nextUpload.fileDate,
+                photoDate,
+                sortDate: photoDate || nextUpload.fileDate,
                 uploadDate: dayjs().toISOString(),
-                properties: uploadDetails.properties,
-                labels: uploadDetails.labels,
+                properties,
+                labels,
                 description: "",
                 userId: user!._id,
             });
@@ -418,8 +472,8 @@ export function UploadContextProvider({ children }: IProps) {
     //
     async function queueUpload(fileName: string, loadData: () => Promise<Blob>, contentType: string, fileDate: Date, filePath: string | undefined, labels: string[]): Promise<void> {
 
-        if (contentType !== "image/png" && contentType !== "image/jpeg" && contentType !== "application/zip") {
-            // Only accept png, jpg and zip files for upload.
+        if (!contentType.startsWith("image/") && !contentType.startsWith("video/") && contentType !== "application/zip") {
+            // Only accept images, videos and zip files for upload.
             console.log(`Ignoring file ${fileName} with type ${contentType}`);
             return;
         }
@@ -463,6 +517,12 @@ export function UploadContextProvider({ children }: IProps) {
         </div>
     );
 
+    const videoThumbnail = (
+        <div className="w-28 h-28 flex flex-col items-center justify-center">
+            <i className="text-7xl fa-regular fa-file-video"></i>
+        </div>
+    );
+
     //
     // Creates a thumbnail for the file.
     //
@@ -474,6 +534,9 @@ export function UploadContextProvider({ children }: IProps) {
                     src={resizeImage(await loadImage(await loadDataURL(await blobLoader())), PREVIEW_THUMBNAIL_MIN_SIZE)}
                 />
             );
+        }
+        else if (contentType.startsWith("video/")) {
+            return videoThumbnail;
         }
         else if (contentType === "application/zip") {
             return zipThumbnail;
