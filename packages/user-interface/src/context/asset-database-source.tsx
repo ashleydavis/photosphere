@@ -16,6 +16,7 @@ import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { syncIncoming } from "../lib/sync/sync-incoming";
 import { ILastUpdateRecord } from "../lib/sync/last-update-record";
+import { IDatabase } from "../lib/database/database";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -403,60 +404,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         try {
             setIsLoading(true);
 
-            let assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
-            if (assets.length > 0) {
+            const assets = await initialSync(database, setId, api, assets => {
                 setAssets(assets.map((asset, index) => ({
                     ...asset,
                     setIndex: index,
                 })));
-            }
-            else {
-                //
-                // Records the time of the latest update for the set.
-                // This should be done before the initial sync to avoid missing updates.
-                //
-                const latestTime = await api.getLatestTime();
 
-                //
-                // Load the assets from the cloud into memory.
-                //
-                let skip = 0;
-                const pageSize = 1000;
-                while (true) {
-                    const records = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
-                    if (records.length === 0) {
-                        // No more records.
-                        break;
-                    }
-
-                    skip += pageSize;
-                    assets = assets.concat(records);
-                    setAssets(assets.map((asset, index) => ({
-                        ...asset,
-                        setIndex: index,
-                    })));
-
-                    console.log(`Loaded ${assets.length} assets.`)
-                }
-                
-                if (latestTime !== undefined) {
-                    //
-                    // Record the latest time where updates were received.
-                    //
-                    database.collection<ILastUpdateRecord>("last-update").setOne({ 
-                        _id: setId,
-                        lastUpdateTime: latestTime,
-                    });
-                }
-
-                //
-                // Save the assets to the local database.
-                //
-                const localCollection = database.collection("metadata");
-                for (const asset of assets) {
-                    await localCollection.setOne(asset); // Store it locally.
-                }
-            }        
+                console.log(`Loaded ${assets.length} assets.`);
+            });            
         }
         finally {
             setIsLoading(false);
@@ -495,3 +450,53 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         </GallerySourceContext.Provider>
     );
 }
+
+async function initialSync(database: IDatabase, setId: string, api: IApi, setAssets: (assets: IGalleryItem[]) => void): Promise<void> {
+    let assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
+    if (assets.length > 0) {
+        setAssets(assets);
+    }
+    else {
+        //
+        // Records the time of the latest update for the set.
+        // This should be done before the initial sync to avoid missing updates.
+        //
+        const latestTime = await api.getLatestTime();
+
+        //
+        // Load the assets from the cloud into memory.
+        //
+        let skip = 0;
+        const pageSize = 1000;
+        while (true) {
+            const records = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
+            if (records.length === 0) {
+                // No more records.
+                break;
+            }
+
+            skip += pageSize;
+            assets = assets.concat(records);           
+            setAssets(assets);
+        }
+
+        if (latestTime !== undefined) {
+            //
+            // Record the latest time where updates were received.
+            //
+            database.collection<ILastUpdateRecord>("last-update").setOne({
+                _id: setId,
+                lastUpdateTime: latestTime,
+            });
+        }
+
+        //
+        // Save the assets to the local database.
+        //
+        const localCollection = database.collection("metadata");
+        for (const asset of assets) {
+            await localCollection.setOne(asset);
+        }
+    }
+}
+
