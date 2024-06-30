@@ -177,7 +177,7 @@ export function ApiContextProvider({ children }: IProps) {
     async function makeAssetUrl(setId: string, assetId: string, assetType: string): Promise<string> {
         await loadToken();
         const token = getToken();
-        return `${BASE_URL}/asset?id=${assetId}&type=${assetType}&set=${setId}&t={token}`;
+        return `${BASE_URL}/asset?id=${assetId}&type=${assetType}&set=${setId}&t=${token}`;
     }
 
     //
