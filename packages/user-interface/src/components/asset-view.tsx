@@ -3,6 +3,7 @@ import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
 import { Image } from "./image";
 import { Video } from "./video";
+import { useGallery } from "../context/gallery-context";
 
 export interface IAssetViewProps { 
 
@@ -32,9 +33,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
 
-    //
-    // Interface to the gallery item.
-    //
+    const { items } = useGallery();
     const { asset } = useGalleryItem();
 
     // 
@@ -61,31 +60,44 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                     </div>
                 }
 
-                <div className="photo-nav w-full h-full flex flex-row">
-                    <div className="flex flex-col justify-center">
-                        <button
-                            className="p-1 px-3"
-                            onClick={() => onPrev()}
-                            >
-                            <i className="text-white fa-solid fa-arrow-left"></i>
-                        </button>
-                    </div>
+                <div className="photo-nav w-full h-full flex flex-row pointer-events-none">
+                    {asset.searchIndex! > 0
+                        && <div className="flex flex-col justify-center">
+                            <button
+                                className="ml-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                                style={{
+                                    backgroundColor: "rgba(0, 0, 255, 0.2)",
+                                }}
+                                onClick={() => onPrev()}
+                                >
+                                <i className="text-white fa-solid fa-arrow-left"></i>
+                            </button>
+                        </div>
+                    }
                     <div className="flex-grow" /> {/* Spacer */}
-                    <div className="flex flex-col justify-center">
-                        <button
-                            className="p-1 px-3"
-                            onClick={() => onNext()}
-                            >
-                            <i className="text-white fa-solid fa-arrow-right"></i>
-                        </button>
-                    </div>
+                    {asset.searchIndex! < items.length - 1
+                        && <div className="flex flex-col justify-center">
+                            <button
+                                className="mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                                style={{
+                                    backgroundColor: "rgba(0, 0, 255, 0.2)",
+                                }}
+                                onClick={() => onNext()}
+                                >
+                                <i className="text-white fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    }
                 </div>
             </div>
             
             <div className="photo-header">
                 <div className="flex flex-row items-center pl-3 pt-3 pb-2">
                     <button
-                        className="p-1 px-3"
+                        className="p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                        style={{
+                            backgroundColor: "rgba(0, 0, 255, 0.2)",
+                        }}
                         onClick={() => {
                             onClose();
                             setOpenInfo(false);
@@ -96,14 +108,17 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
 
                     <button
                         data-testid="open-info-button"
-                        className="ml-auto mr-4"
+                        className="ml-auto mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                        style={{
+                            backgroundColor: "rgba(0, 0, 255, 0.2)",
+                        }}
                         onClick={event => {
                             setOpenInfo(true);
                         }}
                         >
                         <div className="flex flex-row items-center">
                             <i className="w-4 text-white text-center fa-solid fa-circle-info"></i>
-                            <div className="hidden sm:block ml-2">Info</div>
+                            <div className="text-white hidden sm:block ml-2">Info</div>
                         </div>
                     </button>
                 </div>
