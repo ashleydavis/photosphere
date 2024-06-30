@@ -304,7 +304,7 @@ async function main(): Promise<void> {
 
     let numProcessed = 0;
 
-    for (const chunk of _.chunk(files, 10)) {
+    for (const chunk of _.chunk(files, config.batchSize)) {
         await Promise.all(chunk.map(handleAsset));
 
         numProcessed += chunk.length;
