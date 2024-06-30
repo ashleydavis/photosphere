@@ -30,7 +30,7 @@ describe("image", () => {
     test("can resize image", async () => {
 
         const image = await loadImage(testImg);
-        const resizedImageData = resizeImage(image, 12);
+        const { dataUrl: resizedImageData } = resizeImage(image, 12);
         const resizedImage = await loadImage(resizedImageData);
         const resolution = getImageResolution(resizedImage);
         expect(resolution).toEqual({
