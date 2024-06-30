@@ -100,6 +100,40 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             }
                         }}
                         />
+
+                    {item.contentType.startsWith("video")
+                        && <div
+                            style={{
+                                position: "absolute",
+                                left: "50%",
+                                top: "50%",
+                                transform: "translate(-50%, -50%)",
+                                width: "48px",
+                                height: "48px",
+                                borderRadius: "50%",
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                cursor: "pointer",
+                            }}
+                            onClick={() => {
+                                if (onClick) {
+                                    onClick();
+                                }
+                            }}
+                            >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="white"
+                                width="32px"
+                                height="32px"
+                                >
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </div>
+                    }
                 </div>
             }    
 
