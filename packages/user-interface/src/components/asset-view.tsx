@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useApi } from "../context/api-context";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
 import { Image } from "./image";
+import { Video } from "./video";
 
 export interface IAssetViewProps { 
 
@@ -37,11 +37,6 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
     //
     const { asset } = useGalleryItem();
 
-    //
-    // Interface to the backend.
-    //
-    const api = useApi();
-
     // 
     // Set to true to open the info modal.
     //
@@ -53,11 +48,16 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
             <div className="w-full h-full flex flex-col justify-center items-center">
                 {open
                     && <div className="photo-container flex flex-col items-center justify-center">
-                        <Image
-                            testId="fullsize-asset"
-                            asset={asset}
-                            assetType="display"
-                            />
+                        {asset.contentType.startsWith("video/")
+                            && <Video
+                                asset={asset}
+                                />
+                            || <Image
+                                testId="fullsize-asset"
+                                asset={asset}
+                                assetType="display"
+                                />
+                        }
                     </div>
                 }
 

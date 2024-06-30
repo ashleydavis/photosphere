@@ -55,6 +55,11 @@ export interface IApi {
     getAsset(setId: string, assetId: string, assetType: string): Promise<Blob>;
 
     //
+    // Makes a URL to load an asset.
+    //
+    makeAssetUrl(setId: string, assetId: string, assetType: string): Promise<string>;
+
+    //
     // Uploads an asset to the backend.
     //
     uploadSingleAsset(setId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
@@ -164,6 +169,15 @@ export function ApiContextProvider({ children }: IProps) {
         });
     
         return response.data;
+    }
+
+    //
+    // Makes a URL to load an asset.
+    //
+    async function makeAssetUrl(setId: string, assetId: string, assetType: string): Promise<string> {
+        await loadToken();
+        const token = getToken();
+        return `${BASE_URL}/asset?id=${assetId}&type=${assetType}&set=${setId}&t={token}`;
     }
 
     //
@@ -289,6 +303,7 @@ export function ApiContextProvider({ children }: IProps) {
         getUser,
         getLatestTime,
         getAsset,
+        makeAssetUrl,
         uploadSingleAsset,
         submitOperations,
         getJournal,

@@ -23,17 +23,12 @@ export interface IImageProps {
     // The type of asset to retreive.
     //
     assetType: string;
-
-    //
-    // Event raised when an item in the gallery has been clicked.
-    //
-    onClick?: (() => void);
 }
 
 //
 // Renders an image.
 //
-export function Image({ testId, imgClassName, asset, assetType, onClick }: IImageProps) {
+export function Image({ testId, imgClassName, asset, assetType }: IImageProps) {
 
     const [objectURL, setObjectURL] = useState<string>("");
 
@@ -66,11 +61,6 @@ export function Image({ testId, imgClassName, asset, assetType, onClick }: IImag
                     style={{
                         padding: "2px",
                         transform: getImageTransform(asset.properties?.exif?.Orientation?.[0], undefined),
-                    }}
-                    onClick={() => {
-                        if (onClick) {
-                            onClick();
-                        }
                     }}
                     />
             }    
