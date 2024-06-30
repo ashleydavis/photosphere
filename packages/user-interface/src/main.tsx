@@ -4,7 +4,7 @@ import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
-import { enableAuth, useAuth } from "./context/auth-context";
+import { enableAuth, isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
@@ -427,12 +427,14 @@ export function Main({ computerPage }: IMainProps) {
                 </div>
             </div>
 
-            <FPSStats 
-                top="auto"
-                left="auto"
-                right={30}
-                bottom={10}
-                />
+            {!isProduction 
+                && <FPSStats 
+                    top="auto"
+                    left="auto"
+                    right={30}
+                    bottom={10}
+                    />
+            }
 
         </>
     );

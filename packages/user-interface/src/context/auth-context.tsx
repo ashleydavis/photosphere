@@ -9,7 +9,8 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useAuth0, User } from "@auth0/auth0-react";
 
-export const enableAuth = process.env.ENABLE_AUTH === "true" || (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
+export const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test")
+export const enableAuth = process.env.ENABLE_AUTH === "true" || isProduction;
 
 export interface IAuthContext {
 
