@@ -8,7 +8,8 @@ import { ILastUpdateRecord } from "./last-update-record";
 // Does the initial asset load and synchronization.
 //
 export async function initialSync(database: IDatabase, setId: string, api: IApi, setAssets: (assets: IGalleryItem[]) => void): Promise<void> {
-    let assets = await database.collection<IAsset>("metadata").getAllByIndex("setId", setId);
+    const localCollection = database.collection<IAsset>("metadata");
+    let assets = await localCollection.getAllByIndex("setId", setId);
     if (assets.length > 0) {
         setAssets(assets);
     }
@@ -48,8 +49,7 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
 
         //
         // Save the assets to the local database.
-        //
-        const localCollection = database.collection("metadata");
+        //        
         for (const asset of assets) {
             await localCollection.setOne(asset);
         }
