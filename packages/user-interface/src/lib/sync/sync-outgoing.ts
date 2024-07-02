@@ -1,19 +1,13 @@
 import { IApi } from "../../context/api-context";
-import { IAssetUpdateRecord } from "./asset-update-record";
-import { IAssetUploadRecord } from "./asset-upload-record";
+import { IOutgoingUpdate } from "./outgoing-update";
 import { IPersistentQueue } from "./persistent-queue";
 
 interface IProps {
 
     //
-    // Queue of outgoing asset uploads.
+    // Queue of outgoing updates.
     //
-    outgoingAssetUploadQueue: IPersistentQueue<IAssetUploadRecord>;
-
-    //
-    // Queue of outgoing asset updates.
-    //
-    outgoingAssetUpdateQueue: IPersistentQueue<IAssetUpdateRecord>;
+    outgoingUpdateQueue: IPersistentQueue<IOutgoingUpdate>;
 
     //
     // The interface to the backend.
@@ -24,37 +18,29 @@ interface IProps {
 //
 // Send outgoing asset uploads and updates to the cloud.
 //
-export async function syncOutgoing({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, api }: IProps): Promise<void> {
+export async function syncOutgoing({ outgoingUpdateQueue, api }: IProps): Promise<void> {
     //
-    // Flush the queue of outgoing asset uploads.
-    //
-    while (true) {
-        const outgoingUpload = await outgoingAssetUploadQueue.getNext();
-        if (!outgoingUpload) {
-            break;
-        }
-
-        await api.uploadSingleAsset(outgoingUpload.setId, outgoingUpload.assetId, outgoingUpload.assetType, outgoingUpload.assetData);
-        await outgoingAssetUploadQueue.removeNext();
-
-        console.log(`Processed outgoing upload: ${outgoingUpload.setId}/${outgoingUpload.assetType}/${outgoingUpload.assetId}`);
-    }
-
-    //
-    // Flush the queue of outgoing asset updates.
+    // Flush the queue of outgoing updates.
     //
     while (true) {
-        const outgoingUpdate = await outgoingAssetUpdateQueue.getNext();
+        const outgoingUpdate = await outgoingUpdateQueue.getNext();
         if (!outgoingUpdate) {
             break;
         }
 
-        await api.submitOperations(outgoingUpdate.ops);
-        await outgoingAssetUpdateQueue.removeNext();
-
-        console.log(`Processed outgoing updates:`);
-        for (const op of outgoingUpdate.ops) {
-            console.log(`  ${op.collectionName}/${op.recordId}`);
+        switch (outgoingUpdate.type) {
+            case "upload":
+                await api.uploadSingleAsset(outgoingUpdate.setId, outgoingUpdate.assetId, outgoingUpdate.assetType, outgoingUpdate.assetData);
+                break;
+            case "update":
+                await api.submitOperations(outgoingUpdate.ops);
+                break;
+            default: 
+                throw new Error(`Unknown outgoing update type: ${outgoingUpdate}`);
         }
+
+        await outgoingUpdateQueue.removeNext();
+
+        console.log(`Processed outgoing update:`, outgoingUpdate);
     }
 }    

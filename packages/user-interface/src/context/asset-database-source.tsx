@@ -4,8 +4,6 @@ import { IAssetData } from "../def/asset-data";
 import { GallerySourceContext, IAssetDataLoad, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
-import { IAssetUploadRecord } from "../lib/sync/asset-upload-record";
-import { IAssetUpdateRecord } from "../lib/sync/asset-update-record";
 import dayjs from "dayjs";
 import { IAssetRecord } from "../def/asset-record";
 import { IApi, useApi } from "./api-context";
@@ -18,6 +16,7 @@ import { syncIncoming } from "../lib/sync/sync-incoming";
 import { ILastUpdateRecord } from "../lib/sync/last-update-record";
 import { IDatabase } from "../lib/database/database";
 import { initialSync } from "../lib/sync/initial-sync";
+import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -32,8 +31,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const api = useApi();
     const { database } = useIndexeddb();
 
-    const outgoingAssetUploadQueue = useRef<PersistentQueue<IAssetUploadRecord>>(new PersistentQueue<IAssetUploadRecord>(database, "outgoing-asset-upload"));
-    const outgoingAssetUpdateQueue = useRef<PersistentQueue<IAssetUpdateRecord>>(new PersistentQueue<IAssetUpdateRecord>(database, "outgoing-asset-update"));
+    const outgoingUpdateQueue = useRef<PersistentQueue<IOutgoingUpdate>>(new PersistentQueue<IOutgoingUpdate>(database, "outgoing-updates"));
     const periodicSyncStarted = useRef(false);
 
     //
@@ -98,7 +96,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 // Queue the updates for upload to the cloud.
                 //
-                outgoingAssetUpdateQueue.current.add({ ops }),
+                outgoingUpdateQueue.current.add({ 
+                    type: "update",
+                    ops,
+                }),
             ])
             .catch(err => {
                 console.error(`Failed to add asset:`);
@@ -140,7 +141,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 // Queue the updates for upload to the cloud.
                 //
-                outgoingAssetUpdateQueue.current.add({ ops }),
+                outgoingUpdateQueue.current.add({ 
+                    type: "update",
+                    ops,
+                }),
             ])
             .catch(err => {
                 console.error(`Failed to update asset:`);
@@ -188,7 +192,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 // Queue the updates for upload to the cloud.
                 //
-                outgoingAssetUpdateQueue.current.add({ ops }),
+                outgoingUpdateQueue.current.add({ 
+                    type: "update",
+                    ops,
+                }),
             ])
             .catch(err => {
                 console.error(`Failed to update asset:`);
@@ -235,7 +242,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 // Queue the updates for upload to the cloud.
                 //
-                outgoingAssetUpdateQueue.current.add({ ops }),
+                outgoingUpdateQueue.current.add({ 
+                    type: "update",
+                    ops,
+                }),
             ])
             .catch(err => {
                 console.error(`Failed to update asset:`);
@@ -319,7 +329,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         // 
         // Queue the asset for upload to the cloud.
         //
-        await outgoingAssetUploadQueue.current.add({
+        await outgoingUpdateQueue.current.add({
+            type: "upload",
             setId,
             assetId,
             assetType,
@@ -356,8 +367,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
                 try {
                     await syncOutgoing({
-                        outgoingAssetUploadQueue: outgoingAssetUploadQueue.current,
-                        outgoingAssetUpdateQueue: outgoingAssetUpdateQueue.current,
+                        outgoingUpdateQueue: outgoingUpdateQueue.current,
                         api,
                     });
                 }

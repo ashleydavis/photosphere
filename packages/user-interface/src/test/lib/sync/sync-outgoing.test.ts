@@ -6,29 +6,23 @@ describe("sync outgoing", () => {
         const assetId = "my-asset";
         const assetType = "thumbnail";
         const assetData = {};
-        const outgoingAssetUploadQueue: any = {
+        const outgoingUpdateQueue: any = {
             getNext: jest.fn()
                 .mockImplementationOnce(async () => ({ setId, assetId, assetType, assetData }))
                 .mockImplementationOnce(async () => undefined),
             removeNext: jest.fn(async () => {}),
         };
-        const outgoingAssetUpdateQueue: any = {
-            getNext: async () => undefined,
-        };
         const api: any = {
             uploadSingleAsset: jest.fn(async () => {}),
         };
-        await syncOutgoing({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, api });
+        await syncOutgoing({ outgoingUpdateQueue, api });
         expect(api.uploadSingleAsset).toHaveBeenCalledWith(setId, assetId, assetType, assetData);
-        expect(outgoingAssetUploadQueue.removeNext).toHaveBeenCalled();
+        expect(outgoingUpdateQueue.removeNext).toHaveBeenCalled();
     });
 
     test("can sync outgoing update", async () => {
         const ops = [{ collectionName: "my-collection", recordId: "my-record" }];
-        const outgoingAssetUploadQueue: any = {
-            getNext: async () => undefined,
-        };
-        const outgoingAssetUpdateQueue: any = {
+        const outgoingUpdateQueue: any = {
             getNext: jest.fn()
                 .mockImplementationOnce(async () => ({ ops }))
                 .mockImplementationOnce(async () => undefined),
@@ -37,8 +31,8 @@ describe("sync outgoing", () => {
         const api: any = {
             submitOperations: jest.fn(async () => {}),
         };
-        await syncOutgoing({ outgoingAssetUploadQueue, outgoingAssetUpdateQueue, api });
+        await syncOutgoing({ outgoingUpdateQueue, api });
         expect(api.submitOperations).toHaveBeenCalledWith(ops);
-        expect(outgoingAssetUpdateQueue.removeNext).toHaveBeenCalled();
+        expect(outgoingUpdateQueue.removeNext).toHaveBeenCalled();
     });
 });

@@ -1,9 +1,15 @@
 import { IAssetData } from "../../def/asset-data";
+import { IDatabaseOp } from "defs";
 
 //
 // Records an asset upload in the outgoing queue.
 //
 export interface IAssetUploadRecord {
+    //
+    // The type of the record.
+    //
+    type: "upload";
+
     //
     // ID of the collection to upload to.
     //
@@ -24,3 +30,20 @@ export interface IAssetUploadRecord {
     //
     assetData: IAssetData;
 }
+
+//
+// Records an asset update in the outgoing queue.
+//
+export interface IAssetUpdateRecord {
+    //
+    // The type of the record.
+    //
+    type: "update";
+
+    //
+    // Operations to apply to the database.
+    //
+    ops: IDatabaseOp[];
+}
+
+export type IOutgoingUpdate = IAssetUploadRecord | IAssetUpdateRecord;
