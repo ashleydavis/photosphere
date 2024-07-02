@@ -9,7 +9,7 @@ module.exports = {
         filename: '[name].[contenthash].js',
         path: path.resolve(__dirname, 'dist'),
     },
-    devtool: 'inline-source-map',
+    devtool: 'source-map',
     mode: 'development',
     target: 'web',
     performance: { //TODO: Adjust/remove this later for prod performance.
@@ -26,6 +26,11 @@ module.exports = {
                 test: /\.tsx?$/,
                 use: 'ts-loader',
                 exclude: /node_modules/,
+            },
+            {
+                test: /\.js$/,
+                use: ['source-map-loader'],
+                enforce: 'pre'
             },
             {
                 test: /\.css$/,
