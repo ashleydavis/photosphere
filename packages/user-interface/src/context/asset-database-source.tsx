@@ -6,15 +6,13 @@ import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
 import { IAssetRecord } from "../def/asset-record";
-import { IApi, useApi } from "./api-context";
+import { useApi } from "./api-context";
 import { useApp } from "./app-context";
 import { applyOperations } from "../lib/apply-operation";
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { syncIncoming } from "../lib/sync/sync-incoming";
-import { ILastUpdateRecord } from "../lib/sync/last-update-record";
-import { IDatabase } from "../lib/database/database";
 import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Route, Routes, NavLink, Navigate, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Route, Routes, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
@@ -8,7 +8,6 @@ import { enableAuth, isProduction, useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
-import { deleteDatabase } from "./lib/database/indexeddb/indexeddb";
 import { useIndexeddb } from "./context/indexeddb-context";
 const FPSStats = require("react-fps-stats").default;
 
@@ -40,15 +39,9 @@ export function Main({ computerPage }: IMainProps) {
     const { 
         isLoading: isGalleryLoading,
         items,
-        searchText,
         search,
         clearSearch,
     } = useGallery();
-
-    const {
-        setId,
-        setSetId,
-    } = useApp();
 
     const {
         deleteDatabase
@@ -74,7 +67,18 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [ searchInput, setSearchInput ] = React.useState<string>("");
 
-    const { user } = useApp();
+    const { setId, user } = useApp();
+
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location.pathname === "/cloud" && user) {
+            //
+            // If the user is logged in, navigate to their default set.
+            //
+            navigateToDefaultSet();
+        }
+    }, [user, location]);
 
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
@@ -84,11 +88,32 @@ export function Main({ computerPage }: IMainProps) {
     }
 
     //
+    // Navigate to the specified set.
+    //
+    function navigateToSet(setId: string) {
+        navigate(`/cloud/${setId}`);
+    }
+
+    //
+    // Navigate to the users default set.
+    //
+    function navigateToDefaultSet() {
+        console.log(`Navigating to default set.`)
+        console.log(user)
+
+        if (!user) {
+            throw new Error(`No user set.`);
+        }
+
+        navigateToSet(user.sets.default);
+    }
+
+    //
     // Opens the search input.
     //
-    async function onOpenSearch() {
+    function onOpenSearch() {
     	setOpenSearch(true);
-        navigate("/cloud");
+        navigateToDefaultSet();
     }
 
     //
@@ -354,12 +379,12 @@ export function Main({ computerPage }: IMainProps) {
                             <button
                                 key={set}
                                 className="flex flex-row items-center cursor-pointer"
-                                onClick={() => setSetId(set)}
+                                onClick={() => navigateToSet(set)}
                                 >
                                 <div className="flex flex-row items-center pl-1 mt-8">
                                     <i className={classNames("w-12 text-center fa-solid fa-folder", {
-                                        "fa-folder": setId !== set,
-                                        "fa-folder-open": setId === set,
+                                        "fa-folder": set !== setId,
+                                        "fa-folder-open": set === setId,
                                     })}></i>
                                     <div className="">{set}</div>
                                 </div>
@@ -384,10 +409,9 @@ export function Main({ computerPage }: IMainProps) {
                 <div id="content" >
                     <Routes>
                         <Route 
-                            path="/cloud" 
+                            path="/cloud/:setId" 
                             element={
                                 <GalleryPage
-                                    key={searchText} // Forces the gallery to update when the search changes.
                                     />
                             }
                             />
@@ -404,7 +428,7 @@ export function Main({ computerPage }: IMainProps) {
                             element={<UploadPage />} 
                             />
 
-                        <Route
+                        <Route  
                             path="/"
                             element={
                                 <Navigate
@@ -423,6 +447,7 @@ export function Main({ computerPage }: IMainProps) {
                                     />
                             }
                             />
+
                     </Routes>
                 </div>
             </div>
