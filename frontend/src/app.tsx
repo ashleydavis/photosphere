@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider, 
     AuthContextProvider, enableAuth, GalleryContextProvider, 
     IndexeddbContextProvider, AssetDatabaseProvider 
@@ -39,7 +39,7 @@ export function App() {
     if (enableAuth) {
         // Setup with authentication.
         return (
-            <BrowserRouter>
+            <HashRouter>
                 <Auth0Provider
                     domain={process.env.AUTH0_DOMAIN as string}
                     clientId={process.env.AUTH0_CLIENT_ID as string}
@@ -50,15 +50,15 @@ export function App() {
                     >
                     <ApiSetup />
                 </Auth0Provider>
-            </BrowserRouter>
+            </HashRouter>
         );
     }
     else {
         // Setup for dev and testing with no authentication.
         return (
-            <BrowserRouter>
+            <HashRouter>
                 <ApiSetup />
-            </BrowserRouter>
+            </HashRouter>
         );
     }
 }
