@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
   "scripts": {
+    "start": "turbo --concurrency=20 photosphere-backend#start:dev photosphere-frontend#start compile:watch",
     "c": "pnpm run compile",
     "cw": "pnpm run compile:watch",
     "compile": "pnpm --stream -r run compile",
@@ -23,8 +24,8 @@
     "url": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo/issues"
   },
   "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
-  "dependencies": {
-  },
   "devDependencies": {
-  }
+    "turbo": "^2.0.6"
+  },
+  "packageManager": "pnpm@8.15.5"
 }

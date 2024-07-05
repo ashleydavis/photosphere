@@ -16,3 +16,4 @@ tools/upload/build
 packages/exif-js/build
 packages/defs/build
 tools/upload/log
+.turbo

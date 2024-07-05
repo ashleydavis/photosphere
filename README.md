@@ -82,6 +82,19 @@ To start the Electron-based frontend, follow the instructions in [./electron/REA
 
 To start the mobile frontend, follow the instructions in [./mobile/README.md](./mobile/README.md).
 
+### New Turborepo scripts
+
+I've added Turborepo to the monorepo.
+
+There's a simple way to run the entire application now:
+
+```
+cd photosphere
+pnpm install
+pnpm start
+```
+
+This includes the build script and then runs the backend and frontend.
 
 
 
