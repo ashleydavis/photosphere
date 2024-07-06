@@ -39,6 +39,7 @@ export function Video({ asset }: IVideoProps) {
             {assetUrl
                 && <video
                     className="w-full h-full"
+                    muted={true}
                     autoPlay={true}
                     controls={true}
                     loop={true}
