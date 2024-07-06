@@ -35,10 +35,11 @@ export function Main({ computerPage }: IMainProps) {
     // Interface to React Router navigation.
     //
 	const navigate = useNavigate();
-	
+
     const { 
         isLoading: isGalleryLoading,
         items,
+        selectedItem,
         search,
         clearSearch,
     } = useGallery();
@@ -80,6 +81,13 @@ export function Main({ computerPage }: IMainProps) {
         }
     }, [user, location]);
 
+    useEffect(() => {
+        if (setId && selectedItem) {
+            navigate(`/cloud/${setId}/${selectedItem._id}`);
+        }
+    }, [setId, selectedItem]);
+
+
     function notImplemented(event: any) {
         alert("This is a not implemented yet.");
 
@@ -99,7 +107,6 @@ export function Main({ computerPage }: IMainProps) {
     //
     function navigateToDefaultSet() {
         console.log(`Navigating to default set.`)
-        console.log(user)
 
         if (!user) {
             throw new Error(`No user set.`);
@@ -153,6 +160,14 @@ export function Main({ computerPage }: IMainProps) {
                 </div>
             );
         }
+
+        if (location.pathname === "/cloud") {
+            return (
+                <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                    <Spinner show={true} />
+                </div>
+            );
+       }
     }
 
     async function onLogOut() {
@@ -409,7 +424,7 @@ export function Main({ computerPage }: IMainProps) {
                 <div id="content" >
                     <Routes>
                         <Route 
-                            path="/cloud/:setId" 
+                            path="/cloud/:setId/:assetId?" 
                             element={
                                 <GalleryPage
                                     />

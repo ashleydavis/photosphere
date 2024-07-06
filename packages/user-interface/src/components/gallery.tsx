@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { GalleryLayout } from "./gallery-layout";
 import useResizeObserver from "@react-hook/resize-observer";
 import { useGallery } from "../context/gallery-context";
@@ -54,6 +54,12 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
         setGalleryWidth(containerRef.current!.clientWidth - GUTTER);
     });
 
+    useEffect(() => {
+        if (selectedItem && !openAssetView) {
+            setOpenAssetView(true);
+        }
+    }, [selectedItem])
+
     return (
         <div 
         	className="pl-1" 
@@ -66,21 +72,22 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
                 galleryWidth={galleryWidth}
                 targetRowHeight={targetRowHeight}
                 onItemClick={item => { 
-                    setOpenAssetView(true);
+                    setOpenAssetView(true)
                     setSelectedItem(item);
                 }}                
                 />
 
             {selectedItem &&
                 <GalleryItemContextProvider 
-                    asset={selectedItem.item}
-                    key={selectedItem.item._id}
+                    asset={selectedItem}
+                    key={selectedItem._id}
                     >
                     <AssetView
-                        key={selectedItem.item._id}
+                        key={selectedItem._id}
                         open={openAssetView}
                         onClose={() => {
                             setOpenAssetView(false);
+                            setSelectedItem(undefined);
                         }}
                         onPrev={() => {
                             setSelectedItem(getPrev(selectedItem));

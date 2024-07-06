@@ -154,13 +154,3 @@ export interface IGalleryRow {
     //
     headings: string[];
 }
-
-//
-// Represents an item in the gallery that has been selected.
-//
-export interface ISelectedGalleryItem {
-    //
-    // The selected item.
-    //
-    item: IGalleryItem;
-}

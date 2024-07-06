@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { IGalleryItem, ISelectedGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem } from "../lib/gallery-item";
 import flexsearch from "flexsearch";
 import { useGallerySource } from "./gallery-source";
 
@@ -73,24 +73,29 @@ export interface IGalleryContext {
     unloadAsset(assetId: string, assetType: string): void;
 
     //
+    // Gets a gallery item by id.
+    //
+    getItemById(assetId: string): IGalleryItem | undefined;
+
+    //
     // Gets the previous asset, or undefined if none.
     //
-    getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined;
+    getPrev(selectedItem: IGalleryItem): IGalleryItem | undefined;
 
     //
     // Gets the next asset, or undefined if none.
     //
-    getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined;
+    getNext(selectedItem: IGalleryItem): IGalleryItem | undefined;
 
     //
     // The currently selected gallery item or undefined when no item is selected.
     //
-    selectedItem: ISelectedGalleryItem | undefined
+    selectedItem: IGalleryItem | undefined
     
     //
     // Sets the selected gallery item.
     //
-    setSelectedItem(selectedItem: ISelectedGalleryItem | undefined): void;
+    setSelectedItem(selectedItem: IGalleryItem | undefined): void;
 
     //
     // Clears the currently selected gallery item.
@@ -148,12 +153,17 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // The item in the gallery that is currently selected.
     //
-    const [selectedItem, setSelectedItem] = useState<ISelectedGalleryItem | undefined>(undefined);
+    const [selectedItem, setSelectedItem] = useState<IGalleryItem | undefined>(undefined);
 
     //
     // References the search index.
     //
     const searchIndexRef = useRef<flexsearch.Document<IGalleryItem, true>>();
+
+    //
+    // Maps by id to searched assets.
+    //
+    const searchedAssets = useRef<Map<string, IGalleryItem>>();
 
     //
     // A cache entry for a loaded asset.
@@ -316,22 +326,41 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     }
 
     //
+    // Gets a gallery item by id.
+    //
+    function getItemById(assetId: string): IGalleryItem | undefined {
+        if (searchedAssets.current) {
+            const asset = searchedAssets.current.get(assetId);
+            if (asset) {
+                return asset;
+            }
+        }
+
+        if (loadedAssets.current) {
+            const asset = loadedAssets.current.get(assetId);
+            if (asset) {
+                return asset;
+            }
+        }
+
+        return undefined;        
+    }
+
+    //
     // Gets the previous asset, or undefined if none.
     //
-    function getPrev(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
-        if (selectedItem.item.searchIndex === undefined) {
+    function getPrev(selectedItem: IGalleryItem): IGalleryItem | undefined {
+        if (selectedItem.searchIndex === undefined) {
             throw new Error(`Selected item has no search index!`);
         }
 
-        if (selectedItem.item.searchIndex < 0) {
+        if (selectedItem.searchIndex < 0) {
             return undefined;
         }
 
-        if (selectedItem.item.searchIndex > 0) {
-            const prevIndex = selectedItem.item.searchIndex-1;
-            return {
-                item: items[prevIndex],
-            };
+        if (selectedItem.searchIndex > 0) {
+            const prevIndex = selectedItem.searchIndex-1;
+            return items[prevIndex];
         }
         else {
             return undefined;
@@ -341,20 +370,18 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Gets the next asset, or undefined if none.
     //
-    function getNext(selectedItem: ISelectedGalleryItem): ISelectedGalleryItem | undefined {
-        if (selectedItem.item.searchIndex === undefined) {
+    function getNext(selectedItem: IGalleryItem): IGalleryItem | undefined {
+        if (selectedItem.searchIndex === undefined) {
             throw new Error(`Selected item has no search index!`);
         }
         
-        if (selectedItem.item.searchIndex < 0) {
+        if (selectedItem.searchIndex < 0) {
             return undefined;
         }
 
-        if (selectedItem.item.searchIndex < items.length-1) {
-            const nextIndex = selectedItem.item.searchIndex + 1;
-            return {
-                item: items[nextIndex],
-            };
+        if (selectedItem.searchIndex < items.length-1) {
+            const nextIndex = selectedItem.searchIndex + 1;
+            return items[nextIndex];
         }
         else {
             return undefined;
@@ -429,7 +456,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         //
         // Bake in the search index now that we have sorted the assets.
         //
-        return sorted.map((asset, index) => ({ ...asset, searchIndex: index }));
+        const searched =  sorted.map((asset, index) => ({ ...asset, searchIndex: index }));
+
+        searchedAssets.current = new Map<string, IGalleryItem>();
+        for (const asset of searched) {
+            searchedAssets.current.set(asset._id, asset);
+        }
+        
+        return searched;
     }
 
     //
@@ -475,6 +509,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         uploadAsset,
         loadAsset,
         unloadAsset,
+        getItemById,
         getPrev,
         getNext,
         selectedItem,

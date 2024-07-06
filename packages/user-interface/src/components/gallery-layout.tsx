@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { IGalleryRow, ISelectedGalleryItem } from "../lib/gallery-item";
+import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryLayout, computePartialLayout } from "../lib/create-layout";
 import { GalleryImage } from "./gallery-image";
 import { throttle } from "lodash";
 
-export type ItemClickFn = ((item: ISelectedGalleryItem) => void);
+export type ItemClickFn = ((item: IGalleryItem) => void);
 
 //
 // Renders a row of items in the gallery.
@@ -50,7 +50,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         item={item}
                         onClick={() => {
                             if (onItemClick) {
-                                onItemClick({ item });
+                                onItemClick(item);
                             }
                         }}
                         x={item.offsetX!}
