@@ -41,6 +41,7 @@ export function Video({ asset }: IVideoProps) {
                     className="w-full h-full"
                     autoPlay={true}
                     controls={true}
+                    loop={true}
                     src={assetUrl}
                     />
             }    
