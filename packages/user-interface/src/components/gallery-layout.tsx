@@ -137,7 +137,6 @@ function renderVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop
     return renderedRows;
 }
 
-
 export interface IGalleryLayoutProps { 
     //
     // The width of the gallery.

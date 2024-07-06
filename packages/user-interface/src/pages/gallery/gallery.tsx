@@ -35,6 +35,7 @@ export function GalleryPage({}: IGalleryPageProps) {
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <Gallery 
+                key={setId} // Resets the gallery completely when the set changes. Simplest way to reset the scroll of the gallery.
                 targetRowHeight={150}
                 />
         </div>
