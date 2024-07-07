@@ -84,8 +84,13 @@ export function Main({ computerPage }: IMainProps) {
     }, [user, location]);
 
     useEffect(() => {
-        if (setId && selectedItem) {
-            navigate(`/cloud/${setId}/${selectedItem._id}`);
+        if (setId) {
+            if (selectedItem) {
+                navigate(`/cloud/${setId}/${selectedItem._id}`);
+            }
+            else {
+                navigate(`/cloud/${setId}`);
+            }
         }
     }, [setId, selectedItem]);
 
