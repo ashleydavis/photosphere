@@ -36,20 +36,20 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     //
     // Adds a new label to the asset.
     //
-    async function onAddLabel() {
+    function onAddLabel() {
         const labelName = window.prompt("Enter the new label:");
         if (!labelName) {
             return;
         }
 
-        await addArrayValue("labels", labelName);
+        addArrayValue("labels", labelName);
     }
     
 	//
     // Removes a label from the asset.
     //
-    async function onRemoveLabel(labelName: string) {
-        await removeArrayValue("labels", labelName);
+    function onRemoveLabel(labelName: string) {
+        removeArrayValue("labels", labelName);
     }
 
     //

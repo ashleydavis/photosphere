@@ -151,14 +151,14 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             alignItems: "center",
                             cursor: "pointer",
                         }}
-                        onClick={async event => {
+                        onClick={event => {
                             event.preventDefault();
                             event.stopPropagation();
                             if (item.selected) {
-                                await removeFromMultipleSelection(item);
+                                removeFromMultipleSelection(item);
                             }
                             else {
-                                await addToMultipleSelection(item);
+                                addToMultipleSelection(item);
                             }
                         }}
                         >

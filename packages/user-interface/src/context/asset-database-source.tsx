@@ -45,7 +45,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Adds an asset to the source.
     //
-    async function addAsset(asset: IGalleryItem): Promise<void> {
+    function addAsset(asset: IGalleryItem): void {
 
         setAssets([ { ...asset, setIndex: 0 } ]
             .concat(
@@ -108,7 +108,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Updates an existing asset.
     //
-    async function updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void> {
+    function updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): void {
 
         const assetId = assets[assetIndex]._id;
         const updatedAsset = { ...assets[assetIndex], ...partialAsset };
@@ -160,10 +160,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         });
         setAssets(_assets);
     }
+
     //
     // Adds an array value to the asset.
     //
-    async function addArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+    function addArrayValue(assetIndex: number, field: string, value: any): void {
         const assetId = assets[assetIndex]._id;
         const updatedAsset: any = { ...assets[assetIndex] };
         if (updatedAsset[field] === undefined) {
@@ -214,7 +215,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Removes an array value from the asset.
     //
-    async function removeArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
+    function removeArrayValue(assetIndex: number, field: string, value: any): void {
         const assetId = assets[assetIndex]._id;
         const updatedAsset: any = { ...assets[assetIndex] };
         if (updatedAsset[field] === undefined) {

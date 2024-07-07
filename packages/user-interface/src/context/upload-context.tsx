@@ -432,7 +432,7 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Add asset to the gallery.
             //
-            await addGalleryItem({
+            addGalleryItem({
                 _id: assetId,
                 width: resolution.width,
                 height: resolution.height,

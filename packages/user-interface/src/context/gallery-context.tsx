@@ -36,22 +36,22 @@ export interface IGalleryContext {
     //
     // Adds an item to the the gallery.
     //
-    addGalleryItem(galleryItem: IGalleryItem): Promise<void>;
+    addGalleryItem(galleryItem: IGalleryItem): void;
 
     //
     // Updates an item in the gallery by index.
     //
-    updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
+    updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): void;
 
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
+    addArrayValue(assetIndex: number, field: string, value: any): void;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
+    removeArrayValue(assetIndex: number, field: string, value: any): void;
 
     //
     // Checks if an asset is already uploaded.
@@ -106,22 +106,22 @@ export interface IGalleryContext {
     //
     // Multiple selected gallery items.
     //
-    selectedItems: IGalleryItem[]; //fio:
+    selectedItems: IGalleryItem[];
 
     //
     // Add the item to the multiple selection.
     //
-    addToMultipleSelection(item: IGalleryItem): Promise<void>;
+    addToMultipleSelection(item: IGalleryItem): void;
 
     //
     // Remove the item from the multiple selection.
     //
-    removeFromMultipleSelection(item: IGalleryItem): Promise<void>;
+    removeFromMultipleSelection(item: IGalleryItem): void;
 
     //
     // Clears the multiple selection.
     //
-    clearMultiSelection(): Promise<void>;
+    clearMultiSelection(): void;
 
     //
     // The current search text.
@@ -153,7 +153,7 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { isLoading, assets, addAsset, updateAsset, 
+    const { isLoading, assets, addAsset, updateAsset, updateAssets,
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
@@ -254,35 +254,37 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         }
 
         // Renders the assets that we know about already.
-        setItems(applySort(removeDeletedAssets(assets)));
+        const items = applySort(removeDeletedAssets(assets));
+        setItems(items);
+        setSelectedItems(items.filter(item => item.selected));
     }
 
     //
     // Adds an asset to the start of the gallery.
     //
-    async function addGalleryItem(galleryItem: IGalleryItem): Promise<void> {
+    function addGalleryItem(galleryItem: IGalleryItem): void {
         addAsset(galleryItem);
     }
 
     //
     // Updates an asset in the gallery by index.
     //
-    async function updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
+    function updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): void {
         updateAsset(assetIndex, partialGalleryItem);
     }
 
     //
     // Adds an array value to the asset.
     //
-    async function addArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
-        await _addArrayValue(assetIndex, field, value);
+    function addArrayValue(assetIndex: number, field: string, value: any): void {
+        _addArrayValue(assetIndex, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
-    async function removeArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
-        await _removeArrayValue(assetIndex, field, value);
+    function removeArrayValue(assetIndex: number, field: string, value: any): void {
+        _removeArrayValue(assetIndex, field, value);
     }
 
     //
@@ -424,7 +426,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Add the item to the multiple selection.
     //
-    async function addToMultipleSelection(item: IGalleryItem): Promise<void> {
+    function addToMultipleSelection(item: IGalleryItem): void {
         if (!item.setIndex) {
             throw new Error(`Asset index is not set`);
         }
@@ -439,7 +441,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Remove the item from the multiple selection.
     //
-    async function removeFromMultipleSelection(item: IGalleryItem): Promise<void> {
+    function removeFromMultipleSelection(item: IGalleryItem): void {
         if (!item.setIndex) {
             throw new Error(`Asset index is not set`);
         }
@@ -455,7 +457,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Clears the multiple selection.
     //
-    async function clearMultiSelection(): Promise<void> {
+    function clearMultiSelection(): void {        
         updateAssets(selectedItems.map(item => ({ 
             assetIndex: item.setIndex!, 
             partialAsset: { selected: false },

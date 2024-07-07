@@ -32,12 +32,13 @@ export interface IGallerySource {
     //
     // Adds an asset to the source.
     //
-    addAsset(asset: IGalleryItem): Promise<void>;
+    addAsset(asset: IGalleryItem): void;
 
     //
     // Updates an existing asset.
     //
-    updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void>;
+    updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): void;
+
     //
     // Update multiple assets with non persisted changes.
     //
@@ -46,12 +47,12 @@ export interface IGallerySource {
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetIndex: number, field: string, value: any): Promise<void>;
+    addArrayValue(assetIndex: number, field: string, value: any): void;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetIndex: number, field: string, value: any): Promise<void>;    
+    removeArrayValue(assetIndex: number, field: string, value: any): void;    
 
     //
     // Checks if an asset is already uploaded.
