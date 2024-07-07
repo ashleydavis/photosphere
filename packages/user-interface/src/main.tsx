@@ -40,6 +40,8 @@ export function Main({ computerPage }: IMainProps) {
         isLoading: isGalleryLoading,
         items,
         selectedItem,
+        selectedItems,
+        clearMultiSelection,
         search,
         clearSearch,
     } = useGallery();
@@ -254,9 +256,21 @@ export function Main({ computerPage }: IMainProps) {
                         }
 
                         <div
-                            className="mr-2 text-xs sm:text-sm"
+                            className="flex flex-row items-center mr-2 text-xs sm:text-sm"
                             >
-                            {items.length} photos
+                            {selectedItems.length > 0 
+                                && <div className="flex flex-row items-center">
+                                    <button
+                                        className="w-6 text-sm"
+                                        onClick={clearMultiSelection}
+                                        >
+                                        <i className="fa-solid fa-close"></i>
+                                    </button>                                    
+                                    {selectedItems.length} selected
+                                </div>
+                                || <div>{items.length} photos</div>
+                            }
+                            
                         </div>
 
                         {!isAuthenticated && (

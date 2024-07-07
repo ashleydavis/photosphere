@@ -44,7 +44,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     const [source, setSource] = useState<string>();
     const [objectURL, setObjectURL] = useState<string>("");
 
-    const { loadAsset, unloadAsset } = useGallery();
+    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection } = useGallery();
 
     const gutter = 1;
 
@@ -134,24 +134,64 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             </svg>
                         </div>
                     }
+
+                    {/* Selection tick mark. */}
+
+                    <div
+                        style={{
+                            position: "absolute",
+                            left: "8px",
+                            top: "8px",
+                            width: "24px",
+                            height: "24px",
+                            borderRadius: "50%",
+                            backgroundColor: item.selected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            cursor: "pointer",
+                        }}
+                        onClick={async event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (item.selected) {
+                                await removeFromMultipleSelection(item);
+                            }
+                            else {
+                                await addToMultipleSelection(item);
+                            }
+                        }}
+                        >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="white"
+                            width="16px"
+                            height="16px"
+                            >
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                        </svg>
+                    </div>
+
+                    {/* Image number. */}
+
+                    <div
+                        style={{
+                            position: "absolute",
+                            left: `8px`,
+                            bottom: `8px`,
+                            padding: "2px",
+                            color: "white",
+                            backgroundColor: "rgba(0, 0, 0, 0.5)",
+                            pointerEvents: "none",
+                            fontSize: "14px",
+                            lineHeight: "14px",
+                        }}
+                        >
+                        #{item.searchIndex!+1}
+                    </div>
                 </div>
             }    
-
-            <div
-                style={{
-                    position: "absolute",
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    padding: "2px",
-                    color: "white",
-                    backgroundColor: "black",
-                    pointerEvents: "none",
-                    fontSize: "12px",
-                    lineHeight: "14px",
-                }}
-                >
-                #{item.searchIndex!+1}
-            </div>
 
             {/* Renders a debug panel for each image showing it's position and dimensions. */}
             {/* <div

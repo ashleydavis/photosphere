@@ -38,6 +38,10 @@ export interface IGallerySource {
     // Updates an existing asset.
     //
     updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): Promise<void>;
+    //
+    // Update multiple assets with non persisted changes.
+    //
+    updateAssets(assetUpdates: { assetIndex: number, partialAsset: Partial<IGalleryItem>}[]): void;
 
     //
     // Adds an array value to the asset.

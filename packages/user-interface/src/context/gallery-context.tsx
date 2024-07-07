@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import flexsearch from "flexsearch";
 import { useGallerySource } from "./gallery-source";
+import { update } from "lodash";
 
 //
 // Gets the sorting value from the gallery item.
@@ -103,6 +104,26 @@ export interface IGalleryContext {
     clearSelectedItem(): void;
 
     //
+    // Multiple selected gallery items.
+    //
+    selectedItems: IGalleryItem[]; //fio:
+
+    //
+    // Add the item to the multiple selection.
+    //
+    addToMultipleSelection(item: IGalleryItem): Promise<void>;
+
+    //
+    // Remove the item from the multiple selection.
+    //
+    removeFromMultipleSelection(item: IGalleryItem): Promise<void>;
+
+    //
+    // Clears the multiple selection.
+    //
+    clearMultiSelection(): Promise<void>;
+
+    //
     // The current search text.
     //
     searchText: string;
@@ -154,6 +175,11 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // The item in the gallery that is currently selected.
     //
     const [selectedItem, setSelectedItem] = useState<IGalleryItem | undefined>(undefined);
+
+    //
+    // Multiple selected gallery items.
+    //
+    const [selectedItems, setSelectedItems] = useState<IGalleryItem[]>([]);
 
     //
     // References the search index.
@@ -396,6 +422,48 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     }
 
     //
+    // Add the item to the multiple selection.
+    //
+    async function addToMultipleSelection(item: IGalleryItem): Promise<void> {
+        if (!item.setIndex) {
+            throw new Error(`Asset index is not set`);
+        }
+        if (item.selected) {
+            // Already selected.
+            return;
+        }
+        setSelectedItems([...selectedItems, item]);
+        updateAssets([{ assetIndex: item.setIndex, partialAsset: { selected: true } }]);
+    }
+
+    //
+    // Remove the item from the multiple selection.
+    //
+    async function removeFromMultipleSelection(item: IGalleryItem): Promise<void> {
+        if (!item.setIndex) {
+            throw new Error(`Asset index is not set`);
+        }
+        if (!item.selected) {
+            // Already not selected.
+            return;
+        }
+
+        setSelectedItems(selectedItems.filter(selectedItem => selectedItem._id !== item._id));        
+        updateAssets([{ assetIndex: item.setIndex, partialAsset: { selected: false } }]);
+    }
+
+    //
+    // Clears the multiple selection.
+    //
+    async function clearMultiSelection(): Promise<void> {
+        updateAssets(selectedItems.map(item => ({ 
+            assetIndex: item.setIndex!, 
+            partialAsset: { selected: false },
+        })));
+        setSelectedItems([]);
+    }
+
+    //
     // Sets the search text for finding assets.
     // Passing in empty string or undefined gets all assets.
     // This does a gallery reset when the search term has changed.
@@ -411,7 +479,9 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return;
         }
 
-        setItems(applySort(removeDeletedAssets(searchAssets(newSearchText))));
+        const items = applySort(removeDeletedAssets(searchAssets(newSearchText)));
+        setItems(items);
+        setSelectedItems(items.filter(item => item.selected));
         setSearchText(newSearchText);
     }
 
@@ -515,6 +585,10 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         selectedItem,
         setSelectedItem,
         clearSelectedItem,
+        selectedItems,
+        addToMultipleSelection,
+        removeFromMultipleSelection,
+        clearMultiSelection,
         search,
         clearSearch,
     };

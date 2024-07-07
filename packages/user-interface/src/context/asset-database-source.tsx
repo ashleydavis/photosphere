@@ -151,6 +151,16 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
+    // Update multiple assets with non persisted changes.
+    //
+    function updateAssets(assetUpdates: { assetIndex: number, partialAsset: Partial<IGalleryItem>}[]): void {
+        let _assets = [...assets];
+        assetUpdates.forEach(({ assetIndex, partialAsset }) => {
+            _assets[assetIndex] = { ..._assets[assetIndex], ...partialAsset };
+        });
+        setAssets(_assets);
+    }
+    //
     // Adds an array value to the asset.
     //
     async function addArrayValue(assetIndex: number, field: string, value: any): Promise<void> {
@@ -446,6 +456,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         assets,
         addAsset,
         updateAsset,
+        updateAssets,
         addArrayValue,
         removeArrayValue,
         checkAssetHash,
