@@ -1,7 +1,7 @@
 body {
     overflow: hidden;
     font-family: 'Roboto', Arial, sans-serif;
-    color: rgb(60,64,67);
+    color: rgb(60, 64, 67);
     font-size: 1.125rem;
     line-height: 1.5rem;
     letter-spacing: 0;
@@ -106,7 +106,6 @@ i {
     height: 52px;
     background-color: white;
     border-bottom: 1px solid rgb(218, 220, 224);
-    overflow: hidden;
 }
 
 #navbar.search {
@@ -133,6 +132,7 @@ i {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -282,8 +282,30 @@ i {
     .info.open>.info-header {
         left: 50%;
     }
-} 
+}
 
 .info-content {
     margin-top: 50px;
+}
+
+/* Drop down */
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-toggle {
+    cursor: pointer;
+    height: 39px;
+    padding: 8px;
+}
+
+.dropdown-menu li {
+    padding: 10px;
+    cursor: pointer;
+}
+
+.dropdown-menu li:hover {
+    background-color: #f0f0f0;
 }

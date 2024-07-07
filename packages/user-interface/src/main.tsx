@@ -9,8 +9,8 @@ import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
 import { useIndexeddb } from "./context/indexeddb-context";
+import { Dropdown } from "./components/dropdown";
 const FPSStats = require("react-fps-stats").default;
-
 
 export interface IMainProps {
     //
@@ -177,12 +177,6 @@ export function Main({ computerPage }: IMainProps) {
        }
     }
 
-    async function onLogOut() {
-        await logout();
-
-        await deleteDatabase();
-    }
-
     return (
         <>
             <div id="navbar" className={(openSearch ? "search": "")} >
@@ -278,27 +272,7 @@ export function Main({ computerPage }: IMainProps) {
                             
                         </div>
 
-                        {!isAuthenticated && (
-                            <div className="ml-1 mr-2 sm:mr-4">
-                                <button
-                                    onClick={login}
-                                    >
-                                    <i className="w-5 fa-solid fa-right-to-bracket"></i>
-                                    <span className="hidden sm:inline ml-2">Log in</span>
-                                </button>
-                            </div> 
-                        )}
-
-                        {isAuthenticated && (
-                            <div className="ml-1 mr-2 sm:mr-4">
-                                <button
-                                    onClick={onLogOut}
-                                    >
-                                    <i className="w-5 fa-solid fa-right-from-bracket"></i>
-                                    <span className="hidden sm:inline ml-1">Log out</span>
-                                </button>
-                            </div> 
-                        )}
+                        <Dropdown />
                     </div>
 
                     {openSearch

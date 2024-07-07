@@ -106,7 +106,6 @@ i {
     height: 52px;
     background-color: white;
     border-bottom: 1px solid rgb(218, 220, 224);
-    overflow: hidden;
 }
 
 #navbar.search {
@@ -285,4 +284,26 @@ i {
 
 .info-content {
     margin-top: 50px;
+}
+
+/* Drop down */
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-toggle {
+    cursor: pointer;
+    height: 39px;
+    padding: 8px;
+}
+
+.dropdown-menu li {
+    padding: 10px;
+    cursor: pointer;
+}
+
+.dropdown-menu li:hover {
+    background-color: #f0f0f0;
 }
