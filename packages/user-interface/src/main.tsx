@@ -28,7 +28,6 @@ export function Main({ computerPage }: IMainProps) {
         isLoading,
         isAuthenticated,
         login,
-        logout,
     } = useAuth();
 
     //
