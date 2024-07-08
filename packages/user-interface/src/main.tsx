@@ -118,7 +118,7 @@ export function Main({ computerPage }: IMainProps) {
             throw new Error(`No user set.`);
         }
 
-        navigateToSet(user.sets.default);
+        navigateToSet(user.defaultSet);
     }
 
     //
@@ -381,19 +381,19 @@ export function Main({ computerPage }: IMainProps) {
                         Sets
                     </h2>
 
-                    {user?.sets.access.map(set => {
+                    {user?.sets.map(set => {
                         return (
                             <button
-                                key={set}
+                                key={set.id}
                                 className="flex flex-row items-center cursor-pointer"
-                                onClick={() => navigateToSet(set)}
+                                onClick={() => navigateToSet(set.id)}
                                 >
                                 <div className="flex flex-row items-center pl-1 mt-8">
                                     <i className={classNames("w-12 text-center fa-solid fa-folder", {
-                                        "fa-folder": set !== setId,
-                                        "fa-folder-open": set === setId,
+                                        "fa-folder": set.id !== setId,
+                                        "fa-folder-open": set.id === setId,
                                     })}></i>
-                                    <div className="">{set}</div>
+                                    <div className="">{set.name}</div>
                                 </div>
                             </button>
                         );                    

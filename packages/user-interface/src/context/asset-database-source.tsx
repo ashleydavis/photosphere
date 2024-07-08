@@ -389,7 +389,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     //
                     // Collate the last update ids for each collection.
                     //
-                    const setIds = user!.sets.access;    
+                    const setIds = user!.sets.map(set => set.id);
                     await syncIncoming({ setIds, database, api });
                 }
                 catch (err) {

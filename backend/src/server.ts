@@ -1,10 +1,9 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { IUser } from "./lib/user";
 import { Db } from "mongodb";
 import { IStorage } from "./lib/storage/storage";
-import { IDatabaseOp, IDatabaseOpRecord } from "defs";
+import { IUser, IDatabaseOp, IDatabaseOpRecord } from "defs";
 import { uuid } from "./lib/uuid";
 
 declare global {

@@ -1,8 +1,8 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { IUser } from "../def/user";
 import { useIndexeddb } from "./indexeddb-context";
 import { useOnline } from "../lib/use-online";
 import { useApi } from "./api-context";
+import { IUser } from "defs";
 
 export interface IAppContext {
     //
@@ -54,7 +54,7 @@ export function AppContextProvider({ children }: IProps) {
 
         const user = await database.collection<IUser>("users").getOne(userId);
         if (user) {
-            setSetId(user.sets.default);
+            setSetId(user.defaultSet);
             setUser(user);
         }
         else {
@@ -76,7 +76,7 @@ export function AppContextProvider({ children }: IProps) {
                 //
                 await database.collection("users").setOne(user);
                 localStorage.setItem("userId", user._id);
-                setSetId(user.sets.default);
+                setSetId(user.defaultSet);
                 setUser(user);
                 return;
             }
