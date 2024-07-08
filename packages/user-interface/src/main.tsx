@@ -9,7 +9,12 @@ import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
 import { useIndexeddb } from "./context/indexeddb-context";
-import { Dropdown } from "./components/dropdown";
+import Dropdown from '@mui/joy/Dropdown';
+import MenuButton from '@mui/joy/MenuButton';
+import IconButton from '@mui/joy/IconButton';
+import MoreVert from '@mui/icons-material/MoreVert';
+import MenuItem from '@mui/joy/MenuItem';
+import Menu from '@mui/joy/Menu';
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -28,6 +33,7 @@ export function Main({ computerPage }: IMainProps) {
         isLoading,
         isAuthenticated,
         login,
+        logout,
     } = useAuth();
 
     //
@@ -143,6 +149,12 @@ export function Main({ computerPage }: IMainProps) {
         await clearSearch();
         setSearchInput("");
         setOpenSearch(false);
+    }
+
+    async function onLogOut() {
+        await logout();
+
+        await deleteDatabase();
     }
 
     if (enableAuth) {       
@@ -271,7 +283,27 @@ export function Main({ computerPage }: IMainProps) {
                             
                         </div>
 
-                        <Dropdown />
+                        <Dropdown>
+                            <MenuButton
+                                sx={{
+                                    mr: 1,
+                                }}                            
+                                slots={{ root: IconButton }}
+                                slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
+                                >
+                                <MoreVert />
+                            </MenuButton>
+                            <Menu placement="bottom-end">
+                                <MenuItem>Item 1</MenuItem>
+                                <MenuItem>Item 2</MenuItem>
+                                <MenuItem
+                                    onClick={onLogOut}
+                                    >
+                                    <i className="fa-solid fa-right-from-bracket"></i>
+                                    <span className="ml-1">Log out</span>
+                                </MenuItem>
+                            </Menu>
+                        </Dropdown>
                     </div>
 
                     {openSearch
