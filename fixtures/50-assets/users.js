@@ -7,6 +7,10 @@ const users = [
                 "id": "test-collection",
                 "name": "Test collection",
             },
+            {
+                "id": "test-collection-empty",
+                "name": "Empty collection",
+            },
         ],
     }
 ]
