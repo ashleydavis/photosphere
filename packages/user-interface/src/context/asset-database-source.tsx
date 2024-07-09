@@ -304,6 +304,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         try {
             setIsWorking(true);
 
+            //
+            // Initializes the destination set.
+            //
+            await initialSync(database, destSetId, api, assets => {
+                console.log(`Loaded ${assets.length} assets into ${setId}`);
+            });            
+
             const newAssetId = uuid();
     
             //
@@ -514,7 +521,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         try {
             setIsLoading(true);
 
-            const assets = await initialSync(database, setId, api, assets => {
+            await initialSync(database, setId, api, assets => {
                 const assetMap: IGalleryItemMap = {};
                 for (const asset of assets) {
                     assetMap[asset._id] = asset;
@@ -523,7 +530,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 setAssets(assetMap);
 
                 console.log(`Loaded ${assets.length} assets.`);
-            });            
+            });
         }
         finally {
             setIsLoading(false);
