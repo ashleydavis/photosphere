@@ -18,6 +18,7 @@ import Menu from '@mui/joy/Menu';
 import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
 import { useGallerySource } from "./context/gallery-source";
+import { useAssetDatabase } from "./context/asset-database-source";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -54,7 +55,7 @@ export function Main({ computerPage }: IMainProps) {
         clearSearch,
     } = useGallery();
 
-    const { moveToSet } = useGallerySource();
+    const { moveToSet } = useAssetDatabase();
 
     const {
         deleteDatabase

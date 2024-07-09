@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useRef, useState } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
 import { GallerySourceContext, IAssetDataLoad, IGalleryItemMap, IGallerySource } from "./gallery-source";
@@ -18,6 +18,16 @@ import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { uuid } from "../lib/uuid";
 
 const SYNC_POLL_PERIOD = 5000;
+
+//
+// Adds "asset database" specific functionality to the gallery source.
+//
+export interface IAssetDatabase extends IGallerySource {
+    //
+    // Moves an asset to another set.
+    //
+    moveToSet(assetId: string, setId: string): Promise<void>;
+}
 
 export interface IAssetDatabaseProviderProps {
     children: ReactNode | ReactNode[];
@@ -494,7 +504,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         }
     }, [setId]);
 
-    const value: IGallerySource = {
+    const value: IAssetDatabase = {
         isLoading,
         isReadOnly: false,
         assets,
@@ -511,9 +521,23 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     };
     
     return (
-        <GallerySourceContext.Provider value={value} >
-            {children}
-        </GallerySourceContext.Provider>
+        <AssetDatabaseContext.Provider value={value} >
+            <GallerySourceContext.Provider value={value} >
+                {children}
+            </GallerySourceContext.Provider>
+        </AssetDatabaseContext.Provider>
     );
 }
 
+export const AssetDatabaseContext = createContext<IAssetDatabase | undefined>(undefined);
+
+//
+// Use the asset database in a component.
+//
+export function useAssetDatabase(): IAssetDatabase {
+    const context = useContext(AssetDatabaseContext);
+    if (!context) {
+        throw new Error(`AssetDatabaseContext is not set!.`);
+    }
+    return context;
+}

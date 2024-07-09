@@ -64,12 +64,6 @@ export interface IGallerySource {
     deleteAsset(assetId: string): void;
 
     //
-    // Moves an asset to another set.
-    // TODO: There's something wrong with this abstraction now because the "source" for local assets doesn't know about sets.
-    //
-    moveToSet(assetId: string, setId: string): Promise<void>;
-
-    //
     // Checks if an asset is already uploaded.
     //
     checkAssetHash(hash: string): Promise<boolean>;
