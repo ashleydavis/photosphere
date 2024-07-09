@@ -63,26 +63,18 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
     // Updates the configuration of the asset.
     //
     function updateAsset(assetUpdate: Partial<IGalleryItem>): void {
-        if (asset.setIndex === undefined) {
-            throw new Error(`Asset set index is not set!`);
-        }
-
         setAsset({
             ..._asset,
             ...assetUpdate,
         });
 
-        updateGalleryItem(asset.setIndex, assetUpdate);
+        updateGalleryItem(asset._id, assetUpdate);
     }
 
     //
     // Adds an array value to the asset.
     //
     function addArrayValue(field: string, value: any): void {
-        if (asset.setIndex === undefined) {
-            throw new Error(`Asset set index is not set!`);
-        }
-
         const updatedAsset: any = { ..._asset };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -91,17 +83,13 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         updatedAsset[field].push(value);
         setAsset(updatedAsset);
 
-        _addArrayValue(asset.setIndex, field, value);
+        _addArrayValue(asset._id, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
     function removeArrayValue(field: string, value: any): void {
-        if (asset.setIndex === undefined) {
-            throw new Error(`Asset set index is not set!`);
-        }
-
         const updatedAsset: any = { ..._asset };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -109,18 +97,14 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
         setAsset(updatedAsset);
 
-        _removeArrayValue(asset.setIndex, field, value);
+        _removeArrayValue(asset._id, field, value);
     }
 
     //
     // Deletes the asset in question.
     //
     function deleteAsset(): void {
-        if (asset.setIndex === undefined) {
-            throw new Error(`Asset set index is not set!`);
-        }
-
-        _deleteAsset(asset.setIndex);
+        _deleteAsset(asset._id);
     }
 
     const value: IGalleryItemContext = {

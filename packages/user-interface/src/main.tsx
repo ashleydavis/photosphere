@@ -170,7 +170,7 @@ export function Main({ computerPage }: IMainProps) {
     //
     async function onMoveSelectedToSet(setId: string) {
         for (const selectedItem of selectedItems) {
-            await moveToSet(selectedItem.setIndex!, setId);
+            await moveToSet(selectedItem._id, setId);
         }
     }
 

@@ -41,22 +41,22 @@ export interface IGalleryContext {
     //
     // Updates an item in the gallery by index.
     //
-    updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): void;
+    updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): void;
 
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetIndex: number, field: string, value: any): void;
+    addArrayValue(assetId: string, field: string, value: any): void;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetIndex: number, field: string, value: any): void;
+    removeArrayValue(assetId: string, field: string, value: any): void;
 
     //
     // Deletes the asset.
     //
-    deleteAsset(assetIndex: number): void;
+    deleteAsset(assetId: string): void;
 
     //
     // Checks if an asset is already uploaded.
@@ -254,13 +254,15 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             },
         });
 
-        for (const asset of assets) {
+        const _assets = Object.values(assets);
+
+        for (const asset of _assets) {
             loadedAssets.current.set(asset._id, asset);
             searchIndexRef.current.add(asset._id, asset);
         }
 
         // Renders the assets that we know about already.
-        const items = applySort(removeDeletedAssets(assets));
+        const items = applySort(removeDeletedAssets(_assets));
         setItems(items);
         setSelectedItems(items.filter(item => item.selected));
     }
@@ -275,29 +277,29 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Updates an asset in the gallery by index.
     //
-    function updateGalleryItem(assetIndex: number, partialGalleryItem: Partial<IGalleryItem>): void {
-        updateAsset(assetIndex, partialGalleryItem);
+    function updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): void {
+        updateAsset(assetId, partialGalleryItem);
     }
 
     //
     // Adds an array value to the asset.
     //
-    function addArrayValue(assetIndex: number, field: string, value: any): void {
-        _addArrayValue(assetIndex, field, value);
+    function addArrayValue(assetId: string, field: string, value: any): void {
+        _addArrayValue(assetId, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
-    function removeArrayValue(assetIndex: number, field: string, value: any): void {
-        _removeArrayValue(assetIndex, field, value);
+    function removeArrayValue(assetId: string, field: string, value: any): void {
+        _removeArrayValue(assetId, field, value);
     }
 
     //
     // Deletes the asset.
     //
-    function deleteAsset(assetIndex: number): void {
-        _deleteAsset(assetIndex);
+    function deleteAsset(assetId: string): void {
+        _deleteAsset(assetId);
     }
 
 
@@ -441,31 +443,25 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Add the item to the multiple selection.
     //
     function addToMultipleSelection(item: IGalleryItem): void {
-        if (!item.setIndex) {
-            throw new Error(`Asset index is not set`);
-        }
         if (item.selected) {
             // Already selected.
             return;
         }
         setSelectedItems([...selectedItems, item]);
-        updateAssets([{ assetIndex: item.setIndex, partialAsset: { selected: true } }]);
+        updateAssets([{ assetId: item._id, partialAsset: { selected: true } }]);
     }
 
     //
     // Remove the item from the multiple selection.
     //
     function removeFromMultipleSelection(item: IGalleryItem): void {
-        if (!item.setIndex) {
-            throw new Error(`Asset index is not set`);
-        }
         if (!item.selected) {
             // Already not selected.
             return;
         }
 
         setSelectedItems(selectedItems.filter(selectedItem => selectedItem._id !== item._id));        
-        updateAssets([{ assetIndex: item.setIndex, partialAsset: { selected: false } }]);
+        updateAssets([{ assetId: item._id, partialAsset: { selected: false } }]);
     }
 
     //
@@ -473,7 +469,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     function clearMultiSelection(): void {        
         updateAssets(selectedItems.map(item => ({ 
-            assetIndex: item.setIndex!, 
+            assetId: item._id, 
             partialAsset: { selected: false },
         })));
         setSelectedItems([]);
@@ -557,7 +553,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // 
     function searchAssets(searchText: string): IGalleryItem[] {
         if (searchText === "") {
-            return assets;
+            return Object.values(assets);
         }
 
         const searchResult = searchIndexRef.current!.search(searchText, 1_000_000);

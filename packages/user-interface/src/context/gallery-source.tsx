@@ -9,6 +9,10 @@ export interface IAssetDataLoad extends IAssetData {
     source: "local" | "cloud";
 }
 
+export interface IGalleryItemMap {
+    [assetId: string]: IGalleryItem;
+}
+
 //
 // Interface that provides assets for a gallery.
 //
@@ -27,7 +31,7 @@ export interface IGallerySource {
     //
     // Assets that have been loaded.
     //
-    assets: IGalleryItem[];
+    assets: IGalleryItemMap;
 
     //
     // Adds an asset to the source.
@@ -37,33 +41,33 @@ export interface IGallerySource {
     //
     // Updates an existing asset.
     //
-    updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): void;
+    updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): void;
 
     //
     // Update multiple assets with non persisted changes.
     //
-    updateAssets(assetUpdates: { assetIndex: number, partialAsset: Partial<IGalleryItem>}[]): void;
+    updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void;
 
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetIndex: number, field: string, value: any): void;
+    addArrayValue(assetId: string, field: string, value: any): void;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetIndex: number, field: string, value: any): void;    
+    removeArrayValue(assetId: string, field: string, value: any): void;    
 
     //
     // Deletes the asset.
     //
-    deleteAsset(assetIndex: number): void;
+    deleteAsset(assetId: string): void;
 
     //
     // Moves an asset to another set.
     // TODO: There's something wrong with this abstraction now because the "source" for local assets doesn't know about sets.
     //
-    moveToSet(assetIndex: number, setId: string): Promise<void>;
+    moveToSet(assetId: string, setId: string): Promise<void>;
 
     //
     // Checks if an asset is already uploaded.

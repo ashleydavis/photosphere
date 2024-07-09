@@ -1,7 +1,7 @@
 import React, { ReactNode, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
-import { GallerySourceContext, IAssetDataLoad, IGallerySource } from "./gallery-source";
+import { GallerySourceContext, IAssetDataLoad, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
@@ -41,19 +41,18 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Assets that have been loaded.
     //
-    const [ assets, setAssets ] = useState<IGalleryItem[]>([]);
+    const [ assets, setAssets ] = useState<IGalleryItemMap>({});
 
     //
     // Adds an asset to the source.
     //
     function addAsset(asset: IGalleryItem, overrideSetId?: string): void {
 
-        setAssets([ { ...asset, setIndex: 0 } ]
-            .concat(
-                assets.map((asset, index) => ({ ...asset, setIndex: index + 1 }))
-            )
-        );
-            
+        setAssets({
+            ...assets,
+            [asset._id]: asset,        
+        });
+           
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
@@ -109,15 +108,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Updates an existing asset.
     //
-    function updateAsset(assetIndex: number, partialAsset: Partial<IGalleryItem>): void {
+    function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): void {
 
-        const assetId = assets[assetIndex]._id;
-        const updatedAsset = { ...assets[assetIndex], ...partialAsset };
-        setAssets([
-            ...assets.slice(0, assetIndex),
-            updatedAsset,
-            ...assets.slice(assetIndex + 1),
-        ].map((asset, index) => ({ ...asset, setIndex: index })));
+        const updatedAsset = { ...assets[assetId], ...partialAsset };
+        setAssets({
+            ...assets,
+            [assetId]: updatedAsset,
+        });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -154,10 +151,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Update multiple assets with non persisted changes.
     //
-    function updateAssets(assetUpdates: { assetIndex: number, partialAsset: Partial<IGalleryItem>}[]): void {
-        let _assets = [...assets];
-        assetUpdates.forEach(({ assetIndex, partialAsset }) => {
-            _assets[assetIndex] = { ..._assets[assetIndex], ...partialAsset };
+    function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void {
+
+        let _assets = {
+            ...assets,
+        }
+        assetUpdates.forEach(({ assetId, partialAsset }) => {
+            _assets[assetId] = { ..._assets[assetId], ...partialAsset };
         });
         setAssets(_assets);
     }
@@ -165,20 +165,19 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Adds an array value to the asset.
     //
-    function addArrayValue(assetIndex: number, field: string, value: any): void {
-        const assetId = assets[assetIndex]._id;
-        const updatedAsset: any = { ...assets[assetIndex] };
+    function addArrayValue(assetId: string, field: string, value: any): void {
+
+        const updatedAsset: any = { ...assets[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
         updatedAsset[field].push(value);
 
-        setAssets([
-            ...assets.slice(0, assetIndex),
-            updatedAsset,
-            ...assets.slice(assetIndex + 1),
-        ].map((asset, index) => ({ ...asset, setIndex: index })));
+        setAssets({
+            ...assets,
+            [assetId]: updatedAsset,
+        });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -216,19 +215,18 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Removes an array value from the asset.
     //
-    function removeArrayValue(assetIndex: number, field: string, value: any): void {
-        const assetId = assets[assetIndex]._id;
-        const updatedAsset: any = { ...assets[assetIndex] };
+    function removeArrayValue(assetId: string, field: string, value: any): void {
+        
+        const updatedAsset: any = { ...assets[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
   
-        setAssets([
-            ...assets.slice(0, assetIndex),
-            updatedAsset,
-            ...assets.slice(assetIndex + 1),
-        ].map((asset, index) => ({ ...asset, setIndex: index })));
+        setAssets({
+            ...assets,
+            [assetId]: updatedAsset,
+        });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -266,8 +264,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Deletes the asset.
     //
-    function deleteAsset(assetIndex: number): void {
-        updateAsset(assetIndex, {
+    function deleteAsset(assetId: string): void {
+        updateAsset(assetId, {
             deleted: true,
         });
     }
@@ -275,14 +273,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Moves selected asset to the requested set.
     //
-    async function moveToSet(assetIndex: number, destSetId: string): Promise<void> {
+    async function moveToSet(assetId: string, destSetId: string): Promise<void> {
 
         const newAssetId = uuid();
 
         //
         // Saves asset data to other set.
         //
-        const asset = assets[assetIndex];        
+        const asset = assets[assetId];        
         const assetTypes = ["thumb", "display", "asset"];    
         for (const assetType of assetTypes) {
             const assetData = await loadAsset(asset._id, assetType);
@@ -299,7 +297,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         // Deletes the old asset.
         //
-        deleteAsset(assetIndex);
+        deleteAsset(assetId);
     }
 
     //
@@ -468,10 +466,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             setIsLoading(true);
 
             const assets = await initialSync(database, setId, api, assets => {
-                setAssets(assets.map((asset, index) => ({
-                    ...asset,
-                    setIndex: index,
-                })));
+                const assetMap: IGalleryItemMap = {};
+                for (const asset of assets) {
+                    assetMap[asset._id] = asset;
+                }               
+
+                setAssets(assetMap);
 
                 console.log(`Loaded ${assets.length} assets.`);
             });            

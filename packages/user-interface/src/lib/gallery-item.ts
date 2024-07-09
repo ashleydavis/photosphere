@@ -9,11 +9,6 @@ export interface IGalleryItem {
     _id: string;
 
     //
-    // The index of the asset in the set.
-    //
-    setIndex?: number;
-
-    //
     // The index of the asset in the search results.
     //
     searchIndex?: number;
