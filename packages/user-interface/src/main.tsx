@@ -17,8 +17,9 @@ import MenuItem from '@mui/joy/MenuItem';
 import Menu from '@mui/joy/Menu';
 import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
-import { useGallerySource } from "./context/gallery-source";
 import { useAssetDatabase } from "./context/asset-database-source";
+import { Fullscreen } from "@mui/icons-material";
+import { FullscreenSpinner } from "./components/full-screen-spinnner";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -55,7 +56,7 @@ export function Main({ computerPage }: IMainProps) {
         clearSearch,
     } = useGallery();
 
-    const { moveToSet } = useAssetDatabase();
+    const { moveToSet, isWorking } = useAssetDatabase();
 
     const {
         deleteDatabase
@@ -523,6 +524,10 @@ export function Main({ computerPage }: IMainProps) {
                     </Routes>
                 </div>
             </div>
+
+            {isWorking
+                && <FullscreenSpinner />
+            }
 
             {!isProduction 
                 && <FPSStats 

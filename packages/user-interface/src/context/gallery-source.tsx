@@ -24,6 +24,11 @@ export interface IGallerySource {
     isLoading: boolean;
 
     //
+    // Set to true while working on something.
+    //
+    isWorking: boolean;
+
+    //
     // Set to true when the source is readonly and can't be edited.
     //
     isReadOnly: boolean;

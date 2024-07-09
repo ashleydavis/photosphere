@@ -49,6 +49,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const [ isLoading, setIsLoading ] = useState(true);
 
     //
+    // Set to true while working on something.
+    //
+    const [ isWorking, setIsWorking ] = useState(false);
+
+    //
     // Assets that have been loaded.
     //
     const [ assets, setAssets ] = useState<IGalleryItemMap>({});
@@ -296,31 +301,38 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function moveToSet(assetIds: string[], destSetId: string): Promise<void> {
 
-        const newAssetId = uuid();
+        try {
+            setIsWorking(true);
 
-        //
-        // Saves asset data to other set.
-        //
-        for (const assetId of assetIds) {
-            const asset = assets[assetId];        
-            const assetTypes = ["thumb", "display", "asset"];    
-            for (const assetType of assetTypes) {
-                const assetData = await loadAsset(asset._id, assetType);
-                if (assetData) {
-                    await storeAssetToSet(newAssetId, assetType, assetData, destSetId);
+            const newAssetId = uuid();
+    
+            //
+            // Saves asset data to other set.
+            //
+            for (const assetId of assetIds) {
+                const asset = assets[assetId];        
+                const assetTypes = ["thumb", "display", "asset"];    
+                for (const assetType of assetTypes) {
+                    const assetData = await loadAsset(asset._id, assetType);
+                    if (assetData) {
+                        await storeAssetToSet(newAssetId, assetType, assetData, destSetId);
+                    }
                 }
+    
+                //
+                // Adds new asset to the database.
+                //
+                addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
             }
-
+    
             //
-            // Adds new asset to the database.
+            // Deletes the old asset.
             //
-            addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
+            deleteAssets(assetIds);
         }
-
-        //
-        // Deletes the old asset.
-        //
-        deleteAssets(assetIds);
+        finally {
+            setIsWorking(false);
+        }
     }
 
     //
@@ -533,6 +545,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
     const value: IAssetDatabase = {
         isLoading,
+        isWorking,
         isReadOnly: false,
         assets,
         addAsset,
