@@ -163,7 +163,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
         removeArrayValue: _removeArrayValue,
-        deleteAsset: _deleteAsset,
+        deleteAssets: _deleteAssets,
         } = useGallerySource();
 
     //
@@ -299,9 +299,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Deletes the asset.
     //
     function deleteAsset(assetId: string): void {
-        _deleteAsset(assetId);
+        _deleteAssets([ assetId ]);
     }
-
 
     //
     // Checks if an asset is already uploaded.

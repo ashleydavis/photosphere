@@ -59,9 +59,9 @@ export interface IGallerySource {
     removeArrayValue(assetId: string, field: string, value: any): void;    
 
     //
-    // Deletes the asset.
+    // Deletes the assets.
     //
-    deleteAsset(assetId: string): void;
+    deleteAssets(assetIds: string[]): void;
 
     //
     // Checks if an asset is already uploaded.

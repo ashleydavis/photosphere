@@ -170,9 +170,7 @@ export function Main({ computerPage }: IMainProps) {
     // Moves selected items to the specified set.
     //
     async function onMoveSelectedToSet(setId: string) {
-        for (const selectedItem of selectedItems) {
-            await moveToSet(selectedItem._id, setId);
-        }
+        await moveToSet(selectedItems.map(item => item._id), setId);
     }
 
     if (enableAuth) {       

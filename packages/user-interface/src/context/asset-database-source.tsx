@@ -24,9 +24,9 @@ const SYNC_POLL_PERIOD = 5000;
 //
 export interface IAssetDatabase extends IGallerySource {
     //
-    // Moves an asset to another set.
+    // Moves assets to another set.
     //
-    moveToSet(assetId: string, setId: string): Promise<void>;
+    moveToSet(assetIds: string[], setId: string): Promise<void>;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -58,10 +58,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     function addAsset(asset: IGalleryItem, overrideSetId?: string): void {
 
-        setAssets({
-            ...assets,
-            [asset._id]: asset,        
-        });
+        if (!overrideSetId) { //TODO: this is a bit awkward. I should probably break this function up so `overrideSetId` is not needed.
+            setAssets({
+                ...assets,
+                [asset._id]: asset,        
+            });
+        }
            
         const ops: IDatabaseOp[] = [
             {
@@ -272,42 +274,45 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Deletes the asset.
+    // Deletes the assets.
     //
-    function deleteAsset(assetId: string): void {
-        updateAsset(assetId, {
-            deleted: true,
-        });
+    function deleteAssets(assetIds: string[]): void {
+        updateAssets(assetIds.map(assetId => ({ 
+            assetId, 
+            partialAsset: { deleted: true } 
+        })));
     }
 
     //
-    // Moves selected asset to the requested set.
+    // Moves assets to another set.
     //
-    async function moveToSet(assetId: string, destSetId: string): Promise<void> {
+    async function moveToSet(assetIds: string[], destSetId: string): Promise<void> {
 
         const newAssetId = uuid();
 
         //
         // Saves asset data to other set.
         //
-        const asset = assets[assetId];        
-        const assetTypes = ["thumb", "display", "asset"];    
-        for (const assetType of assetTypes) {
-            const assetData = await loadAsset(asset._id, assetType);
-            if (assetData) {
-                await storeAsset(newAssetId, assetType, assetData, destSetId);
+        for (const assetId of assetIds) {
+            const asset = assets[assetId];        
+            const assetTypes = ["thumb", "display", "asset"];    
+            for (const assetType of assetTypes) {
+                const assetData = await loadAsset(asset._id, assetType);
+                if (assetData) {
+                    await storeAsset(newAssetId, assetType, assetData, destSetId);
+                }
             }
-        }
 
-        //
-        // Adds new asset to the datbaase.
-        //
-        addAsset({ ...asset, _id: newAssetId }, destSetId);
+            //
+            // Adds new asset to the database.
+            //
+            addAsset({ ...asset, _id: newAssetId }, destSetId);
+        }
 
         //
         // Deletes the old asset.
         //
-        deleteAsset(assetId);
+        deleteAssets(assetIds);
     }
 
     //
@@ -513,7 +518,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         updateAssets,
         addArrayValue,
         removeArrayValue,
-        deleteAsset,
+        deleteAssets,
         moveToSet,
         checkAssetHash,
         loadAsset,
