@@ -49,8 +49,12 @@ export class FileStorage implements IStorage {
     //
     // Gets info about a file.
     //
-    async info(path: string, fileName: string): Promise<IFileInfo> {
-        const info = JSON.parse(await fs.readFile(this.getInfoFileName(path, fileName), "utf8"));
+    async info(path: string, fileName: string): Promise<IFileInfo | undefined> {
+        const filePath = this.getInfoFileName(path, fileName)
+        if (!await fs.pathExists(filePath)) {
+            return undefined;
+        }
+        const info = JSON.parse(await fs.readFile(filePath, "utf8"));
         const stat = await fs.stat(this.getLocalFileName(path, fileName));
         return {
             contentType: info.contentType,

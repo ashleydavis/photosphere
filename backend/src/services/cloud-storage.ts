@@ -85,16 +85,24 @@ export class CloudStorage implements IStorage {
     //
     // Gets info about an asset.
     //
-    async info(path: string, fileName: string): Promise<IFileInfo> {
+    async info(path: string, fileName: string): Promise<IFileInfo | undefined> {
         const headParams: aws.S3.Types.HeadObjectRequest = {
             Bucket: this.bucket,
             Key: `${path}/${fileName}`,
         };
-        const headResult = await this.s3.headObject(headParams).promise();
-        return {
-            contentType: headResult.ContentType as string,
-            length: headResult.ContentLength as number,
-        };
+        try {
+            const headResult = await this.s3.headObject(headParams).promise();
+            return {
+                contentType: headResult.ContentType as string,
+                length: headResult.ContentLength as number,
+            };
+        }
+        catch (err: any) {
+            if (err.statusCode === 404) {
+                return undefined;
+            }
+            throw err;
+        }
     }
 
     //

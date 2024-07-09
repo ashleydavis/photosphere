@@ -45,7 +45,7 @@ export interface IStorage {
     //
     // Gets info about a file.
     //
-    info(path: string, fileName: string): Promise<IFileInfo>;
+    info(path: string, fileName: string): Promise<IFileInfo | undefined>;
     
     //
     // Reads a file from storage.
