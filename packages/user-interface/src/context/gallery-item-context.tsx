@@ -1,7 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "./gallery-context";
-import { set } from "lodash";
 
 export interface IGalleryItemContext {
 
@@ -18,7 +17,7 @@ export interface IGalleryItemContext {
     //
     // Updates the configuration of the asset.
     //
-    updateAsset(asset: Partial<IGalleryItem>): Promise<void>;
+    updateAsset(asset: Partial<IGalleryItem>): void;
 
     //
     // Adds an array value to the asset.
@@ -29,6 +28,11 @@ export interface IGalleryItemContext {
     // Removes an array value from the asset.
     //
     removeArrayValue(key: string, value: string): void;
+
+    //
+    // Deletes the asset in question.
+    //
+    deleteAsset(): void;
 }
 
 const GalleryItemContext = createContext<IGalleryItemContext | undefined>(undefined);
@@ -48,7 +52,7 @@ export interface IProps {
 
 export function GalleryItemContextProvider({ children, asset }: IProps) {
 
-    const { updateGalleryItem, addArrayValue: _addArrayValue, removeArrayValue: _removeArrayValue  } = useGallery();
+    const { updateGalleryItem, addArrayValue: _addArrayValue, removeArrayValue: _removeArrayValue, deleteAsset: _deleteAsset  } = useGallery();
 
     //
     // The asset being edited.
@@ -58,7 +62,7 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
     //
     // Updates the configuration of the asset.
     //
-    async function updateAsset(assetUpdate: Partial<IGalleryItem>): Promise<void> {
+    function updateAsset(assetUpdate: Partial<IGalleryItem>): void {
         if (asset.setIndex === undefined) {
             throw new Error(`Asset set index is not set!`);
         }
@@ -68,7 +72,7 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
             ...assetUpdate,
         });
 
-        await updateGalleryItem(asset.setIndex, assetUpdate);
+        updateGalleryItem(asset.setIndex, assetUpdate);
     }
 
     //
@@ -86,8 +90,6 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
         updatedAsset[field].push(value);
         setAsset(updatedAsset);
-        console.log(`Updated asset:`); //fio:
-        console.log(updatedAsset); //fio:
 
         _addArrayValue(asset.setIndex, field, value);
     }
@@ -110,10 +112,22 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         _removeArrayValue(asset.setIndex, field, value);
     }
 
+    //
+    // Deletes the asset in question.
+    //
+    function deleteAsset(): void {
+        if (asset.setIndex === undefined) {
+            throw new Error(`Asset set index is not set!`);
+        }
+
+        _deleteAsset(asset.setIndex);
+    }
+
     const value: IGalleryItemContext = {
         asset: _asset,
         setAsset,
         updateAsset,
+        deleteAsset,
         addArrayValue,
         removeArrayValue,
     };

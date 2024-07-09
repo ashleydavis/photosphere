@@ -51,7 +51,7 @@ export interface IApi {
     //
     // Retreives the data for an asset from the backend.
     //
-    getAsset(setId: string, assetId: string, assetType: string): Promise<Blob>;
+    getAsset(setId: string, assetId: string, assetType: string): Promise<Blob | undefined>;
 
     //
     // Makes a URL to load an asset.
@@ -155,7 +155,7 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Retreives the data for an asset from the backend.
     //
-    async function getAsset(setId: string, assetId: string, assetType: string): Promise<Blob> {
+    async function getAsset(setId: string, assetId: string, assetType: string): Promise<Blob | undefined> {
         const url = `${BASE_URL}/asset?id=${assetId}&type=${assetType}&set=${setId}`;
         await loadToken();
         const token = getToken();
@@ -165,7 +165,12 @@ export function ApiContextProvider({ children }: IProps) {
                 Authorization: `Bearer ${token}`,
                 Accept: "image/*,video/*",
             },
+            validateStatus: status => (status >= 200 && status < 300) || status === 404,
         });
+
+        if (response.status === 404) {
+            return undefined;
+        }
     
         return response.data;
     }

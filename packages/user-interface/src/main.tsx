@@ -15,6 +15,9 @@ import IconButton from '@mui/joy/IconButton';
 import MoreVert from '@mui/icons-material/MoreVert';
 import MenuItem from '@mui/joy/MenuItem';
 import Menu from '@mui/joy/Menu';
+import ListDivider from '@mui/joy/ListDivider';
+import ListSubheader from "@mui/joy/ListSubheader";
+import { useGallerySource } from "./context/gallery-source";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -50,6 +53,8 @@ export function Main({ computerPage }: IMainProps) {
         search,
         clearSearch,
     } = useGallery();
+
+    const { moveToSet } = useGallerySource();
 
     const {
         deleteDatabase
@@ -151,10 +156,22 @@ export function Main({ computerPage }: IMainProps) {
         setOpenSearch(false);
     }
 
+    //
+    // Logs the user out.
+    //
     async function onLogOut() {
         await logout();
 
         await deleteDatabase();
+    }
+
+    //
+    // Moves selected items to the specified set.
+    //
+    async function onMoveSelectedToSet(setId: string) {
+        for (const selectedItem of selectedItems) {
+            await moveToSet(selectedItem.setIndex!, setId);
+        }
     }
 
     if (enableAuth) {       
@@ -294,8 +311,25 @@ export function Main({ computerPage }: IMainProps) {
                                 <MoreVert />
                             </MenuButton>
                             <Menu placement="bottom-end">
-                                <MenuItem>Item 1</MenuItem>
-                                <MenuItem>Item 2</MenuItem>
+                                {selectedItems.length > 0
+                                    && <>
+                                        <ListSubheader>MOVE TO</ListSubheader>
+                                        {user?.sets.map(set => {
+                                            if (set.id === setId) {
+                                                return null; // Don't show the current set.
+                                            }
+                                            return (
+                                                <MenuItem 
+                                                    key={set.id}
+                                                    onClick={() => onMoveSelectedToSet(set.id)}
+                                                    >
+                                                    {set.name}                                        
+                                                </MenuItem>
+                                            );
+                                        })}
+                                        <ListDivider />
+                                    </>
+                                }
                                 <MenuItem
                                     onClick={onLogOut}
                                     >

@@ -15,6 +15,7 @@ import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { syncIncoming } from "../lib/sync/sync-incoming";
 import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
+import { uuid } from "../lib/uuid";
 
 const SYNC_POLL_PERIOD = 5000;
 
@@ -45,7 +46,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Adds an asset to the source.
     //
-    function addAsset(asset: IGalleryItem): void {
+    function addAsset(asset: IGalleryItem, overrideSetId?: string): void {
 
         setAssets([ { ...asset, setIndex: 0 } ]
             .concat(
@@ -75,7 +76,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                         properties: asset.properties,
                         labels: asset.labels,
                         description: asset.description,
-                        setId,
+                        setId: overrideSetId || setId,
                         usetId: asset.userId,
                     },
                 },
@@ -263,6 +264,45 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
+    // Deletes the asset.
+    //
+    function deleteAsset(assetIndex: number): void {
+        updateAsset(assetIndex, {
+            deleted: true,
+        });
+    }
+
+    //
+    // Moves selected asset to the requested set.
+    //
+    async function moveToSet(assetIndex: number, destSetId: string): Promise<void> {
+
+        const newAssetId = uuid();
+
+        //
+        // Saves asset data to other set.
+        //
+        const asset = assets[assetIndex];        
+        const assetTypes = ["thumb", "display", "asset"];    
+        for (const assetType of assetTypes) {
+            const assetData = await loadAsset(asset._id, assetType);
+            if (assetData) {
+                await storeAsset(newAssetId, assetType, assetData, destSetId);
+            }
+        }
+
+        //
+        // Adds new asset to the datbaase.
+        //
+        addAsset({ ...asset, _id: newAssetId }, destSetId);
+
+        //
+        // Deletes the old asset.
+        //
+        deleteAsset(assetIndex);
+    }
+
+    //
     // Checks if an asset is already uploaded.
     //
     async function checkAssetHash(hash: string): Promise<boolean> {
@@ -273,8 +313,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined> {
-        if (!setId) {
+    async function loadAsset(assetId: string, assetType: string, overrideSetId?: string): Promise<IAssetDataLoad | undefined> {
+        if (!overrideSetId && !setId) {
             throw new Error("No set id provided.");
         }
 
@@ -293,7 +333,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         // Fallback to cloud.
         //
-        const assetBlob = await api.getAsset(setId, assetId, assetType);
+        const assetBlob = await api.getAsset(overrideSetId || setId!, assetId, assetType);
+        if (!assetBlob) {
+            return undefined;
+        }
 
         //
         // Save a local version.
@@ -321,8 +364,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Stores an asset.
     //
-    async function storeAsset(assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
-        if (!setId) {
+    async function storeAsset(assetId: string, assetType: string, assetData: IAssetData, overrideSetId?: string): Promise<void> {
+        if (!overrideSetId && !setId) {
             throw new Error("No set id provided.");
         }
 
@@ -340,7 +383,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         await outgoingUpdateQueue.current.add({
             type: "upload",
-            setId,
+            setId: overrideSetId || setId!,
             assetId,
             assetType,
             assetData,
@@ -460,6 +503,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         updateAssets,
         addArrayValue,
         removeArrayValue,
+        deleteAsset,
+        moveToSet,
         checkAssetHash,
         loadAsset,
         storeAsset,

@@ -54,6 +54,11 @@ export interface IGalleryContext {
     removeArrayValue(assetIndex: number, field: string, value: any): void;
 
     //
+    // Deletes the asset.
+    //
+    deleteAsset(assetIndex: number): void;
+
+    //
     // Checks if an asset is already uploaded.
     //
     checkAssetHash(hash: string): Promise<boolean>;
@@ -157,7 +162,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
-        removeArrayValue: _removeArrayValue 
+        removeArrayValue: _removeArrayValue,
+        deleteAsset: _deleteAsset,
         } = useGallerySource();
 
     //
@@ -286,6 +292,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     function removeArrayValue(assetIndex: number, field: string, value: any): void {
         _removeArrayValue(assetIndex, field, value);
     }
+
+    //
+    // Deletes the asset.
+    //
+    function deleteAsset(assetIndex: number): void {
+        _deleteAsset(assetIndex);
+    }
+
 
     //
     // Checks if an asset is already uploaded.
@@ -577,6 +591,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         updateGalleryItem,
         addArrayValue,
         removeArrayValue,
+        deleteAsset,
         checkAssetHash,
         uploadAsset,
         loadAsset,

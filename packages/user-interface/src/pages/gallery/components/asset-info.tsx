@@ -29,14 +29,14 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     //
     // Interface to the gallery item.
     //
-    const { asset, updateAsset, addArrayValue, removeArrayValue } = useGalleryItem();
+    const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
     const [description, setDescription] = React.useState(asset.description);
 
     //
     // Adds a new label to the asset.
     //
-    function onAddLabel() {
+    function onAddLabel(): void {
         const labelName = window.prompt("Enter the new label:");
         if (!labelName) {
             return;
@@ -48,17 +48,15 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
 	//
     // Removes a label from the asset.
     //
-    function onRemoveLabel(labelName: string) {
+    function onRemoveLabel(labelName: string): void {
         removeArrayValue("labels", labelName);
     }
 
     //
     // Marks the asset as deleted.
     //
-    async function onDeleteItem() {
-        await updateAsset({
-            deleted: true,
-        });
+    function onDeleteItem(): void {
+        deleteAsset();
         onDeleted();
     }
 
@@ -66,13 +64,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     // Debounce the update to prevent too many updates.
     //
     const debouncedUpdateDescription = useCallback(_.debounce((description: string) => {
-        updateAsset({
-                description,
-            })
-            .catch(err => {
-                console.error("Failed to update asset description");
-                console.error(err);            
-            });
+        updateAsset({ description });
     }, 500), []);
 
     //
@@ -105,7 +97,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                 <button
                     className="ml-2 p-1 pl-2 pr-1"
                     onClick={() => onRemoveLabel(name)}
-                >
+                    >
                     <i className="fa-solid fa-close"></i>
                 </button>
             </span>
