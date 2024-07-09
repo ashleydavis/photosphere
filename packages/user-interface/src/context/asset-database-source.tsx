@@ -54,17 +54,25 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const [ assets, setAssets ] = useState<IGalleryItemMap>({});
 
     //
-    // Adds an asset to the source.
+    // Adds an asset to the default set.
     //
-    function addAsset(asset: IGalleryItem, overrideSetId?: string): void {
-
-        if (!overrideSetId) { //TODO: this is a bit awkward. I should probably break this function up so `overrideSetId` is not needed.
-            setAssets({
-                ...assets,
-                [asset._id]: asset,        
-            });
+    function addAsset(asset: IGalleryItem): void {
+        if (!setId) {
+            throw new Error("No set id provided.");
         }
-           
+
+        setAssets({
+            ...assets,
+            [asset._id]: asset,        
+        });
+
+        addAssetToSet(asset, setId);
+    }
+
+    //
+    // Adds an asset to a particular set.
+    //
+    function addAssetToSet(asset: IGalleryItem, setId: string): void {
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
@@ -87,7 +95,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                         properties: asset.properties,
                         labels: asset.labels,
                         description: asset.description,
-                        setId: overrideSetId || setId,
+                        setId,
                         usetId: asset.userId,
                     },
                 },
@@ -299,14 +307,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             for (const assetType of assetTypes) {
                 const assetData = await loadAsset(asset._id, assetType);
                 if (assetData) {
-                    await storeAsset(newAssetId, assetType, assetData, destSetId);
+                    await storeAssetToSet(newAssetId, assetType, assetData, destSetId);
                 }
             }
 
             //
             // Adds new asset to the database.
             //
-            addAsset({ ...asset, _id: newAssetId }, destSetId);
+            addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
         }
 
         //
@@ -324,13 +332,20 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Loads data for an asset.
+    // Loads data for an asset from the current set.
     //
-    async function loadAsset(assetId: string, assetType: string, overrideSetId?: string): Promise<IAssetDataLoad | undefined> {
-        if (!overrideSetId && !setId) {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined> {
+        if (!setId) {
             throw new Error("No set id provided.");
         }
 
+        return await loadAssetFromSet(assetId, assetType, setId);
+    }
+
+    //
+    // Loads data for an asset from a particular set.
+    //
+    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<IAssetDataLoad | undefined> {
         const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
             return {
@@ -346,7 +361,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         // Fallback to cloud.
         //
-        const assetBlob = await api.getAsset(overrideSetId || setId!, assetId, assetType);
+        const assetBlob = await api.getAsset(setId!, assetId, assetType);
         if (!assetBlob) {
             return undefined;
         }
@@ -375,13 +390,20 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Stores an asset.
+    // Stores an asset to the current set.
     //
-    async function storeAsset(assetId: string, assetType: string, assetData: IAssetData, overrideSetId?: string): Promise<void> {
-        if (!overrideSetId && !setId) {
+    async function storeAsset(assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+        if (!setId) {
             throw new Error("No set id provided.");
         }
 
+        await storeAssetToSet(assetId, assetType, assetData, setId);
+    }
+
+    //
+    // Stores an asset to a particular set.
+    //
+    async function storeAssetToSet(assetId: string, assetType: string, assetData: IAssetData, setId: string): Promise<void> {
         // 
         // Store the asset locally.
         //
@@ -396,7 +418,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         await outgoingUpdateQueue.current.add({
             type: "upload",
-            setId: overrideSetId || setId!,
+            setId: setId!,
             assetId,
             assetType,
             assetData,
