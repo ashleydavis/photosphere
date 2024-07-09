@@ -18,7 +18,6 @@ import Menu from '@mui/joy/Menu';
 import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
 import { useAssetDatabase } from "./context/asset-database-source";
-import { Fullscreen } from "@mui/icons-material";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
 const FPSStats = require("react-fps-stats").default;
 
