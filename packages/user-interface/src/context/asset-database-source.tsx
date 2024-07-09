@@ -71,13 +71,17 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             [asset._id]: asset,        
         });
 
-        addAssetToSet(asset, setId);
+        addAssetToSet(asset, setId) 
+            .catch(err => {
+                console.error(`Failed to add asset:`);
+                console.error(err);
+            });
     }
 
     //
     // Adds an asset to a particular set.
     //
-    function addAssetToSet(asset: IGalleryItem, setId: string): void {
+    async function addAssetToSet(asset: IGalleryItem, setId: string): Promise<void> {
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
@@ -107,27 +111,20 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             }
         ];
 
-        //
-        // Don't have to wait for these slow operations to complete.
-        //
-        Promise.all([
-                //
-                // Updates the local database.
-                //
-                applyOperations(database, ops),
+        await Promise.all([
+            //
+            // Updates the local database.
+            //
+            applyOperations(database, ops),
 
-                //
-                // Queue the updates for upload to the cloud.
-                //
-                outgoingUpdateQueue.current.add({ 
-                    type: "update",
-                    ops,
-                }),
-            ])
-            .catch(err => {
-                console.error(`Failed to add asset:`);
-                console.error(err);
-            });
+            //
+            // Queue the updates for upload to the cloud.
+            //
+            outgoingUpdateQueue.current.add({ 
+                type: "update",
+                ops,
+            }),
+        ]);
     }
 
     //
@@ -329,11 +326,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 //
                 // Adds new asset to the database.
                 //
-                addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
+                await addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
             }
     
             //
-            // Deletes the old asset.
+            // Deletes the old assets.
             //
             deleteAssets(assetIds);
         }
