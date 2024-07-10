@@ -316,7 +316,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             // Initializes the destination set.
             //
-            await initialSync(database, destSetId, api, assets => {
+            await initialSync(database, destSetId, api, 0, assets => {
                 console.log(`Loaded ${assets.length} assets into ${setId}`);
                 return true;
             });            

@@ -13,7 +13,7 @@ describe("initial sync", () => {
             getAll: jest.fn(async () => []),
         };
         const setAssets = jest.fn();
-        await initialSync(database, "my-set", api, setAssets);
+        await initialSync(database, "my-set", api, 0, setAssets);
         expect(setAssets).toHaveBeenCalledWith([asset]);
     });
 
@@ -50,7 +50,7 @@ describe("initial sync", () => {
         };
         const setAssets = jest.fn();
         const setId = "my-set";
-        await initialSync(database, setId, api, setAssets);
+        await initialSync(database, setId, api, 0, setAssets);
 
         //
         // Added assets to the UI.
