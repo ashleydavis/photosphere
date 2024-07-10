@@ -54,11 +54,9 @@ export function AppContextProvider({ children }: IProps) {
 
         const user = await database.collection<IUser>("users").getOne(userId);
         if (user) {
-            setSetId(user.defaultSet);
             setUser(user);
         }
         else {
-            setSetId(undefined);
             setUser(undefined);
         }
     }
@@ -76,7 +74,6 @@ export function AppContextProvider({ children }: IProps) {
                 //
                 await database.collection("users").setOne(user);
                 localStorage.setItem("userId", user._id);
-                setSetId(user.defaultSet);
                 setUser(user);
                 return;
             }
