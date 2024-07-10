@@ -41,6 +41,10 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
     //
     const [openInfo, setOpenInfo] = useState<boolean>(false);
 
+    if (!asset) {
+        return null; // Waiting for asset to be loaded.
+    }
+
     return (
         <div className={"photo bg-black text-white text-xl " + (open ? "open" : "")}>
 

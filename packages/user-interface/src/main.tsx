@@ -48,7 +48,7 @@ export function Main({ computerPage }: IMainProps) {
     const { 
         isLoading: isGalleryLoading,
         items,
-        selectedItem,
+        selectedItemId,
         selectedItems,
         clearMultiSelection,
         search,
@@ -100,14 +100,14 @@ export function Main({ computerPage }: IMainProps) {
 
     useEffect(() => {
         if (setId) {
-            if (selectedItem) {
-                navigate(`/cloud/${setId}/${selectedItem._id}`);
+            if (selectedItemId) {
+                navigate(`/cloud/${setId}/${selectedItemId}`);
             }
             else {
                 navigate(`/cloud/${setId}`);
             }
         }
-    }, [setId, selectedItem]);
+    }, [setId, selectedItemId]);
 
 
     function notImplemented(event: any) {

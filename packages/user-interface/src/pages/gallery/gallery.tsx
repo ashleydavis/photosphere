@@ -10,29 +10,18 @@ export interface IGalleryPageProps {
 
 export function GalleryPage({}: IGalleryPageProps) {
     const { setId: _setId, setSetId } = useAssetDatabase();
-    const {  selectedItem,  setSelectedItem, getItemById, items } = useGallery();
+    const {  selectedItemId,  setSelectedItemId, getItemById, items } = useGallery();
     const { setId, assetId } = useParams();
 
     useEffect(() => {
-        if (items.length === 0) {
-            // Items have to be loaded.
-            return;
-        }
-
-        if (assetId) {
-            const newSelectedItem = getItemById(assetId);
-            if (selectedItem !== newSelectedItem) {
-                // Selects the item specified in the URL.
-                setSelectedItem(newSelectedItem);
-            }            
-        }
-        else {
-            setSelectedItem(undefined);        
-        }
-
         if (setId && setId !== _setId) {
             // Selects the set specified in the URL.
             setSetId(setId);
+        }
+
+        if (assetId && assetId !== selectedItemId) {
+            // Selects the asset specified in the URL.
+            setSelectedItemId(assetId);
         }
     }, [setId, assetId, items]);
 

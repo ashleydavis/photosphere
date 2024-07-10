@@ -9,16 +9,6 @@ export interface IAppContext {
     // The current user, if known.
     //
     user: IUser | undefined;
-
-    //
-    // The currently viewed set.
-    //
-    setId: string | undefined;
-
-    //
-    // Sets the viewed set.
-    //
-    setSetId(setId: string): void;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -37,11 +27,6 @@ export function AppContextProvider({ children }: IProps) {
     // The current user.
     //
     const [ user, setUser ] = useState<IUser | undefined>(undefined);
-
-    //
-    // The collection currently being viewed.
-    //
-    const [ setId, setSetId ] = useState<string | undefined>(undefined);
 
     //
     // Loads the local user's details.
@@ -93,8 +78,6 @@ export function AppContextProvider({ children }: IProps) {
 
     const value: IAppContext = {
         user,
-        setId,
-        setSetId,
     };
     
     return (

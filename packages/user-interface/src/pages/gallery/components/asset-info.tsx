@@ -31,7 +31,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     //
     const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
-    const [description, setDescription] = React.useState(asset.description);
+    const [description, setDescription] = React.useState(asset?.description);
 
     //
     // Adds a new label to the asset.
@@ -102,6 +102,10 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                 </button>
             </span>
         );
+    }
+
+    if (!asset) {
+        return null; // Waiting for asset to be loaded.
     }
 
     return (

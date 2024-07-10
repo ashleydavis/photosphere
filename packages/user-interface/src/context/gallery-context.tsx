@@ -96,12 +96,12 @@ export interface IGalleryContext {
     //
     // The currently selected gallery item or undefined when no item is selected.
     //
-    selectedItem: IGalleryItem | undefined
+    selectedItemId: string | undefined
     
     //
     // Sets the selected gallery item.
     //
-    setSelectedItem(selectedItem: IGalleryItem | undefined): void;
+    setSelectedItemId(selectedItemId: string | undefined): void;
 
     //
     // Clears the currently selected gallery item.
@@ -180,7 +180,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // The item in the gallery that is currently selected.
     //
-    const [selectedItem, setSelectedItem] = useState<IGalleryItem | undefined>(undefined);
+    const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
 
     //
     // Multiple selected gallery items.
@@ -231,7 +231,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Clears the selection when search text changes.
     //
     useEffect(() => {
-        setSelectedItem(undefined);
+        setSelectedItemId(undefined);
     }, [searchText]);
 
     //
@@ -435,7 +435,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Clears the currently selected gallery item.
     //
     function clearSelectedItem(): void {
-        setSelectedItem(undefined);
+        setSelectedItemId(undefined);
     }
 
     //
@@ -594,8 +594,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         getItemById,
         getPrev,
         getNext,
-        selectedItem,
-        setSelectedItem,
+        selectedItemId,
+        setSelectedItemId,
         clearSelectedItem,
         selectedItems,
         addToMultipleSelection,

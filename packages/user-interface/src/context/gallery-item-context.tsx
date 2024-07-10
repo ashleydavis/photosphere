@@ -6,8 +6,8 @@ export interface IGalleryItemContext {
 
     //
     // The asset currently loaded.
-    //
-    asset: IGalleryItem;
+    // 
+    asset: IGalleryItem | undefined;
 
     //
     // Set the asset currently loaded.
@@ -47,34 +47,51 @@ export interface IProps {
     //
     // The asset currently loaded.
     //
-    asset: IGalleryItem;
+    assetId: string;
 }
 
-export function GalleryItemContextProvider({ children, asset }: IProps) {
+export function GalleryItemContextProvider({ children, assetId }: IProps) {
 
-    const { updateGalleryItem, addArrayValue: _addArrayValue, removeArrayValue: _removeArrayValue, deleteAsset: _deleteAsset  } = useGallery();
+    const { updateGalleryItem, addArrayValue: _addArrayValue, removeArrayValue: _removeArrayValue, deleteAsset: _deleteAsset, getItemById, items  } = useGallery();
 
     //
     // The asset being edited.
     //
-    const [_asset, setAsset] = useState<IGalleryItem>(asset);
+    const [_asset, setAsset] = useState<IGalleryItem | undefined>();
+
+    useEffect(() => {
+        if (_asset === undefined || _asset._id !== assetId) {
+            const loadedAsset = getItemById(assetId);
+            if (loadedAsset) {
+                setAsset(loadedAsset);
+            }
+        } 
+    }, [items, assetId])
 
     //
     // Updates the configuration of the asset.
     //
     function updateAsset(assetUpdate: Partial<IGalleryItem>): void {
+        if (_asset === undefined) {
+            throw new Error(`Asset ${assetId} not loaded!`);
+        }
+
         setAsset({
             ..._asset,
             ...assetUpdate,
         });
 
-        updateGalleryItem(asset._id, assetUpdate);
+        updateGalleryItem(assetId, assetUpdate);
     }
 
     //
     // Adds an array value to the asset.
     //
     function addArrayValue(field: string, value: any): void {
+        if (_asset === undefined) {
+            throw new Error(`Asset ${assetId} not loaded!`);
+        }
+
         const updatedAsset: any = { ..._asset };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -83,13 +100,17 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         updatedAsset[field].push(value);
         setAsset(updatedAsset);
 
-        _addArrayValue(asset._id, field, value);
+        _addArrayValue(assetId, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
     function removeArrayValue(field: string, value: any): void {
+        if (_asset === undefined) {
+            throw new Error(`Asset ${assetId} not loaded!`);
+        }
+
         const updatedAsset: any = { ..._asset };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -97,14 +118,14 @@ export function GalleryItemContextProvider({ children, asset }: IProps) {
         updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
         setAsset(updatedAsset);
 
-        _removeArrayValue(asset._id, field, value);
+        _removeArrayValue(assetId, field, value);
     }
 
     //
     // Deletes the asset in question.
     //
     function deleteAsset(): void {
-        _deleteAsset(asset._id);
+        _deleteAsset(assetId);
     }
 
     const value: IGalleryItemContext = {

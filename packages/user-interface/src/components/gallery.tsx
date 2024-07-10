@@ -26,10 +26,11 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
     // The interface to the gallery.
     //
     const { 
-        selectedItem, 
-        setSelectedItem,
+        selectedItemId, 
+        setSelectedItemId,
         getNext, 
         getPrev, 
+        getItemById,
     } = useGallery();
 
     //
@@ -55,10 +56,10 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
     });
 
     useEffect(() => {
-        if (selectedItem && !openAssetView) {
+        if (selectedItemId && !openAssetView) {
             setOpenAssetView(true);
         }
-    }, [selectedItem])
+    }, [selectedItemId])
 
     return (
         <div 
@@ -73,27 +74,27 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
                 targetRowHeight={targetRowHeight}
                 onItemClick={item => { 
                     setOpenAssetView(true)
-                    setSelectedItem(item);
+                    setSelectedItemId(item._id);
                 }}                
                 />
 
-            {selectedItem &&
+            {selectedItemId &&
                 <GalleryItemContextProvider 
-                    asset={selectedItem}
-                    key={selectedItem._id}
+                    assetId={selectedItemId}
+                    key={selectedItemId}
                     >
                     <AssetView
-                        key={selectedItem._id}
+                        key={selectedItemId}
                         open={openAssetView}
                         onClose={() => {
                             setOpenAssetView(false);
-                            setSelectedItem(undefined);
+                            setSelectedItemId(undefined);
                         }}
                         onPrev={() => {
-                            setSelectedItem(getPrev(selectedItem));
+                            setSelectedItemId(getPrev(getItemById(selectedItemId!)!)?._id);
                         }}
                         onNext={() => {
-                            setSelectedItem(getNext(selectedItem));
+                            setSelectedItemId(getNext(getItemById(selectedItemId!)!)?._id);
                         }}
                         />
                 </GalleryItemContextProvider>
