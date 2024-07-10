@@ -308,16 +308,15 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 console.log(`Loaded ${assets.length} assets into ${setId}`);
             });            
 
-            const newAssetId = uuid();
-    
             //
             // Saves asset data to other set.
             //
             for (const assetId of assetIds) {
                 const asset = assets[assetId];        
+                const newAssetId = uuid();                
                 const assetTypes = ["thumb", "display", "asset"];    
                 for (const assetType of assetTypes) {
-                    const assetData = await loadAsset(asset._id, assetType);
+                    const assetData = await loadAsset(assetId, assetType);
                     if (assetData) {
                         await storeAssetToSet(newAssetId, assetType, assetData, destSetId);
                     }
