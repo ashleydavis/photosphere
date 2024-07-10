@@ -7,11 +7,12 @@ import { ILastUpdateRecord } from "./last-update-record";
 //
 // Does the initial asset load and synchronization.
 //
-export async function initialSync(database: IDatabase, setId: string, api: IApi, setAssets: (assets: IGalleryItem[]) => void): Promise<void> {
+export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, setAssets: (assets: IGalleryItem[], setIndex: number) => boolean): Promise<void> {
+    console.log(`Loading ${setId}`); //fio:
     const localCollection = database.collection<IAsset>("metadata");
     let assets = await localCollection.getAllByIndex("setId", setId);
     if (assets.length > 0) {
-        setAssets(assets);
+        setAssets(assets, setIndex);
     }
     else {
         //
@@ -34,7 +35,10 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
 
             skip += pageSize;
             assets = assets.concat(records);           
-            setAssets(assets);
+            if (!setAssets(assets, setIndex)) {
+                // Request to abort asset loading.
+                return;
+            }
         }
 
         if (latestTime !== undefined) {

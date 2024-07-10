@@ -49,6 +49,18 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const [ isLoading, setIsLoading ] = useState(true);
 
     //
+    // The number of asset loads in progress.
+    // This number can increase when the user changes sets during the initial load, causing
+    // additional set loads to start while the previous ones are still in progress.
+    //
+    const loadingCount = useRef<number>(0);
+
+    //
+    // Counts up IDs for each set currently being loaded.
+    //
+    const loadingId = useRef<number>(0);
+
+    //
     // Set to true while working on something.
     //
     const [ isWorking, setIsWorking ] = useState(false);
@@ -306,6 +318,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             await initialSync(database, destSetId, api, assets => {
                 console.log(`Loaded ${assets.length} assets into ${setId}`);
+                return true;
             });            
 
             //
@@ -514,22 +527,45 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Load assets into memory.
     //
     async function loadAssets(setId: string) {
+    
         try {
             setIsLoading(true);
+            loadingCount.current += 1;
+            loadingId.current += 1;
 
-            await initialSync(database, setId, api, assets => {
+            //
+            // Start with no assets.
+            // This clears out any existing set of assets.
+            //
+            setAssets({});
+
+            await initialSync(database, setId, api, loadingId.current, (assets, setIndex) => {
+                if (setIndex !== loadingId.current) {
+                    // The set we are loading has changed.
+                    // Stop loading assets.
+                    return false; 
+                }
+
                 const assetMap: IGalleryItemMap = {};
                 for (const asset of assets) {
                     assetMap[asset._id] = asset;
                 }               
 
+                //
+                // As each page of assets are loaded update the asset map in state.
+                //
                 setAssets(assetMap);
 
-                console.log(`Loaded ${assets.length} assets.`);
+                console.log(`Loaded ${assets.length} assets for set ${setId}`);
+
+                return true; // Continue loading assets.
             });
         }
         finally {
-            setIsLoading(false);
+            loadingCount.current -= 1;
+            if (loadingCount.current <= 0) {
+                setIsLoading(false);
+            }
         }
     }
 
