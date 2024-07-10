@@ -55,7 +55,11 @@ export function Main({ computerPage }: IMainProps) {
         clearSearch,
     } = useGallery();
 
-    const { moveToSet, isWorking } = useAssetDatabase();
+    const { 
+        isWorking,
+        setId,
+        moveToSet, 
+    } = useAssetDatabase();
 
     const {
         deleteDatabase
@@ -81,7 +85,7 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [ searchInput, setSearchInput ] = React.useState<string>("");
 
-    const { setId, user } = useApp();
+    const { user } = useApp();
 
     const location = useLocation();
 

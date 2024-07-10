@@ -24,6 +24,16 @@ const SYNC_POLL_PERIOD = 5000;
 //
 export interface IAssetDatabase extends IGallerySource {
     //
+    // The currently viewed set.
+    //
+    setId: string | undefined;
+
+    //
+    // Sets the viewed set.
+    //
+    setSetId(setId: string): void;
+
+    //
     // Moves assets to another set.
     //
     moveToSet(assetIds: string[], setId: string): Promise<void>;
@@ -35,7 +45,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
 
-    const { setId, user } = useApp();
+    const { user } = useApp();
     const { isOnline } = useOnline();
     const api = useApi();
     const { database } = useIndexeddb();
@@ -69,6 +79,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Assets that have been loaded.
     //
     const [ assets, setAssets ] = useState<IGalleryItemMap>({});
+
+    //
+    // The set currently being viewed.
+    //
+    const [ setId, setSetId ] = useState<string | undefined>(undefined);
 
     //
     // Adds an asset to the default set.
@@ -583,6 +598,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }, [setId]);
 
     const value: IAssetDatabase = {
+        // Gallery source.
         isLoading,
         isWorking,
         isReadOnly: false,
@@ -593,10 +609,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         addArrayValue,
         removeArrayValue,
         deleteAssets,
-        moveToSet,
         checkAssetHash,
         loadAsset,
         storeAsset,
+
+        // Asset database source.
+        setId,
+        setSetId,
+        moveToSet,
     };
     
     return (
