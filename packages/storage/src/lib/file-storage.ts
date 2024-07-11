@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
 import { join, dirname } from "path";
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage } from "../lib/storage/storage";
+import { IFileInfo, IListResult, IStorage } from "./storage";
 
 export class FileStorage implements IStorage {
 

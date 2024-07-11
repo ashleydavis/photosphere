@@ -1,7 +1,7 @@
 import { MongoClient } from "mongodb";
 import { createServer } from "./server";
-import { CloudStorage } from "./services/cloud-storage";
-import { FileStorage } from "./services/file-storage";
+import { CloudStorage } from "storage";
+import { FileStorage } from "storage";
 
 async function main() {
 

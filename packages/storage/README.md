@@ -1,6 +1,6 @@
 # Defs
 
-Shared code library with Photosphere types.
+Shared code library for Photosphere storage.
 
 ## Setup
 
@@ -11,10 +11,10 @@ cd photosphere
 pnpm install
 ```
 
-Change to the defs package:
+Change to the storage package:
 
 ```bash
-cd packages/defs
+cd packages/storage
 ```
 
 ## Compile

@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { Db } from "mongodb";
-import { IStorage } from "./lib/storage/storage";
+import { IStorage } from "storage";
 import { IUser, IDatabaseOp, IDatabaseOpRecord } from "defs";
 import { uuid } from "./lib/uuid";
 

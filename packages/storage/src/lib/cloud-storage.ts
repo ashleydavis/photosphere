@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import aws from "aws-sdk";
-import { IFileInfo, IListResult, IStorage } from "../lib/storage/storage";
+import { IFileInfo, IListResult, IStorage } from "./storage";
 
 /*
 AWS S3:
