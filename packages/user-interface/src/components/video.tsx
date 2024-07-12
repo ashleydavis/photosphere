@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useApi } from "../context/api-context";
 import { useApp } from "../context/app-context";
+import { useAssetDatabase } from "../context/asset-database-source";
 
 export interface IVideoProps {
     //
@@ -15,7 +16,7 @@ export interface IVideoProps {
 //
 export function Video({ asset }: IVideoProps) {
 
-    const { setId } = useApp();
+    const { setId } = useAssetDatabase(); //TODO: This should not depend on the set! Otherwise we can't view videos from the local file system.
     const { makeAssetUrl } = useApi();
     const [assetUrl, setAssetUrl] = useState<string>("");
 
