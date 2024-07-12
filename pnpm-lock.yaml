@@ -42,6 +42,9 @@ importers:
       '@types/express':
         specifier: ^4.17.16
         version: 4.17.21
+      '@types/fs-extra':
+        specifier: ^11.0.1
+        version: 11.0.4
       '@types/jest':
         specifier: ^29.4.0
         version: 29.5.12
@@ -57,6 +60,9 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
+      fs-extra:
+        specifier: ^11.2.0
+        version: 11.2.0
       insta-mongo:
         specifier: ^0.0.6
         version: 0.0.6(@aws-sdk/client-sso-oidc@3.592.0)
