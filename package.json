@@ -8,6 +8,7 @@
     "cw": "pnpm run compile:watch",
     "compile": "pnpm --stream -r run compile",
     "compile:watch": "pnpm --stream -r --parallel run compile:watch",
+    "clean": "pnpm --stream -r run clean",
     "test": "pnpm --stream -r run test",
     "test:watch": "pnpm --stream -r --parallel run test:watch",
     "t": "pnpm run test",
