@@ -36,7 +36,7 @@ async function downloadAsset(cloudStorage: CloudStorage, localStorage: FileStora
         cloudStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
     );
 
-    console.log(`Wrote asset for ${assetType}/${metadata._id} to local storage.`);
+    // console.log(`Wrote asset for ${assetType}/${metadata._id} to local storage.`);
 }
 
 async function main() {
@@ -68,7 +68,7 @@ async function main() {
         await Promise.all(batch.map(async (document: any) => {
             if (await localStorage.exists(`collections/${document.setId}/metadata`, document._id)) {
                 numAlreadyDownloaded += 1;
-                console.log(`Document ${document._id} already downloaded.`);
+                // console.log(`Document ${document._id} already downloaded.`);
                 return;
             }
 
@@ -88,29 +88,29 @@ async function main() {
             }
             await downloadAsset(cloudStorage, localStorage, document, "thumb");
 
-            await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
-
-            console.log(`Downloaded asset ${document._id} to local storage.`);
-
-            numDownloaded += 1;
-
             //
             // Check the hash of the downloaded assets.
             //
             const fileData = await localStorage.read(`collections/${document.setId}/asset`, document._id);
             if (!fileData) {
-                throw new Error(`Document ${document._id} does not have file data.`);
+                throw new Error(`Document ${document._id} does not have local file data.`);
             }
 
             const hash = await computeHash(fileData);
             if (hash === document.hash) {
                 numMatching++;
-                console.log(`Document ${document._id} has matching hash.`);            
+                // console.log(`Document ${document._id} has matching hash.`);            
             }
             else {
                 numNotMatching++;
                 console.error(`Document ${document._id} has non-matching hash.`);
             }
+
+            await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
+
+            // console.log(`Downloaded asset ${document._id} to local storage.`);
+
+            numDownloaded += 1;
         }));
 
         numDocuments += batchSize;
