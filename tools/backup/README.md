@@ -35,6 +35,7 @@ export AWS_SECRET_ACCESS_KEY=<aws-secret>
 export AWS_BUCKET=<aws-bucket>
 export AWS_DEFAULT_REGION=<aws-region>
 export DB_CONNECTION_STRING=<db-connection-string>
+export DB_BACKUP_TARGET_DIR=<target-directory-for-the-backup>
 ```
 
 Use `set` instead of `export` for Windows.

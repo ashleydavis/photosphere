@@ -5,11 +5,19 @@ import { IFileInfo, IListResult, IStorage } from "./storage";
 
 export class FileStorage implements IStorage {
 
+    private readonly rootDir: string = "files";
+
+    constructor(rootDir?: string) {
+        if (rootDir) {
+            this.rootDir = rootDir;
+        }
+    }
+
     //
     // List files in storage.
     //
     async list(path: string, max: number, next?: string): Promise<IListResult> {
-        const dir = join("files", path);
+        const dir = join(this.rootDir, path);
         if (!await fs.pathExists(dir)) {
             return {
                 fileNames: [],
@@ -29,7 +37,7 @@ export class FileStorage implements IStorage {
     // Determines the local file name for a file.
     //
     getLocalFileName(path: string, fileName: string): string {
-        return join("files", path, fileName);
+        return join(this.rootDir, path, fileName);
     }
 
     //
@@ -80,7 +88,7 @@ export class FileStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void> {
-        await fs.ensureDir(join("files", path));
+        await fs.ensureDir(join(this.rootDir, path));
         await fs.writeFile(this.getLocalFileName(path, fileName), data);
         await fs.writeFile(this.getInfoFileName(path, fileName), JSON.stringify({
             contentType: contentType,

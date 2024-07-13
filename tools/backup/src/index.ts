@@ -49,9 +49,11 @@ async function main() {
     await client.connect();
 
     const db = client.db("photosphere");
+
+    const DB_BACKUP_TARGET_DIR = process.env.DB_BACKUP_TARGET_DIR || "backup";
     
     const cloudStorage = new CloudStorage();
-    const localStorage = new FileStorage();
+    const localStorage = new FileStorage(DB_BACKUP_TARGET_DIR);
 
     const metadataCollection = db.collection<any>("metadata");
     const documents = await metadataCollection.find({}).toArray();
