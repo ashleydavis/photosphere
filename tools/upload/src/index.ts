@@ -49,9 +49,53 @@ let numFailed = 0;
 // File extensions for files to ignore.
 //
 const ignoreExts = [
-    "ini",
-    "db",
+    ".ini",
+    ".db",
+	".lnk",
+	".dat",
+	".log",
+	".htm",
+	".html",
+	".pdf",
+	".rtf",
+	".odt",
+	".eml",
+	".bin",
+	".pln",
+	".exe",
+	".air",
+	".url",
+	".contact",
+	".download",
+	".js",
+	".css",
+	".php",
+	".ico",
+	".ithmb",
+	".authenticate",
+	".log1",
+	".log2",
+	".blf",
+	".regtrans-ms",
+	".ZFSendToTarget",
+	".xml",
+	".DeskLink",
+	".MAPIMail",
+	".csv",
+	".txt",
+	".cfg",
+	".applesyncinfo",
+	".jsx",
+	".ashx",
+	".searchconnector-ms",
+	".3gp",
+	".bs",	
 ];
+
+//
+// Number of files ignored due to extension.
+//
+let numIgnored = 0;
 
 //
 // Processes and uploads a single asset.
@@ -203,11 +247,15 @@ async function main(): Promise<void> {
     // Returns undefined if the asset is to be ignored.
     //
     function validateAsset(filePath: string): string | undefined {
-        const ext = path.extname(filePath).toLowerCase();
-        if (ignoreExts.includes(ext)) {
-            // Certain extensions can be ignored and we just don't need to know about them.
-            return undefined;
-        }
+		for (const ignoreExt of ignoreExts) {
+			if (filePath.toLowerCase().endsWith(ignoreExt.toLowerCase())) {
+				numIgnored += 1;
+				//console.log(`Ignored ${filePath} due to ext ${ignoreExt}`);
+				return undefined;
+			}
+		}
+		
+		const ext = path.extname(filePath).toLowerCase();		
 
         // Check if the file is a supported asset based on its extension.
         const contentType = extMap[ext];
@@ -331,6 +379,7 @@ async function main(): Promise<void> {
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Failed: ${numFailed}`);
     console.log(`Not handled: ${filesNotHandled.length}`);
+	console.log(`Ignored: ${numIgnored}`);
 
     await fs.writeFile("./log/failures.json", JSON.stringify(failures, null, 2));
     await fs.writeFile("./log/files-not-handled.json", JSON.stringify(filesNotHandled, null, 2));
