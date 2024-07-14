@@ -77,27 +77,28 @@ async function main() {
 
     for (const batch of _.chunk(documents, batchSize)) {
         await Promise.all(batch.map(async (document: any) => {
-            if (await localStorage.exists(`collections/${document.setId}/metadata`, document._id)) {
+            const isAlreadyDownloaded = await localStorage.exists(`collections/${document.setId}/metadata`, document._id);
+            if (isAlreadyDownloaded) {
                 numAlreadyDownloaded += 1;
                 // console.log(`Document ${document._id} already downloaded.`);
-                return;
             }
-
-            // console.log(document._id);
-
-            if (!document.setId) {
-                throw new Error(`Document ${document._id} does not have a set ID.`);
+            else {
+                // console.log(document._id);
+    
+                if (!document.setId) {
+                    throw new Error(`Document ${document._id} does not have a set ID.`);
+                }
+    
+                if (!document.hash) {
+                    throw new Error(`Document ${document._id} does not have a hash.`);
+                }
+    
+                await downloadAsset(cloudStorage, localStorage, document, "asset");
+                if (document.contentType.startsWith("image")) {
+                    await downloadAsset(cloudStorage, localStorage, document, "display");
+                }
+                await downloadAsset(cloudStorage, localStorage, document, "thumb");
             }
-
-            if (!document.hash) {
-                throw new Error(`Document ${document._id} does not have a hash.`);
-            }
-
-            await downloadAsset(cloudStorage, localStorage, document, "asset");
-            if (document.contentType.startsWith("image")) {
-                await downloadAsset(cloudStorage, localStorage, document, "display");
-            }
-            await downloadAsset(cloudStorage, localStorage, document, "thumb");
 
             //
             // Check the hash of the downloaded assets.
@@ -117,11 +118,16 @@ async function main() {
                 console.error(`Document ${document._id} has non-matching hash.`);
             }
 
-            await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
+            if (!isAlreadyDownloaded) {
+                //
+                // The final thing is to download the metadata if not already downloaded.
+                // If anything else fails (including checking the hash) the metadata will not be downloaded.
+                //
+                await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
 
-            // console.log(`Downloaded asset ${document._id} to local storage.`);
-
-            numDownloaded += 1;
+                // console.log(`Downloaded asset ${document._id} to local storage.`);
+                numDownloaded += 1;
+            }
         }));
 
         numDocuments += batchSize;
