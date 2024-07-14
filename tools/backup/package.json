@@ -18,6 +18,7 @@
     "dayjs": "^1.11.7",
     "fs-extra": "^11.2.0",
     "lodash": "^4.17.21",
+    "minimist": "^1.2.8",
     "mongodb": "^4.7.0",
     "storage": "workspace:*"
   },

@@ -52,4 +52,11 @@ Run it for development with live reload:
 pnpm run start:dev
 ```
 
+## Arguments
+
+Use `--asset` to just backup one asset:
+
+```bash
+npm start -- --asset=<the-asset-id>
+```
 

@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { CloudStorage, FileStorage } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
+const minimist = require("minimist");
 
 //
 // Computes a hash for a file or blob of data.
@@ -40,6 +41,8 @@ async function downloadAsset(cloudStorage: CloudStorage, localStorage: FileStora
 }
 
 async function main() {
+    const argv = minimist(process.argv.slice(2));
+
     const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING;
     if (DB_CONNECTION_STRING === undefined) {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
@@ -55,8 +58,14 @@ async function main() {
     const cloudStorage = new CloudStorage();
     const localStorage = new FileStorage(DB_BACKUP_TARGET_DIR);
 
+    const query: any = {};
+
+    if (argv.asset) {
+        query._id = argv.asset;
+    }
+
     const metadataCollection = db.collection<any>("metadata");
-    const documents = await metadataCollection.find({}).toArray();
+    const documents = await metadataCollection.find(query).toArray();
     console.log(`Found ${documents.length} documents in the collection.`);
 
     let numMatching = 0;
