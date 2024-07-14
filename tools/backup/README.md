@@ -60,3 +60,9 @@ Use `--asset` to just backup one asset:
 npm start -- --asset=<the-asset-id>
 ```
 
+Use `--set` to just backup one set:
+
+```bash
+npm start -- --set=<the-set-id>
+```
+

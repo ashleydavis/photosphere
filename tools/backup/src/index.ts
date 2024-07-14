@@ -63,6 +63,9 @@ async function main() {
     if (argv.asset) {
         query._id = argv.asset;
     }
+    else if (argv.set) {
+        query.setId = argv.set;
+    }
 
     const metadataCollection = db.collection<any>("metadata");
     const documents = await metadataCollection.find(query).toArray();
