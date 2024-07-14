@@ -19,3 +19,5 @@ tools/upload/log
 .turbo
 tools/backup/build
 packages/storage/build
+tools/backup/backup
+tools/backup/log

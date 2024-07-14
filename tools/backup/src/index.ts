@@ -3,6 +3,7 @@ import { CloudStorage, FileStorage } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
+const fs = require("fs-extra");
 
 //
 // Computes a hash for a file or blob of data.
@@ -142,11 +143,16 @@ async function main() {
 
     await client.close();
 
+    console.log(`-- Summary --`);
     console.log(`Found ${numMatching} documents with matching hash.`);
     console.log(`Found ${numNotMatching} documents with non-matching hash.`);
     console.log(`Total documents ${documents.length}.`);
     console.log(`Already downloaded: ${numAlreadyDownloaded}.`);
     console.log(`Downloaded: ${numDownloaded}.`);
+
+    await fs.ensureDir("./log");
+    await fs.writeFile("./log/documents.json", JSON.stringify(documents, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documents.length, numAlreadyDownloaded, numDownloaded }, null, 2));
 }
 
 main()
