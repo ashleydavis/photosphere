@@ -44,12 +44,6 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             return;
         }
 
-        // Check if the token exists in the query parameters.
-        if (!req.headers.authorization && req.query && req.query.t) {
-            // Add the token to the Authorization header.
-            req.headers.authorization = `Bearer ${req.query.t}`;
-        }        
-
         next();
     });
 
