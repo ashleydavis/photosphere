@@ -47,6 +47,11 @@ let numAlreadyUploaded = 0;
 let numUploadedWithNonMatchingHash = 0;
 
 //
+// Number of assets that were correct with Image Magick before upload.
+//
+let numAssetsCorrected = 0;
+
+//
 // Counts the number of failures.
 //
 let numFailed = 0;
@@ -164,6 +169,8 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
             //
             execSync(`cp "${filePath}" "${filePath}.bak"`);
             execSync(`magick "${filePath}" "${filePath}"`);
+
+            numAssetsCorrected += 1;
 
             assetDetails = await getImageDetails(filePath, fileData, contentType);
         }
@@ -419,6 +426,7 @@ async function main(): Promise<void> {
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Uploaded not matching local hash: ${numUploadedWithNonMatchingHash}`);
+    console.log(`Assets corrected: ${numAssetsCorrected}`);
     console.log(`Failed: ${numFailed}`);
     console.log(`Not handled: ${filesNotHandled.length}`);
 	console.log(`Ignored: ${numIgnored}`);
@@ -443,6 +451,7 @@ async function main(): Promise<void> {
         numUploads, 
         numAlreadyUploaded, 
         numUploadedWithNonMatchingHash,        
+        numAssetsCorrected,
         numFailed, 
         numNotHandled: filesNotHandled.length 
     }, null, 2));
