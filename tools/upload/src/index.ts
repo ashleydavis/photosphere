@@ -15,6 +15,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
 ffmpeg.setFfmpegPath(ffmpegPaths.ffmpegPath);
 ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
+const { execSync } = require('child_process');
 
 if (!process.env.GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY environment variable not set.");
@@ -126,7 +127,23 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         assetDetails = await getVideoDetails(actualFilePath, fileData);
     }
     else {
-        assetDetails = await getImageDetails(filePath, fileData, contentType);
+        try {
+            assetDetails = await getImageDetails(filePath, fileData, contentType);
+        }
+        catch (err) {
+            console.log(`Failed to get image details for ${filePath}:`);
+            console.log(err);
+
+            console.log(`Will retry after fixing the image.`);
+
+            //
+            // If it crashed, fix the image and try again.
+            //
+            execSync(`cp "${filePath}" "${filePath}.bak"`);
+            execSync(`magick "${filePath}" "${filePath}"`);
+
+            assetDetails = await getImageDetails(filePath, fileData, contentType);
+        }
     }
 
     //
