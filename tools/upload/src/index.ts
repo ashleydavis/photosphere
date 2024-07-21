@@ -92,6 +92,7 @@ const ignoreExts = [
 	".3gp",
 	".bs",	
     ".json",
+    ".bak",
 ];
 
 //
