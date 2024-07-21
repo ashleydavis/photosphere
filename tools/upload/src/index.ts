@@ -90,6 +90,7 @@ const ignoreExts = [
 	".searchconnector-ms",
 	".3gp",
 	".bs",	
+    ".json",
 ];
 
 //
