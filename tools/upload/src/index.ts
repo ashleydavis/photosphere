@@ -382,8 +382,20 @@ async function main(): Promise<void> {
     console.log(`Not handled: ${filesNotHandled.length}`);
 	console.log(`Ignored: ${numIgnored}`);
 
-    await fs.writeFile("./log/failures.json", JSON.stringify(failures, null, 2));
-    await fs.writeFile("./log/files-not-handled.json", JSON.stringify(filesNotHandled, null, 2));
+    await fs.ensureDir("./log/failures");
+    let failureIndex = 0;
+    for (const chunk of _.chunk(failures, 10)) {
+        await fs.writeFile(`./log/failures/failures_${failureIndex+1}.json`, JSON.stringify(chunk, null, 2));
+        failureIndex += 1;
+    }
+
+    await fs.ensureDir("./log/not-handled");
+    let notHandledIndex = 0;
+    for (const chunk of _.chunk(filesNotHandled, 10)) {
+        await fs.writeFile(`./log/not-handled/not-handled-${notHandledIndex+1}.json`, JSON.stringify(chunk, null, 2));
+        notHandledIndex += 1;
+    }
+
     await fs.writeFile("./log/summary.json", JSON.stringify({ numFiles: files.length, numProcessed, numUploads, numAlreadyUploaded, numFailed, numNotHandled: filesNotHandled.length }, null, 2));
 }
 
