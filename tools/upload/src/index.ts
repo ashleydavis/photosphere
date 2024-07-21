@@ -42,6 +42,11 @@ let numUploads = 0;
 let numAlreadyUploaded = 0; 
 
 //
+// Number of uploads where the asset matches. 
+//
+let numUploadedWithNonMatchingHash = 0;
+
+//
 // Counts the number of failures.
 //
 let numFailed = 0;
@@ -109,11 +114,28 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     // Computes the hash and checks if we already uploaded this file.
     //
     const hash = await computeHash(fileData);    
-    if (await checkUploaded(config.uploadSetId, hash)) {
+    const existingAssetIds = await checkUploaded(config.uploadSetId, hash);
+    if (existingAssetIds.length === 1) {
+        const existingAssetId = existingAssetIds[0];
+
         //console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
+
+        //
+        // Checks the exzisting file matches the hash of the local file.
+        //
+        const existingData = await downloadAssetData(config.uploadSetId, existingAssetId, "asset");
+        const existingHash = await computeHash(existingData);
+        if (hash !== existingHash) {
+            console.error(`BAD: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} does not match existing hash ${existingHash}`);
+            numUploadedWithNonMatchingHash += 1;
+        }
+        else {
+            // console.log(`OK: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} matches existing hash`);
+        }
+
         return;
-    }    
+    }
     
     const assetId = uuid();
 
@@ -396,6 +418,7 @@ async function main(): Promise<void> {
     console.log(`Processed: ${numProcessed}`);
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
+    console.log(`Uploaded not matching local hash: ${numUploadedWithNonMatchingHash}`);
     console.log(`Failed: ${numFailed}`);
     console.log(`Not handled: ${filesNotHandled.length}`);
 	console.log(`Ignored: ${numIgnored}`);
@@ -414,7 +437,15 @@ async function main(): Promise<void> {
         notHandledIndex += 1;
     }
 
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numFiles: files.length, numProcessed, numUploads, numAlreadyUploaded, numFailed, numNotHandled: filesNotHandled.length }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ 
+        numFiles: files.length, 
+        numProcessed, 
+        numUploads, 
+        numAlreadyUploaded, 
+        numUploadedWithNonMatchingHash,        
+        numFailed, 
+        numNotHandled: filesNotHandled.length 
+    }, null, 2));
 }
 
 main()
@@ -671,7 +702,7 @@ export async function computeHash(data: Buffer) {
 //
 // Checks if the asset is already uploaded.
 //
-export async function checkUploaded(setId: string, hash: string): Promise<boolean> {
+export async function checkUploaded(setId: string, hash: string): Promise<string[]> {
     const url = `${config.backend}/check-hash?hash=${hash}&set=${setId}`;
     const response = await axios.get(
         url, 
@@ -683,7 +714,7 @@ export async function checkUploaded(setId: string, hash: string): Promise<boolea
         }
     );
 
-    return response.data.assetIds.length > 0;
+    return response.data.assetIds;
 }
 
 //
@@ -731,6 +762,23 @@ async function uploadAssetData(setId: string, assetId: string, assetType: string
             },
         }
     );
+}
+
+//
+// Downloads the data for an asset.
+//
+async function downloadAssetData(setId: string, assetId: string, assetType: string): Promise<Buffer> {
+    const response = await axios.get(
+        `${config.backend}/asset?set=${setId}&id=${assetId}&type=${assetType}`, 
+        {
+			responseType: "arraybuffer",
+            headers: {
+                Authorization: `Bearer ${config.token}`,
+                Accept: "image/*,video/*",
+            },
+        }
+    );
+    return Buffer.from(response.data, 'binary');
 }
 
 //
