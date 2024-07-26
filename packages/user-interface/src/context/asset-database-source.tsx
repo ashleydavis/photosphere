@@ -17,7 +17,7 @@ import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { uuid } from "../lib/uuid";
 
-const SYNC_POLL_PERIOD = 5000;
+const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -517,6 +517,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     console.error(`Incoming sync failed:`);
                     console.error(err);
                 }
+
+                console.log(`Periodic sync done.`);
     
                 timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
             }
