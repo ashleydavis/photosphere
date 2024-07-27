@@ -250,7 +250,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             preset: "memory",
             document: {
                 id: "_", // Set when adding a document.
-                index: [ "location", "description", "labels" ],
+                index: [ "location", "description", "labels", "origFileName", "origPath", "contentType" ],
             },
         });
 
