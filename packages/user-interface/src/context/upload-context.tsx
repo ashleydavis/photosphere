@@ -443,7 +443,6 @@ export function UploadContextProvider({ children }: IProps) {
                 location,
                 fileDate: nextUpload.fileDate,
                 photoDate,
-                sortDate: photoDate || nextUpload.fileDate,
                 uploadDate: dayjs().toISOString(),
                 properties,
                 labels,

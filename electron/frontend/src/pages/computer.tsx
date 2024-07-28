@@ -24,6 +24,7 @@ export function ComputerPage() {
                 >
                 <Gallery
                     targetRowHeight={150}
+                    getHeadings={undefined}
                     />
             </GalleryContextProvider>
         </div>

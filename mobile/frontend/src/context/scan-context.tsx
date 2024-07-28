@@ -111,7 +111,6 @@ export function ScanContextProvider({ children }: IProps) {
                         //     origFileName: file.path,
                         //     hash,
                         //     fileDate: dayjs().toISOString(),
-                        //     sortDate: dayjs().toISOString(),
                         //     uploadDate: dayjs().toISOString(),
                         //     url: dataURL,
                         //     makeFullUrl: async () => {

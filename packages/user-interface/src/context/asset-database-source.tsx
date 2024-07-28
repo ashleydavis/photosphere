@@ -126,7 +126,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                         location: asset.location,
                         fileDate: asset.fileDate,
                         photoDate: asset.photoDate,
-                        sortDate: asset.sortDate,
                         uploadDate: dayjs().toISOString(),
                         properties: asset.properties,
                         labels: asset.labels,

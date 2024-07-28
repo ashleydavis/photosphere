@@ -6,7 +6,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight);
+        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight, undefined);
         expect(rows).toEqual({
             galleryHeight: 0,
             rows: []
@@ -25,7 +25,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight);
+        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight, undefined);
         
         expect(layout.rows.length).toBe(2);
 
@@ -56,7 +56,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
         expect(layout.rows.length).toBe(2);
 
         const row = layout.rows[1];
@@ -88,7 +88,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
         expect(layout.rows.length).toBe(3);
 
         const firstRow = layout.rows[1];
@@ -120,7 +120,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
         const firstRow = layout.rows[1];
         expect(firstRow.items.length).toBe(2);
         expect(firstRow.height).toBeGreaterThan(targetRowHeight);

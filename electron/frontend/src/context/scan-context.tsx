@@ -54,7 +54,6 @@ export function ScanContextProvider({ children }: IProps) {
                 contentType: fileDetails.contentType,
                 hash,
                 fileDate: dayjs(fileDate).toISOString(),
-                sortDate: dayjs(fileDate).toISOString(),
                 uploadDate: dayjs().toISOString(),
                 setId: "this doesn't make sense here",
                 userId: user!._id,

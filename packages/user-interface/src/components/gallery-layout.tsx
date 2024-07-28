@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
-import { IGalleryLayout, computePartialLayout } from "../lib/create-layout";
+import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/create-layout";
 import { GalleryImage } from "./gallery-image";
 import { throttle } from "lodash";
 
@@ -152,6 +152,11 @@ export interface IGalleryLayoutProps {
     // Event raised when an item in the gallery has been clicked.
     //
     onItemClick: ItemClickFn | undefined;
+
+    //
+    // Gets headings from a gallery item.
+    //
+    getHeadings?: GetHeadingsFn;
 }
 
 //
@@ -161,6 +166,7 @@ export function GalleryLayout({
 	galleryWidth = 600, 
 	targetRowHeight = 150, 
     onItemClick = undefined,
+    getHeadings,
     }: IGalleryLayoutProps) {
 
     const { items } = useGallery();
@@ -177,7 +183,7 @@ export function GalleryLayout({
     // Computes the gallery layout.
     //
     useEffect(() => {
-        setLayout(computePartialLayout(undefined, items, galleryWidth, targetRowHeight));
+        setLayout(computePartialLayout(undefined, items, galleryWidth, targetRowHeight, getHeadings));
     }, [items, galleryWidth, targetRowHeight]);
 
     //

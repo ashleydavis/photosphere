@@ -37,9 +37,14 @@ function headingsMatch(headingsA: string[], headingsB: string[]): boolean {
 }
 
 //
+// Gets headings from an item.
+//
+export type GetHeadingsFn = (item: IGalleryItem) => string[];
+
+//
 // Creates or updates a row-based layout for items in the gallery.
 //
-export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number): IGalleryLayout {
+export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number, getHeadings: GetHeadingsFn | undefined): IGalleryLayout {
 
     if (!layout) {
         layout = {
@@ -92,10 +97,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         // Compute headings for the item.
         // TODO: This should be customizable. Heading could also be location (country, city, suburb, etc) or something else.
         //
-        const itemHeadings = [
-            dayjs(item.sortDate).format("MMMM"),
-            dayjs(item.sortDate).format("YYYY"),
-        ];
+        const itemHeadings = getHeadings ? getHeadings(item) : [];
 
         if (curRow.items.length > 0) {
             if (curRow.width + computedWidth > galleryWidth) {

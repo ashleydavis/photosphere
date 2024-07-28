@@ -4,6 +4,7 @@ import useResizeObserver from "@react-hook/resize-observer";
 import { useGallery } from "../context/gallery-context";
 import { GalleryItemContextProvider } from "../context/gallery-item-context";
 import { AssetView } from "./asset-view";
+import { GetHeadingsFn } from "../lib/create-layout";
 
 //
 // Adds a small gutter on the right hand side of the gallery for some whitespace.
@@ -15,12 +16,17 @@ export interface IGalleryProps {
     // The target height for rows in the gallery.
     //
 	targetRowHeight: number;
+
+    //
+    // Gets headings from a gallery item.
+    //
+    getHeadings?: GetHeadingsFn;
 }
 
 //
 // A photo gallery component.
 //
-export function Gallery({ targetRowHeight }: IGalleryProps) {
+export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
 
     //
     // The interface to the gallery.
@@ -75,7 +81,8 @@ export function Gallery({ targetRowHeight }: IGalleryProps) {
                 onItemClick={item => { 
                     setOpenAssetView(true)
                     setSelectedItemId(item._id);
-                }}                
+                }}        
+                getHeadings={getHeadings}        
                 />
 
             {selectedItemId &&

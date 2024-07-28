@@ -518,14 +518,28 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         const sorted = items.slice();
         if (sortFn !== undefined) {
             sorted.sort((a, b) => { // Warning: this mutates the array we just cloned.
-                if (sortFn(a) < sortFn(b)) {
-                    return 1;
+                const sortA = sortFn(a);
+                const sortB = sortFn(b);
+                if (sortA === undefined) {
+                    if (sortB === undefined) {
+                        return 0; // Equal.
+                    }
+                    else {
+                        return -1; // a has no sort value, so it comes first.
+                    }
                 }
-                else if (a.sortDate > b.sortDate) {
-                    return -1;
+                else if (sortB === undefined) {
+                    return 1; // b has no sort value, so it comes first.
+                }
+
+                if (sortA < sortB) {
+                    return 1; // a comes after b.
+                }
+                else if (sortA > sortB) {
+                    return -1; // a comes before b.
                 }
                 else {
-                    return 0;
+                    return 0; // a and b are equal.
                 }
             });
         }

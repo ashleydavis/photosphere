@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { useApp } from "../../context/app-context";
 import { useGallery } from "../../context/gallery-context";
 import { useAssetDatabase } from "../../context/asset-database-source";
+import dayjs from "dayjs";
 
 export interface IGalleryPageProps {
 }
@@ -30,6 +31,13 @@ export function GalleryPage({}: IGalleryPageProps) {
             <Gallery 
                 key={setId} // Resets the gallery completely when the set changes. Simplest way to reset the scroll of the gallery.
                 targetRowHeight={150}
+                getHeadings={item => item.photoDate 
+                    ? [
+                        dayjs(item.photoDate).format("MMMM"),
+                        dayjs(item.photoDate).format("YYYY"),
+                    ]
+                    : [ "Undated" ]
+                } 
                 />
         </div>
     );

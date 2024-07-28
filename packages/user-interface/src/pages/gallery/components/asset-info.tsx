@@ -200,10 +200,10 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
-                                    {dayjs(asset.sortDate).format("MMM D, YYYY")}
+                                    {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
                                 </div>
                                 <div className="text-sm flex flex-row" >
-                                    {dayjs(asset.sortDate).format("HH:mm")}
+                                    {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
                                 </div>
                             </div>
                         </div>
