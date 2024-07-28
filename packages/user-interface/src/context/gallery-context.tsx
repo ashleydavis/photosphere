@@ -525,11 +525,11 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
                         return 0; // Equal.
                     }
                     else {
-                        return -1; // a has no sort value, so it comes first.
+                        return 1; // a has no sort value, so it comes last.
                     }
                 }
                 else if (sortB === undefined) {
-                    return 1; // b has no sort value, so it comes first.
+                    return -1; // b has no sort value, so it comes last.
                 }
 
                 if (sortA < sortB) {
