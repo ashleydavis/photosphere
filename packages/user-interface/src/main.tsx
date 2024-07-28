@@ -19,6 +19,8 @@ import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
+import Delete from "@mui/icons-material/Delete";
+import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -59,6 +61,7 @@ export function Main({ computerPage }: IMainProps) {
         isWorking,
         setId,
         moveToSet, 
+        deleteAssets,
     } = useAssetDatabase();
 
     const {
@@ -83,7 +86,12 @@ export function Main({ computerPage }: IMainProps) {
     //
     // The search currently being typed by the user.
     //
-    const [ searchInput, setSearchInput ] = React.useState<string>("");
+    const [ searchInput, setSearchInput ] = useState<string>("");
+
+    //
+    // Opens the delete confirmation dialog.
+    //
+    const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState<boolean>(false);
 
     const { user } = useApp();
 
@@ -331,6 +339,14 @@ export function Main({ computerPage }: IMainProps) {
                                             );
                                         })}
                                         <ListDivider />
+                                        <MenuItem
+                                            color="danger"
+                                            onClick={() => setDeleteConfirmationOpen(true)}
+                                            >
+                                            <Delete />
+                                            Delete {selectedItems.length} assets
+                                        </MenuItem>                                        
+                                        <ListDivider />
                                     </>
                                 }
                                 <MenuItem
@@ -527,6 +543,17 @@ export function Main({ computerPage }: IMainProps) {
                     </Routes>
                 </div>
             </div>
+
+            <DeleteConfirmationDialog
+                open={deleteConfirmationOpen}
+                numItems={selectedItems.length}
+                onCancel={() => setDeleteConfirmationOpen(false)}
+                onDelete={async () => {
+                    await deleteAssets(selectedItems.map(item => item._id));
+                    clearMultiSelection();
+                    setDeleteConfirmationOpen(false);
+                }}
+                />
 
             {isWorking
                 && <FullscreenSpinner />

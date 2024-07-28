@@ -56,7 +56,7 @@ export interface IGalleryContext {
     //
     // Deletes the asset.
     //
-    deleteAsset(assetId: string): void;
+    deleteAsset(assetId: string): Promise<void>;
 
     //
     // Checks if an asset is already uploaded.
@@ -158,7 +158,7 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { isLoading, assets, addAsset, updateAsset, updateAssets,
+    const { isLoading, assets, addAsset, updateAsset, updateAssetsVisual, updateAssetsDatabase,
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
@@ -298,8 +298,8 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Deletes the asset.
     //
-    function deleteAsset(assetId: string): void {
-        _deleteAssets([ assetId ]);
+    async function deleteAsset(assetId: string): Promise<void> {
+        await _deleteAssets([ assetId ]);
     }
 
     //
@@ -447,7 +447,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return;
         }
         setSelectedItems([...selectedItems, item]);
-        updateAssets([{ assetId: item._id, partialAsset: { selected: true } }]);
+        updateAssetsVisual([{ assetId: item._id, partialAsset: { selected: true } }]);
     }
 
     //
@@ -460,14 +460,14 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         }
 
         setSelectedItems(selectedItems.filter(selectedItem => selectedItem._id !== item._id));        
-        updateAssets([{ assetId: item._id, partialAsset: { selected: false } }]);
+        updateAssetsVisual([{ assetId: item._id, partialAsset: { selected: false } }]);
     }
 
     //
     // Clears the multiple selection.
     //
     function clearMultiSelection(): void {        
-        updateAssets(selectedItems.map(item => ({ 
+        updateAssetsVisual(selectedItems.map(item => ({ 
             assetId: item._id, 
             partialAsset: { selected: false },
         })));

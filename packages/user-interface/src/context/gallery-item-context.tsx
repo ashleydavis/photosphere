@@ -32,7 +32,7 @@ export interface IGalleryItemContext {
     //
     // Deletes the asset in question.
     //
-    deleteAsset(): void;
+    deleteAsset(): Promise<void>;
 }
 
 const GalleryItemContext = createContext<IGalleryItemContext | undefined>(undefined);
@@ -124,8 +124,8 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
     //
     // Deletes the asset in question.
     //
-    function deleteAsset(): void {
-        _deleteAsset(assetId);
+    async function deleteAsset(): Promise<void> {
+        await _deleteAsset(assetId);
     }
 
     const value: IGalleryItemContext = {

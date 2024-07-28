@@ -55,8 +55,8 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     //
     // Marks the asset as deleted.
     //
-    function onDeleteItem(): void {
-        deleteAsset();
+    async function onDeleteItem(): Promise<void> {
+        await deleteAsset();
         onDeleted();
     }
 

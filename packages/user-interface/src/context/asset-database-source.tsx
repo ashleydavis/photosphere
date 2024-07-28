@@ -197,17 +197,47 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Update multiple assets with non persisted changes.
+    // Update multiple assets with visual only (non-persisted) changes.
     //
-    function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void {
-
+    function updateAssetsVisual(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void {
         let _assets = {
             ...assets,
-        }
-        assetUpdates.forEach(({ assetId, partialAsset }) => {
+        };
+        for (const { assetId, partialAsset } of assetUpdates) {
             _assets[assetId] = { ..._assets[assetId], ...partialAsset };
-        });
+        }
         setAssets(_assets);
+    }
+
+    //
+    // Update multiple assets with persisted database changes.
+    //
+    async function updateAssetsDatabase(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
+        updateAssetsVisual(assetUpdates);
+
+        const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
+            collectionName: "metadata",
+            recordId: assetId,
+            op: {
+                type: "set",
+                fields: partialAsset,
+            },
+        }));        
+
+        await Promise.all([
+            //
+            // Updates the local database.
+            //
+            applyOperations(database, ops),
+
+            //
+            // Queue the updates for upload to the cloud.
+            //
+            outgoingUpdateQueue.current.add({ 
+                type: "update",
+                ops,
+            }),
+        ]);
     }
 
     //
@@ -312,8 +342,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Deletes the assets.
     //
-    function deleteAssets(assetIds: string[]): void {
-        updateAssets(assetIds.map(assetId => ({ 
+    async function deleteAssets(assetIds: string[]): Promise<void> {
+        await updateAssetsDatabase(assetIds.map(assetId => ({
             assetId, 
             partialAsset: { deleted: true } 
         })));
@@ -358,7 +388,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             // Deletes the old assets.
             //
-            deleteAssets(assetIds);
+            await deleteAssets(assetIds);
         }
         finally {
             setIsWorking(false);
@@ -606,7 +636,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         assets,
         addAsset,
         updateAsset,
-        updateAssets,
+        updateAssetsVisual,
+        updateAssetsDatabase,
         addArrayValue,
         removeArrayValue,
         deleteAssets,
