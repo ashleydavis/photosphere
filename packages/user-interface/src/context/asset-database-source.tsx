@@ -197,9 +197,9 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Update multiple assets with visual only (non-persisted) changes.
+    // Update multiple assets with persisted database changes.
     //
-    function updateAssetsVisual(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void {
+    async function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
         let _assets = {
             ...assets,
         };
@@ -207,13 +207,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             _assets[assetId] = { ..._assets[assetId], ...partialAsset };
         }
         setAssets(_assets);
-    }
-
-    //
-    // Update multiple assets with persisted database changes.
-    //
-    async function updateAssetsDatabase(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
-        updateAssetsVisual(assetUpdates);
 
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
@@ -343,7 +336,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Deletes the assets.
     //
     async function deleteAssets(assetIds: string[]): Promise<void> {
-        await updateAssetsDatabase(assetIds.map(assetId => ({
+        await updateAssets(assetIds.map(assetId => ({
             assetId, 
             partialAsset: { deleted: true } 
         })));
@@ -636,8 +629,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         assets,
         addAsset,
         updateAsset,
-        updateAssetsVisual,
-        updateAssetsDatabase,
+        updateAssets,
         addArrayValue,
         removeArrayValue,
         deleteAssets,

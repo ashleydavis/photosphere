@@ -107,11 +107,6 @@ export interface IGalleryItem {
     // The user that uploaded the asset.
     //
     userId: string;
-
-    //
-    // Set to true when selected.
-    //
-    selected?: boolean;
 }
 
 //

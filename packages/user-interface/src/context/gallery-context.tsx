@@ -111,7 +111,7 @@ export interface IGalleryContext {
     //
     // Multiple selected gallery items.
     //
-    selectedItems: IGalleryItem[];
+    selectedItems: Set<string>;
 
     //
     // Add the item to the multiple selection.
@@ -158,7 +158,7 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
 
-    const { isLoading, assets, addAsset, updateAsset, updateAssetsVisual, updateAssetsDatabase,
+    const { isLoading, assets, addAsset, updateAsset, updateAssets,
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
@@ -185,7 +185,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Multiple selected gallery items.
     //
-    const [selectedItems, setSelectedItems] = useState<IGalleryItem[]>([]);
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set<string>());
 
     //
     // References the search index.
@@ -264,7 +264,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         // Renders the assets that we know about already.
         const items = applySort(removeDeletedAssets(_assets));
         setItems(items);
-        setSelectedItems(items.filter(item => item.selected));
+        setSelectedItems(new Set<string>());
     }
 
     //
@@ -442,36 +442,31 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Add the item to the multiple selection.
     //
     function addToMultipleSelection(item: IGalleryItem): void {
-        if (item.selected) {
+        if (selectedItems.has(item._id)) {
             // Already selected.
             return;
         }
-        setSelectedItems([...selectedItems, item]);
-        updateAssetsVisual([{ assetId: item._id, partialAsset: { selected: true } }]);
+        setSelectedItems(new Set([...selectedItems, item._id]));        
     }
 
     //
     // Remove the item from the multiple selection.
     //
     function removeFromMultipleSelection(item: IGalleryItem): void {
-        if (!item.selected) {
+        if (!selectedItems.has(item._id)) {
             // Already not selected.
             return;
         }
 
-        setSelectedItems(selectedItems.filter(selectedItem => selectedItem._id !== item._id));        
-        updateAssetsVisual([{ assetId: item._id, partialAsset: { selected: false } }]);
+        const filtered =  [...selectedItems].filter(selectedItem => selectedItem !== item._id);
+        setSelectedItems(new Set(filtered));
     }
 
     //
     // Clears the multiple selection.
     //
     function clearMultiSelection(): void {        
-        updateAssetsVisual(selectedItems.map(item => ({ 
-            assetId: item._id, 
-            partialAsset: { selected: false },
-        })));
-        setSelectedItems([]);
+        setSelectedItems(new Set<string>());
     }
 
     //
@@ -492,7 +487,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
 
         const items = applySort(removeDeletedAssets(searchAssets(newSearchText)));
         setItems(items);
-        setSelectedItems(items.filter(item => item.selected));
+        setSelectedItems(new Set<string>());
         setSearchText(newSearchText);
     }
 

@@ -182,7 +182,7 @@ export function Main({ computerPage }: IMainProps) {
     // Moves selected items to the specified set.
     //
     async function onMoveSelectedToSet(setId: string) {
-        await moveToSet(selectedItems.map(item => item._id), setId);
+        await moveToSet(Array.from(selectedItems), setId);
     }
 
     if (enableAuth) {       
@@ -296,7 +296,7 @@ export function Main({ computerPage }: IMainProps) {
                         <div
                             className="flex flex-row items-center mr-2 text-xs sm:text-sm"
                             >
-                            {selectedItems.length > 0 
+                            {selectedItems.size > 0 
                                 && <div className="flex flex-row items-center">
                                     <button
                                         className="w-6 text-sm"
@@ -304,7 +304,7 @@ export function Main({ computerPage }: IMainProps) {
                                         >
                                         <i className="fa-solid fa-close"></i>
                                     </button>                                    
-                                    {selectedItems.length} selected
+                                    {selectedItems.size} selected
                                 </div>
                                 || <div>{items.length} photos</div>
                             }
@@ -322,7 +322,7 @@ export function Main({ computerPage }: IMainProps) {
                                 <MoreVert />
                             </MenuButton>
                             <Menu placement="bottom-end">
-                                {selectedItems.length > 0
+                                {selectedItems.size > 0
                                     && <>
                                         <ListSubheader>MOVE TO</ListSubheader>
                                         {user?.sets.map(set => {
@@ -344,7 +344,7 @@ export function Main({ computerPage }: IMainProps) {
                                             onClick={() => setDeleteConfirmationOpen(true)}
                                             >
                                             <Delete />
-                                            Delete {selectedItems.length} assets
+                                            Delete {selectedItems.size} assets
                                         </MenuItem>                                        
                                         <ListDivider />
                                     </>
@@ -546,10 +546,10 @@ export function Main({ computerPage }: IMainProps) {
 
             <DeleteConfirmationDialog
                 open={deleteConfirmationOpen}
-                numItems={selectedItems.length}
+                numItems={selectedItems.size}
                 onCancel={() => setDeleteConfirmationOpen(false)}
                 onDelete={async () => {
-                    await deleteAssets(selectedItems.map(item => item._id));
+                    await deleteAssets(Array.from(selectedItems.values()));
                     clearMultiSelection();
                     setDeleteConfirmationOpen(false);
                 }}

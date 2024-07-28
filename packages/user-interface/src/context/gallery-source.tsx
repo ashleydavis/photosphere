@@ -49,14 +49,9 @@ export interface IGallerySource {
     updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): void;
 
     //
-    // Update multiple assets with visual only (non-persisted) changes.
-    //
-    updateAssetsVisual(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): void;
-
-    //
     // Update multiple assets with persisted database changes.
     //
-    updateAssetsDatabase(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void>;
+    updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void>;
 
     //
     // Adds an array value to the asset.

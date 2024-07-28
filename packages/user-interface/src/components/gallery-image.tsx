@@ -44,7 +44,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     const [source, setSource] = useState<string>();
     const [objectURL, setObjectURL] = useState<string>("");
 
-    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection } = useGallery();
+    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems } = useGallery();
 
     const gutter = 1;
 
@@ -65,6 +65,8 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
             unloadAsset(item._id, "thumb");
         };
     }, [item]);
+
+    const isSelected = selectedItems.has(item._id);
 
     return (
         <>
@@ -145,7 +147,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             width: "24px",
                             height: "24px",
                             borderRadius: "50%",
-                            backgroundColor: item.selected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
+                            backgroundColor: isSelected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
                             display: "flex",
                             justifyContent: "center",
                             alignItems: "center",
@@ -154,7 +156,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         onClick={event => {
                             event.preventDefault();
                             event.stopPropagation();
-                            if (item.selected) {
+                            if (isSelected) {
                                 removeFromMultipleSelection(item);
                             }
                             else {
