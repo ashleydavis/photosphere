@@ -47,6 +47,11 @@ let numAlreadyUploaded = 0;
 let numUploadedWithNonMatchingHash = 0;
 
 //
+// Number of duplicate assets found against one hash.
+//
+let numDuplicateAssets = 0;
+
+//
 // Number of assets that were correct with Image Magick before upload.
 //
 let numAssetsCorrected = 0;
@@ -139,6 +144,41 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
             // console.log(`OK: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} matches existing hash`);
         }
 
+        const assetData = await getAssetMetadata(existingAssetId);
+        if (assetData.photoDate === undefined) {
+            console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
+
+            //
+            // See if we can get photo date from the JSON file.
+            //
+            const jsonFilePath = filePath + ".json";
+            if (await fs.pathExists(jsonFilePath)) {
+                const jsonFileData = await fs.readFile(jsonFilePath);
+                const photoData = JSON.parse(jsonFileData.toString());
+                if (photoData.photoTakenTime?.timestamp) {
+                    try {
+                        const photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
+                        console.log(`Parsed date ${assetData.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+
+                        await updateAsset(existingAssetId, { photoDate });
+
+                        console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
+                    }
+                    catch (err) {
+                        console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
+                        console.error(err);
+                    }    
+                }
+            }            
+        }
+
+        return;
+    }
+    else if (existingAssetIds.length > 1) {
+        console.warn(`Multiple assets with hash ${hash} found:`);
+        console.warn(existingAssetIds);
+
+        numDuplicateAssets += 1;
         return;
     }
     
@@ -426,6 +466,7 @@ async function main(): Promise<void> {
     console.log(`Uploaded: ${numUploads}`);
     console.log(`Already uploaded: ${numAlreadyUploaded}`);
     console.log(`Uploaded not matching local hash: ${numUploadedWithNonMatchingHash}`);
+    console.log(`Duplicate assets: ${numDuplicateAssets}`);
     console.log(`Assets corrected: ${numAssetsCorrected}`);
     console.log(`Failed: ${numFailed}`);
     console.log(`Not handled: ${filesNotHandled.length}`);
@@ -450,10 +491,11 @@ async function main(): Promise<void> {
         numProcessed, 
         numUploads, 
         numAlreadyUploaded, 
-        numUploadedWithNonMatchingHash,        
+        numUploadedWithNonMatchingHash,
+        numDuplicateAssets, 
         numAssetsCorrected,
         numFailed, 
-        numNotHandled: filesNotHandled.length 
+        numNotHandled: filesNotHandled.length,
     }, null, 2));
 }
 
@@ -501,13 +543,34 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
 
     const resolution = await getVideoResolution(videoPath);
     const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
-    const videoDetails = { resolution, thumbnail, ...await getVideoMetadata(videoPath) };
+    const assetDetails = await getVideoMetadata(videoPath);
+
+    if (assetDetails.photoDate === undefined) {
+        //
+        // See if we can get photo date from the JSON file.
+        //
+        const jsonFilePath = filePath + ".json";
+        if (await fs.pathExists(jsonFilePath)) {
+            const jsonFileData = await fs.readFile(jsonFilePath);
+            const photoData = JSON.parse(jsonFileData.toString());
+            if (photoData.photoTakenTime?.timestamp) {
+                try {
+                    assetDetails.photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
+                    console.log(`Parsed date ${assetDetails.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+                }
+                catch (err) {
+                    console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
+                    console.error(err);
+                }    
+            }
+        }
+    }
 
     if (!filePath) {
         await fs.unlink(videoPath);
     }
 
-    return videoDetails;
+    return { resolution, thumbnail, ...assetDetails };
 }
 
 //
@@ -622,7 +685,30 @@ function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordina
 async function getImageDetails(filePath: string, fileData: Buffer, contentType: string): Promise<IAssetDetails> {
     const resolution = await getImageResolution(filePath, fileData);
     const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
-    return { resolution, thumbnail, ...await getImageMetadata(filePath, fileData, contentType) };
+    const assetDetails = await getImageMetadata(filePath, fileData, contentType);
+
+    if (assetDetails.photoDate === undefined) {
+        //
+        // See if we can get photo date from the JSON file.
+        //
+        const jsonFilePath = filePath + ".json";
+        if (await fs.pathExists(jsonFilePath)) {
+            const jsonFileData = await fs.readFile(jsonFilePath);
+            const photoData = JSON.parse(jsonFileData.toString());
+            if (photoData.photoTakenTime?.timestamp) {
+                try {
+                    assetDetails.photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
+                    console.log(`Parsed date ${assetDetails.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+                }
+                catch (err) {
+                    console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
+                    console.error(err);
+                }    
+            }
+        }
+    }
+
+    return { resolution, thumbnail, ...assetDetails };
 }
 
 //
@@ -821,6 +907,54 @@ async function addAsset(asset: IAsset): Promise<void> {
             },
         }
     );    
-
 }
 
+//
+// Gets the metadata for an asset.
+//
+async function getAssetMetadata(assetId: string): Promise<IAsset>  {
+    const url = `${config.backend}/get-one?col=metadata&id=${assetId}`;
+    const response = await axios.get(
+        url, 
+        {
+            headers: {
+                Authorization: `Bearer ${config.token}`,
+                Accept: "application/json",
+            },
+        }
+    );
+    return response.data;
+}
+
+//
+// Applies a partial update to an asset.
+//
+async function updateAsset(assetId: string, assetPartial: Partial<IAsset>): Promise<void> {
+    //
+    // Add the asset to the database.
+    //
+    const ops: IDatabaseOp[] = [
+        {
+            collectionName: "metadata",
+            recordId: assetId,
+            op: {
+                type: "set",
+                fields: assetPartial,
+            },
+        }
+    ];
+
+    await axios.post(
+        `${config.backend}/operations`, 
+        {
+            ops,
+            clientId: config.clientId,
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${config.token}`,
+                Accept: "application/json",
+            },
+        }
+    );     
+}
