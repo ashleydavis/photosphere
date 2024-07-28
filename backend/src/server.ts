@@ -361,7 +361,13 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         const collection = db.collection(collectionName);
         const records = await collection.find({ setId })
             .sort({
-                photoDate: -1, // Reverse chronological order.
+                //
+                // Reverse chronological order.
+                //
+                // TODO: This only makes sense for asset metadata.
+                //       This doesn't make for any other database collection.
+                //
+                photoDate: -1, 
             })
             .skip(skip)
             .limit(limit)
