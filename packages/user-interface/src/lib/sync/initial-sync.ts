@@ -3,6 +3,7 @@ import { IDatabase } from "../database/database";
 import { IApi } from "../../context/api-context";
 import { IGalleryItem } from "../gallery-item";
 import { ILastUpdateRecord } from "./last-update-record";
+import { sleep } from "../sleep";
 
 //
 // Does the initial asset load and synchronization.
@@ -38,6 +39,11 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
                 // Request to abort asset loading.
                 return;
             }
+
+            //
+            // Wait a moment before starting the next request.
+            //
+            await sleep(100);
         }
 
         if (latestTime !== undefined) {
