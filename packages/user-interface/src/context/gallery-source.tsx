@@ -46,7 +46,7 @@ export interface IGallerySource {
     //
     // Updates an existing asset.
     //
-    updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): void;
+    updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void>;
 
     //
     // Update multiple assets with persisted database changes.
@@ -56,12 +56,12 @@ export interface IGallerySource {
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetId: string, field: string, value: any): void;
+    addArrayValue(assetId: string, field: string, value: any): Promise<void>;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetId: string, field: string, value: any): void;    
+    removeArrayValue(assetId: string, field: string, value: any): Promise<void>;
 
     //
     // Deletes the assets.

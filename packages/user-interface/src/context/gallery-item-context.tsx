@@ -17,17 +17,17 @@ export interface IGalleryItemContext {
     //
     // Updates the configuration of the asset.
     //
-    updateAsset(asset: Partial<IGalleryItem>): void;
+    updateAsset(asset: Partial<IGalleryItem>): Promise<void>;
 
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(key: string, value: string): void;
+    addArrayValue(key: string, value: string): Promise<void>;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(key: string, value: string): void;
+    removeArrayValue(key: string, value: string): Promise<void>;
 
     //
     // Deletes the asset in question.
@@ -71,7 +71,7 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
     //
     // Updates the configuration of the asset.
     //
-    function updateAsset(assetUpdate: Partial<IGalleryItem>): void {
+    async function updateAsset(assetUpdate: Partial<IGalleryItem>): Promise<void> {
         if (_asset === undefined) {
             throw new Error(`Asset ${assetId} not loaded!`);
         }
@@ -81,13 +81,13 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
             ...assetUpdate,
         });
 
-        updateGalleryItem(assetId, assetUpdate);
+        await updateGalleryItem(assetId, assetUpdate);
     }
 
     //
     // Adds an array value to the asset.
     //
-    function addArrayValue(field: string, value: any): void {
+    async function addArrayValue(field: string, value: any): Promise<void> {
         if (_asset === undefined) {
             throw new Error(`Asset ${assetId} not loaded!`);
         }
@@ -100,13 +100,13 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
         updatedAsset[field].push(value);
         setAsset(updatedAsset);
 
-        _addArrayValue(assetId, field, value);
+        await _addArrayValue(assetId, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
-    function removeArrayValue(field: string, value: any): void {
+    async function removeArrayValue(field: string, value: any): Promise<void> {
         if (_asset === undefined) {
             throw new Error(`Asset ${assetId} not loaded!`);
         }
@@ -118,7 +118,7 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
         updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
         setAsset(updatedAsset);
 
-        _removeArrayValue(assetId, field, value);
+        await _removeArrayValue(assetId, field, value);
     }
 
     //

@@ -156,7 +156,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Updates an existing asset.
     //
-    function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): void {
+    async function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void> {
 
         const updatedAsset = { ...assets[assetId], ...partialAsset };
         setAssets({
@@ -173,10 +173,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        //
-        // Don't have to wait for these slow operations to complete.
-        //
-        Promise.all([
+        await Promise.all([
                 //
                 // Updates the local database.
                 //
@@ -236,7 +233,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Adds an array value to the asset.
     //
-    function addArrayValue(assetId: string, field: string, value: any): void {
+    async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
         const updatedAsset: any = { ...assets[assetId] };
         if (updatedAsset[field] === undefined) {
@@ -260,10 +257,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        //
-        // Don't have to wait for these slow operations to complete.
-        //
-        Promise.all([
+        await Promise.all([
                 //
                 // Updates the local database.
                 //
@@ -286,7 +280,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Removes an array value from the asset.
     //
-    function removeArrayValue(assetId: string, field: string, value: any): void {
+    async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
         
         const updatedAsset: any = { ...assets[assetId] };
         if (updatedAsset[field] === undefined) {
@@ -309,10 +303,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        //
-        // Don't have to wait for these slow operations to complete.
-        //
-        Promise.all([
+        await Promise.all([
                 //
                 // Updates the local database.
                 //

@@ -41,17 +41,17 @@ export interface IGalleryContext {
     //
     // Updates an item in the gallery by index.
     //
-    updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): void;
+    updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
 
     //
     // Adds an array value to the asset.
     //
-    addArrayValue(assetId: string, field: string, value: any): void;
+    addArrayValue(assetId: string, field: string, value: any): Promise<void>;
 
     //
     // Removes an array value from the asset.
     //
-    removeArrayValue(assetId: string, field: string, value: any): void;
+    removeArrayValue(assetId: string, field: string, value: any): Promise<void>;
 
     //
     // Deletes the asset.
@@ -277,22 +277,22 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Updates an asset in the gallery by index.
     //
-    function updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): void {
-        updateAsset(assetId, partialGalleryItem);
+    async function updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
+        await updateAsset(assetId, partialGalleryItem);
     }
 
     //
     // Adds an array value to the asset.
-    //
-    function addArrayValue(assetId: string, field: string, value: any): void {
-        _addArrayValue(assetId, field, value);
+    //  
+    async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
+        await _addArrayValue(assetId, field, value);
     }
 
     //
     // Removes an array value from the asset.
     //
-    function removeArrayValue(assetId: string, field: string, value: any): void {
-        _removeArrayValue(assetId, field, value);
+    async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
+        await _removeArrayValue(assetId, field, value);
     }
 
     //
