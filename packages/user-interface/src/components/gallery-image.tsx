@@ -3,6 +3,7 @@ import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import classNames from "classnames";
 import { getImageTransform } from "../lib/image";
+import dayjs from "dayjs";
 
 export interface IGalleryImageProps {
     //
@@ -192,44 +193,47 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         >
                         #{item.searchIndex!+1}
                     </div>
+
+                    {/* Renders a debug panel for each image showing it's position and dimensions. */}
+                    <div
+                        style={{
+                            position: "absolute",
+                            right: `2px`,
+                            bottom: `2px`,
+                            color: "black",
+                            backgroundColor: `rgba(255, 255, 255, 0.75)`,
+                            border: "1px solid black",
+                            padding: "3px",
+                            pointerEvents: "none",
+                            fontSize: "12px",
+                            lineHeight: "14px",
+                        }}
+                        >
+                        <p>
+                            {item.photoDate ? dayjs(item.photoDate).format("DD/MM/YYYY") : "No date"}
+                        </p>
+
+                        {/* <p>
+                            left = {x.toFixed(2)}  
+                        </p>
+                        <p>
+                            top = {y.toFixed(2)}
+                        </p>
+                        <p>
+                            right = {(x+width).toFixed(2)}  
+                        </p>
+                        <p>
+                            bottom = {(y+height).toFixed(2)}
+                        </p>
+                        <p>
+                            w = {width.toFixed(2)}
+                        </p>
+                        <p>
+                            h = {height.toFixed(2)}
+                        </p> */}
+                    </div>
                 </div>
             }    
-
-            {/* Renders a debug panel for each image showing it's position and dimensions. */}
-            {/* <div
-                style={{
-                    position: "absolute",
-                    left: `${x+2}px`,
-                    top: `${y+30}px`,
-                    color: "black",
-                    backgroundColor: "white",
-                    border: "1px solid black",
-                    padding: "8px",
-                    paddingRight: "12px",
-                    pointerEvents: "none",
-                    fontSize: "12px",
-                    lineHeight: "14px",
-                }}
-                >
-                <p>
-                    left = {x.toFixed(2)}  
-                </p>
-                <p>
-                    top = {y.toFixed(2)}
-                </p>
-                <p>
-                    right = {(x+width).toFixed(2)}  
-                </p>
-                <p>
-                    bottom = {(y+height).toFixed(2)}
-                </p>
-                <p>
-                    w = {width.toFixed(2)}
-                </p>
-                <p>
-                    h = {height.toFixed(2)}
-                </p>
-            </div> */}
         </>
     );
 };
