@@ -12,9 +12,7 @@ function GallerySetup() {
     return (
         <ScanContextProvider>
             <AssetDatabaseProvider>
-                <GalleryContextProvider 
-                    sortFn={asset => asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined}
-                    >
+                <GalleryContextProvider>
                     <UploadContextProvider>
                         <Main
                             computerPage={<ComputerPage />} 

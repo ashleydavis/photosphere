@@ -6,12 +6,48 @@ import { ILastUpdateRecord } from "./last-update-record";
 import { sleep } from "../sleep";
 
 //
+// Gets the sorting value from the gallery item.
+//
+export type SortFn = (galleryItem: IGalleryItem) => any;
+
+//
 // Does the initial asset load and synchronization.
 //
-export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, setAssets: (assets: IGalleryItem[], setIndex: number) => boolean): Promise<void> {
+export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, setAssets: (assets: IGalleryItem[], setIndex: number) => boolean, sortFn?: SortFn): Promise<void> {
     const localCollection = database.collection<IAsset>("metadata");
     let assets = await localCollection.getAllByIndex("setId", setId);
     if (assets.length > 0) {
+        //
+        // Sort assets loaded from indexeddb.
+        //
+        if (sortFn) {
+            assets.sort((a, b) => {
+                const sortA = sortFn(a);
+                const sortB = sortFn(b);
+                if (sortA === undefined) {
+                    if (sortB === undefined) {
+                        return 0; // Equal.
+                    }
+                    else {
+                        return 1; // a has no sort value, so it comes last.
+                    }
+                }
+                else if (sortB === undefined) {
+                    return -1; // b has no sort value, so it comes last.
+                }
+    
+                if (sortA < sortB) {
+                    return 1; // a comes after b.
+                }
+                else if (sortA > sortB) {
+                    return -1; // a comes before b.
+                }
+                else {
+                    return 0; // a and b are equal.
+                }
+            });
+        }
+
         setAssets(assets, setIndex);
     }
     else {
@@ -27,6 +63,10 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
         let skip = 0;
         const pageSize = 1000;
         while (true) {
+            //
+            // Get a page of assets from the backend.
+            // Assumes the backend gives us the assets in sorted order.
+            //
             const records = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
             if (records.length === 0) {
                 // No more records.

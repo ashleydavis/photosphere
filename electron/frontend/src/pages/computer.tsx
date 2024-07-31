@@ -19,9 +19,7 @@ export function ComputerPage() {
         
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
-            <GalleryContextProvider 
-                sortFn={undefined} // Assets are shown in the order they are found.
-                >
+            <GalleryContextProvider>
                 <Gallery
                     targetRowHeight={150}
                     getHeadings={undefined}

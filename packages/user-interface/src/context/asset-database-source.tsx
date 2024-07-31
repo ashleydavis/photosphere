@@ -554,6 +554,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }, [isLoading, isOnline, user]);
 
     //
+    // Sorts assets by photo date.
+    //
+    function assetSortFn(asset: IGalleryItem) {
+        return asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined;
+    }    
+
+    //
     // Load assets into memory.
     //
     async function loadAssets(setId: string) {
@@ -589,7 +596,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 console.log(`Loaded ${assets.length} assets for set ${setId}`);
 
                 return true; // Continue loading assets.
-            });
+            }, assetSortFn);
         }
         finally {
             loadingCount.current -= 1;

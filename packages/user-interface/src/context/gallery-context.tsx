@@ -2,11 +2,6 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallerySource } from "./gallery-source";
 
-//
-// Gets the sorting value from the gallery item.
-//
-export type SortFn = (galleryItem: IGalleryItem) => any;
-
 export interface IAssetDataLoad {
     //
     // The object URL for the asset.
@@ -145,16 +140,10 @@ export interface IGalleryContext {
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
 
 export interface IGalleryContextProviderProps {
-
-    //
-    // Sets the sorting function for the gallery.
-    //
-    sortFn?: SortFn;
-
     children: ReactNode | ReactNode[];
 }
 
-export function GalleryContextProvider({ sortFn, children }: IGalleryContextProviderProps) {
+export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
     const { isLoading, assets, addAsset, updateAsset, updateAssets,
         checkAssetHash: _checkAssetHash, 
@@ -189,11 +178,6 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Multiple selected gallery items.
     //
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set<string>());
-
-    //
-    // Maps by id to searched assets.
-    //
-    const searchedAssets = useRef<Map<string, IGalleryItem>>();
 
     //
     // A cache entry for a loaded asset.
@@ -253,8 +237,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
 
         // Renders the assets that we know about already.
         allItems.current = removeDeletedAssets(_assets);
-        const items = applySort(applySearch(allItems.current, searchText));
-        setItems(items);
+        setItems(applySearch(allItems.current, searchText));
         setSelectedItems(new Set<string>());
     }
 
@@ -363,13 +346,6 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Gets a gallery item by id.
     //
     function getItemById(assetId: string): IGalleryItem | undefined {
-        if (searchedAssets.current) {
-            const asset = searchedAssets.current.get(assetId);
-            if (asset) {
-                return asset;
-            }
-        }
-
         if (loadedAssets.current) {
             const asset = loadedAssets.current.get(assetId);
             if (asset) {
@@ -405,6 +381,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Gets the next asset, or undefined if none.
     //
     function getNext(selectedItem: IGalleryItem): IGalleryItem | undefined {
+        //todo: if I had a map of assetId to next assetId, I could just look it up without needing a search index.
         if (selectedItem.searchIndex === undefined) {
             throw new Error(`Selected item has no search index!`);
         }
@@ -476,8 +453,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return;
         }
 
-        const items = applySort(applySearch(allItems.current, newSearchText));
-        setItems(items);
+        setItems(applySearch(allItems.current, newSearchText));
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText);
     }
@@ -498,56 +474,6 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     }
 
     //
-    // Sort all assets.
-    //
-    function applySort(items: IGalleryItem[]): IGalleryItem[] {
-        const sorted = items.slice();
-        if (sortFn !== undefined) {
-            sorted.sort((a, b) => { // Warning: this mutates the array we just cloned.
-                const sortA = sortFn(a);
-                const sortB = sortFn(b);
-                if (sortA === undefined) {
-                    if (sortB === undefined) {
-                        return 0; // Equal.
-                    }
-                    else {
-                        return 1; // a has no sort value, so it comes last.
-                    }
-                }
-                else if (sortB === undefined) {
-                    return -1; // b has no sort value, so it comes last.
-                }
-
-                if (sortA < sortB) {
-                    return 1; // a comes after b.
-                }
-                else if (sortA > sortB) {
-                    return -1; // a comes before b.
-                }
-                else {
-                    return 0; // a and b are equal.
-                }
-            });
-        }
-        else {
-            // No sort required.
-            // We still clone it because the array must be different to trigger a render.
-        }
-
-        //
-        // Bake in the search index now that we have sorted the assets.
-        //
-        const searched =  sorted.map((asset, index) => ({ ...asset, searchIndex: index }));
-
-        searchedAssets.current = new Map<string, IGalleryItem>();
-        for (const asset of searched) {
-            searchedAssets.current.set(asset._id, asset);
-        }
-        
-        return searched;
-    }
-
-    //
     // Search for assets based on text input.
     // 
     function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
@@ -555,13 +481,15 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
         searchText = searchText.trim();
 
         if (searchText === "") {
-            return items.slice(); // Clone the array to ensure a state update.
+            return items.map((item, index) => ({ ...item, searchIndex: index }));
         }
 
         const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
         const searchedItems: IGalleryItem[] = [];
 
         const searchLwr = searchText.toLowerCase();
+
+        let searchIndex = 0;
 
         for (const item of items) {
             for (const fieldName of searchFields) {
@@ -571,7 +499,9 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
                 }
 
                 if (fieldValue.toLowerCase().includes(searchLwr)) {
+                    item.searchIndex = searchIndex;
                     searchedItems.push(item);
+                    searchIndex += 1;
                     break;
                 }                
             }

@@ -10,9 +10,7 @@ import dayjs from "dayjs";
 function GallerySetup() {
     return (
         <AssetDatabaseProvider>
-            <GalleryContextProvider 
-                sortFn={asset => asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined}
-                >
+            <GalleryContextProvider>
                 <UploadContextProvider>
                     <Main />
                 </UploadContextProvider>
