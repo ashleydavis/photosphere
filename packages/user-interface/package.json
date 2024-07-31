@@ -46,7 +46,6 @@
     "classnames": "^2.5.1",
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
-    "flexsearch": "^0.7.43",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",

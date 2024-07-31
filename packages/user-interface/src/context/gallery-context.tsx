@@ -1,8 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
-import flexsearch from "flexsearch";
 import { useGallerySource } from "./gallery-source";
-import { update } from "lodash";
 
 //
 // Gets the sorting value from the gallery item.
@@ -173,6 +171,11 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     const loadedAssets = useRef<Map<string, IGalleryItem>>();
 
     //
+    // List all loaded items before searching.
+    //
+    const allItems = useRef<IGalleryItem[]>([]);
+
+    //
     // Gallery items produced by the search and sorted.
     //
     const [ items, setItems ] = useState<IGalleryItem[]>([]);
@@ -186,11 +189,6 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     // Multiple selected gallery items.
     //
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set<string>());
-
-    //
-    // References the search index.
-    //
-    const searchIndexRef = useRef<flexsearch.Document<IGalleryItem, true>>();
 
     //
     // Maps by id to searched assets.
@@ -246,23 +244,16 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     async function loadGallery(): Promise<void> {
         loadedAssets.current = new Map<string, IGalleryItem>();
-        searchIndexRef.current = new flexsearch.Document<IGalleryItem, true>({
-            preset: "memory",
-            document: {
-                id: "_", // Set when adding a document.
-                index: [ "location", "description", "labels", "origFileName", "origPath", "contentType" ],
-            },
-        });
 
         const _assets = Object.values(assets);
 
         for (const asset of _assets) {
             loadedAssets.current.set(asset._id, asset);
-            searchIndexRef.current.add(asset._id, asset);
         }
 
         // Renders the assets that we know about already.
-        const items = applySort(removeDeletedAssets(_assets));
+        allItems.current = removeDeletedAssets(_assets);
+        const items = applySort(applySearch(allItems.current, searchText));
         setItems(items);
         setSelectedItems(new Set<string>());
     }
@@ -485,7 +476,7 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
             return;
         }
 
-        const items = applySort(removeDeletedAssets(searchAssets(newSearchText)));
+        const items = applySort(applySearch(allItems.current, newSearchText));
         setItems(items);
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText);
@@ -559,32 +550,34 @@ export function GalleryContextProvider({ sortFn, children }: IGalleryContextProv
     //
     // Search for assets based on text input.
     // 
-    function searchAssets(searchText: string): IGalleryItem[] {
+    function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
+        
+        searchText = searchText.trim();
+
         if (searchText === "") {
-            return Object.values(assets);
+            return items.slice(); // Clone the array to ensure a state update.
         }
 
-        const searchResult = searchIndexRef.current!.search(searchText, 1_000_000);
+        const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
+        const searchedItems: IGalleryItem[] = [];
 
-        let searchedAssets: IGalleryItem[] = [];
+        const searchLwr = searchText.toLowerCase();
 
-        let searchedSet = new Set<string>();
-
-        for (const searchTerm of searchResult) {
-            for (const result of searchTerm.result) {
-                const assetId = result as string;
-                if (searchedSet.has(assetId)) {
-                    // There search can return the same result multiple times.
-                    // We don't want to include an asset more than once though.
+        for (const item of items) {
+            for (const fieldName of searchFields) {
+                const fieldValue = (item as any)[fieldName];
+                if (fieldValue === undefined) {
                     continue;
                 }
 
-                searchedSet.add(assetId);
-                searchedAssets.push(loadedAssets.current!.get(assetId)!);
+                if (fieldValue.toLowerCase().includes(searchLwr)) {
+                    searchedItems.push(item);
+                    break;
+                }                
             }
-        }        
+        }
 
-        return searchedAssets
+        return searchedItems;
     }
 
     const value: IGalleryContext = {
