@@ -1,6 +1,12 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallerySource } from "./gallery-source";
+import { IObservable, ISubscription, Observable } from "../lib/subscription";
+
+//
+// Gets the sorting value from the gallery item.
+//
+export type SortFn = (galleryItem: IGalleryItem) => any;
 
 export interface IAssetDataLoad {
     //
@@ -22,9 +28,24 @@ export interface IGalleryContext {
     isLoading: boolean;
 
     //
-    // The assets currently loaded. 
+    // Gets all assets currently loaded in sorted order. 
     //
-    items: IGalleryItem[];
+    getAllSortedItems(): IGalleryItem[];
+
+    //
+    // Gets the search for assets.
+    //
+    getSearchedItems(): IGalleryItem[];
+
+    //
+    // Subscribes to resets of the gallery.
+    //
+    onReset: IObservable<void>;
+
+    //
+    // Subscribes to new gallery items.
+    //
+    onNewItems: IObservable<IGalleryItem[]>;
 
     //
     // Adds an item to the the gallery.
@@ -145,7 +166,9 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
-    const { isLoading, assets, addAsset, updateAsset, updateAssets,
+    const { isLoading, addAsset, updateAsset, updateAssets,
+        onReset: __onReset,
+        onNewItems: __onNewItems, 
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
@@ -157,17 +180,17 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Asset that have been loaded from storage.
     // These assets are unsorted.
     //
-    const loadedAssets = useRef<Map<string, IGalleryItem>>();
+    const loadedItems = useRef<Map<string, IGalleryItem>>(new Map<string, IGalleryItem>());
 
     //
     // List all loaded items before searching.
     //
     const allItems = useRef<IGalleryItem[]>([]);
-
+   
     //
-    // Gallery items produced by the search and sorted.
+    // Items that are currently displayed in the gallery.
     //
-    const [ items, setItems ] = useState<IGalleryItem[]>([]);
+    const searchedItems = useRef<IGalleryItem[]>([]);
 
     //
     // The item in the gallery that is currently selected.
@@ -216,30 +239,74 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         setSelectedItemId(undefined);
     }, [searchText]);
 
-    //
-    // Loads assets on mount.
-    //
     useEffect(() => {
-        loadGallery();
-    }, [assets]); 
+        const subscription = __onReset.subscribe(_onReset);
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
+
+    useEffect(() => {
+        const subscription = __onNewItems.subscribe(_onNewItems);
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
 
     //
-    // Loads items into the gallery.
+    // Gets all assets currently loaded in sorted order. 
     //
-    async function loadGallery(): Promise<void> {
-        loadedAssets.current = new Map<string, IGalleryItem>();
-
-        const _assets = Object.values(assets);
-
-        for (const asset of _assets) {
-            loadedAssets.current.set(asset._id, asset);
-        }
-
-        // Renders the assets that we know about already.
-        allItems.current = removeDeletedAssets(_assets);
-        setItems(applySearch(allItems.current, searchText));
-        setSelectedItems(new Set<string>());
+    function getAllSortedItems(): IGalleryItem[] {
+        return allItems.current;
     }
+
+    //
+    // Gets the search for assets.
+    //
+    function getSearchedItems(): IGalleryItem[] {
+        return searchedItems.current
+    }
+
+    //
+    // Passes the gallery reset down the line to start incremetally loading assets.
+    //
+    const onReset = useRef<IObservable<void>>(new Observable<void>());
+
+    //
+    // Resets the gallery.
+    //
+    function _onReset(): void {
+        allItems.current = [];
+        searchedItems.current = [];
+        setSelectedItems(new Set<string>());
+        setSearchText("");
+
+        onReset.current.invoke();
+    }
+
+    //
+    // Passes newitems down the line as they are incrementally loaded.
+    //
+    const onNewItems = useRef<IObservable<IGalleryItem[]>>(new Observable<IGalleryItem[]>());
+
+    //
+    // Invokes subscriptions for new assets.
+    //
+    function _onNewItems(items: IGalleryItem[]) { 
+
+        const newItems = removeDeletedAssets(items);
+        allItems.current = allItems.current.concat(newItems);
+        
+ 		for (const item of items) {
+            loadedItems.current.set(item._id, item);
+        }        
+
+        const startSearchIndex = searchedItems.current.length;
+        const newSearchedItems = applySearch(newItems, searchText, startSearchIndex);
+        searchedItems.current = searchedItems.current.concat(newSearchedItems);
+
+        onNewItems.current.invoke(newSearchedItems);
+    };
 
     //
     // Adds an asset to the start of the gallery.
@@ -346,8 +413,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Gets a gallery item by id.
     //
     function getItemById(assetId: string): IGalleryItem | undefined {
-        if (loadedAssets.current) {
-            const asset = loadedAssets.current.get(assetId);
+        if (loadedItems.current) {
+            const asset = loadedItems.current.get(assetId);
             if (asset) {
                 return asset;
             }
@@ -370,7 +437,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         if (selectedItem.searchIndex > 0) {
             const prevIndex = selectedItem.searchIndex-1;
-            return items[prevIndex];
+            return searchedItems.current[prevIndex];
         }
         else {
             return undefined;
@@ -390,9 +457,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return undefined;
         }
 
-        if (selectedItem.searchIndex < items.length-1) {
+        if (selectedItem.searchIndex < searchedItems.current.length-1) {
             const nextIndex = selectedItem.searchIndex + 1;
-            return items[nextIndex];
+            return searchedItems.current[nextIndex];
         }
         else {
             return undefined;
@@ -453,9 +520,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return;
         }
 
-        setItems(applySearch(allItems.current, newSearchText));
+        searchedItems.current = applySearch(allItems.current, newSearchText, 0);
+
         setSelectedItems(new Set<string>());
-        setSearchText(newSearchText);
+        setSearchText(newSearchText); // Triggers layout update.
     }
 
     //
@@ -476,12 +544,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Search for assets based on text input.
     // 
-    function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
+    function applySearch(items: IGalleryItem[], searchText: string, startSearchIndex: number): IGalleryItem[] {
         
         searchText = searchText.trim();
 
         if (searchText === "") {
-            return items.map((item, index) => ({ ...item, searchIndex: index }));
+            return items.map((item, index) => ({ ...item, searchIndex: startSearchIndex + index }));
         }
 
         const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
@@ -489,7 +557,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const searchLwr = searchText.toLowerCase();
 
-        let searchIndex = 0;
+        let searchIndex = startSearchIndex;
 
         for (const item of items) {
             for (const fieldName of searchFields) {
@@ -501,7 +569,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
                 if (fieldValue.toLowerCase().includes(searchLwr)) {
                     item.searchIndex = searchIndex;
                     searchedItems.push(item);
-                    searchIndex += 1;
+                    searchIndex += 1;                	
                     break;
                 }                
             }
@@ -513,7 +581,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const value: IGalleryContext = {
         isLoading,
         searchText,
-        items,
+        getAllSortedItems,
+        getSearchedItems,
+        onReset: onReset.current,
+        onNewItems: onNewItems.current,
         addGalleryItem,
         updateGalleryItem,
         addArrayValue,

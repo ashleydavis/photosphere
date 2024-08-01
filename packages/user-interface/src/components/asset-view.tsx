@@ -33,7 +33,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { items } = useGallery();
+    const { getSearchedItems } = useGallery();
     const { asset } = useGalleryItem();
 
     // 
@@ -79,7 +79,7 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                         </div>
                     }
                     <div className="flex-grow" /> {/* Spacer */}
-                    {asset.searchIndex! < items.length - 1
+                    {asset.searchIndex! < getSearchedItems().length - 1
                         && <div className="flex flex-col justify-center">
                             <button
                                 className="mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"

@@ -169,7 +169,7 @@ export function GalleryLayout({
     getHeadings,
     }: IGalleryLayoutProps) {
 
-    const { items } = useGallery();
+    const { getSearchedItems, onReset, onNewItems, searchText } = useGallery();
     
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
@@ -180,11 +180,43 @@ export function GalleryLayout({
     const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
     //
-    // Computes the gallery layout.
+    // Resets the gallery layout as necessary in preparation for incremental loading.
     //
     useEffect(() => {
-        setLayout(computePartialLayout(undefined, items, galleryWidth, targetRowHeight, getHeadings));
-    }, [items, galleryWidth, targetRowHeight]);
+        const subscription = onReset.subscribe(() => {
+            setLayout(undefined);
+        });
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
+
+    //
+    // Incrementally builds the layout as items are loaded.
+    //
+    useEffect(() => {
+        if (galleryWidth > 0) {
+            const subscription = onNewItems.subscribe(items => {
+                //
+                // Adds new items to the layout.
+                //
+                setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, getHeadings));
+            });
+            return () => {
+                subscription.unsubscribe();            
+            };
+        }
+    }, [galleryWidth]);
+
+    //
+    // Rebuilds the gallery layout as necessary when important details have changed.
+    //
+    useEffect(() => {
+        if (galleryWidth === 0) {
+            return;
+        }
+        setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));        
+    }, [galleryWidth, targetRowHeight, searchText]);
 
     //
     // Handles scrolling.

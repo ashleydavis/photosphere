@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
-import { GallerySourceContext, IAssetDataLoad, IGalleryItemMap, IGallerySource } from "./gallery-source";
+import { GallerySourceContext, IAssetDataLoad, IAssetsUpdated, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
@@ -16,6 +16,7 @@ import { syncIncoming } from "../lib/sync/sync-incoming";
 import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { uuid } from "../lib/uuid";
+import { IObservable, Observable } from "../lib/subscription";
 
 const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.
 
@@ -78,7 +79,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Assets that have been loaded.
     //
-    const [ assets, setAssets ] = useState<IGalleryItemMap>({});
+    const loadedAssets = useRef<IGalleryItemMap>({});
 
     //
     // The set currently being viewed.
@@ -86,19 +87,51 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const [ setId, setSetId ] = useState<string | undefined>(undefined);
 
     //
+    // Assets that have been loaded.
+    //
+    function getAssets(): IGalleryItemMap {
+        return loadedAssets.current;
+    }
+
+    //
+    // Subscribes to resets of the gallery.
+    //
+    const onReset = useRef<IObservable<void>>(new Observable<void>());
+
+    //
+    // Subscribes to new gallery items.
+    //
+    const onNewItems = useRef<IObservable<IGalleryItem[]>>(new Observable<IGalleryItem[]>());
+
+    //
+    // Invokes subscriptions for new assets.
+    //
+    function _onNewItems(assets: IAsset[]) {
+        for (const asset of assets) {
+            loadedAssets.current[asset._id] = asset;
+        }               
+
+        onNewItems.current.invoke(assets);
+    }
+
+    const onAssetsUpdated = useRef<IObservable<IAssetsUpdated>>(new Observable<IAssetsUpdated>());
+
+    //
     // Adds an asset to the default set.
     //
-    function addAsset(asset: IGalleryItem): void {
+    function addAsset(item: IGalleryItem): void {
         if (!setId) {
             throw new Error("No set id provided.");
         }
 
-        setAssets({
-            ...assets,
-            [asset._id]: asset,        
-        });
+        const asset: IAsset = {
+            ...item,
+            setId,
+        };
 
-        addAssetToSet(asset, setId) 
+        _onNewItems([ asset ]); 
+
+        addAssetToSet(asset, setId)
             .catch(err => {
                 console.error(`Failed to add asset:`);
                 console.error(err);
@@ -158,11 +191,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void> {
 
-        const updatedAsset = { ...assets[assetId], ...partialAsset };
-        setAssets({
-            ...assets,
-            [assetId]: updatedAsset,
-        });
+        const updatedAsset = { ...loadedAssets.current[assetId], ...partialAsset };
+        loadedAssets.current[assetId] = updatedAsset;
+
+        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -197,13 +229,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Update multiple assets with persisted database changes.
     //
     async function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
-        let _assets = {
-            ...assets,
-        };
         for (const { assetId, partialAsset } of assetUpdates) {
-            _assets[assetId] = { ..._assets[assetId], ...partialAsset };
+            loadedAssets.current[assetId] = { 
+                ...loadedAssets.current[assetId], 
+                ...partialAsset,
+            };
         }
-        setAssets(_assets);
+
+        onAssetsUpdated.current.invoke({ assetIds: assetUpdates.map(({ assetId }) => assetId) });
 
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
@@ -235,17 +268,16 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
-        const updatedAsset: any = { ...assets[assetId] };
+        const updatedAsset: any = { ...loadedAssets.current[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
         updatedAsset[field].push(value);
 
-        setAssets({
-            ...assets,
-            [assetId]: updatedAsset,
-        });
+        loadedAssets.current[assetId] = updatedAsset;
+
+        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -282,16 +314,15 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
         
-        const updatedAsset: any = { ...assets[assetId] };
+        const updatedAsset: any = { ...loadedAssets.current[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)
-  
-        setAssets({
-            ...assets,
-            [assetId]: updatedAsset,
-        });
+
+        loadedAssets.current[assetId] = updatedAsset;
+
+        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -344,16 +375,17 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             // Initializes the destination set.
             //
-            await initialSync(database, destSetId, api, 0, assets => {
-                console.log(`Loaded ${assets.length} assets into ${setId}`);
-                return true;
-            });            
+            await initialSync(database, destSetId, api, 0,
+                assets => {
+                    console.log(`Loaded ${assets.length} assets into ${setId}`);
+                }
+            );            
 
             //
             // Saves asset data to other set.
             //
             for (const assetId of assetIds) {
-                const asset = assets[assetId];        
+                const asset = loadedAssets.current[assetId];        
                 const newAssetId = uuid();                
                 const assetTypes = ["thumb", "display", "asset"];    
                 for (const assetType of assetTypes) {
@@ -574,29 +606,35 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             // Start with no assets.
             // This clears out any existing set of assets.
             //
-            setAssets({});
+            loadedAssets.current = {};
 
-            await initialSync(database, setId, api, loadingId.current, (assets, setIndex) => {
-                if (setIndex !== loadingId.current) {
-                    // The set we are loading has changed.
-                    // Stop loading assets.
-                    return false; 
-                }
+            //
+            // Pass a gallery reset down the line.
+            // This is the starting point for incremental gallery loading.
+            //
+            onReset.current.invoke();
 
-                const assetMap: IGalleryItemMap = {};
-                for (const asset of assets) {
-                    assetMap[asset._id] = asset;
-                }               
+            await initialSync(database, setId, api, loadingId.current, 
+                //
+                // Sets assets as they are loaded.
+                //
+                assets => {
+                    //
+                    // As each page of assets are loaded update the asset map in state.
+                    //
+                    _onNewItems(assets);
+
+                    console.log(`Loaded ${assets.length} assets for set ${setId}`);
+                },
 
                 //
-                // As each page of assets are loaded update the asset map in state.
+                // Continue if the set index matches the current loading index.
+                // This allows loading to be aborted if the user changes what they are looking at.
                 //
-                setAssets(assetMap);
-
-                console.log(`Loaded ${assets.length} assets for set ${setId}`);
-
-                return true; // Continue loading assets.
-            }, assetSortFn);
+                setIndex => setIndex === loadingId.current, 
+		
+				assetSortFn
+            );
         }
         finally {
             loadingCount.current -= 1;
@@ -624,7 +662,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         isLoading,
         isWorking,
         isReadOnly: false,
-        assets,
+        getAssets,
+        onReset: onReset.current,
+        onNewItems: onNewItems.current,
+        onAssetsUpdated: onAssetsUpdated.current,
         addAsset,
         updateAsset,
         updateAssets,

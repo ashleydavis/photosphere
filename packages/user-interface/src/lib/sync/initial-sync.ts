@@ -13,15 +13,21 @@ export type SortFn = (galleryItem: IGalleryItem) => any;
 //
 // Does the initial asset load and synchronization.
 //
-export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, setAssets: (assets: IGalleryItem[], setIndex: number) => boolean, sortFn?: SortFn): Promise<void> {
-    const localCollection = database.collection<IAsset>("metadata");
-    let assets = await localCollection.getAllByIndex("setId", setId);
-    if (assets.length > 0) {
+export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, 
+    setAssets: (assets: IAsset[]) => void,
+    shouldContinue?: (setIndex: number) => boolean,
+    sortFn?: SortFn
+        ): Promise<void> {
+    //
+    // Load from local collection.
+    //
+    const localCollection = database.collection<IAsset>("metadata")
+    let allAssets = await localCollection.getAllByIndex("setId", setId);
+    if (allAssets.length > 0) {
         //
-        // Sort assets loaded from indexeddb.
         //
         if (sortFn) {
-            assets.sort((a, b) => {
+            allAssets.sort((a, b) => {
                 const sortA = sortFn(a);
                 const sortB = sortFn(b);
                 if (sortA === undefined) {
@@ -48,7 +54,7 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
             });
         }
 
-        setAssets(assets, setIndex);
+        setAssets(allAssets);
     }
     else {
         //
@@ -67,23 +73,23 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
             // Get a page of assets from the backend.
             // Assumes the backend gives us the assets in sorted order.
             //
-            const records = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
-            if (records.length === 0) {
+            const page = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
+            if (page.length === 0) {
                 // No more records.
                 break;
             }
 
             skip += pageSize;
-            assets = assets.concat(records);           
-            if (!setAssets(assets, setIndex)) {
+            if (shouldContinue && !shouldContinue(setIndex)) {
                 // Request to abort asset loading.
                 return;
-            }
+            }      
 
-            //
-            // Wait a moment before starting the next request.
-            //
-            await sleep(100);
+            setTimeout(() => {
+                setAssets(page); // Starts the next request before setting the new assets.
+            }, 0);
+
+            allAssets = allAssets.concat(page);    
         }
 
         if (latestTime !== undefined) {
@@ -99,7 +105,7 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
         //
         // Save the assets to the local database.
         //        
-        for (const asset of assets) {
+        for (const asset of allAssets) {
             await localCollection.setOne(asset);
         }
     }

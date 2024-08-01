@@ -49,12 +49,14 @@ export function Main({ computerPage }: IMainProps) {
 
     const { 
         isLoading: isGalleryLoading,
-        items,
+        getSearchedItems,
         selectedItemId,
         selectedItems,
         clearMultiSelection,
         search,
         clearSearch,
+        onReset,
+        onNewItems,
     } = useGallery();
 
     const { 
@@ -93,9 +95,38 @@ export function Main({ computerPage }: IMainProps) {
     //
     const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState<boolean>(false);
 
+    //
+    // Number of assets loaded.
+    //
+    const [numLoaded, setNumLoaded] = useState<number>(0);
+
     const { user } = useApp();
 
     const location = useLocation();
+
+    //
+    // Resets the gallery layout.
+    //
+    useEffect(() => {
+        const subscription = onReset.subscribe(() => {
+            setNumLoaded(getSearchedItems().length);
+        });
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
+
+    //
+    // New items added to the gallery.
+    //
+    useEffect(() => {
+        const subscription = onNewItems.subscribe(() => {
+            setNumLoaded(getSearchedItems().length);
+        });
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
 
     useEffect(() => {
         if (location.pathname === "/cloud" && user) {
@@ -306,7 +337,7 @@ export function Main({ computerPage }: IMainProps) {
                                     </button>                                    
                                     {selectedItems.size} selected
                                 </div>
-                                || <div>{items.length} photos</div>
+                                || <div>{getSearchedItems().length} photos</div>
                             }
                             
                         </div>

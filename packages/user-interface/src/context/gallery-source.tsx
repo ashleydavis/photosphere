@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
+import { IAsset } from "defs";
+import { IObservable } from "../lib/subscription";
 
 export interface IAssetDataLoad extends IAssetData {
     //
@@ -11,6 +13,16 @@ export interface IAssetDataLoad extends IAssetData {
 
 export interface IGalleryItemMap {
     [assetId: string]: IGalleryItem;
+}
+
+// 
+// Notifies of assets that were updated.
+//
+export interface IAssetsUpdated {
+    //
+    // The IDs of updated assets.
+    //
+    assetIds: string[];
 }
 
 //
@@ -36,7 +48,22 @@ export interface IGallerySource {
     //
     // Assets that have been loaded.
     //
-    assets: IGalleryItemMap;
+    getAssets(): IGalleryItemMap;
+
+    //
+    // Subscribes to resets of the gallery.
+    //
+    onReset: IObservable<void>;
+
+    //
+    // Subscribes to new gallery items.
+    //
+    onNewItems: IObservable<IGalleryItem[]>;
+
+    //
+    // Subscribes to asset updates.
+    //
+    onAssetsUpdated: IObservable<IAssetsUpdated>;
 
     //
     // Adds an asset to the source.

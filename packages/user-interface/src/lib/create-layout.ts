@@ -52,6 +52,14 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             galleryHeight: 0,
         };
     }
+    else {
+        //
+        // Have to create a fresh object so the state updates.
+        //
+        layout = {
+            ...layout,
+        };
+    }
 
     if (!items || !items.length) {
         return layout;
