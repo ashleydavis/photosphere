@@ -109,6 +109,11 @@ export interface IGallerySource {
     // Stores an asset.
     //
     storeAsset(assetId: string, assetType: string, assetData: IAssetData): Promise<void>;    
+
+    //
+    // Gets a gallery item by id.
+    //
+    getItemById(assetId: string): IGalleryItem | undefined;
 }
 
 export const GallerySourceContext = createContext<IGallerySource | undefined>(undefined);

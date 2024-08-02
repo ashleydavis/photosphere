@@ -100,12 +100,12 @@ export interface IGalleryContext {
     //
     // Gets the previous asset, or undefined if none.
     //
-    getPrev(selectedItem: IGalleryItem): IGalleryItem | undefined;
+    getPrev(item: IGalleryItem): IGalleryItem | undefined;
 
     //
     // Gets the next asset, or undefined if none.
     //
-    getNext(selectedItem: IGalleryItem): IGalleryItem | undefined;
+    getNext(item: IGalleryItem): IGalleryItem | undefined;
 
     //
     // The currently selected gallery item or undefined when no item is selected.
@@ -174,13 +174,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         addArrayValue: _addArrayValue,
         removeArrayValue: _removeArrayValue,
         deleteAssets: _deleteAssets,
+        getItemById: _getItemById,
         } = useGallerySource();
-
-    //
-    // Asset that have been loaded from storage.
-    // These assets are unsorted.
-    //
-    const loadedItems = useRef<Map<string, IGalleryItem>>(new Map<string, IGalleryItem>());
 
     //
     // List all loaded items before searching.
@@ -296,13 +291,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const newItems = removeDeletedAssets(items);
         allItems.current = allItems.current.concat(newItems);
-        
- 		for (const item of items) {
-            loadedItems.current.set(item._id, item);
-        }        
 
         const startSearchIndex = searchedItems.current.length;
-        const newSearchedItems = applySearch(newItems, searchText, startSearchIndex);
+        const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
 
         onNewItems.current.invoke(newSearchedItems);
@@ -413,57 +404,29 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Gets a gallery item by id.
     //
     function getItemById(assetId: string): IGalleryItem | undefined {
-        if (loadedItems.current) {
-            const asset = loadedItems.current.get(assetId);
-            if (asset) {
-                return asset;
-            }
-        }
-
-        return undefined;        
+        return _getItemById(assetId);
     }
 
     //
     // Gets the previous asset, or undefined if none.
     //
-    function getPrev(selectedItem: IGalleryItem): IGalleryItem | undefined {
-        if (selectedItem.searchIndex === undefined) {
-            throw new Error(`Selected item has no search index!`);
-        }
-
-        if (selectedItem.searchIndex < 0) {
+    function getPrev(item: IGalleryItem): IGalleryItem | undefined {
+        const itemIndex = searchedItems.current.findIndex(item => item._id === selectedItemId); 
+        if (itemIndex <= 0) {
             return undefined;
         }
-
-        if (selectedItem.searchIndex > 0) {
-            const prevIndex = selectedItem.searchIndex-1;
-            return searchedItems.current[prevIndex];
-        }
-        else {
-            return undefined;
-        }
+        return searchedItems.current[itemIndex - 1];
     }
 
     //
     // Gets the next asset, or undefined if none.
     //
-    function getNext(selectedItem: IGalleryItem): IGalleryItem | undefined {
-        //todo: if I had a map of assetId to next assetId, I could just look it up without needing a search index.
-        if (selectedItem.searchIndex === undefined) {
-            throw new Error(`Selected item has no search index!`);
-        }
-        
-        if (selectedItem.searchIndex < 0) {
+    function getNext(item: IGalleryItem): IGalleryItem | undefined {
+        const itemIndex = searchedItems.current.findIndex(item => item._id === selectedItemId); 
+        if (itemIndex < 0 || itemIndex >= searchedItems.current.length - 1) {
             return undefined;
         }
-
-        if (selectedItem.searchIndex < searchedItems.current.length-1) {
-            const nextIndex = selectedItem.searchIndex + 1;
-            return searchedItems.current[nextIndex];
-        }
-        else {
-            return undefined;
-        }
+        return searchedItems.current[itemIndex + 1];
     }
 
     //
@@ -520,7 +483,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return;
         }
 
-        searchedItems.current = applySearch(allItems.current, newSearchText, 0);
+        searchedItems.current = applySearch(allItems.current, newSearchText);
 
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText); // Triggers layout update.
@@ -544,20 +507,18 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Search for assets based on text input.
     // 
-    function applySearch(items: IGalleryItem[], searchText: string, startSearchIndex: number): IGalleryItem[] {
+    function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
         
         searchText = searchText.trim();
 
         if (searchText === "") {
-            return items.map((item, index) => ({ ...item, searchIndex: startSearchIndex + index }));
+            return items.slice(); // Clone the array to make sure state update triggers a render.
         }
 
         const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
         const searchedItems: IGalleryItem[] = [];
 
         const searchLwr = searchText.toLowerCase();
-
-        let searchIndex = startSearchIndex;
 
         for (const item of items) {
             for (const fieldName of searchFields) {
@@ -567,9 +528,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
                 }
 
                 if (fieldValue.toLowerCase().includes(searchLwr)) {
-                    item.searchIndex = searchIndex;
                     searchedItems.push(item);
-                    searchIndex += 1;                	
                     break;
                 }                
             }

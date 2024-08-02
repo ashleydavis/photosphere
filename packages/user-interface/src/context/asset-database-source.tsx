@@ -514,6 +514,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
+    // Gets a gallery item by id.
+    //
+    function getItemById(assetId: string): IGalleryItem | undefined {
+        return loadedAssets.current[assetId];
+    }
+
+    //
     // Periodic synchronization.
     //
     useEffect(() => {
@@ -675,6 +682,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         checkAssetHash,
         loadAsset,
         storeAsset,
+        getItemById,
 
         // Asset database source.
         setId,
