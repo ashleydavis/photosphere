@@ -178,7 +178,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
                     {/* Image number. */}
 
-                    <div
+                    {/* <div
                         style={{
                             position: "absolute",
                             left: `8px`,
@@ -192,7 +192,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         }}
                         >
                         #{item.searchIndex!+1}
-                    </div>
+                    </div> */}
 
                     {/* Renders a debug panel for each image showing it's position and dimensions. */}
                     <div

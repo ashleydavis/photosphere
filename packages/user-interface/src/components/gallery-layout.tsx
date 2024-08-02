@@ -169,7 +169,7 @@ export function GalleryLayout({
     getHeadings,
     }: IGalleryLayoutProps) {
 
-    const { getSearchedItems, onReset, onNewItems, searchText } = useGallery();
+    const { getSearchedItems, onReset, onNewItems, onItemsDeleted, searchText } = useGallery();
     
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
@@ -191,19 +191,25 @@ export function GalleryLayout({
         };
     }, []);
 
-    //
-    // Incrementally builds the layout as items are loaded.
-    //
     useEffect(() => {
         if (galleryWidth > 0) {
-            const subscription = onNewItems.subscribe(items => {
-                //
-                // Adds new items to the layout.
-                //
+            //
+            // Incrementally builds the layout as items are loaded.
+            //
+            const subscription1 = onNewItems.subscribe(items => {
                 setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, getHeadings));
             });
+
+            //
+            // Rebuilds the layout when items are deleted.
+            //
+            const subscription2 = onItemsDeleted.subscribe(() => {
+                setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));        
+            });
+    
             return () => {
-                subscription.unsubscribe();            
+                subscription1.unsubscribe();
+                subscription2.unsubscribe();
             };
         }
     }, [galleryWidth]);

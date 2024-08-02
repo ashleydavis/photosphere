@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
-import { GallerySourceContext, IAssetDataLoad, IAssetsUpdated, IGalleryItemMap, IGallerySource } from "./gallery-source";
+import { GallerySourceContext, IAssetDataLoad, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
@@ -114,7 +114,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         onNewItems.current.invoke(assets);
     }
 
-    const onAssetsUpdated = useRef<IObservable<IAssetsUpdated>>(new Observable<IAssetsUpdated>());
+    const onItemsUpdated = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
+
+    //
+    // Subscribes to gallery item deletions.
+    //
+    const onItemsDeleted = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
 
     //
     // Adds an asset to the default set.
@@ -194,7 +199,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const updatedAsset = { ...loadedAssets.current[assetId], ...partialAsset };
         loadedAssets.current[assetId] = updatedAsset;
 
-        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
+        onItemsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -236,7 +241,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             };
         }
 
-        onAssetsUpdated.current.invoke({ assetIds: assetUpdates.map(({ assetId }) => assetId) });
+        onItemsUpdated.current.invoke({ assetIds: assetUpdates.map(({ assetId }) => assetId) });
 
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
@@ -277,7 +282,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         loadedAssets.current[assetId] = updatedAsset;
 
-        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
+        onItemsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -322,7 +327,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         loadedAssets.current[assetId] = updatedAsset;
 
-        onAssetsUpdated.current.invoke({ assetIds: [ assetId ] });
+        onItemsUpdated.current.invoke({ assetIds: [ assetId ] });
 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
@@ -362,6 +367,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             assetId, 
             partialAsset: { deleted: true } 
         })));
+
+        onItemsDeleted.current.invoke({ assetIds });
     }
 
     //
@@ -672,7 +679,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         getAssets,
         onReset: onReset.current,
         onNewItems: onNewItems.current,
-        onAssetsUpdated: onAssetsUpdated.current,
+        onItemsUpdated: onItemsUpdated.current,
+        onItemsDeleted: onItemsDeleted.current,
         addAsset,
         updateAsset,
         updateAssets,

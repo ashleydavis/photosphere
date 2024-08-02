@@ -33,7 +33,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { getSearchedItems } = useGallery();
+    const { getSearchedItems, getNext, getPrev } = useGallery();
     const { asset } = useGalleryItem();
 
     // 
@@ -65,7 +65,7 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                 }
 
                 <div className="photo-nav w-full h-full flex flex-row pointer-events-none">
-                    {asset.searchIndex! > 0
+                    {getPrev(asset) !== undefined
                         && <div className="flex flex-col justify-center">
                             <button
                                 className="ml-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
@@ -79,7 +79,7 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                         </div>
                     }
                     <div className="flex-grow" /> {/* Spacer */}
-                    {asset.searchIndex! < getSearchedItems().length - 1
+                    {getNext(asset) !== undefined
                         && <div className="flex flex-col justify-center">
                             <button
                                 className="mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"

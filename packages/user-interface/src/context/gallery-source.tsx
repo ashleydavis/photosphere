@@ -16,11 +16,11 @@ export interface IGalleryItemMap {
 }
 
 // 
-// Notifies of assets that were updated.
+// Notifies of gallery items that were updated.
 //
-export interface IAssetsUpdated {
+export interface IItemsUpdate {
     //
-    // The IDs of updated assets.
+    // The IDs of updated items.
     //
     assetIds: string[];
 }
@@ -61,9 +61,14 @@ export interface IGallerySource {
     onNewItems: IObservable<IGalleryItem[]>;
 
     //
-    // Subscribes to asset updates.
+    // Subscribes to gallery item updates.
     //
-    onAssetsUpdated: IObservable<IAssetsUpdated>;
+    onItemsUpdated: IObservable<IItemsUpdate>;
+
+    //
+    // Subscribes to gallery item deletions.
+    //
+    onItemsDeleted: IObservable<IItemsUpdate>;
 
     //
     // Adds an asset to the source.

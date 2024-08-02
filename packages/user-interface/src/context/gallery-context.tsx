@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
-import { useGallerySource } from "./gallery-source";
-import { IObservable, ISubscription, Observable } from "../lib/subscription";
+import { IItemsUpdate, useGallerySource } from "./gallery-source";
+import { IObservable, Observable } from "../lib/subscription";
 
 //
 // Gets the sorting value from the gallery item.
@@ -46,6 +46,16 @@ export interface IGalleryContext {
     // Subscribes to new gallery items.
     //
     onNewItems: IObservable<IGalleryItem[]>;
+
+    //
+    // Subscribes to items updated.
+    //
+    onItemsUpdated: IObservable<IItemsUpdate>;
+
+    //
+    // Subscribes to items deleted.
+    //
+    onItemsDeleted: IObservable<IItemsUpdate>;
 
     //
     // Adds an item to the the gallery.
@@ -169,6 +179,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const { isLoading, addAsset, updateAsset, updateAssets,
         onReset: __onReset,
         onNewItems: __onNewItems, 
+        onItemsUpdated: __onItemsUpdated,
+        onItemsDeleted: __onItemsDeleted,
         checkAssetHash: _checkAssetHash, 
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
@@ -248,6 +260,20 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         };
     }, []);
 
+    useEffect(() => {
+        const subscription = __onItemsUpdated.subscribe(_onItemsUpdated);
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
+
+    useEffect(() => {
+        const subscription = __onItemsDeleted.subscribe(_onItemsDeleted);
+        return () => {
+            subscription.unsubscribe();            
+        };
+    }, []);
+
     //
     // Gets all assets currently loaded in sorted order. 
     //
@@ -298,6 +324,40 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         onNewItems.current.invoke(newSearchedItems);
     };
+
+    //
+    // Subscribes to items updates.
+    //
+    const onItemsUpdated = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
+
+    //
+    // Invokes subscriptions for updated items.
+    //
+    function _onItemsUpdated(itemUpdated: IItemsUpdate) { 
+        onItemsUpdated.current.invoke(itemUpdated);
+    }
+
+    //
+    // Subscribes to item deletions.
+    //
+    const onItemsDeleted = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
+
+    //
+    // Removes gallery items from the array that have been deleted.
+    //
+    function removeItemsFromArray(items: IGalleryItem[], assetIds: string[]): IGalleryItem[] {
+        return items.filter(item => !assetIds.includes(item._id));
+    }
+
+    //
+    // Invokes subscriptions for item deletions.
+    //
+    function _onItemsDeleted(itemsUpdated: IItemsUpdate) { 
+        allItems.current = removeItemsFromArray(allItems.current, itemsUpdated.assetIds);
+        searchedItems.current = removeItemsFromArray(searchedItems.current, itemsUpdated.assetIds);
+
+        onItemsDeleted.current.invoke(itemsUpdated);
+    }
 
     //
     // Adds an asset to the start of the gallery.
@@ -544,6 +604,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         getSearchedItems,
         onReset: onReset.current,
         onNewItems: onNewItems.current,
+        onItemsUpdated: onItemsUpdated.current,
+        onItemsDeleted: onItemsDeleted.current,
         addGalleryItem,
         updateGalleryItem,
         addArrayValue,
