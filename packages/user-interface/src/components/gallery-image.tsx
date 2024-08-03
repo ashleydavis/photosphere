@@ -69,6 +69,14 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     const isSelected = selectedItems.has(item._id);
 
+    let orientation = 1;
+    if (item.properties?.exif?.Orientation) {
+        orientation = item.properties.exif.Orientation?.[0];        
+    }
+    else if (item.properties?.metadata?.Orientation) {
+        orientation = item.properties.metadata.Orientation?.[0];
+    }
+
     return (
         <>
             {objectURL
@@ -94,7 +102,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             width: "100%",
                             height: "100%",
                             objectFit: "contain",
-                            transform: getImageTransform(item.properties?.exif?.Orientation?.[0], item.aspectRatio),
+                            transform: getImageTransform(orientation, item.aspectRatio),
                             transformOrigin: "center",
                         }}
                         onClick={() => {

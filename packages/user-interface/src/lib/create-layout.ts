@@ -97,7 +97,15 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
         const item = items[itemIndex];
-        const resolution = getImageDimensions({ width: item.width, height: item.height }, item.properties?.exif?.Orientation?.[0]);
+        let orientation = 1;
+        if (item.properties?.exif?.Orientation) {
+            orientation = item.properties.exif.Orientation?.[0];        
+        }
+        else if (item.properties?.metadata?.Orientation) {
+            orientation = item.properties.metadata.Orientation?.[0];
+        }
+    
+        const resolution = getImageDimensions({ width: item.width, height: item.height }, orientation);
         const aspectRatio = resolution.width / resolution.height;
         const computedWidth = targetRowHeight * aspectRatio;
 

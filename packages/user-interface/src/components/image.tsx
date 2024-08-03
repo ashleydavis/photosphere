@@ -51,6 +51,14 @@ export function Image({ testId, imgClassName, asset, assetType }: IImageProps) {
         };
     }, [asset]);
 
+    let orientation = 1;
+    if (asset.properties?.exif?.Orientation) {
+        orientation = asset.properties.exif.Orientation?.[0];        
+    }
+    else if (asset.properties?.metadata?.Orientation) {
+        orientation = asset.properties.metadata.Orientation?.[0];
+    }
+
     return (
         <>
             {objectURL
@@ -60,7 +68,7 @@ export function Image({ testId, imgClassName, asset, assetType }: IImageProps) {
                     src={objectURL}
                     style={{
                         padding: "2px",
-                        transform: getImageTransform(asset.properties?.exif?.Orientation?.[0], undefined),
+                        transform: getImageTransform(orientation, undefined),
                     }}
                     />
             }    
