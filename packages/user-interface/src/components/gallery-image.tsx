@@ -42,8 +42,8 @@ export interface IGalleryImageProps {
 //
 export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
 
-    const [source, setSource] = useState<string>();
-    const [objectURL, setObjectURL] = useState<string>("");
+    const [source, setSource] = useState<string | undefined>(undefined);
+    const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems } = useGallery();
 
@@ -79,6 +79,18 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     return (
         <>
+            <div
+                style={{
+                    position: "absolute",
+                    left: `${x}px`,
+                    top: `${y}px`,
+                    width: `${width-gutter}px`,
+                    height: `${height-gutter}px`,
+                    overflow: "hidden",
+                    backgroundColor: "rgba(0, 0, 0, 0.1)",
+                }} 
+                />
+
             {objectURL
                 && <div
                     style={{
