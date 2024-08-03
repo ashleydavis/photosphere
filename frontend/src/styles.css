@@ -138,6 +138,14 @@ i {
     }
 }
 
+.selection-tick {
+    display: none;
+}
+
+.gallery-thumb-container:hover .selection-tick {
+    display: flex;
+}
+
 /* Gallery scrollbar */
 
 .gallery-scrollbar {

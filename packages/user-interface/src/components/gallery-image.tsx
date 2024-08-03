@@ -108,6 +108,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
 
             {objectURL
                 && <div
+                    className="gallery-thumb-container"
                     style={{
                         position: "absolute",
                         left: `${x}px`,
@@ -176,6 +177,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     {/* Selection tick mark. */}
 
                     <div
+                        className="selection-tick"
                         style={{
                             position: "absolute",
                             left: "8px",
@@ -184,10 +186,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             height: "24px",
                             borderRadius: "50%",
                             backgroundColor: isSelected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
-                            display: "flex",
                             justifyContent: "center",
                             alignItems: "center",
                             cursor: "pointer",
+                            display: isSelected ? "flex" : undefined,
                         }}
                         onClick={event => {
                             event.preventDefault();
