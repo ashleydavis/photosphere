@@ -55,10 +55,8 @@ export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
                             && <Video
                                 asset={asset}
                                 />
-                            || <Image
-                                testId="fullsize-asset"
+                            || <Image                                
                                 asset={asset}
-                                assetType="display"
                                 />
                         }
                     </div>

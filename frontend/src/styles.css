@@ -229,13 +229,8 @@ i {
     height: 80%;
     margin: auto;
     object-fit: contain;
-    opacity: 0;
-    transition: opacity 1s ease-in-out;
 }
 
-.photo-container .full.loaded {
-    opacity: 1;
-}
 
 .photo-nav {
     z-index: 2100;

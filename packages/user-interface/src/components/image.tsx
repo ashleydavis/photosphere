@@ -5,49 +5,47 @@ import { getImageTransform } from "../lib/image";
 
 export interface IImageProps {
     //
-    // Test ID for the image attribute.
-    //
-    testId?: string;
-
-    //
-    // Class name for the image attribute.
-    //
-    imgClassName?: string;
-
-    //
     // The asset being displayed.
     //
     asset: IGalleryItem;
-
-    //
-    // The type of asset to retreive.
-    //
-    assetType: string;
 }
 
 //
 // Renders an image.
 //
-export function Image({ testId, imgClassName, asset, assetType }: IImageProps) {
+export function Image({ asset }: IImageProps) {
 
-    const [objectURL, setObjectURL] = useState<string>("");
+    const [thumbnailObjectURL, setThumbnailObjectURL] = useState<string | undefined>(undefined);
+    const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
-        loadAsset(asset._id, assetType)
+        loadAsset(asset._id, "thumb")
+        .then(assetLoaded => {
+            if (assetLoaded) {
+                setThumbnailObjectURL(assetLoaded.objectUrl);
+            }
+        })
+        .catch(err => {
+            console.error(`Failed to load asset: thumb:${asset._id}`);
+            console.error(err);
+        });
+
+        loadAsset(asset._id, "display")
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setObjectURL(assetLoaded.objectUrl);
                 }
             })
             .catch(err => {
-                console.error(`Failed to load asset: ${assetType}:${asset._id}`);
+                console.error(`Failed to load asset: display:${asset._id}`);
                 console.error(err);
             });
 
         return () => {
-            unloadAsset(asset._id, assetType);
+            unloadAsset(asset._id, "thumb");
+            unloadAsset(asset._id, "display");
         };
     }, [asset]);
 
@@ -61,10 +59,20 @@ export function Image({ testId, imgClassName, asset, assetType }: IImageProps) {
 
     return (
         <>
+            {thumbnailObjectURL
+                && <img
+                    className="thumbnail"
+                    src={thumbnailObjectURL}
+                    style={{
+                        padding: "2px",
+                        transform: getImageTransform(orientation, undefined),
+                    }}
+                    />        
+            }
             {objectURL
                 && <img 
-                    data-testid={testId}
-                    className={imgClassName}
+                    data-testid="fullsize-asset"
+                    className="full fade-in"
                     src={objectURL}
                     style={{
                         padding: "2px",
