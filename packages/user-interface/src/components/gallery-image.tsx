@@ -230,7 +230,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     </div> */}
 
                     {/* Renders a debug panel for each image showing it's position and dimensions. */}
-                    <div
+                    {/* <div
                         style={{
                             position: "absolute",
                             right: `2px`,
@@ -248,7 +248,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             {item.photoDate ? dayjs(item.photoDate).format("DD/MM/YYYY") : "No date"}
                         </p>
 
-                        {/* <p>
+                        <p>
                             left = {x.toFixed(2)}  
                         </p>
                         <p>
@@ -265,8 +265,8 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                         </p>
                         <p>
                             h = {height.toFixed(2)}
-                        </p> */}
-                    </div>
+                        </p>
+                    </div> */}
                 </div>
             }    
         </>
