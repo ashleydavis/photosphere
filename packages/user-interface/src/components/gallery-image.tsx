@@ -7,6 +7,11 @@ import dayjs from "dayjs";
 
 export interface IGalleryImageProps {
     //
+    // Set to true when scrolling through the gallery.
+    //
+    isScrolling: boolean;
+
+    //
     // The gallery item to render.
     //
     item: IGalleryItem;
@@ -40,7 +45,7 @@ export interface IGalleryImageProps {
 //
 // Renders an image for the gallery.
 //
-export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
+export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }: IGalleryImageProps) {
 
     const [source, setSource] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
@@ -50,6 +55,16 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     const gutter = 1;
 
     useEffect(() => {
+        if (objectURL) {
+            // Already loaded.
+            return;
+        }
+
+        if (isScrolling) {
+            // Don't load while scrolling.
+            return;
+        }
+
         loadAsset(item._id, "thumb")
             .then(assetLoaded => {
                 if (assetLoaded) {
@@ -65,7 +80,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
         return () => {
             unloadAsset(item._id, "thumb");
         };
-    }, [item]);
+    }, [item, isScrolling]);
 
     const isSelected = selectedItems.has(item._id);
 

@@ -3,14 +3,14 @@ import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
 import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/create-layout";
 import { GalleryImage } from "./gallery-image";
-import { throttle } from "lodash";
+import { debounce, throttle } from "lodash";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
 //
 // Renders a row of items in the gallery.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined) {
+function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, onItemClick: ItemClickFn | undefined) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -47,6 +47,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                 return (
                     <GalleryImage
                         key={item._id}
+                        isScrolling={isScrolling}
                         item={item}
                         onClick={() => {
                             if (onItemClick) {
@@ -110,7 +111,13 @@ function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: 
 //
 // Renders rows in the visible range.
 //
-function renderVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: number, contentHeight: number | undefined, onItemClick: ItemClickFn | undefined) {
+function renderVisibleRange(
+    galleryLayout: IGalleryLayout | undefined, 
+    scrollTop: number, 
+    contentHeight: number | undefined, 
+    isScrolling: boolean, 
+    onItemClick: ItemClickFn | undefined
+        ) {
     if (!contentHeight || !galleryLayout) {
         return [];
     }
@@ -123,7 +130,7 @@ function renderVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop
     const renderedRows: JSX.Element[] = [];
 
     //
-    //  rows actually on screen with a higher priority.
+    //  Render rows in the visible range.
     //
     for (let rowIndex = range.startIndex; rowIndex <= range.endIndex; rowIndex++) {
         const row = galleryLayout.rows[rowIndex];
@@ -131,7 +138,7 @@ function renderVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop
         //
         // Only render rows actually on screen.
         //
-        renderedRows.push(renderRow(row, rowIndex, onItemClick));
+        renderedRows.push(renderRow(row, rowIndex, isScrolling, onItemClick));
     }
 
     return renderedRows;
@@ -173,6 +180,10 @@ export function GalleryLayout({
     
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
+
+    const isScrolling = useRef(false);
+    const workingScrollTop = useRef(0);
+    const scrollDistance = useRef(0);
     
     //
     // The layout of the gallery.
@@ -234,10 +245,30 @@ export function GalleryLayout({
 
         const container = containerRef.current;
 
-        const onScroll = throttle(() => {
+        const onScrollDone = debounce(() => {
+            isScrolling.current = false
+            workingScrollTop.current = 0;
+            scrollDistance.current = 0;
+            setScrollTop(container.scrollTop-1); // The -1 is to force a re-render.
+        }, 200);
+
+        const onScrollThrottled = throttle(() => {
+            scrollDistance.current = Math.abs(container.scrollTop - workingScrollTop.current);
+            workingScrollTop.current = container.scrollTop;
             setScrollTop(container.scrollTop);
+            onScrollDone();            
         }, 10);
-        
+
+        function onScroll() {
+            if (!isScrolling.current) {
+                // Started scrolling.
+                isScrolling.current = true;
+                workingScrollTop.current = container.scrollTop;
+            }
+
+            onScrollThrottled();
+        }
+       
         container.addEventListener('scroll', onScroll);
     
         return () => {
@@ -263,7 +294,7 @@ export function GalleryLayout({
                     position: "relative",
                 }}
                 >
-                {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, onItemClick)}
+                {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)}
             </div>
         </div>
     );
