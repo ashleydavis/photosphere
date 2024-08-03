@@ -224,6 +224,13 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     let prevHeadings: string[] = [];
 
+    if (startingRowIndex > 0) {
+        //
+        // Start with headings from the previous row.
+        //
+        prevHeadings = rows[startingRowIndex-1].headings
+    }    
+
     for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
         if (!headingsMatch(row.headings, prevHeadings)) {
@@ -245,10 +252,20 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     // Computes the offsets of each row and total height of the gallery.
     //
 
+    let prevRowHeight = 0;
+
+    if (startingRowIndex > 0) {
+        //
+        // Start with height of the previous row.
+        //
+        prevRowHeight = rows[startingRowIndex-1].offsetY + rows[startingRowIndex-1].height
+    }    
+
     for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
-        row.offsetY = layout.galleryHeight;
-        layout.galleryHeight += row.height;
+        row.offsetY = prevRowHeight;
+        prevRowHeight += row.height;
+        layout.galleryHeight = prevRowHeight;
 
         let accumulatedWidth = 0;
 
