@@ -565,6 +565,23 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     //
+    // Determine if a field value matches the search text.
+    //
+    function valueMatches(fieldValue: any, searchTextLwr: string): boolean {
+        if (Array.isArray(fieldValue)) {
+            for (const elementValue of fieldValue) {
+                if (elementValue.toLowerCase().includes(searchTextLwr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        else {
+            return fieldValue.toLowerCase().includes(searchTextLwr);
+        }
+    }
+
+    //
     // Search for assets based on text input.
     // 
     function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
@@ -578,7 +595,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
         const searchedItems: IGalleryItem[] = [];
 
-        const searchLwr = searchText.toLowerCase();
+        const searchTextLwr = searchText.toLowerCase();
 
         for (const item of items) {
             for (const fieldName of searchFields) {
@@ -587,10 +604,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
                     continue;
                 }
 
-                if (fieldValue.toLowerCase().includes(searchLwr)) {
+                if (valueMatches(fieldValue, searchTextLwr)) {
                     searchedItems.push(item);
                     break;
-                }                
+                }
             }
         }
 
