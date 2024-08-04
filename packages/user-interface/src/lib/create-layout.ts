@@ -6,6 +6,7 @@
 import dayjs from "dayjs";
 import { IGalleryItem, IGalleryRow } from "./gallery-item";
 import { getImageDimensions } from "./image";
+import { pull } from "lodash";
 
 export interface IGalleryLayout {
     //
@@ -97,6 +98,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
         const item = items[itemIndex];
+
         let orientation = 1;
         if (item.properties?.exif?.Orientation) {
             orientation = item.properties.exif.Orientation?.[0];        
@@ -201,30 +203,101 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         }
 
         let pullback = 1;
-        let origHeight = row.height;
-        let prevHeight = origHeight;
+        let prevPullback = 1;
+        const origHeight = row.height;
 
+        const gutter = 9; // Approximately the width of the scrollbar.
+
+        //
+        // SLOW VERSION:
+        //
+        // Slowly pulls the row in until it is less than the gallery width.
+        // This is the slow version. It is accurate but takes longer.
+        // //
+        // while (true) {
+
+        //     // 
+        //     // Slowly pull the width back to the right size.
+        //     //
+        //     pullback += 1;
+
+        //     computeFromHeight(row, origHeight - pullback);
+
+        //     if (row.width < galleryWidth - gutter) {
+        //         // We have pulled back too far. We are done here.
+        //         pullback = prevPullback;
+        //         break;
+        //     }
+
+        //     prevPullback = pullback;
+        // }
+
+        //
+        // FAST VERSION
+        //
+        // Quickly pulls the row in until it is less than the gallery width.
+        // Doubles the amount of pullback each time.
+        //
         while (true) {
 
-            const newHeight = origHeight - pullback;
-            computeFromHeight(row, newHeight);
-
-            if (row.width < galleryWidth) {
-                //
-                // Pulled the row width in too far, restore the previous height.
-                //
-                computeFromHeight(row, prevHeight);
-                break;
-            }
-
-            prevHeight = newHeight;
-            
             // 
-            // Each time we double the amount of pullback we try. It
-            // results in too many iterations if we advance this by one each loop.
+            // Quckly pulls the row in.
             //
             pullback *= 2;
+
+            computeFromHeight(row, origHeight - pullback);
+
+            if (row.width < galleryWidth - gutter) {
+                // We have pulled in too far. Move onto the next phase.
+                break;
+            }            
         }
+
+        //
+        // Quicly pushes the row out until it is greater than the gallery width.
+        // This reduces the pullback quickly so we don't waste time incrementing by one each time.
+        //
+        while (true) {            
+            // 
+            // Quickly push the row out.
+            //
+            prevPullback = pullback;
+            pullback *= 0.75;
+
+            computeFromHeight(row, origHeight - pullback);
+
+            if (row.width >= galleryWidth - gutter) {
+                // We have pushed out too far. Move onto the next phase.
+                pullback = prevPullback;
+                break;
+            }
+        }
+
+        //
+        // Slowly pushes the right out until it is greater than the gallery width.
+        // Now that we are close, we can increment by one each time for accuracy.
+        //
+        while (true) {
+            
+            // 
+            // Slowly pushes the row out.
+            //
+            prevPullback = pullback;
+            pullback -= 1;
+
+            computeFromHeight(row, origHeight - pullback);
+
+            if (row.width >= galleryWidth - gutter) {
+                // We have pushed out too far. Time to finish up.
+                pullback = prevPullback;
+                break;
+            }
+        }
+
+        //
+        // Final compute.
+        //
+        computeFromHeight(row, origHeight - pullback);
     }
 
     //
