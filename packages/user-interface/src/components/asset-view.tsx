@@ -33,7 +33,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ open, onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { getSearchedItems, getNext, getPrev } = useGallery();
+    const { getNext, getPrev } = useGallery();
     const { asset } = useGalleryItem();
 
     // 

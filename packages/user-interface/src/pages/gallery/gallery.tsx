@@ -10,7 +10,7 @@ export interface IGalleryPageProps {
 
 export function GalleryPage({}: IGalleryPageProps) {
     const { setId: _setId, setSetId } = useAssetDatabase();
-    const {  selectedItemId,  setSelectedItemId, getItemById, getSearchedItems } = useGallery();
+    const {  selectedItemId,  setSelectedItemId } = useGallery();
     const { setId, assetId } = useParams();
 
     useEffect(() => {
