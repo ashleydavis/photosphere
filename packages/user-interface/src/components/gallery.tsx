@@ -88,10 +88,8 @@ export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
             {selectedItemId &&
                 <GalleryItemContextProvider 
                     assetId={selectedItemId}
-                    key={selectedItemId}
                     >
                     <AssetView
-                        key={selectedItemId}
                         open={openAssetView}
                         onClose={() => {
                             setOpenAssetView(false);
