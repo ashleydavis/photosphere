@@ -35,12 +35,12 @@ export AWS_SECRET_ACCESS_KEY=<aws-secret>
 export AWS_BUCKET=<aws-bucket>
 export AWS_DEFAULT_REGION=<aws-region>
 export DB_CONNECTION_STRING=<db-connection-string>
-export DB_BACKUP_TARGET_DIR=<target-directory-for-the-backup>
+export LOCAL_STORAGE_DIR=<local-directory-to-contain-assets>
 ```
 
 Use `set` instead of `export` for Windows.
 
-Run the backup:
+Run the backup from cloud to local:
 
 ```bash
 pnpm start
@@ -52,7 +52,23 @@ Run it for development with live reload:
 pnpm run start:dev
 ```
 
+## Run it with source and dest specified
+
+From cloud to local:
+
+```bash
+pnpm start -- --source=s3 --dest=local
+```
+
+From local to cloud:
+
+```bash
+pnpm start -- --source=local --dest=s3
+```
+
 ## Arguments
+
+Use `--source` and `--dest` to set the source and destination to `s3` or `local`.
 
 Use `--asset` to just backup one asset:
 

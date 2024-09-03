@@ -1,5 +1,4 @@
-import dayjs from "dayjs";
-import { CloudStorage, FileStorage } from "storage";
+import { CloudStorage, FileStorage, IStorage } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -23,19 +22,19 @@ async function computeHash(data: Buffer): Promise<string> {
 //
 // Downloads an assert to local storage.
 //
-async function downloadAsset(cloudStorage: CloudStorage, localStorage: FileStorage, metadata: any, assetType: string): Promise<void> {
-    const fileInfo = await cloudStorage.info(`collections/${metadata.setId}/${assetType}`, metadata._id);
+async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: any, assetType: string): Promise<void> {
+    const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}`, metadata._id);
     if (!fileInfo) {
         throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
     }
     
-    const fileData = await cloudStorage.read(`collections/${metadata.setId}/${assetType}`, metadata._id);
+    const fileData = await sourceStorage.read(`collections/${metadata.setId}/${assetType}`, metadata._id);
     if (!fileData) {
         throw new Error(`Document ${metadata._id} does not have file data.`);
     }
 
-    await localStorage.writeStream(`collections/${metadata.setId}/${assetType}`, metadata._id, fileInfo.contentType, 
-        cloudStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
+    await destStorage.writeStream(`collections/${metadata.setId}/${assetType}`, metadata._id, fileInfo.contentType, 
+        sourceStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
     );
 
     // console.log(`Wrote asset for ${assetType}/${metadata._id} to local storage.`);
@@ -54,10 +53,25 @@ async function main() {
 
     const db = client.db("photosphere");
 
-    const DB_BACKUP_TARGET_DIR = process.env.DB_BACKUP_TARGET_DIR || "backup";
-    
-    const cloudStorage = new CloudStorage();
-    const localStorage = new FileStorage(DB_BACKUP_TARGET_DIR);
+    const LOCAL_STORAGE_DIR = process.env.LOCAL_STORAGE_DIR || "backup";
+
+    const source = argv.source || "s3";
+    const dest = argv.dest || "local";
+    if (source !== "s3" && source !== "local") {
+        throw new Error(`Invalid source: ${source}`);
+    }
+    if (dest !== "s3" && dest !== "local") {
+        throw new Error(`Invalid destination: ${dest}`);
+    }
+    if (source === dest) {
+        throw new Error(`Source and destination cannot be the same.`);
+    }
+
+    const sourceStorage = source == "s3" ? new CloudStorage() : new FileStorage(LOCAL_STORAGE_DIR);
+    const destStorage = dest == "s3" ? new CloudStorage() : new FileStorage(LOCAL_STORAGE_DIR);
+
+    console.log(`Source storage: ${source}`);
+    console.log(`Destination storage: ${dest}`);
 
     const query: any = {};
 
@@ -81,7 +95,7 @@ async function main() {
 
     for (const batch of _.chunk(documents, batchSize)) {
         await Promise.all(batch.map(async (document: any) => {
-            const isAlreadyDownloaded = await localStorage.exists(`collections/${document.setId}/metadata`, document._id);
+            const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
             if (isAlreadyDownloaded) {
                 numAlreadyDownloaded += 1;
                 // console.log(`Document ${document._id} already downloaded.`);
@@ -97,17 +111,17 @@ async function main() {
                     throw new Error(`Document ${document._id} does not have a hash.`);
                 }
     
-                await downloadAsset(cloudStorage, localStorage, document, "asset");
+                await downloadAsset(sourceStorage, destStorage, document, "asset");
                 if (document.contentType.startsWith("image")) {
-                    await downloadAsset(cloudStorage, localStorage, document, "display");
+                    await downloadAsset(sourceStorage, destStorage, document, "display");
                 }
-                await downloadAsset(cloudStorage, localStorage, document, "thumb");
+                await downloadAsset(sourceStorage, destStorage, document, "thumb");
             }
 
             //
             // Check the hash of the downloaded assets.
             //
-            const fileData = await localStorage.read(`collections/${document.setId}/asset`, document._id);
+            const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
             if (!fileData) {
                 throw new Error(`Document ${document._id} does not have local file data.`);
             }
@@ -127,7 +141,7 @@ async function main() {
                 // The final thing is to download the metadata if not already downloaded.
                 // If anything else fails (including checking the hash) the metadata will not be downloaded.
                 //
-                await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
+                await destStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
 
                 console.log(`Downloaded asset ${document._id} to local storage.`);
                 numDownloaded += 1;
