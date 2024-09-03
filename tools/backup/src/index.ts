@@ -83,76 +83,87 @@ async function main() {
     }
 
     const metadataCollection = db.collection<any>("metadata");
-    const documents = await metadataCollection.find(query).toArray();
-    console.log(`Found ${documents.length} documents in the collection.`);
+    const documentCount = await metadataCollection.countDocuments(query);
+    console.log(`Found ${documentCount} documents in the collection.`);
 
     let numMatching = 0;
     let numNotMatching = 0;
-    let numDocuments = 0;
     let numDownloaded = 0;
     let numAlreadyDownloaded = 0;
+    let queryOffset = 0;
+    const querySize = 100;
     const batchSize = 100;
 
-    for (const batch of _.chunk(documents, batchSize)) {
-        await Promise.all(batch.map(async (document: any) => {
-            const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
-            if (isAlreadyDownloaded) {
-                numAlreadyDownloaded += 1;
-                // console.log(`Document ${document._id} already downloaded.`);
-            }
-            else {
-                console.log(`Downloading ${document._id}`);
-    
-                if (!document.setId) {
-                    throw new Error(`Document ${document._id} does not have a set ID.`);
-                }
-    
-                if (!document.hash) {
-                    throw new Error(`Document ${document._id} does not have a hash.`);
-                }
-    
-                await downloadAsset(sourceStorage, destStorage, document, "asset");
-                if (document.contentType.startsWith("image")) {
-                    await downloadAsset(sourceStorage, destStorage, document, "display");
-                }
-                await downloadAsset(sourceStorage, destStorage, document, "thumb");
-            }
+    while (true) {
+        const documents = await metadataCollection.find(query)
+            .skip(queryOffset)
+            .limit(querySize)
+            .toArray();
 
-            //
-            // Check the hash of the downloaded assets.
-            //
-            const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
-            if (!fileData) {
-                throw new Error(`Document ${document._id} does not have local file data.`);
-            }
-
-            const hash = await computeHash(fileData);
-            if (hash === document.hash) {
-                numMatching++;
-                // console.log(`Document ${document._id} has matching hash.`);            
-            }
-            else {
-                numNotMatching++;
-                console.error(`Document ${document._id} has non-matching hash.`);
-            }
-
-            if (!isAlreadyDownloaded) {
-                //
-                // The final thing is to download the metadata if not already downloaded.
-                // If anything else fails (including checking the hash) the metadata will not be downloaded.
-                //
-                await destStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
-
-                console.log(`Downloaded asset ${document._id} to local storage.`);
-                numDownloaded += 1;
-            }
-        }));
-
-        numDocuments += batchSize;
-            
-        if ((numDocuments % 1000) === 0) {
-            console.log(`Downloaded ${numDocuments} of ${documents.length} documents.`);
+        if (documents.length === 0) {
+            console.log(`No more documents to download.`);
+            break;
         }
+
+        queryOffset += documents.length;
+
+        for (const batch of _.chunk(documents, batchSize)) {
+            await Promise.all(batch.map(async (document: any) => {
+                const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
+                if (isAlreadyDownloaded) {
+                    numAlreadyDownloaded += 1;
+                    console.log(`Document ${document._id} already downloaded.`);
+                }
+                else {
+                    console.log(`Downloading ${document._id}`);
+        
+                    if (!document.setId) {
+                        throw new Error(`Document ${document._id} does not have a set ID.`);
+                    }
+        
+                    if (!document.hash) {
+                        throw new Error(`Document ${document._id} does not have a hash.`);
+                    }
+        
+                    await downloadAsset(sourceStorage, destStorage, document, "asset");
+                    if (document.contentType.startsWith("image")) {
+                        await downloadAsset(sourceStorage, destStorage, document, "display");
+                    }
+                    await downloadAsset(sourceStorage, destStorage, document, "thumb");
+                }
+
+                //
+                // Check the hash of the downloaded assets.
+                //
+                const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
+                if (!fileData) {
+                    throw new Error(`Document ${document._id} does not have local file data.`);
+                }
+
+                const hash = await computeHash(fileData);
+                if (hash === document.hash) {
+                    numMatching++;
+                    // console.log(`Document ${document._id} has matching hash.`);            
+                }
+                else {
+                    numNotMatching++;
+                    console.error(`Document ${document._id} has non-matching hash.`);
+                }
+
+                if (!isAlreadyDownloaded) {
+                    //
+                    // The final thing is to download the metadata if not already downloaded.
+                    // If anything else fails (including checking the hash) the metadata will not be downloaded.
+                    //
+                    await destStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
+
+                    console.log(`Downloaded asset ${document._id} to local storage.`);
+                    numDownloaded += 1;
+                }
+            }));
+        }
+
+        console.log(`Downloaded ${documents.length} of ${documentCount} documents.`);
     }
 
     await client.close();
@@ -160,13 +171,12 @@ async function main() {
     console.log(`-- Summary --`);
     console.log(`Found ${numMatching} documents with matching hash.`);
     console.log(`Found ${numNotMatching} documents with non-matching hash.`);
-    console.log(`Total documents ${documents.length}.`);
+    console.log(`Total documents ${documentCount}.`);
     console.log(`Already downloaded: ${numAlreadyDownloaded}.`);
     console.log(`Downloaded: ${numDownloaded}.`);
 
     await fs.ensureDir("./log");
-    await fs.writeFile("./log/documents.json", JSON.stringify(documents, null, 2));
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documents.length, numAlreadyDownloaded, numDownloaded }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documentCount, numAlreadyDownloaded, numDownloaded }, null, 2));
 }
 
 main()
