@@ -84,7 +84,7 @@ async function main() {
             const isAlreadyDownloaded = await localStorage.exists(`collections/${document.setId}/metadata`, document._id);
             if (isAlreadyDownloaded) {
                 numAlreadyDownloaded += 1;
-                console.log(`Document ${document._id} already downloaded.`);
+                // console.log(`Document ${document._id} already downloaded.`);
             }
             else {
                 console.log(`Downloading ${document._id}`);
