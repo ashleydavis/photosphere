@@ -43,7 +43,7 @@ Use `set` instead of `export` for Windows.
 Run the backup:
 
 ```bash
-npm start
+pnpm start
 ```
 
 Run it for development with live reload:
