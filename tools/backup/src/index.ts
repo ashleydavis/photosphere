@@ -84,10 +84,10 @@ async function main() {
             const isAlreadyDownloaded = await localStorage.exists(`collections/${document.setId}/metadata`, document._id);
             if (isAlreadyDownloaded) {
                 numAlreadyDownloaded += 1;
-                // console.log(`Document ${document._id} already downloaded.`);
+                console.log(`Document ${document._id} already downloaded.`);
             }
             else {
-                // console.log(document._id);
+                console.log(`Downloading ${document._id}`);
     
                 if (!document.setId) {
                     throw new Error(`Document ${document._id} does not have a set ID.`);
@@ -129,7 +129,7 @@ async function main() {
                 //
                 await localStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
 
-                // console.log(`Downloaded asset ${document._id} to local storage.`);
+                console.log(`Downloaded asset ${document._id} to local storage.`);
                 numDownloaded += 1;
             }
         }));
