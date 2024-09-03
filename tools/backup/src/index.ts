@@ -20,7 +20,7 @@ async function computeHash(data: Buffer): Promise<string> {
 }
 
 //
-// Downloads an assert to local storage.
+// Downloads an assert to the destination storage.
 //
 async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: any, assetType: string): Promise<void> {
     const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}`, metadata._id);
@@ -37,7 +37,7 @@ async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, met
         sourceStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
     );
 
-    // console.log(`Wrote asset for ${assetType}/${metadata._id} to local storage.`);
+    // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
 }
 
 async function main() {
@@ -137,7 +137,7 @@ async function main() {
                 //
                 const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
                 if (!fileData) {
-                    throw new Error(`Document ${document._id} does not have local file data.`);
+                    throw new Error(`Document ${document._id} does not have data at ${dest}.`);
                 }
 
                 const hash = await computeHash(fileData);
@@ -157,7 +157,7 @@ async function main() {
                     //
                     await destStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
 
-                    console.log(`Downloaded asset ${document._id} to local storage.`);
+                    console.log(`Downloaded asset ${document._id} to ${dest}.`);
                     numDownloaded += 1;
                 }
             }));
