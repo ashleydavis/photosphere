@@ -90,6 +90,7 @@ async function main() {
     let numNotMatching = 0;
     let numDownloaded = 0;
     let numAlreadyDownloaded = 0;
+    let numProcessed = 0;
     let queryOffset = 0;
     const querySize = 100;
     const batchSize = 100;
@@ -112,7 +113,7 @@ async function main() {
                 const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
                 if (isAlreadyDownloaded) {
                     numAlreadyDownloaded += 1;
-                    console.log(`Document ${document._id} already downloaded.`);
+                    // console.log(`Document ${document._id} already downloaded.`);
                 }
                 else {
                     console.log(`Downloading ${document._id}`);
@@ -160,10 +161,12 @@ async function main() {
                     console.log(`Downloaded asset ${document._id} to ${dest}.`);
                     numDownloaded += 1;
                 }
+
+                numProcessed += 1;
             }));
         }
 
-        console.log(`Downloaded ${documents.length} of ${documentCount} documents.`);
+        console.log(`Downloaded ${numProcessed} of ${documentCount} documents.`);
     }
 
     await client.close();
@@ -172,11 +175,12 @@ async function main() {
     console.log(`Found ${numMatching} documents with matching hash.`);
     console.log(`Found ${numNotMatching} documents with non-matching hash.`);
     console.log(`Total documents ${documentCount}.`);
+    console.log(`Processed: ${numProcessed}.`);
     console.log(`Already downloaded: ${numAlreadyDownloaded}.`);
     console.log(`Downloaded: ${numDownloaded}.`);
 
     await fs.ensureDir("./log");
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documentCount, numAlreadyDownloaded, numDownloaded }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documentCount, numAlreadyDownloaded, numProcessed, numDownloaded }, null, 2));
 }
 
 main()
