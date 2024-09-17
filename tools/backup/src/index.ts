@@ -40,6 +40,57 @@ async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, met
     // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
 }
 
+//
+// Downloads an asset, retrying up to 3 times on failure.
+//
+async function downloadAssetWithRetry(sourceStorage: IStorage, destStorage: IStorage, metadata: any, assetType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await downloadAsset(sourceStorage, destStorage, metadata, assetType);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to download asset ${assetType}/${metadata._id}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
+//
+// Write JSON data to the destination storage.
+//
+function writeJson(destStorage: IStorage, setId: string, collectionName: string, documentId: string, document: any): Promise<void> {
+    return destStorage.write(`collections/${setId}/${collectionName}`, documentId, "application/json", Buffer.from(JSON.stringify(document)));
+}
+
+//
+// Write JSON data to the destination storage, retrying up to 3 times on failure.
+//
+function writeJsonWithRetry(destStorage: IStorage, setId: string, collectionName: string, documentId: string, document: any): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            return writeJson(destStorage, setId, collectionName, documentId, document);
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to write metadata ${collectionName}/${documentId}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
+
 async function main() {
     const argv = minimist(process.argv.slice(2));
 
@@ -126,11 +177,11 @@ async function main() {
                         throw new Error(`Document ${document._id} does not have a hash.`);
                     }
         
-                    await downloadAsset(sourceStorage, destStorage, document, "asset");
+                    await downloadAssetWithRetry(sourceStorage, destStorage, document, "asset");
                     if (document.contentType.startsWith("image")) {
-                        await downloadAsset(sourceStorage, destStorage, document, "display");
+                        await downloadAssetWithRetry(sourceStorage, destStorage, document, "display");
                     }
-                    await downloadAsset(sourceStorage, destStorage, document, "thumb");
+                    await downloadAssetWithRetry(sourceStorage, destStorage, document, "thumb");
                 }
 
                 //
@@ -156,7 +207,7 @@ async function main() {
                     // The final thing is to download the metadata if not already downloaded.
                     // If anything else fails (including checking the hash) the metadata will not be downloaded.
                     //
-                    await destStorage.write(`collections/${document.setId}/metadata`, document._id, "application/json", Buffer.from(JSON.stringify(document)));
+                    await writeJsonWithRetry(document.setId, "metadata", document._id, document);
 
                     console.log(`Downloaded asset ${document._id} to ${dest}.`);
                     numDownloaded += 1;
