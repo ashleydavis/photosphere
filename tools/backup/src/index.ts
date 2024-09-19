@@ -104,7 +104,10 @@ async function main() {
 
     const db = client.db("photosphere");
 
-    const LOCAL_STORAGE_DIR = process.env.LOCAL_STORAGE_DIR || "backup";
+    const LOCAL_STORAGE_DIR = process.env.LOCAL_STORAGE_DIR
+    if (!LOCAL_STORAGE_DIR) {
+        throw new Error(`Set the LOCAL_STORAGE_DIR environment variable.`);
+    }
 
     const source = argv.source || "s3";
     const dest = argv.dest || "local";
