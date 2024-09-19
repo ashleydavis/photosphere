@@ -207,7 +207,7 @@ async function main() {
                     // The final thing is to download the metadata if not already downloaded.
                     // If anything else fails (including checking the hash) the metadata will not be downloaded.
                     //
-                    await writeJsonWithRetry(document.setId, "metadata", document._id, document);
+                    await writeJsonWithRetry(destStorage, document.setId, "metadata", document._id, document);
 
                     console.log(`Downloaded asset ${document._id} to ${dest}.`);
                     numDownloaded += 1;
