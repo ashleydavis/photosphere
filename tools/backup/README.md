@@ -56,14 +56,17 @@ pnpm run start:dev
 
 From cloud to local:
 
+
 ```bash
-pnpm start -- --source=s3 --dest=local
+npm start -- --source=s3 --dest=local
 ```
+
+(From some reason `pnpm` doesn't copy the args over correctly.)
 
 From local to cloud:
 
 ```bash
-pnpm start -- --source=local --dest=s3
+npm start -- --source=local --dest=s3
 ```
 
 ## Arguments

@@ -109,8 +109,14 @@ async function main() {
         throw new Error(`Set the LOCAL_STORAGE_DIR environment variable.`);
     }
 
-    const source = argv.source || "s3";
-    const dest = argv.dest || "local";
+    const source = argv.source;
+    const dest = argv.dest;
+    if (!source) {
+        throw new Error(`Specify source with --source=s3|local.`);
+    }
+    if (!dest) {
+        throw new Error(`Specify destination with --dest=s3|local.`);
+    }
     if (source !== "s3" && source !== "local") {
         throw new Error(`Invalid source: ${source}`);
     }
