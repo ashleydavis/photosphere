@@ -7,8 +7,6 @@
     "start": "cross-env NODE_ENV=development BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
     "start:prod": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --open --mode production --devtool source-map",
     "build": "cross-env NODE_ENV=production BASE_URL=https://photosphere-api.codecapers.com.au webpack --mode production --devtool source-map",
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf dist build"
@@ -29,8 +27,6 @@
     "css-loader": "^6.10.0",
     "fs-extra": "^11.1.0",
     "html-webpack-plugin": "^5.6.0",
-    "jest": "^29.0.1",
-    "jest-environment-jsdom": "^29.4.1",
     "postcss": "^8.4.35",
     "postcss-loader": "^8.1.1",
     "style-loader": "^3.3.4",

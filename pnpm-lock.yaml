@@ -151,9 +151,6 @@ importers:
       '@types/fs-extra':
         specifier: ^11.0.1
         version: 11.0.4
-      '@types/jest':
-        specifier: ^29.4.0
-        version: 29.5.12
       '@types/node':
         specifier: ^20.3.1
         version: 20.11.24
@@ -181,12 +178,6 @@ importers:
       html-webpack-plugin:
         specifier: ^5.6.0
         version: 5.6.0(webpack@5.90.3)
-      jest:
-        specifier: ^29.0.1
-        version: 29.7.0(@types/node@20.11.24)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5))
-      jest-environment-jsdom:
-        specifier: ^29.4.1
-        version: 29.7.0(canvas@2.11.2)
       postcss:
         specifier: ^8.4.35
         version: 8.4.35
@@ -199,9 +190,6 @@ importers:
       tailwindcss:
         specifier: ^3.4.1
         version: 3.4.1(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5))
-      ts-jest:
-        specifier: ^29.0.5
-        version: 29.1.2(@babel/core@7.24.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.24.0))(jest@29.7.0(@types/node@20.11.24)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5)))(typescript@4.9.5)
       ts-loader:
         specifier: ^9.5.1
         version: 9.5.1(typescript@4.9.5)(webpack@5.90.3)
@@ -293,12 +281,6 @@ importers:
       html-webpack-plugin:
         specifier: ^5.6.0
         version: 5.6.0(webpack@5.90.3)
-      jest:
-        specifier: ^29.0.1
-        version: 29.7.0(@types/node@20.11.24)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5))
-      jest-environment-jsdom:
-        specifier: ^29.4.1
-        version: 29.7.0(canvas@2.11.2)
       postcss:
         specifier: ^8.4.35
         version: 8.4.35
@@ -314,9 +296,6 @@ importers:
       tailwindcss:
         specifier: ^3.4.1
         version: 3.4.1(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5))
-      ts-jest:
-        specifier: ^29.0.5
-        version: 29.1.2(@babel/core@7.24.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.24.0))(jest@29.7.0(@types/node@20.11.24)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5)))(typescript@4.9.5)
       ts-loader:
         specifier: ^9.5.1
         version: 9.5.1(typescript@4.9.5)(webpack@5.90.3)
@@ -436,12 +415,6 @@ importers:
       html-webpack-plugin:
         specifier: ^5.6.0
         version: 5.6.0(webpack@5.90.3)
-      jest:
-        specifier: ^29.0.1
-        version: 29.7.0(@types/node@20.11.24)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@20.11.24)(typescript@4.9.5))
-      jest-environment-jsdom:
-        specifier: ^29.4.1
-        version: 29.7.0(canvas@2.11.2)
       postcss:
         specifier: ^8.4.35
         version: 8.4.35
