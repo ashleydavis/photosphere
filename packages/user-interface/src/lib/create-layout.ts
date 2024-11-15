@@ -206,9 +206,10 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
         //
         // Used to place a small gutter at the right hand edge of the gallery.
-        // Currently not needed.
+        // Ideally this would be 0, but somehow that causes an infinite loop!
+        // IT NEEDS TO BE SET TO AT LEAST 1 UNTIL IF CAN FIGURE OUT WHAT THE PROBLEM IS.
         //
-        const gutter = 0;
+        const gutter = 1;
 
         //
         // SLOW VERSION:
