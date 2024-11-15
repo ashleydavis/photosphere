@@ -298,7 +298,7 @@ export function GalleryLayout({
                 {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)}
             </div>
 
-            {layout
+            {/* {layout
                 && <GalleryScrollbar
                     galleryContainerHeight={containerRef.current?.clientHeight || 0}
                     galleryLayout={layout}
@@ -307,7 +307,7 @@ export function GalleryLayout({
                         containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
                     }}
                     />
-            }
+            } */}
 
         </div>
     );
