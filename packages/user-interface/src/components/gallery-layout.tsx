@@ -5,13 +5,14 @@ import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/crea
 import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { debounce, throttle } from "lodash";
+import { useTheme } from "@mui/joy";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
 //
 // Renders a row of items in the gallery.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, onItemClick: ItemClickFn | undefined) {
+function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, theme: Theme, onItemClick: ItemClickFn | undefined) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -22,7 +23,6 @@ function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, onI
                 key={heading}
                 style={{
                     fontSize: "0.9rem",
-                    color: "rgb(60,64,67)",
                     fontWeight: 600,
                     lineHeight: "1.25rem",
                     letterSpacing: ".0178571429em",
@@ -239,6 +239,8 @@ export function GalleryLayout({
     //
     const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
+    const theme = useTheme();
+
     //
     // Resets the gallery layout as necessary in preparation for incremental loading.
     //
@@ -344,12 +346,13 @@ export function GalleryLayout({
                         position: "sticky",
                         top: 0,
                         zIndex: 100,
-                        backgroundColor: "rgba(255,255,255,0.75)",
+                        backgroundColor: theme.palette.background.body,
+                        color: theme.palette.text.primary,
+                        opacity: 0.75,
                         borderBottom: "1px solid rgba(0,0,0,0.1)",
                         height: `${visibleRange.curHeadingRow.height}px`,
                         width: "100%",
                         fontSize: "0.9rem",
-                        color: "rgb(60,64,67)",
                         fontWeight: 600,
                         lineHeight: "1.25rem",
                         letterSpacing: ".0178571429em",

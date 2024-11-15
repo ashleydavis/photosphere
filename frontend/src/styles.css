@@ -1,12 +1,10 @@
 body {
     overflow: hidden;
     font-family: 'Roboto', Arial, sans-serif;
-    color: rgb(60, 64, 67);
     font-size: 1.125rem;
     line-height: 1.5rem;
     letter-spacing: 0;
     font-weight: 400;
-    background-color: #F3F4F6;
     position: absolute;
     top: 0;
     bottom: 0;
@@ -71,7 +69,6 @@ i {
     will-change: transform;
     width: 200px;
     padding-left: 10px;
-    background-color: white;
 
     /* Left sidebar */
     left: 0;
@@ -104,7 +101,6 @@ i {
     left: 0;
     right: 0;
     height: 52px;
-    background-color: white;
     border-bottom: 1px solid rgb(218, 220, 224);
 }
 

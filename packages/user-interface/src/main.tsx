@@ -23,6 +23,7 @@ import Delete from "@mui/icons-material/Delete";
 import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import { ModeToggle } from "./components/mode-toggle";
+import { useTheme } from "@mui/joy/styles/ThemeProvider";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -35,7 +36,7 @@ export interface IMainProps {
 //
 // The main page of the Photosphere app.
 //
-export function Main({ computerPage }: IMainProps) {
+function __Main({ computerPage }: IMainProps) {
 
     const {
         isLoading,
@@ -105,6 +106,8 @@ export function Main({ computerPage }: IMainProps) {
     const { user } = useApp();
 
     const location = useLocation();
+
+    const theme = useTheme();
 
     //
     // Resets the gallery layout.
@@ -248,12 +251,18 @@ export function Main({ computerPage }: IMainProps) {
             );
        }
     }
-
+   
+   
     return (
-        <CssVarsProvider>
-            <ModeToggle />
-
-            <div id="navbar" className={(openSearch ? "search": "")} >
+        <>
+            <div 
+                id="navbar" 
+                className={(openSearch ? "search": "")} 
+                style={{
+                    backgroundColor: theme.palette.background.body,
+                    color: theme.palette.text.primary,
+                }}
+                >
                 <div className="flex flex-col">
                     <div className="flex flex-row items-center pl-4 pt-3 pb-2">
                         <button
@@ -434,7 +443,14 @@ export function Main({ computerPage }: IMainProps) {
                 
             </div>
 
-            <div id="sidebar" className={classNames("flex flex-col", { "open": sidebarOpen})} >
+            <div 
+                id="sidebar" 
+                className={classNames("flex flex-col", { "open": sidebarOpen})} 
+                style={{
+                    backgroundColor: theme.palette.background.body,
+                    color: theme.palette.text.primary,
+                }}
+                >
                 <div className="flex flex-row items-center mt-4 mb-8">
                     <h1 className="text-xl">
                         Photosphere
@@ -532,7 +548,14 @@ export function Main({ computerPage }: IMainProps) {
                 )}
             </div>
 
-            <div id="main" className={classNames({ "search": openSearch})} >
+            <div 
+                id="main" 
+                className={classNames({ "search": openSearch})} 
+                style={{
+                    backgroundColor: theme.palette.background.body,
+                    color: theme.palette.text.primary,
+                }}
+                >
                 <div id="content" >
                     <Routes>
                         <Route 
@@ -609,6 +632,18 @@ export function Main({ computerPage }: IMainProps) {
                     bottom={10}
                     />
             }
+        </>
+    );
+}
+
+//
+// Wrapped/exported version of Main that ties in the MUI theme.
+//
+export function Main({ computerPage }: IMainProps) {
+    return (
+        <CssVarsProvider>
+            <ModeToggle />
+            <__Main computerPage={computerPage} />
         </CssVarsProvider>
     );
 }
