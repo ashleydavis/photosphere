@@ -539,6 +539,13 @@ export function Main({ computerPage }: IMainProps) {
                             }
                             />
 
+                        {/* Placeholder route to avoid the warning before the redirect. */}
+                        <Route
+                            path="/cloud"
+                            element={<div/>}
+                            />
+
+
                         {computerPage 
                             && <Route
                                 path="/computer"
