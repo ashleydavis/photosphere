@@ -5,7 +5,7 @@ import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/crea
 import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { debounce, throttle } from "lodash";
-import { useTheme } from "@mui/joy";
+import { Theme, useTheme } from "@mui/joy";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
@@ -132,6 +132,7 @@ function renderVisibleRange(
     scrollTop: number, 
     contentHeight: number | undefined, 
     isScrolling: boolean, 
+    theme: Theme,
     onItemClick: ItemClickFn | undefined
         ): {
             curHeadingRow?: IGalleryRow,
@@ -184,7 +185,7 @@ function renderVisibleRange(
         //
         // Only render rows actually on screen.
         //
-        rows.push(renderRow(row, rowIndex, isScrolling, onItemClick));
+        rows.push(renderRow(row, rowIndex, isScrolling, theme, onItemClick));
     }
 
     return {
@@ -327,7 +328,7 @@ export function GalleryLayout({
         };
     }, []);
 
-    const visibleRange = renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)
+    const visibleRange = renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, theme, onItemClick)
 
     return (
         <div
