@@ -21,6 +21,8 @@ import { useAssetDatabase } from "./context/asset-database-source";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
 import Delete from "@mui/icons-material/Delete";
 import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
+import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
+import { ModeToggle } from "./components/mode-toggle";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -248,7 +250,9 @@ export function Main({ computerPage }: IMainProps) {
     }
 
     return (
-        <>
+        <CssVarsProvider>
+            <ModeToggle />
+
             <div id="navbar" className={(openSearch ? "search": "")} >
                 <div className="flex flex-col">
                     <div className="flex flex-row items-center pl-4 pt-3 pb-2">
@@ -605,7 +609,6 @@ export function Main({ computerPage }: IMainProps) {
                     bottom={10}
                     />
             }
-
-        </>
+        </CssVarsProvider>
     );
 }
