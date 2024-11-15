@@ -1,13 +1,13 @@
 name: Frontend Tests
 on:
   push:
-    branches: 
+    branches:
       - main
     paths:
       - frontend/**
 
   pull_request:
-    branches: 
+    branches:
       - main
     paths:
       - frontend/**
@@ -27,7 +27,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8.15.5
+          version: 9.13.0
 
       # - name: Get pnpm cache directory
       #   id: pnpm-cache-dir
@@ -62,7 +62,7 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: frontend
-        run: |          
+        run: |
           pnpm run test-e2e
 
       - uses: actions/upload-artifact@v3
