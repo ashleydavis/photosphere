@@ -22,7 +22,7 @@ export function ModeToggle() {
             }}
             sx={{ 
                 position: 'fixed',
-                top: 60,
+                bottom: 70,
                 right: 30,
                 width: 'max-content',
                 zIndex: 1000,
