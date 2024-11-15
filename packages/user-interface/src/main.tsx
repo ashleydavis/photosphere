@@ -642,7 +642,9 @@ function __Main({ computerPage }: IMainProps) {
 export function Main({ computerPage }: IMainProps) {
     return (
         <CssVarsProvider>
-            <ModeToggle />
+            {!isProduction &&
+                <ModeToggle />
+            }
             <__Main computerPage={computerPage} />
         </CssVarsProvider>
     );
