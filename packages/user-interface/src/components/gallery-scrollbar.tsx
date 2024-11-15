@@ -222,6 +222,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                 className="gallery-scrollbar"
                 style={{
                     width: `${SCROLLBAR_WIDTH}px`,
+                    zIndex: 200,
                 }}
                 onMouseEnter={() => {
                     if (!isTouchDevice) {

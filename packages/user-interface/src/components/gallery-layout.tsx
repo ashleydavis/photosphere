@@ -27,7 +27,8 @@ function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, onI
                     lineHeight: "1.25rem",
                     letterSpacing: ".0178571429em",
                     padding: "1em",
-                    position: "absolute",
+                    position: "sticky",
+                    zIndex: 100,
                     top: `${row.offsetY}px`,
                     height: `${row.height}px`,
                 }}
@@ -73,12 +74,22 @@ interface IRange {
     //
     // The index of the first row to render.
     //
-    startIndex: number;
+    renderStartIndex: number;
 
     // 
     // The index of the last row to render.
     //
-    endIndex: number;
+    renderEndIndex: number;
+
+    //
+    // The first row that's actually in the view port.
+    //
+    visibleStartIndex: number;
+
+    //
+    // The last row that's actually in the view port.
+    //
+    visibleEndIndex: number;
 }
 
 //
@@ -90,9 +101,10 @@ function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: 
     }
 
     const buffer = 2; // Number of items to render outside the viewport, above and below
-    const startIndex = Math.max(0, galleryLayout.rows.findIndex(row => row.offsetY >= scrollTop) - buffer);
+    const visibleStartIndex = Math.max(0, galleryLayout.rows.findIndex(row => (row.offsetY + row.height) >= scrollTop));
+    const renderStartIndex = Math.max(0, visibleStartIndex - buffer);
 
-    let endIndex = startIndex+1;
+    let endIndex = visibleStartIndex+1;
     while (endIndex < galleryLayout.rows.length) {
         const row = galleryLayout.rows[endIndex];
         if (row.offsetY - scrollTop > contentHeight) {
@@ -101,11 +113,14 @@ function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: 
         endIndex++;
     }
 
-    endIndex = Math.min(galleryLayout.rows.length-1, endIndex + buffer);
+    const visibleEndIndex = Math.min(galleryLayout.rows.length-1, endIndex);
+    const renderEndIndex = Math.min(galleryLayout.rows.length-1, endIndex + buffer);
 
     return {
-        startIndex,
-        endIndex,
+        renderStartIndex,
+        renderEndIndex,
+        visibleStartIndex,
+        visibleEndIndex,
     };      
 }    
 
@@ -118,31 +133,64 @@ function renderVisibleRange(
     contentHeight: number | undefined, 
     isScrolling: boolean, 
     onItemClick: ItemClickFn | undefined
-        ) {
-    if (!contentHeight || !galleryLayout) {
-        return [];
+        ): {
+            curHeadingRow?: IGalleryRow,
+            rows: JSX.Element[],
+        }
+        {
+    if (!contentHeight || !galleryLayout || galleryLayout.rows.length === 0) {
+        return {
+            rows: [],
+        };
     }
 
     const range = findVisibleRange(galleryLayout, scrollTop, contentHeight);
     if (!range) {
-        return [];
+        return {
+            rows: [],
+        };
     }
 
-    const renderedRows: JSX.Element[] = [];
+    let curHeadingRow: IGalleryRow | undefined;
+    
+    //
+    // Is there a heading in the next two visible rows?
+    //
+    const isHeadingImminent = 
+        (range.visibleStartIndex < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex].type === "heading")
+        || (range.visibleStartIndex+1 < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex+1].type === "heading")
+        || (range.visibleStartIndex+2 < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex+2].type === "heading");
+    if (!isHeadingImminent) {
+        //
+        // Search backward to find the latest heading.
+        //
+        for (let rowIndex = range.visibleStartIndex-1; rowIndex >= 0; rowIndex--) {        
+            const row = galleryLayout.rows[rowIndex];
+            if (row.type === "heading") {
+                curHeadingRow = row;
+                break;
+            }
+        }
+    }   
+
+    const rows: JSX.Element[] = [];
 
     //
     //  Render rows in the visible range.
     //
-    for (let rowIndex = range.startIndex; rowIndex <= range.endIndex; rowIndex++) {
+    for (let rowIndex = range.renderStartIndex; rowIndex <= range.renderEndIndex; rowIndex++) {
         const row = galleryLayout.rows[rowIndex];
 
         //
         // Only render rows actually on screen.
         //
-        renderedRows.push(renderRow(row, rowIndex, isScrolling, onItemClick));
+        rows.push(renderRow(row, rowIndex, isScrolling, onItemClick));
     }
 
-    return renderedRows;
+    return {
+        curHeadingRow,
+        rows,
+    };
 }
 
 export interface IGalleryLayoutProps { 
@@ -277,6 +325,8 @@ export function GalleryLayout({
         };
     }, []);
 
+    const visibleRange = renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)
+
     return (
         <div
             className="gallery-scroller"
@@ -287,6 +337,29 @@ export function GalleryLayout({
                 position: "relative",
             }}
             >
+            {/* Sticky header */}
+            {visibleRange.curHeadingRow &&
+                <div
+                    style={{
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 100,
+                        backgroundColor: "rgba(255,255,255,0.75)",
+                        borderBottom: "1px solid rgba(0,0,0,0.1)",
+                        height: `${visibleRange.curHeadingRow.height}px`,
+                        width: "100%",
+                        fontSize: "0.9rem",
+                        color: "rgb(60,64,67)",
+                        fontWeight: 600,
+                        lineHeight: "1.25rem",
+                        letterSpacing: ".0178571429em",
+                        padding: "1em",
+                    }}                    
+                    >                            
+                    {visibleRange.curHeadingRow.headings.join(" ")}                    
+                </div>
+            }
+
             <div
                 style={{
                     width: `${galleryWidth}px`,
@@ -295,7 +368,7 @@ export function GalleryLayout({
                     position: "relative",
                 }}
                 >
-                {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)}
+                {visibleRange.rows}
             </div>
 
             {layout
