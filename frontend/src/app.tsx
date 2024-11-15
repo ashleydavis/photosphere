@@ -5,7 +5,6 @@ import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider,
     IndexeddbContextProvider, AssetDatabaseProvider 
     } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
-import dayjs from "dayjs";
 
 function GallerySetup() {
     return (
