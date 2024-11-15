@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
 import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/create-layout";
+import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { debounce, throttle } from "lodash";
 
@@ -296,6 +297,18 @@ export function GalleryLayout({
                 >
                 {renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, onItemClick)}
             </div>
+
+            {layout
+                && <GalleryScrollbar
+                    galleryContainerHeight={containerRef.current?.clientHeight || 0}
+                    galleryLayout={layout}
+                    scrollTop={scrollTop}
+                    scrollTo={scrollPosition => {
+                        containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+                    }}
+                    />
+            }
+
         </div>
     );
 }

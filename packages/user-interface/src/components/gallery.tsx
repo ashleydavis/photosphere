@@ -5,11 +5,7 @@ import { useGallery } from "../context/gallery-context";
 import { GalleryItemContextProvider } from "../context/gallery-item-context";
 import { AssetView } from "./asset-view";
 import { GetHeadingsFn } from "../lib/create-layout";
-
-//
-// Adds a small gutter on the right hand side of the gallery for some whitespace.
-//
-const GUTTER = 8;
+import { SCROLLBAR_WIDTH } from "./gallery-scrollbar";
 
 export interface IGalleryProps { 
     //
@@ -58,7 +54,7 @@ export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
     // Updates the gallery width when the container is resized.
     //
     useResizeObserver(containerRef, () => {
-        setGalleryWidth(containerRef.current!.clientWidth - GUTTER);
+        setGalleryWidth(containerRef.current!.clientWidth - SCROLLBAR_WIDTH);
     });
 
     useEffect(() => {

@@ -3,10 +3,8 @@
 // Creates a row-based layout for the photo gallery.
 //
 
-import dayjs from "dayjs";
 import { IGalleryItem, IGalleryRow } from "./gallery-item";
 import { getImageDimensions } from "./image";
-import { pull } from "lodash";
 
 export interface IGalleryLayout {
     //
@@ -206,7 +204,11 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         let prevPullback = 1;
         const origHeight = row.height;
 
-        const gutter = 9; // Approximately the width of the scrollbar.
+        //
+        // Used to place a small gutter at the right hand edge of the gallery.
+        // Currently not needed.
+        //
+        const gutter = 0;
 
         //
         // SLOW VERSION:
