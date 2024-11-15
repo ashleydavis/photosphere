@@ -2,7 +2,7 @@ FROM node:20.10.0 AS builder
 
 WORKDIR /build
 
-RUN npm install -g pnpm@8.15.5
+RUN npm install -g pnpm@9.13.0
 RUN npm install -g hoist-modules
 
 COPY . .
