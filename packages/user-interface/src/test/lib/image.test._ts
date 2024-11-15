@@ -1,3 +1,7 @@
+//
+// This file offline because it depends on jsdom which depends on the canvas shim which I can't get to install on Ubuntu.
+//
+
 /** 
  * @jest-environment-options { "resources": "usable" }
  */
