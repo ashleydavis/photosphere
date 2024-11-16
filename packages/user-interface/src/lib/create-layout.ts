@@ -205,13 +205,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         const origHeight = row.height;
 
         //
-        // Used to place a small gutter at the right hand edge of the gallery.
-        // Ideally this would be 0, but somehow that causes an infinite loop!
-        // IT NEEDS TO BE SET TO AT LEAST 1 UNTIL IF CAN FIGURE OUT WHAT THE PROBLEM IS.
-        //
-        const gutter = 1;
-
-        //
         // SLOW VERSION:
         //
         // Slowly pulls the row in until it is less than the gallery width.
@@ -226,7 +219,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
         //     computeFromHeight(row, origHeight - pullback);
 
-        //     if (row.width < galleryWidth - gutter) {
+        //     if (row.width < galleryWidth) {
         //         // We have pulled back too far. We are done here.
         //         pullback = prevPullback;
         //         break;
@@ -250,7 +243,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
             computeFromHeight(row, origHeight - pullback);
 
-            if (row.width < galleryWidth - gutter) {
+            if (row.width < galleryWidth) {
                 // We have pulled in too far. Move onto the next phase.
                 break;
             }            
@@ -269,7 +262,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
             computeFromHeight(row, origHeight - pullback);
 
-            if (row.width >= galleryWidth - gutter) {
+            if (row.width >= galleryWidth) {
                 // We have pushed out too far. Move onto the next phase.
                 pullback = prevPullback;
                 break;
@@ -290,7 +283,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 
             computeFromHeight(row, origHeight - pullback);
 
-            if (row.width >= galleryWidth - gutter) {
+            if (row.width >= galleryWidth) {
                 // We have pushed out too far. Time to finish up.
                 pullback = prevPullback;
                 break;
