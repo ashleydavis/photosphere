@@ -82,7 +82,7 @@ export function UploadPage() {
                     }}
                     />
                 <label 
-                    className="inline-block p-4 cursor-pointer rounded-lg border-2 border-blue-200 hover:border-blue-400 border-solid bg-blue-100" 
+                    className="inline-block p-4 cursor-pointer rounded-lg border-2 border-blue-200 hover:border-blue-400 border-solid" 
                     htmlFor="upload-file-input"
                     >
                     Choose files
