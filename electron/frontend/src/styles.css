@@ -94,14 +94,45 @@ i {
     }
 }
 
+.selection-tick {
+    display: none;
+}
+
+.gallery-thumb-container:hover .selection-tick {
+    display: flex;
+}
+
+.gallery-scroller {
+    overflow-y: auto;
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+.gallery-scroller::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
 /* Gallery scrollbar */
 
 .gallery-scrollbar {
     position: fixed;
     top: 52px;
-    right: 0;
-    height: 100%;
-    border-left: 1px solid rgba(94, 95, 97, 0.541);
+    right: 0px;
+    height: calc(100vh - 52px);
+}
+
+.gallery-scrollbar-thumb {
+    border-radius: 11px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    background-color: #d55959;
+    left: 0px;
+    width: 22px;
+}
+
+.hover-indicator {
+    background-color: #d55959;
+    opacity: 0.25;
 }
 
 /* Drag and drop */
