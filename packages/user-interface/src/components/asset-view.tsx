@@ -60,12 +60,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         && <div className="flex flex-col justify-center">
                             <button
                                 className="ml-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
-                                style={{
-                                    backgroundColor: "rgba(0, 0, 255, 0.2)",
-                                }}
                                 onClick={() => onPrev()}
                                 >
-                                <i className="text-white fa-solid fa-arrow-left"></i>
+                                <i className="fa-solid fa-arrow-left"></i>
                             </button>
                         </div>
                     }
@@ -74,12 +71,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         && <div className="flex flex-col justify-center">
                             <button
                                 className="mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
-                                style={{
-                                    backgroundColor: "rgba(0, 0, 255, 0.2)",
-                                }}
                                 onClick={() => onNext()}
                                 >
-                                <i className="text-white fa-solid fa-arrow-right"></i>
+                                <i className="fa-solid fa-arrow-right"></i>
                             </button>
                         </div>
                     }
@@ -90,28 +84,22 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 <div className="flex flex-row items-center pl-3 pr-3 pt-3 pb-2">
                     <button
                         className="p-1 px-3 pointer-events-auto rounded border border-solid border-white"
-                        style={{
-                            backgroundColor: "rgba(0, 0, 255, 0.2)",
-                        }}
                         onClick={() => {
                             onClose();
                             setOpenInfo(false);
                         }}
                         >
-                        <i className="text-white fa-solid fa-close"></i>
+                        <i className="fa-solid fa-close"></i>
                     </button>
 
                     <button
                         data-testid="open-info-button"
                         className="ml-auto p-1 px-3 pointer-events-auto rounded border border-solid border-white"
-                        style={{
-                            backgroundColor: "rgba(0, 0, 255, 0.2)",
-                        }}
                         onClick={() => {
                             setOpenInfo(true);
                         }}
                         >
-                        <i className="text-white fa-solid fa-circle-info"></i>
+                        <i className="fa-solid fa-circle-info"></i>
                     </button>
                 </div>
             </div>
