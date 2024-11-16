@@ -343,54 +343,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                     }}
                     >
 
-                    {/* Pop out timeline. */}
-                    {(isDraggingTouch || isDraggingMouse || hover) &&
-                        <>
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    right: "100%",
-                                    width: "100px",
-                                    height: "100%",
-                                    backgroundColor: "rgba(255,255,255,0.9)",
-                                }}
-                                >
-
-                                {/*
-                                Hover indicator
-                                */}
-                                <div
-                                    className="hover-indicator"
-                                    style={{
-                                        position: "absolute",
-                                        top: `${thumbPos-1}px`,
-                                        left: "0",
-                                        width: "100%",
-                                        height: `${thumbHeight+2}px`,
-                                    }}
-                                    />
-
-                                {renderScrollbarRows(galleryLayout)}                
-                            </div>
-
-                            {/*
-                            Hover indicator
-                            */}
-
-                            <div
-                                className="hover-indicator"
-                                style={{
-                                    position: "absolute",
-                                    top: `${thumbPos-1}px`,
-                                    left: "0",
-                                    width: "100%",
-                                    height: `${thumbHeight+2}px`,
-                                }}
-                                />
-                        </>                
-                    }
-
-
                     {/* The thumb */}
                     <div
                         className="gallery-scrollbar-thumb"
