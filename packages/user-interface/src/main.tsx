@@ -21,7 +21,7 @@ import { useAssetDatabase } from "./context/asset-database-source";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
 import Delete from "@mui/icons-material/Delete";
 import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
-import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
+import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import { ModeToggle } from "./components/mode-toggle";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
@@ -110,6 +110,10 @@ function __Main({ computerPage }: IMainProps) {
     const location = useLocation();
 
     const theme = useTheme();
+
+    const { mode, setMode } = useColorScheme();
+
+    setMode("system"); // Automatically choose system mode.
 
     //
     // Resets the gallery layout.
@@ -253,7 +257,6 @@ function __Main({ computerPage }: IMainProps) {
             );
        }
     }
-   
    
     return (
         <>
