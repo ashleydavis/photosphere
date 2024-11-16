@@ -95,6 +95,7 @@ export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
                     assetId={selectedItemId}
                     >
                     <Drawer
+                        className="asset-view-drawer"
                         open={openAssetView}
                         onClose={closeAssetView}
                         size="lg"

@@ -105,6 +105,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
             </div>
 
             <Drawer
+                className="asset-info-drawer"
                 open={openInfo}
                 onClose={() => {
                     setOpenInfo(false);
