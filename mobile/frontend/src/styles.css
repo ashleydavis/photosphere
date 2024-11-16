@@ -1,12 +1,10 @@
 body {
     overflow: hidden;
     font-family: 'Roboto', Arial, sans-serif;
-    color: rgb(60,64,67);
     font-size: 1.125rem;
     line-height: 1.5rem;
     letter-spacing: 0;
     font-weight: 400;
-    background-color: #F3F4F6;
     position: absolute;
     top: env(safe-area-inset-top);
     bottom: env(safe-area-inset-bottom);
@@ -65,7 +63,6 @@ i {
     left: env(safe-area-inset-left);
     right: env(safe-area-inset-right);
     height: 52px;
-    background-color: white;
     border-bottom: 1px solid rgb(218, 220, 224);
 }
 
@@ -115,7 +112,6 @@ i {
     max-width: 480px;
     margin: 150px auto;
     padding: 30px;
-    background-color: white;
 }
 
 #upload-drop-area.highlight {
@@ -130,7 +126,6 @@ i {
     max-width: 480px;
     margin: 100px auto;
     padding: 30px;
-    background-color: white;
 }
 
 /* Fullscreen photo */

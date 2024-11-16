@@ -2,6 +2,8 @@ import React, { useCallback, useEffect } from "react";
 import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
+import Textarea from "@mui/joy/Textarea/Textarea";
+import { useTheme } from "@mui/joy/styles/ThemeProvider";
 
 export interface IAssetInfoProps { 
 
@@ -32,6 +34,8 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
     const [description, setDescription] = React.useState(asset?.description);
+
+    const theme = useTheme();
 
     //
     // Adds a new label to the asset.
@@ -91,14 +95,19 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
         return (
             <span
                 key={name}
-                className="ml-2 mt-1 flex flex-wrap justify-between items-center text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
+                className="ml-2 mt-1 flex flex-wrap justify-between items-center text-sm border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
                 >
                 {name}
                 <button
                     className="ml-2 p-1 pl-2 pr-1"
                     onClick={() => onRemoveLabel(name)}
                     >
-                    <i className="fa-solid fa-close"></i>
+                    <i 
+                        className="fa-solid fa-close"
+                        style={{
+                            color: theme.palette.text.primary,
+                        }}
+                        />
                 </button>
             </span>
         );
@@ -109,7 +118,13 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
     }
 
     return (
-        <div className={"info overflow-scroll bg-white text-black " + (open ? "open" : "")}>
+        <div 
+            className={"info overflow-scroll " + (open ? "open" : "")}
+            style={{
+                backgroundColor: theme.palette.background.body,
+                color: theme.palette.text.primary,
+            }}
+            >
             <div className="info-header">
                 <div className="flex flex-row items-center pl-3 pt-3 pb-2">
                     <button
@@ -118,7 +133,12 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             onClose();
                         }}
                         >
-                        <i className="fa-solid fa-close"></i>
+                        <i 
+                            className="fa-solid fa-close"
+                            style={{
+                                color: theme.palette.text.primary,
+                            }}
+                            />
                     </button>
 
                     <h1 className="text-xl ml-2">Info</h1>
@@ -129,21 +149,23 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
 
                 <div className="flex flex-col flex-grow ml-5 mr-5 mt-6 mb-6 justify-center">
                     <div className="flex flex-row h-8">
-                        <textarea
-                            className="flex-grow border-b border-solid border-black border-opacity-20"
-                            placeholder="Add a description"
-                            spellCheck="false"
-                            autoComplete="off"
+                        <Textarea
+                            className="flex-grow"
+                            placeholder="Add a description"                            
                             value={description}
                             onChange={event => onUpdateDescription(event.target.value)}
-                        >
-                        </textarea>
+                            />
                     </div>
 
                     <div className="flex flex-col">
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day"></i>
+                                <i 
+                                    className="text-2xl fa-solid fa-calendar-day"
+                                    style={{
+                                        color: theme.palette.text.primary,
+                                    }}        
+                                    />
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
@@ -158,9 +180,14 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                         </div>
 
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day"></i>
+                                <i 
+                                    className="text-2xl fa-solid fa-calendar-day"
+                                    style={{
+                                        color: theme.palette.text.primary,
+                                    }}        
+                                    />
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
@@ -174,9 +201,14 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                         </div>
 
-                        <div className="text-lg text-gray-600 flex flex-row portrait:mt-10 landscape:mt-4 pt-2">
+                        <div className="text-lg flex flex-row portrait:mt-10 landscape:mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-tags"></i>
+                                <i 
+                                    className="text-2xl fa-solid fa-tags"
+                                    style={{
+                                        color: theme.palette.text.primary,
+                                    }}        
+                                    />
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div className="flex flex-row flex-wrap">
@@ -188,15 +220,25 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                                         className="ml-2 p-1 pl-3 pr-3"
                                         onClick={onAddLabel}
                                         >
-                                        <i className="fa-solid fa-square-plus"></i>
+                                        <i 
+                                            className="fa-solid fa-square-plus"
+                                            style={{
+                                                color: theme.palette.text.primary,
+                                            }}                
+                                            />
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day"></i>
+                                <i 
+                                    className="text-2xl fa-solid fa-calendar-day"
+                                    style={{
+                                        color: theme.palette.text.primary,
+                                    }}        
+                                    />
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
@@ -209,9 +251,14 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                         </div>
 
                         {asset.location
-                            && <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                            && <div className="text-base flex flex-row mt-4 pt-2">
                                 <div className="w-6 mt-2 flex flex-col items-center">
-                                    <i className="text-2xl fa-regular fa-map"></i>
+                                    <i 
+                                        className="text-2xl fa-regular fa-map"
+                                        style={{
+                                            color: theme.palette.text.primary,
+                                        }}            
+                                        />
                                 </div>
                                 <div className="flex flex-col ml-3">
                                     <div>
@@ -221,7 +268,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                         }
 
-                        {/* <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        {/* <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-camera"></i>
                             </div>
@@ -238,9 +285,14 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                         </div> */}
 
-                        <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-regular fa-image"></i>
+                                <i 
+                                    className="text-2xl fa-regular fa-image"
+                                    style={{
+                                        color: theme.palette.text.primary,
+                                    }}        
+                                    />
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div>
@@ -252,7 +304,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
                             </div>
                         </div>
 
-                        {/* <div className="text-base text-gray-600 flex flex-row mt-4 pt-2">
+                        {/* <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-0 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-upload"></i>
                             </div>
