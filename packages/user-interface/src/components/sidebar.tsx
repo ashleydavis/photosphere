@@ -80,7 +80,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 Pages
             </h2>
 
-            <NavLink to="/cloud">
+            <NavLink 
+                to="/cloud"
+                onClick={() => setSidebarOpen(false)}
+                >
                 <div className="flex flex-row items-center pl-1 mt-2">
                     <i className="w-12 text-center fa-solid fa-cloud"></i>
                     <div className="">Cloud</div>
@@ -88,7 +91,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             </NavLink>
 
             {computerPage
-                && <NavLink to="/computer">
+                && <NavLink 
+                    to="/computer"
+                    onClick={() => setSidebarOpen(false)}
+                    >
                     <div className="flex flex-row items-center pl-1 mt-2">
                         <i className="w-12 text-center fa-solid fa-computer"></i>
                         <div className="">Computer</div>
@@ -96,7 +102,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 </NavLink>
             }
 
-            <NavLink to="/upload">
+            <NavLink 
+                to="/upload"
+                onClick={() => setSidebarOpen(false)}
+                >
                 <div className="flex flex-row items-center pl-1 mt-2">
                     <i className="w-12 text-center fa-solid fa-upload"></i>
                     <div className="">Upload</div>
@@ -129,7 +138,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                         <button
                             key={set.id}
                             className="flex flex-row items-center cursor-pointer"
-                            onClick={() => navigateToSet(set.id)}
+                            onClick={() => {
+                                setSidebarOpen(false);
+                                navigateToSet(set.id)
+                            }}
                             >
                             <div className="flex flex-row items-center pl-1 mt-2">
                                 <i className={classNames("w-12 text-center fa-solid fa-folder", {
