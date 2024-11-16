@@ -307,6 +307,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         position: "absolute",
                         top: `${thumbPos}px`,
                         height: `${thumbHeight}px`,
+                        width: `${SCROLLBAR_WIDTH}px`,
                     }}
                     >
                 </div>
@@ -354,7 +355,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                             position: "fixed",
                             top: `${thumbPos}px`,
                             height: `${thumbHeight}px`,
-                            width: "100%",
+                            width: `${SCROLLBAR_WIDTH*SCROLLBAR_HITTEST_MULTIPLIER}px`,
                         }}
                         >
                     </div>
