@@ -87,7 +87,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     }
 
     useEffect(() => {
-        setThumbHeight(Math.max(MIN_SCROLLTHUMB_HEIGHT, (galleryContainerHeight / galleryLayout?.galleryHeight) * scrollbarHeight));
+        setThumbHeight(Math.min(Math.max(MIN_SCROLLTHUMB_HEIGHT, (galleryContainerHeight / galleryLayout?.galleryHeight) * scrollbarHeight), scrollbarHeight - VERTICAL_GUTTER - VERTICAL_GUTTER));
     }, [galleryContainerHeight, galleryLayout?.galleryHeight, scrollbarHeight]);
     
     useEffect(() => {
@@ -397,7 +397,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         onMouseDown={onMouseDown}
                         onTouchStart={onTouchStart}
                         style={{
-                            position: "absolute",
+                            position: "fixed",
                             top: `${thumbPos}px`,
                             height: `${thumbHeight}px`,
                             width: "100%",
