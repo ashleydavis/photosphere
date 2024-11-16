@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { IGalleryLayout } from "../lib/create-layout";
 import { IGalleryRow } from "../lib/gallery-item";
 import useResizeObserver from "@react-hook/resize-observer";
+import { useTheme } from "@mui/joy";
 
 //
 // Width of the custom scrollbar on the right of the gallery.
@@ -60,6 +61,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     const [hover, setHover] = useState(false);
     const [isTouchDevice, setIsTouchDevice] = useState(false);
     const deltaY = useRef(0);
+    const theme = useTheme();
 
     useEffect(() => {
         // Check if it's a touch device
@@ -203,7 +205,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         justifyContent: "center",
                         alignItems: "center",
                         textAlign: "center",
-                        color: "rgb(60,64,67)",
                         fontWeight: 600,
                         fontSize: "0.9rem",
                     }}
@@ -257,7 +258,8 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                                 right: "100%",
                                 width: "100px",
                                 height: "100%",
-                                backgroundColor: "rgba(255,255,255,0.9)",
+                                backgroundColor: theme.palette.background.body,
+                                color: theme.palette.text.primary,
                             }}
                             >
 
