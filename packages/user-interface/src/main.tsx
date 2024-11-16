@@ -24,6 +24,8 @@ import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialo
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import { ModeToggle } from "./components/mode-toggle";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
+import Drawer from "@mui/joy/Drawer/Drawer";
+import { Sidebar } from "./components/sidebar";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -443,114 +445,21 @@ function __Main({ computerPage }: IMainProps) {
                 
             </div>
 
-            <div 
-                id="sidebar" 
-                className={classNames("flex flex-col", { "open": sidebarOpen})} 
-                style={{
-                    backgroundColor: theme.palette.background.body,
-                    color: theme.palette.text.primary,
-                }}
+            <Drawer 
+                open={sidebarOpen} 
+                onClose={() => setSidebarOpen(false)}
                 >
-                <div className="flex flex-row items-center mt-4 mb-8">
-                    <h1 className="text-xl">
-                        Photosphere
-                    </h1>
-                    <div className="flex-grow" />
-                    <button
-                        className="mr-3 text-xl"
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                    >
-                        <i className="fa-solid fa-arrow-left"></i>
-                    </button>
-                </div>
+                <Sidebar
+                    sidebarOpen={sidebarOpen}
+                    setSidebarOpen={setSidebarOpen}
+                    navigateToSet={navigateToSet}
+                    onOpenSearch={onOpenSearch}
+                    />               
+            </Drawer>
 
-                <button
-                    onClick={onOpenSearch}
-                    >
-                    <div className="flex flex-row items-center pl-1">
-                        <i className="w-12 text-center fa-solid fa-search"></i>
-                        <div className="">Search</div>
-                    </div>
-                </button>
-
-                <NavLink to="/cloud">
-                    <div className="flex flex-row items-center pl-1 mt-8">
-                        <i className="w-12 text-center fa-solid fa-cloud"></i>
-                        <div className="">Cloud</div>
-                    </div>
-                </NavLink>
-
-                {computerPage 
-                    && <NavLink to="/computer">
-                        <div className="flex flex-row items-center pl-1 mt-8">
-                            <i className="w-12 text-center fa-solid fa-computer"></i>
-                            <div className="">Computer</div>
-                        </div>
-                    </NavLink>
-                }
-
-                <NavLink to="/upload">
-                    <div className="flex flex-row items-center pl-1 mt-2">
-                        <i className="w-12 text-center fa-solid fa-upload"></i>
-                        <div className="">Upload</div>
-                    </div>
-                </NavLink>
-
-                {/* <button
-                    className="flex flex-row items-center pl-1 mt-8 cursor-pointer"
-                    onClick={event => notImplemented(event)}
-                    >
-                    <i className="w-12 text-center fa-regular fa-star"></i>
-                    <div className="">Favorites</div>
-                </button>
-
-                <button
-                    className="flex flex-row items-center pl-1 mt-2 cursor-pointer"
-                    onClick={event => notImplemented(event)}
-                    >
-                    <i className="w-12 text-center fa-regular fa-trash-can"></i>
-                    <div className="">Trash</div>
-                </button> */}
-
-                <div className="flex flex-col pl-1 mt-4 mb-8">
-                    <h2 className="text-lg">
-                        Sets
-                    </h2>
-
-                    {user?.sets.map(set => {
-                        return (
-                            <button
-                                key={set.id}
-                                className="flex flex-row items-center cursor-pointer"
-                                onClick={() => navigateToSet(set.id)}
-                                >
-                                <div className="flex flex-row items-center pl-1 mt-8">
-                                    <i className={classNames("w-12 text-center fa-solid fa-folder", {
-                                        "fa-folder": set.id !== setId,
-                                        "fa-folder-open": set.id === setId,
-                                    })}></i>
-                                    <div className="">{set.name}</div>
-                                </div>
-                            </button>
-                        );                    
-                    })}
-                </div>
-
-                <div className="flex-grow" />
-
-                {!enableAuth && (
-                    <button 
-                        className="flex flex-row items-center p-2 m-2 cursor-pointer"
-                        onClick={deleteDatabase}
-                        >
-                        Delete local database
-                    </button>
-                )}
-            </div>
-
-            <div 
-                id="main" 
-                className={classNames({ "search": openSearch})} 
+            <div
+                id="main"
+                className={classNames({ "search": openSearch })}
                 style={{
                     backgroundColor: theme.palette.background.body,
                     color: theme.palette.text.primary,

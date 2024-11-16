@@ -54,44 +54,6 @@ i {
     border-bottom: 2px solid #B1B1B1;
 }
 
-#sidebar .active>div>div {
-    border-bottom: 2px solid #B1B1B1;
-}
-
-/* Sidebar */
-
-#sidebar {
-    z-index: 1000;
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    transition: transform .1s ease-out;
-    will-change: transform;
-    width: 200px;
-    padding-left: 10px;
-
-    /* Left sidebar */
-    left: 0;
-    transform: translateX(-100%);
-
-    /* Sidebar shadow */
-    box-shadow: 0 1px 2px 0 rgb(60 64 67 / 30%), 0 2px 6px 2px rgb(60 64 67 / 15%)
-}
-
-#sidebar.open {
-    transform: translateX(0%);
-}
-
-@media (min-width: 640px) {
-    #navbar.sidebar {
-        padding-left: 201px;
-    }
-
-    #main.sidebar {
-        padding-left: 201px;
-    }
-}
-
 /* Nav bar */
 
 #navbar {
@@ -145,7 +107,7 @@ i {
 .gallery-scroller {
     overflow-y: auto;
     -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */   
+    scrollbar-width: none; /* Firefox */
 }
 
 .gallery-scroller::-webkit-scrollbar {
@@ -166,13 +128,13 @@ i {
     border-radius: 11px;
     border: 3px solid transparent;
     background-clip: content-box;
-    background-color: #d55959;   
+    background-color: #d55959;
     left: 0px;
     width: 22px;
 }
 
 .hover-indicator {
-    background-color: #d55959;   
+    background-color: #d55959;
     opacity: 0.25;
 }
 
