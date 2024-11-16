@@ -6,6 +6,7 @@ import { GalleryItemContextProvider } from "../context/gallery-item-context";
 import { AssetView } from "./asset-view";
 import { GetHeadingsFn } from "../lib/create-layout";
 import { SCROLLBAR_WIDTH } from "./gallery-scrollbar";
+import Drawer from "@mui/joy/Drawer/Drawer";
 
 export interface IGalleryProps { 
     //
@@ -61,7 +62,15 @@ export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
         if (selectedItemId && !openAssetView) {
             setOpenAssetView(true);
         }
-    }, [selectedItemId])
+    }, [selectedItemId]);
+
+    //
+    // Closes the full screen asset view.
+    //
+    function closeAssetView() {
+        setOpenAssetView(false);
+        setSelectedItemId(undefined);
+    }
 
     return (
         <div 
@@ -85,19 +94,22 @@ export function Gallery({ targetRowHeight, getHeadings }: IGalleryProps) {
                 <GalleryItemContextProvider 
                     assetId={selectedItemId}
                     >
-                    <AssetView
+                    <Drawer
                         open={openAssetView}
-                        onClose={() => {
-                            setOpenAssetView(false);
-                            setSelectedItemId(undefined);
-                        }}
-                        onPrev={() => {
-                            setSelectedItemId(getPrev(getItemById(selectedItemId!)!)?._id);
-                        }}
-                        onNext={() => {
-                            setSelectedItemId(getNext(getItemById(selectedItemId!)!)?._id);
-                        }}
+                        onClose={closeAssetView}
+                        size="lg"
+                        anchor="left"
+                        >
+                        <AssetView
+                            onClose={closeAssetView}
+                            onPrev={() => {
+                                setSelectedItemId(getPrev(getItemById(selectedItemId!)!)?._id);
+                            }}
+                            onNext={() => {
+                                setSelectedItemId(getNext(getItemById(selectedItemId!)!)?._id);
+                            }}
                         />
+                    </Drawer>
                 </GalleryItemContextProvider>
             }                
         </div>

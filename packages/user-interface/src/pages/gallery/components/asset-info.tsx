@@ -8,11 +8,6 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 export interface IAssetInfoProps { 
 
     //
-    // Set to true to open the asset info modal.
-    //
-    open: boolean;
-
-    //
     // Event raised when the modal is closed.
     //
     onClose: () => void;
@@ -26,7 +21,7 @@ export interface IAssetInfoProps {
 //
 // Shows info for a particular asset.
 //
-export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
+export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
 
     //
     // Interface to the gallery item.
@@ -119,7 +114,7 @@ export function AssetInfo({ open, onClose, onDeleted }: IAssetInfoProps) {
 
     return (
         <div 
-            className={"info overflow-scroll " + (open ? "open" : "")}
+            className="info overflow-scroll"
             style={{
                 backgroundColor: theme.palette.background.body,
                 color: theme.palette.text.primary,
