@@ -253,7 +253,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         // Quicly pushes the row out until it is greater than the gallery width.
         // This reduces the pullback quickly so we don't waste time incrementing by one each time.
         //
-        while (true) {            
+        while (pullback > 1) {            
             // 
             // Quickly push the row out.
             //
