@@ -1,20 +1,18 @@
-import Box from '@mui/joy/Box/Box';
-import ModalClose from '@mui/joy/ModalClose/ModalClose';
 import Typography from '@mui/joy/Typography/Typography';
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/app-context';
-import classNames from 'classnames';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { CalendarMonth, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, MoreHoriz, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop, DateRange } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
 import Link from '@mui/joy/Link/Link';
+import Divider from '@mui/joy/Divider/Divider';
 
 export interface ISidebarProps {
     //
@@ -44,6 +42,25 @@ export interface ISidebarProps {
 }
 
 //
+// Defines a menu item in the sidebar menu.
+//
+interface IMenuItem {
+    icon?: JSX.Element;
+    text: string;
+    children?: IMenuItem[];
+    more?: boolean;
+}
+
+//
+// Defines a breadcrumb item in the sidebar.
+//
+interface IBreadcrumb {
+    icon?: JSX.Element;
+    text?: string;
+    menu: IMenuItem[];
+}
+
+//
 // Renders the sidebar for the app.
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToSet }: ISidebarProps) {
@@ -51,6 +68,337 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
+
+    const topMenu: IMenuItem[] = [
+        {
+            icon: <Map />,
+            text: "Navigation",
+            children: [ //todo: The navigation should change depending on how the gallery is sorted/grouped.
+                {
+                    icon: <VerticalAlignTop />,
+                    text: "Start",
+                },
+                {
+                    icon: <VerticalAlignBottom />,
+                    text: "End",
+                },
+                {
+                    icon: <CalendarMonth />,
+                    text: "Date",
+                    children: [
+                        {
+                            text: "Year",
+                            children: [
+                                {
+                                    text: "2024",
+                                },
+                                {
+                                    text: "2023",
+                                },
+                                {
+                                    text: "2022",
+                                },
+                                {
+                                    text: "2020",
+                                },
+                                {
+                                    text: "2021",
+                                },
+                            ],
+                        },
+                        {
+                            text: "Month",
+                            children: [
+                                {
+                                    text: "December",
+                                },
+                                {
+                                    text: "November",
+                                },
+                                {
+                                    text: "October",
+                                },
+                                {
+                                    text: "September",
+                                },
+                                {
+                                    text: "August",
+                                },
+                                {
+                                    text: "July",
+                                },
+                                {
+                                    text: "June",
+                                },
+                                {
+                                    text: "May",
+                                },
+                                {
+                                    text: "April",
+                                },
+                                {
+                                    text: "March",
+                                },
+                                {
+                                    text: "February",
+                                },
+                                {
+                                    text: "January",
+                                },
+                            ],                                
+                        },
+                    ],
+                },                
+            ],
+        },
+        {
+            icon: <Search />,
+            text: "Search",
+            children: [
+                {
+                    icon: <History />,
+                    text: "Recent",
+                },
+                {
+                    icon: <Star />,
+                    text: "Starred",
+                },
+                {
+                    icon: <CalendarMonth />,
+                    text: "Date",
+                    children: [
+                        {
+                            icon: <DateRange />,
+                            text: "Date range",
+                            more: true,
+                        },
+                        {
+                            icon: <DateRange />,
+                            text: "No date",
+                            more: true,
+                        },
+                        {
+                            text: "Year",
+                            children: [
+                                {
+                                    text: "2024",
+                                },
+                                {
+                                    text: "2023",
+                                },
+                                {
+                                    text: "2022",
+                                },
+                                {
+                                    text: "2020",
+                                },
+                                {
+                                    text: "2021",
+                                },
+                            ],
+                        },
+                        {
+                            text: "Month",
+                            children: [
+                                {
+                                    text: "December",
+                                },
+                                {
+                                    text: "November",
+                                },
+                                {
+                                    text: "October",
+                                },
+                                {
+                                    text: "September",
+                                },
+                                {
+                                    text: "August",
+                                },
+                                {
+                                    text: "July",
+                                },
+                                {
+                                    text: "June",
+                                },
+                                {
+                                    text: "May",
+                                },
+                                {
+                                    text: "April",
+                                },
+                                {
+                                    text: "March",
+                                },
+                                {
+                                    text: "February",
+                                },
+                                {
+                                    text: "January",
+                                },
+                            ],                                
+                        },
+                    ],
+                },
+                {
+                    icon: <People />,
+                    text: "People",
+                    children: [
+                        {
+                            text: "Ashley",
+                        },
+                        {
+                            text: "Antonella",
+                        },
+                        {
+                            text: "Lucia",
+                        },
+                        {
+                            text: "Lucio",
+                        },
+                    ],
+                },
+                {
+                    icon: <Place />,
+                    text: "Place",
+                    children: [
+                        {
+                            text: "No location",
+                        },
+                        {
+                            text: "Australia",
+                            children: [
+                                {
+                                    text: "Sydney",
+                                },
+                                {
+                                    text: "Melbourne",
+                                },
+                                {
+                                    text: "Brisbane",
+                                },
+                                {
+                                    text: "Perth",
+                                },
+                            ],
+                        },
+                        {
+                            text: "United Kingdom",
+                            children: [
+                                {
+                                    text: "London",
+                                },
+                                {
+                                    text: "Manchester",
+                                },
+                                {
+                                    text: "Birmingham",
+                                },
+                                {
+                                    text: "Glasgow",
+                                },
+                            ],
+                        },
+                        {
+                            text: "Italy",
+                            children: [
+                                {
+                                    text: "Rome",
+                                },
+                                {
+                                    text: "Abruzzo",
+                                },
+                                {
+                                    text: "Naples",
+                                },
+                                {
+                                    text: "Turin",
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    icon: <Event />,
+                    text: "Event",
+                    children: [
+                        {
+                            text: "Birthday",
+                        },
+                        {
+                            text: "Wedding",
+                        },
+                        {
+                            text: "Graduation",
+                        },
+                        {
+                            text: "Party",
+                        },
+                    ],
+                },
+                {
+                    icon: <Label />,
+                    text: "Label",
+                    children: [
+                        {
+                            text: "Vacation",
+                        },
+                        {
+                            text: "Family",
+                        },
+                        {
+                            text: "Work",
+                        },
+                        {
+                            text: "Friends",
+                        },
+                        {
+                            text: "More",
+                            more: true,
+                        },
+                    ],
+                },
+                {
+                    icon: <ListIcon />,
+                    text: "Property",
+                    more: true,
+                },
+            ],
+        },
+        {
+            icon: <Category />,
+            text: "Grouping",
+            children: [
+                {
+                    icon: <CalendarMonth />,
+                    text: "Date",
+                },
+                {
+                    icon: <People />,
+                    text: "People",
+                },
+                {
+                    icon: <Place />,
+                    text: "Place",
+                },
+                {
+                    icon: <Event />,
+                    text: "Event",
+                },
+                {
+                    icon: <Label />,
+                    text: "Label",
+                },
+                {
+                    icon: <ListIcon />,
+                    text: "Property",
+                    more: true,
+                },
+            ],
+        },
+    ];
+    const [curMenu, setCurMenu] = useState(topMenu);
+    const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
     return (
         <div
@@ -126,17 +474,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 </NavLink>
             </List>
 
-            <Breadcrumbs 
-                separator={<KeyboardArrowRight />}
-                >
-                <Link>
-                    <Home />
-                </Link>
-                <Typography level="body-xs">•••</Typography>
-                <Link>
-                    February
-                </Link>
-            </Breadcrumbs>
+            <Divider />
 
             <Typography
                 level="body-xs"
@@ -169,151 +507,89 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 })}
             </List>
 
+            <Divider />
+
             <Typography
                 level="body-xs"
                 sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
                 >
-                Navigation
+                Content
             </Typography>
 
-            <List>
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><VerticalAlignTop /></ListItemDecorator>
-                        <ListItemContent>Start</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
+            {breadcrumbs.length > 0 &&
+                <Breadcrumbs 
+                    separator={<KeyboardArrowRight />}
+                    >
 
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><VerticalAlignBottom /></ListItemDecorator>
-                        <ListItemContent>End</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
+                    <Link
+                        onClick={() => {
+                            setCurMenu(topMenu);
+                            setBreadCrumbs([]);
+                        }}
+                        >
+                        <Home />
+                    </Link>
 
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
-                        <ListItemContent>Date</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
+                    {breadcrumbs.length > 2 &&
+                        <Typography level="body-xs">•••</Typography>
+                    }
 
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Place /></ListItemDecorator>
-                        <ListItemContent>Place</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-            </List>
+                    {breadcrumbs.length > 1 &&
+                        <Link 
+                            onClick={() => {
+                                setCurMenu(breadcrumbs[breadcrumbs.length-2].menu);
+                                setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
+                            }}
+                            >
+                            {breadcrumbs[breadcrumbs.length-2].icon}
+                            {breadcrumbs[breadcrumbs.length-2].text &&
+                                <Typography>                                    
+                                    {breadcrumbs[breadcrumbs.length-2].text}
+                                </Typography>
+                            }
+                        </Link>                
+                    }
+                    
+                    {breadcrumbs[breadcrumbs.length-1].icon}
 
-            <Typography
-                level="body-xs"
-                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2, mb: 1 }}
-                >                
-                Searches
-            </Typography>
-
-            <List>
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><History /></ListItemDecorator>
-                        <ListItemContent>Recent</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Star /></ListItemDecorator>
-                        <ListItemContent>Starred</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
-                        <ListItemContent>Date</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><People /></ListItemDecorator>
-                        <ListItemContent>People</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Place /></ListItemDecorator>
-                        <ListItemContent>Place</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Label /></ListItemDecorator>
-                        <ListItemContent>Label</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                {/* More examples under this one. */}
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><MoreHoriz /></ListItemDecorator>
-                        <ListItemContent>More</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-            </List>
-
-            <Typography
-                level="body-xs"
-                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2, mb: 1 }}
-                >
-                Group by
-            </Typography>
+                    {breadcrumbs[breadcrumbs.length-1].text &&
+                        <Typography>
+                            {breadcrumbs[breadcrumbs.length-1].text}
+                        </Typography>
+                    }
+                </Breadcrumbs>
+            }
 
             <List>
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><People /></ListItemDecorator>
-                        <ListItemContent>People</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
-                        <ListItemContent>Date</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Place /></ListItemDecorator>
-                        <ListItemContent>Place</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem>
-                    <ListItemButton>
-                        <ListItemDecorator><Label /></ListItemDecorator>
-                        <ListItemContent>Label</ListItemContent>
-                        <KeyboardArrowRight />
-                    </ListItemButton>
-                </ListItem>
+                {curMenu.map((menuItem, index) => {
+                    return (
+                        <ListItem 
+                            key={index}
+                            onClick={() => {
+                                if (menuItem.children && menuItem.children.length > 0) {
+                                    setCurMenu(menuItem.children);
+                                    setBreadCrumbs([...breadcrumbs, {
+                                        text: menuItem.text,
+                                        menu: menuItem.children,
+                                    }]);
+                                }
+                            }}
+                            >
+                            <ListItemButton>
+                                <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
+                                <ListItemContent>{menuItem.text}</ListItemContent>
+                                {menuItem.children && menuItem.children.length > 0 &&
+                                    <KeyboardArrowRight />
+                                }
+                                {menuItem.more &&
+                                    <MoreHoriz />
+                                }
+                            </ListItemButton>
+                        </ListItem>
+                    );
+                })}
             </List>
-        </div>
+      </div>
     );
 
 }
