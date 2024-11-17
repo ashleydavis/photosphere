@@ -10,9 +10,11 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { CalendarMonth, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Label, MoreHoriz, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop } from '@mui/icons-material';
+import { CalendarMonth, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, MoreHoriz, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
+import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
+import Link from '@mui/joy/Link/Link';
 
 export interface ISidebarProps {
     //
@@ -123,6 +125,18 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                     </ListItem>
                 </NavLink>
             </List>
+
+            <Breadcrumbs 
+                separator={<KeyboardArrowRight />}
+                >
+                <Link>
+                    <Home />
+                </Link>
+                <Typography level="body-xs">•••</Typography>
+                <Link>
+                    February
+                </Link>
+            </Breadcrumbs>
 
             <Typography
                 level="body-xs"
