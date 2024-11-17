@@ -6,7 +6,13 @@ import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/app-context';
 import classNames from 'classnames';
 import { useAssetDatabase } from '../context/asset-database-source';
-import { useTheme } from '@mui/joy';
+import { useTheme } from '@mui/joy/styles/ThemeProvider';
+import List from '@mui/joy/List/List';
+import ListItem from '@mui/joy/ListItem/ListItem';
+import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
+import { CalendarMonth, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Label, MoreHoriz, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop } from '@mui/icons-material';
+import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
+import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 
 export interface ISidebarProps {
     //
@@ -42,7 +48,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
 
     const { user } = useApp();
     const theme = useTheme();
-    const {  setId } = useAssetDatabase();
+    const { setId } = useAssetDatabase();
 
     return (
         <div
@@ -66,94 +72,233 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 </button>
             </div>
 
-            <button
-                className="mt-4"
-                onClick={onOpenSearch}
-                >
-                <div className="flex flex-row items-center pl-1">
-                    <i className="w-12 text-center fa-solid fa-search"></i>
-                    <div className="">Search</div>
-                </div>
-            </button>
+            <List>
+                <ListItem
+                    onClick={() => {
+                        setSidebarOpen(false);
+                        onOpenSearch();
+                    }}
+                    >
+                    <ListItemButton>
+                        <ListItemDecorator><Search /></ListItemDecorator>
+                        <ListItemContent>Search</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
 
-            <h2 className="text-lg mt-8">
-                Pages
-            </h2>
-
-            <NavLink 
-                to="/cloud"
-                onClick={() => setSidebarOpen(false)}
-                >
-                <div className="flex flex-row items-center pl-1 mt-2">
-                    <i className="w-12 text-center fa-solid fa-cloud"></i>
-                    <div className="">Cloud</div>
-                </div>
-            </NavLink>
-
-            {computerPage
-                && <NavLink 
-                    to="/computer"
+                <NavLink
+                    to="/cloud"
                     onClick={() => setSidebarOpen(false)}
                     >
-                    <div className="flex flex-row items-center pl-1 mt-2">
-                        <i className="w-12 text-center fa-solid fa-computer"></i>
-                        <div className="">Computer</div>
-                    </div>
+                    <ListItem>
+                        <ListItemButton>
+                            <ListItemDecorator><Cloud /></ListItemDecorator>
+                            <ListItemContent>Cloud</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
                 </NavLink>
-            }
 
-            <NavLink 
-                to="/upload"
-                onClick={() => setSidebarOpen(false)}
+                {computerPage
+                    && <NavLink
+                        to="/computer"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        <ListItem>                        
+                            <ListItemButton>
+                                <ListItemDecorator><Computer /></ListItemDecorator>
+                                <ListItemContent>Computer</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    </NavLink>
+                }
+
+                <NavLink
+                    to="/upload"
+                    onClick={() => setSidebarOpen(false)}
+                    >
+                    <ListItem>
+                            <ListItemButton>
+                                <ListItemDecorator><Upload /></ListItemDecorator>
+                                <ListItemContent>Upload</ListItemContent>
+                            </ListItemButton>
+                    </ListItem>
+                </NavLink>
+            </List>
+
+            <Typography
+                level="body-xs"
+                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
                 >
-                <div className="flex flex-row items-center pl-1 mt-2">
-                    <i className="w-12 text-center fa-solid fa-upload"></i>
-                    <div className="">Upload</div>
-                </div>
-            </NavLink>
+                Sets
+            </Typography>
 
-            {/* <button
-                className="flex flex-row items-center pl-1 mt-8 cursor-pointer"
-                onClick={event => notImplemented(event)}
-                >
-                <i className="w-12 text-center fa-regular fa-star"></i>
-                <div className="">Favorites</div>
-            </button>
-
-            <button
-                className="flex flex-row items-center pl-1 mt-2 cursor-pointer"
-                onClick={event => notImplemented(event)}
-                >
-                <i className="w-12 text-center fa-regular fa-trash-can"></i>
-                <div className="">Trash</div>
-            </button> */}
-
-            <div className="flex flex-col pl-1 mt-8 mb-8">
-                <h2 className="text-lg">
-                    Sets
-                </h2>
-
+            <List>
                 {user?.sets.map(set => {
                     return (
-                        <button
+                        <ListItem
                             key={set.id}
-                            className="flex flex-row items-center cursor-pointer"
                             onClick={() => {
                                 setSidebarOpen(false);
                                 navigateToSet(set.id)
                             }}
                             >
-                            <div className="flex flex-row items-center pl-1 mt-2">
-                                <i className={classNames("w-12 text-center fa-solid fa-folder", {
-                                    "fa-folder": set.id !== setId,
-                                    "fa-folder-open": set.id === setId,
-                                })}></i>
-                                <div className="">{set.name}</div>
-                            </div>
-                        </button>
+                            <ListItemButton>
+                                <ListItemDecorator>
+                                    {set.id === setId
+                                        ? <FolderOpen />
+                                        : <Folder />
+                                    }
+                                </ListItemDecorator>
+                                <ListItemContent>{set.name}</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
                     );
                 })}
-            </div>
+            </List>
+
+            <Typography
+                level="body-xs"
+                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                >
+                Navigation
+            </Typography>
+
+            <List>
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><VerticalAlignTop /></ListItemDecorator>
+                        <ListItemContent>Start</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><VerticalAlignBottom /></ListItemDecorator>
+                        <ListItemContent>End</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
+                        <ListItemContent>Date</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Place /></ListItemDecorator>
+                        <ListItemContent>Place</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+            </List>
+
+            <Typography
+                level="body-xs"
+                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2, mb: 1 }}
+                >                
+                Searches
+            </Typography>
+
+            <List>
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><History /></ListItemDecorator>
+                        <ListItemContent>Recent</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Star /></ListItemDecorator>
+                        <ListItemContent>Starred</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
+                        <ListItemContent>Date</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><People /></ListItemDecorator>
+                        <ListItemContent>People</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Place /></ListItemDecorator>
+                        <ListItemContent>Place</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Label /></ListItemDecorator>
+                        <ListItemContent>Label</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                {/* More examples under this one. */}
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><MoreHoriz /></ListItemDecorator>
+                        <ListItemContent>More</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+            </List>
+
+            <Typography
+                level="body-xs"
+                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2, mb: 1 }}
+                >
+                Group by
+            </Typography>
+
+            <List>
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><People /></ListItemDecorator>
+                        <ListItemContent>People</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
+                        <ListItemContent>Date</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Place /></ListItemDecorator>
+                        <ListItemContent>Place</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem>
+                    <ListItemButton>
+                        <ListItemDecorator><Label /></ListItemDecorator>
+                        <ListItemContent>Label</ListItemContent>
+                        <KeyboardArrowRight />
+                    </ListItemButton>
+                </ListItem>
+            </List>
         </div>
     );
 

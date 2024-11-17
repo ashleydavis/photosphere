@@ -50,7 +50,7 @@ i {
     border-bottom: 2px solid transparent;
 }
 
-#navbar .active {
+.active {
     border-bottom: 2px solid #B1B1B1;
 }
 
