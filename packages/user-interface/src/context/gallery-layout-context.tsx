@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { computePartialLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
@@ -29,19 +29,19 @@ export interface IGalleryLayoutContext {
     setTargetRowHeight: (height: number) => void;
 
     //
-    // The scroll position of the gallery.
-    //
-    scrollTop: number;
-
-    //
-    // Sets the scroll position of the gallery.
-    //
-    setScrollTop: (scrollTop: number) => void;
-
-    //
     // The current layout of the gallery.
     //
     layout?: IGalleryLayout;
+
+    //
+    // Scrolls the gallery to the specified location.
+    //
+    scrollTo(scrollTop: number): void;
+
+    //
+    // Sets a handler to scroll the gallery.
+    //
+    setScrollToHandler(handler: (scrollTop: number) => void): void;
 }
 
 const GalleryLayoutContext = createContext<IGalleryLayoutContext | undefined>(undefined);
@@ -64,18 +64,31 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     // The target row height of the gallery.
     //
     const [targetRowHeight, setTargetRowHeight] = useState(150);
-
-    //
-    // The scroll position of the gallery.
-    //
-    const [ scrollTop, setScrollTop ] = useState(0);
-
+    
     //
     // The current layout of the gallery.
     //
     const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
     const { getSearchedItems, onReset, onNewItems, onItemsDeleted, searchText } = useGallery();
+
+    const scrollToHandler = useRef<(scrollTop: number) => void>();
+
+    //
+    // Scrolls the gallery to the specified location.
+    //
+    function scrollTo(scrollTop: number): void {
+        if (scrollToHandler.current) {
+            scrollToHandler.current(scrollTop);
+        }
+    }
+
+    //
+    // Sets a handler to scroll the gallery.
+    //
+    function setScrollToHandler(handler: (scrollTop: number) => void): void {
+        scrollToHandler.current = handler;
+    }
 
     //
     // Resets the gallery layout as necessary in preparation for incremental loading.
@@ -126,7 +139,6 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         }
     }, [galleryWidth]);
 
-
     //
     // Rebuilds the gallery layout as necessary when important details have changed.
     //
@@ -142,9 +154,9 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         setGalleryWidth,
         targetRowHeight,
         setTargetRowHeight,
-        scrollTop,
-        setScrollTop,
         layout,
+        scrollTo,
+        setScrollToHandler,
     };
 
     return (

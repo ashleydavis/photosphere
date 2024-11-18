@@ -205,7 +205,12 @@ export interface IGalleryLayoutProps {
 //
 export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
-    const { galleryWidth, scrollTop, setScrollTop, layout } = useGalleryLayout();
+    const { galleryWidth, layout, setScrollToHandler } = useGalleryLayout();
+
+    //
+    // The scroll position of the gallery.
+    //
+    const [ scrollTop, setScrollTop ] = useState(0);
 
     const containerRef = useRef<HTMLDivElement>(null);  
 
@@ -222,6 +227,13 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         if (!containerRef.current) {
             return;
         }
+
+        //
+        // Allows other components to scroll the gallery.
+        //
+        setScrollToHandler(scrollTop => {
+            containerRef.current!.scrollTo({ top: scrollTop, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+        });
 
         const container = containerRef.current;
 

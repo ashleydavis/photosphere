@@ -90,7 +90,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
-    const { setScrollTop, layout } = useGalleryLayout();
+    const { scrollTo, layout } = useGalleryLayout();
 
     const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
     const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);
@@ -120,7 +120,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                             // 
                             // Scroll to the row.
                             //
-                            setScrollTop(row.offsetY);
+                            scrollTo(row.offsetY);
                             setSidebarOpen(false);
                         };
                     }
