@@ -14,6 +14,7 @@ import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
 import Link from '@mui/joy/Link/Link';
 import Divider from '@mui/joy/Divider/Divider';
 import { useGalleryLayout } from '../context/gallery-layout-context';
+import { IGalleryLayout } from '../lib/create-layout';
 
 export interface ISidebarProps {
     //
@@ -96,6 +97,44 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
     //
+    // Build the navigation menu from the gallery layout.
+    //
+    function buildNavMenu(layout: IGalleryLayout): IMenuItem[] {
+        const menu: IMenuItem[] = [];
+
+        const headingRows = layout.rows.filter(row => row.type === "heading");
+        for (const row of headingRows) {
+            let parentMenu = menu;
+            for (let groupIndex = 0; groupIndex < row.group.length; groupIndex++) {
+                let lastMenu = parentMenu.length > 0 ? parentMenu[parentMenu.length-1] : undefined
+                if (!lastMenu || lastMenu.text !== row.group[groupIndex]) {
+                    // 
+                    // Create a new menu.
+                    //
+                    lastMenu = {
+                        text: row.group[groupIndex],
+                        children: [],                        
+                    };
+                    if (groupIndex === row.group.length-1) {
+                        lastMenu.onClick = () => {
+                            // 
+                            // Scroll to the row.
+                            //
+                            setScrollTop(row.offsetY);
+                            setSidebarOpen(false);
+                        };
+                    }
+                    parentMenu.push(lastMenu);        
+                }       
+                parentMenu = lastMenu.children!;
+            }       
+        }
+
+        return menu;
+    }
+
+
+    //
     // Resets the sidebar menu to the top menu whenever the layout changes.
     //
     useEffect(() => {
@@ -103,22 +142,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             return;
         }
 
-        //todo: this should possibly be derived from Group?
-
-        const headingRows = layout.rows.filter(row => row.type === "heading");
-
-        const navMenu: IMenuItem[] = [];
-
-        for (let rowIndex = 0; rowIndex < headingRows.length; rowIndex++) {
-            const row = headingRows[rowIndex];
-            navMenu.push({
-                text: row.heading!,
-                onClick: () => {
-                    setScrollTop(row.offsetY);
-                    setSidebarOpen(false);
-                },
-            });            
-        }
+        const navMenu = buildNavMenu(layout);
 
         const topMenu = [
             {
