@@ -564,6 +564,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                                         menu: menuItem.children,
                                     }]);
                                 }
+
+                                if (menuItem.onClick) {
+                                    menuItem.onClick();
+                                }
                             }}
                             >
                             <ListItemButton>
