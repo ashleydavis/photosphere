@@ -6,6 +6,7 @@ import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { debounce, throttle } from "lodash";
 import { Theme, useTheme } from "@mui/joy";
+import { useGalleryLayout } from "../context/gallery-layout-context";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
@@ -194,98 +195,28 @@ function renderVisibleRange(
     };
 }
 
-export interface IGalleryLayoutProps { 
-    //
-    // The width of the gallery.
-    //
-	galleryWidth: number;
-
-    //
-    // The target height for rows in the gallery.
-    //
-	targetRowHeight: number;
-
+export interface IGalleryLayoutProps {
     //
     // Event raised when an item in the gallery has been clicked.
     //
     onItemClick: ItemClickFn | undefined;
-
-    //
-    // Gets headings from a gallery item.
-    //
-    getHeadings?: GetHeadingsFn;
 }
 
 //
 // Responsible for row-based gallery layout.
 //
-export function GalleryLayout({
-	galleryWidth = 600, 
-	targetRowHeight = 150, 
-    onItemClick = undefined,
-    getHeadings,
-    }: IGalleryLayoutProps) {
+export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
-    const { getSearchedItems, onReset, onNewItems, onItemsDeleted, searchText } = useGallery();
-    
+    const { galleryWidth, layout } = useGalleryLayout();
+
     const containerRef = useRef<HTMLDivElement>(null);
     const [ scrollTop, setScrollTop ] = useState(0);
 
     const isScrolling = useRef(false);
     const workingScrollTop = useRef(0);
     const scrollDistance = useRef(0);
-    
-    //
-    // The layout of the gallery.
-    //
-    const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
     const theme = useTheme();
-
-    //
-    // Resets the gallery layout as necessary in preparation for incremental loading.
-    //
-    useEffect(() => {
-        const subscription = onReset.subscribe(() => {
-            setLayout(undefined);
-        });
-        return () => {
-            subscription.unsubscribe();            
-        };
-    }, []);
-
-    useEffect(() => {
-        if (galleryWidth > 0) {
-            //
-            // Incrementally builds the layout as items are loaded.
-            //
-            const subscription1 = onNewItems.subscribe(items => {
-                setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, getHeadings));
-            });
-
-            //
-            // Rebuilds the layout when items are deleted.
-            //
-            const subscription2 = onItemsDeleted.subscribe(() => {
-                setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));        
-            });
-    
-            return () => {
-                subscription1.unsubscribe();
-                subscription2.unsubscribe();
-            };
-        }
-    }, [galleryWidth]);
-
-    //
-    // Rebuilds the gallery layout as necessary when important details have changed.
-    //
-    useEffect(() => {
-        if (galleryWidth === 0) {
-            return;
-        }
-        setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));        
-    }, [galleryWidth, targetRowHeight, searchText]);
 
     //
     // Handles scrolling.

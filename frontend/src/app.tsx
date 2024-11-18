@@ -1,8 +1,9 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider, 
-    AuthContextProvider, enableAuth, GalleryContextProvider, 
-    IndexeddbContextProvider, AssetDatabaseProvider 
+import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider,
+    AuthContextProvider, enableAuth, GalleryContextProvider,
+    IndexeddbContextProvider, AssetDatabaseProvider,
+    GalleryLayoutContextProvider
     } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 
@@ -10,16 +11,18 @@ function GallerySetup() {
     return (
         <AssetDatabaseProvider>
             <GalleryContextProvider>
-                <UploadContextProvider>
-                    <Main />
-                </UploadContextProvider>
+                <GalleryLayoutContextProvider>
+                    <UploadContextProvider>
+                        <Main />
+                    </UploadContextProvider>
+                </GalleryLayoutContextProvider>
             </GalleryContextProvider>
         </AssetDatabaseProvider>
     );
 }
 
 function ApiSetup() {
-    return (        
+    return (
         <AuthContextProvider>
             <ApiContextProvider>
                 <IndexeddbContextProvider>

@@ -1,6 +1,6 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, enableAuth } from "user-interface";
+import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, GalleryLayoutContextProvider, IndexeddbContextProvider, Main, UploadContextProvider, enableAuth } from "user-interface";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { ComputerPage } from "./pages/computer";
 import { ScanContextProvider } from "./context/scan-context";
@@ -10,13 +10,15 @@ function GallerySetup() {
     return (
         <AssetDatabaseProvider>
             <GalleryContextProvider>
-                <UploadContextProvider>
-                    <ScanContextProvider>
-                        <Main
-                            computerPage={<ComputerPage />} 
-                            />
-                    </ScanContextProvider>
-                </UploadContextProvider>
+                <GalleryLayoutContextProvider>
+                    <UploadContextProvider>
+                        <ScanContextProvider>
+                            <Main
+                                computerPage={<ComputerPage />} 
+                                />
+                        </ScanContextProvider>
+                    </UploadContextProvider>
+                </GalleryLayoutContextProvider>
             </GalleryContextProvider>
         </AssetDatabaseProvider>
     );

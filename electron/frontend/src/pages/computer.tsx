@@ -4,7 +4,7 @@
 
 import React, { useEffect } from "react";
 import { useScan } from "../context/scan-context";
-import { Gallery, GalleryContextProvider } from "user-interface";
+import { Gallery, GalleryContextProvider, GalleryLayoutContextProvider } from "user-interface";
 
 export function ComputerPage() {
 
@@ -20,10 +20,9 @@ export function ComputerPage() {
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <GalleryContextProvider>
-                <Gallery
-                    targetRowHeight={150}
-                    getHeadings={undefined}
-                    />
+                <GalleryLayoutContextProvider>
+                    <Gallery />
+                </GalleryLayoutContextProvider>
             </GalleryContextProvider>
         </div>
     );

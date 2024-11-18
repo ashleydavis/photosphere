@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { HashRouter } from "react-router-dom";
-import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, IndexeddbContextProvider, Main, UploadContextProvider } from "user-interface";
+import { ApiContextProvider, AssetDatabaseProvider, AuthContextProvider, GalleryContextProvider, GalleryLayoutContextProvider, IndexeddbContextProvider, Main, UploadContextProvider } from "user-interface";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -13,11 +13,13 @@ function GallerySetup() {
         <ScanContextProvider>
             <AssetDatabaseProvider>
                 <GalleryContextProvider>
-                    <UploadContextProvider>
-                        <Main
-                            computerPage={<ComputerPage />} 
-                            />
-                    </UploadContextProvider>
+                    <GalleryLayoutContextProvider>
+                        <UploadContextProvider>
+                            <Main
+                                computerPage={<ComputerPage />}
+                                />
+                        </UploadContextProvider>
+                    </GalleryLayoutContextProvider>
                 </GalleryContextProvider>
             </AssetDatabaseProvider>
         </ScanContextProvider>
@@ -25,7 +27,7 @@ function GallerySetup() {
 }
 
 function ApiSetup() {
-    return (        
+    return (
         <ApiContextProvider>
             <IndexeddbContextProvider>
                 <GallerySetup />
@@ -87,6 +89,6 @@ function HandleAuthCallback() {
             await Browser.close();
         });
     }, [handleRedirectCallback]);
-    
+
     return <></>;
 }

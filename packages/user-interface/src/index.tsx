@@ -2,6 +2,7 @@ export { Main } from './main';
 export { AuthContextProvider, enableAuth } from './context/auth-context';
 export { ApiContextProvider, useApi } from './context/api-context';
 export { GalleryContextProvider } from './context/gallery-context';
+export { GalleryLayoutContextProvider } from './context/gallery-layout-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { UploadContextProvider, useUpload } from './context/upload-context';
 export { IndexeddbContextProvider, useIndexeddb } from './context/indexeddb-context';
