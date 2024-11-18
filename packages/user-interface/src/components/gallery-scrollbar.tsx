@@ -181,7 +181,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
 
         for (const row of galleryLayout.rows) {
             if (row.type === "heading") { // Filter out rows that are not group headings.
-                const topLevelHeading = row.headings[row.headings.length - 1]; // Only care about top level headings.
+                const topLevelHeading = row.group![0]; // Only care about top level group.
                 if (previousHeading !== topLevelHeading) {
                     headingRows.push(row);
                     previousHeading = topLevelHeading;
@@ -190,7 +190,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
         }
 
         return headingRows.map((row, index) => {
-            const topLevelHeading = row.headings[row.headings.length - 1]; // Only care about top level headings.
+            const topLevelHeading = row.group![0]; // Only care about top level group.
             const headingOffsetY = VERTICAL_GUTTER + (row.offsetY / galleryLayout.galleryHeight) * scrollbarHeight; // Maps the scroll position into the scrollbar.
             return (
                 <div

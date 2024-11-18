@@ -89,13 +89,18 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         };
     }, []);
 
-    function getHeadings(item: IGalleryItem) {
+    function getGroup(item: IGalleryItem) {
         return item.photoDate
             ? [
-                dayjs(item.photoDate).format("MMMM"),
                 dayjs(item.photoDate).format("YYYY"),
+                dayjs(item.photoDate).format("MMMM"),
             ]
             : ["Undated"];
+    };
+
+    function getHeading(group: string[]): string {
+        const reversed = group.slice().reverse();
+        return reversed.join(" ");
     };
 
     useEffect(() => {
@@ -104,14 +109,14 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             // Incrementally builds the layout as items are loaded.
             //
             const subscription1 = onNewItems.subscribe(items => {
-                setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, getHeadings));
+                setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, getGroup, getHeading));
             });
 
             //
             // Rebuilds the layout when items are deleted.
             //
             const subscription2 = onItemsDeleted.subscribe(() => {
-                setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));
+                setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getGroup, getHeading));
             });
 
             return () => {
@@ -129,7 +134,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         if (galleryWidth === 0) {
             return;
         }
-        setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getHeadings));
+        setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, getGroup, getHeading));
     }, [galleryWidth, targetRowHeight, searchText]);
 
     const value: IGalleryLayoutContext = {

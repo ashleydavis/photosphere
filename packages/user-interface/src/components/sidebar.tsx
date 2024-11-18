@@ -112,7 +112,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
         for (let rowIndex = 0; rowIndex < headingRows.length; rowIndex++) {
             const row = headingRows[rowIndex];
             navMenu.push({
-                text: row.headings.join(" "),
+                text: row.heading!,
                 onClick: () => {
                     setScrollTop(row.offsetY);
                     setSidebarOpen(false);

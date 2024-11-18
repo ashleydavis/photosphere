@@ -21,7 +21,7 @@ export interface IGalleryLayout {
 //
 // Returns true if two sets of hedadings match.
 //
-function headingsMatch(headingsA: string[], headingsB: string[]): boolean {
+function groupsMatch(headingsA: string[], headingsB: string[]): boolean {
     if (headingsA.length !== headingsB.length) {
         return false;
     }
@@ -36,14 +36,19 @@ function headingsMatch(headingsA: string[], headingsB: string[]): boolean {
 }
 
 //
-// Gets headings from an item.
+// Gets the nested group path for an item.
 //
-export type GetHeadingsFn = (item: IGalleryItem) => string[];
+export type GetGroupFn = (item: IGalleryItem) => string[];
+
+//
+// Gets the heading for a group
+//
+export type GetHeadingFn = (group: string[]) => string;
 
 //
 // Creates or updates a row-based layout for items in the gallery.
 //
-export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number, getHeadings: GetHeadingsFn | undefined): IGalleryLayout {
+export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number, getGroup: GetGroupFn, getHeading: GetHeadingFn): IGalleryLayout {
 
     if (!layout) {
         layout = {
@@ -78,7 +83,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             offsetY: 0,
             height: targetRowHeight,
             width: 0,
-            headings: [],
+            group: [],
         };
     
         rows.push(curRow);
@@ -110,10 +115,10 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         const computedWidth = targetRowHeight * aspectRatio;
 
         // 
-        // Compute headings for the item.
+        // Compute the nested group path for the item.
         // TODO: This should be customizable. Heading could also be location (country, city, suburb, etc) or something else.
         //
-        const itemHeadings = getHeadings ? getHeadings(item) : [];
+        const itemGroup = getGroup ? getGroup(item) : [];
 
         if (curRow.items.length > 0) {
             if (curRow.width + computedWidth > galleryWidth) {
@@ -125,11 +130,11 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                     offsetY: 0,
                     height: targetRowHeight,
                     width: 0,
-                    headings: itemHeadings,
+                    group: itemGroup,
                 };
                 rows.push(curRow);
             }
-            else if (!headingsMatch(curRow.headings, itemHeadings)) {
+            else if (!groupsMatch(curRow.group, itemGroup)) {
                 //
                 // Break row on headings.
                 //
@@ -138,13 +143,13 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
                     offsetY: 0,
                     height: targetRowHeight,
                     width: 0,
-                    headings: itemHeadings,
+                    group: itemGroup,
                 };
                 rows.push(curRow);
             }
         }
         else {
-            curRow.headings = itemHeadings;
+            curRow.group = itemGroup;
         }
 
         //
@@ -167,7 +172,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     for (let rowIndex = startingRowIndex; rowIndex < rows.length-1; rowIndex++) {
         const row = rows[rowIndex];
         const nextRow = rows[rowIndex+1];
-        if (!headingsMatch(row.headings, nextRow.headings)) {
+        if (!groupsMatch(row.group, nextRow.group)) {
             continue; // Don't expand the last row in each group.
         }
 
@@ -196,7 +201,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     for (let rowIndex = startingRowIndex; rowIndex < rows.length-1; rowIndex++) {
         const row = rows[rowIndex];
         const nextRow = rows[rowIndex+1];
-        if (!headingsMatch(row.headings, nextRow.headings)) {
+        if (!groupsMatch(row.group, nextRow.group)) {
             continue; // Don't expand the last row in each group.
         }
 
@@ -299,30 +304,31 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     // Add group headings.
     //
-    let prevHeadings: string[] = [];
+    let prevGroup: string[] = [];
 
     if (startingRowIndex > 0) {
         //
         // Start with headings from the previous row.
         //
-        prevHeadings = rows[startingRowIndex-1].headings
+        prevGroup = rows[startingRowIndex-1].group
     }    
 
     for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
-        if (!headingsMatch(row.headings, prevHeadings)) {
+        if (!groupsMatch(row.group, prevGroup)) {
             rows.splice(rowIndex, 0, {
                 type: "heading",
                 items: [],
                 offsetY: 0,
                 height: 45,
                 width: 0, // This isn't needed.
-                headings: row.headings,
+                heading: getHeading(row.group),
+                group: row.group,
             });
             rowIndex += 1;
         }
         
-        prevHeadings = row.headings;
+        prevGroup = row.group;
     }
 
     //

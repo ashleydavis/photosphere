@@ -135,7 +135,12 @@ export interface IGalleryRow {
     height: number;
 
     //
-    // The headings displayed for this row of items.
+    // The heading displayed for this row of items.
     //
-    headings: string[];
+    heading?: string;
+
+    //
+    // The nested group path of this item.
+    //
+    group: string[];
 }

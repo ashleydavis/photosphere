@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
-import { useGallery } from "../context/gallery-context";
-import { GetHeadingsFn, IGalleryLayout, computePartialLayout } from "../lib/create-layout";
+import { IGalleryLayout } from "../lib/create-layout";
 import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { debounce, throttle } from "lodash";
@@ -18,10 +17,9 @@ function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, the
         //
         // Renders a heading row.
         //
-        const heading = row.headings.join(" ");
         return (
             <div 
-                key={heading}
+                key={row.heading}
                 style={{
                     fontSize: "0.9rem",
                     fontWeight: 600,
@@ -34,7 +32,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, isScrolling: boolean, the
                     height: `${row.height}px`,
                 }}
                 >
-                {heading}
+                {row.heading}
             </div>
         );
     }
@@ -290,7 +288,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         padding: "1em",
                     }}                    
                     >                            
-                    {visibleRange.curHeadingRow.headings.join(" ")}                    
+                    {visibleRange.curHeadingRow.heading}
                 </div>
             }
 

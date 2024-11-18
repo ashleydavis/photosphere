@@ -6,7 +6,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight, undefined);
+        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight, () => [], () => "");
         expect(rows).toEqual({
             galleryHeight: 0,
             rows: []
@@ -25,7 +25,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight, undefined);
+        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight, () => [], () => "");
 
         expect(layout.rows.length).toBe(1);
 
@@ -56,7 +56,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
         expect(layout.rows.length).toBe(1);
 
         const row = layout.rows[0];
@@ -88,7 +88,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
         expect(layout.rows.length).toBe(2);
 
         const firstRow = layout.rows[0];
@@ -99,7 +99,7 @@ describe("layout", () => {
         const secondRow = layout.rows[1];
         expect(secondRow.items.length).toBe(1);
         expect(secondRow.items[0]._id).toBe(3);
-    });    
+    });
 
     test("items not in the last row are stretched toward the right hand boundary of the gallery", () => {
 
@@ -120,7 +120,7 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, undefined);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
 
         expect(layout.rows.length).toBe(2);
 
@@ -143,6 +143,6 @@ describe("layout", () => {
         const item3 = secondRow.items[0];
         expect(item3.thumbWidth).toBeCloseTo(items[2].width);
         expect(item3.thumbHeight).toBeCloseTo(items[2].height);
-        
+
     });
 });
