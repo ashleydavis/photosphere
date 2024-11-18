@@ -29,6 +29,16 @@ export interface IGalleryLayoutContext {
     setTargetRowHeight: (height: number) => void;
 
     //
+    // The scroll position of the gallery.
+    //
+    scrollTop: number;
+
+    //
+    // Sets the scroll position of the gallery.
+    //
+    setScrollTop: (scrollTop: number) => void;
+
+    //
     // The current layout of the gallery.
     //
     layout?: IGalleryLayout;
@@ -54,6 +64,11 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     // The target row height of the gallery.
     //
     const [targetRowHeight, setTargetRowHeight] = useState(150);
+
+    //
+    // The scroll position of the gallery.
+    //
+    const [ scrollTop, setScrollTop ] = useState(0);
 
     //
     // The current layout of the gallery.
@@ -122,6 +137,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         setGalleryWidth,
         targetRowHeight,
         setTargetRowHeight,
+        scrollTop,
+        setScrollTop,
         layout,
     };
 

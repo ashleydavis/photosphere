@@ -207,10 +207,9 @@ export interface IGalleryLayoutProps {
 //
 export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
-    const { galleryWidth, layout } = useGalleryLayout();
+    const { galleryWidth, scrollTop, setScrollTop, layout } = useGalleryLayout();
 
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [ scrollTop, setScrollTop ] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);  
 
     const isScrolling = useRef(false);
     const workingScrollTop = useRef(0);
