@@ -1,5 +1,5 @@
 import Typography from '@mui/joy/Typography/Typography';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -13,6 +13,7 @@ import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
 import Link from '@mui/joy/Link/Link';
 import Divider from '@mui/joy/Divider/Divider';
+import { useGalleryLayout } from '../context/gallery-layout-context';
 
 export interface ISidebarProps {
     //
@@ -45,10 +46,30 @@ export interface ISidebarProps {
 // Defines a menu item in the sidebar menu.
 //
 interface IMenuItem {
+    //
+    // The icon for the menu item.
+    //
     icon?: JSX.Element;
+
+    //
+    // The text for the menu item.
+    //
     text: string;
+
+    //
+    // The children of the menu item.
+    //
     children?: IMenuItem[];
+
+    //
+    // True if clicking the menu leads to more options.
+    //
     more?: boolean;
+
+    //
+    // Click handler for the menu item.
+    //
+    onClick?: () => void;
 }
 
 //
@@ -68,337 +89,307 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
+    const { setScrollTop, layout } = useGalleryLayout();
 
-    const topMenu: IMenuItem[] = [
-        {
-            icon: <Map />,
-            text: "Navigation",
-            children: [ //todo: The navigation should change depending on how the gallery is sorted/grouped.
-                {
-                    icon: <VerticalAlignTop />,
-                    text: "Start",
-                },
-                {
-                    icon: <VerticalAlignBottom />,
-                    text: "End",
-                },
-                {
-                    icon: <CalendarMonth />,
-                    text: "Date",
-                    children: [
-                        {
-                            text: "Year",
-                            children: [
-                                {
-                                    text: "2024",
-                                },
-                                {
-                                    text: "2023",
-                                },
-                                {
-                                    text: "2022",
-                                },
-                                {
-                                    text: "2020",
-                                },
-                                {
-                                    text: "2021",
-                                },
-                            ],
-                        },
-                        {
-                            text: "Month",
-                            children: [
-                                {
-                                    text: "December",
-                                },
-                                {
-                                    text: "November",
-                                },
-                                {
-                                    text: "October",
-                                },
-                                {
-                                    text: "September",
-                                },
-                                {
-                                    text: "August",
-                                },
-                                {
-                                    text: "July",
-                                },
-                                {
-                                    text: "June",
-                                },
-                                {
-                                    text: "May",
-                                },
-                                {
-                                    text: "April",
-                                },
-                                {
-                                    text: "March",
-                                },
-                                {
-                                    text: "February",
-                                },
-                                {
-                                    text: "January",
-                                },
-                            ],                                
-                        },
-                    ],
-                },                
-            ],
-        },
-        {
-            icon: <Search />,
-            text: "Search",
-            children: [
-                {
-                    icon: <History />,
-                    text: "Recent",
-                },
-                {
-                    icon: <Star />,
-                    text: "Starred",
-                },
-                {
-                    icon: <CalendarMonth />,
-                    text: "Date",
-                    children: [
-                        {
-                            icon: <DateRange />,
-                            text: "Date range",
-                            more: true,
-                        },
-                        {
-                            icon: <DateRange />,
-                            text: "No date",
-                            more: true,
-                        },
-                        {
-                            text: "Year",
-                            children: [
-                                {
-                                    text: "2024",
-                                },
-                                {
-                                    text: "2023",
-                                },
-                                {
-                                    text: "2022",
-                                },
-                                {
-                                    text: "2020",
-                                },
-                                {
-                                    text: "2021",
-                                },
-                            ],
-                        },
-                        {
-                            text: "Month",
-                            children: [
-                                {
-                                    text: "December",
-                                },
-                                {
-                                    text: "November",
-                                },
-                                {
-                                    text: "October",
-                                },
-                                {
-                                    text: "September",
-                                },
-                                {
-                                    text: "August",
-                                },
-                                {
-                                    text: "July",
-                                },
-                                {
-                                    text: "June",
-                                },
-                                {
-                                    text: "May",
-                                },
-                                {
-                                    text: "April",
-                                },
-                                {
-                                    text: "March",
-                                },
-                                {
-                                    text: "February",
-                                },
-                                {
-                                    text: "January",
-                                },
-                            ],                                
-                        },
-                    ],
-                },
-                {
-                    icon: <People />,
-                    text: "People",
-                    children: [
-                        {
-                            text: "Ashley",
-                        },
-                        {
-                            text: "Antonella",
-                        },
-                        {
-                            text: "Lucia",
-                        },
-                        {
-                            text: "Lucio",
-                        },
-                    ],
-                },
-                {
-                    icon: <Place />,
-                    text: "Place",
-                    children: [
-                        {
-                            text: "No location",
-                        },
-                        {
-                            text: "Australia",
-                            children: [
-                                {
-                                    text: "Sydney",
-                                },
-                                {
-                                    text: "Melbourne",
-                                },
-                                {
-                                    text: "Brisbane",
-                                },
-                                {
-                                    text: "Perth",
-                                },
-                            ],
-                        },
-                        {
-                            text: "United Kingdom",
-                            children: [
-                                {
-                                    text: "London",
-                                },
-                                {
-                                    text: "Manchester",
-                                },
-                                {
-                                    text: "Birmingham",
-                                },
-                                {
-                                    text: "Glasgow",
-                                },
-                            ],
-                        },
-                        {
-                            text: "Italy",
-                            children: [
-                                {
-                                    text: "Rome",
-                                },
-                                {
-                                    text: "Abruzzo",
-                                },
-                                {
-                                    text: "Naples",
-                                },
-                                {
-                                    text: "Turin",
-                                },
-                            ],
-                        },
-                    ],
-                },
-                {
-                    icon: <Event />,
-                    text: "Event",
-                    children: [
-                        {
-                            text: "Birthday",
-                        },
-                        {
-                            text: "Wedding",
-                        },
-                        {
-                            text: "Graduation",
-                        },
-                        {
-                            text: "Party",
-                        },
-                    ],
-                },
-                {
-                    icon: <Label />,
-                    text: "Label",
-                    children: [
-                        {
-                            text: "Vacation",
-                        },
-                        {
-                            text: "Family",
-                        },
-                        {
-                            text: "Work",
-                        },
-                        {
-                            text: "Friends",
-                        },
-                        {
-                            text: "More",
-                            more: true,
-                        },
-                    ],
-                },
-                {
-                    icon: <ListIcon />,
-                    text: "Property",
-                    more: true,
-                },
-            ],
-        },
-        {
-            icon: <Category />,
-            text: "Grouping",
-            children: [
-                {
-                    icon: <CalendarMonth />,
-                    text: "Date",
-                },
-                {
-                    icon: <People />,
-                    text: "People",
-                },
-                {
-                    icon: <Place />,
-                    text: "Place",
-                },
-                {
-                    icon: <Event />,
-                    text: "Event",
-                },
-                {
-                    icon: <Label />,
-                    text: "Label",
-                },
-                {
-                    icon: <ListIcon />,
-                    text: "Property",
-                    more: true,
-                },
-            ],
-        },
-    ];
-    const [curMenu, setCurMenu] = useState(topMenu);
+    const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
+    const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
+
+    //
+    // Resets the sidebar menu to the top menu whenever the layout changes.
+    //
+    useEffect(() => {
+        if (!layout) {
+            return;
+        }
+
+        //todo: this should possibly be derived from Group?
+
+        const headingRows = layout.rows.filter(row => row.type === "heading");
+
+        const navMenu: IMenuItem[] = [];
+
+        for (let rowIndex = 0; rowIndex < headingRows.length; rowIndex++) {
+            const row = headingRows[rowIndex];
+            navMenu.push({
+                text: row.headings.join(" "),
+                onClick: () => {
+                    setScrollTop(row.offsetY);
+                    setSidebarOpen(false);
+                },
+            });            
+        }
+
+        const topMenu = [
+            {
+                icon: <Map />,
+                text: "Navigation",
+                children: [
+                    {
+                        icon: <VerticalAlignTop />,
+                        text: "Start",
+                    },
+                    {
+                        icon: <VerticalAlignBottom />,
+                        text: "End",
+                    },
+                    {
+                        icon: <CalendarMonth />,
+                        text: "Date",
+                        children: navMenu,
+                    },                
+                ],
+            },
+            {
+                icon: <Search />,
+                text: "Search",
+                children: [
+                    {
+                        icon: <History />,
+                        text: "Recent",
+                    },
+                    {
+                        icon: <Star />,
+                        text: "Starred",
+                    },
+                    {
+                        icon: <CalendarMonth />,
+                        text: "Date",
+                        children: [
+                            {
+                                icon: <DateRange />,
+                                text: "Date range",
+                                more: true,
+                            },
+                            {
+                                icon: <DateRange />,
+                                text: "No date",
+                                more: true,
+                            },
+                            {
+                                text: "Year",
+                                children: [
+                                    {
+                                        text: "2024",
+                                    },
+                                    {
+                                        text: "2023",
+                                    },
+                                    {
+                                        text: "2022",
+                                    },
+                                    {
+                                        text: "2020",
+                                    },
+                                    {
+                                        text: "2021",
+                                    },
+                                ],
+                            },
+                            {
+                                text: "Month",
+                                children: [
+                                    {
+                                        text: "December",
+                                    },
+                                    {
+                                        text: "November",
+                                    },
+                                    {
+                                        text: "October",
+                                    },
+                                    {
+                                        text: "September",
+                                    },
+                                    {
+                                        text: "August",
+                                    },
+                                    {
+                                        text: "July",
+                                    },
+                                    {
+                                        text: "June",
+                                    },
+                                    {
+                                        text: "May",
+                                    },
+                                    {
+                                        text: "April",
+                                    },
+                                    {
+                                        text: "March",
+                                    },
+                                    {
+                                        text: "February",
+                                    },
+                                    {
+                                        text: "January",
+                                    },
+                                ],                                
+                            },
+                        ],
+                    },
+                    {
+                        icon: <People />,
+                        text: "People",
+                        children: [
+                            {
+                                text: "Ashley",
+                            },
+                            {
+                                text: "Antonella",
+                            },
+                            {
+                                text: "Lucia",
+                            },
+                            {
+                                text: "Lucio",
+                            },
+                        ],
+                    },
+                    {
+                        icon: <Place />,
+                        text: "Place",
+                        children: [
+                            {
+                                text: "No location",
+                            },
+                            {
+                                text: "Australia",
+                                children: [
+                                    {
+                                        text: "Sydney",
+                                    },
+                                    {
+                                        text: "Melbourne",
+                                    },
+                                    {
+                                        text: "Brisbane",
+                                    },
+                                    {
+                                        text: "Perth",
+                                    },
+                                ],
+                            },
+                            {
+                                text: "United Kingdom",
+                                children: [
+                                    {
+                                        text: "London",
+                                    },
+                                    {
+                                        text: "Manchester",
+                                    },
+                                    {
+                                        text: "Birmingham",
+                                    },
+                                    {
+                                        text: "Glasgow",
+                                    },
+                                ],
+                            },
+                            {
+                                text: "Italy",
+                                children: [
+                                    {
+                                        text: "Rome",
+                                    },
+                                    {
+                                        text: "Abruzzo",
+                                    },
+                                    {
+                                        text: "Naples",
+                                    },
+                                    {
+                                        text: "Turin",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        icon: <Event />,
+                        text: "Event",
+                        children: [
+                            {
+                                text: "Birthday",
+                            },
+                            {
+                                text: "Wedding",
+                            },
+                            {
+                                text: "Graduation",
+                            },
+                            {
+                                text: "Party",
+                            },
+                        ],
+                    },
+                    {
+                        icon: <Label />,
+                        text: "Label",
+                        children: [
+                            {
+                                text: "Vacation",
+                            },
+                            {
+                                text: "Family",
+                            },
+                            {
+                                text: "Work",
+                            },
+                            {
+                                text: "Friends",
+                            },
+                            {
+                                text: "More",
+                                more: true,
+                            },
+                        ],
+                    },
+                    {
+                        icon: <ListIcon />,
+                        text: "Property",
+                        more: true,
+                    },
+                ],
+            },
+            {
+                icon: <Category />,
+                text: "Grouping",
+                children: [
+                    {
+                        icon: <CalendarMonth />,
+                        text: "Date",
+                    },
+                    {
+                        icon: <People />,
+                        text: "People",
+                    },
+                    {
+                        icon: <Place />,
+                        text: "Place",
+                    },
+                    {
+                        icon: <Event />,
+                        text: "Event",
+                    },
+                    {
+                        icon: <Label />,
+                        text: "Label",
+                    },
+                    {
+                        icon: <ListIcon />,
+                        text: "Property",
+                        more: true,
+                    },
+                ],
+            },
+        ];
+        setTopMenu(topMenu);
+        setCurMenu(topMenu);
+        setBreadCrumbs([]);
+    }, [layout]);
 
     return (
         <div
