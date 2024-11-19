@@ -39,9 +39,11 @@ const groupingMap: { [key: string]: IGroupBy } = {
         heading: (group: string[]) => group.join(" "),
     },
     location: {
-        sortKey: asset => asset.location,
+        sortKey: asset => asset.location
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2).join(" ")
+            : undefined,
         group: asset => asset.location
-            ? asset.location.split(",").map(s => s.trim()).reverse()
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2)
             : [ "Location unknown" ],
         heading: (group: string[]) => group.join(", "),
     },
