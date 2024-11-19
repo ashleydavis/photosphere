@@ -1,0 +1,11 @@
+#
+# A test script for reverse geocoding using the Google API.
+#
+
+@lat = 34.98605555555556
+@lng = 135.75775833333333
+@google_api_key = <your-api-key>
+
+@url = https://maps.googleapis.com/maps/api/geocode/json?latlng={{lat}},{{lng}}&key={{google_api_key}}
+
+GET {{url}}
