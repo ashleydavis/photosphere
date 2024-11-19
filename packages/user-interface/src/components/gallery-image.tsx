@@ -52,7 +52,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems } = useGallery();
 
-    const gutter = 1;
+    const gutter = 2;
 
     useEffect(() => {
         if (objectURL) {
