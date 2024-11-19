@@ -15,6 +15,7 @@ import Link from '@mui/joy/Link/Link';
 import Divider from '@mui/joy/Divider/Divider';
 import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
+import { useGallery } from '../context/gallery-context';
 
 export interface ISidebarProps {
     //
@@ -77,8 +78,19 @@ interface IMenuItem {
 // Defines a breadcrumb item in the sidebar.
 //
 interface IBreadcrumb {
+    //
+    // The icon for the breadcrumb.
+    //
     icon?: JSX.Element;
+
+    //
+    // The text for the breadcrumb.
+    //
     text?: string;
+
+    //
+    // The menu to display when the breadcrumb is clicked.
+    //
     menu: IMenuItem[];
 }
 
@@ -90,7 +102,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
-    const { scrollTo, layout } = useGalleryLayout();
+    const { search } = useGallery();
+    const { scrollTo, layout, setGroupBy } = useGalleryLayout();
 
     const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
     const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);
@@ -148,46 +161,38 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             {
                 icon: <Map />,
                 text: "Navigation",
-                children: [
-                    {
-                        icon: <VerticalAlignTop />,
-                        text: "Start",
-                    },
-                    {
-                        icon: <VerticalAlignBottom />,
-                        text: "End",
-                    },
-                    {
-                        icon: <CalendarMonth />,
-                        text: "Date",
-                        children: navMenu,
-                    },                
-                ],
+                children: navMenu,
             },
             {
                 icon: <Search />,
                 text: "Search",
                 children: [
+                    //todo:
+                    // {
+                    //     icon: <History />,
+                    //     text: "Recent",
+                    // },
+                    // {
+                    //     icon: <Star />,
+                    //     text: "Starred",
+                    // },
                     {
-                        icon: <History />,
-                        text: "Recent",
-                    },
-                    {
-                        icon: <Star />,
-                        text: "Starred",
-                    },
-                    {
-                        icon: <CalendarMonth />,
+                        icon: <CalendarMonth />, //todo: How do I generate this?
                         text: "Date",
                         children: [
                             {
-                                icon: <DateRange />,
+                                icon: <DateRange />, //todo:
+                                text: "A particular day",
+                                more: true,
+                            },
+                            {
+                                icon: <DateRange />, //todo:
                                 text: "Date range",
                                 more: true,
                             },
                             {
-                                icon: <DateRange />,
-                                text: "No date",
+                                icon: <DateRange />, //todo:
+                                text: "Undated",
                                 more: true,
                             },
                             {
@@ -195,84 +200,64 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                                 children: [
                                     {
                                         text: "2024",
+                                        onClick: () => {
+                                            search(".year=2024");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "2023",
+                                        onClick: () => {
+                                            search(".year=2024");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "2022",
+                                        onClick: () => {
+                                            search(".year=2024");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "2020",
+                                        onClick: () => {
+                                            search(".year=2024");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "2021",
+                                        onClick: () => {
+                                            search(".year=2024");
+                                            setSidebarOpen(false);
+                                        },                                        
                                     },
                                 ],
                             },
-                            {
-                                text: "Month",
-                                children: [
-                                    {
-                                        text: "December",
-                                    },
-                                    {
-                                        text: "November",
-                                    },
-                                    {
-                                        text: "October",
-                                    },
-                                    {
-                                        text: "September",
-                                    },
-                                    {
-                                        text: "August",
-                                    },
-                                    {
-                                        text: "July",
-                                    },
-                                    {
-                                        text: "June",
-                                    },
-                                    {
-                                        text: "May",
-                                    },
-                                    {
-                                        text: "April",
-                                    },
-                                    {
-                                        text: "March",
-                                    },
-                                    {
-                                        text: "February",
-                                    },
-                                    {
-                                        text: "January",
-                                    },
-                                ],                                
-                            },
                         ],
                     },
+                    //todo:
+                    // {
+                    //     icon: <People />,
+                    //     text: "People",
+                    //     children: [
+                    //         {
+                    //             text: "Ashley",
+                    //         },
+                    //         {
+                    //             text: "Antonella",
+                    //         },
+                    //         {
+                    //             text: "Lucia",
+                    //         },
+                    //         {
+                    //             text: "Lucio",
+                    //         },
+                    //     ],
+                    // },
                     {
-                        icon: <People />,
-                        text: "People",
-                        children: [
-                            {
-                                text: "Ashley",
-                            },
-                            {
-                                text: "Antonella",
-                            },
-                            {
-                                text: "Lucia",
-                            },
-                            {
-                                text: "Lucio",
-                            },
-                        ],
-                    },
-                    {
-                        icon: <Place />,
+                        icon: <Place />, //todo: generate this from unique places?
                         text: "Place",
                         children: [
                             {
@@ -283,15 +268,31 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                                 children: [
                                     {
                                         text: "Sydney",
+                                        onClick: () => {
+                                            search(".location=contains(sydney)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Melbourne",
+                                        onClick: () => {
+                                            search(".location=contains(melbourne)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Brisbane",
+                                        onClick: () => {
+                                            search(".location=contains(brisbane)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Perth",
+                                        onClick: () => {
+                                            search(".location=contains(perth)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                 ],
                             },
@@ -300,15 +301,31 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                                 children: [
                                     {
                                         text: "London",
+                                        onClick: () => {
+                                            search(".location=contains(london)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Manchester",
+                                        onClick: () => {
+                                            search(".location=contains(manchester)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Birmingham",
+                                        onClick: () => {
+                                            search(".location=contains(birmingham)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Glasgow",
+                                        onClick: () => {
+                                            search(".location=contains(glasgow)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                 ],
                             },
@@ -317,15 +334,31 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                                 children: [
                                     {
                                         text: "Rome",
+                                        onClick: () => {
+                                            search(".location=contains(rome)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Abruzzo",
+                                        onClick: () => {
+                                            search(".location=contains(abruzzo)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Naples",
+                                        onClick: () => {
+                                            search(".location=contains(naples)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                     {
                                         text: "Turin",
+                                        onClick: () => {
+                                            search(".location=contains(turin)");
+                                            setSidebarOpen(false);
+                                        },
                                     },
                                 ],
                             },
@@ -337,17 +370,37 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                         children: [
                             {
                                 text: "Birthday",
+                                onClick: () => {
+                                    search(".event=contains(birthday)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Wedding",
+                                onClick: () => {
+                                    search(".event=contains(wedding)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Graduation",
+                                onClick: () => {
+                                    search(".event=contains(graduation)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Party",
+                                onClick: () => {
+                                    search(".event=contains(party)");
+                                    setSidebarOpen(false);
+                                },
                             },
-                        ],
+                            {
+                                text: "Edit", //todo:
+                                more: true,
+                            },
+                        ],                        
                     },
                     {
                         icon: <Label />,
@@ -355,27 +408,44 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                         children: [
                             {
                                 text: "Vacation",
+                                onClick: () => {
+                                    search(".labels=has(vacation)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Family",
+                                onClick: () => {
+                                    search(".labels=has(family)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Work",
+                                onClick: () => {
+                                    search(".labels=has(work)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
                                 text: "Friends",
+                                onClick: () => {
+                                    search(".labels=has(friends)");
+                                    setSidebarOpen(false);
+                                },
                             },
                             {
-                                text: "More",
+                                text: "Edit", //todo:
                                 more: true,
                             },
                         ],
                     },
-                    {
-                        icon: <ListIcon />,
-                        text: "Property",
-                        more: true,
-                    },
+                    //todo:
+                    // {
+                    //     icon: <ListIcon />,
+                    //     text: "Property",
+                    //     more: true,
+                    // },
                 ],
             },
             {
@@ -385,28 +455,38 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                     {
                         icon: <CalendarMonth />,
                         text: "Date",
+                        onClick: () => {
+                            setGroupBy("date");
+                            setSidebarOpen(false);
+                        },
                     },
-                    {
-                        icon: <People />,
-                        text: "People",
-                    },
+                    //todo:
+                    // {
+                    //     icon: <People />,
+                    //     text: "People",
+                    // },
                     {
                         icon: <Place />,
                         text: "Place",
+                        onClick: () => {
+                            setGroupBy("location");
+                            setSidebarOpen(false);
+                        },
                     },
-                    {
-                        icon: <Event />,
-                        text: "Event",
-                    },
-                    {
-                        icon: <Label />,
-                        text: "Label",
-                    },
-                    {
-                        icon: <ListIcon />,
-                        text: "Property",
-                        more: true,
-                    },
+                    //todo:
+                    // {
+                    //     icon: <Event />,
+                    //     text: "Event",
+                    // },
+                    // {
+                    //     icon: <Label />,
+                    //     text: "Label",
+                    // },
+                    // {
+                    //     icon: <ListIcon />,
+                    //     text: "Property",
+                    //     more: true,
+                    // },
                 ],
             },
         ];

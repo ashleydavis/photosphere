@@ -26,6 +26,7 @@ import { ModeToggle } from "./components/mode-toggle";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
+import Input from "@mui/joy/Input/Input";
 const FPSStats = require("react-fps-stats").default;
 
 export interface IMainProps {
@@ -58,6 +59,7 @@ function __Main({ computerPage }: IMainProps) {
         selectedItemId,
         selectedItems,
         clearMultiSelection,
+        searchText,
         search,
         clearSearch,
         onReset,
@@ -159,13 +161,13 @@ function __Main({ computerPage }: IMainProps) {
         }
     }, [setId, selectedItemId]);
 
+    useEffect(() => {
+        if (searchText.length > 0 && !openSearch) {
+            setSearchInput(searchText);
+            setOpenSearch(true);
+        }
+    }, [searchText]);
 
-    function notImplemented(event: any) {
-        alert("This is a not implemented yet.");
-
-        event.preventDefault();
-        event.stopPropagation();
-    }
 
     //
     // Navigate to the specified set.
@@ -409,13 +411,14 @@ function __Main({ computerPage }: IMainProps) {
                     </div>
 
                     {openSearch
-                        && <div className="flex flex-row items-center pt-3 pb-3 pl-4 pr-1">
+                        && <div className="flex flex-row items-center pl-4 pr-1">
                             <div>
                                 <i className="fa-solid fa-search"></i>
                             </div>
-                            <input
+                            <Input
+                                size="sm"
                                 autoFocus 
-                                className="search-input flex-grow ml-4 outline-none"
+                                className="flex-grow ml-4 outline-none"
                                 placeholder="Type your search and press enter"
                                 value={searchInput} 
                                 onChange={event => {

@@ -67,7 +67,7 @@ i {
 }
 
 #navbar.search {
-    height: 104px;
+    height: 100px;
 }
 
 #main {
@@ -75,7 +75,7 @@ i {
 }
 
 #main.search {
-    padding-top: 104px;
+    padding-top: 100px;
 }
 
 /* Gallery */

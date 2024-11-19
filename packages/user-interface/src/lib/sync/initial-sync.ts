@@ -1,14 +1,7 @@
 import { IAsset } from "defs";
 import { IDatabase } from "../database/database";
 import { IApi } from "../../context/api-context";
-import { IGalleryItem } from "../gallery-item";
 import { ILastUpdateRecord } from "./last-update-record";
-import { sleep } from "../sleep";
-
-//
-// Gets the sorting value from the gallery item.
-//
-export type SortFn = (galleryItem: IGalleryItem) => any;
 
 //
 // Does the initial asset load and synchronization.
@@ -16,7 +9,6 @@ export type SortFn = (galleryItem: IGalleryItem) => any;
 export async function initialSync(database: IDatabase, setId: string, api: IApi, setIndex: number, 
     setAssets: (assets: IAsset[]) => void,
     shouldContinue?: (setIndex: number) => boolean,
-    sortFn?: SortFn
         ): Promise<void> {
     //
     // Load from local collection.
@@ -24,36 +16,6 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
     const localCollection = database.collection<IAsset>("metadata")
     let allAssets = await localCollection.getAllByIndex("setId", setId);
     if (allAssets.length > 0) {
-        //
-        //
-        if (sortFn) {
-            allAssets.sort((a, b) => {
-                const sortA = sortFn(a);
-                const sortB = sortFn(b);
-                if (sortA === undefined) {
-                    if (sortB === undefined) {
-                        return 0; // Equal.
-                    }
-                    else {
-                        return 1; // a has no sort value, so it comes last.
-                    }
-                }
-                else if (sortB === undefined) {
-                    return -1; // b has no sort value, so it comes last.
-                }
-    
-                if (sortA < sortB) {
-                    return 1; // a comes after b.
-                }
-                else if (sortA > sortB) {
-                    return -1; // a comes before b.
-                }
-                else {
-                    return 0; // a and b are equal.
-                }
-            });
-        }
-
         setAssets(allAssets);
     }
     else {

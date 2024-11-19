@@ -67,16 +67,15 @@ i {
 }
 
 #navbar.search {
-    height: 104px;
+    height: 100px;
 }
-
 
 #main {
     padding-top: 52px;
 }
 
 #main.search {
-    padding-top: 104px;
+    padding-top: 100px;
 }
 
 /* Gallery */

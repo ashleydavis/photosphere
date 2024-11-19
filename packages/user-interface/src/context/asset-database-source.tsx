@@ -600,13 +600,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }, [isLoading, isOnline, user]);
 
     //
-    // Sorts assets by photo date.
-    //
-    function assetSortFn(asset: IGalleryItem) {
-        return asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined;
-    }    
-
-    //
     // Load assets into memory.
     //
     async function loadAssets(setId: string) {
@@ -645,9 +638,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 // Continue if the set index matches the current loading index.
                 // This allows loading to be aborted if the user changes what they are looking at.
                 //
-                setIndex => setIndex === loadingId.current, 
-		
-				assetSortFn
+                setIndex => setIndex === loadingId.current
             );
         }
         finally {
