@@ -29,23 +29,33 @@ interface IGroupBy {
 //
 const groupingMap: { [key: string]: IGroupBy } = {
     date: {
+        // Sorts the photos by date.
         sortKey: asset => asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined,
+
+        // Groups the photos by year and month.
         group: asset => asset.photoDate
             ? [
                 dayjs(asset.photoDate).format("YYYY"),
                 dayjs(asset.photoDate).format("MMMM"),
             ]
             : [ "Undated" ],
-        heading: (group: string[]) => group.join(" "),
+
+        // Formats the group heading.
+        heading: (group: string[]) => group.slice().reverse().join(" "),
     },
     location: {
+        // Sorts the photos by location.
         sortKey: asset => asset.location
             ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2).join(" ")
             : undefined,
+
+        // Groups the photos by location
         group: asset => asset.location
             ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2)
             : [ "Location unknown" ],
-        heading: (group: string[]) => group.join(", "),
+
+        // Formats the group heading.
+        heading: (group: string[]) => group.slice().reverse().join(", "),
     },
 }
 
