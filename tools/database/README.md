@@ -1,8 +1,8 @@
-# Backup
+# Database
 
-A backup tool for Photosphere.
+A tool for updating the Photosphere database.
 
-Run this to backup the Photosphere database and assets.
+Run this to when you need to make mass changes to the Photosphere database.
 
 ## Setup
 
@@ -21,10 +21,10 @@ Compile code:
 pnpm run compile
 ```
 
-Change into directory for the Backup tool and run it:
+Change into directory for the tool and run it:
 
 ```bash
-cd tools/backup
+cd tools/database
 ```
 
 Set set environnment variables for the database connection and AWS:
@@ -52,34 +52,15 @@ Run it for development with live reload:
 pnpm run start:dev
 ```
 
-## Run it with source and dest specified
-
-From cloud to local:
-
-
-```bash
-npm start -- --source=s3 --dest=local
-```
-
-(From some reason `pnpm` doesn't copy the args over correctly.)
-
-From local to cloud:
-
-```bash
-npm start -- --source=local --dest=s3
-```
-
 ## Arguments
 
-Use `--source` and `--dest` to set the source and destination to `s3` or `local`.
-
-Use `--asset` to just backup one asset:
+Use `--asset` to just modify one asset:
 
 ```bash
 npm start -- --asset=<the-asset-id>
 ```
 
-Use `--set` to just backup one set:
+Use `--set` to just modify one set:
 
 ```bash
 npm start -- --set=<the-set-id>
