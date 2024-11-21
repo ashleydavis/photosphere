@@ -29,6 +29,7 @@ async function main() {
     const documentCount = await metadataCollection.countDocuments(query);
     console.log(`Found ${documentCount} documents in the collection.`);
 
+    let numUpdated = 0;
     let numProcessed = 0;
     let queryOffset = 0;
     const querySize = 100;
@@ -70,6 +71,8 @@ async function main() {
                     });
 
                     console.log(`Updated document ${document._id}.`);
+
+                    numUpdated += 1;
                 }
 
                 numProcessed += 1;
@@ -83,10 +86,11 @@ async function main() {
 
     console.log(`-- Summary --`);
     console.log(`Total documents ${documentCount}.`);
+    console.log(`Updated: ${numUpdated}.`);
     console.log(`Processed: ${numProcessed}.`);
 
     await fs.ensureDir("./log");
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numProcessed }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed }, null, 2));
 }
 
 main()
