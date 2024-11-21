@@ -59,7 +59,6 @@ async function main() {
                     }
 
                     const metadata = document.properties.exif;
-                    console.log(JSON.stringify(metadata, null, 2));
 
                     await metadataCollection.updateOne({ _id: document._id }, {
                         $set: {
