@@ -1,4 +1,5 @@
 import { MongoClient } from "mongodb";
+import { retry, reverseGeocode } from "user-interface";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
@@ -51,27 +52,31 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                //
-                // If it has the field exif, change it to metadata update the database document.
-                //
-                if (document.properties.exif) {
-                    if (document.properties.metadata) {
-                        throw new Error(`Document ${document._id} has exif and metadata!`);
+                if (document.new_location === undefined) {
+                    if (document.coordinates === undefined) {
+                        // console.log(`Document ${document._id} has no coordinates.`);
+                        return;
                     }
 
-                    const metadata = document.properties.exif;
+                    console.log(`Reverse geocoding document ${document._id}.`);
+
+                    const reverseGecoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
+                    if (!reverseGecoding) {
+                        throw new Error(`Failed to reverse geocode document ${document._id}.`);
+                    }
 
                     await metadataCollection.updateOne({ _id: document._id }, {
                         $set: {
-                            "properties.metadata": metadata,                            
+                            new_location: reverseGecoding!.location,
+                            "properties.reverseGeocoding": reverseGecoding!.fullResult,
                         },
-                        $unset: {
-                            "properties.exif": "",
-                        },
+                        // $unset: {
+                        //     "todo": "",
+                        // },
                     });
 
                     console.log(`Updated document ${document._id}.`);
-
+                
                     numUpdated += 1;
                 }
 

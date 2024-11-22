@@ -116,12 +116,24 @@ function checkCoordinateOk(coordinate: any, name: string, min: number, max: numb
     }
 }
 
+export interface IReverseGeocodeResult {
+    //
+    // The formatted location.
+    //
+    location: string;
+
+    //
+    // Array of results from the reverse geocoder.
+    //
+    fullResult: any[];
+}
+
 //
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
-export async function reverseGeocode(location: ILocation): Promise<string | undefined> {
+export async function reverseGeocode(location: ILocation): Promise<IReverseGeocodeResult | undefined> {
 
     if (location === null || location === undefined) {
         throw new Error(`Invalid location ${location}`);
@@ -147,7 +159,18 @@ export async function reverseGeocode(location: ILocation): Promise<string | unde
     });
 
     if (data.results && data.results.length > 0) {
-        return data.results[0].formatted_address;
+        const filtered = data.results.filter((result: any) => {
+            return result.types.includes("street_address");
+        });
+
+        if (filtered.length > 0) {
+            return {
+                location: filtered[0].formatted_address,
+                fullResult: filtered,
+            };
+        }
+
+        return undefined;
     }
 
     return undefined;

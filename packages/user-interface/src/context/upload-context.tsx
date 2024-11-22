@@ -373,7 +373,11 @@ export function UploadContextProvider({ children }: IProps) {
                     if (exif.GPSLatitude && exif.GPSLongitude) {
                         const coordinates = convertExifCoordinates(exif);
                         if (isLocationInRange(coordinates)) {
-                            location = await retry(() => reverseGeocode(coordinates), 3, 5000);
+                            const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates), 3, 5000);
+                            if (reverseGeocodingResult) {
+                                location = reverseGeocodingResult.location;
+                                properties.reverseGeocoding = reverseGeocodingResult.fullResult;
+                            }
                         }
                         else {
                             console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${nextUpload.fileName}.`);

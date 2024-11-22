@@ -20,7 +20,7 @@
     "lodash": "^4.17.21",
     "minimist": "^1.2.8",
     "mongodb": "^4.7.0",
-    "storage": "workspace:*"
+    "user-interface": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",

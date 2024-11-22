@@ -244,7 +244,11 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     let location: string | undefined = undefined;
     if (assetDetails.coordinates) {
         coordinates = assetDetails.coordinates;
-        location = await retry(() => reverseGeocode(assetDetails.coordinates!), 3, 1500);
+        const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!), 3, 1500);
+        if (reverseGeocodingResult) {
+            location = reverseGeocodingResult.location;
+            properties.reverseGeocoding = reverseGeocodingResult.fullResult;
+        }
     }
 
     //
