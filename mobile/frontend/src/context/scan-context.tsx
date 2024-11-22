@@ -3,8 +3,7 @@
 //
 
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { IGalleryItem, sleep } from "user-interface";
-import dayjs from "dayjs";
+import { IGalleryItem } from "user-interface";
 import { registerPlugin } from '@capacitor/core';
 
 const FileUploader = registerPlugin<any>('FileUploader'); //TODO: Type me.

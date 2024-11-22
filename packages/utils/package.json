@@ -1,7 +1,7 @@
 {
-  "name": "user-interface",
+  "name": "utils",
   "version": "1.0.0",
-  "description": "The user-interface for the Photosphere application.",
+  "description": "Various utility functions.",
   "main": "build/index.js",
   "scripts": {
     "t": "pnpm run test",
@@ -51,7 +51,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-fps-stats": "^0.3.1",
-    "react-router-dom": "^6.4.1",
-    "utils": "workspace:*"
+    "react-router-dom": "^6.4.1"
   }
 }

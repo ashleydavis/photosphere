@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { retry, reverseGeocode } from "user-interface";
+import { retry, reverseGeocode } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");

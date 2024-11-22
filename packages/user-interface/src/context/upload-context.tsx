@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { getExifData, getImageResolution, IResolution, loadImage, resizeImage } from "../lib/image";
 import { computeHash, loadDataURL } from "../lib/file";
-import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "../lib/reverse-geocode";
+import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "utils";
 import { IQueuedUpload, UploadState } from "../lib/upload-details";
 
 import dayjs from "dayjs";
@@ -10,10 +10,10 @@ dayjs.extend(customParseFormat);
 
 import JSZip from "jszip";
 import mimeTypes from "mime-types";
-import { retry } from "../lib/retry";
+import { retry } from "utils";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
-import { uuid } from "../lib/uuid";
+import { uuid } from "utils";
 import { useApp } from "./app-context";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
 

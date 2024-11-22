@@ -15,7 +15,7 @@ import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { syncIncoming } from "../lib/sync/sync-incoming";
 import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
-import { uuid } from "../lib/uuid";
+import { uuid } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
 const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.

@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { sleep } from 'user-interface';
+import { sleep } from 'utils';
 
 //
 // Information on a file.

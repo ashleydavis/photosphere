@@ -7,9 +7,9 @@ import sharp from "sharp";
 import os from "os";
 import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
-import { ILocation as ICoordinates, IResolution, convertExifCoordinates, isLocationInRange, retry, reverseGeocode, uuid } from "user-interface";
 import _ from "lodash";
 import JSZip from "jszip";
+import { convertExifCoordinates, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -240,7 +240,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         properties.metadata = assetDetails.metadata;
     }
 
-    let coordinates: ICoordinates | undefined = undefined;
+    let coordinates: ILocation | undefined = undefined;
     let location: string | undefined = undefined;
     if (assetDetails.coordinates) {
         coordinates = assetDetails.coordinates;
@@ -508,6 +508,21 @@ main()
         console.error(err && err.stack || err);
     });
 
+//
+// Represents the resolution of the image or video.
+//
+export interface IResolution {
+    //
+    // The width of the image or video.
+    //
+    width: number;
+
+    //
+    // The height of the image or video.
+    //
+    height: number;
+}
+
 export interface IAssetDetails {
     //
     // The resolution of the image/video.
@@ -527,7 +542,7 @@ export interface IAssetDetails {
     //
     // GPS coordinates of the asset.
     //
-    coordinates?: ICoordinates;
+    coordinates?: ILocation;
 
     //
     // Date of the asset.
@@ -640,7 +655,7 @@ const videoLocationRegex = /([+-]\d+\.\d+)([+-]\d+\.\d+)/;
 //
 // Parses the location of the video.
 //
-function parseVideoLocation(location: string): ICoordinates | undefined {
+function parseVideoLocation(location: string): ILocation | undefined {
     const match = location.match(videoLocationRegex);
     if (match) {
         return {
@@ -655,14 +670,14 @@ function parseVideoLocation(location: string): ICoordinates | undefined {
 //
 // Gets the metadata data for a video.
 //
-function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ICoordinates, photoDate?: string }> {
+function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
             if (err) {
                 reject(err);
             }
             else {
-                let coordinates: ICoordinates | undefined = undefined;
+                let coordinates: ILocation | undefined = undefined;
                 if (metadata.format?.tags?.location) {
                     coordinates = parseVideoLocation(metadata.format.tags.location);
                 }
@@ -733,10 +748,10 @@ async function getImageResolution(filePath: string, fileData: Buffer): Promise<I
 //
 // Gets the metadata from the image.
 //
-async function getImageMetadata(filePath: string, fileData: Buffer, contentType: string): Promise<{ metadata?: any, coordinates?: ICoordinates, photoDate?: string }> {
+async function getImageMetadata(filePath: string, fileData: Buffer, contentType: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
     if (contentType === "image/jpeg" || contentType === "image/jpg") {
         try {
-            let coordinates: ICoordinates | undefined = undefined;
+            let coordinates: ILocation | undefined = undefined;
             let photoDate: string | undefined = undefined;
 
             const parser = exifParser.create(fileData.buffer);
