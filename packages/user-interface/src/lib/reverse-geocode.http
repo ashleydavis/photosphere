@@ -4,7 +4,7 @@
 
 @lat = 34.98605555555556
 @lng = 135.75775833333333
-@google_api_key = AIzaSyBrVvnz9JE__DXHg8YPwOjMJ3_Rc_MUuHw
+@google_api_key = <api-key>
 
 @url = https://maps.googleapis.com/maps/api/geocode/json?latlng={{lat}},{{lng}}&key={{google_api_key}}
 
