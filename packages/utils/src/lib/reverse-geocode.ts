@@ -123,6 +123,11 @@ export interface IReverseGeocodeResult {
     location: string;
 
     //
+    // The selected type.
+    //
+    type: string;
+
+    //
     // Array of results from the reverse geocoder.
     //
     fullResult: any[];
@@ -143,7 +148,7 @@ export async function reverseGeocode(location: ILocation): Promise<IReverseGeoco
     checkCoordinateOk(location.lng, `lng`, LNG_MIN, LNG_MAX);
 
     if (!GOOGLE_API_KEY) {
-        return undefined;
+        throw new Error(`GOOGLE_API_KEY not set. Required for reverse geocoding.`);
     }
 
     //
@@ -158,20 +163,43 @@ export async function reverseGeocode(location: ILocation): Promise<IReverseGeoco
         },
     });
 
-    if (data.results && data.results.length > 0) {
-        const filtered = data.results.filter((result: any) => {
-            return result.types.includes("street_address");
-        });
+    if (data.status === "REQUEST_DENIED") {
+        throw new Error(`Reverse geocoding failed: ${data.error_message}`);
+    }
 
-        if (filtered.length > 0) {
+    if (data.results && data.results.length > 0) {
+        const firstPremise = getFirstResultOfType(data, "premise");
+        if (firstPremise) {
             return {
-                location: filtered[0].formatted_address,
-                fullResult: filtered,
+                location: firstPremise.formatted_address,
+                type: "premise",
+                fullResult: data.results,
             };
         }
 
-        return undefined;
+        const firstStreetAddress = getFirstResultOfType(data, "street_address");
+        if (firstStreetAddress) {
+            return {
+                location: firstStreetAddress.formatted_address,
+                type: "street_address",
+                fullResult: data.results,
+            };
+        }
+
+        return {
+            location: data.results[0].formatted_address,
+            type: "any",
+            fullResult: data.results,
+        };
     }
 
     return undefined;
 }
+function getFirstResultOfType(data: any, desiredType: string) {
+    const filtered = data.results.filter((result: any) => {
+        return result.types.includes(desiredType);
+    });
+    const first = filtered.length > 0 ? filtered[0] : undefined;
+    return first;
+}
+

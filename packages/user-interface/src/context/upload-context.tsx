@@ -376,7 +376,10 @@ export function UploadContextProvider({ children }: IProps) {
                             const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates), 3, 5000);
                             if (reverseGeocodingResult) {
                                 location = reverseGeocodingResult.location;
-                                properties.reverseGeocoding = reverseGeocodingResult.fullResult;
+                                properties.reverseGeocoding = {
+                                    type: reverseGeocodingResult.type,
+                                    fullResult: reverseGeocodingResult.fullResult,
+                                };
                             }
                         }
                         else {
