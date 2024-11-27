@@ -55,29 +55,28 @@ async function main() {
                 if (document.new_location === undefined) {
                     if (document.coordinates === undefined) {
                         // console.log(`Document ${document._id} has no coordinates.`);
-                        return;
                     }
+                    else {
+                        const reverseGeocoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
+                        if (!reverseGeocoding) {
+                            throw new Error(`Failed to reverse geocode document ${document._id}.`);
+                        }
 
-                    console.log(`Reverse geocoding document ${document._id}.`);
+                        await metadataCollection.updateOne({ _id: document._id }, {
+                            $set: {
+                                new_location: reverseGeocoding!.location,
+                                "properties.reverseGeocoding": {
+                                    type: reverseGeocoding!.type,
+                                    fullResult: reverseGeocoding!.fullResult,
+                                },
+                            },
+                            // $unset: {
+                            //     "todo": "",
+                            // },
+                        });
 
-                    const reverseGecoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
-                    if (!reverseGecoding) {
-                        throw new Error(`Failed to reverse geocode document ${document._id}.`);
+                        numUpdated += 1;
                     }
-
-                    await metadataCollection.updateOne({ _id: document._id }, {
-                        $set: {
-                            new_location: reverseGecoding!.location,
-                            "properties.reverseGeocoding": reverseGecoding!.fullResult,
-                        },
-                        // $unset: {
-                        //     "todo": "",
-                        // },
-                    });
-
-                    console.log(`Updated document ${document._id}.`);
-                
-                    numUpdated += 1;
                 }
 
                 numProcessed += 1;
