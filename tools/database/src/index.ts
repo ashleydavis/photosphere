@@ -52,31 +52,17 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                if (document.new_location === undefined) {
-                    if (document.coordinates === undefined) {
-                        // console.log(`Document ${document._id} has no coordinates.`);
-                    }
-                    else {
-                        const reverseGeocoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
-                        if (!reverseGeocoding) {
-                            throw new Error(`Failed to reverse geocode document ${document._id}.`);
-                        }
+                if (document.new_location !== undefined) {
+                    await metadataCollection.updateOne({ _id: document._id }, {
+                        $set: {
+                            location: document.new_location,
+                        },
+                        // $unset: {
+                        //     "todo": "",
+                        // },
+                    });
 
-                        await metadataCollection.updateOne({ _id: document._id }, {
-                            $set: {
-                                new_location: reverseGeocoding!.location,
-                                "properties.reverseGeocoding": {
-                                    type: reverseGeocoding!.type,
-                                    fullResult: reverseGeocoding!.fullResult,
-                                },
-                            },
-                            // $unset: {
-                            //     "todo": "",
-                            // },
-                        });
-
-                        numUpdated += 1;
-                    }
+                    numUpdated += 1;
                 }
 
                 numProcessed += 1;
