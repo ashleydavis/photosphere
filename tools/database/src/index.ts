@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { retry, reverseGeocode } from "utils";
+import { convertExifCoordinates, isLocationInRange, retry, reverseGeocode } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
@@ -51,15 +51,23 @@ async function main() {
 
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
-
-                if (document.new_location !== undefined) {
-                    await metadataCollection.updateOne({ _id: document._id }, {
-                        $unset: {
-                            "new_location": "",
-                        },
-                    });
-
-                    numUpdated += 1;
+                if (!document.coordinates) {
+                    if (document.properties?.metadata?.GPSLatitude
+                        && document.properties?.metadata?.GPSLongitude) {
+                        const coordinates = convertExifCoordinates(document.properties.metadata);
+                        if (!isLocationInRange(coordinates)) {
+                            console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${document._id}.`);
+                        }
+                        else {
+                            await metadataCollection.updateOne({ _id: document._id }, {
+                                $set: {
+                                    coordinates,
+                                },
+                            });
+        
+                            numUpdated += 1;
+                        }            
+                   }
                 }
 
                 numProcessed += 1;
