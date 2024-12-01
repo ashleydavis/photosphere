@@ -51,23 +51,30 @@ async function main() {
 
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
-                if (!document.coordinates) {
-                    if (document.properties?.metadata?.GPSLatitude
-                        && document.properties?.metadata?.GPSLongitude) {
-                        const coordinates = convertExifCoordinates(document.properties.metadata);
-                        if (!isLocationInRange(coordinates)) {
-                            console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${document._id}.`);
+
+                if (document.location === undefined) {
+                    if (document.coordinates === undefined) {
+                        // console.log(`Document ${document._id} has no coordinates.`);
+                    }
+                    else {
+                        console.log(`Reverse geocoding document ${document._id}.`);
+    
+                        const reverseGecoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
+                        if (!reverseGecoding) {
+                            throw new Error(`Failed to reverse geocode document ${document._id}.`);
                         }
-                        else {
-                            await metadataCollection.updateOne({ _id: document._id }, {
-                                $set: {
-                                    coordinates,
-                                },
-                            });
-        
-                            numUpdated += 1;
-                        }            
-                   }
+    
+                        await metadataCollection.updateOne({ _id: document._id }, {
+                            $set: {
+                                location: reverseGecoding!.location,
+                                "properties.reverseGeocoding": reverseGecoding!.fullResult,
+                            },
+                        });
+    
+                        console.log(`Updated document ${document._id}.`);
+                    
+                        numUpdated += 1;
+                    }
                 }
 
                 numProcessed += 1;
