@@ -9,3 +9,7 @@
 @url = https://maps.googleapis.com/maps/api/geocode/json?latlng={{lat}},{{lng}}&key={{google_api_key}}
 
 GET {{url}}
+
+###
+
+GET https://nominatim.openstreetmap.org/reverse?format=json&lat={{lat}}&lon={{lng}}
