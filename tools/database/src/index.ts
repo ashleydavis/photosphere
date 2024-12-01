@@ -33,8 +33,8 @@ async function main() {
     let numUpdated = 0;
     let numProcessed = 0;
     let queryOffset = 0;
-    const querySize = 100;
-    const batchSize = 10;
+    const querySize = 10_000;
+    const batchSize = 1_000;
 
     while (true) {
         const documents = await metadataCollection.find(query)
@@ -54,12 +54,9 @@ async function main() {
 
                 if (document.new_location !== undefined) {
                     await metadataCollection.updateOne({ _id: document._id }, {
-                        $set: {
-                            location: document.new_location,
+                        $unset: {
+                            "new_location": "",
                         },
-                        // $unset: {
-                        //     "todo": "",
-                        // },
                     });
 
                     numUpdated += 1;
