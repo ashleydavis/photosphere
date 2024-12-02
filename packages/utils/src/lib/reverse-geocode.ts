@@ -134,6 +134,108 @@ export interface IReverseGeocodeResult {
 }
 
 //
+// Get the first result of reverse geocoding that matches the desired type.
+//
+export function getFirstResultOfType(results: any[], desiredType: string) {
+    const filtered = results.filter((result: any) => {
+        return result.types.includes(desiredType);
+    });
+    const first = filtered.length > 0 ? filtered[0] : undefined;
+    return first;
+}
+
+const fields = [
+    [ "street_number" ],
+    [ "route" ],
+    [ "sublocality_level_2" ],
+    [ "sublocality_level_1" ],
+    [ "locality", "administrative_area_level_2" ],
+    [ "administrative_area_level_1" ],
+    [ "country" ],
+];
+
+//
+// Parse a reverse geocode result.
+//
+export function parseReverseGeocodeResult(result: any): string {
+
+    const values: any = {};
+
+    for (const component of result.address_components) {
+        for (const fieldOptions of fields) {
+            const key = fieldOptions.join("_");
+            if (values[key]) {
+                continue;
+            }
+
+            for (const fieldOption of fieldOptions) {
+                if (component.types.includes(fieldOption)) {
+                    values[key] = component.long_name;
+                    break;
+                }
+            }
+        }        
+    }
+
+    let streetAddress;
+
+    if (values.street_number && values.route) {
+        streetAddress = `${values.street_number} ${values.route}`;
+    }
+
+    let parts = [];
+
+    if (streetAddress) {
+        parts.push(streetAddress);
+    }
+
+    let alreadySet = new Set<string>();
+
+    for (const fieldOptions of fields.slice(2)) {
+        const value = values[fieldOptions.join("_")];
+        if (value) {
+            if (alreadySet.has(value)) {
+                continue;
+            }
+            alreadySet.add(value);
+            parts.push(value);
+        }
+    }
+
+    return parts.join(", ");
+}
+
+//
+// Choose the best result from the reverse geocoding.
+//
+export function chooseBestResult(results: any[]): IReverseGeocodeResult {
+    const firstStreetAddress = getFirstResultOfType(results, "street_address");
+    if (firstStreetAddress) {
+        return {
+            location: parseReverseGeocodeResult(firstStreetAddress),
+            type: "street_address",
+            fullResult: results,
+        };
+    }
+
+    const firstPremise = getFirstResultOfType(results, "premise");
+    if (firstPremise) {
+        return {
+            location: parseReverseGeocodeResult(firstPremise),
+            type: "premise",
+            fullResult: results,
+        };
+    }
+
+    return {
+        location: parseReverseGeocodeResult(results[0]),
+        type: "any",
+        fullResult: results,
+    };
+
+}
+
+//
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
@@ -168,38 +270,9 @@ export async function reverseGeocode(location: ILocation): Promise<IReverseGeoco
     }
 
     if (data.results && data.results.length > 0) {
-        const firstPremise = getFirstResultOfType(data, "premise");
-        if (firstPremise) {
-            return {
-                location: firstPremise.formatted_address,
-                type: "premise",
-                fullResult: data.results,
-            };
-        }
-
-        const firstStreetAddress = getFirstResultOfType(data, "street_address");
-        if (firstStreetAddress) {
-            return {
-                location: firstStreetAddress.formatted_address,
-                type: "street_address",
-                fullResult: data.results,
-            };
-        }
-
-        return {
-            location: data.results[0].formatted_address,
-            type: "any",
-            fullResult: data.results,
-        };
+        return chooseBestResult(data.results);
     }
 
     return undefined;
-}
-function getFirstResultOfType(data: any, desiredType: string) {
-    const filtered = data.results.filter((result: any) => {
-        return result.types.includes(desiredType);
-    });
-    const first = filtered.length > 0 ? filtered[0] : undefined;
-    return first;
 }
 

@@ -1,5 +1,6 @@
 import { MongoClient } from "mongodb";
-import { convertExifCoordinates, isLocationInRange, retry, reverseGeocode } from "utils";
+import { isArray } from "util";
+import { chooseBestResult, convertExifCoordinates, getFirstResultOfType, isLocationInRange, retry, reverseGeocode } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
@@ -52,29 +53,31 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                if (document.location === undefined) {
-                    if (document.coordinates === undefined) {
-                        // console.log(`Document ${document._id} has no coordinates.`);
+                if (document.properties.reverseGeocoding !== undefined) {
+
+                    let res;
+                    if (isArray(document.properties.reverseGeocoding)) {
+                        res = document.properties.reverseGeocoding;
                     }
                     else {
-                        console.log(`Reverse geocoding document ${document._id}.`);
-    
-                        const reverseGecoding = await retry(() => reverseGeocode(document.coordinates), 3, 1500);
-                        if (!reverseGecoding) {
-                            throw new Error(`Failed to reverse geocode document ${document._id}.`);
-                        }
-    
-                        await metadataCollection.updateOne({ _id: document._id }, {
-                            $set: {
-                                location: reverseGecoding!.location,
-                                "properties.reverseGeocoding": reverseGecoding!.fullResult,
-                            },
-                        });
-    
-                        console.log(`Updated document ${document._id}.`);
-                    
-                        numUpdated += 1;
+                        res = document.properties.reverseGeocoding.fullResult;
                     }
+
+                    const result = chooseBestResult(res);
+
+                    await metadataCollection.updateOne({ _id: document._id }, {
+                        $set: {
+                            location: result.location,
+                            "properties.reverseGeocoding": {
+                                type: result.type,
+                                fullResult: res,
+                            },
+                        },
+                    });
+
+                    // console.log(`Updated document ${document._id}.`);
+
+                    numUpdated += 1;
                 }
 
                 numProcessed += 1;

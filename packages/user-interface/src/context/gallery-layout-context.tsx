@@ -46,12 +46,12 @@ const groupingMap: { [key: string]: IGroupBy } = {
     location: {
         // Sorts the photos by location.
         sortKey: asset => asset.location
-            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2).join(" ")
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3).join(" ")
             : undefined,
 
         // Groups the photos by location
         group: asset => asset.location
-            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 2)
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3)
             : [ "Location unknown" ],
 
         // Formats the group heading.
