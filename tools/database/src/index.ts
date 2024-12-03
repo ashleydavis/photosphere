@@ -53,25 +53,10 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                if (document.properties.reverseGeocoding !== undefined) {
-
-                    let res;
-                    if (isArray(document.properties.reverseGeocoding)) {
-                        res = document.properties.reverseGeocoding;
-                    }
-                    else {
-                        res = document.properties.reverseGeocoding.fullResult;
-                    }
-
-                    const result = chooseBestResult(res);
-
+                if (document.sortDate) {
                     await metadataCollection.updateOne({ _id: document._id }, {
-                        $set: {
-                            location: result.location,
-                            "properties.reverseGeocoding": {
-                                type: result.type,
-                                fullResult: res,
-                            },
+                        $unset: {
+                            sortDate: "",
                         },
                     });
 
