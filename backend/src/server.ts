@@ -26,6 +26,13 @@ const dateFields = [
 //
 export async function createServer(now: () => Date, db: Db, storage: IStorage) {
 
+    //
+    // Make sure the metadata collection has the right indexes to stop the following error:
+    //
+    // MongoServerError: Executor error during find command :: caused by :: Sort exceeded memory limit of 104857600 bytes, but did not opt in to external sorting. Aborting operation. Pass allowDiskUse:true to opt in.
+    //
+    await db.collection("metadata").createIndex({ setId: 1, photoDate: -1 });
+
     const app = express();
     app.use(cors());
 
