@@ -3,6 +3,7 @@ import { computePartialLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import dayjs from "dayjs";
+import { isArray } from "lodash";
 
 //
 // Specifies how to group a gallery itemm.
@@ -46,7 +47,7 @@ const groupingMap: { [key: string]: IGroupBy } = {
     location: {
         // Sorts the photos by location.
         sortKey: asset => asset.location
-            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3).join(" ")
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3)
             : undefined,
 
         // Groups the photos by location
@@ -208,14 +209,30 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
                 return -1; // b has no sort value, so it comes last.
             }
 
-            if (sortA < sortB) {
-                return 1; // a comes after b.
-            }
-            else if (sortA > sortB) {
-                return -1; // a comes before b.
+            if (isArray(sortA) && isArray(sortB)) {
+                for (let i = 0; i < Math.min(sortA.length, sortB.length); i++) {
+                    if (sortA[i] < sortB[i]) {
+                        return -1; // a comes before b
+                    }
+    
+                    if (sortA[i] > sortB[i]) {
+                        return 1;  // a comes after b
+                    }
+                }
+                  
+                // If all compared elements are equal, sort by length
+                return sortA.length - sortB.length;
             }
             else {
-                return 0; // a and b are equal.
+                if (sortA < sortB) {
+                    return 1; // a comes after b.
+                }
+                else if (sortA > sortB) {
+                    return -1; // a comes before b.
+                }
+                else {
+                    return 0; // a and b are equal.
+                }
             }
         });
         setLayout(computePartialLayout(undefined, sortedItems, galleryWidth, targetRowHeight, grouping.group, grouping.heading));
