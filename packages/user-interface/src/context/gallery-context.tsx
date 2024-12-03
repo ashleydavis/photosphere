@@ -138,6 +138,16 @@ export interface IGalleryContext {
     selectedItems: Set<string>;
 
     //
+    // Set to true when the user is selecting multiple items.
+    //
+    isSelecting: boolean;
+
+    //
+    // Enables or disables selecting multiple items.
+    //
+    enableSelecting(selecting: boolean): void;
+
+    //
     // Add the item to the multiple selection.
     //
     addToMultipleSelection(item: IGalleryItem): void;
@@ -208,6 +218,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Multiple selected gallery items.
     //
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set<string>());
+
+    //
+    // Set to true when the user is selecting multiple items.
+    //
+    const [isSelecting, setIsSelecting] = useState<boolean>(false);
 
     //
     // A cache entry for a loaded asset.
@@ -518,12 +533,17 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const filtered =  [...selectedItems].filter(selectedItem => selectedItem !== item._id);
         setSelectedItems(new Set(filtered));
+
+        if (filtered.length === 0) {
+            setIsSelecting(false);
+        }
     }
 
     //
     // Clears the multiple selection.
     //
     function clearMultiSelection(): void {        
+        setIsSelecting(false);
         setSelectedItems(new Set<string>());
     }
 
@@ -639,6 +659,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         setSelectedItemId,
         clearSelectedItem,
         selectedItems,
+        isSelecting,
+        enableSelecting: setIsSelecting,
         addToMultipleSelection,
         removeFromMultipleSelection,
         clearMultiSelection,

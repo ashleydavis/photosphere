@@ -4,6 +4,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import classNames from "classnames";
 import { getImageTransform } from "../lib/image";
 import dayjs from "dayjs";
+import { useLongPress } from "../lib/long-press";
 
 export interface IGalleryImageProps {
     //
@@ -50,7 +51,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
     const [source, setSource] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
-    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems } = useGallery();
+    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
 
     const gutter = 2;
 
@@ -92,6 +93,19 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
         orientation = item.properties.metadata.Orientation?.[0];
     }
 
+    const { longPressHandlers } = useLongPress({
+        onLongPress: () => {
+            enableSelecting(true);
+            addToMultipleSelection(item);
+        },
+        onClick: () => {
+            if (onClick) {
+                onClick();
+            }
+        },
+        delay: 500,
+    });
+
     return (
         <>
             <div
@@ -123,6 +137,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                         data-testid="gallery-thumb"
                         className={classNames("gallery-thumb", { "fade-in": source === "cloud" })}                    
                         src={objectURL}
+                        {...longPressHandlers}
                         style={{
                             position: "absolute",
                             left: "0",
@@ -133,15 +148,11 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             transform: getImageTransform(orientation, item.aspectRatio),
                             transformOrigin: "center",
                         }}
-                        onClick={() => {
-                            if (onClick) {
-                                onClick();
-                            }
-                        }}
                         />
 
                     {item.contentType.startsWith("video")
                         && <div
+                            {...longPressHandlers}
                             style={{
                                 position: "absolute",
                                 left: "50%",
@@ -155,11 +166,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                                 justifyContent: "center",
                                 alignItems: "center",
                                 cursor: "pointer",
-                            }}
-                            onClick={() => {
-                                if (onClick) {
-                                    onClick();
-                                }
                             }}
                             >
                             <svg
@@ -189,7 +195,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             justifyContent: "center",
                             alignItems: "center",
                             cursor: "pointer",
-                            display: isSelected ? "flex" : undefined,
+                            display: (isSelecting || isSelected) ? "flex" : undefined,
                         }}
                         onClick={event => {
                             event.preventDefault();
