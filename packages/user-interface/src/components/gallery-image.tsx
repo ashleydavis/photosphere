@@ -128,7 +128,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                         width: `${width}px`,
                         height: `${height}px`,
                         overflow: "hidden",
-                        border: "2px solid black",
                     }}
                     >
                     <img 
