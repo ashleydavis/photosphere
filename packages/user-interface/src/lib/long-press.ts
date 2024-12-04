@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 
 export interface ILongPressProps {
     //
@@ -17,30 +17,60 @@ export interface ILongPressProps {
     delay: number;
 }
 
+interface ITouchCoordinates {
+    x: number;
+    y: number;
+}
+
 export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
 
-    const [isLongPress, setIsLongPress] = useState(false); //todo: can this be a ref?
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isLongPress = useRef<boolean>(false);
+    const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+    const startPos = useRef<ITouchCoordinates | undefined>(undefined);
 
-    const start = useCallback(() => {
+    function onTouchStart(event: React.TouchEvent) {
+        startPos.current = {
+            x: event.touches[0].clientX,
+            y: event.touches[0].clientY,
+        };
         timeoutRef.current = setTimeout(() => {
-            setIsLongPress(true);
+            isLongPress.current = true;
             onLongPress();
         }, delay);
-    }, [onLongPress, delay]);
-
-    const clear = useCallback(() => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
+    }
+    
+    function onTouchEnd() {
+        if (timeoutRef.current === undefined) {
+            // Not active.
+            return;
         }
-        if (!isLongPress) {
+
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = undefined;
+
+        if (!isLongPress.current) {
             onClick();
         }
-        setIsLongPress(false);
-    }, [isLongPress, onClick]);
+        isLongPress.current = false;
+    }
 
-    const onTouchStart = useCallback(() => start(), [start]);
-    const onTouchEnd = useCallback(() => clear(), [clear]);
+    function onTouchMove(event: React.TouchEvent) {
+        if (timeoutRef.current === undefined) {
+            // Not pressing.
+            return;
+        }
+
+        // If we moved further than 10 pixels, cancel the long press.
+        const distance = {
+            x: Math.abs(event.touches[0].clientX - startPos.current!.x),
+            y: Math.abs(event.touches[0].clientY - startPos.current!.y),
+        };
+        if (distance.x > 10 || distance.y > 10) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = undefined;
+            isLongPress.current = false;
+        }
+    }
 
     function onContextMenu(e: React.MouseEvent) {
         e.preventDefault();
@@ -50,6 +80,7 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         longPressHandlers: {
             onTouchStart,
             onTouchEnd,
+            onTouchMove,
             onContextMenu,
         },
     };
