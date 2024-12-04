@@ -146,6 +146,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             height: "100%",
                             objectFit: "contain",
                             transform: getImageTransform(orientation, item.aspectRatio),
+                            scale: "1.05", // A small tweak to make the image cover the space without gaps.
                             transformOrigin: "center",
                         }}
                         />
