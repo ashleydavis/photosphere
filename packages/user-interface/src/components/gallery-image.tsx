@@ -53,8 +53,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
 
-    const gutter = 2;
-
     useEffect(() => {
         if (objectURL) {
             // Already loaded.
@@ -113,8 +111,8 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     position: "absolute",
                     left: `${x}px`,
                     top: `${y}px`,
-                    width: `${width-gutter}px`,
-                    height: `${height-gutter}px`,
+                    width: `${width}px`,
+                    height: `${height}px`,
                     overflow: "hidden",
                     backgroundColor: "rgba(0, 0, 0, 0.1)",
                 }} 
@@ -127,10 +125,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                         position: "absolute",
                         left: `${x}px`,
                         top: `${y}px`,
-                        width: `${width-gutter}px`,
-                        height: `${height-gutter}px`,
+                        width: `${width}px`,
+                        height: `${height}px`,
                         overflow: "hidden",
-                        // border: "1px solid red",
+                        border: "2px solid black",
                     }}
                     >
                     <img 
