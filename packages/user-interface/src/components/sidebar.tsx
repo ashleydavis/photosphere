@@ -521,7 +521,9 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 <ListItem
                     onClick={() => {
                         setSidebarOpen(false);
-                        onOpenSearch();
+                        setTimeout(() => { // Delay the opening of the search input allows it auto focus.
+                            onOpenSearch();
+                        }, 10);
                     }}
                     >
                     <ListItemButton>
