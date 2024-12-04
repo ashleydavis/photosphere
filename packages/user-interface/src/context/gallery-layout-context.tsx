@@ -129,7 +129,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     // The target row height of the gallery.
     //
-    const [targetRowHeight, setTargetRowHeight] = useState(150);
+    const [targetRowHeight, setTargetRowHeight] = useState(80);
     
     //
     // The current layout of the gallery.
