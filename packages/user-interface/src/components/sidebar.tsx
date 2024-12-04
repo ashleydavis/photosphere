@@ -661,7 +661,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                 {curMenu.map((menuItem, index) => {
                     return (
                         <ListItem 
-                            key={index}
+                            key={`${index}-${menuItem.text}`}
                             onClick={() => {
                                 if (menuItem.children && menuItem.children.length > 0) {
                                     setCurMenu(menuItem.children);
