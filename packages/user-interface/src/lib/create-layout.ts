@@ -69,6 +69,9 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         return layout;
     }
 
+    const horizonalGutter = 4;
+    const verticalGutter = 4;
+
     const rows = layout.rows;
 
     let curRow: IGalleryRow;
@@ -164,6 +167,9 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         //
         curRow.items.push(item);
         curRow.width += computedWidth;
+        if (itemIndex < items.length-1) {
+            curRow.width += horizonalGutter;
+        }
     }
 
     //
@@ -185,14 +191,18 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         //
         // Expand each item to fill the gap.
         //
-        for (const item of row.items) {
+        for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+            const item = row.items[itemIndex];
             item.thumbWidth! += deltaWidth;
             item.thumbHeight = item.thumbWidth! * (1.0 / item.aspectRatio!);
             row.width += item.thumbWidth!;
+            if (itemIndex < row.items.length-1) {
+                row.width += horizonalGutter;
+            }
             maxThumbHeight = Math.max(maxThumbHeight, item.thumbHeight);
         }
 
-        computeFromHeight(row, maxThumbHeight);
+        computeFromHeight(row, maxThumbHeight, horizonalGutter);
     }
 
     //
@@ -246,7 +256,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             //
             pullback *= 2;
 
-            computeFromHeight(row, origHeight - pullback);
+            computeFromHeight(row, origHeight - pullback, horizonalGutter);
 
             if (row.width < galleryWidth) {
                 // We have pulled in too far. Move onto the next phase.
@@ -265,7 +275,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             prevPullback = pullback;
             pullback *= 0.75;
 
-            computeFromHeight(row, origHeight - pullback);
+            computeFromHeight(row, origHeight - pullback, horizonalGutter);
 
             if (row.width >= galleryWidth) {
                 // We have pushed out too far. Move onto the next phase.
@@ -286,7 +296,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             prevPullback = pullback;
             pullback -= 1;
 
-            computeFromHeight(row, origHeight - pullback);
+            computeFromHeight(row, origHeight - pullback, horizonalGutter);
 
             if (row.width >= galleryWidth) {
                 // We have pushed out too far. Time to finish up.
@@ -298,7 +308,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         //
         // Final compute.
         //
-        computeFromHeight(row, origHeight - pullback);
+        computeFromHeight(row, origHeight - pullback, horizonalGutter);
     }
 
     //
@@ -347,15 +357,8 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
         row.offsetY = prevRowHeight;
-        prevRowHeight += row.height;
+        prevRowHeight += row.height + verticalGutter;
         layout.galleryHeight = prevRowHeight;
-
-        let accumulatedWidth = 0;
-
-        for (const item of row.items) {
-            item.offsetX = accumulatedWidth;
-            accumulatedWidth += item.thumbWidth!;
-        }
     }
 
     return layout;
@@ -364,13 +367,18 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 //
 // Compute thumbnail resolution from a requested height.
 //
-function computeFromHeight(row: IGalleryRow, height: number): void {
+function computeFromHeight(row: IGalleryRow, height: number, horizonalGutter: number): void {
     row.height = height;
     row.width = 0;
 
-    for (const item of row.items) {
+    for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+        const item = row.items[itemIndex];
+        item.offsetX = row.width;
         item.thumbHeight = height;
         item.thumbWidth = row.height * item.aspectRatio!;
         row.width += item.thumbWidth;
+        if (itemIndex < row.items.length-1) {
+            row.width += horizonalGutter;
+        }
     }
 }
