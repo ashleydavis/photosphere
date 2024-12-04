@@ -305,10 +305,19 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             }
         }
 
-        //
-        // Final compute.
+        // 
+        // Backup a bit.
         //
         computeFromHeight(row, origHeight - pullback, horizonalGutter);
+
+        // 
+        // Inch the row out pixel by pixel by expanding the horizontal gutter until it just overlaps the right hand edge of the gallery.
+        //
+        let finalGap = galleryWidth - row.width;
+        if (finalGap > 0) {
+            let finalDeltaGap = finalGap / (row.items.length - 1);
+            computeFromHeight(row, origHeight - pullback, horizonalGutter + finalDeltaGap);
+        }
     }
 
     //
