@@ -154,20 +154,29 @@ function renderVisibleRange(
     let curHeadingRow: IGalleryRow | undefined;
     
     //
-    // Is there a heading in the next two visible rows?
+    // Search backward to find the latest heading.
     //
-    const isHeadingImminent = 
-        (range.visibleStartIndex < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex].type === "heading")
-        || (range.visibleStartIndex+1 < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex+1].type === "heading")
-        || (range.visibleStartIndex+2 < galleryLayout.rows.length && galleryLayout.rows[range.visibleStartIndex+2].type === "heading");
-    if (!isHeadingImminent) {
+    for (let rowIndex = range.visibleStartIndex-1; rowIndex >= 0; rowIndex--) {        
+        const row = galleryLayout.rows[rowIndex];
+        if (row.type === "heading") {
+            curHeadingRow = row;
+            break;
+        }
+    }
+
+    if (curHeadingRow) {
         //
-        // Search backward to find the latest heading.
+        // Does the current heading overlap with the next heading?
         //
-        for (let rowIndex = range.visibleStartIndex-1; rowIndex >= 0; rowIndex--) {        
+        for (let rowIndex = range.visibleStartIndex; rowIndex <= range.visibleEndIndex; rowIndex++) {
             const row = galleryLayout.rows[rowIndex];
             if (row.type === "heading") {
-                curHeadingRow = row;
+                if (row.offsetY < scrollTop + curHeadingRow.height) {
+                    //
+                    // Clear the current heading so it doesn't overlap with the next one.
+                    //
+                    curHeadingRow = undefined;
+                }
                 break;
             }
         }
