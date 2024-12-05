@@ -253,6 +253,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                 {(isDraggingTouch || isDraggingMouse || hover) &&
                     <>
                         <div
+                            className="select-none"
                             style={{
                                 position: "absolute",
                                 right: "100%",

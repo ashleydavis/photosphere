@@ -264,7 +264,7 @@ function __Main({ computerPage }: IMainProps) {
         <>
             <div 
                 id="navbar" 
-                className={(openSearch ? "search": "")} 
+                className={"select-none " + (openSearch ? "search": "")} 
                 style={{
                     backgroundColor: theme.palette.background.body,
                     color: theme.palette.text.primary,
@@ -465,7 +465,7 @@ function __Main({ computerPage }: IMainProps) {
 
             <div
                 id="main"
-                className={classNames({ "search": openSearch })}
+                className={`select-none ` + classNames({ "search": openSearch })}
                 style={{
                     backgroundColor: theme.palette.background.body,
                     color: theme.palette.text.primary,
