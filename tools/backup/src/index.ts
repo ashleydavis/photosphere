@@ -27,11 +27,6 @@ async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, met
     if (!fileInfo) {
         throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
     }
-    
-    const fileData = await sourceStorage.read(`collections/${metadata.setId}/${assetType}`, metadata._id);
-    if (!fileData) {
-        throw new Error(`Document ${metadata._id} does not have file data.`);
-    }
 
     await destStorage.writeStream(`collections/${metadata.setId}/${assetType}`, metadata._id, fileInfo.contentType, 
         sourceStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
