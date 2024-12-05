@@ -89,7 +89,12 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     }
 
     useEffect(() => {
-        setThumbHeight(Math.min(Math.max(MIN_SCROLLTHUMB_HEIGHT, (galleryContainerHeight / galleryLayout?.galleryHeight) * scrollbarHeight), scrollbarHeight - VERTICAL_GUTTER - VERTICAL_GUTTER));
+        if (galleryContainerHeight > 0 && galleryLayout?.galleryHeight > 0 && scrollbarHeight > 0) {
+            setThumbHeight(Math.min(Math.max(MIN_SCROLLTHUMB_HEIGHT, (galleryContainerHeight / galleryLayout?.galleryHeight) * scrollbarHeight), scrollbarHeight - VERTICAL_GUTTER - VERTICAL_GUTTER));
+        }
+        else {
+            setThumbHeight(0);
+        }
     }, [galleryContainerHeight, galleryLayout?.galleryHeight, scrollbarHeight]);
     
     useEffect(() => {
