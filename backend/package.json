@@ -9,7 +9,7 @@
         "start": "node build/index.js",
         "start:prod": "pnpm run clean-uploads && pnpm run copy-no-assets && cross-env NODE_ENV=production PORT=3000 ts-node-dev --respawn src/index.ts",
         "start:dev": "pnpm run start:dev-multi-collection",
-        "start:dev-multi-collection": "pnpm run clean-uploads && pnpm run copy-multi-collection && concurrently --names \"db,be\" \"npm run start-db-50-assets\" \"npm run start-watch\"",
+        "start:dev-multi-collection": "pnpm run clean-uploads && pnpm run copy-multi-collection && concurrently --names \"db,be\" \"npm run start-db-multi-collection\" \"npm run start-watch\"",
         "start:dev-50-assets": "pnpm run clean-uploads && pnpm run copy-50-assets && concurrently --names \"db,be\" \"npm run start-db-50-assets\" \"npm run start-watch\"",
         "start:dev-no-assets": "pnpm run clean-uploads  && concurrently --names \"db,be\" \"npm run start-db-no-assets\" \"npm run start-watch\"",
         "start:dev-1-asset": "pnpm run clean-uploads  && pnpm run copy-1-asset && concurrently --names \"db,be\" \"npm run start-db-1-asset\" \"npm run start-watch\"",
