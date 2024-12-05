@@ -200,6 +200,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
             return (
                 <div
                     key={index}
+                    className="cursor-pointer"
                     style={{
                         position: "absolute",
                         top: `${headingOffsetY - 0}px`,
@@ -212,6 +213,9 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         textAlign: "center",
                         fontWeight: 600,
                         fontSize: "0.9rem",
+                    }}
+                    onClick={() => {
+                        scrollTo(row.offsetY);
                     }}
                     >
                     {topLevelHeading}
@@ -319,7 +323,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                 </div>
             </div>
 
-            {/* Invisible scrollbar for hittesting */  }
+            {/* Invisible scrollbar for hit testing */  }
             {isTouchDevice &&
                 <div
                     className="gallery-scrollbar"
