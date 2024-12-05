@@ -23,7 +23,6 @@
     "fs-extra": "^11.2.0",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
-    "sharp": "^0.33.4",
     "utils": "workspace:*"
   },
   "devDependencies": {

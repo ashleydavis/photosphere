@@ -3,13 +3,12 @@ import { findAssets } from "./scan";
 import axios from "axios";
 import fs from "fs-extra";
 import path from "path";
-import sharp from "sharp";
 import os from "os";
 import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
-import { convertExifCoordinates, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
+import { convertExifCoordinates, getImageResolution, ILocation, IResolution, isLocationInRange, resizeImage, retry, reverseGeocode, uuid } from "utils";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -511,21 +510,6 @@ main()
         console.error(err && err.stack || err);
     });
 
-//
-// Represents the resolution of the image or video.
-//
-export interface IResolution {
-    //
-    // The width of the image or video.
-    //
-    width: number;
-
-    //
-    // The height of the image or video.
-    //
-    height: number;
-}
-
 export interface IAssetDetails {
     //
     // The resolution of the image/video.
@@ -733,22 +717,6 @@ async function getImageDetails(filePath: string, fileData: Buffer, contentType: 
 }
 
 //
-// Gets the resolution of an image.
-//
-async function getImageResolution(filePath: string, fileData: Buffer): Promise<IResolution> {
-    //
-    // Get image resolution.
-    //
-    const fullImage = sharp(fileData);
-    const { width, height } = await fullImage.metadata();
-    if (width === undefined || height === undefined) {
-        throw new Error(`Failed to get image resolution for ${filePath}`);
-    }
-
-    return { width, height };
-}
-
-//
 // Gets the metadata from the image.
 //
 async function getImageMetadata(filePath: string, fileData: Buffer, contentType: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
@@ -831,31 +799,6 @@ export async function checkUploaded(setId: string, hash: string): Promise<string
     );
 
     return response.data.assetIds;
-}
-
-//
-// Resize an image.
-//
-export async function resizeImage(inputData: Buffer, resolution: { width: number, height: number }, minSize: number): Promise<Buffer> {
-
-    let width: number;
-    let height: number;
-
-    if (resolution.width > resolution.height) {
-        height = minSize;
-        width = Math.trunc((resolution.width / resolution.height) * minSize);
-    } 
-    else {
-        height = Math.trunc((resolution.height / resolution.width) * minSize);
-        width = minSize;
-    }
-
-    return await sharp(inputData)
-        .resize(width, height, {
-            fit: sharp.fit.fill,
-        })
-        .jpeg()
-        .toBuffer();
 }
 
 //
