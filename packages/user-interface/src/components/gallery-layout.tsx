@@ -280,20 +280,12 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     const visibleRange = renderVisibleRange(layout, scrollTop, containerRef.current?.clientHeight, scrollDistance.current > 10, theme, onItemClick)
 
     return (
-        <div
-            className="gallery-scroller"
-            ref={containerRef}
-            style={{
-                overflowX: "hidden",
-                height: "100%",
-                position: "relative",
-            }}
-            >
+        <>
             {/* Sticky header */}
             {visibleRange.curHeadingRow &&
                 <div
                     style={{
-                        position: "sticky",
+                        position: "absolute",
                         top: 0,
                         zIndex: 100,
                         backgroundColor: theme.palette.background.body,
@@ -314,27 +306,38 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
             }
 
             <div
+                className="gallery-scroller"
+                ref={containerRef}
                 style={{
-                    width: `${galleryWidth}px`,
-                    height: `${layout?.galleryHeight}px`,
                     overflowX: "hidden",
+                    height: "100%",
                     position: "relative",
                 }}
                 >
-                {visibleRange.rows}
-            </div>
 
-            {layout
-                && <GalleryScrollbar
-                    galleryContainerHeight={containerRef.current?.clientHeight || 0}
-                    galleryLayout={layout}
-                    scrollTop={scrollTop}
-                    scrollTo={scrollPosition => {
-                        containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+                <div
+                    style={{
+                        width: `${galleryWidth}px`,
+                        height: `${layout?.galleryHeight}px`,
+                        overflowX: "hidden",
+                        position: "relative",
                     }}
-                    />
-            }
+                    >
+                    {visibleRange.rows}
+                </div>
 
-        </div>
+                {layout
+                    && <GalleryScrollbar
+                        galleryContainerHeight={containerRef.current?.clientHeight || 0}
+                        galleryLayout={layout}
+                        scrollTop={scrollTop}
+                        scrollTo={scrollPosition => {
+                            containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+                        }}
+                        />
+                }
+
+            </div>
+        </>
     );
 }
