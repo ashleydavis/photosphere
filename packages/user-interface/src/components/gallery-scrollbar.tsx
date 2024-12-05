@@ -213,6 +213,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         textAlign: "center",
                         fontWeight: 600,
                         fontSize: "0.9rem",
+                        borderTop: `1px solid ${theme.palette.text.primary}`,
                     }}
                     onClick={() => {
                         scrollTo(row.offsetY);
@@ -232,6 +233,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                 className="gallery-scrollbar"
                 style={{
                     width: `${SCROLLBAR_WIDTH}px`,
+                    backgroundColor: theme.palette.background.body,
                     zIndex: 200,
                 }}
                 onMouseEnter={() => {
@@ -270,6 +272,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                                 height: "100%",
                                 backgroundColor: theme.palette.background.body,
                                 color: theme.palette.text.primary,
+                                opacity: "0.6",
                             }}
                             >
 
