@@ -22,15 +22,15 @@ export function Image({ asset }: IImageProps) {
 
     useEffect(() => {
         loadAsset(asset._id, "thumb")
-        .then(assetLoaded => {
-            if (assetLoaded) {
-                setThumbnailObjectURL(assetLoaded.objectUrl);
-            }
-        })
-        .catch(err => {
-            console.error(`Failed to load asset: thumb:${asset._id}`);
-            console.error(err);
-        });
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setThumbnailObjectURL(assetLoaded.objectUrl);
+                }
+            })
+            .catch(err => {
+                console.error(`Failed to load asset: thumb:${asset._id}`);
+                console.error(err);
+            });
 
         loadAsset(asset._id, "display")
             .then(assetLoaded => {
