@@ -1,7 +1,7 @@
 {
-  "name": "utils",
+  "name": "node-utils",
   "version": "1.0.0",
-  "description": "Various utility functions that work both in the browser and Node.js.",
+  "description": "Various utility functions that only work under Node.js.",
   "main": "build/index.js",
   "scripts": {
     "t": "pnpm run test",
@@ -31,7 +31,8 @@
     "jest": "^29.0.1",
     "jest-environment-jsdom": "^29.4.1",
     "ts-jest": "^29.0.5",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "sharp": "^0.33.4"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.2.4",

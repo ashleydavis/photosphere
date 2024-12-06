@@ -23,7 +23,8 @@
     "fs-extra": "^11.2.0",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
-    "utils": "workspace:*"
+    "utils": "workspace:*",
+    "node-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",

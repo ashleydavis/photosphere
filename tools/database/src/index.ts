@@ -1,7 +1,6 @@
 import { MongoClient } from "mongodb";
+import { getImageResolution, resizeImage } from "node-utils";
 import { CloudStorage, readAssetWithRetry } from "storage";
-import { isArray } from "util";
-import { chooseBestResult, convertExifCoordinates, getFirstResultOfType, getImageResolution, isLocationInRange, resizeImage, retry, reverseGeocode } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");

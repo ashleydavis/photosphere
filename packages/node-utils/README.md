@@ -1,13 +1,13 @@
-# utils
+# node-utils
 
-Various utility functions that work both in the browser and Node.js.
+Various utility functions that only work under Node.js.
 
 ## Setup
 
-Open a terminal and change directory to the utils project:
+Open a terminal and change directory to the node-utils project:
 
 ```bash
-cd photosphere/packages/utils
+cd photosphere/packages/node-utils
 ```
 
 Install dependencies:

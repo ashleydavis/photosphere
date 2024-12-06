@@ -21,7 +21,8 @@
     "minimist": "^1.2.8",
     "mongodb": "^4.7.0",
     "storage": "workspace:*",
-    "utils": "workspace:*"
+    "utils": "workspace:*",
+    "node-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",

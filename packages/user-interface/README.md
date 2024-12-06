@@ -7,7 +7,7 @@ This is the user-interface for [the Photosphere application](https://rapidfullst
 Open a terminal and change directory to the user-interface project:
 
 ```bash
-cd photosphere-monorepo/packages/user-interface
+cd photosphere/packages/user-interface
 ```
 
 Install dependencies:
