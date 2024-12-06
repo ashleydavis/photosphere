@@ -80,7 +80,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setThumbObjectURL(assetLoaded.objectUrl);
-                    setMicroObjectURL(undefined);
+                    setTimeout(() => {
+                        setMicroObjectURL(undefined); // A moment later, unload the micro image. Saves memory.
+                        unloadAsset(item._id, "micro"); 
+                    }, 1000);
                 }
             })
             .catch(err => {
@@ -91,7 +94,9 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
 
         return () => {
             clearTimeout(thumbTimeout);
-            unloadAsset(item._id, "micro");
+            if (microObjectURL) {
+                unloadAsset(item._id, "micro"); 
+            }
             unloadAsset(item._id, "thumb");
         };
     }, [item, isScrolling]);
