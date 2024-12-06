@@ -48,13 +48,13 @@ export interface IGalleryImageProps {
 //
 export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }: IGalleryImageProps) {
 
-    const [source, setSource] = useState<string | undefined>(undefined);
-    const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
+    const [microObjectURL, setMicroObjectURL] = useState<string | undefined>(undefined);
+    const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
 
     useEffect(() => {
-        if (objectURL) {
+        if (thumbObjectURL) {
             // Already loaded.
             return;
         }
@@ -64,11 +64,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             return;
         }
 
-        loadAsset(item._id, "thumb")
+        loadAsset(item._id, "micro")
             .then(assetLoaded => {
                 if (assetLoaded) {
-                    setSource(assetLoaded.source);
-                    setObjectURL(assetLoaded.objectUrl);
+                    setMicroObjectURL(assetLoaded.objectUrl);
                 }
             })
             .catch(err => {
@@ -76,7 +75,23 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                 console.error(err);
             });
 
+        const thumbTimeout = setTimeout(() => {
+            loadAsset(item._id, "thumb")
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setThumbObjectURL(assetLoaded.objectUrl);
+                    setMicroObjectURL(undefined);
+                }
+            })
+            .catch(err => {
+                console.error(`Failed to load asset: thumb:${item._id}`);
+                console.error(err);
+            });
+        }, 100);
+
         return () => {
+            clearTimeout(thumbTimeout);
+            unloadAsset(item._id, "micro");
             unloadAsset(item._id, "thumb");
         };
     }, [item, isScrolling]);
@@ -118,7 +133,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                 }} 
                 />
 
-            {objectURL
+            {microObjectURL
                 && <div
                     className="gallery-thumb-container"
                     style={{
@@ -132,8 +147,8 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     >
                     <img 
                         data-testid="gallery-thumb"
-                        className={classNames("gallery-thumb", { "fade-in": source === "cloud" })}                    
-                        src={objectURL}
+                        className="gallery-thumb"
+                        src={microObjectURL}
                         {...longPressHandlers}
                         style={{
                             position: "absolute",
@@ -177,104 +192,166 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             </svg>
                         </div>
                     }
-
-                    {/* Selection tick mark. */}
-
-                    <div
-                        className="selection-tick"
-                        style={{
-                            position: "absolute",
-                            left: "8px",
-                            top: "8px",
-                            width: "24px",
-                            height: "24px",
-                            borderRadius: "50%",
-                            backgroundColor: isSelected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            cursor: "pointer",
-                            display: (isSelecting || isSelected) ? "flex" : undefined,
-                        }}
-                        onClick={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (isSelected) {
-                                removeFromMultipleSelection(item);
-                            }
-                            else {
-                                addToMultipleSelection(item);
-                            }
-                        }}
-                        >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="white"
-                            width="16px"
-                            height="16px"
-                            >
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                        </svg>
-                    </div>
-
-                    {/* Image number. */}
-
-                    {/* <div
-                        style={{
-                            position: "absolute",
-                            left: `8px`,
-                            bottom: `8px`,
-                            padding: "2px",
-                            color: "white",
-                            backgroundColor: "rgba(0, 0, 0, 0.5)",
-                            pointerEvents: "none",
-                            fontSize: "14px",
-                            lineHeight: "14px",
-                        }}
-                        >
-                        #{item.searchIndex!+1}
-                    </div> */}
-
-                    {/* Renders a debug panel for each image showing it's position and dimensions. */}
-                    {/* <div
-                        style={{
-                            position: "absolute",
-                            right: `2px`,
-                            bottom: `2px`,
-                            color: "black",
-                            backgroundColor: `rgba(255, 255, 255, 0.75)`,
-                            border: "1px solid black",
-                            padding: "3px",
-                            pointerEvents: "none",
-                            fontSize: "12px",
-                            lineHeight: "14px",
-                        }}
-                        >
-                        <p>
-                            {item.photoDate ? dayjs(item.photoDate).format("DD/MM/YYYY") : "No date"}
-                        </p>
-
-                        <p>
-                            left = {x.toFixed(2)}  
-                        </p>
-                        <p>
-                            top = {y.toFixed(2)}
-                        </p>
-                        <p>
-                            right = {(x+width).toFixed(2)}  
-                        </p>
-                        <p>
-                            bottom = {(y+height).toFixed(2)}
-                        </p>
-                        <p>
-                            w = {width.toFixed(2)}
-                        </p>
-                        <p>
-                            h = {height.toFixed(2)}
-                        </p>
-                    </div> */}
                 </div>
             }    
+
+            {thumbObjectURL
+                && <div
+                    className="gallery-thumb-container"
+                    style={{
+                        position: "absolute",
+                        left: `${x}px`,
+                        top: `${y}px`,
+                        width: `${width}px`,
+                        height: `${height}px`,
+                        overflow: "hidden",
+                    }}
+                    >
+                    <img 
+                        data-testid="gallery-thumb"
+                        className="gallery-thumb fade-in"
+                        src={thumbObjectURL}
+                        {...longPressHandlers}
+                        style={{
+                            position: "absolute",
+                            left: "0",
+                            top: "0",
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                            transform: getImageTransform(orientation, item.aspectRatio),
+                            scale: "1.05", // A small tweak to make the image cover the space without gaps.
+                            transformOrigin: "center",
+                        }}
+                        />
+                </div>
+            }    
+
+            {/* Selection tick mark. */}
+
+            <div
+                className="selection-tick"
+                style={{
+                    position: "absolute",
+                    left: "8px",
+                    top: "8px",
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "50%",
+                    backgroundColor: isSelected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    display: (isSelecting || isSelected) ? "flex" : undefined,
+                }}
+                onClick={event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (isSelected) {
+                        removeFromMultipleSelection(item);
+                    }
+                    else {
+                        addToMultipleSelection(item);
+                    }
+                }}
+                >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="white"
+                    width="16px"
+                    height="16px"
+                    >
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                </svg>
+            </div>                  
+
+            {item.contentType.startsWith("video")
+                && <div
+                    {...longPressHandlers}
+                    style={{
+                        position: "absolute",
+                        left: "50%",
+                        top: "50%",
+                        transform: "translate(-50%, -50%)",
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        cursor: "pointer",
+                    }}
+                    >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="white"
+                        width="32px"
+                        height="32px"
+                        >
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </div>
+            }
+
+            {/* Image number. */}
+
+            {/* <div
+                style={{
+                    position: "absolute",
+                    left: `8px`,
+                    bottom: `8px`,
+                    padding: "2px",
+                    color: "white",
+                    backgroundColor: "rgba(0, 0, 0, 0.5)",
+                    pointerEvents: "none",
+                    fontSize: "14px",
+                    lineHeight: "14px",
+                }}
+                >
+                #{item.searchIndex!+1}
+            </div> */}
+
+            {/* Renders a debug panel for each image showing it's position and dimensions. */}
+            {/* <div
+                style={{
+                    position: "absolute",
+                    right: `2px`,
+                    bottom: `2px`,
+                    color: "black",
+                    backgroundColor: `rgba(255, 255, 255, 0.75)`,
+                    border: "1px solid black",
+                    padding: "3px",
+                    pointerEvents: "none",
+                    fontSize: "12px",
+                    lineHeight: "14px",
+                }}
+                >
+                <p>
+                    {item.photoDate ? dayjs(item.photoDate).format("DD/MM/YYYY") : "No date"}
+                </p>
+
+                <p>
+                    left = {x.toFixed(2)}  
+                </p>
+                <p>
+                    top = {y.toFixed(2)}
+                </p>
+                <p>
+                    right = {(x+width).toFixed(2)}  
+                </p>
+                <p>
+                    bottom = {(y+height).toFixed(2)}
+                </p>
+                <p>
+                    w = {width.toFixed(2)}
+                </p>
+                <p>
+                    h = {height.toFixed(2)}
+                </p>
+            </div> */}
         </>
     );
 };

@@ -6,6 +6,9 @@ import { IndexeddbDatabase } from "../lib/database/indexeddb/indexeddb-database"
 const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
     collections: [
         {
+            name: "micro",
+        },
+        {
             name: "thumb",
         },
         {
@@ -28,7 +31,7 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
             name: "users",
         },
     ],
-    versionNumber: 3,
+    versionNumber: 4,
 }
 
 export interface IIndexeddbContext {

@@ -36,6 +36,7 @@ export function Image({ asset }: IImageProps) {
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setObjectURL(assetLoaded.objectUrl);
+                    setThumbnailObjectURL(undefined);
                 }
             })
             .catch(err => {
