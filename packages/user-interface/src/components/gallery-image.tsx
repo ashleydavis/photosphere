@@ -64,6 +64,9 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             return;
         }
 
+        //
+        // Start with the pre-cached micro image.
+        //
         loadAsset(item._id, "micro")
             .then(assetLoaded => {
                 if (assetLoaded) {
@@ -75,6 +78,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                 console.error(err);
             });
 
+        
+        // 
+        // A moment later load the the full thumb.
+        //
         const thumbTimeout = setTimeout(() => {
             loadAsset(item._id, "thumb")
             .then(assetLoaded => {
