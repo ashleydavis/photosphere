@@ -1,4 +1,4 @@
-import { CloudStorage, FileStorage, IStorage } from "storage";
+import { CloudStorage, streamAssetWithRetry, FileStorage, IStorage } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -19,43 +19,6 @@ async function computeHash(data: Buffer): Promise<string> {
     return hashHex;
 }
 
-//
-// Downloads an assert to the destination storage.
-//
-async function downloadAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: any, assetType: string): Promise<void> {
-    const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}`, metadata._id);
-    if (!fileInfo) {
-        throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
-    }
-
-    await destStorage.writeStream(`collections/${metadata.setId}/${assetType}`, metadata._id, fileInfo.contentType, 
-        sourceStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
-    );
-
-    // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
-}
-
-//
-// Downloads an asset, retrying up to 3 times on failure.
-//
-async function downloadAssetWithRetry(sourceStorage: IStorage, destStorage: IStorage, metadata: any, assetType: string): Promise<void> {
-    let lastErr = undefined;
-    let retries = 3;
-    while (retries > 0) {
-        try {
-            await downloadAsset(sourceStorage, destStorage, metadata, assetType);
-            return;
-        }
-        catch (err) {
-            lastErr = err;
-            console.error(`Failed to download asset ${assetType}/${metadata._id}. Retries left: ${retries}.`);
-            console.error(err);
-            retries--;
-        }
-    }
-
-    throw lastErr;
-}
 
 //
 // Write JSON data to the destination storage.
@@ -180,12 +143,12 @@ async function main() {
                     if (!document.hash) {
                         throw new Error(`Document ${document._id} does not have a hash.`);
                     }
-        
-                    await downloadAssetWithRetry(sourceStorage, destStorage, document, "asset");
+
+                    await streamAssetWithRetry(sourceStorage, destStorage, document, "asset");
                     if (document.contentType.startsWith("image")) {
-                        await downloadAssetWithRetry(sourceStorage, destStorage, document, "display");
+                        await streamAssetWithRetry(sourceStorage, destStorage, document, "display");
                     }
-                    await downloadAssetWithRetry(sourceStorage, destStorage, document, "thumb");
+                    await streamAssetWithRetry(sourceStorage, destStorage, document, "thumb");
                 }
 
                 //

@@ -1,6 +1,7 @@
 import { MongoClient } from "mongodb";
+import { CloudStorage, readAssetWithRetry } from "storage";
 import { isArray } from "util";
-import { chooseBestResult, convertExifCoordinates, getFirstResultOfType, isLocationInRange, retry, reverseGeocode } from "utils";
+import { chooseBestResult, convertExifCoordinates, getFirstResultOfType, getImageResolution, isLocationInRange, resizeImage, retry, reverseGeocode } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
@@ -12,6 +13,8 @@ async function main() {
     if (DB_CONNECTION_STRING === undefined) {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
     }
+
+    const storage = new CloudStorage();
 
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();
@@ -35,7 +38,7 @@ async function main() {
     let numProcessed = 0;
     let queryOffset = 0;
     const querySize = 10_000;
-    const batchSize = 1_000;
+    const batchSize = 100;
 
     while (true) {
         const documents = await metadataCollection.find(query)
@@ -53,23 +56,36 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                if (document.sortDate) {
-                    await metadataCollection.updateOne({ _id: document._id }, {
-                        $unset: {
-                            sortDate: "",
-                        },
-                    });
+                if (!document.setId) {
+                    throw new Error(`Document ${document._id} does not have setId.`);
+                }
 
-                    // console.log(`Updated document ${document._id}.`);
-
+                const info = await storage.info(`collections/${document.setId}/micro`, document._id);
+                if (info) {
+                    // console.log(`Document ${document._id} already has micro asset.`);
+                }
+                else {
+                    const fileData = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
+                    if (!fileData) {
+                        throw new Error(`Document ${document._id} does not have thumb asset.`);
+                    }
+    
+                    const resolution = await getImageResolution(document._id, fileData)
+                    const minSize = 40;
+                    const quality = 75;
+                    const resized = await resizeImage(fileData, resolution, minSize, quality);
+                    await storage.write(`collections/${document.setId}/micro`, document._id, "image/jpg", resized);
+    
+                    // console.log(`Processed ${document.setId}/${document._id}.`);
+                    
                     numUpdated += 1;
                 }
 
                 numProcessed += 1;
             }));
-        }
 
-        console.log(`Processed ${numProcessed} of ${documentCount} documents.`);
+            console.log(`Processed ${numProcessed} of ${documentCount} documents.`);
+        }
     }
 
     await client.close();
