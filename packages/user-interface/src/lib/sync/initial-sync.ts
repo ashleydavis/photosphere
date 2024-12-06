@@ -2,6 +2,7 @@ import { IAsset } from "defs";
 import { IDatabase } from "../database/database";
 import { IApi } from "../../context/api-context";
 import { ILastUpdateRecord } from "./last-update-record";
+import { IAssetRecord } from "../../def/asset-record";
 
 //
 // Does the initial asset load and synchronization.
@@ -45,7 +46,35 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
             if (shouldContinue && !shouldContinue(setIndex)) {
                 // Request to abort asset loading.
                 return;
-            }      
+            }     
+
+            const microCollection = database.collection<IAssetRecord>("micro");
+            
+            await Promise.all(page.map(async asset => {
+                if (!microCollection.getOne(asset._id)) {
+                    // Already got it.
+                    return;
+                }
+                else {                    
+                    //
+                    // Get asset.
+                    //
+                    const assetBlob = await api.getAsset(setId, asset._id, "micro");
+                    if (assetBlob) {
+                        //
+                        // Save a local version.
+                        //
+                        await database.collection<IAssetRecord>("micro").setOne({
+                            _id: asset._id,
+                            storeDate: new Date(),
+                            assetData: {
+                                contentType: assetBlob.type,
+                                data: assetBlob,
+                            },
+                        });
+                    }
+                }
+            }));
 
             setTimeout(() => {
                 setAssets(page); // Starts the next request before setting the new assets.
