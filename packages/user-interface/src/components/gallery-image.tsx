@@ -87,7 +87,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                 console.error(`Failed to load asset: thumb:${item._id}`);
                 console.error(err);
             });
-        }, 100);
+        }, 1000);
 
         return () => {
             clearTimeout(thumbTimeout);
