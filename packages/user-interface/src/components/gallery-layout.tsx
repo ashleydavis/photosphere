@@ -92,6 +92,32 @@ interface IRange {
 }
 
 //
+// Does a binary search to find the first row that's visible.
+//
+function findVisibleStartIndex(galleryLayout: IGalleryLayout | undefined, scrollTop: number): number {
+    if (!galleryLayout) {
+        return 0;
+    }
+
+    let low = 0;
+    let high = galleryLayout.rows.length - 1;
+
+    while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        const row = galleryLayout.rows[mid];
+
+        if (row.offsetY < scrollTop) {
+            low = mid + 1;
+        }
+        else {
+            high = mid;
+        }
+    }
+
+    return low;
+}
+
+//
 // Determines the range of visible items.
 //
 function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: number, contentHeight: number): IRange | undefined {
@@ -100,7 +126,7 @@ function findVisibleRange(galleryLayout: IGalleryLayout | undefined, scrollTop: 
     }
 
     const buffer = 2; // Number of items to render outside the viewport, above and below
-    const visibleStartIndex = Math.max(0, galleryLayout.rows.findIndex(row => (row.offsetY + row.height) >= scrollTop));
+    const visibleStartIndex = findVisibleStartIndex(galleryLayout, scrollTop);
     const renderStartIndex = Math.max(0, visibleStartIndex - buffer);
 
     let endIndex = visibleStartIndex+1;
