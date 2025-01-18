@@ -931,6 +931,9 @@ importers:
       dayjs:
         specifier: ^1.11.7
         version: 1.11.10
+      defs:
+        specifier: workspace:*
+        version: link:../../packages/defs
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0

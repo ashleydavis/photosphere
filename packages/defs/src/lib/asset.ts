@@ -99,4 +99,9 @@ export interface IAsset {
     // The user that uploaded the asset.
     //
     userId: string;
+
+    //
+    // Data URL containing the micro thumbnail for the asset.
+    //
+    microDataUrl: string;
 }

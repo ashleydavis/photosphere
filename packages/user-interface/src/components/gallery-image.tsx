@@ -48,7 +48,6 @@ export interface IGalleryImageProps {
 //
 export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }: IGalleryImageProps) {
 
-    const [microObjectURL, setMicroObjectURL] = useState<string | undefined>(undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
@@ -64,21 +63,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             return;
         }
 
-        //
-        // Start with the pre-cached micro image.
-        //
-        loadAsset(item._id, "micro")
-            .then(assetLoaded => {
-                if (assetLoaded) {
-                    setMicroObjectURL(assetLoaded.objectUrl);
-                }
-            })
-            .catch(err => {
-                console.error(`Failed to load asset: thumb:${item._id}`);
-                console.error(err);
-            });
-
-        
         // 
         // A moment later load the the full thumb.
         //
@@ -87,10 +71,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setThumbObjectURL(assetLoaded.objectUrl);
-                    setTimeout(() => {
-                        setMicroObjectURL(undefined); // A moment later, unload the micro image. Saves memory.
-                        unloadAsset(item._id, "micro"); 
-                    }, 1000);
                 }
             })
             .catch(err => {
@@ -101,9 +81,6 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
 
         return () => {
             clearTimeout(thumbTimeout);
-            if (microObjectURL) {
-                unloadAsset(item._id, "micro"); 
-            }
             unloadAsset(item._id, "thumb");
         };
     }, [item, isScrolling]);
@@ -145,7 +122,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                 }} 
                 />
 
-            {microObjectURL
+            {!thumbObjectURL
                 && <div
                     className="gallery-thumb-container"
                     style={{
@@ -160,7 +137,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     <img 
                         data-testid="gallery-thumb"
                         className="gallery-thumb"
-                        src={microObjectURL}
+                        src={item.microDataUrl}
                         {...longPressHandlers}
                         style={{
                             position: "absolute",

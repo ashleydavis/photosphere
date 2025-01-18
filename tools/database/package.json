@@ -22,7 +22,8 @@
     "mongodb": "^4.7.0",
     "storage": "workspace:*",
     "utils": "workspace:*",
-    "node-utils": "workspace:*"
+    "node-utils": "workspace:*",
+    "defs": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",

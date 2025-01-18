@@ -1,6 +1,7 @@
 import { MongoClient } from "mongodb";
 import { getImageResolution, resizeImage } from "node-utils";
 import { CloudStorage, readAssetWithRetry } from "storage";
+import { IAsset } from "defs";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
@@ -40,7 +41,7 @@ async function main() {
     const batchSize = 100;
 
     while (true) {
-        const documents = await metadataCollection.find(query)
+        const documents = await metadataCollection.find<IAsset>(query)
             .skip(queryOffset)
             .limit(querySize)
             .toArray();
@@ -59,23 +60,21 @@ async function main() {
                     throw new Error(`Document ${document._id} does not have setId.`);
                 }
 
-                const info = await storage.info(`collections/${document.setId}/micro`, document._id);
-                if (info) {
-                    // console.log(`Document ${document._id} already has micro asset.`);
-                }
-                else {
-                    const fileData = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
+                if (!document.microDataUrl) {
+                    const fileData = await readAssetWithRetry(storage, document._id, document.setId, "micro");
                     if (!fileData) {
-                        throw new Error(`Document ${document._id} does not have thumb asset.`);
+                        throw new Error(`Document ${document._id} does not have micro asset.`);
                     }
+
+                    // Encode it as a data URL.
+                    const dataUrl = `data:image/jpg;base64,${fileData.toString("base64")}`;
+                    await metadataCollection.updateOne({ _id: document._id }, { 
+                        $set: { 
+                            microDataUrl: dataUrl,
+                        },
+                    });
     
-                    const resolution = await getImageResolution(document._id, fileData)
-                    const minSize = 40;
-                    const quality = 75;
-                    const resized = await resizeImage(fileData, resolution, minSize, quality);
-                    await storage.write(`collections/${document.setId}/micro`, document._id, "image/jpg", resized);
-    
-                    // console.log(`Processed ${document.setId}/${document._id}.`);
+                    console.log(`Processed ${document.setId}/${document._id}.`);
                     
                     numUpdated += 1;
                 }

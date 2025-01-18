@@ -48,34 +48,6 @@ export async function initialSync(database: IDatabase, setId: string, api: IApi,
                 return;
             }     
 
-            const microCollection = database.collection<IAssetRecord>("micro");
-            
-            await Promise.all(page.map(async asset => {
-                if (!microCollection.getOne(asset._id)) {
-                    // Already got it.
-                    return;
-                }
-                else {                    
-                    //
-                    // Get asset.
-                    //
-                    const assetBlob = await api.getAsset(setId, asset._id, "micro");
-                    if (assetBlob) {
-                        //
-                        // Save a local version.
-                        //
-                        await database.collection<IAssetRecord>("micro").setOne({
-                            _id: asset._id,
-                            storeDate: new Date(),
-                            assetData: {
-                                contentType: assetBlob.type,
-                                data: assetBlob,
-                            },
-                        });
-                    }
-                }
-            }));
-
             setTimeout(() => {
                 setAssets(page); // Starts the next request before setting the new assets.
             }, 0);

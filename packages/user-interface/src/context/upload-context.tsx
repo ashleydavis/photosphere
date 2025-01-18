@@ -497,6 +497,7 @@ export function UploadContextProvider({ children }: IProps) {
                 labels,
                 description: "",
                 userId: user!._id,
+                microDataUrl: `data:image/jpg;base64,${micro}`,
             });
 
             console.log(`Uploaded ${assetId}`);
