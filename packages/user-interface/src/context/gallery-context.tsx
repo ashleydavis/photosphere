@@ -333,7 +333,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         const newItems = removeDeletedAssets(items);
         allItems.current = allItems.current.concat(newItems);
 
-        const startSearchIndex = searchedItems.current.length;
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
 
