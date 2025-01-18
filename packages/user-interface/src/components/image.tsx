@@ -15,6 +15,7 @@ export interface IImageProps {
 //
 export function Image({ asset }: IImageProps) {
 
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(asset.microDataUrl);
     const [thumbnailObjectURL, setThumbnailObjectURL] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
@@ -25,6 +26,9 @@ export function Image({ asset }: IImageProps) {
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setThumbnailObjectURL(assetLoaded.objectUrl);
+                    setTimeout(() => {
+                        setMicroDataURL(undefined);
+                    }, 600);
                 }
             })
             .catch(err => {
@@ -36,7 +40,9 @@ export function Image({ asset }: IImageProps) {
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setObjectURL(assetLoaded.objectUrl);
-                    setThumbnailObjectURL(undefined);
+                    setTimeout(() => {
+                        setThumbnailObjectURL(undefined);
+                    }, 600);
                 }
             })
             .catch(err => {
@@ -60,9 +66,20 @@ export function Image({ asset }: IImageProps) {
 
     return (
         <>
+            {microDataURL
+                && <img 
+                    className="micro"
+                    src={microDataURL}
+                    style={{
+                        padding: "2px",
+                        transform: getImageTransform(orientation, undefined),
+                    }}
+                    />
+            }
+            
             {thumbnailObjectURL
                 && <img
-                    className="thumbnail"
+                    className="thumbnail fade-in"
                     src={thumbnailObjectURL}
                     style={{
                         padding: "2px",
@@ -70,6 +87,7 @@ export function Image({ asset }: IImageProps) {
                     }}
                     />        
             }
+
             {objectURL
                 && <img 
                     data-testid="fullsize-asset"

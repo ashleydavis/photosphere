@@ -48,6 +48,7 @@ export interface IGalleryImageProps {
 //
 export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }: IGalleryImageProps) {
 
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.microDataUrl);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
@@ -68,15 +69,18 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
         //
         const thumbTimeout = setTimeout(() => {
             loadAsset(item._id, "thumb")
-            .then(assetLoaded => {
-                if (assetLoaded) {
-                    setThumbObjectURL(assetLoaded.objectUrl);
-                }
-            })
-            .catch(err => {
-                console.error(`Failed to load asset: thumb:${item._id}`);
-                console.error(err);
-            });
+                .then(assetLoaded => {
+                    if (assetLoaded) {
+                        setThumbObjectURL(assetLoaded.objectUrl);
+                        setTimeout(() => {
+                            setMicroDataURL(undefined);
+                        }, 600);
+                    }
+                })
+                .catch(err => {
+                    console.error(`Failed to load asset: thumb:${item._id}`);
+                    console.error(err);
+                });
         }, 1000);
 
         return () => {
@@ -118,11 +122,10 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     width: `${width}px`,
                     height: `${height}px`,
                     overflow: "hidden",
-                    backgroundColor: "rgba(0, 0, 0, 0.1)",
                 }} 
                 />
 
-            {!thumbObjectURL
+            {microDataURL
                 && <div
                     className="gallery-thumb-container"
                     style={{
@@ -137,7 +140,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     <img 
                         data-testid="gallery-thumb"
                         className="gallery-thumb"
-                        src={item.microDataUrl}
+                        src={microDataURL}
                         {...longPressHandlers}
                         style={{
                             position: "absolute",
@@ -183,6 +186,8 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             transformOrigin: "center",
                         }}
                         />
+
+                        
                 </div>
             }    
 
