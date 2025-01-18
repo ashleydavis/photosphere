@@ -169,7 +169,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                         labels: asset.labels,
                         description: asset.description,
                         setId,
-                        usetId: asset.userId,
+                        userId: asset.userId,
                     },
                 },
             }
