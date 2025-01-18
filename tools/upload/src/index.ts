@@ -22,14 +22,34 @@ if (!process.env.GOOGLE_API_KEY) {
 }
 
 //
+// Size of the micro thumbnail.
+//
+const MICRO_MIN_SIZE = 40;
+
+//
+// Quality of the micro thumbnail.
+//
+const MICRO_QUALITY = 75;
+
+//
 // Size of the thumbnail.
 //
 const THUMBNAIL_MIN_SIZE = 300;
 
 //
+// Quality of the thumbnail.
+//
+const THUMBNAIL_QUALITY = 90;
+
+//
 // Size of the display asset.
 //
 const DISPLAY_MIN_SIZE = 1000;
+
+//
+// Quality of the display asset.
+//
+const DISPLAY_QUALITY = 95;
 
 //
 // Counts the number of uploads.
@@ -222,6 +242,11 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     await uploadAssetData(config.uploadSetId, assetId, "asset", contentType, fileData);
 
     //
+    // Uploads the micro thumbnail.
+    //
+    await uploadAssetData(config.uploadSetId, assetId, "micro", "image/jpg", assetDetails.micro);
+
+    //
     // Uploads the thumbnail.
     //
     await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
@@ -230,7 +255,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
-        const displayData = await resizeImage(fileData, assetDetails.resolution, DISPLAY_MIN_SIZE);
+        const displayData = await resizeImage(fileData, assetDetails.resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
         await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", displayData);
     }
 
@@ -518,6 +543,11 @@ export interface IAssetDetails {
     resolution: IResolution;
 
     //
+    // The micro thumbnail of the image/video.
+    //
+    micro: Buffer;
+
+    //
     // The thumbnail of the image/video.
     //
     thumbnail: Buffer;
@@ -547,8 +577,9 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
         await fs.writeFile(videoPath, fileData);
     }
 
-    const resolution = await getVideoResolution(videoPath);
+    const resolution = await getVideoResolution(videoPath);    
     const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
+    const micro = await resizeImage(thumbnail, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
     const assetDetails = await getVideoMetadata(videoPath);
 
     if (assetDetails.photoDate === undefined) {
@@ -576,7 +607,12 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
         await fs.unlink(videoPath);
     }
 
-    return { resolution, thumbnail, ...assetDetails };
+    return { 
+        resolution, 
+        micro, 
+        thumbnail, 
+        ...assetDetails 
+    };
 }
 
 //
@@ -690,7 +726,8 @@ function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordina
 //
 async function getImageDetails(filePath: string, fileData: Buffer, contentType: string): Promise<IAssetDetails> {
     const resolution = await getImageResolution(filePath, fileData);
-    const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE);
+    const micro = await resizeImage(fileData, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
+    const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
     const assetDetails = await getImageMetadata(filePath, fileData, contentType);
 
     if (assetDetails.photoDate === undefined) {
@@ -714,7 +751,12 @@ async function getImageDetails(filePath: string, fileData: Buffer, contentType: 
         }
     }
 
-    return { resolution, thumbnail, ...assetDetails };
+    return { 
+        resolution, 
+        micro,
+        thumbnail, 
+        ...assetDetails 
+    };
 }
 
 //

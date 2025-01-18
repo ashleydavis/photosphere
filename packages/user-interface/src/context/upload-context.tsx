@@ -23,6 +23,11 @@ import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
 const PREVIEW_THUMBNAIL_MIN_SIZE = 60;
 
 //
+// Size of the micro thumbnail to generate and upload to the backend.
+//
+const MICRO_MIN_SIZE = 40;
+
+//
 // Size of the thumbnail to generate and upload to the backend.
 //
 const THUMBNAIL_MIN_SIZE = 300;
@@ -273,6 +278,16 @@ export function UploadContextProvider({ children }: IProps) {
         //
         resolution: IResolution;
 
+        //
+        // Micro thumbnail for the asset (base 64).
+        //
+        micro: string;
+
+        //
+        // Content type of the micro thumbnail.
+        //
+        microContentType: string;
+
         // 
         // Thumbnail for the asset (base 64).
         //
@@ -304,11 +319,21 @@ export function UploadContextProvider({ children }: IProps) {
             try {
                 const resolution = { width: video.videoWidth, height: video.videoHeight };
                 const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = captureVideoThumbnail(video, THUMBNAIL_MIN_SIZE);
+                const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(await loadImage(thumbnailDataUrl), MICRO_MIN_SIZE);
                 
                 const contentTypeStart = 5;
+                const microContentTypeEnd = microDataUrl.indexOf(";", contentTypeStart);
+                const micro = microDataUrl.slice(microContentTypeEnd + 1 + "base64,".length);
                 const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
                 const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
-               return { resolution, thumbnail, thumbContentType };
+
+                return { 
+                    resolution, 
+                    micro,
+                    microContentType,
+                    thumbnail, 
+                    thumbContentType,
+                };
             }
             finally {
                 unloadVideo(video);
@@ -320,13 +345,24 @@ export function UploadContextProvider({ children }: IProps) {
             const image = await loadImage(imageData);
             const resolution = await getImageResolution(image);
             const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = resizeImage(image, THUMBNAIL_MIN_SIZE);
+            const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(image, MICRO_MIN_SIZE);
             const contentTypeStart = 5;
+            const microContentTypeEnd = microDataUrl.indexOf(";", contentTypeStart);
+            const micro = microDataUrl.slice(microContentTypeEnd + 1 + "base64,".length);
             const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
             const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
             const { dataUrl: displayDataUrl, contentType: displayContentType } = resizeImage(image, DISPLAY_MIN_SIZE);
             const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
             const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);        
-            return { resolution, thumbnail, thumbContentType, displayData, displayContentType };
+            return { 
+                resolution, 
+                micro,
+                microContentType,
+                thumbnail, 
+                thumbContentType, 
+                displayData, 
+                displayContentType,
+            };
         }    
     }
 
@@ -358,7 +394,7 @@ export function UploadContextProvider({ children }: IProps) {
             // otherwise we get an out of memory error when trying to
             // upload 1000s of assets.
             //
-            const { resolution, thumbnail, thumbContentType, displayData, displayContentType } = 
+            const { resolution, micro, microContentType, thumbnail, thumbContentType, displayData, displayContentType } = 
                 await loadAssetDetails(fileData, nextUpload.assetContentType);
 
             const properties: any = {};
@@ -421,6 +457,12 @@ export function UploadContextProvider({ children }: IProps) {
             // Uploads the full asset.
             //
             await uploadAsset(assetId, "asset", nextUpload.assetContentType, fileData);
+
+            //
+            // Uploads the micro thumbnail.
+            //
+            const microBlob = base64StringToBlob(micro, microContentType);
+            await uploadAsset(assetId, "micro", microContentType, microBlob);
 
             //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
