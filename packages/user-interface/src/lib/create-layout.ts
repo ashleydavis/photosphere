@@ -366,7 +366,14 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     for (let rowIndex = startingRowIndex; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex];
         row.offsetY = prevRowHeight;
-        prevRowHeight += row.height + verticalGutter;
+
+        //
+        // Add the height of the row and the vertical gutter.
+        // Integrate with TanStack Virtual needs this.
+        //
+        row.height += verticalGutter;
+
+        prevRowHeight += row.height;
         layout.galleryHeight = prevRowHeight;
     }
 

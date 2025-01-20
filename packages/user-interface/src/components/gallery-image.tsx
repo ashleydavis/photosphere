@@ -8,11 +8,6 @@ import { useLongPress } from "../lib/long-press";
 
 export interface IGalleryImageProps {
     //
-    // Set to true when scrolling through the gallery.
-    //
-    isScrolling: boolean;
-
-    //
     // The gallery item to render.
     //
     item: IGalleryItem;
@@ -46,7 +41,7 @@ export interface IGalleryImageProps {
 //
 // Renders an image for the gallery.
 //
-export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }: IGalleryImageProps) {
+export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
 
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.microDataUrl);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
@@ -58,12 +53,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             // Already loaded.
             return;
         }
-
-        if (isScrolling) {
-            // Don't load while scrolling.
-            return;
-        }
-
+        
         // 
         // A moment later load the the full thumb.
         //
@@ -87,7 +77,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
             clearTimeout(thumbTimeout);
             unloadAsset(item._id, "thumb");
         };
-    }, [item, isScrolling]);
+    }, [item]);
 
     const isSelected = selectedItems.has(item._id);
 
@@ -139,7 +129,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                     >
                     <img 
                         data-testid="gallery-thumb"
-                        className="gallery-thumb"
+                        className="gallery-thumb fade-in"
                         src={microDataURL}
                         {...longPressHandlers}
                         style={{
@@ -185,9 +175,7 @@ export function GalleryImage({ isScrolling, item, onClick, x, y, width, height }
                             scale: "1.05", // A small tweak to make the image cover the space without gaps.
                             transformOrigin: "center",
                         }}
-                        />
-
-                        
+                        />                        
                 </div>
             }    
 
