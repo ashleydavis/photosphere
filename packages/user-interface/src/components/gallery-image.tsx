@@ -71,7 +71,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     console.error(`Failed to load asset: thumb:${item._id}`);
                     console.error(err);
                 });
-        }, 1000);
+        }, 200);
 
         return () => {
             clearTimeout(thumbTimeout);
@@ -115,6 +115,22 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                 }} 
                 />
 
+            {item.color
+                && <div
+                    className="gallery-thumb-container"
+                    style={{
+                        position: "absolute",
+                        left: `${x}px`,
+                        top: `${y}px`,
+                        width: `${width}px`,
+                        height: `${height}px`,
+                        overflow: "hidden",
+                        backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
+                    }}
+                    >                   
+                </div>
+            }    
+
             {microDataURL
                 && <div
                     className="gallery-thumb-container"
@@ -129,7 +145,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     >
                     <img 
                         data-testid="gallery-thumb"
-                        className="gallery-thumb fade-in"
+                        className="gallery-thumb fade-in-micro"
                         src={microDataURL}
                         {...longPressHandlers}
                         style={{
@@ -161,7 +177,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     >
                     <img 
                         data-testid="gallery-thumb"
-                        className="gallery-thumb fade-in"
+                        className="gallery-thumb fade-in-thumb"
                         src={thumbObjectURL}
                         {...longPressHandlers}
                         style={{

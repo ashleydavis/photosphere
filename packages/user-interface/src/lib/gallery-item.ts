@@ -107,6 +107,12 @@ export interface IGalleryItem {
     // Data URL containing the micro thumbnail for the asset.
     //
     microDataUrl: string;
+
+    //
+    // The color of the asset, if known.
+    // Helps hide the pop when thumbnails are loaded.
+    //
+    color?: [number, number, number];
 }
 
 //

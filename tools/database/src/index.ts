@@ -5,6 +5,7 @@ import { IAsset } from "defs";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
+const ColorThief = require("colorthief");
 
 async function main() {
     const argv = minimist(process.argv.slice(2));
@@ -36,6 +37,7 @@ async function main() {
 
     let numUpdated = 0;
     let numProcessed = 0;
+    let numFailed = 0;
     let queryOffset = 0;
     const querySize = 10_000;
     const batchSize = 100;
@@ -60,23 +62,41 @@ async function main() {
                     throw new Error(`Document ${document._id} does not have setId.`);
                 }
 
-                if (!document.microDataUrl) {
+                if (!document.color) {
                     const fileData = await readAssetWithRetry(storage, document._id, document.setId, "micro");
                     if (!fileData) {
                         throw new Error(`Document ${document._id} does not have micro asset.`);
                     }
 
-                    // Encode it as a data URL.
-                    const dataUrl = `data:image/jpg;base64,${fileData.toString("base64")}`;
-                    await metadataCollection.updateOne({ _id: document._id }, { 
-                        $set: { 
-                            microDataUrl: dataUrl,
-                        },
-                    });
+                    try {
+                        const color = await ColorThief.getColor(fileData);
     
-                    console.log(`Processed ${document.setId}/${document._id}.`);
-                    
-                    numUpdated += 1;
+                        await metadataCollection.updateOne({ _id: document._id }, { 
+                            $set: { 
+                                color,
+                            },
+                        });
+    
+                        // console.log(`Processed ${document.setId}/${document._id}.`);
+
+                        numUpdated += 1;
+                    }
+                    catch (err) {
+                        console.error(`Failed to process ${document.setId}/${document._id}.`);
+                        console.error(err);
+                        console.log(`Defaulting to white`);
+
+                        const color = [255, 255, 255];
+    
+                        await metadataCollection.updateOne({ _id: document._id }, { 
+                            $set: { 
+                                color,
+                            },
+                        });
+
+                        numFailed += 1;
+                    }
+
                 }
 
                 numProcessed += 1;
@@ -92,9 +112,10 @@ async function main() {
     console.log(`Total documents ${documentCount}.`);
     console.log(`Updated: ${numUpdated}.`);
     console.log(`Processed: ${numProcessed}.`);
+    console.log(`Failed: ${numFailed}.`);
 
     await fs.ensureDir("./log");
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed }, null, 2));
 }
 
 main()

@@ -15,15 +15,16 @@
   },
   "dependencies": {
     "axios": "^1.7.2",
+    "colorthief": "^2.6.0",
     "dayjs": "^1.11.7",
+    "defs": "workspace:*",
     "fs-extra": "^11.2.0",
     "lodash": "^4.17.21",
     "minimist": "^1.2.8",
     "mongodb": "^4.7.0",
-    "storage": "workspace:*",
-    "utils": "workspace:*",
     "node-utils": "workspace:*",
-    "defs": "workspace:*"
+    "storage": "workspace:*",
+    "utils": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",
