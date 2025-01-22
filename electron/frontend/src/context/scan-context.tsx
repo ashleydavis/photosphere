@@ -57,7 +57,7 @@ export function ScanContextProvider({ children }: IProps) {
                 uploadDate: dayjs().toISOString(),
                 setId: "this doesn't make sense here",
                 userId: user!._id,
-                microDataUrl: "", //todo: Fill this out.
+                micro: "", //todo: Fill this out.
             };
             assets.current.push(newAsset);
 
