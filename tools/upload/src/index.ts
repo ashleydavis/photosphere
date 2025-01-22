@@ -316,7 +316,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         labels,
         description: "",
         userId: config.userId,
-        microDataUrl: `data:image/jpg;base64,${assetDetails.micro}`
+        micro: assetDetails.micro.toString("base64"),
     });   
 
     numUploads += 1;

@@ -104,9 +104,9 @@ export interface IGalleryItem {
     userId: string;
 
     //
-    // Data URL containing the micro thumbnail for the asset.
+    // Base64 image containing the micro thumbnail for the asset.
     //
-    microDataUrl: string;
+    micro: string;
 
     //
     // The color of the asset, if known.

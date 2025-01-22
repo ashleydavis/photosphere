@@ -42,8 +42,7 @@ export interface IGalleryImageProps {
 // Renders an image for the gallery.
 //
 export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
-
-    const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.microDataUrl);
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
@@ -53,6 +52,8 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
             // Already loaded.
             return;
         }
+
+        setMicroDataURL(`data:image/jpeg;base64,${item.micro}`);
         
         // 
         // A moment later load the the full thumb.

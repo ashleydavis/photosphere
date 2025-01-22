@@ -15,13 +15,22 @@ export interface IImageProps {
 //
 export function Image({ asset }: IImageProps) {
 
-    const [microDataURL, setMicroDataURL] = useState<string | undefined>(asset.microDataUrl);
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(undefined);
     const [thumbnailObjectURL, setThumbnailObjectURL] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
+        if (thumbnailObjectURL) {
+            // Already loaded.
+            return;
+        }
+
+        if (asset.micro) {
+            setMicroDataURL(`data:image/jpeg;base64,${asset.micro}`);
+        }
+
         loadAsset(asset._id, "thumb")
             .then(assetLoaded => {
                 if (assetLoaded) {
