@@ -65,14 +65,14 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         setThumbObjectURL(assetLoaded.objectUrl);
                         setTimeout(() => {
                             setMicroDataURL(undefined);
-                        }, 600);
+                        }, 1200);
                     }
                 })
                 .catch(err => {
                     console.error(`Failed to load asset: thumb:${item._id}`);
                     console.error(err);
                 });
-        }, 200);
+        }, 300);
 
         return () => {
             clearTimeout(thumbTimeout);
@@ -126,6 +126,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         width: `${width}px`,
                         height: `${height}px`,
                         overflow: "hidden",
+                        opacity: "0.2",
                         backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
                     }}
                     >                   

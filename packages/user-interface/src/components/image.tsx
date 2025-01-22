@@ -37,7 +37,7 @@ export function Image({ asset }: IImageProps) {
                     setThumbnailObjectURL(assetLoaded.objectUrl);
                     setTimeout(() => {
                         setMicroDataURL(undefined);
-                    }, 600);
+                    }, 1200);
                 }
             })
             .catch(err => {
