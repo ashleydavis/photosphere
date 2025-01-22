@@ -126,7 +126,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         width: `${width}px`,
                         height: `${height}px`,
                         overflow: "hidden",
-                        opacity: "0.2",
+                        opacity: "0.7",
                         backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
                     }}
                     >                   
