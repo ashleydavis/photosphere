@@ -105,17 +105,25 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
     });
 
     return (
-        <>
+        <div
+            className="gallery-thumb-container"
+            style={{
+                position: "absolute",
+                left: `${x}px`,
+                top: `${y}px`,
+                width: `${width}px`,
+                height: `${height}px`,
+                overflow: "hidden",
+            }}
+            >
             {item.color
-                && <div
-                    className="gallery-thumb-container"
+                && <div                    
                     style={{
                         position: "absolute",
-                        left: `${x}px`,
-                        top: `${y}px`,
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        overflow: "hidden",
+                        left: `0px`,
+                        top: `0px`,
+                        width: `100%`,
+                        height: `100%`,
                         opacity: "0.7",
                         backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
                     }}
@@ -124,67 +132,43 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
             }    
 
             {microDataURL
-                && <div
-                    className="gallery-thumb-container"
+                && <img 
+                    data-testid="gallery-thumb"
+                    className="gallery-thumb"
+                    src={microDataURL}
+                    {...longPressHandlers}
                     style={{
                         position: "absolute",
-                        left: `${x}px`,
-                        top: `${y}px`,
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        overflow: "hidden",
+                        left: "0",
+                        top: "0",
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        transform: getImageTransform(orientation, item.aspectRatio),
+                        scale: "1.05", // A small tweak to make the image cover the space without gaps.
+                        transformOrigin: "center",
                     }}
-                    >
-                    <img 
-                        data-testid="gallery-thumb"
-                        className="gallery-thumb"
-                        src={microDataURL}
-                        {...longPressHandlers}
-                        style={{
-                            position: "absolute",
-                            left: "0",
-                            top: "0",
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "contain",
-                            transform: getImageTransform(orientation, item.aspectRatio),
-                            scale: "1.05", // A small tweak to make the image cover the space without gaps.
-                            transformOrigin: "center",
-                        }}
-                        />
-                </div>
+                    />
             }    
 
             {thumbObjectURL
-                && <div
-                    className="gallery-thumb-container"
+                &&  <img 
+                    data-testid="gallery-thumb"
+                    className="gallery-thumb fade-in-thumb"
+                    src={thumbObjectURL}
+                    {...longPressHandlers}
                     style={{
                         position: "absolute",
-                        left: `${x}px`,
-                        top: `${y}px`,
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        overflow: "hidden",
+                        left: "0",
+                        top: "0",
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        transform: getImageTransform(orientation, item.aspectRatio),
+                        scale: "1.05", // A small tweak to make the image cover the space without gaps.
+                        transformOrigin: "center",
                     }}
-                    >
-                    <img 
-                        data-testid="gallery-thumb"
-                        className="gallery-thumb fade-in-thumb"
-                        src={thumbObjectURL}
-                        {...longPressHandlers}
-                        style={{
-                            position: "absolute",
-                            left: "0",
-                            top: "0",
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "contain",
-                            transform: getImageTransform(orientation, item.aspectRatio),
-                            scale: "1.05", // A small tweak to make the image cover the space without gaps.
-                            transformOrigin: "center",
-                        }}
-                        />
-                </div>
+                    />
             }    
 
             {/* Selection tick mark. */}
@@ -312,6 +296,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     h = {height.toFixed(2)}
                 </p>
             </div> */}
-        </>
+        </div>
     );
 };
