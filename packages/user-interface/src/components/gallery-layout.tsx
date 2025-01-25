@@ -5,6 +5,7 @@ import { GalleryImage } from "./gallery-image";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GalleryPreview } from "./gallery-preview";
+import { Theme, useTheme } from "@mui/joy";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
@@ -156,6 +157,8 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
     const containerRef = useRef<HTMLDivElement>(null);  
 
+    const theme = useTheme();
+
     //
     // Handles scrolling.
     //
@@ -184,18 +187,37 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         };
     }, []);
 
-
     const rowVirtualizer = useVirtualizer({
         count: layout?.rows.length || 0,
         getScrollElement: () => containerRef.current,
         estimateSize: (i) => layout?.rows[i].height || 0,
-        overscan: 1,
+        overscan: 0,
     });
+
+    //
+    // Rows that are currently visible in the viewport.
+    //
+    const virtualRows = rowVirtualizer.getVirtualItems();
+
+    //
+    // Find the previous heading row.
+    //
+    let curHeadingRow: IGalleryRow | undefined;
+
+    if (layout && virtualRows.length > 0) {
+        const startingRow = virtualRows[0].index;
+        for (let i = startingRow; i >= 0; i--) {
+            const row = layout!.rows[i];
+            if (row.type === "heading") {
+                curHeadingRow = row;
+                break;
+            }
+        }
+    }
 
     return (
         <>
-            {/* todo: Sticky header */}
-            {/* {visibleRange.curHeadingRow &&
+            {curHeadingRow &&
                 <div
                     style={{
                         position: "absolute",
@@ -205,7 +227,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         color: theme.palette.text.primary,
                         opacity: 0.75,
                         borderBottom: "1px solid rgba(0,0,0,0.1)",
-                        height: `${visibleRange.curHeadingRow.height}px`,
+                        height: `${curHeadingRow.height}px`,
                         width: "100%",
                         fontSize: "0.9rem",
                         fontWeight: 600,
@@ -214,10 +236,10 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         padding: "1em",
                     }}                    
                     >                            
-                    {visibleRange.curHeadingRow.heading}
+                    {curHeadingRow.heading}
                 </div>
             }
-            */}
+           
 
             <div
                 className="gallery-scroller"
@@ -240,10 +262,10 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                     >
 
                     {isDragging
-                        ? rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        ? virtualRows.map(virtualRow => {
                             return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
                         })
-                        : rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        : virtualRows.map(virtualRow => {
                             return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
                         })
                     }
