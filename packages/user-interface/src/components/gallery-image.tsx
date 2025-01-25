@@ -42,7 +42,7 @@ export interface IGalleryImageProps {
 // Renders an image for the gallery.
 //
 export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
-    const [microDataURL, setMicroDataURL] = useState<string | undefined>(undefined);
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(`data:image/jpeg;base64,${item.micro}`);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
@@ -53,7 +53,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
             return;
         }
 
-        setMicroDataURL(`data:image/jpeg;base64,${item.micro}`);
+        // setMicroDataURL(`data:image/jpeg;base64,${item.micro}`);
         
         loadAsset(item._id, "thumb")
             .then(assetLoaded => {
@@ -141,7 +141,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     >
                     <img 
                         data-testid="gallery-thumb"
-                        className="gallery-thumb fade-in-micro"
+                        className="gallery-thumb"
                         src={microDataURL}
                         {...longPressHandlers}
                         style={{

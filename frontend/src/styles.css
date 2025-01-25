@@ -80,20 +80,6 @@ i {
 
 /* Gallery */
 
-@keyframes fadeInMicro {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-.fade-in-micro {
-    animation: fadeInMicro 0.3s cubic-bezier(1,0,.95,.82);
-}
-
 @keyframes fadeInThumb {
     from {
         opacity: 0;
