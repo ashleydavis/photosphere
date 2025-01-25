@@ -4,6 +4,7 @@ import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { GalleryPreview } from "./gallery-preview";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
@@ -64,6 +65,64 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         width={item.thumbWidth!}
                         height={item.thumbHeight!}
                         isDragging={isDragging}
+                        />
+                );
+            })}
+        </div>        
+    );
+}
+
+//
+// Renders a row of items in the gallery.
+//
+function renderPreviewRow(row: IGalleryRow, rowIndex: number) {
+    if (row.type === "heading") {
+        //
+        // Renders a heading row.
+        //
+        return (
+            <div 
+                key={rowIndex}
+                style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                    lineHeight: "1.25rem",
+                    letterSpacing: ".0178571429em",
+                    padding: "1em",
+                    position: "sticky",
+                    zIndex: 100,
+                    top: `${row.offsetY}px`,
+                    height: `${row.height}px`,
+                }}
+                >
+                {row.heading}
+            </div>
+        );
+    }
+
+    //
+    // Renders a row of gallery items.
+    //
+    return (
+        <div
+            key={rowIndex}
+            style={{
+                position: "absolute",
+                top: `${row.offsetY}px`,
+                left: 0,
+                width: "100%",
+                height: `${row.height}px`,
+            }}
+            >
+            {row.items.map(item => {
+                return (
+                    <GalleryPreview
+                        key={item._id}
+                        item={item}
+                        x={item.offsetX!}
+                        y={0}
+                        width={item.thumbWidth!}
+                        height={item.thumbHeight!}
                         />
                 );
             })}
@@ -179,9 +238,16 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         position: "relative",
                     }}
                     >
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
-                    })}
+
+                    {isDragging
+                        ? rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
+                        })
+                        : rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
+                        })
+                    }
+                    
                 </div>
 
                 {layout

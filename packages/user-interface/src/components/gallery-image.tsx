@@ -106,17 +106,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
 
     return (
         <>
-            <div
-                style={{
-                    position: "absolute",
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    width: `${width}px`,
-                    height: `${height}px`,
-                    overflow: "hidden",
-                }} 
-                />
-
             {item.color
                 && <div
                     className="gallery-thumb-container"
