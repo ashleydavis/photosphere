@@ -44,12 +44,22 @@ export interface IGalleryScrolbarProps {
     // Scrolls the gallery to a specific position.
     //
     scrollTo: (scrollTop: number) => void;
+
+    //
+    // Event raised when dragging has started.
+    //
+    onDraggingStarted: () => void;
+
+    //
+    // Event raised when dragging has ended.
+    //
+    onDraggingEnded: () => void;
 }
 
 //
 // A custom scrollbar for the gallery.
 //
-export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scrollTop, scrollTo }: IGalleryScrolbarProps) {
+export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scrollTop, scrollTo, onDraggingStarted, onDraggingEnded }: IGalleryScrolbarProps) {
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +114,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
 
     }, [scrollTop, galleryLayout]);
 
+    //
     // Mouse support for desktop.
     //
     // Updates the gallery width when the container is resized.
@@ -111,6 +122,7 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     useResizeObserver(containerRef, () => {
         updateScrollbarHeight();
     });
+
     useEffect(() => {
         if (isDraggingMouse) {
             function onMouseMove(e: MouseEvent) {
@@ -119,7 +131,9 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
             }
 
             function onMouseUp() {
-                setIsDraggingMouse(false);                
+                setIsDraggingMouse(false);
+
+                onDraggingEnded();
             }
 
             document.addEventListener('mousemove', onMouseMove);
@@ -132,7 +146,9 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
         }
     }, [isDraggingMouse, deltaY]);
 
+    //
     // Touch support for mobile.
+    //
     useEffect(() => {
         if (isDraggingTouch) {
             function onTouchMove(e: TouchEvent) {
@@ -141,7 +157,9 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
             };
 
             function onTouchEnd() {
-                setIsDraggingTouch(false);                
+                setIsDraggingTouch(false);
+                
+                onDraggingEnded();
             }
 
             document.addEventListener('touchmove', onTouchMove);
@@ -157,11 +175,15 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     function onMouseDown(e: React.MouseEvent) {
         deltaY.current = e.clientY - thumbPos;
         setIsDraggingMouse(true);
+
+        onDraggingStarted();
     };
 
     function onTouchStart(e: React.TouchEvent) {
         deltaY.current = e.touches[0].clientY - thumbPos;
         setIsDraggingTouch(true);
+
+        onDraggingStarted();
     };
 
     //

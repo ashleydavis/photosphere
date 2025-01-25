@@ -1,10 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
-import { IGalleryLayout } from "../lib/create-layout";
 import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
-import { debounce, throttle } from "lodash";
-import { Theme, useTheme } from "@mui/joy";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
 
@@ -13,7 +10,7 @@ export type ItemClickFn = ((item: IGalleryItem) => void);
 //
 // Renders a row of items in the gallery.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined) {
+function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined, isDragging: boolean) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -66,6 +63,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         y={0}
                         width={item.thumbWidth!}
                         height={item.thumbHeight!}
+                        isDragging={isDragging}
                         />
                 );
             })}
@@ -91,6 +89,11 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     // The scroll position of the gallery.
     //
     const [ scrollTop, setScrollTop ] = useState(0);
+
+    //
+    // Set to true when the scrollbar is being dragged.
+    //
+    const [ isDragging, setIsDragging ] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);  
 
@@ -177,7 +180,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                     }}
                     >
                     {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick);
+                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
                     })}
                 </div>
 
@@ -188,6 +191,12 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         scrollTop={scrollTop}
                         scrollTo={scrollPosition => {
                             containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+                        }}
+                        onDraggingStarted={() => {
+                            setIsDragging(true);
+                        }}
+                        onDraggingEnded={() => {
+                            setIsDragging(false);
                         }}
                         />
                 }
