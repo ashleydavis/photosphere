@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useRef } from "react";
 
 export interface ILongPressProps {
     //
@@ -72,6 +72,53 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         }
     }
 
+    function onMouseDown(event: React.MouseEvent) {
+        console.log("onMouseDown");
+        startPos.current = {
+            x: event.clientX,
+            y: event.clientY,
+        };
+        timeoutRef.current = setTimeout(() => {
+            isLongPress.current = true;
+            onLongPress();
+        }, delay);
+    }
+
+    function onMouseUp() {
+        console.log("onMouseUp");
+        if (timeoutRef.current === undefined) {
+            // Not active.
+            return;
+        }
+
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = undefined;
+
+        if (!isLongPress.current) {
+            console.log("onClick");
+            onClick();
+        }
+        isLongPress.current = false;
+    }
+
+    function onMouseMove(event: React.MouseEvent) {
+        if (timeoutRef.current === undefined) {
+            // Not pressing.
+            return;
+        }
+
+        // If we moved further than 10 pixels, cancel the long press.
+        const distance = {
+            x: Math.abs(event.clientX - startPos.current!.x),
+            y: Math.abs(event.clientY - startPos.current!.y),
+        };
+        if (distance.x > 10 || distance.y > 10) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = undefined;
+            isLongPress.current = false;
+        }
+    }
+
     function onContextMenu(e: React.MouseEvent) {
         e.preventDefault();
     }
@@ -81,6 +128,9 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
             onTouchStart,
             onTouchEnd,
             onTouchMove,
+            onMouseDown,
+            onMouseUp,
+            onMouseMove,
             onContextMenu,
         },
     };
