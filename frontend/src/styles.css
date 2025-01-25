@@ -91,7 +91,7 @@ i {
 }
 
 .fade-in-micro {
-    animation: fadeInMicro 0.2s cubic-bezier(1,0,.95,.82);
+    animation: fadeInMicro 0.3s cubic-bezier(1,0,.95,.82);
 }
 
 @keyframes fadeInThumb {

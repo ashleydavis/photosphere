@@ -55,30 +55,24 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
         setMicroDataURL(`data:image/jpeg;base64,${item.micro}`);
         
-        // 
-        // A moment later load the the full thumb.
-        //
-        const thumbTimeout = setTimeout(() => {
-            loadAsset(item._id, "thumb")
-                .then(assetLoaded => {
-                    if (assetLoaded) {
-                        setThumbObjectURL(assetLoaded.objectUrl);
-                        setTimeout(() => {
-                            setMicroDataURL(undefined);
-                        }, 1200);
-                    }
-                })
-                .catch(err => {
-                    console.error(`Failed to load asset: thumb:${item._id}`);
-                    console.error(err);
-                });
-        }, 300);
+        loadAsset(item._id, "thumb")
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setThumbObjectURL(assetLoaded.objectUrl);
+                    setTimeout(() => {
+                        setMicroDataURL(undefined);
+                    }, 1200);
+                }
+            })
+            .catch(err => {
+                console.error(`Failed to load asset: thumb:${item._id}`);
+                console.error(err);
+            });
 
         return () => {
-            clearTimeout(thumbTimeout);
             unloadAsset(item._id, "thumb");
         };
-    }, [item]);
+    }, []);
 
     const isSelected = selectedItems.has(item._id);
 
@@ -193,7 +187,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                             scale: "1.05", // A small tweak to make the image cover the space without gaps.
                             transformOrigin: "center",
                         }}
-                        />                        
+                        />
                 </div>
             }    
 
