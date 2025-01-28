@@ -179,6 +179,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         const row = rows[rowIndex];
         const nextRow = rows[rowIndex+1];
         if (!groupsMatch(row.group, nextRow.group)) {
+            computeFromHeight(row, targetRowHeight, horizonalGutter);
             continue; // Don't expand the last row in each group.
         }
 
@@ -205,6 +206,14 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         computeFromHeight(row, maxThumbHeight, horizonalGutter);
     }
 
+    //
+    // Compute x offsets for the last row.
+    //
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length-1];
+        computeFromHeight(lastRow, targetRowHeight, horizonalGutter);
+    }
+    
     //
     // Now pull back the width of all rows so they don't overlap the right hand edge by too much.
     //
