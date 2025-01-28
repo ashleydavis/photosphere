@@ -14,30 +14,20 @@ export interface IImageProps {
 // Renders an image.
 //
 export function Image({ asset }: IImageProps) {
-
-    const [microDataURL, setMicroDataURL] = useState<string | undefined>(undefined);
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(asset.micro != undefined ? `data:image/jpeg;base64,${asset.micro}` : undefined);
     const [thumbnailObjectURL, setThumbnailObjectURL] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset } = useGallery();
 
     useEffect(() => {
-        if (thumbnailObjectURL) {
-            // Already loaded.
-            return;
-        }
-
-        if (asset.micro) {
-            setMicroDataURL(`data:image/jpeg;base64,${asset.micro}`);
-        }
-
         loadAsset(asset._id, "thumb")
             .then(assetLoaded => {
                 if (assetLoaded) {
                     setThumbnailObjectURL(assetLoaded.objectUrl);
                     setTimeout(() => {
                         setMicroDataURL(undefined);
-                    }, 1200);
+                    }, 700);
                 }
             })
             .catch(err => {
@@ -51,7 +41,7 @@ export function Image({ asset }: IImageProps) {
                     setObjectURL(assetLoaded.objectUrl);
                     setTimeout(() => {
                         setThumbnailObjectURL(undefined);
-                    }, 600);
+                    }, 700);
                 }
             })
             .catch(err => {
@@ -63,7 +53,7 @@ export function Image({ asset }: IImageProps) {
             unloadAsset(asset._id, "thumb");
             unloadAsset(asset._id, "display");
         };
-    }, [asset]);
+    }, []);
 
     let orientation = 1;
     if (asset.properties?.exif?.Orientation) {
@@ -88,7 +78,7 @@ export function Image({ asset }: IImageProps) {
             
             {thumbnailObjectURL
                 && <img
-                    className="thumbnail fade-in"
+                    className="thumbnail fade-in-thumb"
                     src={thumbnailObjectURL}
                     style={{
                         padding: "2px",
@@ -100,7 +90,7 @@ export function Image({ asset }: IImageProps) {
             {objectURL
                 && <img 
                     data-testid="fullsize-asset"
-                    className="full fade-in"
+                    className="full fade-in-thumb"
                     src={objectURL}
                     style={{
                         padding: "2px",

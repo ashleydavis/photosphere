@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
-import classNames from "classnames";
 import { getImageTransform } from "../lib/image";
-import dayjs from "dayjs";
 import { useLongPress } from "../lib/long-press";
 
 export interface IGalleryImageProps {
@@ -47,7 +45,7 @@ export interface IGalleryImageProps {
 // Renders an image for the gallery.
 //
 export function GalleryImage({ item, onClick, x, y, width, height, isDragging }: IGalleryImageProps) {
-    const [microDataURL, setMicroDataURL] = useState<string | undefined>(`data:image/jpeg;base64,${item.micro}`);
+    const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
@@ -79,7 +77,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                 unloadAsset(item._id, "thumb");
             }
         };
-    }, []);
+    }, [isDragging]);
 
     const isSelected = selectedItems.has(item._id);
 
