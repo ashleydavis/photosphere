@@ -73,7 +73,13 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
     }
 
     function onMouseDown(event: React.MouseEvent) {
-        console.log("onMouseDown");
+        //
+        // Only handle left mouse button.
+        //
+        if (event.button !== 0) {
+            return;
+        }        
+
         startPos.current = {
             x: event.clientX,
             y: event.clientY,
@@ -84,8 +90,15 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         }, delay);
     }
 
-    function onMouseUp() {
-        console.log("onMouseUp");
+    function onMouseUp(event: React.MouseEvent) {
+        //
+        // Only handle left mouse button.
+        //
+        if (event.button !== 0) {
+            return;
+        }
+
+
         if (timeoutRef.current === undefined) {
             // Not active.
             return;
@@ -95,7 +108,6 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         timeoutRef.current = undefined;
 
         if (!isLongPress.current) {
-            console.log("onClick");
             onClick();
         }
         isLongPress.current = false;
