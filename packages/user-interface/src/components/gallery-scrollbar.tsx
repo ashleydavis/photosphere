@@ -247,6 +247,19 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
         });
     }
 
+    if (!galleryLayout) {
+        // No layout yet.
+        return null;
+    }
+    
+    if (galleryContainerHeight >= galleryLayout.galleryHeight) {
+        //
+        // The gallery container is big enough to show all the items.
+        // No need for a scrollbar.
+        //
+        return null;
+    }
+
     return (
         <>
             {/* Visible scrollbar */}
