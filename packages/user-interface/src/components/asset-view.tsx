@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
-import { Image } from "./image";
+import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
 import { Drawer } from "@mui/joy";
@@ -50,7 +50,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             key={asset._id}
                             asset={asset}
                             />
-                        || <Image                                
+                        || <FullImage
                             key={asset._id}
                             asset={asset}
                             />

@@ -13,7 +13,7 @@ export interface IImageProps {
 //
 // Renders an image.
 //
-export function Image({ asset }: IImageProps) {
+export function FullImage({ asset }: IImageProps) {
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(asset.micro != undefined ? `data:image/jpeg;base64,${asset.micro}` : undefined);
     const [thumbnailObjectURL, setThumbnailObjectURL] = useState<string | undefined>(undefined);
     const [objectURL, setObjectURL] = useState<string | undefined>(undefined);
