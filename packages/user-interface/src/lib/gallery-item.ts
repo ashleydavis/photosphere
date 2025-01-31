@@ -112,7 +112,7 @@ export interface IGalleryItem {
     // The color of the asset, if known.
     // Helps hide the pop when thumbnails are loaded.
     //
-    color?: [number, number, number];
+    color: [number, number, number];
 }
 
 //

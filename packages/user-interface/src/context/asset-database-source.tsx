@@ -154,22 +154,9 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 op: {
                     type: "set",
                     fields: {
-                        _id: asset._id,
-                        width: asset.width,
-                        height: asset.height,
-                        origFileName: asset.origFileName,
-                        origPath: asset.origPath,
-                        contentType: asset.contentType,
-                        hash: asset.hash,
-                        location: asset.location,
-                        fileDate: asset.fileDate,
-                        photoDate: asset.photoDate,
+                        ...asset,
                         uploadDate: dayjs().toISOString(),
-                        properties: asset.properties,
-                        labels: asset.labels,
-                        description: asset.description,
                         setId,
-                        userId: asset.userId,
                     },
                 },
             }

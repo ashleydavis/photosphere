@@ -16,6 +16,7 @@ const ffmpegPaths = require('ffmpeg-ffprobe-static');
 ffmpeg.setFfmpegPath(ffmpegPaths.ffmpegPath);
 ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 const { execSync } = require('child_process');
+const ColorThief = require("colorthief");
 
 if (!process.env.GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY environment variable not set.");
@@ -317,6 +318,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         description: "",
         userId: config.userId,
         micro: assetDetails.micro.toString("base64"),
+        color: await ColorThief.getColor(assetDetails.thumbnail),
     });   
 
     numUploads += 1;

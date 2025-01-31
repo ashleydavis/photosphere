@@ -989,6 +989,9 @@ importers:
       axios:
         specifier: ^1.7.2
         version: 1.7.2
+      colorthief:
+        specifier: ^2.6.0
+        version: 2.6.0
       dayjs:
         specifier: ^1.11.7
         version: 1.11.10

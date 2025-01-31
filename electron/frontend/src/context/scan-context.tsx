@@ -58,6 +58,7 @@ export function ScanContextProvider({ children }: IProps) {
                 setId: "this doesn't make sense here",
                 userId: user!._id,
                 micro: "", //todo: Fill this out.
+                color: [255, 255, 255], //todo: Fill this out.
             };
             assets.current.push(newAsset);
 

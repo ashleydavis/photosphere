@@ -24,7 +24,8 @@
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "utils": "workspace:*",
-    "node-utils": "workspace:*"
+    "node-utils": "workspace:*",
+    "colorthief": "^2.6.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",

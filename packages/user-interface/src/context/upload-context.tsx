@@ -16,6 +16,7 @@ import { useGallery } from "./gallery-context";
 import { uuid } from "utils";
 import { useApp } from "./app-context";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
+const ColorThief = require("colorthief/dist/color-thief.umd.js");
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -307,6 +308,11 @@ export function UploadContextProvider({ children }: IProps) {
         // Optional content type of the display asset.
         //
         displayContentType?: string;
+
+        //
+        // The color of the asset.
+        //
+        color: [number, number, number];
     }
 
     //
@@ -319,13 +325,15 @@ export function UploadContextProvider({ children }: IProps) {
             try {
                 const resolution = { width: video.videoWidth, height: video.videoHeight };
                 const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = captureVideoThumbnail(video, THUMBNAIL_MIN_SIZE);
-                const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(await loadImage(thumbnailDataUrl), MICRO_MIN_SIZE);
+                const thumbnailImage = await loadImage(thumbnailDataUrl);
+                const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(thumbnailImage, MICRO_MIN_SIZE);
                 
                 const contentTypeStart = 5;
                 const microContentTypeEnd = microDataUrl.indexOf(";", contentTypeStart);
                 const micro = microDataUrl.slice(microContentTypeEnd + 1 + "base64,".length);
                 const thumbContentTypeEnd = thumbnailDataUrl.indexOf(";", contentTypeStart);
                 const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
+                const color = await (new ColorThief()).getColor(thumbnailImage);
 
                 return { 
                     resolution, 
@@ -333,6 +341,7 @@ export function UploadContextProvider({ children }: IProps) {
                     microContentType,
                     thumbnail, 
                     thumbContentType,
+                    color,
                 };
             }
             finally {
@@ -353,7 +362,8 @@ export function UploadContextProvider({ children }: IProps) {
             const thumbnail = thumbnailDataUrl.slice(thumbContentTypeEnd + 1 + "base64,".length);
             const { dataUrl: displayDataUrl, contentType: displayContentType } = resizeImage(image, DISPLAY_MIN_SIZE);
             const displayContentTypeEnd = displayDataUrl.indexOf(";", contentTypeStart);
-            const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);        
+            const displayData = displayDataUrl.slice(displayContentTypeEnd + 1 + "base64,".length);    
+            const color = await (new ColorThief()).getColor(image);
             return { 
                 resolution, 
                 micro,
@@ -362,6 +372,7 @@ export function UploadContextProvider({ children }: IProps) {
                 thumbContentType, 
                 displayData, 
                 displayContentType,
+                color,
             };
         }    
     }
@@ -394,7 +405,7 @@ export function UploadContextProvider({ children }: IProps) {
             // otherwise we get an out of memory error when trying to
             // upload 1000s of assets.
             //
-            const { resolution, micro, microContentType, thumbnail, thumbContentType, displayData, displayContentType } = 
+            const { resolution, micro, thumbnail, thumbContentType, displayData, displayContentType, color } = 
                 await loadAssetDetails(fileData, nextUpload.assetContentType);
 
             const properties: any = {};
@@ -497,7 +508,8 @@ export function UploadContextProvider({ children }: IProps) {
                 labels,
                 description: "",
                 userId: user!._id,
-                micro: micro,
+                micro,
+                color,
             });
 
             console.log(`Uploaded ${assetId}`);
