@@ -253,7 +253,7 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
-    const { isLoading, addAsset, updateAsset, updateAssets,
+    const { isLoading, addAsset, updateAsset, 
         onReset: __onReset,
         onNewItems: __onNewItems, 
         onItemsUpdated: __onItemsUpdated,
@@ -299,7 +299,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // The way the gallery is grouped.
     //
-    const [groupBy, setGroupBy] = useState<string>("date");
+    const [groupBy, _setGroupBy] = useState<string>("date");
 
     //
     // A cache entry for a loaded asset.
@@ -419,7 +419,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
-        sortedItems.current = applySort(searchedItems.current);
+        const grouping = groupingMap[groupBy];
+        if (!grouping) {
+            throw new Error(`Unknown groupBy value: ${groupBy}`);
+        }
+
+        sortedItems.current = applySort(searchedItems.current, grouping);
 
         onNewItems.current.invoke(sortedItems.current);
     };
@@ -647,7 +652,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         searchedItems.current = applySearch(allItems.current, newSearchText);
-        sortedItems.current = applySort(searchedItems.current);
+
+        const grouping = groupingMap[groupBy];
+        if (!grouping) {
+            throw new Error(`Unknown groupBy value: ${groupBy}`);
+        }
+        sortedItems.current = applySort(searchedItems.current, grouping);
 
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText); // Triggers layout update.
@@ -721,12 +731,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Sorts the items in the gallery.
     //
-    function applySort(items: IGalleryItem[]): IGalleryItem[] {
-        const grouping = groupingMap[groupBy];
-        if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupBy}`);
-        }
-
+    function applySort(items: IGalleryItem[], grouping: IGroupBy): IGalleryItem[] {
         const sortedItems = items.slice();
         sortedItems.sort((a, b) => {
             const sortA = grouping.sortKey(a);
@@ -771,6 +776,19 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         });
 
         return sortedItems;
+    }
+
+    //
+    // Sets the method for grouping the gallery.
+    //
+    function setGroupBy(groupBy: string): void {
+        const grouping = groupingMap[groupBy];
+        if (!grouping) {
+            throw new Error(`Unknown groupBy value: ${groupBy}`);
+        }
+
+        sortedItems.current = applySort(searchedItems.current, grouping);
+        _setGroupBy(groupBy);
     }
 
     const value: IGalleryContext = {
