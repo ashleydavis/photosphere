@@ -41,7 +41,7 @@ export interface ISidebarProps {
     //
     // Navigates to a set.
     //
-    navigateToSet: (setId: string) => void;
+    navigateToSet: (page: string, setId: string) => void;
 }
 
 //
@@ -587,7 +587,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                             key={set.id}
                             onClick={() => {
                                 setSidebarOpen(false);
-                                navigateToSet(set.id)
+                                navigateToSet("cloud", set.id)
                             }}
                             >
                             <ListItemButton>

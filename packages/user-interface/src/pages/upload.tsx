@@ -1,9 +1,13 @@
-import React, { useState, DragEvent } from "react";
+import React, { useState, DragEvent, useEffect } from "react";
 import { useUpload } from "../context/upload-context";
 import { Spinner } from "../components/spinner";
-import { useGallery } from "../context/gallery-context";
+import { useParams } from "react-router-dom";
+import { useAssetDatabase } from "../context/asset-database-source";
 
 export function UploadPage() {
+
+    const { setId: _setId, setSetId } = useAssetDatabase();
+    const { setId } = useParams();
 
     //
     // Interface to the upload context.
@@ -16,6 +20,13 @@ export function UploadPage() {
         numUploaded, 
         numAlreadyUploaded, 
     } = useUpload();
+
+    useEffect(() => {
+        if (setId && setId !== _setId) {
+            // Selects the set specified in the URL.
+            setSetId(setId);
+        }
+    }, [setId]);
 
     //
     // Set to true when something is dragged over the upload area.

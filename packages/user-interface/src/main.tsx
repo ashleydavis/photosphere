@@ -142,24 +142,19 @@ function __Main({ computerPage }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if (location.pathname === "/cloud" && user) {
+        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && user) {
             //
             // If the user is logged in, navigate to their default set.
             //
-            navigateToDefaultSet();
+            navigateToDefaultSet("cloud");
+        }
+        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && user) {
+            //
+            // If the user is logged in, navigate to their default set.
+            //
+            navigateToDefaultSet("upload");
         }
     }, [user, location]);
-
-    useEffect(() => {
-        if (setId) {
-            if (selectedItemId) {
-                navigate(`/cloud/${setId}/${selectedItemId}`);
-            }
-            else {
-                navigate(`/cloud/${setId}`);
-            }
-        }
-    }, [setId, selectedItemId]);
 
     useEffect(() => {
         if (searchText.length > 0 && !openSearch) {
@@ -172,29 +167,29 @@ function __Main({ computerPage }: IMainProps) {
     //
     // Navigate to the specified set.
     //
-    function navigateToSet(setId: string) {
-        navigate(`/cloud/${setId}`);
+    function navigateToSet(page: string, setId: string): void {
+        navigate(`/${page}/${setId}`);
     }
 
     //
     // Navigate to the users default set.
     //
-    function navigateToDefaultSet() {
+    function navigateToDefaultSet(page: string): void {
         console.log(`Navigating to default set.`)
 
         if (!user) {
             throw new Error(`No user set.`);
         }
 
-        navigateToSet(user.defaultSet);
+        navigateToSet(page, user.defaultSet);
     }
 
     //
     // Opens the search input.
     //
-    function onOpenSearch() {
+    function onOpenSearch(): void {
     	setOpenSearch(true);
-        navigateToDefaultSet();
+        navigateToDefaultSet("cloud");
     }
 
     //
@@ -487,7 +482,6 @@ function __Main({ computerPage }: IMainProps) {
                             element={<div/>}
                             />
 
-
                         {computerPage 
                             && <Route
                                 path="/computer"
@@ -496,8 +490,14 @@ function __Main({ computerPage }: IMainProps) {
                         }
 
                         <Route 
-                            path="/upload" 
+                            path="/upload/:setId" 
                             element={<UploadPage />} 
+                            />
+
+                        {/* Placeholder route to avoid the warning before the redirect. */}
+                        <Route
+                            path="/upload"
+                            element={<div/>}
                             />
 
                         <Route  
