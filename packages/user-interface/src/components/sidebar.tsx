@@ -102,8 +102,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
-    const { search } = useGallery();
-    const { scrollTo, layout, setGroupBy } = useGalleryLayout();
+    const { search, setGroupBy } = useGallery();
+    const { scrollTo, layout } = useGalleryLayout();
 
     const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
     const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);

@@ -2,12 +2,69 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { IItemsUpdate, useGallerySource } from "./gallery-source";
 import { IObservable, Observable } from "../lib/subscription";
+import dayjs from "dayjs";
+import { isArray } from "lodash";
 
 export interface IAssetDataLoad {
     //
     // The object URL for the asset.
     //
     objectUrl: string;
+}
+
+//
+// Specifies how to group a gallery itemm.
+//
+interface IGroupBy {
+    //
+    // Selects the field to sort by.
+    //
+    sortKey(asset: IGalleryItem): any;
+
+    //
+    // Gets the group of the asset.
+    //
+    group(asset: IGalleryItem): string[];
+
+    //
+    // Gets the heading for the group of the asset.
+    //
+    heading(group: string[]): string;
+}
+
+//
+// Selects the grouping for the gallery.
+//
+const groupingMap: { [key: string]: IGroupBy } = {
+    date: {
+        // Sorts the photos by date.
+        sortKey: asset => asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined,
+
+        // Groups the photos by year and month.
+        group: asset => asset.photoDate
+            ? [
+                dayjs(asset.photoDate).format("YYYY"),
+                dayjs(asset.photoDate).format("MMMM"),
+            ]
+            : ["Undated"],
+
+        // Formats the group heading.
+        heading: (group: string[]) => group.slice().reverse().join(" "),
+    },
+    location: {
+        // Sorts the photos by location.
+        sortKey: asset => asset.location
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3)
+            : undefined,
+
+        // Groups the photos by location
+        group: asset => asset.location
+            ? asset.location.split(",").map(s => s.trim()).reverse().slice(0, 3)
+            : ["Location unknown"],
+
+        // Formats the group heading.
+        heading: (group: string[]) => group.slice().reverse().join(", "),
+    },
 }
 
 export interface IGalleryContext {
@@ -18,14 +75,19 @@ export interface IGalleryContext {
     isLoading: boolean;
 
     //
-    // Gets all assets currently loaded in sorted order. 
+    // Gets all assets currently loaded (unsorted).
     //
-    getAllSortedItems(): IGalleryItem[];
+    allItems(): IGalleryItem[];
 
     //
-    // Gets the search for assets.
+    // Gets the searched items.
     //
-    getSearchedItems(): IGalleryItem[];
+    searchedItems(): IGalleryItem[];
+
+    //
+    // Gets the searched and sorted items.
+    //
+    sortedItems(): IGalleryItem[];
 
     //
     // Subscribes to resets of the gallery.
@@ -166,6 +228,21 @@ export interface IGalleryContext {
     // Clears the current search.
     //
     clearSearch(): Promise<void>;
+
+    //
+    // The way the gallery is grouped.
+    //
+    groupBy: string;
+
+    //
+    // Sets the way the gallery is grouped.
+    //
+    setGroupBy(groupBy: string): void;
+
+    //
+    // Gets the current grouping criteria.
+    //
+    grouping(): IGroupBy;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -187,17 +264,22 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         removeArrayValue: _removeArrayValue,
         deleteAssets: _deleteAssets,
         getItemById: _getItemById,
-        } = useGallerySource();
+    } = useGallerySource();
 
     //
-    // List all loaded items before searching.
+    // List all loaded items before searching and sorting.
     //
     const allItems = useRef<IGalleryItem[]>([]);
    
     //
-    // Items that are currently displayed in the gallery.
+    // Items found by search (unsorted).
     //
     const searchedItems = useRef<IGalleryItem[]>([]);
+
+    //
+    // Sorted items displayed in the gallery.
+    //
+    const sortedItems = useRef<IGalleryItem[]>([]);
 
     //
     // The item in the gallery that is currently selected.
@@ -213,6 +295,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Set to true when the user is selecting multiple items.
     //
     const [isSelecting, setIsSelecting] = useState<boolean>(false);
+
+    //
+    // The way the gallery is grouped.
+    //
+    const [groupBy, setGroupBy] = useState<string>("date");
 
     //
     // A cache entry for a loaded asset.
@@ -242,7 +329,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // The current search that has been executed.
     //
-    const [ searchText, setSearchText ] = useState<string>("");
+    const [searchText, setSearchText] = useState<string>("");
 
     //
     // Clears the selection when search text changes.
@@ -280,17 +367,24 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }, []);
 
     //
-    // Gets all assets currently loaded in sorted order. 
+    // Gets all assets currently loaded (unsorted).
     //
-    function getAllSortedItems(): IGalleryItem[] {
+    function _allItems(): IGalleryItem[] {
         return allItems.current;
     }
 
     //
-    // Gets the search for assets.
+    // Gets the searched items.
     //
-    function getSearchedItems(): IGalleryItem[] {
+    function _searchedItems(): IGalleryItem[] {
         return searchedItems.current
+    }
+
+    //
+    // Gets the searched and sorted items.
+    //
+    function _sortedItems(): IGalleryItem[] {
+        return sortedItems.current
     }
 
     //
@@ -325,8 +419,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
+        sortedItems.current = applySort(searchedItems.current);
 
-        onNewItems.current.invoke(newSearchedItems);
+        onNewItems.current.invoke(sortedItems.current);
     };
 
     //
@@ -359,6 +454,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     function _onItemsDeleted(itemsUpdated: IItemsUpdate) { 
         allItems.current = removeItemsFromArray(allItems.current, itemsUpdated.assetIds);
         searchedItems.current = removeItemsFromArray(searchedItems.current, itemsUpdated.assetIds);
+        sortedItems.current = removeItemsFromArray(sortedItems.current, itemsUpdated.assetIds);
 
         onItemsDeleted.current.invoke(itemsUpdated);
     }
@@ -473,22 +569,22 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Gets the previous asset, or undefined if none.
     //
     function getPrev(item: IGalleryItem): IGalleryItem | undefined {
-        const itemIndex = searchedItems.current.findIndex(item => item._id === selectedItemId); 
+        const itemIndex = sortedItems.current.findIndex(i => i._id === item._id);
         if (itemIndex <= 0) {
             return undefined;
         }
-        return searchedItems.current[itemIndex - 1];
+        return sortedItems.current[itemIndex - 1];
     }
 
     //
     // Gets the next asset, or undefined if none.
     //
     function getNext(item: IGalleryItem): IGalleryItem | undefined {
-        const itemIndex = searchedItems.current.findIndex(item => item._id === selectedItemId); 
-        if (itemIndex < 0 || itemIndex >= searchedItems.current.length - 1) {
+        const itemIndex = sortedItems.current.findIndex(i => i._id === item._id);
+        if (itemIndex < 0 || itemIndex >= sortedItems.current.length - 1) {
             return undefined;
         }
-        return searchedItems.current[itemIndex + 1];
+        return sortedItems.current[itemIndex + 1];
     }
 
     //
@@ -518,7 +614,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return;
         }
 
-        const filtered =  [...selectedItems].filter(selectedItem => selectedItem !== item._id);
+        const filtered = [...selectedItems].filter(selectedItem => selectedItem !== item._id);
         setSelectedItems(new Set(filtered));
 
         if (filtered.length === 0) {
@@ -551,6 +647,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         searchedItems.current = applySearch(allItems.current, newSearchText);
+        sortedItems.current = applySort(searchedItems.current);
 
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText); // Triggers layout update.
@@ -621,11 +718,67 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         return searchedItems;
     }
 
+    //
+    // Sorts the items in the gallery.
+    //
+    function applySort(items: IGalleryItem[]): IGalleryItem[] {
+        const grouping = groupingMap[groupBy];
+        if (!grouping) {
+            throw new Error(`Unknown groupBy value: ${groupBy}`);
+        }
+
+        const sortedItems = items.slice();
+        sortedItems.sort((a, b) => {
+            const sortA = grouping.sortKey(a);
+            const sortB = grouping.sortKey(b);
+            if (sortA === undefined) {
+                if (sortB === undefined) {
+                    return 0; // Equal.
+                }
+                else {
+                    return 1; // a has no sort value, so it comes last.
+                }
+            }
+            else if (sortB === undefined) {
+                return -1; // b has no sort value, so it comes last.
+            }
+
+            if (isArray(sortA) && isArray(sortB)) {
+                for (let i = 0; i < Math.min(sortA.length, sortB.length); i++) {
+                    if (sortA[i] < sortB[i]) {
+                        return -1; // a comes before b
+                    }
+
+                    if (sortA[i] > sortB[i]) {
+                        return 1;  // a comes after b
+                    }
+                }
+
+                // If all compared elements are equal, sort by length
+                return sortA.length - sortB.length;
+            }
+            else {
+                if (sortA < sortB) {
+                    return 1; // a comes after b.
+                }
+                else if (sortA > sortB) {
+                    return -1; // a comes before b.
+                }
+                else {
+                    return 0; // a and b are equal.
+                }
+            }
+        });
+
+        return sortedItems;
+    }
+
     const value: IGalleryContext = {
         isLoading,
         searchText,
-        getAllSortedItems,
-        getSearchedItems,
+        allItems: _allItems,
+        searchedItems: _searchedItems,
+        sortedItems: _sortedItems,
         onReset: onReset.current,
         onNewItems: onNewItems.current,
         onItemsUpdated: onItemsUpdated.current,
@@ -653,6 +806,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         clearMultiSelection,
         search,
         clearSearch,
+        groupBy,
+        setGroupBy,
+        grouping: () => groupingMap[groupBy],
     };
     
     return (

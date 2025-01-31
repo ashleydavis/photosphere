@@ -55,7 +55,7 @@ function __Main({ computerPage }: IMainProps) {
 
     const { 
         isLoading: isGalleryLoading,
-        getSearchedItems,
+        sortedItems,
         selectedItemId,
         selectedItems,
         clearMultiSelection,
@@ -122,7 +122,7 @@ function __Main({ computerPage }: IMainProps) {
     //
     useEffect(() => {
         const subscription = onReset.subscribe(() => {
-            setNumLoaded(getSearchedItems().length);
+            setNumLoaded(sortedItems().length);
         });
         return () => {
             subscription.unsubscribe();            
@@ -134,7 +134,7 @@ function __Main({ computerPage }: IMainProps) {
     //
     useEffect(() => {
         const subscription = onNewItems.subscribe(() => {
-            setNumLoaded(getSearchedItems().length);
+            setNumLoaded(sortedItems().length);
         });
         return () => {
             subscription.unsubscribe();            
@@ -357,7 +357,7 @@ function __Main({ computerPage }: IMainProps) {
                                     </button>                                    
                                     {selectedItems.size} selected
                                 </div>
-                                || <div>{getSearchedItems().length} photos</div>
+                                || <div>{sortedItems().length} photos</div>
                             }
                             
                         </div>
