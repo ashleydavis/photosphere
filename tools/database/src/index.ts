@@ -1,11 +1,9 @@
 import { MongoClient } from "mongodb";
 import { getImageResolution, resizeImage } from "node-utils";
 import { CloudStorage, readAssetWithRetry } from "storage";
-import { IAsset } from "defs";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
-const ColorThief = require("colorthief");
 
 async function main() {
     const argv = minimist(process.argv.slice(2));
@@ -39,11 +37,24 @@ async function main() {
     let numProcessed = 0;
     let numFailed = 0;
     let queryOffset = 0;
-    const querySize = 10_000;
+    const querySize = 1_000;
     const batchSize = 100;
 
+
+    function estimateJSONSize(jsonObj: any): number {
+        // Convert the JSON object to a string
+        const jsonString = JSON.stringify(jsonObj);
+
+        // Encode the string in UTF-8 and calculate the byte length
+        const sizeInBytes = new TextEncoder().encode(jsonString).length;
+
+        return sizeInBytes;
+    }
+
+    let totalSize = 0;
+
     while (true) {
-        const documents = await metadataCollection.find<IAsset>(query)
+        const documents = await metadataCollection.find(query)
             .skip(queryOffset)
             .limit(querySize)
             .toArray();
@@ -58,48 +69,21 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
 
-                if (!document.setId) {
-                    throw new Error(`Document ${document._id} does not have setId.`);
+                try {
+                    await storage.delete(`collections/${document.setId}/micro`, document._id);
+    
+                    numUpdated += 1;
                 }
+                catch (err) {
+                    console.error(`Failed to delete micro image for asset ${document._id}.`);
+                    console.error(err);
 
-                if (!document.color) {
-                    const fileData = await readAssetWithRetry(storage, document._id, document.setId, "micro");
-                    if (!fileData) {
-                        throw new Error(`Document ${document._id} does not have micro asset.`);
-                    }
-
-                    try {
-                        const color = await ColorThief.getColor(fileData);
-    
-                        await metadataCollection.updateOne({ _id: document._id }, { 
-                            $set: { 
-                                color,
-                            },
-                        });
-    
-                        // console.log(`Processed ${document.setId}/${document._id}.`);
-
-                        numUpdated += 1;
-                    }
-                    catch (err) {
-                        console.error(`Failed to process ${document.setId}/${document._id}.`);
-                        console.error(err);
-                        console.log(`Defaulting to white`);
-
-                        const color = [255, 255, 255];
-    
-                        await metadataCollection.updateOne({ _id: document._id }, { 
-                            $set: { 
-                                color,
-                            },
-                        });
-
-                        numFailed += 1;
-                    }
-
+                    numFailed += 1;
                 }
 
                 numProcessed += 1;
+
+                totalSize += estimateJSONSize(document);
             }));
 
             console.log(`Processed ${numProcessed} of ${documentCount} documents.`);
@@ -112,10 +96,14 @@ async function main() {
     console.log(`Total documents ${documentCount}.`);
     console.log(`Updated: ${numUpdated}.`);
     console.log(`Processed: ${numProcessed}.`);
-    console.log(`Failed: ${numFailed}.`);
+
+    console.log(`Total size: ${totalSize} bytes.`);
+
+    const averageSize = totalSize / documentCount; 
+    console.log(`Average size: ${averageSize} bytes.`);
 
     await fs.ensureDir("./log");
-    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed }, null, 2));
+    await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed, totalSize, averageSize }, null, 2));
 }
 
 main()
