@@ -3,11 +3,6 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { IItemsUpdate, useGallerySource } from "./gallery-source";
 import { IObservable, Observable } from "../lib/subscription";
 
-//
-// Gets the sorting value from the gallery item.
-//
-export type SortFn = (galleryItem: IGalleryItem) => any;
-
 export interface IAssetDataLoad {
     //
     // The object URL for the asset.
