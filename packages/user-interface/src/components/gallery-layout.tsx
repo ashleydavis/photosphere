@@ -202,32 +202,51 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     //
     // Find the previous heading row.
     //
-    let curHeadingRow: IGalleryRow | undefined;
+    let stickyHeading = useRef<IGalleryRow | undefined>(undefined);
+    let stickHeadingVisible = useRef<boolean>(false);
 
     if (layout && virtualRows.length > 0) {
         const startingRow = virtualRows[0].index;
-        for (let i = startingRow; i >= 0; i--) {
-            const row = layout!.rows[i];
-            if (row.type === "heading") {
-                curHeadingRow = row;
-                break;
-            }
+
+        if (layout!.rows[startingRow].type === "heading") {
+            // If the first row is a heading, then don't display a sticky heading.
+            stickHeadingVisible.current = false;
         }
+        else if (startingRow + 1 < layout!.rows.length && layout!.rows[startingRow + 1].type === "heading") {
+            // If the first row is a heading, then don't display a sticky heading.
+            stickHeadingVisible.current = false;
+        }
+        else {
+            //
+            // Find the previous heading row.
+            //
+            for (let i = startingRow-1; i >= 0; i--) {
+                const row = layout!.rows[i];
+                if (row.type === "heading") {
+                    stickyHeading.current = row;
+                    stickHeadingVisible.current = true;
+                    break;
+                }
+            }
+        }      
+    }
+    else {
+        stickHeadingVisible.current = false;
     }
 
     return (
         <>
-            {curHeadingRow &&
+            {stickyHeading.current &&
                 <div
+                    className={`gallery-sticky-heading ` + (stickHeadingVisible.current ? "fade-in" : "fade-out")}
                     style={{
                         position: "absolute",
                         top: 0,
                         zIndex: 100,
                         backgroundColor: theme.palette.background.body,
                         color: theme.palette.text.primary,
-                        opacity: 0.75,
                         borderBottom: "1px solid rgba(0,0,0,0.1)",
-                        height: `${curHeadingRow.height}px`,
+                        height: `${stickyHeading.current.height}px`,
                         width: "100%",
                         fontSize: "0.9rem",
                         fontWeight: 600,
@@ -236,10 +255,9 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         padding: "1em",
                     }}                    
                     >                            
-                    {curHeadingRow.heading}
+                    {stickyHeading.current.heading}
                 </div>
-            }
-           
+            }           
 
             <div
                 className="gallery-scroller"

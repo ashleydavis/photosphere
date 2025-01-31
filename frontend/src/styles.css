@@ -80,6 +80,38 @@ i {
 
 /* Gallery */
 
+.gallery-sticky-heading {
+    opacity: 0;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 0.75;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 0.75;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.gallery-sticky-heading.fade-in {
+    animation: fadeIn 0.3s ease-in;
+    opacity: 0.75;
+}
+
+.gallery-sticky-heading.fade-out {
+    opacity: 0;
+    animation: fadeOut 0.3s ease-out;
+}
+
 @keyframes fadeInThumb {
     from {
         opacity: 0;
