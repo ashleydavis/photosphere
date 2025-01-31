@@ -243,11 +243,6 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     await uploadAssetData(config.uploadSetId, assetId, "asset", contentType, fileData);
 
     //
-    // Uploads the micro thumbnail.
-    //
-    await uploadAssetData(config.uploadSetId, assetId, "micro", "image/jpg", assetDetails.micro);
-
-    //
     // Uploads the thumbnail.
     //
     await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);

@@ -381,7 +381,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             for (const assetId of assetIds) {
                 const asset = loadedAssets.current[assetId];        
                 const newAssetId = uuid();                
-                const assetTypes = ["micro", "thumb", "display", "asset"];    
+                const assetTypes = ["thumb", "display", "asset"];    
                 for (const assetType of assetTypes) {
                     const assetData = await loadAsset(assetId, assetType);
                     if (assetData) {

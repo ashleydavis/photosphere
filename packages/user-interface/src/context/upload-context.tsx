@@ -470,12 +470,6 @@ export function UploadContextProvider({ children }: IProps) {
             await uploadAsset(assetId, "asset", nextUpload.assetContentType, fileData);
 
             //
-            // Uploads the micro thumbnail.
-            //
-            const microBlob = base64StringToBlob(micro, microContentType);
-            await uploadAsset(assetId, "micro", microContentType, microBlob);
-
-            //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
             //
             const thumnailBlob = base64StringToBlob(thumbnail, thumbContentType);
