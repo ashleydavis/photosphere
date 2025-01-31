@@ -65,21 +65,6 @@ export function FullImage({ asset }: IImageProps) {
 
     return (
         <>
-            {asset.color
-                && <div                    
-                    style={{
-                        position: "absolute",
-                        left: `0px`,
-                        top: `0px`,
-                        width: `100%`,
-                        height: `100%`,
-                        opacity: "0.7",
-                        backgroundColor: `rgb(${asset.color[0]}, ${asset.color[1]}, ${asset.color[2]})`,
-                    }}
-                    >                   
-                </div>
-            }    
-
             {microDataURL
                 && <img 
                     src={microDataURL}
