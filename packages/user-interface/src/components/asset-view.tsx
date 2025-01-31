@@ -47,9 +47,11 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 <div className="photo-container flex flex-col items-center justify-center">
                     {asset.contentType.startsWith("video/")
                         && <Video
+                            key={asset._id}
                             asset={asset}
                             />
                         || <Image                                
+                            key={asset._id}
                             asset={asset}
                             />
                     }
