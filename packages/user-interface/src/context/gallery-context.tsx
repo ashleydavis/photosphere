@@ -13,11 +13,6 @@ export interface IAssetDataLoad {
     // The object URL for the asset.
     //
     objectUrl: string;
-
-    //
-    // The source of the asset data.
-    //
-    source: "local" | "cloud";
 }
 
 export interface IGalleryContext {
@@ -435,7 +430,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             existingCacheEntry.numRefs += 1;
             return {
                 objectUrl: existingCacheEntry.objectUrl,
-                source: "local",
             };
         }
 
@@ -453,7 +447,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         return {
             objectUrl,
-            source: assetData.source
         };
     }
 
