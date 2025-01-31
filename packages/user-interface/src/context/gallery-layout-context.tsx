@@ -143,11 +143,6 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
 
     const { getSearchedItems, onReset, onNewItems, onItemsDeleted, searchText } = useGallery();
 
-    //
-    // Items after sorting.
-    //
-    const [ sortedItems, setSortedItems ] = useState<IGalleryItem[]>([]);
-
     const scrollToHandler = useRef<(scrollTop: number) => void>();
 
     //
