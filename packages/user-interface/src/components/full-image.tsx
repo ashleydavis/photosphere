@@ -65,6 +65,21 @@ export function FullImage({ asset }: IImageProps) {
 
     return (
         <>
+            {asset.color
+                && <div                    
+                    style={{
+                        position: "absolute",
+                        left: `0px`,
+                        top: `0px`,
+                        width: `100%`,
+                        height: `100%`,
+                        opacity: "0.7",
+                        backgroundColor: `rgb(${asset.color[0]}, ${asset.color[1]}, ${asset.color[2]})`,
+                    }}
+                    >                   
+                </div>
+            }    
+
             {microDataURL
                 && <img 
                     className="micro"
@@ -72,17 +87,35 @@ export function FullImage({ asset }: IImageProps) {
                     style={{
                         padding: "2px",
                         transform: getImageTransform(orientation, undefined),
+                        position: "absolute",
+                        top: "0",
+                        left: "0",
+                        right: "0",
+                        bottom: "0",
+                        width: "80%",
+                        height: "80%",
+                        margin: "auto",
+                        objectFit: "contain",
                     }}
                     />
             }
             
             {thumbnailObjectURL
                 && <img
-                    className="thumbnail fade-in-thumb"
+                    className="fade-in-thumb"
                     src={thumbnailObjectURL}
                     style={{
                         padding: "2px",
                         transform: getImageTransform(orientation, undefined),
+                        position: "absolute",
+                        top: "0",
+                        left: "0",
+                        right: "0",
+                        bottom: "0",
+                        width: "80%",
+                        height: "80%",
+                        margin: "auto",
+                        objectFit: "contain",
                     }}
                     />        
             }
@@ -90,11 +123,20 @@ export function FullImage({ asset }: IImageProps) {
             {objectURL
                 && <img 
                     data-testid="fullsize-asset"
-                    className="full fade-in-thumb"
+                    className="fade-in-thumb"
                     src={objectURL}
                     style={{
                         padding: "2px",
                         transform: getImageTransform(orientation, undefined),
+                        position: "absolute",
+                        top: "0",
+                        left: "0",
+                        right: "0",
+                        bottom: "0",
+                        width: "80%",
+                        height: "80%",
+                        margin: "auto",
+                        objectFit: "contain",
                     }}
                     />
             }    

@@ -201,34 +201,9 @@ i {
     bottom: 0;
 }
 
-.photo-container .thumbnail {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 80%;
-    height: 80%;
-    margin: auto;
-    object-fit: contain;
-}
-
-.photo-container .full {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 80%;
-    height: 80%;
-    margin: auto;
-    object-fit: contain;
-}
-
 .photo-nav {
     z-index: 2100;
 }
-
 
 /* Drop down */
 
