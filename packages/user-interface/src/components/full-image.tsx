@@ -82,7 +82,6 @@ export function FullImage({ asset }: IImageProps) {
 
             {microDataURL
                 && <img 
-                    className="micro"
                     src={microDataURL}
                     style={{
                         padding: "2px",
