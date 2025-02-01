@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { transformImage } from "node-utils";
+import { getImageResolution, resizeImage, transformImage } from "node-utils";
 import { CloudStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
 import { getImageTransformation } from "utils";
 const _ = require("lodash");
@@ -71,39 +71,25 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    if (document.transformed && !document.updatedRes) {
-                        const imageTransformation = getImageTransformation(document);
-                        if (imageTransformation) {
-                            console.log(`Transforming asset ${document._id}.`);
-                            console.log(`Transformation: ${JSON.stringify(imageTransformation)}`);
+                    if (document.updatedRes && !document.updatedMicro) {
+                        const fileData = await readAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
+                        if (!fileData) {
+                            throw new Error(`Document ${document._id} does not have thumb asset.`);
+                        }
 
-                            let width = document.width;
-                            let height = document.height;
+                        const resolution = await getImageResolution(document._id, fileData)
+                        const minSize = 40;
+                        const quality = 75;
+                        const resized = await resizeImage(fileData, resolution, minSize, quality);
 
-                            if (imageTransformation.rotate === 90 || imageTransformation.rotate === 270) {
-                                //
-                                // Flip width and height.
-                                //
-                                width = document.height;
-                                height = document.width;
-                            }
+                        await metadataCollection.updateOne({ _id: document._id }, {
+                            $set: {
+                                updatedMicro: true,
+                                micro: resized.toString("base64"),
+                            },
+                        });
 
-                            //
-                            // Set the transformed flag to true.
-                            //
-                            await metadataCollection.updateOne(
-                                { _id: document._id }, 
-                                { 
-                                    $set: { 
-                                        updatedRes: true,
-                                        width,
-                                        height,
-                                    },
-                                }
-                            );                                
-        
-                            numUpdated += 1;
-                        }              
+                        numUpdated += 1;
                     }
                 }
                 catch (err) {
