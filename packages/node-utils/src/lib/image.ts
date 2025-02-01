@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { IImageTransformation } from "utils";
 
 //
 // Represents the resolution of the image or video.
@@ -56,4 +57,21 @@ export async function resizeImage(inputData: Buffer, resolution: { width: number
         quality: 75,
       })
       .toBuffer();
+}
+
+//
+// Transforms an image.
+//
+export async function transformImage(inputData: Buffer, options: IImageTransformation): Promise<Buffer> {
+    let image = sharp(inputData);
+
+    if (options.flipX) {
+        image = image.flop();
+    }
+
+    if (options.rotate) {
+        image = image.rotate(options.rotate);
+    }
+
+    return await image.toBuffer();
 }

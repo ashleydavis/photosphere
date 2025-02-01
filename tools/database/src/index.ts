@@ -1,9 +1,11 @@
 import { MongoClient } from "mongodb";
-import { getImageResolution, resizeImage } from "node-utils";
-import { CloudStorage, readAssetWithRetry } from "storage";
+import { transformImage } from "node-utils";
+import { CloudStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { getImageTransformation } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
+
 
 async function main() {
     const argv = minimist(process.argv.slice(2));
@@ -40,7 +42,6 @@ async function main() {
     const querySize = 1_000;
     const batchSize = 100;
 
-
     function estimateJSONSize(jsonObj: any): number {
         // Convert the JSON object to a string
         const jsonString = JSON.stringify(jsonObj);
@@ -70,9 +71,58 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    await storage.delete(`collections/${document.setId}/micro`, document._id);
-    
-                    numUpdated += 1;
+                    if (!document.transformed) {
+                        const imageTransformation = getImageTransformation(document);
+                        if (imageTransformation) {
+                            console.log(`Transforming asset ${document._id}.`);
+                            console.log(`Transformation: ${JSON.stringify(imageTransformation)}`);
+
+                            //
+                            // Get the asset.
+                            //
+                            const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb");
+                            if (thumbInfo) {
+                                let thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
+                                if (thumb) {
+                                    thumb = await transformImage(thumb, imageTransformation);
+                                    await writeAssetWithRetry(storage, document._id, document.setId, "thumb-transformed", thumbInfo.contentType, thumb);
+                                }
+                                else {
+                                    console.error(`Failed to read thumb for asset ${document._id}.`);
+                                }
+                            }
+                            else {
+                                console.error(`Document ${document._id} does not have thumb info.`);
+                            }
+
+                            if (document.contentType.startsWith("image")) {
+                                const displayInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "display");
+                                if (displayInfo) {
+                                    let display = await readAssetWithRetry(storage, document._id, document.setId, "display");
+                                    if (display) {
+                                        display = await transformImage(display, imageTransformation);
+                                        await writeAssetWithRetry(storage, document._id, document.setId, "display-transformed", displayInfo.contentType, display);
+                                    }    
+                                    else {
+                                        console.error(`Failed to read display for asset ${document._id}.`);
+                                    }
+                                }
+                                else {
+                                    console.error(`Document ${document._id} does not have display info.`);
+                                }
+                            }
+                            else {
+                                console.log(`Document ${document._id} is not an image.`);
+                            }
+
+                            //
+                            // Set the transformed flag to true.
+                            //
+                            await metadataCollection.updateOne({ _id: document._id }, { $set: { transformed: true } });
+        
+                            numUpdated += 1;
+                        }              
+                    }
                 }
                 catch (err) {
                     console.error(`Failed to delete micro image for asset ${document._id}.`);
@@ -99,7 +149,7 @@ async function main() {
 
     console.log(`Total size: ${totalSize} bytes.`);
 
-    const averageSize = totalSize / documentCount; 
+    const averageSize = totalSize / documentCount;
     console.log(`Average size: ${averageSize} bytes.`);
 
     await fs.ensureDir("./log");

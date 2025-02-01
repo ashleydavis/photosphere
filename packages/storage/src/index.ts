@@ -1,4 +1,4 @@
-import { IStorage } from "./lib/storage";
+import { IFileInfo, IStorage } from "./lib/storage";
 
 export * from "./lib/storage";
 export * from "./lib/cloud-storage";
@@ -56,6 +56,28 @@ export async function streamAssetWithRetry(sourceStorage: IStorage, destStorage:
 }
 
 //
+// Gets the info about an asset.
+// Retries on failure.
+//
+export async function getAssetInfoWithRetry(storage: IStorage, assetId: string, setId: string, assetType: string): Promise<IFileInfo | undefined> {
+  let lastErr = undefined;
+  let retries = 3;
+  while (retries > 0) {
+      try {
+          return await storage.info(`collections/${setId}/${assetType}`, assetId);
+      }
+      catch (err) {
+          lastErr = err;
+          console.error(`Failed to get asset info ${assetType}/${assetId}. Retries left: ${retries}.`);
+          console.error(err);
+          retries--;
+      }
+  }
+
+  throw lastErr;
+}
+
+//
 // Reads an asset from source storage.
 // Retries on failure.
 //
@@ -69,6 +91,28 @@ export async function readAssetWithRetry(sourceStorage: IStorage, assetId: strin
       catch (err) {
           lastErr = err;
           console.error(`Failed to download asset ${assetType}/${assetId}. Retries left: ${retries}.`);
+          console.error(err);
+          retries--;
+      }
+  }
+
+  throw lastErr;
+}
+
+//
+// Writes an asset with retries.
+//
+export async function writeAssetWithRetry(storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
+  let lastErr = undefined;
+  let retries = 3;
+  while (retries > 0) {
+      try {
+          await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, data);
+          return;
+      }
+      catch (err) {
+          lastErr = err;
+          console.error(`Failed to write asset ${assetType}/${assetId}. Retries left: ${retries}.`);
           console.error(err);
           retries--;
       }
