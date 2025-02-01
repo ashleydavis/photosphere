@@ -71,54 +71,36 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    if (!document.transformed) {
+                    if (document.transformed && !document.updatedRes) {
                         const imageTransformation = getImageTransformation(document);
                         if (imageTransformation) {
                             console.log(`Transforming asset ${document._id}.`);
                             console.log(`Transformation: ${JSON.stringify(imageTransformation)}`);
 
-                            //
-                            // Get the asset.
-                            //
-                            const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb");
-                            if (thumbInfo) {
-                                let thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
-                                if (thumb) {
-                                    thumb = await transformImage(thumb, imageTransformation);
-                                    await writeAssetWithRetry(storage, document._id, document.setId, "thumb-transformed", thumbInfo.contentType, thumb);
-                                }
-                                else {
-                                    console.error(`Failed to read thumb for asset ${document._id}.`);
-                                }
-                            }
-                            else {
-                                console.error(`Document ${document._id} does not have thumb info.`);
-                            }
+                            let width = document.width;
+                            let height = document.height;
 
-                            if (document.contentType.startsWith("image")) {
-                                const displayInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "display");
-                                if (displayInfo) {
-                                    let display = await readAssetWithRetry(storage, document._id, document.setId, "display");
-                                    if (display) {
-                                        display = await transformImage(display, imageTransformation);
-                                        await writeAssetWithRetry(storage, document._id, document.setId, "display-transformed", displayInfo.contentType, display);
-                                    }    
-                                    else {
-                                        console.error(`Failed to read display for asset ${document._id}.`);
-                                    }
-                                }
-                                else {
-                                    console.error(`Document ${document._id} does not have display info.`);
-                                }
-                            }
-                            else {
-                                console.log(`Document ${document._id} is not an image.`);
+                            if (imageTransformation.rotate === 90 || imageTransformation.rotate === 270) {
+                                //
+                                // Flip width and height.
+                                //
+                                width = document.height;
+                                height = document.width;
                             }
 
                             //
                             // Set the transformed flag to true.
                             //
-                            await metadataCollection.updateOne({ _id: document._id }, { $set: { transformed: true } });
+                            await metadataCollection.updateOne(
+                                { _id: document._id }, 
+                                { 
+                                    $set: { 
+                                        updatedRes: true,
+                                        width,
+                                        height,
+                                    },
+                                }
+                            );                                
         
                             numUpdated += 1;
                         }              
