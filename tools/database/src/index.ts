@@ -71,23 +71,25 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    if (document.updatedRes && !document.updatedMicro) {
+                    if (document.transformed) {
+                        const info = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb-transformed");
                         const fileData = await readAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
-                        if (!fileData) {
-                            throw new Error(`Document ${document._id} does not have thumb asset.`);
+                        await writeAssetWithRetry(storage, document._id, document.setId, "thumb",  info!.contentType, fileData!);
+
+                        if (document.contentType.startsWith("image")) {
+                            const displayInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "display-transformed");
+                            const displayFileData = await readAssetWithRetry(storage, document._id, document.setId, "display-transformed");
+                            await writeAssetWithRetry(storage, document._id, document.setId, "display", displayInfo!.contentType, displayFileData!);
                         }
 
-                        const resolution = await getImageResolution(document._id, fileData)
-                        const minSize = 40;
-                        const quality = 75;
-                        const resized = await resizeImage(fileData, resolution, minSize, quality);
-
-                        await metadataCollection.updateOne({ _id: document._id }, {
-                            $set: {
-                                updatedMicro: true,
-                                micro: resized.toString("base64"),
-                            },
-                        });
+                        // await metadataCollection.updateOne({ _id: document._id }, {
+                        //     $unset: {
+                        //         transformed: "",
+                        //         thumbTransformed: "",
+                        //         displayTransformed: "",
+                        //         updatedRes: "",
+                        //     },
+                        // });
 
                         numUpdated += 1;
                     }
