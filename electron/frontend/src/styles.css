@@ -130,11 +130,6 @@ i {
     width: 22px;
 }
 
-.hover-indicator {
-    background-color: #d55959;
-    opacity: 0.25;
-}
-
 /* Backdrop for Drawers */
 
 .MuiDrawer-backdrop {

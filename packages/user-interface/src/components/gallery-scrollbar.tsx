@@ -68,7 +68,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     const [thumbHeight, setThumbHeight] = useState<number>(0);
     const [isDraggingTouch, setIsDraggingTouch] = useState(false);
     const [isDraggingMouse, setIsDraggingMouse] = useState(false);
-    const [hover, setHover] = useState(false);
     const [isTouchDevice, setIsTouchDevice] = useState(false);
     const deltaY = useRef(0);
     const theme = useTheme();
@@ -195,58 +194,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
         return Number(Math.min(galleryLayout!.galleryHeight, Math.max(0, scrollY)).toFixed(2));
     }
 
-    //
-    // Renders the main gallery headings into the custom scroll bar.
-    //
-    function renderScrollbarRows(galleryLayout: IGalleryLayout | undefined) {
-        if (!galleryLayout) {
-            return null;
-        }
-
-        let previousHeading = "";
-        const headingRows: IGalleryRow[] = [];
-
-        for (const row of galleryLayout.rows) {
-            if (row.type === "heading") { // Filter out rows that are not group headings.
-                const topLevelHeading = row.group![0]; // Only care about top level group.
-                if (previousHeading !== topLevelHeading) {
-                    headingRows.push(row);
-                    previousHeading = topLevelHeading;
-                }
-            }
-        }
-
-        return headingRows.map((row, index) => {
-            const topLevelHeading = row.group![0]; // Only care about top level group.
-            const headingOffsetY = VERTICAL_GUTTER + (row.offsetY / galleryLayout.galleryHeight) * scrollbarHeight; // Maps the scroll position into the scrollbar.
-            return (
-                <div
-                    key={index}
-                    className="cursor-pointer"
-                    style={{
-                        position: "absolute",
-                        top: `${headingOffsetY - 0}px`,
-                        left: "0",
-                        width: `100%`,
-                        height: "28px",
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        textAlign: "center",
-                        fontWeight: 600,
-                        fontSize: "0.9rem",
-                        borderTop: `1px solid ${theme.palette.text.primary}`,
-                    }}
-                    onClick={() => {
-                        scrollTo(row.offsetY);
-                    }}
-                    >
-                    {topLevelHeading}
-                </div>
-            );
-        });
-    }
-
     if (!galleryLayout) {
         // No layout yet.
         return null;
@@ -271,16 +218,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                     backgroundColor: theme.palette.background.body,
                     zIndex: 200,
                 }}
-                onMouseEnter={() => {
-                    if (!isTouchDevice) {
-                        setHover(true);
-                    }
-                }}
-                onMouseLeave={() => {
-                    if (!isTouchDevice) {
-                        setHover(false);
-                    }
-                }}
                 onMouseUp={event => {
                     if (isDraggingTouch || isDraggingMouse) {
                         return;
@@ -294,57 +231,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                     scrollTo(newScrollPos);
                 }}
                 >
-
-                {/* Pop out timeline. */}
-                {(isDraggingTouch || isDraggingMouse || hover) &&
-                    <>
-                        <div
-                            className="select-none"
-                            style={{
-                                position: "absolute",
-                                right: "100%",
-                                width: "100px",
-                                height: "100%",
-                                backgroundColor: theme.palette.background.body,
-                                color: theme.palette.text.primary,
-                                opacity: "0.6",
-                            }}
-                            >
-
-                            {/*
-                            Hover indicator
-                            */}
-                            <div
-                                className="hover-indicator"
-                                style={{
-                                    position: "absolute",
-                                    top: `${thumbPos-1}px`,
-                                    left: "0",
-                                    width: "100%",
-                                    height: `${thumbHeight+2}px`,
-                                }}
-                                />
-
-                            {renderScrollbarRows(galleryLayout)}                
-                        </div>
-
-                        {/*
-                        Hover indicator
-                        */}
-
-                        <div
-                            className="hover-indicator"
-                            style={{
-                                position: "absolute",
-                                top: `${thumbPos-1}px`,
-                                left: "0",
-                                width: "100%",
-                                height: `${thumbHeight+2}px`,
-                            }}
-                            />
-                    </>                
-                }
-
 
                 {/* The thumb */}
                 <div
@@ -369,16 +255,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
                         width: `${SCROLLBAR_WIDTH*SCROLLBAR_HITTEST_MULTIPLIER}px`,
                         opacity: 0,
                         pointerEvents: "auto",
-                    }}
-                    onMouseEnter={() => {
-                        if (!isTouchDevice) {
-                            setHover(true);
-                        }
-                    }}
-                    onMouseLeave={() => {
-                        if (!isTouchDevice) {
-                            setHover(false);
-                        }
                     }}
                     onMouseUp={event => {
                         if (isDraggingTouch || isDraggingMouse) {
