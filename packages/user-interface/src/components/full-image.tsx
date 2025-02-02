@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
-import { getImageTransform } from "../lib/image";
 
 export interface IImageProps {
     //
@@ -70,7 +69,6 @@ export function FullImage({ asset }: IImageProps) {
                     src={microDataURL}
                     style={{
                         padding: "2px",
-                        transform: getImageTransform(orientation, undefined),
                         position: "absolute",
                         top: "0",
                         left: "0",
@@ -90,7 +88,6 @@ export function FullImage({ asset }: IImageProps) {
                     src={thumbnailObjectURL}
                     style={{
                         padding: "2px",
-                        transform: getImageTransform(orientation, undefined),
                         position: "absolute",
                         top: "0",
                         left: "0",
@@ -111,7 +108,6 @@ export function FullImage({ asset }: IImageProps) {
                     src={objectURL}
                     style={{
                         padding: "2px",
-                        transform: getImageTransform(orientation, undefined),
                         position: "absolute",
                         top: "0",
                         left: "0",

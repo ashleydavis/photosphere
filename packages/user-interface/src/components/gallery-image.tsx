@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
-import { getImageTransform } from "../lib/image";
 import { useLongPress } from "../lib/long-press";
 
 export interface IGalleryImageProps {
@@ -142,7 +141,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                         width: "100%",
                         height: "100%",
                         objectFit: "contain",
-                        transform: getImageTransform(orientation, item.aspectRatio),
                         scale: "1.05", // A small tweak to make the image cover the space without gaps.
                         transformOrigin: "center",
                     }}
@@ -162,7 +160,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                         width: "100%",
                         height: "100%",
                         objectFit: "contain",
-                        transform: getImageTransform(orientation, item.aspectRatio),
                         scale: "1.05", // A small tweak to make the image cover the space without gaps.
                         transformOrigin: "center",
                     }}

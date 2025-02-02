@@ -4,7 +4,6 @@
 //
 
 import { IGalleryItem, IGalleryRow } from "./gallery-item";
-import { getImageDimensions } from "./image";
 
 export interface IGalleryLayout {
     //
@@ -104,16 +103,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
         const item = items[itemIndex];
-
-        let orientation = 1;
-        if (item.properties?.exif?.Orientation) {
-            orientation = item.properties.exif.Orientation?.[0];        
-        }
-        else if (item.properties?.metadata?.Orientation) {
-            orientation = item.properties.metadata.Orientation?.[0];
-        }
-    
-        const resolution = getImageDimensions({ width: item.width, height: item.height }, orientation);
+        const resolution = { width: item.width, height: item.height };
         const aspectRatio = resolution.width / resolution.height;
         const computedWidth = targetRowHeight * aspectRatio;
 
