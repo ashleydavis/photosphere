@@ -8,8 +8,8 @@ import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
-import { convertExifCoordinates, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
-import { getImageResolution, IResolution, resizeImage } from "node-utils";
+import { convertExifCoordinates, getImageTransformation, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
+import { getImageResolution, IResolution, resizeImage, transformImage } from "node-utils";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -247,12 +247,11 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     //
     await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
 
-    if (contentType.startsWith("image")) {
+    if (assetDetails.display) {
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
-        const displayData = await resizeImage(fileData, assetDetails.resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
-        await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", displayData);
+        await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", assetDetails.display);
     }
 
     const properties: any = {};
@@ -551,6 +550,11 @@ export interface IAssetDetails {
     thumbnail: Buffer;
 
     //
+    // The display image.
+    //
+    display?: Buffer;
+
+    //
     // Metadata, if any.
     //
     metadata?: any;
@@ -723,10 +727,17 @@ function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordina
 // Gets the details of an image.
 //
 async function getImageDetails(filePath: string, fileData: Buffer, contentType: string): Promise<IAssetDetails> {
+
+    const assetDetails = await getImageMetadata(filePath, fileData, contentType);
+    const imageTransformation = await getImageTransformation(assetDetails.metadata);
+    if (imageTransformation) {
+        fileData = await transformImage(fileData, imageTransformation);
+    }
+
     const resolution = await getImageResolution(filePath, fileData);
     const micro = await resizeImage(fileData, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
     const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
-    const assetDetails = await getImageMetadata(filePath, fileData, contentType);
+    const display = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
 
     if (assetDetails.photoDate === undefined) {
         //
@@ -753,6 +764,7 @@ async function getImageDetails(filePath: string, fileData: Buffer, contentType: 
         resolution, 
         micro,
         thumbnail, 
+        display,
         ...assetDetails 
     };
 }

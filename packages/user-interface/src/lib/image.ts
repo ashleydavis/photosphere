@@ -53,6 +53,7 @@ export interface IResolution {
 
 //
 // Gets the size of an image element.
+// Note: this automatically rotates the image to match the orientation in exif.
 //
 export function getImageResolution(image: HTMLImageElement): IResolution {
     return {
@@ -63,6 +64,7 @@ export function getImageResolution(image: HTMLImageElement): IResolution {
 
 //
 // Resizes an image.
+// Note: this automatically rotates the image to match the orientation in exif.
 //
 // https://stackoverflow.com/a/43354901/25868
 //

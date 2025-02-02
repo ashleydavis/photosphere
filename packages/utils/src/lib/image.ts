@@ -1,3 +1,5 @@
+import { IAsset } from "defs";
+import { isArray } from "lodash";
 
 //
 // Options for transforming an image.
@@ -17,16 +19,16 @@ export interface IImageTransformation {
 //
 // Gets the transformation for an image.
 //
-export function getImageTransformation(asset: any): IImageTransformation | undefined {
-  let orientation = 1;
-  if (asset.properties?.exif?.Orientation) {
-      orientation = asset.properties.exif.Orientation?.[0];
-  }
-  else if (asset.properties?.metadata?.Orientation) {
-      orientation = asset.properties.metadata.Orientation?.[0];
-  }
-
-  console.log(`Asset ${asset._id} orientation: ${orientation}`);
+export function getImageTransformation(exif: any): IImageTransformation | undefined {
+    let orientation = 1;
+    if (exif?.Orientation) {
+        if (isArray(exif.Orientation)) {
+            orientation = exif.Orientation?.[0];
+        }
+        else {
+            orientation = exif.Orientation
+        }
+    }
 
   switch (orientation) {
       case 1:

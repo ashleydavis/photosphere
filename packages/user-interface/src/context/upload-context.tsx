@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { getExifData, getImageResolution, IResolution, loadImage, resizeImage } from "../lib/image";
 import { computeHash, loadDataURL } from "../lib/file";
-import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "utils";
+import { convertExifCoordinates, getImageTransformation, isLocationInRange, reverseGeocode } from "utils";
 import { IQueuedUpload, UploadState } from "../lib/upload-details";
 
 import dayjs from "dayjs";
@@ -347,7 +347,7 @@ export function UploadContextProvider({ children }: IProps) {
         if (uploadDetails.assetContentType === "image/jpeg" || uploadDetails.assetContentType === "image/jpg") {
             const exif = await getExifData(fileData);
             if (exif) {
-                properties.exif = exif;
+                properties.metadata = exif;
 
                 if (exif.GPSLatitude && exif.GPSLongitude) {
                     const coordinates = convertExifCoordinates(exif);
@@ -429,8 +429,7 @@ export function UploadContextProvider({ children }: IProps) {
         }
         else {
             // An image.
-            const imageData = await loadDataURL(fileData);
-            const image = await loadImage(imageData);
+            const image = await loadImage(await loadDataURL(fileData));
             const resolution = await getImageResolution(image);
             const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = resizeImage(image, THUMBNAIL_MIN_SIZE);
             const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(image, MICRO_MIN_SIZE);
