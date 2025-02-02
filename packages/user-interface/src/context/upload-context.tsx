@@ -313,13 +313,88 @@ export function UploadContextProvider({ children }: IProps) {
         // The color of the asset.
         //
         color: [number, number, number];
+
+        //
+        // Properties of the asset.
+        //
+        properties: any;
+
+        //
+        // Location of the asset.
+        //
+        location?: string;
+
+        //
+        // Date the photo was taken.
+        //
+        photoDate: string;
+
+        //
+        // Labels for the asset.
+        //
+        labels: string[];
     }
 
     //
     // Loads the details for an asset.
     //
-    async function loadAssetDetails(fileData: Blob, contentType: string): Promise<IAssetDetails> {
-        if (contentType.startsWith("video/")) {
+    async function loadAssetDetails(fileData: Blob, uploadDetails: IQueuedUpload): Promise<IAssetDetails> {
+
+        const properties: any = {};
+        let location: string | undefined = undefined;
+        let photoDate = uploadDetails.fileDate;
+
+        if (uploadDetails.assetContentType === "image/jpeg" || uploadDetails.assetContentType === "image/jpg") {
+            const exif = await getExifData(fileData);
+            if (exif) {
+                properties.exif = exif;
+
+                if (exif.GPSLatitude && exif.GPSLongitude) {
+                    const coordinates = convertExifCoordinates(exif);
+                    if (isLocationInRange(coordinates)) {
+                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates), 3, 5000);
+                        if (reverseGeocodingResult) {
+                            location = reverseGeocodingResult.location;
+                            properties.reverseGeocoding = {
+                                type: reverseGeocodingResult.type,
+                                fullResult: reverseGeocodingResult.fullResult,
+                            };
+                        }
+                    }
+                    else {
+                        console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${uploadDetails.fileName}.`);
+                    }
+                }
+
+                const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+                for (const dateField of dateFields) {
+                    const dateStr = exif[dateField];
+                    if (dateStr) {
+                        try {
+                            photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                        }
+                        catch (err) {
+                            console.error(`Failed to parse date from ${dateStr}`);
+                            console.error(err);
+                        }
+                    }
+                }
+            }
+        }
+
+        //
+        // Add the month and year as labels.
+        //
+        const month = dayjs(photoDate).format("MMMM");
+        const year = dayjs(photoDate).format("YYYY");
+        let labels = [month, year].concat(uploadDetails.labels);
+
+        //
+        // Remove duplicate labels, in case month/year already added.
+        //
+        labels = removeDuplicates(labels);
+
+        if (uploadDetails.assetContentType.startsWith("video/")) {
             // A video.
             const video = await loadVideo(fileData);
             try {
@@ -342,6 +417,10 @@ export function UploadContextProvider({ children }: IProps) {
                     thumbnail, 
                     thumbContentType,
                     color,
+                    properties,
+                    location,
+                    photoDate,
+                    labels,
                 };
             }
             finally {
@@ -373,6 +452,10 @@ export function UploadContextProvider({ children }: IProps) {
                 displayData, 
                 displayContentType,
                 color,
+                properties,
+                location,
+                photoDate,
+                labels,
             };
         }    
     }
@@ -405,62 +488,9 @@ export function UploadContextProvider({ children }: IProps) {
             // otherwise we get an out of memory error when trying to
             // upload 1000s of assets.
             //
-            const { resolution, micro, thumbnail, thumbContentType, displayData, displayContentType, color } = 
-                await loadAssetDetails(fileData, nextUpload.assetContentType);
-
-            const properties: any = {};
-            let location: string | undefined = undefined;
-            let photoDate = nextUpload.fileDate;
-
-            if (nextUpload.assetContentType === "image/jpeg" || nextUpload.assetContentType === "image/jpg") {
-                const exif = await getExifData(fileData);
-                if (exif) {
-                    properties.exif = exif;
-
-                    if (exif.GPSLatitude && exif.GPSLongitude) {
-                        const coordinates = convertExifCoordinates(exif);
-                        if (isLocationInRange(coordinates)) {
-                            const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates), 3, 5000);
-                            if (reverseGeocodingResult) {
-                                location = reverseGeocodingResult.location;
-                                properties.reverseGeocoding = {
-                                    type: reverseGeocodingResult.type,
-                                    fullResult: reverseGeocodingResult.fullResult,
-                                };
-                            }
-                        }
-                        else {
-                            console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${nextUpload.fileName}.`);
-                        }
-                    }
-
-                    const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-                    for (const dateField of dateFields) {
-                        const dateStr = exif[dateField];
-                        if (dateStr) {
-                            try {
-                                photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                            }
-                            catch (err) {
-                                console.error(`Failed to parse date from ${dateStr}`);
-                                console.error(err);
-                            }
-                        }
-                    }
-                }
-            }
-
-            //
-            // Add the month and year as labels.
-            //
-            const month = dayjs(photoDate).format("MMMM");
-            const year = dayjs(photoDate).format("YYYY");
-            let labels = [month, year].concat(nextUpload.labels);
-
-            //
-            // Remove duplicate labels, in case month/year already added.
-            //
-            labels = removeDuplicates(labels);
+            const { resolution, micro, thumbnail, thumbContentType, displayData, displayContentType, color,
+                location, photoDate, properties, labels } = 
+                await loadAssetDetails(fileData, nextUpload);
 
             const assetId = uuid();
 
