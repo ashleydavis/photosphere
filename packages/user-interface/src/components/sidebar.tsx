@@ -16,6 +16,8 @@ import Divider from '@mui/joy/Divider/Divider';
 import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
+import Slider from '@mui/joy/Slider/Slider';
+import Stack from '@mui/joy/Stack/Stack';
 
 export interface ISidebarProps {
     //
@@ -103,7 +105,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const theme = useTheme();
     const { setId } = useAssetDatabase();
     const { search, setGroupBy } = useGallery();
-    const { scrollTo, layout } = useGalleryLayout();
+    const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
     const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
     const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);
@@ -690,6 +692,28 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                     );
                 })}
             </List>
+
+            <Divider />
+
+            <Typography
+                level="body-xs"
+                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                >
+                Configuration
+            </Typography>
+
+           <Stack
+                sx={{ mt: 2, mr: 2 }}
+                >
+                <Typography level="body-xs">Row Height</Typography>                
+                <Slider 
+                    min={50}
+                    max={500}
+                    value={targetRowHeight}
+                    onChange={(e, value) => setTargetRowHeight(value as number)}
+                    />
+            </Stack>
+
       </div>
     );
 
