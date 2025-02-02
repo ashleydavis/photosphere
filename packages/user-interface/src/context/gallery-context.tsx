@@ -299,7 +299,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // The way the gallery is grouped.
     //
-    const [groupBy, _setGroupBy] = useState<string>("date");
+    const [groupBy, _setGroupBy] = useState<string>(localStorage.getItem("gallery-sort") || "date");
 
     //
     // A cache entry for a loaded asset.
@@ -789,6 +789,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         sortedItems.current = applySort(searchedItems.current, grouping);
         _setGroupBy(groupBy);
+
+        localStorage.setItem("gallery-sort", groupBy);
     }
 
     const value: IGalleryContext = {

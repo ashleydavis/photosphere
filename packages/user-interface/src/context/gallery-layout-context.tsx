@@ -61,7 +61,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     // The target row height of the gallery.
     //
-    const [targetRowHeight, setTargetRowHeight] = useState(80);
+    const savedHeight = localStorage.getItem("gallery-row-height");
+    const [targetRowHeight, _setTargetRowHeight] = useState(savedHeight ? parseInt(savedHeight) : 80);
     
     //
     // The current layout of the gallery.
@@ -171,6 +172,11 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //         };
     //     }
     // }, [galleryWidth]);
+
+    const setTargetRowHeight = (height: number) => {
+        _setTargetRowHeight(height);
+        localStorage.setItem("gallery-row-height", height.toString());
+    };
 
     const value: IGalleryLayoutContext = {
         galleryWidth,
