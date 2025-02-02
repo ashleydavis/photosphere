@@ -120,3 +120,25 @@ export async function writeAssetWithRetry(storage: IStorage, assetId: string, se
 
   throw lastErr;
 }
+
+//
+// Deletes an asset with retries.
+//
+export async function deleteAssetWithRetry(storage: IStorage, assetId: string, setId: string, assetType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await storage.delete(`collections/${setId}/${assetType}`, assetId);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to delete asset ${assetType}/${assetId}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+    
+    throw lastErr;
+}

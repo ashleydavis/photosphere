@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 import { getImageResolution, resizeImage, transformImage } from "node-utils";
-import { CloudStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { CloudStorage, deleteAssetWithRetry, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
 import { getImageTransformation } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -72,24 +72,17 @@ async function main() {
 
                 try {
                     if (document.transformed) {
-                        const info = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb-transformed");
-                        const fileData = await readAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
-                        await writeAssetWithRetry(storage, document._id, document.setId, "thumb",  info!.contentType, fileData!);
 
-                        if (document.contentType.startsWith("image")) {
-                            const displayInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "display-transformed");
-                            const displayFileData = await readAssetWithRetry(storage, document._id, document.setId, "display-transformed");
-                            await writeAssetWithRetry(storage, document._id, document.setId, "display", displayInfo!.contentType, displayFileData!);
-                        }
+                        await deleteAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
+                        await deleteAssetWithRetry(storage, document._id, document.setId, "display-transformed");
 
-                        // await metadataCollection.updateOne({ _id: document._id }, {
-                        //     $unset: {
-                        //         transformed: "",
-                        //         thumbTransformed: "",
-                        //         displayTransformed: "",
-                        //         updatedRes: "",
-                        //     },
-                        // });
+                        await metadataCollection.updateOne({ _id: document._id }, {
+                            $unset: {
+                                transformed: "",
+                                updatedRes: "",
+                                updatedMicro: "",
+                            },
+                        });
 
                         numUpdated += 1;
                     }
