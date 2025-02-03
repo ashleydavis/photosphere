@@ -93,7 +93,357 @@ interface IBreadcrumb {
     //
     // The menu to display when the breadcrumb is clicked.
     //
-    menu: IMenuItem[];
+    menuPath: string[]; 
+}
+
+//
+// Build the navigation menu from the gallery layout.
+//
+function buildNavMenu(layout: IGalleryLayout, scrollTo: (position: number) => void): IMenuItem[] {
+    const menu: IMenuItem[] = [];
+
+    const headingRows = layout.rows.filter(row => row.type === "heading");
+    for (const row of headingRows) {
+        let parentMenu = menu;
+        for (let groupIndex = 0; groupIndex < row.group.length; groupIndex++) {
+            let lastMenu = parentMenu.length > 0 ? parentMenu[parentMenu.length-1] : undefined
+            if (!lastMenu || lastMenu.text !== row.group[groupIndex]) {
+                // 
+                // Create a new menu.
+                //
+                lastMenu = {
+                    text: row.group[groupIndex],
+                    children: [],                        
+                };
+                if (groupIndex === row.group.length-1) {
+                    lastMenu.onClick = () => {
+                        // 
+                        // Scroll to the row.
+                        //
+                        scrollTo(row.offsetY);
+                    };
+                }
+                parentMenu.push(lastMenu);        
+            }       
+            parentMenu = lastMenu.children!;
+        }       
+    }
+
+    return menu;
+}
+
+
+//
+// Creates the full nav meu.
+//
+function makeFullMenu(navMenu: IMenuItem[], search: (searchText: string) => void, setGroupBy: (groupBy: string) => void) : IMenuItem[] {
+    const topMenu = [
+        {
+            icon: <Map />,
+            text: "Navigation",
+            children: navMenu,
+        },
+        {
+            icon: <Search />,
+            text: "Search",
+            children: [
+                //todo:
+                // {
+                //     icon: <History />,
+                //     text: "Recent",
+                // },
+                // {
+                //     icon: <Star />,
+                //     text: "Starred",
+                // },
+                {
+                    icon: <CalendarMonth />, //todo: How do I generate this?
+                    text: "Date",
+                    children: [
+                        {
+                            icon: <DateRange />, //todo:
+                            text: "A particular day",
+                            more: true,
+                        },
+                        {
+                            icon: <DateRange />, //todo:
+                            text: "Date range",
+                            more: true,
+                        },
+                        {
+                            icon: <DateRange />, //todo:
+                            text: "Undated",
+                            more: true,
+                        },
+                        {
+                            text: "Year",
+                            children: [
+                                {
+                                    text: "2024",
+                                    onClick: () => {
+                                        search(".year=2024");
+                                    },
+                                },
+                                {
+                                    text: "2023",
+                                    onClick: () => {
+                                        search(".year=2024");
+                                    },
+                                },
+                                {
+                                    text: "2022",
+                                    onClick: () => {
+                                        search(".year=2024");
+                                    },
+                                },
+                                {
+                                    text: "2020",
+                                    onClick: () => {
+                                        search(".year=2024");
+                                    },
+                                },
+                                {
+                                    text: "2021",
+                                    onClick: () => {
+                                        search(".year=2024");
+                                    },                                        
+                                },
+                            ],
+                        },
+                    ],
+                },
+                //todo:
+                // {
+                //     icon: <People />,
+                //     text: "People",
+                //     children: [
+                //         {
+                //             text: "Ashley",
+                //         },
+                //         {
+                //             text: "Antonella",
+                //         },
+                //         {
+                //             text: "Lucia",
+                //         },
+                //         {
+                //             text: "Lucio",
+                //         },
+                //     ],
+                // },
+                {
+                    icon: <Place />, //todo: generate this from unique places?
+                    text: "Place",
+                    children: [
+                        {
+                            text: "No location",
+                        },
+                        {
+                            text: "Australia",
+                            children: [
+                                {
+                                    text: "Sydney",
+                                    onClick: () => {
+                                        search(".location=contains(sydney)");
+                                    },
+                                },
+                                {
+                                    text: "Melbourne",
+                                    onClick: () => {
+                                        search(".location=contains(melbourne)");
+                                    },
+                                },
+                                {
+                                    text: "Brisbane",
+                                    onClick: () => {
+                                        search(".location=contains(brisbane)");
+                                    },
+                                },
+                                {
+                                    text: "Perth",
+                                    onClick: () => {
+                                        search(".location=contains(perth)");
+                                   },
+                                },
+                            ],
+                        },
+                        {
+                            text: "United Kingdom",
+                            children: [
+                                {
+                                    text: "London",
+                                    onClick: () => {
+                                        search(".location=contains(london)");
+                                    },
+                                },
+                                {
+                                    text: "Manchester",
+                                    onClick: () => {
+                                        search(".location=contains(manchester)");
+                                    },
+                                },
+                                {
+                                    text: "Birmingham",
+                                    onClick: () => {
+                                        search(".location=contains(birmingham)");
+                                   },
+                                },
+                                {
+                                    text: "Glasgow",
+                                    onClick: () => {
+                                        search(".location=contains(glasgow)");
+                                    },
+                                },
+                            ],
+                        },
+                        {
+                            text: "Italy",
+                            children: [
+                                {
+                                    text: "Rome",
+                                    onClick: () => {
+                                        search(".location=contains(rome)");
+                                    },
+                                },
+                                {
+                                    text: "Abruzzo",
+                                    onClick: () => {
+                                        search(".location=contains(abruzzo)");
+                                    },
+                                },
+                                {
+                                    text: "Naples",
+                                    onClick: () => {
+                                        search(".location=contains(naples)");
+                                    },
+                                },
+                                {
+                                    text: "Turin",
+                                    onClick: () => {
+                                        search(".location=contains(turin)");
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    icon: <Event />,
+                    text: "Event",
+                    children: [
+                        {
+                            text: "Birthday",
+                            onClick: () => {
+                                search(".event=contains(birthday)");
+                            },
+                        },
+                        {
+                            text: "Wedding",
+                            onClick: () => {
+                                search(".event=contains(wedding)");
+                            },
+                        },
+                        {
+                            text: "Graduation",
+                            onClick: () => {
+                                search(".event=contains(graduation)");
+                            },
+                        },
+                        {
+                            text: "Party",
+                            onClick: () => {
+                                search(".event=contains(party)");
+                            },
+                        },
+                        {
+                            text: "Edit", //todo:
+                            more: true,
+                        },
+                    ],                        
+                },
+                {
+                    icon: <Label />,
+                    text: "Label",
+                    children: [
+                        {
+                            text: "Vacation",
+                            onClick: () => {
+                                search(".labels=has(vacation)");
+                            },
+                        },
+                        {
+                            text: "Family",
+                            onClick: () => {
+                                search(".labels=has(family)");
+                            },
+                        },
+                        {
+                            text: "Work",
+                            onClick: () => {
+                                search(".labels=has(work)");
+                            },
+                        },
+                        {
+                            text: "Friends",
+                            onClick: () => {
+                                search(".labels=has(friends)");
+                            },
+                        },
+                        {
+                            text: "Edit", //todo:
+                            more: true,
+                        },
+                    ],
+                },
+                //todo:
+                // {
+                //     icon: <ListIcon />,
+                //     text: "Property",
+                //     more: true,
+                // },
+            ],
+        },
+        {
+            icon: <Category />,
+            text: "Grouping",
+            children: [
+                {
+                    icon: <CalendarMonth />,
+                    text: "Date",
+                    onClick: () => {
+                        setGroupBy("date");
+                    },
+                },
+                //todo:
+                // {
+                //     icon: <People />,
+                //     text: "People",
+                // },
+                {
+                    icon: <Place />,
+                    text: "Place",
+                    onClick: () => {
+                        setGroupBy("location");
+                    },
+                },
+                //todo:
+                // {
+                //     icon: <Event />,
+                //     text: "Event",
+                // },
+                // {
+                //     icon: <Label />,
+                //     text: "Label",
+                // },
+                // {
+                //     icon: <ListIcon />,
+                //     text: "Property",
+                //     more: true,
+                // },
+            ],
+        },
+    ];
+    return topMenu;
 }
 
 //
@@ -107,395 +457,36 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { search, setGroupBy } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
-    const [topMenu, setTopMenu] = useState<IMenuItem[]>([]);
-    const [curMenu, setCurMenu] = useState<IMenuItem[]>([]);
+    const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
-    //
-    // Build the navigation menu from the gallery layout.
-    //
-    function buildNavMenu(layout: IGalleryLayout): IMenuItem[] {
-        const menu: IMenuItem[] = [];
-
-        const headingRows = layout.rows.filter(row => row.type === "heading");
-        for (const row of headingRows) {
-            let parentMenu = menu;
-            for (let groupIndex = 0; groupIndex < row.group.length; groupIndex++) {
-                let lastMenu = parentMenu.length > 0 ? parentMenu[parentMenu.length-1] : undefined
-                if (!lastMenu || lastMenu.text !== row.group[groupIndex]) {
-                    // 
-                    // Create a new menu.
-                    //
-                    lastMenu = {
-                        text: row.group[groupIndex],
-                        children: [],                        
-                    };
-                    if (groupIndex === row.group.length-1) {
-                        lastMenu.onClick = () => {
-                            // 
-                            // Scroll to the row.
-                            //
-                            scrollTo(row.offsetY);
-                            setSidebarOpen(false);
-                        };
-                    }
-                    parentMenu.push(lastMenu);        
-                }       
-                parentMenu = lastMenu.children!;
-            }       
+    const navMenu = layout ? buildNavMenu(layout, position => {
+        scrollTo(position);
+        setSidebarOpen(false);
+    }) : [];
+    const fullMenu = makeFullMenu(
+        navMenu, 
+        (searchText) => {
+            search(searchText);
+            setSidebarOpen(false);
+        },
+        (groupBy) => {
+            setGroupBy(groupBy);
+            setSidebarOpen(false);
         }
+    );
 
-        return menu;
+    let curMenu = fullMenu;
+
+    for (const menuName of menuPath) {
+        const menu = curMenu.find(menu => menu.text === menuName);
+        if (menu) {
+            curMenu = menu.children || [];
+        }
+        else {
+            break;
+        }
     }
-
-
-    //
-    // Resets the sidebar menu to the top menu whenever the layout changes.
-    //
-    useEffect(() => {
-        if (!layout) {
-            return;
-        }
-
-        const navMenu = buildNavMenu(layout);
-
-        const topMenu = [
-            {
-                icon: <Map />,
-                text: "Navigation",
-                children: navMenu,
-            },
-            {
-                icon: <Search />,
-                text: "Search",
-                children: [
-                    //todo:
-                    // {
-                    //     icon: <History />,
-                    //     text: "Recent",
-                    // },
-                    // {
-                    //     icon: <Star />,
-                    //     text: "Starred",
-                    // },
-                    {
-                        icon: <CalendarMonth />, //todo: How do I generate this?
-                        text: "Date",
-                        children: [
-                            {
-                                icon: <DateRange />, //todo:
-                                text: "A particular day",
-                                more: true,
-                            },
-                            {
-                                icon: <DateRange />, //todo:
-                                text: "Date range",
-                                more: true,
-                            },
-                            {
-                                icon: <DateRange />, //todo:
-                                text: "Undated",
-                                more: true,
-                            },
-                            {
-                                text: "Year",
-                                children: [
-                                    {
-                                        text: "2024",
-                                        onClick: () => {
-                                            search(".year=2024");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "2023",
-                                        onClick: () => {
-                                            search(".year=2024");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "2022",
-                                        onClick: () => {
-                                            search(".year=2024");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "2020",
-                                        onClick: () => {
-                                            search(".year=2024");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "2021",
-                                        onClick: () => {
-                                            search(".year=2024");
-                                            setSidebarOpen(false);
-                                        },                                        
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                    //todo:
-                    // {
-                    //     icon: <People />,
-                    //     text: "People",
-                    //     children: [
-                    //         {
-                    //             text: "Ashley",
-                    //         },
-                    //         {
-                    //             text: "Antonella",
-                    //         },
-                    //         {
-                    //             text: "Lucia",
-                    //         },
-                    //         {
-                    //             text: "Lucio",
-                    //         },
-                    //     ],
-                    // },
-                    {
-                        icon: <Place />, //todo: generate this from unique places?
-                        text: "Place",
-                        children: [
-                            {
-                                text: "No location",
-                            },
-                            {
-                                text: "Australia",
-                                children: [
-                                    {
-                                        text: "Sydney",
-                                        onClick: () => {
-                                            search(".location=contains(sydney)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Melbourne",
-                                        onClick: () => {
-                                            search(".location=contains(melbourne)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Brisbane",
-                                        onClick: () => {
-                                            search(".location=contains(brisbane)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Perth",
-                                        onClick: () => {
-                                            search(".location=contains(perth)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                ],
-                            },
-                            {
-                                text: "United Kingdom",
-                                children: [
-                                    {
-                                        text: "London",
-                                        onClick: () => {
-                                            search(".location=contains(london)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Manchester",
-                                        onClick: () => {
-                                            search(".location=contains(manchester)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Birmingham",
-                                        onClick: () => {
-                                            search(".location=contains(birmingham)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Glasgow",
-                                        onClick: () => {
-                                            search(".location=contains(glasgow)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                ],
-                            },
-                            {
-                                text: "Italy",
-                                children: [
-                                    {
-                                        text: "Rome",
-                                        onClick: () => {
-                                            search(".location=contains(rome)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Abruzzo",
-                                        onClick: () => {
-                                            search(".location=contains(abruzzo)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Naples",
-                                        onClick: () => {
-                                            search(".location=contains(naples)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                    {
-                                        text: "Turin",
-                                        onClick: () => {
-                                            search(".location=contains(turin)");
-                                            setSidebarOpen(false);
-                                        },
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        icon: <Event />,
-                        text: "Event",
-                        children: [
-                            {
-                                text: "Birthday",
-                                onClick: () => {
-                                    search(".event=contains(birthday)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Wedding",
-                                onClick: () => {
-                                    search(".event=contains(wedding)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Graduation",
-                                onClick: () => {
-                                    search(".event=contains(graduation)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Party",
-                                onClick: () => {
-                                    search(".event=contains(party)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Edit", //todo:
-                                more: true,
-                            },
-                        ],                        
-                    },
-                    {
-                        icon: <Label />,
-                        text: "Label",
-                        children: [
-                            {
-                                text: "Vacation",
-                                onClick: () => {
-                                    search(".labels=has(vacation)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Family",
-                                onClick: () => {
-                                    search(".labels=has(family)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Work",
-                                onClick: () => {
-                                    search(".labels=has(work)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Friends",
-                                onClick: () => {
-                                    search(".labels=has(friends)");
-                                    setSidebarOpen(false);
-                                },
-                            },
-                            {
-                                text: "Edit", //todo:
-                                more: true,
-                            },
-                        ],
-                    },
-                    //todo:
-                    // {
-                    //     icon: <ListIcon />,
-                    //     text: "Property",
-                    //     more: true,
-                    // },
-                ],
-            },
-            {
-                icon: <Category />,
-                text: "Grouping",
-                children: [
-                    {
-                        icon: <CalendarMonth />,
-                        text: "Date",
-                        onClick: () => {
-                            setGroupBy("date");
-                            setSidebarOpen(false);
-                        },
-                    },
-                    //todo:
-                    // {
-                    //     icon: <People />,
-                    //     text: "People",
-                    // },
-                    {
-                        icon: <Place />,
-                        text: "Place",
-                        onClick: () => {
-                            setGroupBy("location");
-                            setSidebarOpen(false);
-                        },
-                    },
-                    //todo:
-                    // {
-                    //     icon: <Event />,
-                    //     text: "Event",
-                    // },
-                    // {
-                    //     icon: <Label />,
-                    //     text: "Label",
-                    // },
-                    // {
-                    //     icon: <ListIcon />,
-                    //     text: "Property",
-                    //     more: true,
-                    // },
-                ],
-            },
-        ];
-        setTopMenu(topMenu);
-        setCurMenu(topMenu);
-        setBreadCrumbs([]);
-    }, [layout]);
 
     return (
         <div
@@ -622,7 +613,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
 
                     <Link
                         onClick={() => {
-                            setCurMenu(topMenu);
+                            setMenuPath([]);
                             setBreadCrumbs([]);
                         }}
                         >
@@ -636,7 +627,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                     {breadcrumbs.length > 1 &&
                         <Link 
                             onClick={() => {
-                                setCurMenu(breadcrumbs[breadcrumbs.length-2].menu);
+                                setMenuPath(breadcrumbs[breadcrumbs.length-2].menuPath);
                                 setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
                             }}
                             >
@@ -666,11 +657,11 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                             key={`${index}-${menuItem.text}`}
                             onClick={() => {
                                 if (menuItem.children && menuItem.children.length > 0) {
-                                    setCurMenu(menuItem.children);
                                     setBreadCrumbs([...breadcrumbs, {
                                         text: menuItem.text,
-                                        menu: menuItem.children,
+                                        menuPath,
                                     }]);
+                                    setMenuPath([...menuPath, menuItem.text]);
                                 }
 
                                 if (menuItem.onClick) {
