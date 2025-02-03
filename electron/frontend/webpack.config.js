@@ -10,6 +10,9 @@ module.exports = {
     devServer: {
         historyApiFallback: true,
     },
+    watchOptions: {
+        ignored: /node_modules/,
+    },
     module: {
         rules: [
             {

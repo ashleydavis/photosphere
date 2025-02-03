@@ -15,6 +15,13 @@ module.exports = {
     devServer: {
         historyApiFallback: true,
     },
+    // 
+    // https://stackoverflow.com/questions/55763428/react-native-error-enospc-system-limit-for-number-of-file-watchers-reached/70436159#70436159
+    // https://webpack.js.org/configuration/watch/#watchoptionsignored
+    // 
+    watchOptions: {
+        ignored: /node_modules/,
+    },
     module: {
         rules: [
             {
