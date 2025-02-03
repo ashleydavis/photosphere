@@ -297,9 +297,14 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const [isSelecting, setIsSelecting] = useState<boolean>(false);
 
     //
+    // A simple way to force state to update.
+    //
+    const [time, setTime] = useState<number>(0);
+
+    //
     // The way the gallery is grouped.
     //
-    const [groupBy, _setGroupBy] = useState<string>(localStorage.getItem("gallery-sort") || "date");
+    const groupByRef = useRef<string>(localStorage.getItem("gallery-sort") || "date");
 
     //
     // A cache entry for a loaded asset.
@@ -419,14 +424,14 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
-        const grouping = groupingMap[groupBy];
+        const grouping = groupingMap[groupByRef.current];
         if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupBy}`);
+            throw new Error(`Unknown groupBy value: ${groupByRef.current}`);
         }
 
         sortedItems.current = applySort(searchedItems.current, grouping);
 
-        onNewItems.current.invoke(sortedItems.current);
+        onNewItems.current.invoke(newSearchedItems);
     };
 
     //
@@ -456,12 +461,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Invokes subscriptions for item deletions.
     //
-    function _onItemsDeleted(itemsUpdated: IItemsUpdate) { 
-        allItems.current = removeItemsFromArray(allItems.current, itemsUpdated.assetIds);
-        searchedItems.current = removeItemsFromArray(searchedItems.current, itemsUpdated.assetIds);
-        sortedItems.current = removeItemsFromArray(sortedItems.current, itemsUpdated.assetIds);
+    function _onItemsDeleted(itemsRemoved: IItemsUpdate) { 
+        allItems.current = removeItemsFromArray(allItems.current, itemsRemoved.assetIds);
+        searchedItems.current = removeItemsFromArray(searchedItems.current, itemsRemoved.assetIds);
+        sortedItems.current = removeItemsFromArray(sortedItems.current, itemsRemoved.assetIds);
 
-        onItemsDeleted.current.invoke(itemsUpdated);
+        onItemsDeleted.current.invoke(itemsRemoved);
     }
 
     //
@@ -653,10 +658,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         searchedItems.current = applySearch(allItems.current, newSearchText);
 
-        const grouping = groupingMap[groupBy];
+        const grouping = groupingMap[groupByRef.current];
         if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupBy}`);
+            throw new Error(`Unknown groupBy value: ${groupByRef.current}`);
         }
+
         sortedItems.current = applySort(searchedItems.current, grouping);
 
         setSelectedItems(new Set<string>());
@@ -788,7 +794,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         sortedItems.current = applySort(searchedItems.current, grouping);
-        _setGroupBy(groupBy);
+
+        groupByRef.current = groupBy;
+        setTime(Date.now());
 
         localStorage.setItem("gallery-sort", groupBy);
     }
@@ -826,9 +834,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         clearMultiSelection,
         search,
         clearSearch,
-        groupBy,
+        groupBy: groupByRef.current,
         setGroupBy,
-        grouping: () => groupingMap[groupBy],
+        grouping: () => groupingMap[groupByRef.current],
     };
     
     return (
