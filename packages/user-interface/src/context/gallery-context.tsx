@@ -702,6 +702,36 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     //
+    // Searches for a term in fields of assets.
+    //
+    function applySearchTerm(searchText: string, items: IGalleryItem[], searchFields: string[]) {
+        const searchedItems: IGalleryItem[] = [];
+        const searchTextLwr = searchText.toLowerCase();
+
+        searchFields = searchFields.map(field => field.toLowerCase());
+
+        for (const item of items) {
+            for (const searchedFieldName of searchFields) {
+                //
+                // Find the lower case field name in the item.
+                //
+                for (const [actualFieldName, fieldValue] of Object.entries(item)) {
+                    if (actualFieldName.toLowerCase().includes(searchedFieldName)) {
+                        if (valueMatches(fieldValue, searchTextLwr)) {
+                            searchedItems.push(item);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return searchedItems;
+    }
+
+    const defaultSearchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
+
+    //
     // Search for assets based on text input.
     // 
     function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
@@ -712,26 +742,25 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return items.slice(); // Clone the array to make sure state update triggers a render.
         }
 
-        const searchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
-        const searchedItems: IGalleryItem[] = [];
+        const terms = searchText.split(' ').map(term => term.trim());
 
-        const searchTextLwr = searchText.toLowerCase();
+        let searchFields = defaultSearchFields;
 
-        for (const item of items) {
-            for (const fieldName of searchFields) {
-                const fieldValue = (item as any)[fieldName];
-                if (fieldValue === undefined) {
-                    continue;
+        for (let term of terms) {
+            if (term.startsWith(".")) {
+                term = term.substring(1);
+                const parts = term.split("=").map(part => part.trim());
+                if (parts.length !== 2) {
+                    continue; // Bad formatting.
                 }
-
-                if (valueMatches(fieldValue, searchTextLwr)) {
-                    searchedItems.push(item);
-                    break;
-                }
+                searchFields = [ parts[0] ];
+                term = parts[1];
             }
-        }
 
-        return searchedItems;
+            items = applySearchTerm(term, items, searchFields);
+        }
+        
+        return items;
     }
 
     //

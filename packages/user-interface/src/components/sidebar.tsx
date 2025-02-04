@@ -18,6 +18,7 @@ import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
 import Slider from '@mui/joy/Slider/Slider';
 import Stack from '@mui/joy/Stack/Stack';
+import dayjs from 'dayjs';
 
 export interface ISidebarProps {
     //
@@ -132,11 +133,60 @@ function buildNavMenu(layout: IGalleryLayout, scrollTo: (position: number) => vo
     return menu;
 }
 
+//
+// Determine the set of unique years of photos.
+//
+function determineYears(layout: IGalleryLayout): string[] {
+    const years = new Set<number>();
+    for (const row of layout.rows) {
+        for (const item of row.items) {
+
+            const fileYear = dayjs(item.fileDate).year();
+            years.add(fileYear);
+            
+            if (item.photoDate) {
+                const photoYear = dayjs(item.photoDate).year();
+                years.add(photoYear);
+            }
+
+            const uploadYear = dayjs(item.uploadDate).year();
+            years.add(uploadYear);
+        }
+    }
+
+    return Array.from(years)
+        .sort((a, b) => b - a)
+        .map(year => year.toString());
+}
+
+//
+// Determines the unique locations in the layout.
+//
+function determineLocations(layout: IGalleryLayout): string[] {
+    const locations = new Set<string>();
+    for (const row of layout.rows) {
+        for (const item of row.items) {
+            if (item.location) {
+                const parts = item.location.split(",").map(part => part.trim());
+                if (parts.length > 0) {
+                    locations.add(parts[parts.length-1]);
+
+                    if (parts.length > 1) {
+                        locations.add(parts[parts.length-2]);
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(locations)
+        .sort();
+}
 
 //
 // Creates the full nav meu.
 //
-function makeFullMenu(navMenu: IMenuItem[], search: (searchText: string) => void, setGroupBy: (groupBy: string) => void) : IMenuItem[] {
+function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[], search: (searchText: string) => void, setGroupBy: (groupBy: string) => void) : IMenuItem[] {
     const topMenu = [
         {
             icon: <Map />,
@@ -161,54 +211,30 @@ function makeFullMenu(navMenu: IMenuItem[], search: (searchText: string) => void
                     text: "Date",
                     children: [
                         {
-                            icon: <DateRange />, //todo:
+                            icon: <DateRange />, //todo: Date picker?
                             text: "A particular day",
                             more: true,
                         },
                         {
-                            icon: <DateRange />, //todo:
+                            icon: <DateRange />, //todo: //todo: Date picker?
                             text: "Date range",
                             more: true,
                         },
                         {
-                            icon: <DateRange />, //todo:
+                            icon: <DateRange />, //todo: 
                             text: "Undated",
                             more: true,
                         },
                         {
                             text: "Year",
-                            children: [
-                                {
-                                    text: "2024",
+                            children: years.map(year => {
+                                return {
+                                    text: year,
                                     onClick: () => {
-                                        search(".year=2024");
+                                        search(`.date=${year}`);
                                     },
-                                },
-                                {
-                                    text: "2023",
-                                    onClick: () => {
-                                        search(".year=2024");
-                                    },
-                                },
-                                {
-                                    text: "2022",
-                                    onClick: () => {
-                                        search(".year=2024");
-                                    },
-                                },
-                                {
-                                    text: "2020",
-                                    onClick: () => {
-                                        search(".year=2024");
-                                    },
-                                },
-                                {
-                                    text: "2021",
-                                    onClick: () => {
-                                        search(".year=2024");
-                                    },                                        
-                                },
-                            ],
+                                };
+                            }),
                         },
                     ],
                 },
@@ -232,169 +258,85 @@ function makeFullMenu(navMenu: IMenuItem[], search: (searchText: string) => void
                 //     ],
                 // },
                 {
-                    icon: <Place />, //todo: generate this from unique places?
+                    icon: <Place />,
                     text: "Place",
-                    children: [
-                        {
-                            text: "No location",
-                        },
-                        {
-                            text: "Australia",
-                            children: [
-                                {
-                                    text: "Sydney",
-                                    onClick: () => {
-                                        search(".location=contains(sydney)");
-                                    },
-                                },
-                                {
-                                    text: "Melbourne",
-                                    onClick: () => {
-                                        search(".location=contains(melbourne)");
-                                    },
-                                },
-                                {
-                                    text: "Brisbane",
-                                    onClick: () => {
-                                        search(".location=contains(brisbane)");
-                                    },
-                                },
-                                {
-                                    text: "Perth",
-                                    onClick: () => {
-                                        search(".location=contains(perth)");
-                                   },
-                                },
-                            ],
-                        },
-                        {
-                            text: "United Kingdom",
-                            children: [
-                                {
-                                    text: "London",
-                                    onClick: () => {
-                                        search(".location=contains(london)");
-                                    },
-                                },
-                                {
-                                    text: "Manchester",
-                                    onClick: () => {
-                                        search(".location=contains(manchester)");
-                                    },
-                                },
-                                {
-                                    text: "Birmingham",
-                                    onClick: () => {
-                                        search(".location=contains(birmingham)");
-                                   },
-                                },
-                                {
-                                    text: "Glasgow",
-                                    onClick: () => {
-                                        search(".location=contains(glasgow)");
-                                    },
-                                },
-                            ],
-                        },
-                        {
-                            text: "Italy",
-                            children: [
-                                {
-                                    text: "Rome",
-                                    onClick: () => {
-                                        search(".location=contains(rome)");
-                                    },
-                                },
-                                {
-                                    text: "Abruzzo",
-                                    onClick: () => {
-                                        search(".location=contains(abruzzo)");
-                                    },
-                                },
-                                {
-                                    text: "Naples",
-                                    onClick: () => {
-                                        search(".location=contains(naples)");
-                                    },
-                                },
-                                {
-                                    text: "Turin",
-                                    onClick: () => {
-                                        search(".location=contains(turin)");
-                                    },
-                                },
-                            ],
-                        },
-                    ],
+                    children: locations.map(location => {
+                        return {
+                            text: location,
+                            onClick: () => {
+                                search(`.location=${location}`);
+                            },
+                        };
+                    }),                            
                 },
-                {
-                    icon: <Event />,
-                    text: "Event",
-                    children: [
-                        {
-                            text: "Birthday",
-                            onClick: () => {
-                                search(".event=contains(birthday)");
-                            },
-                        },
-                        {
-                            text: "Wedding",
-                            onClick: () => {
-                                search(".event=contains(wedding)");
-                            },
-                        },
-                        {
-                            text: "Graduation",
-                            onClick: () => {
-                                search(".event=contains(graduation)");
-                            },
-                        },
-                        {
-                            text: "Party",
-                            onClick: () => {
-                                search(".event=contains(party)");
-                            },
-                        },
-                        {
-                            text: "Edit", //todo:
-                            more: true,
-                        },
-                    ],                        
-                },
-                {
-                    icon: <Label />,
-                    text: "Label",
-                    children: [
-                        {
-                            text: "Vacation",
-                            onClick: () => {
-                                search(".labels=has(vacation)");
-                            },
-                        },
-                        {
-                            text: "Family",
-                            onClick: () => {
-                                search(".labels=has(family)");
-                            },
-                        },
-                        {
-                            text: "Work",
-                            onClick: () => {
-                                search(".labels=has(work)");
-                            },
-                        },
-                        {
-                            text: "Friends",
-                            onClick: () => {
-                                search(".labels=has(friends)");
-                            },
-                        },
-                        {
-                            text: "Edit", //todo:
-                            more: true,
-                        },
-                    ],
-                },
+                // {
+                //     icon: <Event />,
+                //     text: "Event",
+                //     children: [
+                //         {
+                //             text: "Birthday",
+                //             onClick: () => {
+                //                 search(".event=contains(birthday)");
+                //             },
+                //         },
+                //         {
+                //             text: "Wedding",
+                //             onClick: () => {
+                //                 search(".event=contains(wedding)");
+                //             },
+                //         },
+                //         {
+                //             text: "Graduation",
+                //             onClick: () => {
+                //                 search(".event=contains(graduation)");
+                //             },
+                //         },
+                //         {
+                //             text: "Party",
+                //             onClick: () => {
+                //                 search(".event=contains(party)");
+                //             },
+                //         },
+                //         {
+                //             text: "Edit", //todo:
+                //             more: true,
+                //         },
+                //     ],                        
+                // },
+                // {
+                //     icon: <Label />,
+                //     text: "Label",
+                //     children: [
+                //         {
+                //             text: "Vacation",
+                //             onClick: () => {
+                //                 search(".labels=has(vacation)");
+                //             },
+                //         },
+                //         {
+                //             text: "Family",
+                //             onClick: () => {
+                //                 search(".labels=has(family)");
+                //             },
+                //         },
+                //         {
+                //             text: "Work",
+                //             onClick: () => {
+                //                 search(".labels=has(work)");
+                //             },
+                //         },
+                //         {
+                //             text: "Friends",
+                //             onClick: () => {
+                //                 search(".labels=has(friends)");
+                //             },
+                //         },
+                //         {
+                //             text: "Edit", //todo:
+                //             more: true,
+                //         },
+                //     ],
+                // },
                 //todo:
                 // {
                 //     icon: <ListIcon />,
@@ -464,8 +406,12 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
         scrollTo(position);
         setSidebarOpen(false);
     }) : [];
+    const years = layout ? determineYears(layout) : [];
+    const locations = layout ? determineLocations(layout) : [];
     const fullMenu = makeFullMenu(
         navMenu, 
+        years,
+        locations,
         (searchText) => {
             search(searchText);
             setSidebarOpen(false);
