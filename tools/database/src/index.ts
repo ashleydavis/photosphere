@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 import { resizeImage, transformImage } from "node-utils";
-import { CloudStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { CloudStorage, deleteAssetWithRetry, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
 import { IImageTransformation } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -71,63 +71,24 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    if (!document.transformed && document.properties?.metadata?.streams) {
+                    if (document) {
 
-                        let rotation: string | undefined = undefined;
+                        const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb-transformed");
+                        if (thumbInfo) {
+                            const thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
+                            if (thumb) {
+                                await writeAssetWithRetry(storage, document._id, document.setId, "thumb", thumbInfo.contentType, thumb);
 
-                        for (const stream of document.properties.metadata.streams) {
-                            if (stream.rotation) {
-                                rotation = stream.rotation.toString();
-                                break;
-                            }
-                        }
+                                await deleteAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
 
-                        if (!rotation) {
-                            console.error(`No rotation found for asset ${document._id}.`);                            
-                        }
-                        else {
-                            if (rotation !== "90" && rotation !== "-90" && rotation !== "180" && rotation !== "-180") {
-                                console.log(`Processing asset ${document._id}.`);
-                                console.log(`Rotation: "${rotation}".`);
-                                console.log(JSON.stringify({ rotation }));
-                                console.log(`Type of rotation: ${typeof rotation}.`);
-                                console.log(`Rotation is not 90, -90, 180, or -180.`);
-    
-                                process.exit(1); //fio:
-                            }
-
-                            //
-                            // Rotate the thumbnail image.
-                            //
-                            const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb");
-                            if (thumbInfo) {
-                                const thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
-                                if (thumb) {
-                                    const imageTransformation: IImageTransformation = {
-                                        rotate: parseFloat(rotation!),
-                                    };
-                                    const rotated = await transformImage(thumb, imageTransformation);
-                                    await writeAssetWithRetry(storage, document._id, document.setId, "thumb-transformed", thumbInfo.contentType, rotated);
-
-                                    //
-                                    // Remake the micro image.
-                                    //
-                                    let resolution = { width: document.width, height: document.height };
-                                    if (rotation === "-90" || rotation === "90") {
-                                        resolution = { width: document.height, height: document.width };
-                                    }
-
-                                    const micro = await resizeImage(rotated, resolution, 40, 75);
-
-                                    await metadataCollection.updateOne({ _id: document._id }, { 
-                                        $set: {
-                                            transformed: true,
-                                            width: resolution.width,
-                                            height: resolution.height,
-                                            micro: micro.toString("base64"),
-                                        },
-                                    });
-                                }
+                                //
+                                // Remove transformed field.
+                                //
+                                await metadataCollection.updateOne({ _id: document._id }, {
+                                    $unset: {
+                                        transformed: "",
+                                    },
+                                });
                             }
                         }
 
