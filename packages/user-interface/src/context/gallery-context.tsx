@@ -13,9 +13,9 @@ export interface IAssetDataLoad {
 }
 
 //
-// Specifies how to group a gallery itemm.
+// Specifies how to sort the gallery.
 //
-interface IGroupBy {
+interface ISortBy {
     //
     // Selects the field to sort by.
     //
@@ -33,9 +33,9 @@ interface IGroupBy {
 }
 
 //
-// Selects the grouping for the gallery.
+// Selects the sort type for the gallery.
 //
-const groupingMap: { [key: string]: IGroupBy } = {
+const sortingMap: { [key: string]: ISortBy } = {
     date: {
         // Sorts the photos by date.
         sortKey: asset => asset.photoDate ? dayjs(asset.photoDate).toDate() : undefined,
@@ -173,7 +173,7 @@ export interface IGalleryContext {
     // The currently selected gallery item or undefined when no item is selected.
     //
     selectedItemId: string | undefined
-    
+
     //
     // Sets the selected gallery item.
     //
@@ -230,19 +230,19 @@ export interface IGalleryContext {
     clearSearch(): Promise<void>;
 
     //
-    // The way the gallery is grouped.
+    // The way the gallery is currenly sorted.
     //
-    groupBy: string;
+    sortBy: string;
 
     //
-    // Sets the way the gallery is grouped.
+    // Sets the way the gallery is sorted.
     //
-    setGroupBy(groupBy: string): void;
+    setSortBy(sortBy: string): void;
 
     //
-    // Gets the current grouping criteria.
+    // Gets details of the current sort.
     //
-    grouping(): IGroupBy;
+    sorting(): ISortBy;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -253,12 +253,12 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
-    const { isLoading, addAsset, updateAsset, 
+    const { isLoading, addAsset, updateAsset,
         onReset: __onReset,
-        onNewItems: __onNewItems, 
+        onNewItems: __onNewItems,
         onItemsUpdated: __onItemsUpdated,
         onItemsDeleted: __onItemsDeleted,
-        checkAssetHash: _checkAssetHash, 
+        checkAssetHash: _checkAssetHash,
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
         removeArrayValue: _removeArrayValue,
@@ -270,7 +270,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // List all loaded items before searching and sorting.
     //
     const allItems = useRef<IGalleryItem[]>([]);
-   
+
     //
     // Items found by search (unsorted).
     //
@@ -302,9 +302,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const [time, setTime] = useState<number>(0);
 
     //
-    // The way the gallery is grouped.
+    // The way the gallery is sorted.
     //
-    const groupByRef = useRef<string>(localStorage.getItem("gallery-sort") || "date");
+    const sortByRef = useRef<string>(localStorage.getItem("gallery-sort") || "date");
 
     //
     // A cache entry for a loaded asset.
@@ -424,12 +424,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
-        const grouping = groupingMap[groupByRef.current];
-        if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupByRef.current}`);
+        const sorting = sortingMap[sortByRef.current];
+        if (!sorting) {
+            throw new Error(`Unknown sorting value: ${sortByRef.current}`);
         }
 
-        sortedItems.current = applySort(searchedItems.current, grouping);
+        sortedItems.current = applySort(searchedItems.current, sorting);
 
         onNewItems.current.invoke(newSearchedItems);
     };
@@ -658,12 +658,12 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         searchedItems.current = applySearch(allItems.current, newSearchText);
 
-        const grouping = groupingMap[groupByRef.current];
-        if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupByRef.current}`);
+        const sorting = sortingMap[sortByRef.current];
+        if (!sorting) {
+            throw new Error(`Unknown sorting value: ${sortByRef.current}`);
         }
 
-        sortedItems.current = applySort(searchedItems.current, grouping);
+        sortedItems.current = applySort(searchedItems.current, sorting);
 
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText); // Triggers layout update.
@@ -766,11 +766,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Sorts the items in the gallery.
     //
-    function applySort(items: IGalleryItem[], grouping: IGroupBy): IGalleryItem[] {
+    function applySort(items: IGalleryItem[], sorting: ISortBy): IGalleryItem[] {
         const sortedItems = items.slice();
         sortedItems.sort((a, b) => {
-            const sortA = grouping.sortKey(a);
-            const sortB = grouping.sortKey(b);
+            const sortA = sorting.sortKey(a);
+            const sortB = sorting.sortKey(b);
             if (sortA === undefined) {
                 if (sortB === undefined) {
                     return 0; // Equal.
@@ -814,20 +814,20 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     //
-    // Sets the method for grouping the gallery.
+    // Sets the method for sorting the gallery.
     //
-    function setGroupBy(groupBy: string): void {
-        const grouping = groupingMap[groupBy];
-        if (!grouping) {
-            throw new Error(`Unknown groupBy value: ${groupBy}`);
+    function setSortBy(sortBy: string): void {
+        const sorting = sortingMap[sortBy];
+        if (!sorting) {
+            throw new Error(`Unknown sorting value: ${sortBy}`);
         }
 
-        sortedItems.current = applySort(searchedItems.current, grouping);
+        sortedItems.current = applySort(searchedItems.current, sorting);
 
-        groupByRef.current = groupBy;
+        sortByRef.current = sortBy;
         setTime(Date.now());
 
-        localStorage.setItem("gallery-sort", groupBy);
+        localStorage.setItem("gallery-sort", sortBy);
     }
 
     const value: IGalleryContext = {
@@ -863,9 +863,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         clearMultiSelection,
         search,
         clearSearch,
-        groupBy: groupByRef.current,
-        setGroupBy,
-        grouping: () => groupingMap[groupByRef.current],
+        sortBy: sortByRef.current,
+        setSortBy,
+        sorting: () => sortingMap[sortByRef.current],
     };
     
     return (

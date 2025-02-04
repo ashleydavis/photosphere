@@ -69,7 +69,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
-    const { sortedItems, onReset, onNewItems, onItemsDeleted, searchText, groupBy, grouping } = useGallery();
+    const { sortedItems, onReset, onNewItems, onItemsDeleted, searchText, sortBy, sorting } = useGallery();
 
     const scrollToHandler = useRef<(scrollTop: number) => void>();
 
@@ -104,7 +104,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
 
     //
     // Brute force layout rebuid.
-    // This used to do a partial layout as new assets came in, but that can't work now that sorting/grouping
+    // This used to do a partial layout as new assets came in, but that can't work now that sorting
     // can be changed in the UI.
     // Simplest thing is to just rebuild the layout from scratch when anything changes.
     //
@@ -112,8 +112,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         if (galleryWidth === 0) {
             return;
         }
-        const _grouping = grouping();
-        setLayout(computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _grouping.group, _grouping.heading));
+        const _sorting = sorting();
+        setLayout(computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading));
     }
 
     useEffect(() => {
@@ -140,38 +140,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             };
         }
 
-    }, [galleryWidth, targetRowHeight, searchText, groupBy]);
-
-
-    //
-    // Old code that built the layout incrementally as items were added.
-    // This doesn't work so well now that sorting/grouping can change in the UI.
-    //
-    // useEffect(() => {
-    //     if (galleryWidth > 0) {
-    //         //
-    //         // Incrementally builds the layout as items are loaded.
-    //         //
-    //         const subscription1 = onNewItems.subscribe(items => {
-    //             const grouping = groupingMap[groupBy];
-    //             setSortedItems(sortedItems.concat(items));]
-    //             setLayout(prevLayout => computePartialLayout(prevLayout, items, galleryWidth, targetRowHeight, grouping.group, grouping.heading));
-    //         });
-
-    //         //
-    //         // Rebuilds the layout when items are deleted.
-    //         //
-    //         const subscription2 = onItemsDeleted.subscribe(() => {
-    //             const grouping = groupingMap[groupBy];
-    //             setLayout(computePartialLayout(undefined, getSearchedItems(), galleryWidth, targetRowHeight, grouping.group, grouping.heading));
-    //         });
-
-    //         return () => {
-    //             subscription1.unsubscribe();
-    //             subscription2.unsubscribe();
-    //         };
-    //     }
-    // }, [galleryWidth]);
+    }, [galleryWidth, targetRowHeight, searchText, sortBy]);
 
     const setTargetRowHeight = (height: number) => {
         _setTargetRowHeight(height);

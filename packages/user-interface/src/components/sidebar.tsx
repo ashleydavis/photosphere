@@ -186,7 +186,7 @@ function determineLocations(layout: IGalleryLayout): string[] {
 //
 // Creates the full nav meu.
 //
-function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[], search: (searchText: string) => void, setGroupBy: (groupBy: string) => void) : IMenuItem[] {
+function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[], search: (searchText: string) => void, setSortBy: (sortBy: string) => void) : IMenuItem[] {
     const topMenu = [
         {
             icon: <Map />,
@@ -347,13 +347,13 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
         },
         {
             icon: <Category />,
-            text: "Grouping",
+            text: "Sort",
             children: [
                 {
                     icon: <CalendarMonth />,
                     text: "Date",
                     onClick: () => {
-                        setGroupBy("date");
+                        setSortBy("date");
                     },
                 },
                 //todo:
@@ -365,7 +365,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
                     icon: <Place />,
                     text: "Place",
                     onClick: () => {
-                        setGroupBy("location");
+                        setSortBy("location");
                     },
                 },
                 //todo:
@@ -396,7 +396,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
     const { user } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
-    const { search, setGroupBy } = useGallery();
+    const { search, setSortBy } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
     const [menuPath, setMenuPath] = useState<string[]>([]);
@@ -416,8 +416,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             search(searchText);
             setSidebarOpen(false);
         },
-        (groupBy) => {
-            setGroupBy(groupBy);
+        (sortBy) => {
+            setSortBy(sortBy);
             setSidebarOpen(false);
         }
     );
