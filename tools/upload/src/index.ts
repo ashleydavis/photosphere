@@ -18,6 +18,9 @@ ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 const { execSync } = require('child_process');
 const ColorThief = require("colorthief");
 
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
+
 if (!process.env.GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY environment variable not set.");
 }
