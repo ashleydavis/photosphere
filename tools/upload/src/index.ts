@@ -8,7 +8,7 @@ import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
-import { convertExifCoordinates, getImageTransformation, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
+import { convertExifCoordinates, getImageTransformation, getVideoTransformation, ILocation, isLocationInRange, retry, reverseGeocode, uuid } from "utils";
 import { getImageResolution, IResolution, resizeImage, transformImage } from "node-utils";
 const exifParser = require("exif-parser");
 const ffmpeg = require('fluent-ffmpeg');
@@ -579,10 +579,23 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
         await fs.writeFile(videoPath, fileData);
     }
 
-    const resolution = await getVideoResolution(videoPath);    
-    const thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
-    const micro = await resizeImage(thumbnail, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
+    let resolution = await getVideoResolution(videoPath);
+    let thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
     const assetDetails = await getVideoMetadata(videoPath);
+
+    const imageTransformation = await getVideoTransformation(assetDetails.metadata);
+    if (imageTransformation) {
+        // Flips orientation depending on exif data.
+        thumbnail = await transformImage(thumbnail, imageTransformation);
+        if (imageTransformation.changeOrientation) {
+            resolution = {
+                width: resolution.height,
+                height: resolution.width,
+            };
+        }
+    }
+
+    const micro = await resizeImage(thumbnail, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
 
     if (assetDetails.photoDate === undefined) {
         //
@@ -730,11 +743,18 @@ async function getImageDetails(filePath: string, fileData: Buffer, contentType: 
 
     const assetDetails = await getImageMetadata(filePath, fileData, contentType);
     const imageTransformation = await getImageTransformation(assetDetails.metadata);
+    let resolution = await getImageResolution(filePath, fileData);
     if (imageTransformation) {
+        // Flips orientation depending on exif data.
         fileData = await transformImage(fileData, imageTransformation);
+        if (imageTransformation.changeOrientation) {
+            resolution = {
+                width: resolution.height,
+                height: resolution.width,
+            };
+        }
     }
 
-    const resolution = await getImageResolution(filePath, fileData);
     const micro = await resizeImage(fileData, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
     const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
     const display = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);

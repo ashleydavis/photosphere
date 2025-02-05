@@ -396,11 +396,12 @@ export function UploadContextProvider({ children }: IProps) {
 
         if (uploadDetails.assetContentType.startsWith("video/")) {
             // A video.
+            // NOTE: The video is automatically rotated to match the orientation in exif.
             const video = await loadVideo(fileData);
             try {
                 const resolution = { width: video.videoWidth, height: video.videoHeight };
                 const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = captureVideoThumbnail(video, THUMBNAIL_MIN_SIZE);
-                const thumbnailImage = await loadImage(thumbnailDataUrl);
+                const thumbnailImage = await loadImage(thumbnailDataUrl); // NOTE: The resolution is automatically rotated the image to match the orientation in exif.
                 const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(thumbnailImage, MICRO_MIN_SIZE);
                 
                 const contentTypeStart = 5;
@@ -429,9 +430,9 @@ export function UploadContextProvider({ children }: IProps) {
         }
         else {
             // An image.
-            const image = await loadImage(await loadDataURL(fileData));
-            const resolution = await getImageResolution(image);
-            const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = resizeImage(image, THUMBNAIL_MIN_SIZE);
+            const image = await loadImage(await loadDataURL(fileData)); // NOTE: The resolution is automatically rotated the image to match the orientation in exif.
+            const resolution = await getImageResolution(image); // NOTE: The resolution is automatically rotated the image to match the orientation in exif.
+            const { dataUrl: thumbnailDataUrl, contentType: thumbContentType } = resizeImage(image, THUMBNAIL_MIN_SIZE); // NOTE: Resize image changes orientation according to exif.
             const { dataUrl: microDataUrl, contentType: microContentType } = resizeImage(image, MICRO_MIN_SIZE);
             const contentTypeStart = 5;
             const microContentTypeEnd = microDataUrl.indexOf(";", contentTypeStart);

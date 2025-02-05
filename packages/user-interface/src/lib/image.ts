@@ -4,6 +4,8 @@ import { IImageTransformation } from 'utils';
 //
 // Loads URL or source data to an image element.
 //
+// NOTE: The image that is loaded automatically rotates to match the orientation in exif.
+//
 export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
     return new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
@@ -53,7 +55,8 @@ export interface IResolution {
 
 //
 // Gets the size of an image element.
-// Note: this automatically rotates the image to match the orientation in exif.
+//
+// NOTE: The resolution is automatically rotated the image to match the orientation in exif.
 //
 export function getImageResolution(image: HTMLImageElement): IResolution {
     return {

@@ -1,5 +1,7 @@
 //
 // Loads a blob to a video element.
+//
+// NOTE: The video is automatically rotated to match the orientation in exif.
 // 
 export function loadVideo(blob: Blob): Promise<HTMLVideoElement> {
     return new Promise<HTMLVideoElement>((resolve, reject) => {
