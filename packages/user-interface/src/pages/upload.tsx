@@ -79,7 +79,7 @@ export function UploadPage() {
                     className="hidden"
                     id="upload-file-input" 
                     multiple 
-                    accept="image/*,video/*"
+                    accept="image,video"
                     onChange={async event => {
                         if (event.target.files) {
                             await uploadFiles({ files: Array.from(event.target.files) });
