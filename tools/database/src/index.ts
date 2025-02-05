@@ -1,11 +1,12 @@
 import { MongoClient } from "mongodb";
-import { resizeImage, transformImage } from "node-utils";
 import { CloudStorage, deleteAssetWithRetry, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
-import { IImageTransformation } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
 
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
 
 async function main() {
     const argv = minimist(process.argv.slice(2));
@@ -71,28 +72,40 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    if (document) {
+                    if (!document.photoDate) {
 
-                        const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb-transformed");
-                        if (thumbInfo) {
-                            const thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
-                            if (thumb) {
-                                await writeAssetWithRetry(storage, document._id, document.setId, "thumb", thumbInfo.contentType, thumb);
+                        let photoDate = undefined;
 
-                                await deleteAssetWithRetry(storage, document._id, document.setId, "thumb-transformed");
+                        if (!document.properties.metadata) {
+                            // No metadata found.
+                        }
+                        else {
+                            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+                            for (const dateField of dateFields) {
+                                const dateStr = document.properties.metadata[dateField];
+                                if (dateStr) {
+                                    try {
+                                        photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                                    }
+                                    catch (err) {
+                                        console.error(`Failed to parse date from ${dateStr}`);
+                                        console.error(err);
+                                    }
+                                }
+                            }
+                            
+                            if (!photoDate) {
+                                // console.error(`No date found for asset ${document._id}.`);
+                            }
+                            else {
+                                console.log(`Setting date to ${photoDate}.`);
+                                console.log(document.properties.metadata);
 
-                                //
-                                // Remove transformed field.
-                                //
-                                await metadataCollection.updateOne({ _id: document._id }, {
-                                    $unset: {
-                                        transformed: "",
-                                    },
-                                });
+                                // await metadataCollection.updateOne({ _id: document._id }, { $set: { photoDate } });
+    
+                                numUpdated += 1;
                             }
                         }
-
-                        numUpdated += 1;
                     }
                 }
                 catch (err) {
