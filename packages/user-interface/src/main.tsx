@@ -4,7 +4,7 @@ import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
-import { enableAuth, isProduction, useAuth } from "./context/auth-context";
+import { useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
@@ -28,6 +28,8 @@ import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
 const FPSStats = require("react-fps-stats").default;
+
+export const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test")
 
 export interface IMainProps {
     //
@@ -104,6 +106,7 @@ function __Main({ computerPage }: IMainProps) {
 
     //
     // Number of assets loaded.
+    // TODO: This might not be needed.
     //
     const [numLoaded, setNumLoaded] = useState<number>(0);
 
@@ -224,35 +227,33 @@ function __Main({ computerPage }: IMainProps) {
         await moveToSet(Array.from(selectedItems), setId);
     }
 
-    if (enableAuth) {       
-        if (isLoading) {
-            return (
-                <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                    <Spinner show={true} />
-                </div>
-            );
-        }
-    
-        if (!isAuthenticated) {
-            login()
-                .catch(err => {
-                    console.error(`Error on login:`);
-                    console.error(err);
-                });
-            return (
-                <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                    <Spinner show={true} />
-                </div>
-            );
-        }
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                <Spinner show={true} />
+            </div>
+        );
+    }
 
-        if (location.pathname === "/cloud") {
-            return (
-                <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                    <Spinner show={true} />
-                </div>
-            );
-       }
+    if (!isAuthenticated) {
+        login()
+            .catch(err => {
+                console.error(`Error on login:`);
+                console.error(err);
+            });
+        return (
+            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                <Spinner show={true} />
+            </div>
+        );
+    }
+
+    if (location.pathname === "/cloud") {
+        return (
+            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+                <Spinner show={true} />
+            </div>
+        );
     }
    
     return (

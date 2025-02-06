@@ -1,65 +1,31 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
-import { AppContextProvider, Main,  ApiContextProvider, UploadContextProvider,
-    AuthContextProvider, enableAuth, GalleryContextProvider,
+import {
+    AppContextProvider, Main, ApiContextProvider, UploadContextProvider,
+    GalleryContextProvider,
     IndexeddbContextProvider, AssetDatabaseProvider,
     GalleryLayoutContextProvider
-    } from "user-interface";
-import { Auth0Provider } from "@auth0/auth0-react";
+} from "user-interface";
 
-function GallerySetup() {
+export function App() {
     return (
-        <AssetDatabaseProvider>
-            <GalleryContextProvider>
-                <GalleryLayoutContextProvider>
-                    <UploadContextProvider>
-                        <Main />
-                    </UploadContextProvider>
-                </GalleryLayoutContextProvider>
-            </GalleryContextProvider>
-        </AssetDatabaseProvider>
-    );
-}
-
-function ApiSetup() {
-    return (
-        <AuthContextProvider>
+        <HashRouter>
             <ApiContextProvider>
                 <IndexeddbContextProvider>
                     <AppContextProvider>
-                        <GallerySetup />
+                        <AssetDatabaseProvider>
+                            <GalleryContextProvider>
+                                <GalleryLayoutContextProvider>
+                                    <UploadContextProvider>
+                                        <Main />
+                                    </UploadContextProvider>
+                                </GalleryLayoutContextProvider>
+                            </GalleryContextProvider>
+                        </AssetDatabaseProvider>
                     </AppContextProvider>
                 </IndexeddbContextProvider>
             </ApiContextProvider>
-        </AuthContextProvider>
+        </HashRouter>
     );
-}
-
-export function App() {
-    if (enableAuth) {
-        // Setup with authentication.
-        return (
-            <HashRouter>
-                <Auth0Provider
-                    domain={process.env.AUTH0_DOMAIN as string}
-                    clientId={process.env.AUTH0_CLIENT_ID as string}
-                    authorizationParams={{
-                        audience: process.env.AUTH0_AUDIENCE as string,
-                        redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
-                    }}
-                    >
-                    <ApiSetup />
-                </Auth0Provider>
-            </HashRouter>
-        );
-    }
-    else {
-        // Setup for dev and testing with no authentication.
-        return (
-            <HashRouter>
-                <ApiSetup />
-            </HashRouter>
-        );
-    }
 }
 

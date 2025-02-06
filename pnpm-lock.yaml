@@ -585,9 +585,6 @@ importers:
 
   packages/user-interface:
     dependencies:
-      '@auth0/auth0-react':
-        specifier: ^2.2.4
-        version: 2.2.4(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@emotion/react':
         specifier: ^11.13.3
         version: 11.13.3(@types/react@18.2.61)(react@18.2.0)

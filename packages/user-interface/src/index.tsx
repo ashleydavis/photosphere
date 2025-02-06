@@ -1,5 +1,4 @@
 export { Main } from './main';
-export { AuthContextProvider, enableAuth } from './context/auth-context';
 export { ApiContextProvider, useApi } from './context/api-context';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryLayoutContextProvider } from './context/gallery-layout-context';
@@ -20,3 +19,4 @@ export * from "./lib/sync/outgoing-update";
 export * from "./def/asset-data";
 export * from "./context/gallery-source";
 export * from "./context/asset-database-source";
+export * from "./context/auth-context";
