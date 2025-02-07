@@ -17,23 +17,13 @@ Digital Ocean Spaces:
 */
 
 export class CloudStorage implements IStorage {
-
-    //
-    // The S3 bucket in which to store files.
-    //
-    private bucket!: string;
     
     //
     // AWS S3 interface.
     //
     private s3!: aws.S3;
 
-    constructor() {
-        this.bucket = process.env.AWS_BUCKET as string;
-        if (this.bucket === undefined) {
-            throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
-        }
-
+    constructor(private bucket: string) {
         this.s3 = new aws.S3({
             endpoint: process.env.AWS_ENDPOINT,
         });

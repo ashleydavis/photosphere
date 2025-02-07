@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 import { createServer } from "./server";
-import { CloudStorage } from "storage";
+import { CloudStorage, IStorage } from "storage";
 import { FileStorage } from "storage";
 
 async function main() {
@@ -24,9 +24,20 @@ async function main() {
     
     console.log(`Running in mode: ${process.env.NODE_ENV} on port ${PORT}.`);
 
-    const storage = process.env.NODE_ENV === "production"
-        ? new CloudStorage()
-        : new FileStorage();
+    let storage: IStorage;
+
+    if (process.env.NODE_ENV === "production") {
+        const bucket = process.env.AWS_BUCKET as string;
+        if (bucket === undefined) {
+            throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
+        }
+
+        storage = new CloudStorage(bucket);    
+    }
+    else {
+        storage = new FileStorage();
+    }
+
     const app = await createServer(() => new Date(Date.now()), db, storage);
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);

@@ -16,7 +16,12 @@ async function main() {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
     }
 
-    const storage = new CloudStorage();
+    const bucket = process.env.AWS_BUCKET as string;
+    if (bucket === undefined) {
+        throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
+    }
+
+    const storage = new CloudStorage(bucket);
 
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();

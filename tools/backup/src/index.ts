@@ -85,8 +85,13 @@ async function main() {
         throw new Error(`Source and destination cannot be the same.`);
     }
 
-    const sourceStorage = source == "s3" ? new CloudStorage() : new FileStorage(LOCAL_STORAGE_DIR);
-    const destStorage = dest == "s3" ? new CloudStorage() : new FileStorage(LOCAL_STORAGE_DIR);
+    const bucket = process.env.AWS_BUCKET as string;
+    if (bucket === undefined) {
+        throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
+    }
+
+    const sourceStorage = source == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
+    const destStorage = dest == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
 
     console.log(`Source storage: ${source}`);
     console.log(`Destination storage: ${dest}`);
