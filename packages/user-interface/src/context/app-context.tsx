@@ -1,5 +1,4 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { useIndexeddb } from "./indexeddb-context";
 import { useOnline } from "../lib/use-online";
 import { useApi } from "./api-context";
 import { IUser } from "defs";
@@ -20,31 +19,12 @@ export interface IProps {
 export function AppContextProvider({ children }: IProps) {
     
     const { isOnline } = useOnline();
-    const { database } = useIndexeddb();
     const api = useApi();
 
     //
     // The current user.
     //
     const [ user, setUser ] = useState<IUser | undefined>(undefined);
-
-    //
-    // Loads the local user's details.
-    //
-    async function loadLocalUser(): Promise<void> {
-        const userId = localStorage.getItem("userId");
-        if (!userId) {
-            return undefined;
-        }
-
-        const user = await database.collection<IUser>("users").getOne(userId);
-        if (user) {
-            setUser(user);
-        }
-        else {
-            setUser(undefined);
-        }
-    }
 
     //
     // Loads the user's details.
@@ -54,18 +34,10 @@ export function AppContextProvider({ children }: IProps) {
             // Not able to load user details offline.
             const user = await await api.getUser();
             if (user) {
-                //
-                // Store user locally for offline use.
-                //
-                await database.collection("users").setOne(user);
-                localStorage.setItem("userId", user._id);
                 setUser(user);
                 return;
             }
         }
-
-        // Fallback to local user.
-        await loadLocalUser();
     }
 
     useEffect(() => {
