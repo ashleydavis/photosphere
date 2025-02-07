@@ -3,7 +3,7 @@ import { sleep } from "./sleep";
 //
 // Retrys a failing operation a number of times.
 //
-export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number, waitTimeMS: number): Promise<ReturnT> {
+export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number = 3, waitTimeMS: number = 1000): Promise<ReturnT> {
     let lastError: any | undefined;
 
     while (maxAttempts-- > 0) {
