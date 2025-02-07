@@ -15,17 +15,7 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
             name: "asset",
         },
         {
-            name: "metadata",
-            indexKeys: [ "setId", "hash" ],
-        },
-        {
             name: "outgoing-updates",
-        },
-        {
-            name: "last-update",
-        },
-        {
-            name: "users",
         },
     ],
     versionNumber: 4,

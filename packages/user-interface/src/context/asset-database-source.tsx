@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IAssetData } from "../def/asset-data";
-import { GallerySourceContext, IAssetDataLoad, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
+import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
@@ -12,8 +12,6 @@ import { applyOperations } from "../lib/apply-operation";
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
-import { syncIncoming } from "../lib/sync/sync-incoming";
-import { initialSync } from "../lib/sync/initial-sync";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { uuid } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
@@ -162,20 +160,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             }
         ];
 
-        await Promise.all([
-            //
-            // Updates the local database.
-            //
-            applyOperations(database, ops),
-
-            //
-            // Queue the updates for upload to the cloud.
-            //
-            outgoingUpdateQueue.current.add({ 
-                type: "update",
-                ops,
-            }),
-        ]);
+        //
+        // Queue the updates for upload to the cloud.
+        //
+        await outgoingUpdateQueue.current.add({
+            type: "update",
+            ops,
+        });
     }
 
     //
@@ -197,24 +188,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        await Promise.all([
-                //
-                // Updates the local database.
-                //
-                applyOperations(database, ops),
-
-                //
-                // Queue the updates for upload to the cloud.
-                //
-                outgoingUpdateQueue.current.add({ 
-                    type: "update",
-                    ops,
-                }),
-            ])
-            .catch(err => {
-                console.error(`Failed to update asset:`);
-                console.error(err);
-            });
+        //
+        // Queue the updates for upload to the cloud.
+        //
+        await outgoingUpdateQueue.current.add({
+            type: "update",
+            ops,
+        });
     }
 
     //
@@ -281,24 +261,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        await Promise.all([
-                //
-                // Updates the local database.
-                //
-                applyOperations(database, ops),
-
-                //
-                // Queue the updates for upload to the cloud.
-                //
-                outgoingUpdateQueue.current.add({ 
-                    type: "update",
-                    ops,
-                }),
-            ])
-            .catch(err => {
-                console.error(`Failed to update asset:`);
-                console.error(err);
-            });
+        //
+        // Queue the updates for upload to the cloud.
+        //
+        await outgoingUpdateQueue.current.add({
+            type: "update",
+            ops,
+        });
     }
 
     //
@@ -326,24 +295,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        await Promise.all([
-                //
-                // Updates the local database.
-                //
-                applyOperations(database, ops),
 
-                //
-                // Queue the updates for upload to the cloud.
-                //
-                outgoingUpdateQueue.current.add({ 
-                    type: "update",
-                    ops,
-                }),
-            ])
-            .catch(err => {
-                console.error(`Failed to update asset:`);
-                console.error(err);
-            });
+        //
+        // Queue the updates for upload to the cloud.
+        //
+        await outgoingUpdateQueue.current.add({
+            type: "update",
+            ops,
+        })
     }
 
     //
@@ -365,15 +324,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         try {
             setIsWorking(true);
-
-            //
-            // Initializes the destination set.
-            //
-            await initialSync(database, destSetId, api, 0,
-                assets => {
-                    console.log(`Loaded ${assets.length} assets into ${setId}`);
-                }
-            );            
 
             //
             // Saves asset data to other set.
@@ -416,7 +366,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset from the current set.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetDataLoad | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
         if (!setId) {
             throw new Error("No set id provided.");
         }
@@ -427,13 +377,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset from a particular set.
     //
-    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<IAssetDataLoad | undefined> {
+    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<IAssetData | undefined> {
         const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
-            return {
-                ...assetRecord.assetData,
-                source: "local",
-            };
+            return assetRecord.assetData;
         }
 
         if (!isOnline) {
@@ -467,7 +414,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         return {
             contentType: assetBlob.type,
             data: assetBlob,
-            source: "cloud",
         };
     }
 
@@ -552,18 +498,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     console.error(err);
                 }
             
-                try {
-                    //
-                    // Collate the last update ids for each collection.
-                    //
-                    const setIds = user!.sets.map(set => set.id);
-                    await syncIncoming({ setIds, database, api });
-                }
-                catch (err) {
-                    console.error(`Incoming sync failed:`);
-                    console.error(err);
-                }
-
                 console.log(`Periodic sync done.`);
     
                 timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
@@ -596,6 +530,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             loadingCount.current += 1;
             loadingId.current += 1;
 
+            const latestLoadingId = loadingId.current;
+
             //
             // Start with no assets.
             // This clears out any existing set of assets.
@@ -608,25 +544,40 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             onReset.current.invoke();
 
-            await initialSync(database, setId, api, loadingId.current, 
+            //
+            // Load the assets from the cloud into memory.
+            //
+            let skip = 0;
+            const pageSize = 1000;
+            while (true) {
                 //
-                // Sets assets as they are loaded.
+                // Get a page of assets from the backend.
+                // Assumes the backend gives us the assets in sorted order.
                 //
-                assets => {
-                    //
-                    // As each page of assets are loaded update the asset map in state.
-                    //
-                    _onNewItems(assets);
+                const page = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
+                if (page.length === 0) {
+                    // No more records.
+                    break;
+                }
 
-                    console.log(`Loaded ${assets.length} assets for set ${setId}`);
-                },
+                skip += pageSize;
 
                 //
                 // Continue if the set index matches the current loading index.
                 // This allows loading to be aborted if the user changes what they are looking at.
                 //
-                setIndex => setIndex === loadingId.current
-            );
+                const shouldContinue = latestLoadingId === loadingId.current;
+                if (!shouldContinue) {
+                    // Request to abort asset loading.
+                    return;
+                }     
+
+                setTimeout(() => {
+                    _onNewItems(page);  // Starts the next request before setting the new assets.
+
+                    console.log(`Loaded ${page.length} assets for set ${setId}`);
+                }, 0);
+            }
         }
         finally {
             loadingCount.current -= 1;

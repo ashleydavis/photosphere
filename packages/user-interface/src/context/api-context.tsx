@@ -14,21 +14,6 @@ if (!BASE_URL) {
 console.log(`Expecting backend at ${BASE_URL}.`);
 
 //
-// The result of get the database journal.
-//
-export interface IJournalResult {
-    //
-    // Operations recorded against the collection.
-    //
-    journalRecords: IDatabaseOp[];
-
-    //
-    // The id of the latest update that has been retreived.
-    //
-    latestTime: string;
-}
-
-//
 // Client-side interface to the Photosphere API.
 //
 export interface IApi {
@@ -44,11 +29,6 @@ export interface IApi {
     getUser(): Promise<IUser>;
 
     //
-    // Retreives the latest time for the server.
-    //
-    getLatestTime(): Promise<string | undefined>;
-
-    //
     // Retreives the data for an asset from the backend.
     //
     getAsset(setId: string, assetId: string, assetType: string): Promise<Blob | undefined>;
@@ -62,11 +42,6 @@ export interface IApi {
     // Submits database operations to the cloud.
     //
     submitOperations(ops: IDatabaseOp[]): Promise<void>;
-
-    //
-    // Gets the journal of operations that have been applied to the database.
-    //
-    getJournal(lastUpdateTime?: string): Promise<IJournalResult>;
 
     //
     // Gets one record by id.
@@ -126,27 +101,6 @@ export function ApiContextProvider({ children }: IProps) {
 
         return response.data;
     }
-
-    //
-    // Retreives the latest server time.
-    //
-    async function getLatestTime(): Promise<string | undefined> {
-
-        const { headers } = await getRequestConfig();
-
-        const url = `${BASE_URL}/latest-time`;
-        const response = await axios.get(
-            url, 
-            {
-                headers: {
-                    ...headers,
-                    Accept: "application/json",
-                },
-            }
-        );
-
-        return response.data.latestTime;
-    }    
 
     //
     // Retreives the data for an asset from the backend.
@@ -222,35 +176,6 @@ export function ApiContextProvider({ children }: IProps) {
     }
 
     //
-    // Gets the journal of operations that have been applied to the database.
-    //
-    async function getJournal(lastUpdateTime?: string): Promise<IJournalResult> {
-        
-        if (!clientId) {
-            throw new Error(`Client id not set.`);
-        }
-
-        const { headers } = await getRequestConfig();
-
-        const url = `${BASE_URL}/journal`;
-        const response = await axios.post(
-            url, 
-            {
-                lastUpdateTime,
-                clientId,
-            },
-            {
-                headers: {
-                    ...headers,
-                    Accept: "application/json",
-                },
-            },
-        );
-
-        return response.data;
-    }
-
-    //
     // Gets one record by id.
     //
     async function getOne(collectionName: string, recordId: string): Promise<any> {
@@ -293,11 +218,9 @@ export function ApiContextProvider({ children }: IProps) {
     const value: IApi = {
     	isInitialised,
         getUser,
-        getLatestTime,
         getAsset,
         uploadSingleAsset,
         submitOperations,
-        getJournal,
         getOne,
         getAll,
     };
