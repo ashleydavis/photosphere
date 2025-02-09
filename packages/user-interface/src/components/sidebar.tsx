@@ -439,7 +439,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             className="flex flex-col"
             style={{
                 paddingLeft: "15px",
-                backgroundColor: theme.palette.background.body,
                 color: theme.palette.text.primary,
             }}
             >
