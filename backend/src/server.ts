@@ -102,20 +102,16 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Attaches user information to the request.
         //
         app.use(async (req, res, next) => {
-
-            const results = await storage.list("collections", 100);
-            const sets = results.fileNames.map(fileName => {
-                return {
-                    id: fileName,
-                    name: fileName,
-                };
-            });
-
             req.userId = 'test-user';
             req.user = { // Mock user.
                 _id: 'test-user',
-                defaultSet: sets[0].id,
-                sets,
+                defaultSet: `demo`,
+                sets: [
+                    {
+                        id: `demo`,
+                        name: `Demo`,
+                    },
+                ],
             }; 
             next();
         });
