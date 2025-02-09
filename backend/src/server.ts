@@ -53,8 +53,8 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         next();
     });
 
-    const isProduction = process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test";
-    if (isProduction) {
+    
+    if (process.env.AUTH_TYPE === "auth0") {
         
         const checkJwt = auth({
             audience: process.env.AUTH0_AUDIENCE as string,
@@ -66,49 +66,63 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Authenticates a JWT token.
         //
         app.use(checkJwt);
+
+        //
+        // Attaches user information to the request.
+        //
+        app.use(async (req, res, next) => {
+            if (!req.auth?.payload.sub) {
+                res.sendStatus(401);
+                return;
+            }
+
+            let userId = req.auth.payload.sub;
+            if (userId.startsWith("auth0|")) {
+                // Removes the auth0| prefix the user id.
+                userId = userId.substring(6);
+            }
+            const user = await db.collection<IUser>("users").findOne({ _id: userId });
+            if (!user) {
+                console.log(`User not found: ${userId}`);
+                res.sendStatus(401);
+                return;
+            }
+
+            req.userId = userId;
+            req.user = Object.assign({}, user, {
+                _id: userId,
+            });
+            next();
+        });
+
     }
-    else {
+    else if (process.env.AUTH_TYPE === "no-auth") {
         //
-        // Mocks a JWT token.
         //
-        app.use((req, res, next) => {
-            req.auth = { 
-                payload: { 
-                    sub: "test-user", // Test user.
-                } 
-            } as any;
-            
+        // Attaches user information to the request.
+        //
+        app.use(async (req, res, next) => {
+
+            const results = await storage.list("collections", 100);
+            const sets = results.fileNames.map((fileName) => {
+                return {
+                    id: fileName,
+                    name: fileName,
+                };
+            };
+
+            req.userId = 'test-user';
+            req.user = { // Mock user.
+                _id: 'test-user',
+                defaultSet: sets[0].id,
+                sets,
+            }; 
             next();
         });
     }
-
-    //
-    // Attaches user information to the request.
-    //
-    app.use(async (req, res, next) => {
-        if (!req.auth?.payload.sub) {
-            res.sendStatus(401);
-            return;
-        }
-
-        let userId = req.auth.payload.sub;
-        if (userId.startsWith("auth0|")) {
-            // Removes the auth0| prefix the user id.
-            userId = userId.substring(6);
-        }
-        const user = await db.collection<IUser>("users").findOne({ _id: userId });
-        if (!user) {
-            console.log(`User not found: ${userId}`);
-            res.sendStatus(401);
-            return;
-        }
-
-        req.userId = userId;
-        req.user = Object.assign({}, user, {
-            _id: userId,
-        });
-        next();
-    });
+    else {
+        throw new Error(`Unknown AUTH_TYPE: ${process.env.AUTH_TYPE}`);
+    }
 
     //
     // Gets the value of a header from the request.

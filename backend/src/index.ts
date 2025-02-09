@@ -5,8 +5,6 @@ import { FileStorage } from "storage";
 
 async function main() {
 
-    const dbName = "photosphere";
-
     const PORT = process.env.PORT;
     if (!PORT) {
         throw new Error(`Set environment variable PORT.`);
@@ -17,10 +15,15 @@ async function main() {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
     }
 
+    const DB_NAME = process.env.DB_NAME;
+    if (DB_NAME === undefined) {
+        throw new Error(`Set environment variable DB_NAME.`);
+    }
+
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();
 
-    const db = client.db(dbName);
+    const db = client.db(DB_NAME);
     
     console.log(`Running in mode: ${process.env.NODE_ENV} on port ${PORT}.`);
 
