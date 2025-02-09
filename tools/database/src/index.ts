@@ -16,6 +16,11 @@ async function main() {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
     }
 
+    const DB_NAME = process.env.DB_NAME;
+    if (DB_NAME === undefined) {
+        throw new Error(`Set environment variable DB_NAME.`);
+    }
+
     const bucket = process.env.AWS_BUCKET as string;
     if (bucket === undefined) {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
@@ -26,7 +31,7 @@ async function main() {
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();
 
-    const db = client.db("photosphere");
+    const db = client.db(DB_NAME);
 
     const query: any = {};
 
@@ -77,75 +82,12 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    let photoDate = undefined;
 
-                    if (!document.properties.metadata) {
-                        // No metadata found.
-                    }
-                    else {
-                        const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
-                        for (const dateField of dateFields) {
-                            const dateStr = document.properties.metadata[dateField];
-                            if (!dateStr) {
-                                continue;
-                            }
-
-                            if (dateStr === "0000:00:00 00:00:00") {
-                                // Ignoring completely bogus date.
-                                continue;
-                            }
-
-                            if (dateStr.startsWith("450")) {
-                                // Ignoring completely bogus date.
-                                continue;
-                            }
-                            
-                            try {
-                                photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                            }
-                            catch (err) {
-                                console.error(`Failed to parse date from ${dateStr}`);
-                                console.error(err);
-                            }
-                        }
-                        
-                        if (!photoDate) {
-                            // console.error(`No date found for asset ${document._id}.`);
-                        }
-                        else {
-                            if (dayjs(document.photoDate).toISOString() === photoDate) {
-                                // console.log(`Date already set for asset ${document._id}.`);
-                            }
-                            else {
-                                //
-                                // If the date is within a day, don't worry about it.
-                                //
-                                const existingDate = dayjs(document.photoDate);
-                                const newDate = dayjs(photoDate);
-                                const diff = newDate.diff(existingDate, "day");
-                                if (Math.abs(diff) > 1) {
-                                    console.log(`=== Existing date: ${dayjs(document.photoDate).toISOString()}.`);
-                                    console.log(`Date from metadata: ${photoDate}.`);
-                                    console.log(`Difference: ${diff} days.`);
-                                    // console.log(`Setting date to ${photoDate} for asset ${document._id}.`);
-                                    // console.dir(document.properties.metadata, { depth: null });
-
-                                    for (const [key, value] of Object.entries(document.properties.metadata)) {
-                                        if (key.toLowerCase().includes("date")) {
-                                            console.log(` ${key}: ${value}`);
-                                        }
-                                    }
-    
-                                    //todo:
-                                    // await metadataCollection.updateOne({ _id: document._id }, { $set: { photoDate } });
-                                    numUpdated += 1;
-                                }
-                                else {
-                                    // console.log(`Dates are within ${diff} days for asset ${document._id}.`);
-                                }
-                            }
-                        }
-                    }
+                    //
+                    // Update setId to `demo`:
+                    //
+                    await metadataCollection.updateOne({ _id: document._id }, { $set: { setId: "demo" } });
+                    numUpdated += 1;
                 }
                 catch (err) {
                     console.error(`Failed for asset ${document._id}.`);
