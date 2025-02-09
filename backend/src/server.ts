@@ -104,12 +104,12 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         app.use(async (req, res, next) => {
 
             const results = await storage.list("collections", 100);
-            const sets = results.fileNames.map((fileName) => {
+            const sets = results.fileNames.map(fileName => {
                 return {
                     id: fileName,
                     name: fileName,
                 };
-            };
+            });
 
             req.userId = 'test-user';
             req.user = { // Mock user.
