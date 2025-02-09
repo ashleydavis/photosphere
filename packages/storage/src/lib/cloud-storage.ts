@@ -24,6 +24,9 @@ export class CloudStorage implements IStorage {
     private s3!: aws.S3;
 
     constructor(private bucket: string) {
+        if (!bucket) {
+            throw new Error(`Bucket name is required.`);
+        }
         this.s3 = new aws.S3({
             endpoint: process.env.AWS_ENDPOINT,
         });

@@ -14,17 +14,17 @@ async function main() {
     const argv = minimist(process.argv.slice(2));
 
     const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING;
-    if (DB_CONNECTION_STRING === undefined) {
+    if (!DB_CONNECTION_STRING) {
         throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
     }
 
     const DB_NAME = process.env.DB_NAME;
-    if (DB_NAME === undefined) {
+    if (!DB_NAME) {
         throw new Error(`Set environment variable DB_NAME.`);
     }
 
     const bucket = process.env.AWS_BUCKET as string;
-    if (bucket === undefined) {
+    if (!bucket) {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
