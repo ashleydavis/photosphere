@@ -114,7 +114,7 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
 
     return (
         <div 
-            className="info overflow-scroll"
+            className="info"
             style={{
                 backgroundColor: theme.palette.background.body,
                 color: theme.palette.text.primary,
