@@ -82,11 +82,19 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
+                    await metadataCollection.updateOne(
+                        { _id: document._id }, 
+                        { $set: { 
+                            contentType: document.assetContentType 
+                        }, 
+                        $unset: { 
+                            assetContentType: "", 
+                            thumbContentType: "", 
+                            displayContentType: "",
+                            sortDate: "",                        } 
+                        },
+                    );
 
-                    //
-                    // Update setId to `demo`:
-                    //
-                    await metadataCollection.updateOne({ _id: document._id }, { $set: { setId: "demo" } });
                     numUpdated += 1;
                 }
                 catch (err) {
