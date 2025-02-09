@@ -116,7 +116,6 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
         <div 
             className="info"
             style={{
-                backgroundColor: theme.palette.background.body,
                 color: theme.palette.text.primary,
             }}
             >
