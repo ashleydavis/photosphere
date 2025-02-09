@@ -227,43 +227,6 @@ GET {{base_url}}/get-one?id={{asset}}&col=metadata
 Authorization: Bearer {{token}}
 
 ###
-# @name get_journal
-# Gets journal operations for a collection.
-#
-
-POST {{base_url}}/journal
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-    "collectionId": "{{setId}}",
-    "clientId": "a-different-client-id"
-}
-
-###
-# Gets journal operations after a certain update.
-#
-
-@last_update_time = {get_journal.repsonse.body.latestTime}
-
-POST {{base_url}}/journal
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-    "collectionId": "{{setId}}",
-    "clientId": "a-client-id",
-    "lastUpdateTime": "{{last_update_time}}"
-}
-
-###
-# Gets the latest server time.
-#
-
-GET {{base_url}}/latest-time
-Authorization: Bearer {{token}}
-
-###
 # Gets a page of assets.
 #
 

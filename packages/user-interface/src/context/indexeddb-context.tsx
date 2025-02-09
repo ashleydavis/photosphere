@@ -15,17 +15,7 @@ const databaseConfiguration: IIndexeddbDatabaseConfiguration = {
             name: "asset",
         },
         {
-            name: "metadata",
-            indexKeys: [ "setId", "hash" ],
-        },
-        {
             name: "outgoing-updates",
-        },
-        {
-            name: "last-update",
-        },
-        {
-            name: "users",
         },
     ],
     versionNumber: 4,
@@ -51,6 +41,8 @@ export interface IProps {
 
 export function IndexeddbContextProvider({ children }: IProps) {
 
+    const validCollectionNames = new Set<string>(databaseConfiguration.collections.map(collection => collection.name));
+
     const database = useRef<IDatabase>(new IndexeddbDatabase(
         async () => {
             if (indexeddb.current) {
@@ -61,7 +53,8 @@ export function IndexeddbContextProvider({ children }: IProps) {
             // Opens the database connection.
             indexeddb.current = await openDatabase("photosphere", databaseConfiguration);
             return indexeddb.current;
-        }
+        },
+        validCollectionNames
     ));
     const indexeddb = useRef<IDBDatabase | undefined>(undefined);
 

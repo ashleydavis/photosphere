@@ -3,7 +3,7 @@ import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { Db } from "mongodb";
 import { IStorage } from "storage";
-import { IUser, IDatabaseOp, IDatabaseOpRecord } from "defs";
+import { IUser, IDatabaseOp } from "defs";
 import { uuid } from "./lib/uuid";
 
 declare global {
@@ -190,24 +190,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
-        const clientId = getValue<string>(req.body, "clientId");
-        let sequence = 0;
         for (const op of ops) {
-            const databaseOpRecord: IDatabaseOpRecord = {
-                _id: uuid(),
-                serverTime: new Date(),
-                sequence,
-                clientId,
-                collectionName: op.collectionName,
-                recordId: op.recordId,
-                op: op.op,
-            };
-
-            sequence += 1;
-            
-            const journalCollection = db.collection<IDatabaseOpRecord>("journal");
-            await journalCollection.insertOne(databaseOpRecord);
-
             const recordCollection = db.collection(op.collectionName);
             if (op.op.type === "set") {
 
@@ -253,50 +236,6 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         res.sendStatus(200);
     }));
 
-    //
-    // Gets the journal of operations that have been applied to the database.
-    //
-    app.post("/journal", express.json(), asyncErrorHandler(async (req, res) => {
-        const clientId = getValue<string>(req.body, "clientId");
-        let lastUpdateTime = req.body.lastUpdateTime;
-        if (lastUpdateTime !== undefined) {
-            lastUpdateTime = new Date(lastUpdateTime);
-        }
-
-        const journalCollection = db.collection<IDatabaseOpRecord>("journal");
-        let query: any = {};
-        if (lastUpdateTime !== undefined) {
-            query.serverTime = { $gt: lastUpdateTime };
-        }
-
-        const serverTimeNow = new Date();
-        let journalRecords = await journalCollection.find(query) 
-            .sort({ serverTime: 1, sequence: 1 })
-            .toArray(); //TODO: Want pagination.
-
-        //TODO: Filter collections the user doesn't have access to.
-
-        // 
-        // Filter out records from the same client.
-        //
-        journalRecords = journalRecords.filter((record) => record.clientId !== clientId);
-
-        res.json({
-            journalRecords,
-            latestTime: serverTimeNow,
-        });
-    }));
-
-    //
-    // Retreives the latest update id for a collection.
-    //
-    app.get("/latest-time", asyncErrorHandler(async (req, res) => {
-        const serverTimeNow = new Date();
-        res.json({
-            latestTime: serverTimeNow,
-        });
-    }));
-    
     //
     // Uploads a new asset.
     //
