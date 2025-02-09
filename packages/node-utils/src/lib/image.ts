@@ -19,14 +19,14 @@ export interface IResolution {
 //
 // Gets the resolution of an image.
 //
-export async function getImageResolution(filePath: string, fileData: Buffer): Promise<IResolution> {
+export async function getImageResolution(fileData: Buffer): Promise<IResolution> {
   //
   // Get image resolution.
   //
   const fullImage = sharp(fileData);
   const { width, height } = await fullImage.metadata();
   if (width === undefined || height === undefined) {
-      throw new Error(`Failed to get image resolution for ${filePath}`);
+      throw new Error(`Failed to get image resolution.`);
   }
 
   return { width, height };

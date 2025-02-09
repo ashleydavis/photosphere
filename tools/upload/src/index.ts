@@ -746,7 +746,7 @@ async function getImageDetails(filePath: string, fileData: Buffer, contentType: 
 
     const assetDetails = await getImageMetadata(filePath, fileData, contentType);
     const imageTransformation = await getImageTransformation(assetDetails.metadata);
-    let resolution = await getImageResolution(filePath, fileData);
+    let resolution = await getImageResolution(fileData);
     if (imageTransformation) {
         // Flips orientation depending on exif data.
         fileData = await transformImage(fileData, imageTransformation);

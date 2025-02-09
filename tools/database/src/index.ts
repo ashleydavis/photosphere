@@ -3,9 +3,11 @@ import { CloudStorage, deleteAssetWithRetry, getAssetInfoWithRetry, readAssetWit
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
+const ColorThief = require("colorthief");
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import { getImageResolution, resizeImage } from "node-utils";
 dayjs.extend(customParseFormat);
 
 async function main() {
@@ -82,20 +84,30 @@ async function main() {
             await Promise.all(batch.map(async (document: any) => {
 
                 try {
-                    await metadataCollection.updateOne(
-                        { _id: document._id }, 
-                        { $set: { 
-                            contentType: document.assetContentType 
-                        }, 
-                        $unset: { 
-                            assetContentType: "", 
-                            thumbContentType: "", 
-                            displayContentType: "",
-                            sortDate: "",                        } 
-                        },
-                    );
+                    const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb");
+                    if (thumbInfo) {
+                        //
+                        // Compute micro thumb and set it as a new field.
+                        //
+                        const thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
+                        if (thumb) {
+                            const resolution = await getImageResolution(thumb);
+                            const micro = await resizeImage(thumb,  resolution, 40, 75);
 
-                    numUpdated += 1;
+                            await metadataCollection.updateOne(
+                                { _id: document._id }, 
+                                { 
+                                    $set: { 
+                                        micro: micro.toString("base64"),
+                                        color: await ColorThief.getColor(micro),
+                                    },
+                                }
+                            );
+                            
+                            numUpdated += 1;
+                        }
+                    }
+
                 }
                 catch (err) {
                     console.error(`Failed for asset ${document._id}.`);
