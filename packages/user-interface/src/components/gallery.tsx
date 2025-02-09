@@ -43,7 +43,7 @@ export function Gallery() {
     // Updates the gallery width when the container is resized.
     //
     useResizeObserver(containerRef, () => {
-        setGalleryWidth(containerRef.current!.clientWidth - SCROLLBAR_WIDTH);
+        setGalleryWidth(containerRef.current!.clientWidth - SCROLLBAR_WIDTH - 2);
     });
 
     useEffect(() => {
