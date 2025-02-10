@@ -4,7 +4,6 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { Db } from "mongodb";
 import { IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
-import { uuid } from "./lib/uuid";
 
 declare global {
     namespace Express {
@@ -20,6 +19,11 @@ const dateFields = [
     "photoDate",
     "uploadDate",
 ];
+
+const MODE = process.env.MODE;
+if (!MODE) {
+    throw new Error("Expected MODE environment variable set to 'readonly' or 'readwrite'");
+}
 
 //
 // Starts the REST API.
@@ -185,6 +189,11 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
+        if (MODE !== "readwrite") {
+            res.sendStatus(403); // Forbidden in readonly mode.
+            return;
+        }
+
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
             const recordCollection = db.collection(op.collectionName);
@@ -236,6 +245,11 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
+        if (MODE !== "readwrite") {
+            res.sendStatus(403); // Forbidden in readonly mode.
+            return;
+        }
+        
         const assetId = getHeader(req, "id");
         const setId = getHeader(req, "set");
         const contentType = getHeader(req, "content-type");
