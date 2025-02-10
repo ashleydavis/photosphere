@@ -70,6 +70,7 @@ export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProvide
     }
 
     const value: IAuthContext = {
+        isAuthEnabled: true,
         isLoading: isLoading,
         isAuthenticated: isAuthenticated,
         error,

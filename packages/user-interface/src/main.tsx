@@ -44,6 +44,7 @@ export interface IMainProps {
 function __Main({ computerPage }: IMainProps) {
 
     const {
+        isAuthEnabled,
         isLoading,
         isAuthenticated,
         login,
@@ -358,52 +359,56 @@ function __Main({ computerPage }: IMainProps) {
                             
                         </div>
 
-                        <Dropdown>
-                            <MenuButton
-                                sx={{
-                                    mr: 1,
-                                }}                            
-                                slots={{ root: IconButton }}
-                                slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
-                                >
-                                <MoreVert />
-                            </MenuButton>
-                            <Menu placement="bottom-end">
-                                {selectedItems.size > 0
-                                    && <>
-                                        <ListSubheader>MOVE TO</ListSubheader>
-                                        {user?.sets.map(set => {
-                                            if (set.id === setId) {
-                                                return null; // Don't show the current set.
-                                            }
-                                            return (
-                                                <MenuItem 
-                                                    key={set.id}
-                                                    onClick={() => onMoveSelectedToSet(set.id)}
-                                                    >
-                                                    {set.name}                                        
-                                                </MenuItem>
-                                            );
-                                        })}
-                                        <ListDivider />
-                                        <MenuItem
-                                            color="danger"
-                                            onClick={() => setDeleteConfirmationOpen(true)}
-                                            >
-                                            <Delete />
-                                            Delete {selectedItems.size} assets
-                                        </MenuItem>                                        
-                                        <ListDivider />
-                                    </>
-                                }
-                                <MenuItem
-                                    onClick={onLogOut}
+                        {(isAuthEnabled || selectedItems.size > 0)
+                            && <Dropdown>
+                                <MenuButton
+                                    sx={{
+                                        mr: 1,
+                                    }}                            
+                                    slots={{ root: IconButton }}
+                                    slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
                                     >
-                                    <i className="fa-solid fa-right-from-bracket"></i>
-                                    <span className="ml-1">Log out</span>
-                                </MenuItem>
-                            </Menu>
-                        </Dropdown>
+                                    <MoreVert />
+                                </MenuButton>
+                                <Menu placement="bottom-end">
+                                    {selectedItems.size > 0
+                                        && <>
+                                            <ListSubheader>MOVE TO</ListSubheader>
+                                            {user?.sets.map(set => {
+                                                if (set.id === setId) {
+                                                    return null; // Don't show the current set.
+                                                }
+                                                return (
+                                                    <MenuItem 
+                                                        key={set.id}
+                                                        onClick={() => onMoveSelectedToSet(set.id)}
+                                                        >
+                                                        {set.name}                                        
+                                                    </MenuItem>
+                                                );
+                                            })}
+                                            <ListDivider />
+                                            <MenuItem
+                                                color="danger"
+                                                onClick={() => setDeleteConfirmationOpen(true)}
+                                                >
+                                                <Delete />
+                                                Delete {selectedItems.size} assets
+                                            </MenuItem>                                        
+                                            <ListDivider />
+                                        </>
+                                    }
+                                    {isAuthEnabled
+                                        &&  <MenuItem
+                                            onClick={onLogOut}
+                                            >
+                                            <i className="fa-solid fa-right-from-bracket"></i>
+                                            <span className="ml-1">Log out</span>
+                                        </MenuItem>
+                                    }
+                                </Menu>
+                            </Dropdown>
+                        }
                     </div>
 
                     {openSearch

@@ -31,6 +31,7 @@ export function NoAuthContextProvider({ children }: INoAuthContextProviderProps)
     }
 
     const value: IAuthContext = {
+        isAuthEnabled: false,
         isLoading: false,
         isAuthenticated: true,
         error: undefined,

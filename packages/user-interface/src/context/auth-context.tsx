@@ -1,6 +1,10 @@
 import React, { createContext, useContext } from "react";
 
 export interface IAuthContext {
+    //
+    // Set to true when authentication is enabled.
+    //
+    isAuthEnabled: boolean;
 
     //
     // Set to true when loading authentication.
