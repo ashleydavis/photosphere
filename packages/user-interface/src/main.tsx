@@ -27,9 +27,11 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
+import Snackbar from "@mui/joy/Snackbar/Snackbar";
 const FPSStats = require("react-fps-stats").default;
 
-export const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test")
+const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
+const APP_MODE = process.env.APP_MODE!;
 
 export interface IMainProps {
     //
@@ -110,6 +112,8 @@ function __Main({ computerPage }: IMainProps) {
     // TODO: This might not be needed.
     //
     const [numLoaded, setNumLoaded] = useState<number>(0);
+
+    const [readonlyMessageOpen, setReadonlyMessageOpen] = useState<boolean>(true);
 
     const { user } = useApp();
 
@@ -552,6 +556,18 @@ function __Main({ computerPage }: IMainProps) {
                     right={30}
                     bottom={10}
                     />
+            }
+
+            {(APP_MODE === "readonly")
+                && <Snackbar
+                    open={readonlyMessageOpen}
+                    onClose={() => setReadonlyMessageOpen(false)}
+                    variant="soft"
+                    color="warning"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                    >
+                    Photosphere is in readonly mode. You can't upload, edit or delete assets.
+                </Snackbar>
             }
         </>
     );
