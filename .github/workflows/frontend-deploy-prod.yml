@@ -50,6 +50,7 @@ jobs:
       - name: Build frontend
         env:
           NODE_ENV: production
+          APP_MODE: readwrite
           AUTH_TYPE: auth0
           AUTH0_DOMAIN: ${{secrets.AUTH0_DOMAIN}}
           AUTH0_CLIENT_ID: ${{secrets.AUTH0_CLIENT_ID}}

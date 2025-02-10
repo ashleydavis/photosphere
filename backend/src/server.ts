@@ -20,9 +20,9 @@ const dateFields = [
     "uploadDate",
 ];
 
-const MODE = process.env.MODE;
-if (!MODE) {
-    throw new Error("Expected MODE environment variable set to 'readonly' or 'readwrite'");
+const APP_MODE = process.env.APP_MODE;
+if (!APP_MODE) {
+    throw new Error("Expected APP_MODE environment variable set to 'readonly' or 'readwrite'");
 }
 
 //
@@ -189,7 +189,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        if (MODE !== "readwrite") {
+        if (APP_MODE !== "readwrite") {
             res.sendStatus(403); // Forbidden in readonly mode.
             return;
         }
@@ -245,7 +245,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
-        if (MODE !== "readwrite") {
+        if (APP_MODE !== "readwrite") {
             res.sendStatus(403); // Forbidden in readonly mode.
             return;
         }

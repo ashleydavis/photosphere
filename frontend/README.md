@@ -96,12 +96,16 @@ set PWDEBUG=1
 
 ## Environment variables
 
+- `NODE_ENV` - Set to "production" for production use.
 - `BASE_URL` - Sets the URL for the connection to the backend.
 - `GOOGLE_API_KEY` - Sets to a valid Google API key to enable reverse geocoding of photo location in the browser.
+- `APP_MODE` - Can be set to `readonly` or `readwrite`.
+- `AUTH_TYPE` - Can be set to `auth0` or `no-auth`.
 
 ### Auth0 authentication details:
 
+Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
 - `AUTH0_DOMAIN`
 - `AUTH0_CLIENT_ID`
-- `AUTH0_AUDIDENCE`
+- `AUTH0_AUDIENCE`
 - `AUTH0_ORIGIN`

@@ -41,6 +41,7 @@ pnpm test
 ## Environment variables
 
 - `NODE_ENV` - Set to "production" to enable AWS cloud storage.
+- `APP_MODE` - Can be set to `readonly` or `readwrite`.
 - `AUTH_TYPE` - The type of auth to use, can be set to `auth0` or `no-auth`.
 - `AWS_BUCKET` - Sets the name of the AWS S3 bucket to use for storage.
 - `AWS_DEFAULT_REGION` - Sets the AWS region.
