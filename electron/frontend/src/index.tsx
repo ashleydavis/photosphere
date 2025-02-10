@@ -9,7 +9,7 @@ import { Auth0ContextProvider } from "./lib/auth0-context";
 import { NoAuthContextProvider } from "./lib/no-auth-context";
 
 const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test")
-const enableAuth = process.env.ENABLE_AUTH === "true" || isProduction;
+const enableAuth = process.env.AUTH_TYPE === "auth0" && isProduction;
 
 const container = document.getElementById('app');
 const root = createRoot(container!);

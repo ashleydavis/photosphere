@@ -50,7 +50,6 @@ jobs:
       - name: Build frontend
         env:
           NODE_ENV: production
-          MODE: readonly
           AUTH_TYPE: no-auth
           GOOGLE_API_KEY: ""
           BASE_URL: https://photosphere-demo-7vjtd.ondigitalocean.app
