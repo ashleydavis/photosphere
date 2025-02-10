@@ -52,6 +52,11 @@ export interface IApi {
     // Gets a page of records from the database.
     //
     getAll<RecordT extends IRecord>(setId: string, collectionName: string, skip: number, limit: number): Promise<RecordT[]>;
+
+    //
+    // Check if an asset witha  particular hash is already uploaded.
+    //
+    checkAssetHash(setId: string, hash: string): Promise<boolean>;
 }
 
 const ApiContext = createContext<IApi | undefined>(undefined);
@@ -215,6 +220,28 @@ export function ApiContextProvider({ children }: IProps) {
         return response.data;
     }
 
+    //
+    // Check if an asset with a particular hash is already uploaded.
+    //
+    async function checkAssetHash(setId: string, hash: string): Promise<boolean> {
+        
+        const { headers } = await getRequestConfig();
+
+        const url = `${BASE_URL}/check-hash?set=${setId}&hash=${hash}`;
+        const response = await axios.get(
+            url, 
+            {
+                headers: {
+                    ...headers,
+                    Accept: "application/json",
+                },
+            }
+        );
+        
+        const assetIds = response.data.assetIds;
+        return assetIds.length > 0;        
+    }
+
     const value: IApi = {
     	isInitialised,
         getUser,
@@ -223,6 +250,7 @@ export function ApiContextProvider({ children }: IProps) {
         submitOperations,
         getOne,
         getAll,
+        checkAssetHash,
     };
     
     return (

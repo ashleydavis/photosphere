@@ -359,8 +359,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Checks if an asset is already uploaded.
     //
     async function checkAssetHash(hash: string): Promise<boolean> {
-        const assets = await database.collection<IAsset>("metadata").getAllByIndex("hash", hash);
-        return assets.length > 0;
+        if (!setId) {
+            throw new Error("No set id provided.");
+        }
+
+        return await api.checkAssetHash(setId, hash);
     }
 
     //
