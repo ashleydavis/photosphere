@@ -10,8 +10,7 @@ import { NoAuthContextProvider } from "./lib/no-auth-context";
 import { Browser } from "@capacitor/browser";
 import { App as CapacitorApp } from "@capacitor/app";
 
-const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test")
-const enableAuth = process.env.AUTH_TYPE === "auth0" && isProduction;
+const enableAuth = process.env.AUTH_TYPE === "auth0";
 
 const container = document.getElementById('app');
 const root = createRoot(container!);
