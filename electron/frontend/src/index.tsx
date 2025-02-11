@@ -15,29 +15,29 @@ const container = document.getElementById('app');
 const root = createRoot(container!);
 
 if (enableAuth) {
-  // Auth enabled.
-  root.render(
-      <Auth0Provider
-          domain={process.env.AUTH0_DOMAIN as string}
-          clientId={process.env.AUTH0_CLIENT_ID as string}
-          authorizationParams={{
-              audience: process.env.AUTH0_AUDIENCE as string,
-              redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
-          }}
-          >
-          <Auth0ContextProvider>
-              <App />
-          </Auth0ContextProvider>
-      </Auth0Provider>
-  );
+    // Auth enabled.
+    root.render(
+        <Auth0Provider
+            domain={process.env.AUTH0_DOMAIN as string}
+            clientId={process.env.AUTH0_CLIENT_ID as string}
+            authorizationParams={{
+                audience: process.env.AUTH0_AUDIENCE as string,
+                redirect_uri: `${process.env.AUTH0_ORIGIN}/on_login`,
+            }}
+            >
+            <Auth0ContextProvider>
+                <App />
+            </Auth0ContextProvider>
+        </Auth0Provider>
+    );
 }
 else {
-  // Auth disabled.
-  root.render(
-      <NoAuthContextProvider>
-          <App />
-      </NoAuthContextProvider>
-  );
+    // Auth disabled.
+    root.render(
+        <NoAuthContextProvider>
+            <App />
+        </NoAuthContextProvider>
+    );
 }
 
 
