@@ -572,7 +572,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                     {breadcrumbs.length > 1 &&
                         <Link 
                             onClick={() => {
-                                setMenuPath(breadcrumbs[breadcrumbs.length-2].menuPath);
+                                setMenuPath(breadcrumbs[breadcrumbs.length-1].menuPath);
                                 setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
                             }}
                             >
