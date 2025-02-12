@@ -293,6 +293,10 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
             return true;
         }));
 
+    if (config.labels) {
+        labels = labels.concat(config.labels);
+    }
+
     //
     // Add asset to the gallery.
     //
@@ -477,6 +481,11 @@ async function main(): Promise<void> {
         numProcessed += chunk.length;
         if ((numProcessed % 100) === 0) {
             console.log(`Processed ${numProcessed} of ${files.length} assets.`);
+        }
+
+        if (config.maxAssets && numProcessed >= config.maxAssets) {
+            console.log(`Hit max assets: ${config.maxAssets}, done.`);
+            break;
         }
     }
 
