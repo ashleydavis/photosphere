@@ -36,6 +36,11 @@ export function getImageTransformation(exif: any): IImageTransformation | undefi
     }
 
     switch (orientation) {
+        // Value 0 shouldn't be supported, but I've seen it in at least one photo.
+        // So have others: https://stackoverflow.com/questions/39400351/android-exif-data-always-0-how-to-change-it
+        case 0:
+            return undefined; 
+
         case 1:
             return undefined; // No transform needed.
 
