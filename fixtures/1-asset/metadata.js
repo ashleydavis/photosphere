@@ -22,7 +22,7 @@ const metadata = [
         "hash": "80f447731e9107ec1499c90870b131d27f31b78d5cd1d4cc44e21805da924176",
         "fileDate": new Date("2023-02-07T21:57:22Z"),
         "photoDate": new Date("2023-02-07T21:57:22Z"),
-        "setId": "test-collection",
+        "setId": "demo",
       }
 ];
 

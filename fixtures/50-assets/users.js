@@ -1,14 +1,14 @@
 const users = [
     {
         "_id": "test-user",
-        "defaultSet": "test-collection",
+        "defaultSet": "demo",
         "sets": [
             {
-                "id": "test-collection",
-                "name": "Test collection",
+                "id": "demo",
+                "name": "Demo collection",
             },
             {
-                "id": "test-collection-empty",
+                "id": "empty",
                 "name": "Empty collection",
             },
         ],

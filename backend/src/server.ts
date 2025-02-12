@@ -106,17 +106,16 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Attaches user information to the request.
         //
         app.use(async (req, res, next) => {
-            req.userId = 'test-user';
-            req.user = { // Mock user.
-                _id: 'test-user',
-                defaultSet: `demo`,
-                sets: [
-                    {
-                        id: `demo`,
-                        name: `Demo`,
-                    },
-                ],
-            }; 
+            req.userId = 'test-user'; //TOOD: This could be set by env var.
+
+            const user = await db.collection<IUser>("users").findOne({ _id: req.userId });
+            if (!user) {
+                console.log(`User not found: ${req.userId}`);
+                res.sendStatus(401);
+                return;
+            }
+
+            req.user = user;
             next();
         });
     }

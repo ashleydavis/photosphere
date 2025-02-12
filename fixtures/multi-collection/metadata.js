@@ -23,7 +23,7 @@ const metadata = [
         "hash" : "25c6d5bd92f9ef375e50b80196030e2903e4b9be896dce8a2fdfe7a8a3c1f365",
         "fileDate" : new Date("2023-01-09T04:36:22Z"),
         "photoDate" : new Date("2023-01-09T04:36:22Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 2 */
     {
@@ -49,7 +49,7 @@ const metadata = [
         "hash" : "39f8c3599cfee13335143cbd2e7893ef5fbd1b0454aaa6e7f51c47eadc9366fa",
         "fileDate" : new Date("2023-01-09T15:50:46Z"),
         "photoDate" : new Date("2023-01-09T15:50:46Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 3 */
     {
@@ -75,7 +75,7 @@ const metadata = [
         "hash" : "460b3f18faaed8f6841d44f3fd91916fec29b6fc68eaf3fb0cacd55b9f153499",
         "fileDate" : new Date("2023-01-12T19:26:04Z"),
         "photoDate" : new Date("2023-01-12T19:26:04Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 4 */
     {
@@ -100,7 +100,7 @@ const metadata = [
         "hash" : "c3638f7d122c33f10c42f6ed792c7954018f050a35b13d1a2ad123f0fee783b6",
         "fileDate" : new Date("2023-01-13T15:21:25Z"),
         "photoDate" : new Date("2023-01-13T15:21:25Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 5 */
     {
@@ -125,7 +125,7 @@ const metadata = [
         "hash" : "419726ceacd326c0016991a00f9df1e712cf4798f77357ee5599b2be0d64a3f6",
         "fileDate" : new Date("2023-01-13T22:34:00Z"),
         "photoDate" : new Date("2023-01-13T22:34:00Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 6 */
     {
@@ -150,7 +150,7 @@ const metadata = [
         "hash" : "3ccb5904127ed37f291b5979a909366f062f1f97b03d7c5005d0a0c29c9f84d9",
         "fileDate" : new Date("2023-01-16T20:21:03Z"),
         "photoDate" : new Date("2023-01-16T20:21:03Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 7 */
     {
@@ -176,7 +176,7 @@ const metadata = [
         "hash" : "d09dc11087b1fb93881ba61c75831e29c39d74191e505e95c82d63a922a3ea87",
         "fileDate" : new Date("2023-01-16T21:35:04Z"),
         "photoDate" : new Date("2023-01-16T21:35:04Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 8 */
     {
@@ -201,7 +201,7 @@ const metadata = [
         "hash" : "abb523db3ba1b12c7624b8a5acc341beaa8d0df028d0301f7aacfde528e1c220",
         "fileDate" : new Date("2023-01-17T16:33:15Z"),
         "photoDate" : new Date("2023-01-17T16:33:15Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 9 */
     {
@@ -227,7 +227,7 @@ const metadata = [
         "hash" : "504345bccaa98396af0535e84947ece609ebd361efae26e7cffd35c12fdb2a12",
         "fileDate" : new Date("2023-01-19T16:52:05Z"),
         "photoDate" : new Date("2023-01-19T16:52:05Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 10 */
     {
@@ -253,7 +253,7 @@ const metadata = [
         "hash" : "5e1cbd39f832e0d67ad4833a91a376e028a560cdc3946b987a987ba8afc7463d",
         "fileDate" : new Date("2023-01-22T21:35:05Z"),
         "photoDate" : new Date("2023-01-22T21:35:05Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 11 */
     {
@@ -279,7 +279,7 @@ const metadata = [
         "hash" : "7f15396e65408570f54d266dd465e465b8329949991a1bbeaa4f98e6593f8441",
         "fileDate" : new Date("2023-01-23T06:06:50Z"),
         "photoDate" : new Date("2023-01-23T06:06:50Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 12 */
     {
@@ -304,7 +304,7 @@ const metadata = [
         "hash" : "20508a8e387bc6fbc59b597e1affe289b2fda461e3d472af2c83979de58b6815",
         "fileDate" : new Date("2023-01-23T21:06:37Z"),
         "photoDate" : new Date("2023-01-23T21:06:37Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 13 */
     {
@@ -329,7 +329,7 @@ const metadata = [
         "hash" : "a7db9b6e45bf43114c6ea9a38a9c0fbc44368ab96aee5687e44c9fe9a3cc8e1f",
         "fileDate" : new Date("2023-01-25T02:36:35Z"),
         "photoDate" : new Date("2023-01-25T02:36:35Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 14 */
     {
@@ -355,7 +355,7 @@ const metadata = [
         "hash" : "07e825f74bd7841abd03e1eda0ffcdb045abd19fcb3ebf2661daec1afc94b85b",
         "fileDate" : new Date("2023-01-27T22:48:28Z"),
         "photoDate" : new Date("2023-01-27T22:48:28Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 15 */
     {
@@ -380,7 +380,7 @@ const metadata = [
         "hash" : "e664fd9bd8f9e4d67b7647959134a5152277e4284bb615cbb6d987cc68aeafa4",
         "fileDate" : new Date("2023-01-28T18:33:13Z"),
         "photoDate" : new Date("2023-01-28T18:33:13Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 16 */
     {
@@ -406,7 +406,7 @@ const metadata = [
         "hash" : "17228a9a2757e30fbb12a23f2cdc564758dd509c7d947173c4b7d018f9a750cb",
         "fileDate" : new Date("2023-01-28T19:37:15Z"),
         "photoDate" : new Date("2023-01-28T19:37:15Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 17 */
     {
@@ -431,7 +431,7 @@ const metadata = [
         "hash" : "45409a02deead8e49ae06d47eb9d09b49005b688d6016459f358a504ab1b0d87",
         "fileDate" : new Date("2023-01-29T21:19:53Z"),
         "photoDate" : new Date("2023-01-29T21:19:53Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 18 */
     {
@@ -457,7 +457,7 @@ const metadata = [
         "hash" : "d905df09a4709066722677eff7815a5bbb7939e2406367043f85b7920c2ab544",
         "fileDate" : new Date("2023-01-30T06:27:38Z"),
         "photoDate" : new Date("2023-01-30T06:27:38Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 19 */
     {
@@ -482,7 +482,7 @@ const metadata = [
         "hash" : "ba21e6dadd970312facdd2ce412c311151476de2eedcc1dcc3a6c6f0ae415934",
         "fileDate" : new Date("2023-01-30T19:46:02Z"),
         "photoDate" : new Date("2023-01-30T19:46:02Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 20 */
     {
@@ -508,7 +508,7 @@ const metadata = [
         "hash" : "c30c32312c81396af09ab7d49b230d51ee97124b6f2532a2a556db36d71a501b",
         "fileDate" : new Date("2023-01-31T17:24:52Z"),
         "photoDate" : new Date("2023-01-31T17:24:52Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 21 */
     {
@@ -534,7 +534,7 @@ const metadata = [
         "hash" : "681d21f0d674a54acf2881f51f4ee6f721a2a9b288ba0f3e261e16a2d48c8fac",
         "fileDate" : new Date("2023-01-31T20:27:28Z"),
         "photoDate" : new Date("2023-01-31T20:27:28Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 22 */
     {
@@ -559,7 +559,7 @@ const metadata = [
         "hash" : "64743a92a61a587730ceb444ccfcb535126315e993ae2932224a0716aa544c09",
         "fileDate" : new Date("2023-02-01T17:35:29Z"),
         "photoDate" : new Date("2023-02-01T17:35:29Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 23 */
     {
@@ -585,7 +585,7 @@ const metadata = [
         "hash" : "e6752c9bee24f7427dd85bfc45f0ec9582c951fb37ebfaef9e01950ad1a22a94",
         "fileDate" : new Date("2023-02-02T07:09:20Z"),
         "photoDate" : new Date("2023-02-02T07:09:20Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 24 */
     {
@@ -610,7 +610,7 @@ const metadata = [
         "hash" : "65148c4d1710631331e37a4bff52311bc449d68d5186e7cfbf9e94ffc8b593af",
         "fileDate" : new Date("2023-02-02T16:56:18Z"),
         "photoDate" : new Date("2023-02-02T16:56:18Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 25 */
     {
@@ -636,7 +636,7 @@ const metadata = [
         "hash" : "3de8a1e8307af46081027e5e8c6714c191b6bdbd522b1a005652a6f29f1b2fb5",
         "fileDate" : new Date("2023-02-02T19:45:52Z"),
         "photoDate" : new Date("2023-02-02T19:45:52Z"),
-		"setId": "test-collection-1"
+		"setId": "demo"
     },
     /* 26 */
     {
@@ -661,7 +661,7 @@ const metadata = [
         "hash" : "9de67bcbd8c2a996081461f66ecc766a494809cd29367d6a169f4a91519044e8",
         "fileDate" : new Date("2023-02-03T00:26:56Z"),
         "photoDate" : new Date("2023-02-03T00:26:56Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 27 */
     {
@@ -686,7 +686,7 @@ const metadata = [
         "hash" : "69ca616bccac1c64df31c29278f59fbf55ec09c4dafc4ed8ec1d85371fff73b0",
         "fileDate" : new Date("2023-02-05T09:22:19Z"),
         "photoDate" : new Date("2023-02-05T09:22:19Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 28 */
     {
@@ -712,7 +712,7 @@ const metadata = [
         "hash" : "80f447731e9107ec1499c90870b131d27f31b78d5cd1d4cc44e21805da924176",
         "fileDate" : new Date("2023-02-07T21:57:22Z"),
         "photoDate" : new Date("2023-02-07T21:57:22Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 29 */
     {
@@ -737,7 +737,7 @@ const metadata = [
         "hash" : "0664a7ce86769e3754495f8af1205067d6d5f15715c4cf57f795f85cf6a6dd83",
         "fileDate" : new Date("2023-02-09T14:49:56Z"),
         "photoDate" : new Date("2023-02-09T14:49:56Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 30 */
     {
@@ -762,7 +762,7 @@ const metadata = [
         "hash" : "ab21d7ac3be13b98855ac39db5e9c9e46c97e848fef2c1876953d8ff586b455e",
         "fileDate" : new Date("2023-02-10T17:25:56Z"),
         "photoDate" : new Date("2023-02-10T17:25:56Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 31 */
     {
@@ -788,7 +788,7 @@ const metadata = [
         "hash" : "c7785d7fa96e932e97bc9c41bc0cf3f017daf77899ae421d848e1a2d9557f15c",
         "fileDate" : new Date("2023-01-12T22:54:12Z"),
         "photoDate" : new Date("2023-01-12T22:54:12Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 32 */
     {
@@ -813,7 +813,7 @@ const metadata = [
         "hash" : "c5c8c7a95c777994e1c7dec0b830e8fc29a6ee25881bb10492897727e02d02bf",
         "fileDate" : new Date("2023-01-13T14:11:04Z"),
         "photoDate" : new Date("2023-01-13T14:11:04Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 33 */
     {
@@ -838,7 +838,7 @@ const metadata = [
         "hash" : "380179fdd2d496276ae39cd85246045ab73c0e817ee50017fb9afe169c3e92ab",
         "fileDate" : new Date("2023-01-14T01:32:34Z"),
         "photoDate" : new Date("2023-01-14T01:32:34Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 34 */
     {
@@ -864,7 +864,7 @@ const metadata = [
         "hash" : "9ca378e5cf846c4b78a3cf6eb515558eb62fd8ca88cc2800aa588a0903c464ee",
         "fileDate" : new Date("2023-01-14T01:48:52Z"),
         "photoDate" : new Date("2023-01-14T01:48:52Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 35 */
     {
@@ -889,7 +889,7 @@ const metadata = [
         "hash" : "477f1dbde89658e34813fff1107b5b1dec077f0ef5dd1d56b7e5ef14439932c4",
         "fileDate" : new Date("2023-01-17T16:20:35Z"),
         "photoDate" : new Date("2023-01-17T16:20:35Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 36 */
     {
@@ -914,7 +914,7 @@ const metadata = [
         "hash" : "c70b2a0ebd7b97ba256b0e82677a28afd647fb0520c148cd51193f60a927568e",
         "fileDate" : new Date("2023-01-17T18:25:14Z"),
         "photoDate" : new Date("2023-01-17T18:25:14Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 37 */
     {
@@ -940,7 +940,7 @@ const metadata = [
         "hash" : "b7b4fa54dbda2c3218abb48ea4af8620ece637a4af9d08b92dd5850ea3b76696",
         "fileDate" : new Date("2023-01-18T16:59:18Z"),
         "photoDate" : new Date("2023-01-18T16:59:18Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 38 */
     {
@@ -966,7 +966,7 @@ const metadata = [
         "hash" : "0766b644a3f7b5afa8e260a630e2d639db273ecd24fbcfc7f8211930a44405c0",
         "fileDate" : new Date("2023-01-23T08:21:41Z"),
         "photoDate" : new Date("2023-01-23T08:21:41Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 39 */
     {
@@ -992,7 +992,7 @@ const metadata = [
         "hash" : "dc5d065ee0d2c8eb01ae14b6c2b82014b810beaec4d8bd1c0bc3aa48f702696e",
         "fileDate" : new Date("2023-01-23T18:54:30Z"),
         "photoDate" : new Date("2023-01-23T18:54:30Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 40 */
     {
@@ -1018,7 +1018,7 @@ const metadata = [
         "hash" : "63e0696d186d1851b739552b1d4e1e93b9c3cb5a7843e73793ac48da046befe0",
         "fileDate" : new Date("2023-01-23T18:59:57Z"),
         "photoDate" : new Date("2023-01-23T18:59:57Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 41 */
     {
@@ -1043,7 +1043,7 @@ const metadata = [
         "hash" : "553520d9686d63c49ca180fc9169f4a5d7329d5cb4c8b2be4ef205e1ea5797a8",
         "fileDate" : new Date("2023-01-23T21:06:37Z"),
         "photoDate" : new Date("2023-01-23T21:06:37Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 42 */
     {
@@ -1068,7 +1068,7 @@ const metadata = [
         "hash" : "f585fe0383fcbfb208b621c4a9dce0835545c465c637c7940cf5a06c843ed1cd",
         "fileDate" : new Date("2023-01-25T01:09:13Z"),
         "photoDate" : new Date("2023-01-25T01:09:13Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 43 */
     {
@@ -1094,7 +1094,7 @@ const metadata = [
         "hash" : "290cc76da5c4528711e36be80c6db2ae341cecd9a50c0f13e1c38614cf834f58",
         "fileDate" : new Date("2023-01-25T11:09:29Z"),
         "photoDate" : new Date("2023-01-25T11:09:29Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 44 */
     {
@@ -1119,7 +1119,7 @@ const metadata = [
         "hash" : "51eb0f882a47f162b31e2c01f4ce6d58412557978b4fc825a402c26d2cef67d1",
         "fileDate" : new Date("2023-01-25T19:01:09Z"),
         "photoDate" : new Date("2023-01-25T19:01:09Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 45 */
     {
@@ -1144,7 +1144,7 @@ const metadata = [
         "hash" : "305833625ad85adb6778c3bbb512b5a08fe577bf1536c1864b24307e25cd317f",
         "fileDate" : new Date("2023-01-28T23:35:43Z"),
         "photoDate" : new Date("2023-01-28T23:35:43Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 46 */
     {
@@ -1170,7 +1170,7 @@ const metadata = [
         "hash" : "11d4ef27322a97821d683746421605385a3b7f2a257cb663a233125a1f4074eb",
         "fileDate" : new Date("2023-01-29T04:12:02Z"),
         "photoDate" : new Date("2023-01-29T04:12:02Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 47 */
     {
@@ -1195,7 +1195,7 @@ const metadata = [
         "hash" : "7f76e8f047a9eaea2463e9a3f79429dcb5cdcaf40a16e156fd5020f3e2fdda7a",
         "fileDate" : new Date("2023-01-29T21:52:42Z"),
         "photoDate" : new Date("2023-01-29T21:52:42Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 48 */
     {
@@ -1220,7 +1220,7 @@ const metadata = [
         "hash" : "4374e98d33bcd9e6033738a597653e49d92d3d1fdffce75f4122b8c9728cc0f7",
         "fileDate" : new Date("2023-01-30T05:16:59Z"),
         "photoDate" : new Date("2023-01-30T05:16:59Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 49 */
     {
@@ -1245,7 +1245,7 @@ const metadata = [
         "hash" : "25bc960e37a49183fc5dd8aef81aa53d603565e7bdbb3bf8b0d835c2db5a8ead",
         "fileDate" : new Date("2023-01-30T05:16:59Z"),
         "photoDate" : new Date("2023-01-30T05:16:59Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
     /* 50 */
     {
@@ -1271,7 +1271,7 @@ const metadata = [
         "hash" : "76a3438febf8a96a1fd0b1515017dc5ca3d7f3372ee69e84ce4de58cd3327501",
         "fileDate" : new Date("2023-01-30T05:37:55Z"),
         "photoDate" : new Date("2023-01-30T05:37:55Z"),
-		"setId": "test-collection-2"
+		"setId": "other-collection"
     },
 ];
 
@@ -1287,8 +1287,8 @@ module.exports = metadata;
 
 // async function main() {
 //     for (const m of collection2) {
-//         await fs.move(`./files/collections/test-collection-1/thumb/${m._id}`, `./files/collections/test-collection-2/thumb/${m._id}`);
-//         await fs.move(`./files/collections/test-collection-1/thumb/${m._id}.info`, `./files/collections/test-collection-2/thumb/${m._id}.info`);
+//         await fs.move(`./files/collections/demo/thumb/${m._id}`, `./files/collections/other-collection/thumb/${m._id}`);
+//         await fs.move(`./files/collections/demo/thumb/${m._id}.info`, `./files/collections/other-collection/thumb/${m._id}.info`);
 //     }
 // }
 
