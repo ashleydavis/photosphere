@@ -168,9 +168,29 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
             // console.log(`OK: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} matches existing hash`);
         }
 
+        //
+        // Attempt to fix existing asset date:
+        //
+
         const assetData = await getAssetMetadata(existingAssetId);
         if (assetData.photoDate === undefined) {
             console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
+
+            if (assetData.properties.metadata.ModifyDate) {
+                try {
+                    const photoDate = dayjs(assetData.properties.metadata.ModifyDate, "YYYY:MM:DD HH:mm:ss").toISOString();
+
+                    await updateAsset(existingAssetId, { photoDate });
+
+                    console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
+
+                    return;
+                }
+                catch (err) {
+                    console.error(`Failed to parse date from exif ModifyDate: ${assetData.properties.metadata.ModifyDate}`);
+                    console.error(err);
+                }
+            }
 
             //
             // See if we can get photo date from the JSON file.
@@ -187,6 +207,8 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
                         await updateAsset(existingAssetId, { photoDate });
 
                         console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
+
+                        return;
                     }
                     catch (err) {
                         console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
@@ -821,7 +843,7 @@ async function getImageMetadata(filePath: string, fileData: Buffer, contentType:
                 }
             }
 
-            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized", "ModifyDate"];
             for (const dateField of dateFields) {
                 const dateStr = exif.tags[dateField];
                 if (dateStr) {

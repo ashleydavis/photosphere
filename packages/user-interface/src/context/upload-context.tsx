@@ -366,7 +366,7 @@ export function UploadContextProvider({ children }: IProps) {
                     }
                 }
 
-                const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized"];
+                const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized", "ModifyDate"];
                 for (const dateField of dateFields) {
                     const dateStr = exif[dateField];
                     if (dateStr) {
