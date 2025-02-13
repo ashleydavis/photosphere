@@ -8,6 +8,7 @@ const ColorThief = require("colorthief");
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { getImageResolution, resizeImage } from "node-utils";
+import { IAsset } from "defs";
 dayjs.extend(customParseFormat);
 
 async function main() {
@@ -81,31 +82,27 @@ async function main() {
         queryOffset += documents.length;
 
         for (const batch of _.chunk(documents, batchSize)) {
-            await Promise.all(batch.map(async (document: any) => {
+            await Promise.all(batch.map(async (document: IAsset) => {
 
                 try {
-                    const thumbInfo = await getAssetInfoWithRetry(storage, document._id, document.setId, "thumb");
-                    if (thumbInfo) {
-                        //
-                        // Compute micro thumb and set it as a new field.
-                        //
-                        const thumb = await readAssetWithRetry(storage, document._id, document.setId, "thumb");
-                        if (thumb) {
-                            const resolution = await getImageResolution(thumb);
-                            const micro = await resizeImage(thumb,  resolution, 40, 75);
+                    if (document.labels?.includes("new")) {
+                        
+                        const labels = document.labels.filter(label => label !== "new");
 
-                            await metadataCollection.updateOne(
-                                { _id: document._id }, 
-                                { 
-                                    $set: { 
-                                        micro: micro.toString("base64"),
-                                        color: await ColorThief.getColor(micro),
-                                    },
-                                }
-                            );
-                            
-                            numUpdated += 1;
-                        }
+                        console.log(`Updating labels for ${document._id}`);
+                        console.log(`Old: ${document.labels.join(", ")}`);
+                        console.log(`New: ${labels.join(", ")}`);
+
+                        await metadataCollection.updateOne(
+                            { _id: document._id }, 
+                            { 
+                                $set: { 
+                                    labels,
+                                },
+                            }
+                        );
+                        
+                        numUpdated += 1;
                     }
 
                 }
