@@ -234,6 +234,8 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
 
     let assetDetails: IAssetDetails;
 
+    let description = "";
+
     //
     // Get asset resolution.
     //
@@ -254,11 +256,17 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
             // If it crashed, fix the image and try again.
             //
             execSync(`cp "${filePath}" "${filePath}.bak"`);
-            execSync(`magick "${filePath}" "${filePath}"`);
+            execSync(`magick "${filePath}" "${filePath}"`); //TODO: For general uses we should be making no change to their image collections. The correct file should go in a temporary directory.
 
             numAssetsCorrected += 1;
 
             assetDetails = await getImageDetails(filePath, fileData, contentType);
+
+            labels.push("potentially corrupted");
+            description = "We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'";
+
+            console.error(`This file potentially corrupted: ${filePath}`);
+            console.error("We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'");
         }
     }
 
@@ -338,7 +346,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         uploadDate: dayjs().toISOString(),
         properties,
         labels,
-        description: "",
+        description,
         userId: config.userId,
         micro: assetDetails.micro.toString("base64"),
         color: await ColorThief.getColor(assetDetails.thumbnail),
