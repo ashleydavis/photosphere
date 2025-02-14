@@ -740,7 +740,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         return searchedItems;
     }
 
-    const defaultSearchFields = [ "location", "description", "labels", "origFileName", "origPath", "contentType" ];
+    const defaultSearchFields = [ "_id", "hash", "location", "description", "labels", "origFileName", "origPath", "contentType" ];
 
     //
     // Search for assets based on text input.
