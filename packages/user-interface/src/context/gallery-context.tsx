@@ -711,6 +711,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         searchFields = searchFields.map(field => field.toLowerCase());
 
         for (const item of items) {
+
+            let matches = false;
+
             for (const searchedFieldName of searchFields) {
                 //
                 // Find the lower case field name in the item.
@@ -718,11 +721,19 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
                 for (const [actualFieldName, fieldValue] of Object.entries(item)) {
                     if (actualFieldName.toLowerCase().includes(searchedFieldName)) {
                         if (valueMatches(fieldValue, searchTextLwr)) {
-                            searchedItems.push(item);
+                            matches = true;
                             break;
                         }
                     }
                 }
+
+                if (matches) {
+                    break;
+                }
+            }
+
+            if (matches) {
+                searchedItems.push(item);
             }
         }
 
