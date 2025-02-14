@@ -715,13 +715,18 @@ function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: 
 
         const thumbnailFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpg');
         ffmpeg(videoPath)
-            .on('end', () => {
-                resolve(fs.readFileSync(thumbnailFilePath));
-                fs.unlinkSync(thumbnailFilePath);
-            })
             .on('error', (err: any) => {
-                console.log(`Failed to load video file: ${videoPath}`); 
+                console.error(`Failed to load video file: ${videoPath}`); 
                 reject(err);
+            })
+            .on('end', () => {
+                if (!fs.pathExistsSync(thumbnailFilePath)) {
+                    console.error(`Failed to create thumbnail from video ${videoPath}`);
+                }
+                else {
+                    resolve(fs.readFileSync(thumbnailFilePath));
+                    fs.unlinkSync(thumbnailFilePath);
+                }
             })
             .screenshots({
                 count: 1,
