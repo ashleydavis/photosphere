@@ -621,8 +621,9 @@ async function getVideoDetails(filePath: string | undefined, fileData: Buffer): 
         await fs.writeFile(videoPath, fileData);
     }
 
+    const screenshot = await getVideoScreenshot(videoPath);
     let resolution = await getVideoResolution(videoPath);
-    let thumbnail = await getVideoThumbnail(videoPath, resolution, THUMBNAIL_MIN_SIZE);
+    let thumbnail = await resizeImage(screenshot, resolution, THUMBNAIL_MIN_SIZE);
     const assetDetails = await getVideoMetadata(videoPath);
 
     const imageTransformation = await getVideoTransformation(assetDetails.metadata);
@@ -697,22 +698,10 @@ async function getVideoResolution(videoPath: string): Promise<IResolution> {
 }
 
 //
-// Gets a thumbnail for a video.
+// Gets a screenshot from a video.
 //
-function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: number): Promise<Buffer> {
+function getVideoScreenshot(videoPath: string): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
-        let width: number;
-        let height: number;
-    
-        if (resolution.width > resolution.height) {
-            height = minSize;
-            width = Math.trunc((resolution.width / resolution.height) * minSize);
-        } 
-        else {
-            height = Math.trunc((resolution.height / resolution.width) * minSize);
-            width = minSize;
-        }
-
         const thumbnailFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpg');
         ffmpeg(videoPath)
             .on('error', (err: any) => {
@@ -732,7 +721,6 @@ function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: 
                 count: 1,
                 folder: path.dirname(thumbnailFilePath),
                 filename: path.basename(thumbnailFilePath),
-                size: `${width}x${height}`, 
             });
     });
 }
