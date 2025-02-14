@@ -176,7 +176,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         if (assetData.photoDate === undefined) {
             console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
 
-            if (assetData.properties.metadata.ModifyDate) {
+            if (assetData.properties?.metadata?.ModifyDate) {
                 try {
                     const photoDate = dayjs(assetData.properties.metadata.ModifyDate, "YYYY:MM:DD HH:mm:ss").toISOString();
 
