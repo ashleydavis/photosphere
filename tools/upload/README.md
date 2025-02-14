@@ -17,6 +17,16 @@ cd photosphere
 pnpm install
 ```
 
+## Image Magick
+
+Certain files may require processing by Image Magick. Install it from here:
+
+https://imagemagick.org/
+
+Make sure the command `magick` is available from your path.
+
+## Running the upload tool
+
 Compile code:
 
 ```bash
@@ -37,3 +47,4 @@ pnpm run start:dev
 ```
 
 
+ 
