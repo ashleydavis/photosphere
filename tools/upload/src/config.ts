@@ -10,9 +10,7 @@ export const ignoreDirs = [
 ];
 export const clientId = "paste client id here";
 export const userId = "paste user id here";
-export const labels = [
-    "new"
-];
+export const labels = [];
 export const batchSize = 10;
 export const maxAssets = undefined; // Set this to a number for a test run.
 
