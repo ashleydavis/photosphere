@@ -720,6 +720,7 @@ function getVideoThumbnail(videoPath: string, resolution: IResolution, minSize: 
                 fs.unlinkSync(thumbnailFilePath);
             })
             .on('error', (err: any) => {
+                console.log(`Failed to load video file: ${videoPath}`); 
                 reject(err);
             })
             .screenshots({
