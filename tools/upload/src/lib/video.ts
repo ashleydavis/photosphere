@@ -5,6 +5,7 @@ import os from "os";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./asset";
 import dayjs from "dayjs";
 import { resizeImage, transformImage, IResolution } from "node-utils";
+const { execSync } = require('child_process');
 
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPaths = require('ffmpeg-ffprobe-static');
@@ -20,7 +21,7 @@ export async function getVideoDetails(filePath: string | undefined, fileData: Bu
         await fs.writeFile(videoPath, fileData);
     }
 
-    const screenshot = await getVideoScreenshot(videoPath);
+    const screenshot = getVideoScreenshot(videoPath);
     let resolution = await getVideoResolution(videoPath);
     let thumbnail = await resizeImage(screenshot, resolution, THUMBNAIL_MIN_SIZE);
     const assetDetails = await getVideoMetadata(videoPath);
@@ -100,30 +101,19 @@ export async function getVideoResolution(videoPath: string): Promise<IResolution
 //
 // Gets a screenshot from a video.
 //
-export function getVideoScreenshot(videoPath: string): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
-        const thumbnailFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpg');
-        console.log(thumbnailFilePath); //fio:
-        ffmpeg(videoPath)
-            .on('error', (err: any) => {
-                console.error(`Failed to load video file: ${videoPath}`); 
-                reject(err);
-            })
-            .on('end', () => {
-                if (!fs.pathExistsSync(thumbnailFilePath)) {
-                    console.error(`Failed to create thumbnail from video ${videoPath}`);
-                }
-                else {
-                    resolve(fs.readFileSync(thumbnailFilePath));
-                    fs.unlinkSync(thumbnailFilePath);
-                }
-            })
-            .screenshots({
-                count: 1,
-                folder: path.dirname(thumbnailFilePath),
-                filename: path.basename(thumbnailFilePath),
-            });
-    });
+export function getVideoScreenshot(videoPath: string): Buffer {
+    const outputFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpeg');
+    const cmd = `${ffmpegPaths.ffmpegPath} -ss 0 -i "${videoPath}" -frames:v 1 -q:v 2 "${outputFilePath}"`;
+    console.log(cmd);
+    execSync(cmd);
+  
+    if (!fs.existsSync(outputFilePath)) {
+        throw new Error(`Failed to create thumbnail from video ${videoPath}`);
+    }
+
+    const screenshot = fs.readFileSync(outputFilePath);
+    fs.unlinkSync(outputFilePath);
+    return screenshot;
 }
 
 const videoLocationRegex = /([+-]\d+\.\d+)([+-]\d+\.\d+)/;
