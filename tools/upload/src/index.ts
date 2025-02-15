@@ -140,7 +140,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
 
         const assetData = await getAssetMetadata(existingAssetId);
         if (assetData.photoDate === undefined) {
-            console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
+            // console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
 
             if (assetData.properties?.metadata?.ModifyDate) {
                 try {
@@ -187,8 +187,8 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         return;
     }
     else if (existingAssetIds.length > 1) {
-        console.warn(`Multiple assets with hash ${hash} found:`);
-        console.warn(existingAssetIds);
+        // console.warn(`Multiple assets with hash ${hash} found:`);
+        // console.warn(existingAssetIds);
 
         numDuplicateAssets += 1;
         return;
