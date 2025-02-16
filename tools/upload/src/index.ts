@@ -122,67 +122,67 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         numAlreadyUploaded += 1;
 
         //
-        // Checks the exzisting file matches the hash of the local file.
+        // Checks the existing file matches the hash of the local file.
         //
-        const existingData = await downloadAssetData(config.uploadSetId, existingAssetId, "asset");
-        const existingHash = await computeHash(existingData);
-        if (hash !== existingHash) {
-            console.error(`BAD: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} does not match existing hash ${existingHash}`);
-            numUploadedWithNonMatchingHash += 1;
-        }
-        else {
-            // console.log(`OK: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} matches existing hash`);
-        }
+        // const existingData = await downloadAssetData(config.uploadSetId, existingAssetId, "asset");
+        // const existingHash = await computeHash(existingData);
+        // if (hash !== existingHash) {
+        //     console.error(`BAD: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} does not match existing hash ${existingHash}`);
+        //     numUploadedWithNonMatchingHash += 1;
+        // }
+        // else {
+        //     // console.log(`OK: Uploaded asset ${filePath} (${existingAssetId}) with hash ${hash} matches existing hash`);
+        // }
 
-        //
-        // Attempt to fix existing asset date:
-        //
+        // //
+        // // Attempt to fix existing asset date:
+        // //
 
-        const assetData = await getAssetMetadata(existingAssetId);
-        if (assetData.photoDate === undefined) {
-            // console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
+        // const assetData = await getAssetMetadata(existingAssetId);
+        // if (assetData.photoDate === undefined) {
+        //     // console.log(`No photo date for asset ${existingAssetId} with hash ${hash}`);
 
-            if (assetData.properties?.metadata?.ModifyDate) {
-                try {
-                    const photoDate = dayjs(assetData.properties.metadata.ModifyDate, "YYYY:MM:DD HH:mm:ss").toISOString();
+        //     if (assetData.properties?.metadata?.ModifyDate) {
+        //         try {
+        //             const photoDate = dayjs(assetData.properties.metadata.ModifyDate, "YYYY:MM:DD HH:mm:ss").toISOString();
 
-                    await updateAsset(existingAssetId, { photoDate });
+        //             await updateAsset(existingAssetId, { photoDate });
 
-                    console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
+        //             console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
 
-                    return;
-                }
-                catch (err) {
-                    console.error(`Failed to parse date from exif ModifyDate: ${assetData.properties.metadata.ModifyDate}`);
-                    console.error(err);
-                }
-            }
+        //             return;
+        //         }
+        //         catch (err) {
+        //             console.error(`Failed to parse date from exif ModifyDate: ${assetData.properties.metadata.ModifyDate}`);
+        //             console.error(err);
+        //         }
+        //     }
 
-            //
-            // See if we can get photo date from the JSON file.
-            //
-            const jsonFilePath = filePath + ".json";
-            if (await fs.pathExists(jsonFilePath)) {
-                const jsonFileData = await fs.readFile(jsonFilePath);
-                const photoData = JSON.parse(jsonFileData.toString());
-                if (photoData.photoTakenTime?.timestamp) {
-                    try {
-                        const photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
-                        console.log(`Parsed date ${assetData.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+        //     //
+        //     // See if we can get photo date from the JSON file.
+        //     //
+        //     const jsonFilePath = filePath + ".json";
+        //     if (await fs.pathExists(jsonFilePath)) {
+        //         const jsonFileData = await fs.readFile(jsonFilePath);
+        //         const photoData = JSON.parse(jsonFileData.toString());
+        //         if (photoData.photoTakenTime?.timestamp) {
+        //             try {
+        //                 const photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
+        //                 console.log(`Parsed date ${assetData.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
 
-                        await updateAsset(existingAssetId, { photoDate });
+        //                 await updateAsset(existingAssetId, { photoDate });
 
-                        console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
+        //                 console.log(`Updated asset ${existingAssetId} with photo date ${photoDate}`);
 
-                        return;
-                    }
-                    catch (err) {
-                        console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
-                        console.error(err);
-                    }    
-                }
-            }            
-        }
+        //                 return;
+        //             }
+        //             catch (err) {
+        //                 console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
+        //                 console.error(err);
+        //             }    
+        //         }
+        //     }            
+        // }
 
         return;
     }
