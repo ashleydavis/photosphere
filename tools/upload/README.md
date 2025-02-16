@@ -8,6 +8,8 @@ Run this to upload local assets.
 
 Edit [./src/config.js](./src/config.js) with the paths to upload.
 
+Increase the `batchSize` field to create more upload jobs to run in parallel for bigger computers.
+
 Set environment variable `GOOGLE_API_KEY` to your Google API key to enable reverse geocoding of GPS coordinates.
 
 Install dependencies for the monorepo:
