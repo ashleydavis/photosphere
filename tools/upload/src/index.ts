@@ -52,6 +52,11 @@ let numAssetsCorrected = 0;
 let numFailed = 0;
 
 //
+// List of failures.
+//
+const failures: { filePath: string, error: any }[] = [];
+
+//
 // File extensions for files to ignore.
 //
 const ignoreExts = [
@@ -356,105 +361,102 @@ export function getContentType(filePath: string): string | undefined {
     return extMap[ext];
 }
 
-async function main(): Promise<void> {
-
-    const files: string[] = [];
-    const failures: { filePath: string, error: any }[] = [];
-    const filesNotHandled: string[] = [];
-
-    //
-    // Validates an asset and returns the content type.
-    // Returns undefined if the asset is to be ignored.
-    //
-    function validateAsset(filePath: string): string | undefined {
-		for (const ignoreExt of ignoreExts) {
-			if (filePath.toLowerCase().endsWith(ignoreExt.toLowerCase())) {
-				numIgnored += 1;
-				//console.log(`Ignored ${filePath} due to ext ${ignoreExt}`);
-				return undefined;
-			}
-		}
-		
-		const ext = path.extname(filePath).toLowerCase();		
-
-        // Check if the file is a supported asset based on its extension.
-        const contentType = extMap[ext];
-        if (!contentType) {
-            filesNotHandled.push(filePath);
+//
+// Validates an asset and returns the content type.
+// Returns undefined if the asset is to be ignored.
+//
+function validateAsset(filePath: string): string | undefined {
+    for (const ignoreExt of ignoreExts) {
+        if (filePath.toLowerCase().endsWith(ignoreExt.toLowerCase())) {
+            numIgnored += 1;
+            //console.log(`Ignored ${filePath} due to ext ${ignoreExt}`);
             return undefined;
         }
+    }
+    
+    const ext = path.extname(filePath).toLowerCase();		
 
-        return contentType;
+    // Check if the file is a supported asset based on its extension.
+    const contentType = extMap[ext];
+    if (!contentType) {
+        return undefined;
     }
 
-    //
-    // Unpacks a zip file.
-    //
-    async function handleZipFile(filePath: string): Promise<void> {
-        // console.log(`Processing zip file: ${filePath}`);
+    return contentType;
+}
+
+//
+// Unpacks a zip file.
+//
+async function handleZipFile(filePath: string): Promise<void> {
+    // console.log(`Processing zip file: ${filePath}`);
+
+    const stats = await fs.stat(filePath);
+    const fileDate = dayjs(stats.birthtime).toISOString();
+
+    const zip = new JSZip();
+    const unpacked = await zip.loadAsync(await fs.readFile(filePath));
+    for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
+        if (!zipObject.dir) {
+            const fullPath = `${filePath}/${fileName}`;
+            // console.log(fullPath);
+
+            const contentType = validateAsset(fullPath);
+            if (!contentType) {
+                continue;
+            }
+
+            try {
+                const fileData = await zipObject.async("nodebuffer");
+            
+                await retry(() => uploadAsset(fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
+            }
+            catch (error: any) {
+                console.error(`Failed to upload asset: ${fullPath}`);
+                console.error(error.stack || error.message || error);
+                numFailed += 1; 
+                failures.push({ filePath, error });                
+            }
+        }
+    }
+}
+
+//
+// Handles a generic asset.
+//
+async function handleAsset(filePath: string): Promise<void> {
+    const contentType = validateAsset(filePath);
+    if (!contentType) {
+        return;
+    }
+
+    try {
+        if (contentType === "application/zip") {
+            await handleZipFile(filePath);
+            return;
+        }
+
+        //
+        // Load file data.
+        // 
+        const fileData = await fs.readFile(filePath);
 
         const stats = await fs.stat(filePath);
         const fileDate = dayjs(stats.birthtime).toISOString();
 
-        const zip = new JSZip();
-        const unpacked = await zip.loadAsync(await fs.readFile(filePath));
-        for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
-            if (!zipObject.dir) {
-                const fullPath = `${filePath}/${fileName}`;
-                // console.log(fullPath);
-
-                const contentType = validateAsset(fullPath);
-                if (!contentType) {
-                    continue;
-                }
-
-                try {
-                    const fileData = await zipObject.async("nodebuffer");
-                
-                    await retry(() => uploadAsset(fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
-                }
-                catch (error: any) {
-                    console.error(`Failed to upload asset: ${fullPath}`);
-                    console.error(error.stack || error.message || error);
-                    numFailed += 1; 
-                    failures.push({ filePath, error });                
-                }
-            }
-        }
+        await retry(() => uploadAsset(filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
     }
-	
-    //
-    // Handles a generic asset.
-    //
-	async function handleAsset(filePath: string): Promise<void> {
-        const contentType = validateAsset(filePath);
-        if (!contentType) {
-            return;
-        }
+    catch (error: any) {
+        console.error(`Failed to upload asset: ${filePath}`);
+        console.error(error.stack || error.message || error);
+        numFailed += 1; 
+        failures.push({ filePath, error });                
+    }
+}	
 
-		try {
-            if (contentType === "application/zip") {
-                await handleZipFile(filePath);
-                return;
-            }
+async function main(): Promise<void> {
 
-            //
-            // Load file data.
-            // 
-            const fileData = await fs.readFile(filePath);
-
-            const stats = await fs.stat(filePath);
-            const fileDate = dayjs(stats.birthtime).toISOString();
-
-            await retry(() => uploadAsset(filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
-		}
-		catch (error: any) {
-			console.error(`Failed to upload asset: ${filePath}`);
-			console.error(error.stack || error.message || error);
-			numFailed += 1; 
-			failures.push({ filePath, error });                
-		}
-	}	
+    const files: string[] = [];
 
     console.log(`Scanning for assets...`);
 
@@ -506,7 +508,6 @@ async function main(): Promise<void> {
     console.log(`Duplicate assets: ${numDuplicateAssets}`);
     console.log(`Assets corrected: ${numAssetsCorrected}`);
     console.log(`Failed: ${numFailed}`);
-    console.log(`Not handled: ${filesNotHandled.length}`);
 	console.log(`Ignored: ${numIgnored}`);
 
     await fs.ensureDir("./log/failures");
@@ -514,13 +515,6 @@ async function main(): Promise<void> {
     for (const chunk of _.chunk(failures, 10)) {
         await fs.writeFile(`./log/failures/failures_${failureIndex+1}.json`, JSON.stringify(chunk, null, 2));
         failureIndex += 1;
-    }
-
-    await fs.ensureDir("./log/not-handled");
-    let notHandledIndex = 0;
-    for (const chunk of _.chunk(filesNotHandled, 10)) {
-        await fs.writeFile(`./log/not-handled/not-handled-${notHandledIndex+1}.json`, JSON.stringify(chunk, null, 2));
-        notHandledIndex += 1;
     }
 
     await fs.writeFile("./log/summary.json", JSON.stringify({ 
@@ -532,7 +526,6 @@ async function main(): Promise<void> {
         numDuplicateAssets, 
         numAssetsCorrected,
         numFailed, 
-        numNotHandled: filesNotHandled.length,
     }, null, 2));
 }
 
