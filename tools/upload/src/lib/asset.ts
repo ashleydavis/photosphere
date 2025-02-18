@@ -69,5 +69,10 @@ export interface IAssetDetails {
     // Date of the asset.
     //
     photoDate?: string;
+
+    //
+    // Duration of the video, if known.
+    //
+    duration?: number;
 }
 

@@ -14,7 +14,7 @@ const ColorThief = require("colorthief");
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { IAssetDetails } from "./lib/asset";
 import { getImageDetails } from "./lib/image";
-import { getVideoDetails } from "./lib/video";
+import { getVideoDetails, getVideoMetadata } from "./lib/video";
 dayjs.extend(customParseFormat);
 
 if (!process.env.GOOGLE_API_KEY) {
@@ -307,6 +307,7 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
         hash,
         coordinates,
         location,
+        duration: assetDetails.duration,
         fileDate,
         photoDate: assetDetails.photoDate,
         uploadDate: dayjs().toISOString(),

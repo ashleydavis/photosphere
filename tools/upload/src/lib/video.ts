@@ -21,10 +21,10 @@ export async function getVideoDetails(filePath: string | undefined, fileData: Bu
         await fs.writeFile(videoPath, fileData);
     }
 
-    const screenshot = getVideoScreenshot(videoPath);
+    const assetDetails = await getVideoMetadata(videoPath);
+    const screenshot = getVideoScreenshot(videoPath, assetDetails.duration);
     let resolution = await getVideoResolution(videoPath);
     let thumbnail = await resizeImage(screenshot, resolution, THUMBNAIL_MIN_SIZE);
-    const assetDetails = await getVideoMetadata(videoPath);
 
     const imageTransformation = await getVideoTransformation(assetDetails.metadata);
     if (imageTransformation) {
@@ -101,9 +101,10 @@ export async function getVideoResolution(videoPath: string): Promise<IResolution
 //
 // Gets a screenshot from a video.
 //
-export function getVideoScreenshot(videoPath: string): Buffer {
+export function getVideoScreenshot(videoPath: string, duration: number | undefined): Buffer {
     const outputFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpeg');
-    const cmd = `${ffmpegPaths.ffmpegPath} -ss 0 -i "${videoPath}" -frames:v 1 -q:v 2 "${outputFilePath}"`;
+    const screenshotPosition = Math.min(duration ? duration / 2 : 0, 300); // Maxes out at 5 minutes into the video.
+    const cmd = `${ffmpegPaths.ffmpegPath} -y -ss ${screenshotPosition} -i "${videoPath}" -frames:v 1 -q:v 2 "${outputFilePath}"`;
     console.log(cmd);
     execSync(cmd);
   
@@ -136,7 +137,7 @@ function parseVideoLocation(location: string): ILocation | undefined {
 //
 // Gets the metadata data for a video.
 //
-export function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
+export function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string, duration?: number }> {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
             if (err) {
@@ -153,10 +154,16 @@ export function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, c
                     photoDate = metadata.format.tags.creation_time;
                 }
 
+                let duration: number | undefined = undefined;
+                if (metadata.format?.duration) {
+                    duration = metadata.format.duration;
+                }
+
                 resolve({
                     metadata,
                     coordinates,
                     photoDate,
+                    duration,
                 });
             }
         });

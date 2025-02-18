@@ -61,6 +61,11 @@ export interface IAsset {
     location?: string;
 
     //
+    // Duration of the video, if known.
+    //
+    duration?: number;
+
+    //
     // The date the file was created.
     //
     fileDate: string;
