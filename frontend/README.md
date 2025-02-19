@@ -70,6 +70,36 @@ live-server
 
 The web page should automatically be displayed in your browser.
 
+## Run the frontend locally in production mode
+
+Compile the whole project:
+
+```bash
+pnpm run compile
+```
+
+Compile in watch mode in another terminal, if you want to make changes to the code while it is running:
+
+```bash
+pnpm run compile:watch
+```
+
+Set environment variables:
+
+```bash
+export AUTH0_DOMAIN=...
+export AUTH0_CLIENT_ID=...
+export AUTH0_AUDIENCE=...
+export GOOGLE_API_KEY=...
+```
+
+Run it in prod mode:
+
+```bash
+cd photosphere/frontend
+pnpm run start:prod
+```
+
 ## Run automated tests
 
 ```bash

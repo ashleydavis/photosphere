@@ -24,7 +24,45 @@ pnpm run start:dev
 
 Install [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) and you can use the HTTP request scripts in `./test/backend.http` to test the endpoints in the REST API.
 
+## Run the backend locally in production mode
+
+Compile the whole project:
+
+```bash
+pnpm run compile
+```
+
+Compile in watch mode in another terminal, if you want to make changes to the code while it is running:
+
+```bash
+pnpm run compile:watch
+```
+
+Set the following environment variables:
+
+```bash
+export NODE_ENV=production
+export APP_MODE=readwrite
+export AUTH_TYPE=no-auth    
+export PORT=3000
+export DB_CONNECTION_STRING=...
+export DB_NAME=photosphere
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_BUCKET=photosphere-assets
+export AWS_DEFAULT_REGION=ap-southeast-2
+```
+
+Run the backend in production mode:
+
+```bash
+cd backend
+pnpm start
+```
+
 ## Run in production
+
+Make sure relevant environment variables are set.
 
 Start the application in production mode:
 
