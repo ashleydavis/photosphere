@@ -11,7 +11,7 @@ import { getVideoScreenshot } from "./lib/video";
 async function main() {
     const videoPath = "z:\\photos\\Photo Library\\Surrey Bike Ride.wmv";
 
-    const screenshot = getVideoScreenshot(videoPath);
+    const screenshot = getVideoScreenshot(videoPath, 10);
     console.log(screenshot);
 }
 
