@@ -25,6 +25,20 @@ if (!APP_MODE) {
     throw new Error("Expected APP_MODE environment variable set to 'readonly' or 'readwrite'");
 }
 
+const AUTH_TYPE = process.env.AUTH_TYPE;
+if (!AUTH_TYPE) {
+    throw new Error("Expected AUTH_TYPE environment variable set to 'auth0' or 'no-auth'");
+}
+else {
+    if (!process.env.AUTH0_AUDIENCE) {
+        throw new Error("Expected AUTH0_AUDIENCE environment variable");
+    }
+
+    if (!process.env.AUTH0_BASE_URL) {
+        throw new Error("Expected AUTH0_BASE_URL environment variable");
+    }
+}
+
 //
 // Starts the REST API.
 //
@@ -61,8 +75,8 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     if (process.env.AUTH_TYPE === "auth0") {
         
         const checkJwt = auth({
-            audience: process.env.AUTH0_AUDIENCE as string,
-            issuerBaseURL: process.env.AUTH0_BASE_URL as string,
+            audience: process.env.AUTH0_AUDIENCE!,
+            issuerBaseURL: process.env.AUTH0_BASE_URL!,
             tokenSigningAlg: 'RS256'        
         });
 

@@ -43,7 +43,9 @@ Set the following environment variables:
 ```bash
 export NODE_ENV=production
 export APP_MODE=readwrite
-export AUTH_TYPE=no-auth    
+export AUTH_TYPE=auth0
+export AUTH0_AUDIENCE=...
+export AUTH0_BASE_URL=...
 export PORT=3000
 export DB_CONNECTION_STRING=...
 export DB_NAME=photosphere
@@ -94,5 +96,5 @@ pnpm test
 ### Auth0 authentication details:
 
 Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
-- `AUTH0_DOMAIN`
 - `AUTH0_BASE_URL`
+- `AUTH0_AUDIENCE`
