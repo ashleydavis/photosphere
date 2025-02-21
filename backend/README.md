@@ -53,6 +53,7 @@ export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_BUCKET=photosphere-assets
 export AWS_DEFAULT_REGION=ap-southeast-2
+export AWS_ENDPOINT=... (if needed)
 ```
 
 Run the backend in production mode:
