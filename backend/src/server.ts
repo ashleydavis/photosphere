@@ -268,6 +268,8 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         const contentType = getHeader(req, "content-type");
         const assetType = getHeader(req, "asset-type");
 
+        console.log(`Receiving asset ${assetId} of type ${assetType} for set ${setId}.`);
+
         //
         // Load the entire asset into memory.
         // This is not ideal for large file, but the streaming alternative below
