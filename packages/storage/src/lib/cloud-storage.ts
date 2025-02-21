@@ -132,7 +132,7 @@ export class CloudStorage implements IStorage {
         };    
         
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 5 * 1024 * 1024, // 10 MB
+            partSize: 5 * 1024 * 1024, // 5 MB
             queueSize: 5,
         };
         
@@ -168,6 +168,7 @@ export class CloudStorage implements IStorage {
     // Writes an input stream to storage.
     //
     async writeStream(path: string, fileName: string, contentType: string, inputStream: Readable, contentLength?: number): Promise<void> {
+
         const params: aws.S3.Types.PutObjectRequest = {
             Bucket: this.bucket,
             Key: `${path}/${fileName}`,
@@ -177,7 +178,7 @@ export class CloudStorage implements IStorage {
         };    
 
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 5 * 1024 * 1024, // 10 MB
+            partSize: 5 * 1024 * 1024, // 5 MB
             queueSize: 5,
         };
         
