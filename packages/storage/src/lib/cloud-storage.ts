@@ -128,6 +128,7 @@ export class CloudStorage implements IStorage {
             Key: `${path}/${fileName}`,
             Body: data,
             ContentType: contentType,
+            ContentLength: data.length,
         };    
         
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
