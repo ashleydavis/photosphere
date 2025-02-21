@@ -262,13 +262,49 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             res.sendStatus(403); // Forbidden in readonly mode.
             return;
         }
-        
+
         const assetId = getHeader(req, "id");
         const setId = getHeader(req, "set");
         const contentType = getHeader(req, "content-type");
         const assetType = getHeader(req, "asset-type");
-        await storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, req);
+
+        //
+        // Load the entire asset into memory.
+        // This is not ideal for large file, but the streaming alternative below
+        // doesn't seem to work for large files anyway!
+        // 
+        const buffer = await new Promise<Buffer>((resolve, reject) => {
+            const chunks: any[] = [];
+            
+            req.on('data', chunk => chunks.push(chunk));
+            req.on('end', () => resolve(Buffer.concat(chunks)));
+            req.on('error', reject);
+        });        
+
+        await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, buffer);            
+
+        //
+        // Streaming alternative that doesn't work for large files.
+        // I tried many things to get this working for a 1.4 GB video file but couldn't get it completely uploaded.
+        // It always seemed to hang around the 650 MB mark.
+        // Using the `writeStream` function to stream directly from the file system works ok though, it's 
+        // only a problem when streaming the incoming HTTP POST request body to the cloud storage that it's an issue.
+        //
+
+        // const contentLength = parseInt(getHeader(req, "content-length"));
+        // const uploadPromise = storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, req, contentLength);
+
+        //
+        // Sends the response before the upload is complete.
+        // This prevent the client from waiting for the upload to complete (and timing out).
+        //
         res.sendStatus(200);
+
+        //
+        // Waits for the upload to complete.
+        // Alternate streaming code.
+        //
+        // await uploadPromise;
     }));
 
     //
