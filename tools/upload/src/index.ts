@@ -8,6 +8,7 @@ import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
 import { ILocation, retry, reverseGeocode, uuid } from "utils";
+import { CloudStorage, IStorage, writeAssetWithRetry } from "storage";
 const { execSync } = require('child_process');
 const ColorThief = require("colorthief");
 
@@ -113,7 +114,7 @@ let numIgnored = 0;
 //
 // Processes and uploads a single asset.
 //
-async function uploadAsset(filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer, labels: string[], fileDate: string): Promise<void> {
+async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer, labels: string[], fileDate: string): Promise<void> {
 
     //
     // Computes the hash and checks if we already uploaded this file.
@@ -244,18 +245,18 @@ async function uploadAsset(filePath: string, actualFilePath: string | undefined,
     //
     // Uploads the full asset.
     //
-    await uploadAssetData(config.uploadSetId, assetId, "asset", contentType, fileData);
+    await uploadAssetData(storage, config.uploadSetId, assetId, "asset", contentType, fileData);
 
     //
     // Uploads the thumbnail.
     //
-    await uploadAssetData(config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
+    await uploadAssetData(storage, config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
 
     if (assetDetails.display) {
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
-        await uploadAssetData(config.uploadSetId, assetId, "display", "image/jpg", assetDetails.display);
+        await uploadAssetData(storage, config.uploadSetId, assetId, "display", "image/jpg", assetDetails.display);
     }
 
     const properties: any = {};
@@ -388,7 +389,7 @@ function validateAsset(filePath: string): string | undefined {
 //
 // Unpacks a zip file.
 //
-async function handleZipFile(filePath: string): Promise<void> {
+async function handleZipFile(storage: IStorage, filePath: string): Promise<void> {
     // console.log(`Processing zip file: ${filePath}`);
 
     const stats = await fs.stat(filePath);
@@ -409,7 +410,7 @@ async function handleZipFile(filePath: string): Promise<void> {
             try {
                 const fileData = await zipObject.async("nodebuffer");
             
-                await retry(() => uploadAsset(fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
+                await retry(() => uploadAsset(storage, fullPath, undefined, contentType, fileData, ["From zip file"], fileDate), 3, 100);
             }
             catch (error: any) {
                 console.error(`Failed to upload asset: ${fullPath}`);
@@ -424,7 +425,7 @@ async function handleZipFile(filePath: string): Promise<void> {
 //
 // Handles a generic asset.
 //
-async function handleAsset(filePath: string): Promise<void> {
+async function handleAsset(storage: IStorage, filePath: string): Promise<void> {
     const contentType = validateAsset(filePath);
     if (!contentType) {
         return;
@@ -432,7 +433,7 @@ async function handleAsset(filePath: string): Promise<void> {
 
     try {
         if (contentType === "application/zip") {
-            await handleZipFile(filePath);
+            await handleZipFile(storage, filePath);
             return;
         }
 
@@ -444,7 +445,7 @@ async function handleAsset(filePath: string): Promise<void> {
         const stats = await fs.stat(filePath);
         const fileDate = dayjs(stats.birthtime).toISOString();
 
-        await retry(() => uploadAsset(filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
+        await retry(() => uploadAsset(storage, filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
     }
     catch (error: any) {
         console.error(`Failed to upload asset: ${filePath}`);
@@ -472,10 +473,17 @@ async function main(): Promise<void> {
 
     console.log(`Found ${files.length} assets.`);
 
+    const bucket = process.env.AWS_BUCKET as string;
+    if (!bucket) {
+        throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
+    }
+
+    const storage = new CloudStorage(bucket);
+
     let numProcessed = 0;
 
     for (const chunk of _.chunk(files, config.batchSize)) {
-        await Promise.all(chunk.map(handleAsset));
+        await Promise.all(chunk.map(filePath => handleAsset(storage, filePath)));
 
         numProcessed += chunk.length;
         if ((numProcessed % 100) === 0) {
@@ -571,23 +579,28 @@ export async function checkUploaded(setId: string, hash: string): Promise<string
 //
 // Uploads the data for an asset.
 //
-async function uploadAssetData(setId: string, assetId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
-    await axios.post(
-        `${config.backend}/asset`, 
-        data, 
-        {
-			maxContentLength: Infinity,
-			maxBodyLength: Infinity,
-            headers: {
-                "content-type": contentType,
-                set: setId,
-                id: assetId,
-                "asset-type": assetType,
-                Authorization: `Bearer ${config.token}`,
-                Accept: "application/json",
-            },
-        }
-    );
+async function uploadAssetData(storage: IStorage, setId: string, assetId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
+    // await axios.post(
+    //     `${config.backend}/asset`, 
+    //     data, 
+    //     {
+	// 		maxContentLength: Infinity,
+	// 		maxBodyLength: Infinity,
+    //         headers: {
+    //             "content-type": contentType,
+    //             set: setId,
+    //             id: assetId,
+    //             "asset-type": assetType,
+    //             Authorization: `Bearer ${config.token}`,
+    //             Accept: "application/json",
+    //         },
+    //     }
+    // );
+
+    //
+    // Now going directly to the cloud storage to avoid problems uploading through the API.
+    //
+    await writeAssetWithRetry(storage, assetId, setId, assetType, contentType, data);
 }
 
 //

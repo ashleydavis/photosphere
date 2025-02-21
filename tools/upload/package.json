@@ -25,7 +25,8 @@
     "lodash": "^4.17.21",
     "utils": "workspace:*",
     "node-utils": "workspace:*",
-    "colorthief": "^2.6.0"
+    "colorthief": "^2.6.0",
+    "storage": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.1",
