@@ -281,7 +281,17 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             req.on('error', reject);
         });        
 
+        console.log(`Have buffer in memory of ${buffer.length} bytes.`);
+
+        //
+        // Sends the response before the upload is complete.
+        // This prevent the client from waiting for the upload to complete (and timing out).
+        //
+        res.sendStatus(200);
+
         await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, buffer);            
+
+        console.log(`Uploaded ${buffer.length} bytes.`);
 
         //
         // Streaming alternative that doesn't work for large files.
@@ -298,7 +308,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Sends the response before the upload is complete.
         // This prevent the client from waiting for the upload to complete (and timing out).
         //
-        res.sendStatus(200);
+        // res.sendStatus(200);
 
         //
         // Waits for the upload to complete.
