@@ -55,6 +55,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     app.use(cors());
 
     app.get("/alive", (req, res) => {
+        console.log("Server is alive.");
         res.sendStatus(200);
     });
 
@@ -181,7 +182,9 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     function asyncErrorHandler(handler: (req: Request, res: Response) => Promise<void>) {
         return async (req: Request, res: Response) => {
             try {
+                console.log(`Handling ${req.method} ${req.path}`);
                 await handler(req, res);
+                console.log(`Handled ${req.method} ${req.path}`);
             }
             catch (err: any) {
                 console.error(`An error occured handling ${req.method} ${req.path}`);
