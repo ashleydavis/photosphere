@@ -1,9 +1,11 @@
 import { MongoClient } from "mongodb";
-import { CloudStorage, deleteAssetWithRetry, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { CloudStorage, deleteAssetWithRetry, EncryptedStorage, FileStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { sleep } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
 const fs = require("fs-extra");
 const ColorThief = require("colorthief");
+import crypto from "crypto";
 
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -85,26 +87,25 @@ async function main() {
             await Promise.all(batch.map(async (document: IAsset) => {
 
                 try {
-                    if (document.labels?.includes("new")) {
-                        
-                        const labels = document.labels.filter(label => label !== "new");
 
-                        console.log(`Updating labels for ${document._id}`);
-                        console.log(`Old: ${document.labels.join(", ")}`);
-                        console.log(`New: ${labels.join(", ")}`);
+                    if (document.encrypted) {
+                        console.log(`Asset ${document._id} is already encrypted.`);
+                        return;
+                    }
+                    else {
+                        //todo: encrypt the assets.
 
                         await metadataCollection.updateOne(
-                            { _id: document._id }, 
-                            { 
-                                $set: { 
-                                    labels,
+                            { _id: document._id },
+                            {
+                                $set: {
+                                    encrypted: true,
                                 },
                             }
                         );
-                        
+
                         numUpdated += 1;
                     }
-
                 }
                 catch (err) {
                     console.error(`Failed for asset ${document._id}.`);
@@ -138,9 +139,46 @@ async function main() {
     await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed, totalSize, averageSize }, null, 2));
 }
 
-main()
-    .catch(err => {
-        console.error(`Failed with error:`);
-        console.error(err);
-        process.exit(1);
-    });
+// main()
+//     .catch(err => {
+//         console.error(`Failed with error:`);
+//         console.error(err);
+//         process.exit(1);
+//     });
+
+(async () => {
+
+    const publicKey = crypto.createPublicKey(fs.readFileSync("./keys/public.pem"));
+    const privateKey = crypto.createPrivateKey(fs.readFileSync("./keys/private.pem"));
+
+    const fileStorage = new FileStorage("./test");
+    const encryptedStorage = new EncryptedStorage(fileStorage, publicKey, privateKey);
+
+    const readStream = fs.createReadStream("./src/index.ts");
+    await encryptedStorage.writeStream("test", "index.ts.enc", "text/plain", readStream);
+
+    const decryptedStream = await encryptedStorage.readStream("test", "index.ts.enc");
+    const writeStream = fs.createWriteStream("./src/index.ts.dec");
+    decryptedStream.pipe(writeStream);
+
+    await sleep(1000);
+
+    const file = fs.readFileSync("./src/index.ts");
+    const decryptedData = fs.readFileSync("./src/index.ts.dec");
+
+    // // Write the file to storage.
+    // await encryptedStorage.write("test", "index.ts.enc", "text/plain", file);
+
+    // // Read the file from storage.
+    // const decryptedData = await encryptedStorage.read("test", "index.ts.enc");
+
+    if (!file.equals(decryptedData)) {
+        throw new Error(`Decrypted data does not match the original data.`);
+    }
+    else {
+        console.log(`Decrypted data matches the original data.`);
+    }
+
+})();
+
+
