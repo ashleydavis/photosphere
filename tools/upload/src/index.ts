@@ -16,6 +16,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import { IAssetDetails } from "./lib/asset";
 import { getImageDetails } from "./lib/image";
 import { getVideoDetails, getVideoMetadata } from "./lib/video";
+const { serializeError } = require("serialize-error");
 dayjs.extend(customParseFormat);
 
 if (!process.env.GOOGLE_API_KEY) {
@@ -51,11 +52,6 @@ let numAssetsCorrected = 0;
 // Counts the number of failures.
 //
 let numFailed = 0;
-
-//
-// List of failures.
-//
-const failures: { filePath: string, error: any }[] = [];
 
 //
 // File extensions for files to ignore.
@@ -202,7 +198,7 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     
     const assetId = uuid();
 
-    // console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
+    console.log(`Uploading asset ${filePath} with id ${assetId} and hash ${hash}`);
 
     let assetDetails: IAssetDetails;
 
@@ -424,8 +420,13 @@ async function handleZipFile(storage: IStorage, filePath: string): Promise<void>
                 console.error(`Failed to upload asset: ${fullPath}`);
                 console.error(error.stack || error.message || error);
                 numFailed += 1; 
-                failures.push({ filePath, error });                
-            }
+
+                await fs.ensureDir("./log/failures");
+                await fs.writeFile(`./log/failures/${numFailed}.json`, JSON.stringify({
+                    filePath,
+                    error: serializeError(error),
+                }, null, 2));
+                    }
         }
     }
 }
@@ -459,7 +460,12 @@ async function handleAsset(storage: IStorage, filePath: string): Promise<void> {
         console.error(`Failed to upload asset: ${filePath}`);
         console.error(error.stack || error.message || error);
         numFailed += 1; 
-        failures.push({ filePath, error });                
+
+        await fs.ensureDir("./log/failures");
+        await fs.writeFile(`./log/failures/${numFailed}.json`, JSON.stringify({
+            filePath,
+            error: serializeError(error),
+        }, null, 2));
     }
 }	
 
@@ -475,6 +481,8 @@ async function main(): Promise<void> {
             files.push(filePath) 
         });
     }    
+
+    await fs.removeSync("./log");
 
     await fs.ensureDir("./log");
     await fs.writeFile("./log/files.json", JSON.stringify(files, null, 2));
@@ -525,13 +533,6 @@ async function main(): Promise<void> {
     console.log(`Assets corrected: ${numAssetsCorrected}`);
     console.log(`Failed: ${numFailed}`);
 	console.log(`Ignored: ${numIgnored}`);
-
-    await fs.ensureDir("./log/failures");
-    let failureIndex = 0;
-    for (const chunk of _.chunk(failures, 10)) {
-        await fs.writeFile(`./log/failures/failures_${failureIndex+1}.json`, JSON.stringify(chunk, null, 2));
-        failureIndex += 1;
-    }
 
     await fs.writeFile("./log/summary.json", JSON.stringify({ 
         numFiles: files.length, 
