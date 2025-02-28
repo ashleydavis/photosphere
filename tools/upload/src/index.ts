@@ -122,7 +122,7 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     const hash = await computeHash(fileData);    
     const existingAssetIds = await checkUploaded(config.uploadSetId, hash);
     if (existingAssetIds.length === 1) {
-        const existingAssetId = existingAssetIds[0];
+        // const existingAssetId = existingAssetIds[0];
 
         //console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
@@ -222,23 +222,31 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
             console.log(`Failed to get image details for ${filePath}:`);
             console.log(err);
 
-            console.log(`Will retry after fixing the image.`);
+            const backupFilePath = `${filePath}.bak`;
+            if (await fs.pathExists(backupFilePath)) {
+                console.log(`Backup file already exists ${backupFilePath}, won't try to fix it again.`);
 
-            //
-            // If it crashed, fix the image and try again.
-            //
-            execSync(`cp "${filePath}" "${filePath}.bak"`);
-            execSync(`magick "${filePath}" "${filePath}"`); //TODO: For general uses we should be making no change to their image collections. The correct file should go in a temporary directory.
+                throw err;
+            }
+            else {
+                console.log(`Will retry after fixing the image.`);
 
-            numAssetsCorrected += 1;
+                //
+                // If it crashed, fix the image and try again.
+                //
+                execSync(`cp "${filePath}" "${backupFilePath}"`);
+                execSync(`magick "${filePath}" "${filePath}"`); //TODO: For general uses we should be making no change to their image collections. The correct file should go in a temporary directory.
 
-            assetDetails = await getImageDetails(filePath, fileData, contentType);
+                numAssetsCorrected += 1;
 
-            labels.push("potentially corrupted");
-            description = "We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'";
+                assetDetails = await getImageDetails(filePath, fileData, contentType);
 
-            console.error(`This file potentially corrupted: ${filePath}`);
-            console.error("We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'");
+                labels.push("potentially corrupted");
+                description = "We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'";
+
+                console.error(`This file potentially corrupted: ${filePath}`);
+                console.error("We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'");
+            }
         }
     }
 
