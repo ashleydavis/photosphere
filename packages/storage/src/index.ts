@@ -3,6 +3,7 @@ import { IFileInfo, IStorage } from "./lib/storage";
 export * from "./lib/storage";
 export * from "./lib/cloud-storage";
 export * from "./lib/file-storage";
+export * from "./lib/encrypted-storage";
 
 export interface IAssetMetadata {
   //

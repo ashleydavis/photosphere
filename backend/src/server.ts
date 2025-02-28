@@ -30,12 +30,14 @@ if (!AUTH_TYPE) {
     throw new Error("Expected AUTH_TYPE environment variable set to 'auth0' or 'no-auth'");
 }
 else {
-    if (!process.env.AUTH0_AUDIENCE) {
-        throw new Error("Expected AUTH0_AUDIENCE environment variable");
-    }
+    if (AUTH_TYPE === "auth0") {
+        if (!process.env.AUTH0_AUDIENCE) {
+            throw new Error("Expected AUTH0_AUDIENCE environment variable");
+        }
 
-    if (!process.env.AUTH0_BASE_URL) {
-        throw new Error("Expected AUTH0_BASE_URL environment variable");
+        if (!process.env.AUTH0_BASE_URL) {
+            throw new Error("Expected AUTH0_BASE_URL environment variable");
+        }
     }
 }
 

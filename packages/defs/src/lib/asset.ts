@@ -115,4 +115,9 @@ export interface IAsset {
     // Helps hide the pop when thumbnails are loaded.
     //
     color: [number, number, number];
+
+    //
+    // Set to true once encrypted.
+    //
+    encrypted?: boolean;
 }
