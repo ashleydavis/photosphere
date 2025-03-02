@@ -2,6 +2,7 @@ import * as config from "./config";
 import { findAssets } from "./scan";
 import axios from "axios";
 import fs from "fs-extra";
+import os from "os";
 import path from "path";
 import dayjs from "dayjs";
 import { IAsset, IDatabaseOp } from "defs";
@@ -18,6 +19,8 @@ import { getImageDetails } from "./lib/image";
 import { getVideoDetails, getVideoMetadata } from "./lib/video";
 const { serializeError } = require("serialize-error");
 dayjs.extend(customParseFormat);
+
+import crypto from "node:crypto";
 
 if (!process.env.GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY environment variable not set.");
@@ -113,9 +116,39 @@ let numIgnored = 0;
 async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer, labels: string[], fileDate: string): Promise<void> {
 
     //
-    // Computes the hash and checks if we already uploaded this file.
+    // Load cached hash
     //
-    const hash = await computeHash(fileData);    
+    const hashCacheDir = path.join(os.tmpdir(), "ps-upload", config.clientId, "hashes");
+    const hashFilePath = path.join(hashCacheDir, `${filePath.slice(3)}.hash`);
+    let hash: string;
+
+    if (await fs.exists(hashFilePath)) {
+        hash = await fs.readFile(hashFilePath, "utf8");
+    }
+    else {
+        //
+        // Computes the hash and checks if we already uploaded this file.
+        //
+        if (fileData) {
+            //
+            // File data is already loaded.
+            //
+            hash = await computeHash(fileData);    
+        }
+        else {
+            //
+            // Stream the data.
+            //
+            hash = await computeStreamingHash(filePath);
+        }
+
+        //
+        // Cache the hash.
+        //
+        await fs.ensureDir(path.dirname(hashFilePath));
+        await fs.writeFile(hashFilePath, hash);
+    }
+
     const existingAssetIds = await checkUploaded(config.uploadSetId, hash);
     if (existingAssetIds.length === 1) {
         // const existingAssetId = existingAssetIds[0];
@@ -563,12 +596,37 @@ main()
 // https://www.npmjs.com/package/@peculiar/webcrypto
 // https://github.com/PeculiarVentures/webcrypto-docs/blob/master/README.md
 //
-export async function computeHash(data: Buffer) {
+export async function computeHash(data: Buffer): Promise<string> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
     return hashHex;
 }
+
+//
+// Computes a hash from a file stream.
+//
+export async function computeStreamingHash(filePath: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        const inputStream = fs.createReadStream(filePath);
+        const hash = crypto.createHash('sha256');
+
+        inputStream.on("data", (data: Buffer) => {
+            hash.update(data);
+        });
+
+        inputStream.on("end", () => {
+            const hashBuffer = hash.digest();
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+            resolve(hashHex);
+        });
+
+        inputStream.on("error", (err) => {
+            reject(err);
+        });
+    });
+}    
 
 //
 // Checks if the asset is already uploaded.
