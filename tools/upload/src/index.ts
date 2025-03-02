@@ -421,14 +421,21 @@ async function handleZipFile(storage: IStorage, filePath: string): Promise<void>
                 console.error(error.stack || error.message || error);
                 numFailed += 1; 
 
-                await fs.ensureDir("./log/failures");
-                await fs.writeFile(`./log/failures/${numFailed}.json`, JSON.stringify({
-                    filePath,
-                    error: serializeError(error),
-                }, null, 2));
-                    }
+                await logFailure(numFailed, filePath, error);
+            }
         }
     }
+}
+
+//
+// Log a particular failure to disk.
+//
+async function logFailure(failureNumber: number, filePath: string, error: any): Promise<void> {
+    await fs.ensureDir("./log/failures");
+    await fs.writeFile(`./log/failures/${failureNumber}.json`, JSON.stringify({
+        filePath,
+        error: serializeError(error),
+    }, null, 2));
 }
 
 //
@@ -461,11 +468,7 @@ async function handleAsset(storage: IStorage, filePath: string): Promise<void> {
         console.error(error.stack || error.message || error);
         numFailed += 1; 
 
-        await fs.ensureDir("./log/failures");
-        await fs.writeFile(`./log/failures/${numFailed}.json`, JSON.stringify({
-            filePath,
-            error: serializeError(error),
-        }, null, 2));
+        await logFailure(numFailed, filePath, error);
     }
 }	
 
