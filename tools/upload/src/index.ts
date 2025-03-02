@@ -123,7 +123,10 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     let hash: string;
 
     if (await fs.exists(hashFilePath)) {
-        hash = await fs.readFile(hashFilePath, "utf8");
+        //
+        // If the local hash file already exists, it means the asset is already uploaded.
+        numAlreadyUploaded += 1;
+        return;
     }
     else {
         //
@@ -141,12 +144,6 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
             //
             hash = await computeStreamingHash(filePath);
         }
-
-        //
-        // Cache the hash.
-        //
-        await fs.ensureDir(path.dirname(hashFilePath));
-        await fs.writeFile(hashFilePath, hash);
     }
 
     const existingAssetIds = await checkUploaded(config.uploadSetId, hash);
@@ -155,6 +152,12 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
 
         //console.log(`Already uploaded asset ${filePath} with hash ${hash}`);
         numAlreadyUploaded += 1;
+
+        //
+        // Cache the hash.
+        //
+        await fs.ensureDir(path.dirname(hashFilePath));
+        await fs.writeFile(hashFilePath, hash);
 
         //
         // Checks the existing file matches the hash of the local file.
@@ -226,6 +229,13 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
         // console.warn(existingAssetIds);
 
         numDuplicateAssets += 1;
+
+        //
+        // Cache the hash.
+        //
+        await fs.ensureDir(path.dirname(hashFilePath));
+        await fs.writeFile(hashFilePath, hash);
+
         return;
     }
     
@@ -371,6 +381,12 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     });   
 
     numUploads += 1;
+
+    //
+    // Cache the hash if the file is uploaded.
+    //
+    await fs.ensureDir(path.dirname(hashFilePath));
+    await fs.writeFile(hashFilePath, hash);
 
     console.log(`Uploaded asset ${filePath} (${contentType}) with id ${assetId} and hash ${hash}`);
 }
