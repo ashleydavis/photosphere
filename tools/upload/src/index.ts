@@ -113,7 +113,7 @@ let numIgnored = 0;
 //
 // Processes and uploads a single asset.
 //
-async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer, labels: string[], fileDate: string): Promise<void> {
+async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: string | undefined, contentType: string, fileData: Buffer | undefined, labels: string[], fileDate: string): Promise<void> {
 
     //
     // Load cached hash
@@ -236,6 +236,14 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     let assetDetails: IAssetDetails;
 
     let description = "";
+
+    if (!fileData) {
+        // 
+        // Load the file data at the last minute.
+        // TODO: This will have to be streaming to load large files.
+        //
+        fileData = await fs.readFile(filePath);
+    }
 
     //
     // Get asset resolution.
@@ -486,15 +494,10 @@ async function handleAsset(storage: IStorage, filePath: string): Promise<void> {
             return;
         }
 
-        //
-        // Load file data.
-        // 
-        const fileData = await fs.readFile(filePath);
-
         const stats = await fs.stat(filePath);
         const fileDate = dayjs(stats.birthtime).toISOString();
 
-        await retry(() => uploadAsset(storage, filePath, filePath, contentType, fileData, [], fileDate), 3, 100);
+        await retry(() => uploadAsset(storage, filePath, filePath, contentType, undefined, [], fileDate), 3, 100);
     }
     catch (error: any) {
         console.error(`Failed to upload asset: ${filePath}`);
