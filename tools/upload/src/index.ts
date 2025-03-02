@@ -510,16 +510,30 @@ async function handleAsset(storage: IStorage, filePath: string): Promise<void> {
 
 async function main(): Promise<void> {
 
-    const files: string[] = [];
+    let files: string[];
 
-    console.log(`Scanning for assets...`);
+    const cachedFilesList = path.join(os.tmpdir(), "ps-upload", "files", config.clientId, "files.json");
+    if (await fs.pathExists(cachedFilesList)) {
+        console.log(`Loading cached files list from ${cachedFilesList}`);
+        files = JSON.parse(await fs.readFile(cachedFilesList, "utf8"));
+    }
+    else {
+        console.log(`Scanning for assets...`);
 
-    for (const scanPath of config.paths) {        
-        console.log(`Scanning path: ${scanPath}`);
-        await findAssets(scanPath, config.ignoreDirs, async filePath => { 
-            files.push(filePath) 
-        });
-    }    
+        files = [];
+    
+        for (const scanPath of config.paths) {        
+            console.log(`Scanning path: ${scanPath}`);
+            await findAssets(scanPath, config.ignoreDirs, async filePath => { 
+                files.push(filePath) 
+            });
+        }    
+
+        await fs.ensureDir(path.dirname(cachedFilesList));
+        await fs.writeFile(cachedFilesList, JSON.stringify(files, null, 2));
+
+        console.log(`Cached files list to ${cachedFilesList}`);
+    }
 
     await fs.removeSync("./log");
 
