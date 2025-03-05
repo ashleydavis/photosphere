@@ -15,9 +15,13 @@ ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string | undefined, fileData: Buffer): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string | undefined, fileData: Buffer | undefined): Promise<IAssetDetails> {
     const videoPath = filePath || path.join(os.tmpdir(), uuid());
     if (!filePath) {
+        if (!fileData) {
+            throw new Error('Either filePath or fileData must be provided');
+        }
+        
         await fs.writeFile(videoPath, fileData);
     }
 

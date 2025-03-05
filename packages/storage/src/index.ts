@@ -1,4 +1,5 @@
 import { IFileInfo, IStorage } from "./lib/storage";
+import fs from "fs";
 
 export * from "./lib/storage";
 export * from "./lib/cloud-storage";
@@ -141,5 +142,27 @@ export async function deleteAssetWithRetry(storage: IStorage, assetId: string, s
         }
     }
     
+    throw lastErr;
+}
+
+//
+// Uploads a file stream with retries.
+//
+export async function uploadFileStreamWithRetry(filePath: string, storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const fileStream = fs.createReadStream(filePath);
+            await storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, fileStream);            
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to upload file ${filePath} to ${assetType}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
     throw lastErr;
 }

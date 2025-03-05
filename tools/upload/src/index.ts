@@ -9,7 +9,7 @@ import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
 import { ILocation, retry, reverseGeocode, uuid } from "utils";
-import { CloudStorage, IStorage, writeAssetWithRetry } from "storage";
+import { CloudStorage, IStorage, streamAssetWithRetry, uploadFileStreamWithRetry, writeAssetWithRetry } from "storage";
 const { execSync } = require('child_process');
 const ColorThief = require("colorthief");
 
@@ -249,14 +249,6 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
 
     let description = "";
 
-    if (!fileData) {
-        // 
-        // Load the file data at the last minute.
-        // TODO: This will have to be streaming to load large files.
-        //
-        fileData = await fs.readFile(filePath);
-    }
-
     //
     // Get asset resolution.
     //
@@ -265,6 +257,12 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     }
     else {
         try {
+            //
+            // Just assume we can always load the file data into memory.
+            // Some videos will be too big for this.
+            //
+            fileData = await fs.readFile(filePath);
+
             assetDetails = await getImageDetails(filePath, fileData, contentType);
         }
         catch (err) {
@@ -287,8 +285,8 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
                 execSync(`magick "${filePath}" "${filePath}"`); //TODO: For general uses we should be making no change to their image collections. The correct file should go in a temporary directory.
 
                 numAssetsCorrected += 1;
-
-                assetDetails = await getImageDetails(filePath, fileData, contentType);
+                
+                assetDetails = await getImageDetails(filePath, fileData!, contentType);
 
                 labels.push("potentially corrupted");
                 description = "We attempted to correct this potentially corrupted file and added the label 'potenially corrupted'";
@@ -302,18 +300,18 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     //
     // Uploads the full asset.
     //
-    await uploadAssetData(storage, config.uploadSetId, assetId, "asset", contentType, fileData);
+    await uploadAssetData(storage, config.uploadSetId, assetId, "asset", contentType, filePath, fileData);
 
     //
     // Uploads the thumbnail.
     //
-    await uploadAssetData(storage, config.uploadSetId, assetId, "thumb", "image/jpg", assetDetails.thumbnail);
+    await uploadAssetData(storage, config.uploadSetId, assetId, "thumb", "image/jpg", undefined, assetDetails.thumbnail);
 
     if (assetDetails.display) {
         //
         // Uploads the display asset separately for simplicity and no restriction on size.
         //
-        await uploadAssetData(storage, config.uploadSetId, assetId, "display", "image/jpg", assetDetails.display);
+        await uploadAssetData(storage, config.uploadSetId, assetId, "display", "image/jpg", undefined, assetDetails.display);
     }
 
     const properties: any = {};
@@ -686,7 +684,7 @@ export async function checkUploaded(setId: string, hash: string): Promise<string
 //
 // Uploads the data for an asset.
 //
-async function uploadAssetData(storage: IStorage, setId: string, assetId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
+async function uploadAssetData(storage: IStorage, setId: string, assetId: string, assetType: string, contentType: string, filePath: string | undefined, data: Buffer | undefined): Promise<void> {
     // await axios.post(
     //     `${config.backend}/asset`, 
     //     data, 
@@ -707,7 +705,18 @@ async function uploadAssetData(storage: IStorage, setId: string, assetId: string
     //
     // Now going directly to the cloud storage to avoid problems uploading through the API.
     //
-    await writeAssetWithRetry(storage, assetId, setId, assetType, contentType, data);
+    if (data) {
+        // Have the data in memory.
+        await writeAssetWithRetry(storage, assetId, setId, assetType, contentType, data);
+    }
+    else {
+        if (!filePath) {
+            throw new Error("No file path or data provided.");
+        }
+
+        // Stream the data from the file.
+        await uploadFileStreamWithRetry(filePath, storage, assetId, setId, assetType, contentType);
+    }
 }
 
 //
