@@ -21,6 +21,7 @@ const { serializeError } = require("serialize-error");
 dayjs.extend(customParseFormat);
 
 import crypto from "node:crypto";
+import { summarizeFailures } from "./lib/failures";
 
 if (!process.env.GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY environment variable not set.");
@@ -125,6 +126,7 @@ async function uploadAsset(storage: IStorage, filePath: string, actualFilePath: 
     if (await fs.exists(hashFilePath)) {
         //
         // If the local hash file already exists, it means the asset is already uploaded.
+        //
         numAlreadyUploaded += 1;
         return;
     }
@@ -613,6 +615,8 @@ async function main(): Promise<void> {
         numAssetsCorrected,
         numFailed, 
     }, null, 2));
+
+    await summarizeFailures("./log/failures");
 }
 
 main()
