@@ -5,7 +5,7 @@
   "scripts": {
     "s": "pnpm run start",
     "sd": "pnpm run start:dev",
-    "start": "ts-node src/index.ts",
+    "start": "rm -rf ./storage-test && ts-node src/index.ts",
     "start:dev": "ts-node-dev --respawn src/index.ts",
     "c": "pnpm run compile",
     "cw": "pnpm run compile:watch",

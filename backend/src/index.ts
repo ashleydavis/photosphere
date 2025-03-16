@@ -29,19 +29,23 @@ async function main() {
 
     let storage: IStorage;
 
+    let storagePrefix = "";
+
     if (process.env.NODE_ENV === "production") {
         const bucket = process.env.AWS_BUCKET as string;
         if (bucket === undefined) {
             throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
         }
 
-        storage = new CloudStorage(bucket);    
+        storage = new CloudStorage(true);
+        storagePrefix = `${bucket}:`;
     }
     else {
         storage = new FileStorage();
+        storagePrefix = "files/"
     }
 
-    const app = await createServer(() => new Date(Date.now()), db, storage);
+    const app = await createServer(() => new Date(Date.now()), db, storage, storagePrefix);
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);
     });

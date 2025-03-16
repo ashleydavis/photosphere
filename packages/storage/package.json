@@ -14,12 +14,14 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "devDependencies": {
+    "@types/fs-extra": "^11.0.1",
     "@types/node": "^22.9.1",
-    "typescript": "^5.6.3",
-    "@types/fs-extra": "^11.0.1"
+    "typescript": "^5.6.3"
   },
   "dependencies": {
     "aws-sdk": "^2.1313.0",
-    "fs-extra": "^11.1.0"
+    "bson": "^6.10.3",
+    "fs-extra": "^11.1.0",
+    "utils": "workspace:*"
   }
 }

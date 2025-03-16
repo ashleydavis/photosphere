@@ -44,7 +44,7 @@ else {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, db: Db, storage: IStorage) {
+export async function createServer(now: () => Date, db: Db, storage: IStorage, storageRoot: string) {
 
     //
     // Make sure the metadata collection has the right indexes to stop the following error:
@@ -296,7 +296,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         //
         res.sendStatus(200);
 
-        await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, buffer);            
+        await storage.write(`${storageRoot}collections/${setId}/${assetType}/${assetId}`, contentType, buffer);            
 
         console.log(`Uploaded ${buffer.length} bytes.`);
 
@@ -336,7 +336,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             return;
         }
 
-        const info = await storage.info(`collections/${setId}/${assetType}`, assetId);
+        const info = await storage.info(`${storageRoot}collections/${setId}/${assetType}${assetId}`);
         if (!info) {
             res.sendStatus(404);
             return;
@@ -346,7 +346,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             "Content-Type": info.contentType,
         });
 
-        storage.readStream(`collections/${setId}/${assetType}`, assetId)
+        storage.readStream(`${storageRoot}collections/${setId}/${assetType}${assetId}`)
             .pipe(res);
     }));
 
