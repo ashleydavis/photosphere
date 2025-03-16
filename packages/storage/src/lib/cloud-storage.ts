@@ -138,16 +138,16 @@ export class CloudStorage implements IStorage {
         
         const upload = this.s3.upload(params, options);
 
-        upload.on('httpUploadProgress', (progress) => {
-            // console.dir(process, { depth: null });
+        // upload.on('httpUploadProgress', (progress) => {
+        //     // console.dir(process, { depth: null });
 
-            console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
+        //     console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
 
-            if (progress.total) {
-                const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
-                console.log(`S3 Upload Progress: ${percentage}%`);
-            }
-        });
+        //     if (progress.total) {
+        //         const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
+        //         console.log(`S3 Upload Progress: ${percentage}%`);
+        //     }
+        // });
 
         await upload.promise();
 
@@ -184,16 +184,16 @@ export class CloudStorage implements IStorage {
         
         const upload = this.s3.upload(params, options);
 
-        upload.on('httpUploadProgress', (progress) => {
-            // console.dir(process, { depth: null });
+        // upload.on('httpUploadProgress', (progress) => {
+        //     // console.dir(process, { depth: null });
 
-            console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
+        //     console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
 
-            if (progress.total) {
-                const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
-                console.log(`S3 Upload Progress: ${percentage}%`);
-            }
-        });
+        //     if (progress.total) {
+        //         const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
+        //         console.log(`S3 Upload Progress: ${percentage}%`);
+        //     }
+        // });
 
         await upload.promise();
     }
