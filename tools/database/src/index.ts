@@ -52,7 +52,6 @@ async function main() {
         storage,
         // directory: "storage-test-next:/test-12", todo
         directory: "./storage-test",  //fio:
-        maxRecordsPerFile: 1000,
     });
 
     const metadataCollection = db.collection<any>("metadata");
@@ -118,9 +117,9 @@ async function main() {
                     //     numUpdated += 1;
                     // }
                 }
-                catch (err) {
+                catch (err: any) {
                     console.error(`Failed for asset ${document._id}.`);
-                    console.error(err);
+                    console.error(err.stack);
 
                     numFailed += 1;
                 }
