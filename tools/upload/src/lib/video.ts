@@ -107,6 +107,8 @@ export async function getVideoResolution(videoPath: string): Promise<IResolution
 //
 export function getVideoScreenshot(videoPath: string, duration: number | undefined): Buffer {
     const outputFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpeg');
+    fs.ensureDirSync(path.dirname(outputFilePath));
+
     const screenshotPosition = Math.min(duration ? duration / 2 : 0, 300); // Maxes out at 5 minutes into the video.
     const cmd = `${ffmpegPaths.ffmpegPath} -y -ss ${screenshotPosition} -i "${videoPath}" -frames:v 1 -q:v 2 "${outputFilePath}"`;
     console.log(cmd);
