@@ -1,0 +1,37 @@
+{
+  "name": "find-orphans",
+  "description": "A tool for finding orphaned assets in the database",
+  "main": "src/index.js",
+  "scripts": {
+    "s": "pnpm run start",
+    "sd": "pnpm run start:dev",
+    "start": "ts-node src/index.ts",
+    "start:dev": "ts-node-dev --respawn src/index.ts",
+    "c": "pnpm run compile",
+    "cw": "pnpm run compile:watch",
+    "compile": "tsc",
+    "compile:watch": "tsc --watch --preserveWatchOutput",
+    "clean": "rm -rf build"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "colorthief": "^2.6.0",
+    "dayjs": "^1.11.7",
+    "defs": "workspace:*",
+    "fs-extra": "^11.2.0",
+    "lodash": "^4.17.21",
+    "minimist": "^1.2.8",
+    "mongodb": "^4.7.0",
+    "node-utils": "workspace:*",
+    "storage": "workspace:*",
+    "utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.1",
+    "@types/lodash": "^4.17.5",
+    "@types/node": "^22.9.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3"
+  }
+}
