@@ -4,6 +4,8 @@ import fs from "fs-extra";
 // Reads all the failure files and creates a summary.
 //
 export async function summarizeFailures(path: string): Promise<void> {
+    await fs.ensureDir(path);
+    
     const failures = await fs.readdir(path);
     console.log(`Found ${failures.length} failures.`);
 
