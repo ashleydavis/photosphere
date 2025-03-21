@@ -132,8 +132,8 @@ export class CloudStorage implements IStorage {
         };    
         
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 5 * 1024 * 1024, // 5 MB
-            queueSize: 5,
+            partSize: 100 * 1024 * 1024, // 100 MB
+            queueSize: 1,
         };
         
         const upload = this.s3.upload(params, options);
@@ -178,8 +178,8 @@ export class CloudStorage implements IStorage {
         };    
 
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 5 * 1024 * 1024, // 5 MB
-            queueSize: 5,
+            partSize: 100 * 1024 * 1024, // 100 MB
+            queueSize: 1,
         };
         
         const upload = this.s3.upload(params, options);
