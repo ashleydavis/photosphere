@@ -551,6 +551,13 @@ async function main(): Promise<void> {
         console.log(`Cached files list to ${cachedFilesList}`);
     }
 
+    //
+    // Uncomment this to focus on a specific set of files.
+    //
+    // files = [
+    //     "full file path",
+    // ];
+
     await fs.removeSync("./log");
 
     await fs.ensureDir("./log");
