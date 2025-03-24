@@ -7,7 +7,7 @@
         "s": "pnpm start",
         "sd": "pnpm run start:dev",
         "start": "node build/index.js",
-        "start:prod": "pnpm run clean-uploads && cross-env NODE_ENV=production APP_MODE=readwrite PORT=3000 ts-node-dev --respawn src/index.ts",
+        "start:prod": "pnpm run clean-uploads && cross-env NODE_ENV=production AUTH_TYPE=auth0 APP_MODE=readwrite PORT=3000 ts-node-dev --respawn src/index.ts",
         "start:dev": "pnpm run start:dev-multi-collection",
         "start:dev-multi-collection": "pnpm run clean-uploads && pnpm run copy-multi-collection && pnpm run load-bson-fixture && concurrently --names \"db,be\" \"npm run start-db-multi-collection\" \"npm run start-watch\"",
         "start:dev-50-assets": "pnpm run clean-uploads && pnpm run copy-50-assets && pnpm run load-bson-fixture && concurrently --names \"db,be\" \"npm run start-db-50-assets\" \"npm run start-watch\"",
