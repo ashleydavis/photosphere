@@ -1,4 +1,4 @@
-import { CloudStorage, streamAssetWithRetry, FileStorage, IStorage } from "storage";
+import { CloudStorage, streamAssetWithRetry, FileStorage, IStorage, StoragePrefixWrapper } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -24,7 +24,7 @@ async function computeHash(data: Buffer): Promise<string> {
 // Write JSON data to the destination storage.
 //
 function writeJson(destStorage: IStorage, setId: string, collectionName: string, documentId: string, document: any): Promise<void> {
-    return destStorage.write(`collections/${setId}/${collectionName}`, documentId, "application/json", Buffer.from(JSON.stringify(document)));
+    return destStorage.write(`collections/${setId}/${collectionName}/${documentId}`, "application/json", Buffer.from(JSON.stringify(document)));
 }
 
 //
@@ -90,8 +90,8 @@ async function main() {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const sourceStorage = source == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
-    const destStorage = dest == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
+    const sourceStorage = source == "s3" ?  new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`) : new StoragePrefixWrapper(new FileStorage(), LOCAL_STORAGE_DIR);
+    const destStorage = dest == "s3" ? new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`) : new StoragePrefixWrapper(new FileStorage(), LOCAL_STORAGE_DIR);
 
     console.log(`Source storage: ${source}`);
     console.log(`Destination storage: ${dest}`);
@@ -133,7 +133,7 @@ async function main() {
 
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
-                const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
+                const isAlreadyDownloaded = await destStorage.fileExists(`collections/${document.setId}/metadata/${document._id}`);
                 if (isAlreadyDownloaded) {
                     numAlreadyDownloaded += 1;
                     // console.log(`Document ${document._id} already downloaded.`);
@@ -159,7 +159,7 @@ async function main() {
                 //
                 // Check the hash of the downloaded assets.
                 //
-                const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
+                const fileData = await destStorage.read(`collections/${document.setId}/asset/${document._id}`);
                 if (!fileData) {
                     throw new Error(`Document ${document._id} does not have data at ${dest}.`);
                 }

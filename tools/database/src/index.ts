@@ -76,6 +76,12 @@ async function main() {
     }
 
     let totalSize = 0;
+    let minDocumentSize = Number.MAX_SAFE_INTEGER;
+    let maxDocumentSize = 0;
+    const sizePerSet = new Map<string, number>();
+
+    // let allJsonDocs: any[] = [];
+    // let allBinaryDocs: any[] = [];
 
     while (true) {
         const documents = await metadataCollection.find(query)
@@ -93,40 +99,48 @@ async function main() {
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: IAsset) => {
 
-
                 try {
 
-                    await bsonDatabase.insert(document);
+                    if (document.encrypted) {
+                        console.log(`Asset ${document._id} is already encrypted.`);
+                        return;
+                    }
+                    else {
+                        //todo: encrypt the assets.
 
-                    // if (document.encrypted) {
-                    //     console.log(`Asset ${document._id} is already encrypted.`);
-                    //     return;
-                    // }
-                    // else {
-                    //     //todo: encrypt the assets.
+                        await metadataCollection.updateOne(
+                            { _id: document._id },
+                            {
+                                $set: {
+                                    encrypted: true,
+                                },
+                            }
+                        );
 
-                    //     await metadataCollection.updateOne(
-                    //         { _id: document._id },
-                    //         {
-                    //             $set: {
-                    //                 encrypted: true,
-                    //             },
-                    //         }
-                    //     );
-
-                    //     numUpdated += 1;
-                    // }
+                        numUpdated += 1;
+                    }
                 }
-                catch (err: any) {
+                catch (err) {
                     console.error(`Failed for asset ${document._id}.`);
-                    console.error(err.stack);
+                    console.error(err);
 
                     numFailed += 1;
                 }
 
                 numProcessed += 1;
 
-                totalSize += estimateJSONSize(document);
+
+                const docSize = estimateJSONSize(document);
+
+                totalSize += docSize;
+                minDocumentSize = Math.min(minDocumentSize, docSize);
+                maxDocumentSize = Math.max(maxDocumentSize, docSize);
+
+                //
+                // Update size for each set.
+                //
+                sizePerSet.set(document.setId, (sizePerSet.get(document.setId) || 0) + docSize);
+
             }));
 
             console.log(`Processed ${numProcessed} of ${documentCount} documents.`);
@@ -147,8 +161,25 @@ async function main() {
     const averageSize = totalSize / documentCount;
     console.log(`Average size: ${averageSize} bytes.`);
 
+    console.log(`Min document size: ${minDocumentSize} bytes.`);
+    console.log(`Max document size: ${maxDocumentSize} bytes.`);
+
     await fs.ensureDir("./log");
     await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed, totalSize, averageSize }, null, 2));
+
+    console.log(sizePerSet);
+
+    // Write the JSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all.json", JSON.stringify(allJsonDocs));
+
+    // // Write the BSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all.bson", BSON.serialize(allJsonDocs));
+
+    // // Write the binary BSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all-binary.bson", BSON.serialize(allBinaryDocs));
 }
 
 main()

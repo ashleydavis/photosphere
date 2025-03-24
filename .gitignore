@@ -25,4 +25,5 @@ tools/database/log/
 tools/database/build/
 packages/utils/build/
 packages/node-utils/build/
-tools/database/storage-test/
+tools/database/storage-test
+/tools/find-orphans/build/
