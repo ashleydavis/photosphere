@@ -295,7 +295,12 @@ export class BsonCollection implements IBsonCollection {
     // Determines the shard ID for a record based on its ID.
     //
     private generateShardId(recordId: string): number {
-        const hash = crypto.createHash('md5').update(recordId).digest('hex');
+        const recordIdBuffer = Buffer.from(recordId.replace(/-/g, ''), 'hex');
+        if (recordIdBuffer.length !== 16) {
+            throw new Error(`Invalid record ID ${recordId} with length ${recordIdBuffer.length}`);
+        }
+
+        const hash = crypto.createHash('md5').update(recordIdBuffer).digest('hex');
         const decimal = parseInt(hash.substring(0, 8), 16);
         return decimal % this.numShards;
     }
@@ -339,7 +344,7 @@ export class BsonCollection implements IBsonCollection {
         for (const record of shard.records.values()) {
             const recordIdBuffer = Buffer.from(record._id.replace(/-/g, ''), 'hex');
             if (recordIdBuffer.length !== 16) {
-                throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`); //TODO: This gets triggered!
+                throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
             }
             buffers.push(recordIdBuffer);
 
