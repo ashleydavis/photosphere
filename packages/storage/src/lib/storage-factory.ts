@@ -21,7 +21,6 @@ export function createStorage(path: string): { storage: IStorage, normalizedPath
         };
     } 
     else if (path.startsWith('s3:')) {
-        // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = path.substring('s3:'.length);
         return {
             storage: new CloudStorage(true),
@@ -30,7 +29,6 @@ export function createStorage(path: string): { storage: IStorage, normalizedPath
         };
     } 
     else {
-        // Assume local file system for backward compatibility
         console.warn('Storage prefix missing, assuming local file system');
         return {
             storage: new FileStorage(),
