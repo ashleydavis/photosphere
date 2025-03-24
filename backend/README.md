@@ -88,7 +88,7 @@ pnpm test
 - `DB_NAME` - The name of the datbaase for the app to use.
 - `STORAGE_CONNECTION` - Defines the connection to storage for the application, examples:
     - `s3:your-s3-bucket:`
-    - `s3:your-s3-bucket:a-sub-directory`
+    - `s3:your-s3-bucket/a-sub-directory`
     - `fs:the/local/file-system`
 - `PORT` - Port to run the web server on.
 
