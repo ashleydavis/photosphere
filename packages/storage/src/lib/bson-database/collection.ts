@@ -488,6 +488,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             //
             this.evictOldestShards();
         }
+        else {
+            // console.log(`Found shard ${shardId} in cache.`);
+            shard.lastAccessed = Date.now();
+        }
 
         return shard;
     }
