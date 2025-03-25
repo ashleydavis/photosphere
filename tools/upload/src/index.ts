@@ -653,7 +653,7 @@ export async function computeStreamingHash(filePath: string): Promise<string> {
         const inputStream = fs.createReadStream(filePath);
         const hash = crypto.createHash('sha256');
 
-        inputStream.on("data", (data: Buffer) => {
+        inputStream.on("data", (data: Buffer | string) => {
             hash.update(data);
         });
 
