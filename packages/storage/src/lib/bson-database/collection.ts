@@ -546,6 +546,18 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             let result = await this.storage.listFiles(this.directory, 1000, next);
             let files = result.names || [];
             for (const file of files) {
+                const shardId = parseInt(file);
+                let shard = this.shardCache.get(shardId);
+                if (shard !== undefined) {
+                    //
+                    // The shard is already cached in memory.
+                    //
+                    for (const record of shard.records.values()) {
+                        yield record;
+                    }
+                    continue;
+                }
+
                 const buffer = await this.storage.read(`${this.directory}/${file}`);
                 if (!buffer || buffer.length === 0) {
                     continue;
