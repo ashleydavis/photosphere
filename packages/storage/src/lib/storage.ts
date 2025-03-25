@@ -5,9 +5,9 @@ import { Readable } from "stream";
 //
 export interface IListResult {
     //
-    // The list of file names found in storage.
+    // The list of file or directories names found in storage.
     //
-    fileNames: string[];
+    names: string[];
 
     //
     // If there are more assets to read the contination token is set.
@@ -22,7 +22,7 @@ export interface IFileInfo {
     //
     // The content type of the file.
     //
-    contentType: string;
+    contentType: string | undefined;
 
     //
     // The length of the file in bytes.
@@ -35,41 +35,56 @@ export interface IStorage {
     //
     // List files in storage.
     //
-    list(path: string, max: number, next?: string): Promise<IListResult>;
+    listFiles(path: string, max: number, next?: string): Promise<IListResult>;
+
+    //
+    // List directories in storage.
+    //
+    listDirs(path: string, max: number, next?: string): Promise<IListResult>;
 
     //
     // Returns true if the specified file exists.
     //
-    exists(path: string, fileName: string): Promise<boolean>;
+    fileExists(filePath: string): Promise<boolean>;
+
+    //
+    // Returns true if the specified directory exists (contains at least one file or subdirectory).
+    //
+    dirExists(dirPath: string): Promise<boolean>;
 
     //
     // Gets info about a file.
     //
-    info(path: string, fileName: string): Promise<IFileInfo | undefined>;
-    
+    info(filePath: string): Promise<IFileInfo | undefined>;
+
     //
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    read(path: string, fileName: string): Promise<Buffer | undefined>;
+    read(filePath: string): Promise<Buffer | undefined>;
 
     //
     // Writes a file to storage.
     //
-    write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void>;
+    write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void>;
 
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, fileName: string): Readable;
+    readStream(filePath: string): Readable;
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(path: string, fileName: string, contentType: string, inputStream: Readable, contentLength?: number): Promise<void>;
+    writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void>;
 
     //
     // Deletes the file from storage.
     //
-    delete(path: string, fileName: string): Promise<void>;
+    delete(filePath: string): Promise<void>;
+
+    //
+    // Copies a file from one location to another.
+    //
+    copyTo(srcPath: string, destPath: string): Promise<void>;
 }

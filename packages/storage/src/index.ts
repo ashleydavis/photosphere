@@ -5,6 +5,10 @@ export * from "./lib/storage";
 export * from "./lib/cloud-storage";
 export * from "./lib/file-storage";
 export * from "./lib/encrypted-storage";
+export * from "./lib/storage-prefix-wrapper";
+export * from "./lib/bson-database/database";
+export * from "./lib/bson-database/collection";
+export * from "./lib/storage-factory";
 
 export interface IAssetMetadata {
   //
@@ -22,13 +26,13 @@ export interface IAssetMetadata {
 // Streams an asset from source to destination storage.
 //
 export async function streamAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: IAssetMetadata, assetType: string): Promise<void> {
-  const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}`, metadata._id);
+  const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}/${metadata._id}`);
   if (!fileInfo) {
       throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
   }
 
-  await destStorage.writeStream(`collections/${metadata.setId}/${assetType}`, metadata._id, fileInfo.contentType,
-      sourceStorage.readStream(`collections/${metadata.setId}/${assetType}`, metadata._id)
+  await destStorage.writeStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`, fileInfo.contentType,
+      sourceStorage.readStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`)
   );
 
   // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
@@ -61,12 +65,12 @@ export async function streamAssetWithRetry(sourceStorage: IStorage, destStorage:
 // Gets the info about an asset.
 // Retries on failure.
 //
-export async function getAssetInfoWithRetry(storage: IStorage, assetId: string, setId: string, assetType: string): Promise<IFileInfo | undefined> {
+export async function getAssetInfoWithRetry(storage: IStorage, storageRoot: string, assetId: string, setId: string, assetType: string): Promise<IFileInfo | undefined> {
   let lastErr = undefined;
   let retries = 3;
   while (retries > 0) {
       try {
-          return await storage.info(`collections/${setId}/${assetType}`, assetId);
+          return await storage.info(`${storageRoot}collections/${setId}/${assetType}/${assetId}`);
       }
       catch (err) {
           lastErr = err;
@@ -83,12 +87,12 @@ export async function getAssetInfoWithRetry(storage: IStorage, assetId: string, 
 // Reads an asset from source storage.
 // Retries on failure.
 //
-export async function readAssetWithRetry(sourceStorage: IStorage, assetId: string, setId: string, assetType: string): Promise<Buffer | undefined> {
+export async function readAssetWithRetry(sourceStorage: IStorage, storageRoot: string, assetId: string, setId: string, assetType: string): Promise<Buffer | undefined> {
   let lastErr = undefined;
   let retries = 3;
   while (retries > 0) {
       try {
-          return await sourceStorage.read(`collections/${setId}/${assetType}`, assetId);
+          return await sourceStorage.read(`${storageRoot}collections/${setId}/${assetType}/${assetId}`);
       }
       catch (err) {
           lastErr = err;
@@ -109,7 +113,7 @@ export async function writeAssetWithRetry(storage: IStorage, assetId: string, se
   let retries = 3;
   while (retries > 0) {
       try {
-          await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, data);
+          await storage.write(`collections/${setId}/${assetType}/${assetId}`, contentType, data);
           return;
       }
       catch (err) {
@@ -131,7 +135,7 @@ export async function deleteAssetWithRetry(storage: IStorage, assetId: string, s
     let retries = 3;
     while (retries > 0) {
         try {
-            await storage.delete(`collections/${setId}/${assetType}`, assetId);
+            await storage.delete(`collections/${setId}/${assetType}/${assetId}`);
             return;
         }
         catch (err) {
@@ -154,7 +158,7 @@ export async function uploadFileStreamWithRetry(filePath: string, storage: IStor
     while (retries > 0) {
         try {
             const fileStream = fs.createReadStream(filePath);
-            await storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, fileStream);            
+            await storage.writeStream(`collections/${setId}/${assetType}/${assetId}`, contentType, fileStream);            
         }
         catch (err) {
             lastErr = err;

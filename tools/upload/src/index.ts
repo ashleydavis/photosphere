@@ -9,7 +9,7 @@ import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
 import { ILocation, retry, reverseGeocode, uuid } from "utils";
-import { CloudStorage, IStorage, streamAssetWithRetry, uploadFileStreamWithRetry, writeAssetWithRetry } from "storage";
+import { CloudStorage, IStorage, StoragePrefixWrapper, streamAssetWithRetry, uploadFileStreamWithRetry, writeAssetWithRetry } from "storage";
 const { execSync } = require('child_process');
 const ColorThief = require("colorthief");
 
@@ -570,7 +570,7 @@ async function main(): Promise<void> {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const storage = new CloudStorage(bucket);
+    const storage = new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`);
 
     let numProcessed = 0;
 
@@ -754,6 +754,7 @@ async function addAsset(asset: IAsset): Promise<void> {
         {
             collectionName: "metadata",
             recordId: asset._id,
+            setId: config.uploadSetId,
             op: {
                 type: "set",
                 fields: asset,
@@ -804,6 +805,7 @@ async function updateAsset(assetId: string, assetPartial: Partial<IAsset>): Prom
         {
             collectionName: "metadata",
             recordId: assetId,
+            setId: config.uploadSetId,
             op: {
                 type: "set",
                 fields: assetPartial,

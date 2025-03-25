@@ -1,9 +1,9 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { Db } from "mongodb";
-import { IStorage } from "storage";
+import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
+import { registerTerminationCallback } from "./lib/termination";
 
 declare global {
     namespace Express {
@@ -44,14 +44,38 @@ else {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, db: Db, storage: IStorage) {
+export async function createServer(now: () => Date, assetStorage: IStorage, databaseStorage: IStorage) {
+
+    const db = new BsonDatabase({ storage: databaseStorage });
+
+    const bsonDatabaseMap = new Map<string, IBsonDatabase>();
 
     //
-    // Make sure the metadata collection has the right indexes to stop the following error:
+    // Opens a database for a particular set.
     //
-    // MongoServerError: Executor error during find command :: caused by :: Sort exceeded memory limit of 104857600 bytes, but did not opt in to external sorting. Aborting operation. Pass allowDiskUse:true to opt in.
-    //
-    await db.collection("metadata").createIndex({ setId: 1, photoDate: -1 });
+    function openDatabase(setId: string): IBsonDatabase {
+        let bsonDatabase = bsonDatabaseMap.get(setId);
+        if (!bsonDatabase) {
+            const directory = `${setId}/metadata`;
+            bsonDatabase = new BsonDatabase({
+                storage: assetStorage,
+                directory,
+            });
+            bsonDatabaseMap.set(setId, bsonDatabase);
+            console.log(`Opened BSON database in ${directory}.`);
+        }
+        return bsonDatabase;
+
+    }
+
+    registerTerminationCallback(async () => {
+        console.log("Shutting down server.");
+        for (const bsonDatabase of bsonDatabaseMap.values()) {
+            await bsonDatabase.shutdown();
+        }
+
+        bsonDatabaseMap.clear();
+    });
 
     const app = express();
     app.use(cors());
@@ -102,7 +126,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
                 // Removes the auth0| prefix the user id.
                 userId = userId.substring(6);
             }
-            const user = await db.collection<IUser>("users").findOne({ _id: userId });
+            const user = await db.collection<IUser>("users").getOne(userId);
             if (!user) {
                 console.log(`User not found: ${userId}`);
                 res.sendStatus(401);
@@ -123,9 +147,9 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Attaches user information to the request.
         //
         app.use(async (req, res, next) => {
-            req.userId = 'test-user'; //TOOD: This could be set by env var.
+            req.userId = '8632edb0-8a4d-41d2-8648-f734bea0be4b'; //TOOD: This could be set by env var.
 
-            const user = await db.collection<IUser>("users").findOne({ _id: req.userId });
+            const user = await db.collection<IUser>("users").getOne(req.userId);
             if (!user) {
                 console.log(`User not found: ${req.userId}`);
                 res.sendStatus(401);
@@ -214,7 +238,9 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
 
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
-            const recordCollection = db.collection(op.collectionName);
+            const database = openDatabase(op.setId);
+            const recordCollection = database.collection(op.collectionName);
+            
             if (op.op.type === "set") {
 
                 //
@@ -227,33 +253,20 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
                     }
                 }
 
-                await recordCollection.updateOne(
-                    { _id: op.recordId },
-                    { $set: fields },
-                    { upsert: true }
-                );
+                await recordCollection.updateOne(op.recordId, fields, { upsert: true });
             }
             else if (op.op.type === "push") {
-                await recordCollection.updateOne(
-                    { _id: op.recordId },
-                    { 
-                        $push: {
-                            [op.op.field]: op.op.value,                           
-                        },
-                    },
-                    { upsert: true }
-                );
+                const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
+                const array = record?.[op.op.field] || [];
+                array.push(op.op.value);
+                await recordCollection.updateOne(op.recordId, { [op.op.field]: array }, { upsert: true });
             }
             else if (op.op.type === "pull") {
-                await recordCollection.updateOne(
-                    { _id: op.recordId },
-                    { 
-                        $pull: {
-                            [op.op.field]: op.op.value,                           
-                        },
-                    },
-                    { upsert: true }
-                );
+                const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
+                const array = record?.[op.op.field] || [];
+                const value = op.op.value;
+                const updatedArray = array.filter((item: any) => item !== value);
+                await recordCollection.updateOne(op.recordId, { [op.op.field]: updatedArray }, { upsert: true });
             }
         }
         res.sendStatus(200);
@@ -296,7 +309,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         //
         res.sendStatus(200);
 
-        await storage.write(`collections/${setId}/${assetType}`, assetId, contentType, buffer);            
+        await assetStorage.write(`${setId}/${assetType}/${assetId}`, contentType, buffer);            
 
         console.log(`Uploaded ${buffer.length} bytes.`);
 
@@ -336,7 +349,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             return;
         }
 
-        const info = await storage.info(`collections/${setId}/${assetType}`, assetId);
+        const info = await assetStorage.info(`${setId}/${assetType}/${assetId}`);
         if (!info) {
             res.sendStatus(404);
             return;
@@ -346,7 +359,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             "Content-Type": info.contentType,
         });
 
-        storage.readStream(`collections/${setId}/${assetType}`, assetId)
+        assetStorage.readStream(`${setId}/${assetType}/${assetId}`)
             .pipe(res);
     }));
 
@@ -354,10 +367,12 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
     // Gets a record from the database.
     //
     app.get("/get-one", asyncErrorHandler(async (req, res) => {
+        const setId = getValue<string>(req.query, "set");
         const collectionName = getValue<string>(req.query, "col");
         const recordId = getValue<string>(req.query, "id");
-        const collection = db.collection(collectionName);
-        const record = await collection.findOne({ _id: recordId });
+        const database = openDatabase(setId);
+        const collection = database.collection(collectionName);
+        const record = await collection.getOne(recordId);
         if (!record) {
             res.sendStatus(404);
             return;
@@ -394,34 +409,30 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         //     return;
         // }
 
-        const collection = db.collection(collectionName);
-        const records = await collection.find({ setId })
-            .sort({
-                //
-                // Reverse chronological order.
-                //
-                // TODO: This only makes sense for asset metadata.
-                //       This doesn't make for any other database collection.
-                //
-                photoDate: -1, 
-            })
-            .skip(skip)
-            .limit(limit)
-            .toArray();
-
+        const database = openDatabase(setId);
+        const collection = database.collection(collectionName);
+        const records = await collection.getAll(skip, limit); //TODO: Ideally the output here would be sorted by date or place.
         res.json(records);
     }));
 
     //
     // Gets a record from the database based on their hash.
+    // TODO: This should check the hash of the asset using the system, not the metadata.
     //
     app.get("/check-hash", asyncErrorHandler(async (req, res) => {
         const setId = getValue<string>(req.query, "set");
         const hash = getValue<string>(req.query, "hash");
-        const collection = db.collection("metadata");
-        const records = await collection.find({ hash, setId }).toArray();
+        const database = openDatabase(setId);
+        const collection = database.collection("metadata");
+        const matchingRecords = [];
+        for await (const record of collection.iterateRecords()) { //TODO: It's super expensive to iterate over all records. Need an index or lookup table.
+            if (record.hash === hash) {
+                matchingRecords.push(record);
+                break; //TODO: Ideally this would find all records with the same hash, instead of just breaking out here.
+            }
+        }
         res.json({
-            assetIds: records.map(record => record._id),
+            assetIds: matchingRecords.map(record => record._id),
         });
     }));    
 

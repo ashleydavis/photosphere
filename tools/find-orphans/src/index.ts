@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { CloudStorage } from "storage";
+import { CloudStorage, IStorage, StoragePrefixWrapper } from "storage";
 import _ from "lodash";
 const minimist = require("minimist");
 
@@ -25,7 +25,7 @@ async function main() {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const storage = new CloudStorage(bucket);
+    const storage = new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`);
 
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();
@@ -52,18 +52,18 @@ async function main() {
     //
     // List all assets in storage.
     //
-    async function listAssets(storage: CloudStorage, dir: string): Promise<void> {
+    async function listAssets(storage: IStorage, dir: string): Promise<void> {
         let next: string | undefined = undefined;
         do {
-            const result = await storage.list(dir, 1000, next);
+            const result = await storage.listFiles(dir, 1000, next);
             //
             // Checks the assets in batches.
             //
-            for (const batch of _.chunk(result.fileNames, 100)) {
+            for (const batch of _.chunk(result.names, 100)) {
                 await Promise.all(batch.map(async fileName => {
                     const asset = await metadataCollection.findOne({ _id: fileName });
                     if (!asset) {
-                        await storage.delete(dir, fileName);
+                        await storage.delete(`${dir}/${fileName}`);
                         console.log(`Deleted orphaned asset: ${fileName}`);
                         numOrphans++;
                     }
