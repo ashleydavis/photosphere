@@ -1,7 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { Db } from "mongodb";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
 import { registerTerminationCallback } from "./lib/termination";
@@ -45,7 +44,9 @@ else {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, db: Db, storage: IStorage) {
+export async function createServer(now: () => Date, assetStorage: IStorage, databaseStorage: IStorage) {
+
+    const db = new BsonDatabase({ storage: databaseStorage });
 
     const bsonDatabaseMap = new Map<string, IBsonDatabase>();
 
@@ -57,7 +58,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         if (!bsonDatabase) {
             const directory = `${setId}/metadata`;
             bsonDatabase = new BsonDatabase({
-                storage,
+                storage: assetStorage,
                 directory,
             });
             bsonDatabaseMap.set(setId, bsonDatabase);
@@ -125,7 +126,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
                 // Removes the auth0| prefix the user id.
                 userId = userId.substring(6);
             }
-            const user = await db.collection<IUser>("users").findOne({ _id: userId });
+            const user = await db.collection<IUser>("users").getOne(userId);
             if (!user) {
                 console.log(`User not found: ${userId}`);
                 res.sendStatus(401);
@@ -146,9 +147,9 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         // Attaches user information to the request.
         //
         app.use(async (req, res, next) => {
-            req.userId = 'test-user'; //TOOD: This could be set by env var.
+            req.userId = '8632edb0-8a4d-41d2-8648-f734bea0be4b'; //TOOD: This could be set by env var.
 
-            const user = await db.collection<IUser>("users").findOne({ _id: req.userId });
+            const user = await db.collection<IUser>("users").getOne(req.userId);
             if (!user) {
                 console.log(`User not found: ${req.userId}`);
                 res.sendStatus(401);
@@ -308,7 +309,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
         //
         res.sendStatus(200);
 
-        await storage.write(`${setId}/${assetType}/${assetId}`, contentType, buffer);            
+        await assetStorage.write(`${setId}/${assetType}/${assetId}`, contentType, buffer);            
 
         console.log(`Uploaded ${buffer.length} bytes.`);
 
@@ -348,7 +349,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             return;
         }
 
-        const info = await storage.info(`${setId}/${assetType}/${assetId}`);
+        const info = await assetStorage.info(`${setId}/${assetType}/${assetId}`);
         if (!info) {
             res.sendStatus(404);
             return;
@@ -358,7 +359,7 @@ export async function createServer(now: () => Date, db: Db, storage: IStorage) {
             "Content-Type": info.contentType,
         });
 
-        storage.readStream(`${setId}/${assetType}/${assetId}`)
+        assetStorage.readStream(`${setId}/${assetType}/${assetId}`)
             .pipe(res);
     }));
 

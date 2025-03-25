@@ -3,7 +3,7 @@
 //
 
 import { IStorage } from "../storage";
-import { BsonCollection, type IBsonCollection } from "./collection";
+import { BsonCollection, IRecord, type IBsonCollection } from "./collection";
 
 export interface IBsonDatabase {
 
@@ -15,7 +15,7 @@ export interface IBsonDatabase {
     //
     // Gets a named collection.
     //
-    collection(name: string): IBsonCollection;
+    collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT>;
     
     //
     // Writes all pending changes to the database and shuts down the database.
@@ -35,7 +35,7 @@ export interface IBsonDatabaseOptions {
     //
     // The directory where the collection is stored.
     //
-    directory: string;
+    directory?: string;
 
     //
     // The maximum number of shards to keep in memory.
@@ -48,7 +48,7 @@ export class BsonDatabase implements IBsonDatabase {
     //
     // Caches created collections.
     //
-    private _collections = new Map<string, IBsonCollection>();
+    private _collections = new Map<string, IBsonCollection<IRecord>>();
 
     constructor(private options: IBsonDatabaseOptions) {        
     }
@@ -62,7 +62,7 @@ export class BsonDatabase implements IBsonDatabase {
 
         let next: string | undefined = undefined;
         do {
-            const storageResult = await this.options.storage.listDirs(this.options.directory, 1000, next);
+            const storageResult = await this.options.storage.listDirs(this.options.directory || "", 1000, next);
             for (const name of storageResult.names) { 
                 uniqueSet.add(name);
             }
@@ -79,17 +79,21 @@ export class BsonDatabase implements IBsonDatabase {
     //
     // Gets a named collection.
     //
-    collection(name: string): IBsonCollection {
+    collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT> {
         let collection = this._collections.get(name);
         if (!collection) {
-            collection = new BsonCollection({
+            let collectionPath = name;
+            if (this.options.directory) {
+                collectionPath = `${this.options.directory}/${name}`;
+            }
+            collection = new BsonCollection<IRecord>({
                 storage: this.options.storage,
-                directory: `${this.options.directory}/${name}`,
+                directory: collectionPath,
                 maxCachedShards: this.options.maxCachedShards,
             });
             this._collections.set(name, collection);
-        }
-        return collection;        
+        }        
+        return collection as IBsonCollection<RecordT>;
     }
 
     //

@@ -32,52 +32,52 @@ export interface IBsonCollectionOptions {
     maxCachedShards?: number;
 }
 
-export interface Record {
+export interface IRecord {
     _id: string;
     [key: string]: any;
 }
 
-interface IShard {
+interface IShard<RecordT extends IRecord> {
     id: number;
     dirty: boolean;
     lastAccessed: number;
-    records: Map<string, Record>;
+    records: Map<string, RecordT>;
 }
 
 const saveDebounceMs = 300;
 const maxSaveDelayMs = 1000;
 
-export interface IBsonCollection {
+export interface IBsonCollection<RecordT extends IRecord> {
 
     //
     // Insert a new record into the collection.
     //
-    insertOne(record: Record): Promise<void>;
+    insertOne(record: RecordT): Promise<void>;
 
     //
     // Gets one record by ID.
     //
-    getOne(id: string): Promise<Record | undefined>;
+    getOne(id: string): Promise<RecordT | undefined>;
 
     //
     // Iterate all records in the collection without loading all into memory.
     //
-    iterateRecords(): AsyncGenerator<Record, void, unknown>;
+    iterateRecords(): AsyncGenerator<RecordT, void, unknown>;
 
     //
     // Gets all records in the collection.
     //
-    getAll(skip: number, limit: number): Promise<Record[]>;
+    getAll(skip: number, limit: number): Promise<RecordT[]>;
 
     //
     // Updates a record.
     //
-    updateOne(id: string, updates: Partial<Record>, options?: { upsert?: boolean }): Promise<boolean>    
+    updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean>
 
     //
     // Replaces a record with completely new data.
     //
-    replaceOne(id: string, record: Record, options?: { upsert?: boolean }): Promise<boolean>;
+    replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean>;
 
     //
     // Writes all pending changes and shuts down the collection.
@@ -90,11 +90,11 @@ export interface IBsonCollection {
     drop(): Promise<void>;
 }
 
-export class BsonCollection implements IBsonCollection {
+export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
     private storage: IStorage;
     private directory: string;
     private numShards: number;
-    private shardCache: Map<number, IShard> = new Map();
+    private shardCache: Map<number, IShard<RecordT>> = new Map();
     private isAlive: boolean = true;
     private maxCachedShards: number;
 
@@ -315,7 +315,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Saves the shard file to storage.
     //
-    private async saveShardFile(shardFilePath: string, shard: IShard): Promise<void> {
+    private async saveShardFile(shardFilePath: string, shard: IShard<RecordT>): Promise<void> {
         if (shard.records.size === 0) {
             if (await this.storage.fileExists(shardFilePath)) {
                 //
@@ -332,7 +332,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Writes a shard to disk.
     //
-    private async writeBsonFile(filePath: string, shard: IShard): Promise<void> {
+    private async writeBsonFile(filePath: string, shard: IShard<RecordT>): Promise<void> {
 
         const buffers: Uint8Array[] = [];
 
@@ -402,7 +402,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Reads a single record from the file data and returns the new offset.
     //
-    private readRecord(fileData: Buffer<ArrayBufferLike>, offset: number): { record: Record, offset: number } {
+    private readRecord(fileData: Buffer<ArrayBufferLike>, offset: number): { record: RecordT, offset: number } {
 
         //
         // Read 16 byte uuid.
@@ -428,7 +428,7 @@ export class BsonCollection implements IBsonCollection {
         // Read and deserialize the record.
         //
         const recordData = fileData.subarray(offset, offset + recordLength);
-        const record = BSON.deserialize(recordData) as Record;
+        const record = BSON.deserialize(recordData) as RecordT;
         record._id = recordId;
         offset += recordLength;
         return { record, offset };
@@ -437,9 +437,9 @@ export class BsonCollection implements IBsonCollection {
     //
     // Loads all records from a shard file.
     //
-    private async loadRecords(shardFilePath: string): Promise<Record[]> {
+    private async loadRecords(shardFilePath: string): Promise<RecordT[]> {
 
-        let records: Record[] = [];
+        let records: RecordT[] = [];
 
         if (await this.storage.fileExists(shardFilePath)) {
             // Read all records from the file
@@ -465,12 +465,12 @@ export class BsonCollection implements IBsonCollection {
     //
     // Loads the requested shard from cache or from storage.
     //
-    private async loadShard(shardId: number): Promise<IShard> {
+    private async loadShard(shardId: number): Promise<IShard<RecordT>> {
         let shard = this.shardCache.get(shardId);
         if (shard === undefined) {
             const filePath = `${this.directory}/${shardId}`;
             const records = await this.loadRecords(filePath);
-            const recordMap = new Map<string, Record>();
+            const recordMap = new Map<string, RecordT>();
             for (const record of records) {
                 recordMap.set(record._id, { ...record });
             }
@@ -495,7 +495,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Insert a new record into the collection.
     //
-    async insertOne(record: Record): Promise<void> {
+    async insertOne(record: RecordT): Promise<void> {
         if (!record._id) {
             record._id = crypto.randomUUID();
         }
@@ -513,7 +513,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Gets one record by ID.
     //
-    async getOne(id: string): Promise<Record | undefined> {
+    async getOne(id: string): Promise<RecordT | undefined> {
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
@@ -534,7 +534,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Iterate all records in the collection without loading all into memory.
     //
-    async *iterateRecords(): AsyncGenerator<Record, void, unknown> {
+    async *iterateRecords(): AsyncGenerator<RecordT, void, unknown> {
 
         let next: string | undefined = undefined;
 
@@ -565,8 +565,8 @@ export class BsonCollection implements IBsonCollection {
     //
     // Gets all records in the collection.
     //
-    async getAll(skip: number, limit: number): Promise<Record[]> {
-        const results: Record[] = [];
+    async getAll(skip: number, limit: number): Promise<RecordT[]> {
+        const results: RecordT[] = [];
 
         let count = 0;
 
@@ -589,12 +589,12 @@ export class BsonCollection implements IBsonCollection {
     //
     // Updates a record.
     //
-    async updateOne(id: string, updates: Partial<Record>, options?: { upsert?: boolean }): Promise<boolean> {
+    async updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean> {
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
-        let existingRecord = shard.records.get(id);
+        let existingRecord: any = shard.records.get(id);
 
         if (!options?.upsert) {
             //
@@ -615,7 +615,7 @@ export class BsonCollection implements IBsonCollection {
         //
         // Updates the record.
         //
-        const updatedRecord = { ...existingRecord, ...updates };
+        const updatedRecord: any = { ...existingRecord, ...updates };
         shard.records.set(id, updatedRecord);
         shard.dirty = true;
         shard.lastAccessed = Date.now();
@@ -628,7 +628,7 @@ export class BsonCollection implements IBsonCollection {
     //
     // Replaces a record with completely new data.
     //
-    async replaceOne(id: string, record: Record, options?: { upsert?: boolean }): Promise<boolean> {
+    async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean> {
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);

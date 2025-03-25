@@ -47,8 +47,6 @@ export AUTH_TYPE=auth0
 export AUTH0_AUDIENCE=...
 export AUTH0_BASE_URL=...
 export PORT=3000
-export DB_CONNECTION_STRING=...
-export DB_NAME=photosphere
 export STORAGE_CONNECTION=s3:your-s3-bucket-name:
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
@@ -84,12 +82,11 @@ pnpm test
 - `NODE_ENV` - Set to "production" to enable AWS cloud storage.
 - `APP_MODE` - Can be set to `readonly` or `readwrite`.
 - `AUTH_TYPE` - The type of auth to use, can be set to `auth0` or `no-auth`.
-- `DB_CONNECTION_STRING` - Connection string for the MongoDB database server.
-- `DB_NAME` - The name of the datbaase for the app to use.
-- `STORAGE_CONNECTION` - Defines the connection to storage for the application, examples:
+- `ASSET_STORAGE_CONNECTION` - Defines the connection to storage that contains asset databases, examples:
     - `s3:your-s3-bucket:`
     - `s3:your-s3-bucket/a-sub-directory`
     - `fs:the/local/file-system`
+- `DB_STORAGE_CONNECTION` - Defines the connection to storage that contains the Photosphere backend's general purpose database (user records are contained here).
 - `PORT` - Port to run the web server on.
 
 If using S3 for storage:
