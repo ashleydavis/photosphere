@@ -35,13 +35,21 @@ export class CloudStorage implements IStorage {
     // Parse the path and extract the bucket and key.
     //
     private parsePath(path: string): { bucket: string, key: string } {
-        const parts = path.split(":");
-        if (parts.length !== 2) {
+        const firstSlashIndex = path.indexOf("/");
+        if (firstSlashIndex === -1) {
             throw new Error(`Invalid path: ${path}`);
         }
+
+        const bucket = path.slice(0, firstSlashIndex);
+        const key = path.slice(firstSlashIndex + 1);
+
+        if (bucket === "" || key === "") {
+            throw new Error(`Invalid path: ${path}`);
+        }
+
         return {
-            bucket: parts[0],
-            key: parts[1],
+            bucket,
+            key,
         };
     }
 
