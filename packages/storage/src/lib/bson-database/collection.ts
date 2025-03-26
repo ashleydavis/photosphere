@@ -113,6 +113,47 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
+    // Put id through a buffer and be sure it's in standarized v4 format.
+    //
+    private normalizeId(id: string) {
+        const idBuffer = Buffer.from(id.replace(/-/g, ''), "hex");
+        if (idBuffer.length !== 16) {
+            throw new Error(`Invalid record ID ${id} with length ${idBuffer.length}`);
+        }
+
+        const normalizedId = idBuffer.toString("hex");
+        return normalizedId;
+    }
+
+    //
+    // Adds a record to the shard cache.
+    //
+    private setRecord(id: string, record: RecordT, shard: IShard<any>): void {
+        const normalizedId = this.normalizeId(id);
+        shard.records.set(normalizedId, record);
+        shard.dirty = true;
+        shard.lastAccessed = Date.now();
+    }
+
+    //
+    // Gets a record from the shard cache.
+    //
+    private getRecord(id: string, shard: IShard<any>): RecordT | undefined {
+        const normalizedId = this.normalizeId(id);
+        return shard.records.get(normalizedId);
+    }
+
+    //
+    // Deletes a record from the shard cache.
+    //
+    private deleteRecord(id: string, shard: IShard<any>): void {
+        const normalizedId = this.normalizeId(id);
+        shard.records.delete(normalizedId);
+        shard.dirty = true;
+        shard.lastAccessed = Date.now();
+    }
+
+    //
     // Save all dirty shards.
     //
     private async saveDirtyShards(): Promise<void> {
@@ -302,7 +343,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         const hash = crypto.createHash('md5').update(recordIdBuffer).digest('hex');
         const decimal = parseInt(hash.substring(0, 8), 16);
-        return decimal % this.numShards;
+        const shardId = decimal % this.numShards;
+        return shardId;
     }
 
     //
@@ -470,16 +512,15 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (shard === undefined) {
             const filePath = `${this.directory}/${shardId}`;
             const records = await this.loadRecords(filePath);
-            const recordMap = new Map<string, RecordT>();
-            for (const record of records) {
-                recordMap.set(record._id, { ...record });
-            }
             shard = {
                 id: shardId,
                 dirty: false,
                 lastAccessed: Date.now(),
-                records: recordMap,
+                records: new Map<string, RecordT>(),
             };
+            for (const record of records) {
+                this.setRecord(record._id, record, shard);
+            }
             this.shardCache.set(shardId, shard);
 
             //
@@ -507,9 +548,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const shardId = this.generateShardId(record._id);
         const shard = await this.loadShard(shardId);
 
-        shard.records.set(record._id, record);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
+        this.setRecord(record._id, record, shard);
 
         this.scheduleSave(`inserted record ${record._id}`);
     }
@@ -525,7 +564,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return undefined; // Empty file.
         }
 
-        const record = shard.records.get(id);
+        const record = this.getRecord(id, shard);
         if (!record) {
             return undefined; // Record not found
         }
@@ -610,7 +649,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
-        let existingRecord: any = shard.records.get(id);
+        let existingRecord: any = this.getRecord(id, shard);
 
         if (!options?.upsert) {
             //
@@ -632,9 +671,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Updates the record.
         //
         const updatedRecord: any = { ...existingRecord, ...updates };
-        shard.records.set(id, updatedRecord);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
+        this.setRecord(id, updatedRecord, shard);
 
         this.scheduleSave(`updated record ${id}`);
 
@@ -653,7 +690,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             //
             // If not upserting, finds the record to update.
             //
-            const existingRecord = shard.records.get(id);
+            const existingRecord = this.getRecord(id, shard);
             if (!existingRecord) {
                 return false; // Record not found
             }
@@ -662,9 +699,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Replaces the record.
         //
-        shard.records.set(id, record);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
+        this.setRecord(id, record, shard);
 
         this.scheduleSave(`replaced record ${id}`);
 
@@ -682,7 +717,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Find the record to delete.
         //
-        const existingRecord = shard.records.get(id);
+        const existingRecord = this.getRecord(id, shard);
         if (!existingRecord) {
             return false; // Record not found
         }
@@ -690,9 +725,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Delete the record.
         //
-        shard.records.delete(id);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
+        this.deleteRecord(id, shard);
 
         this.scheduleSave(`deleted record ${id}`);
 
