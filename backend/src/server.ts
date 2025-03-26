@@ -125,6 +125,15 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
             if (userId.startsWith("auth0|")) {
                 // Removes the auth0| prefix the user id.
                 userId = userId.substring(6);
+
+                let numPadding = 32 - userId.length;
+                if (numPadding < 0) {
+                    console.log(`User ID is too long: ${userId}`);
+                    res.sendStatus(401);
+                    return;
+                }
+
+                userId += '0'.repeat(numPadding); // Pad the user id to 32 characters to match the database.
             }
             const user = await db.collection<IUser>("users").getOne(userId);
             if (!user) {
