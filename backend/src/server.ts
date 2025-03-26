@@ -542,9 +542,6 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     app.get("/check-hash", asyncErrorHandler(async (req, res) => {
         const setId = getValue<string>(req.query, "set");
         const hash = getValue<string>(req.query, "hash");
-        const database = openDatabase(setId);
-        const collection = database.collection("metadata");
-
         const hashMap = await loadHashes(setId); //todo: Consider caching this per set.
         const matchingReocrdIds = hashMap.get(hash) || [];
         res.json({
