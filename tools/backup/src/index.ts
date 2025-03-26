@@ -1,4 +1,4 @@
-import { CloudStorage, streamAssetWithRetry, FileStorage, IStorage, StoragePrefixWrapper } from "storage";
+import { CloudStorage, FileStorage, IAssetMetadata, IStorage, StoragePrefixWrapper } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -205,6 +205,68 @@ async function main() {
     await fs.ensureDir("./log");
     await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documentCount, numAlreadyDownloaded, numProcessed, numDownloaded }, null, 2));
 }
+
+//
+// Uploads a file stream with retries.
+//
+async function uploadFileStreamWithRetry(filePath: string, storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const fileStream = fs.createReadStream(filePath);
+            await storage.writeStream(`collections/${setId}/${assetType}/${assetId}`, contentType, fileStream);
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to upload file ${filePath} to ${assetType}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
+//
+// Streams an asset from source to destination storage.
+//
+async function streamAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: IAssetMetadata, assetType: string): Promise<void> {
+    const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}/${metadata._id}`);
+    if (!fileInfo) {
+        throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
+    }
+
+    await destStorage.writeStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`, fileInfo.contentType,
+        sourceStorage.readStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`)
+    );
+
+    // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
+}
+
+//
+// Streams an asset from source to destination storage.
+// Retries on failure.
+//
+async function streamAssetWithRetry(sourceStorage: IStorage, destStorage: IStorage, metadata: IAssetMetadata, assetType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await streamAsset(sourceStorage, destStorage, metadata, assetType);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to download asset ${assetType}/${metadata._id}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
 
 main()
     .catch(err => {

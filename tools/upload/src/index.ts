@@ -9,14 +9,14 @@ import { IAsset, IDatabaseOp } from "defs";
 import _ from "lodash";
 import JSZip from "jszip";
 import { ILocation, retry, reverseGeocode, uuid } from "utils";
-import { CloudStorage, IStorage, StoragePrefixWrapper, streamAssetWithRetry, uploadFileStreamWithRetry, writeAssetWithRetry } from "storage";
+import { CloudStorage, IStorage, StoragePrefixWrapper } from "storage";
 const { execSync } = require('child_process');
 const ColorThief = require("colorthief");
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { IAssetDetails } from "./lib/asset";
 import { getImageDetails } from "./lib/image";
-import { getVideoDetails, getVideoMetadata } from "./lib/video";
+import { getVideoDetails } from "./lib/video";
 const { serializeError } = require("serialize-error");
 dayjs.extend(customParseFormat);
 
@@ -825,5 +825,49 @@ async function updateAsset(assetId: string, assetPartial: Partial<IAsset>): Prom
                 Accept: "application/json",
             },
         }
-    );     
+    );
+}
+
+//
+// Writes an asset with retries.
+//
+async function writeAssetWithRetry(storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string, data: Buffer): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await storage.write(`collections/${setId}/${assetType}/${assetId}`, contentType, data);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to write asset ${assetType}/${assetId}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
+//
+// Uploads a file stream with retries.
+//
+async function uploadFileStreamWithRetry(filePath: string, storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const fileStream = fs.createReadStream(filePath);
+            await storage.writeStream(`collections/${setId}/${assetType}/${assetId}`, contentType, fileStream);
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to upload file ${filePath} to ${assetType}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
 }
