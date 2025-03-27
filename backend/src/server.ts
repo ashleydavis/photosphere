@@ -218,9 +218,9 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     function asyncErrorHandler(handler: (req: Request, res: Response) => Promise<void>) {
         return async (req: Request, res: Response) => {
             try {
-                console.log(`Handling ${req.method} ${req.path}`);
+                // console.log(`Handling ${req.method} ${req.path}`);
                 await handler(req, res);
-                console.log(`Handled ${req.method} ${req.path}`);
+                // console.log(`Handled ${req.method} ${req.path}`);
             }
             catch (err: any) {
                 console.error(`An error occured handling ${req.method} ${req.path}`);
