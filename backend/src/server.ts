@@ -425,126 +425,17 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         res.json(records);
     }));
 
-    /**
-     * Loads file hashes from serialized file, reconstructing full FileHash objects
-     * TODO: This should be delegated to the asset storage system, which should have a way to load hashes.
-     */
-    async function loadHashes(setId: string): Promise<Map<string, string[]>> {
-        const hashMap = new Map<string, string[]>();
-        const hashesData = await assetStorage.read(`${setId}/.db/hashes.dat`);
-        if (!hashesData) {
-            return hashMap;
-        }
-
-        let offset = 0;
-        
-        // Read the segment table first
-        const segmentTableSize = hashesData.readUInt32LE(offset);
-        offset += 4;
-        
-        // Read all segments in the segment table
-        const segmentTable: string[] = [];
-        for (let i = 0; i < segmentTableSize; i++) {
-            const segmentLength = hashesData.readUInt16LE(offset);
-            offset += 2;
-            const segment = hashesData.slice(offset, offset + segmentLength).toString('utf8');
-            offset += segmentLength;
-            segmentTable.push(segment);
-        }
-        
-        // Read path list
-        const pathsCount = hashesData.readUInt32LE(offset);
-        offset += 4;
-        
-        // Read all paths (directory segments + filename)
-        const pathsList: string[] = [];
-        for (let i = 0; i < pathsCount; i++) {
-            // Read number of directory segments
-            const dirSegmentsCount = hashesData.readUInt8(offset);
-            offset += 1;
-            
-            // Read directory segments
-            const dirSegments: string[] = [];
-            for (let j = 0; j < dirSegmentsCount; j++) {
-                const segmentIndex = hashesData.readUInt16LE(offset);
-                offset += 2;
-                
-                if (segmentIndex >= segmentTable.length) {
-                    throw new Error(`Invalid segment index: ${segmentIndex}`);
-                }
-                
-                dirSegments.push(segmentTable[segmentIndex]);
-            }
-            
-            // Read filename directly
-            const fileNameLength = hashesData.readUInt16LE(offset);
-            offset += 2;
-            const fileName = hashesData.slice(offset, offset + fileNameLength).toString('utf8');
-            offset += fileNameLength;
-            
-            // Combine directory parts and filename into a full path
-            let fullPath: string;
-            if (dirSegments.length > 0) {
-                fullPath = dirSegments.join('/') + '/' + fileName;
-            } else {
-                fullPath = fileName;
-            }
-            
-            pathsList.push(fullPath);
-        }
-        
-        // Now read the hash count
-        const hashCount = hashesData.readUInt32LE(offset);
-        offset += 4;
-
-        for (let i = 0; i < hashCount; i++) {
-            // Read index (4 bytes)
-            const index = hashesData.readUInt32LE(offset);
-            offset += 4;
-
-            // Read path index (2 bytes) - index into paths list
-            const pathIndex = hashesData.readUInt16LE(offset);
-            offset += 2;
-            
-            // Get the file path from the paths list
-            if (pathIndex >= pathsList.length) {
-                throw new Error(`Invalid path index: ${pathIndex}`);
-            }
-            const filePath = pathsList[pathIndex];
-
-            // Read hash
-            const hash = hashesData.slice(offset, offset + 32);
-            offset += 32;
-
-            // Read file size
-            let size = 0;
-            if (offset + 8 <= hashesData.length) {
-                // Read size as 64-bit number
-                size = Number(hashesData.readBigUInt64LE(offset));
-                offset += 8;
-            }
-
-            // Add to hash cache (we keep them sorted when writing, reading from the same order preserves that)
-            const hashStr = hash.toString('hex');
-            let filePaths = hashMap.get(hashStr);
-            if (!filePaths) {
-                filePaths = [];
-                hashMap.set(hashStr, filePaths);
-            }
-            filePaths.push(path.basename(filePath));
-        }
-
-        return hashMap;
-    }    
-
     //
     // Gets a record from the database based on their hash.
     //
     app.get("/check-hash", asyncErrorHandler(async (req, res) => {
         const setId = getValue<string>(req.query, "set");
         const hash = getValue<string>(req.query, "hash");
-        const hashMap = await loadHashes(setId); //todo: Consider caching this per set.
-        const matchingRecordIds = hashMap.get(hash) || [];
+        const db = openDatabase(setId);
+        const metadataCollection = db.collection("metadata");
+        await metadataCollection.ensureIndex("hash");
+        const records = await metadataCollection.findByIndex("hash", hash);
+        const matchingRecordIds = records.map(record => record._id);
         res.json({
             assetIds: matchingRecordIds,
         });
