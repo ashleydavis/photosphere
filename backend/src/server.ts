@@ -544,9 +544,9 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         const setId = getValue<string>(req.query, "set");
         const hash = getValue<string>(req.query, "hash");
         const hashMap = await loadHashes(setId); //todo: Consider caching this per set.
-        const matchingReocrdIds = hashMap.get(hash) || [];
+        const matchingRecordIds = hashMap.get(hash) || [];
         res.json({
-            assetIds: matchingReocrdIds,
+            assetIds: matchingRecordIds,
         });
     }));    
 
