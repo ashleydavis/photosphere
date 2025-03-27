@@ -149,12 +149,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             {
                 collectionName: "metadata",
                 recordId: asset._id,
+                setId,
                 op: {
                     type: "set",
                     fields: {
                         ...asset,
                         uploadDate: dayjs().toISOString(),
-                        setId,
+                        setId, //TODO: Shouldn't be needed.
                     },
                 },
             }
@@ -174,6 +175,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void> {
 
+        if (!setId) {
+            throw new Error("No set id provided.");
+        }
+
         const updatedAsset = { ...loadedAssets.current[assetId], ...partialAsset };
         loadedAssets.current[assetId] = updatedAsset;
 
@@ -182,6 +187,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
+            setId,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -201,9 +207,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Update multiple assets with persisted database changes.
     //
     async function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
+
+        if (!setId) {
+            throw new Error("No set id provided.");
+        }
+
         for (const { assetId, partialAsset } of assetUpdates) {
-            loadedAssets.current[assetId] = { 
-                ...loadedAssets.current[assetId], 
+            loadedAssets.current[assetId] = {
+                ...loadedAssets.current[assetId],
                 ...partialAsset,
             };
         }
@@ -213,6 +224,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
             recordId: assetId,
+            setId,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -240,6 +252,10 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
+        if (!setId) {
+            throw new Error("No set id provided.");
+        }
+
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -254,6 +270,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
+            setId,
             op: {
                 type: "push",
                 field: field,
@@ -274,7 +291,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Removes an array value from the asset.
     //
     async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
-        
+
+        if (!setId) {
+            throw new Error("No set id provided.");
+        }
+
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
         if (updatedAsset[field] === undefined) {
             updatedAsset[field] = [];
@@ -288,6 +309,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
+            setId,
             op: {
                 type: "pull",
                 field: field,

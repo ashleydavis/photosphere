@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { CloudStorage, deleteAssetWithRetry, EncryptedStorage, FileStorage, getAssetInfoWithRetry, readAssetWithRetry, writeAssetWithRetry } from "storage";
+import { BsonDatabase, FileStorage } from "storage";
 import { sleep } from "utils";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -31,8 +31,9 @@ async function main() {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const storage = new CloudStorage(bucket);
-
+    // const storage = new CloudStorage(true);
+    const storage = new FileStorage();
+    
     const client = new MongoClient(DB_CONNECTION_STRING);
     await client.connect();
 
@@ -46,6 +47,12 @@ async function main() {
     else if (argv.set) {
         query.setId = argv.set;
     }
+
+    const bsonDatabase = new BsonDatabase({ //todo: need a separate database for each set.
+        storage,
+        // directory: "storage-test-next:/test-12", todo
+        directory: "./storage-test",  //fio:
+    });
 
     const metadataCollection = db.collection<any>("metadata");
     const documentCount = await metadataCollection.countDocuments(query);
@@ -69,6 +76,12 @@ async function main() {
     }
 
     let totalSize = 0;
+    let minDocumentSize = Number.MAX_SAFE_INTEGER;
+    let maxDocumentSize = 0;
+    const sizePerSet = new Map<string, number>();
+
+    // let allJsonDocs: any[] = [];
+    // let allBinaryDocs: any[] = [];
 
     while (true) {
         const documents = await metadataCollection.find(query)
@@ -116,12 +129,25 @@ async function main() {
 
                 numProcessed += 1;
 
-                totalSize += estimateJSONSize(document);
+
+                const docSize = estimateJSONSize(document);
+
+                totalSize += docSize;
+                minDocumentSize = Math.min(minDocumentSize, docSize);
+                maxDocumentSize = Math.max(maxDocumentSize, docSize);
+
+                //
+                // Update size for each set.
+                //
+                sizePerSet.set(document.setId, (sizePerSet.get(document.setId) || 0) + docSize);
+
             }));
 
             console.log(`Processed ${numProcessed} of ${documentCount} documents.`);
         }
     }
+
+    await bsonDatabase.shutdown();
 
     await client.close();
 
@@ -135,50 +161,68 @@ async function main() {
     const averageSize = totalSize / documentCount;
     console.log(`Average size: ${averageSize} bytes.`);
 
+    console.log(`Min document size: ${minDocumentSize} bytes.`);
+    console.log(`Max document size: ${maxDocumentSize} bytes.`);
+
     await fs.ensureDir("./log");
     await fs.writeFile("./log/summary.json", JSON.stringify({ numDocuments: documentCount, numUpdated, numProcessed, numFailed, totalSize, averageSize }, null, 2));
+
+    console.log(sizePerSet);
+
+    // Write the JSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all.json", JSON.stringify(allJsonDocs));
+
+    // // Write the BSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all.bson", BSON.serialize(allJsonDocs));
+
+    // // Write the binary BSON documents to a single file.
+    // await fs.ensureDir("./output");
+    // await fs.writeFile("./output/all-binary.bson", BSON.serialize(allBinaryDocs));
 }
 
-// main()
-//     .catch(err => {
-//         console.error(`Failed with error:`);
-//         console.error(err);
-//         process.exit(1);
-//     });
+main()
+    .catch(err => {
+        console.error(`Failed with error:`);
+        console.error(err);
+        process.exit(1);
+    });
 
-(async () => {
+// (async () => {
 
-    const publicKey = crypto.createPublicKey(fs.readFileSync("./keys/public.pem"));
-    const privateKey = crypto.createPrivateKey(fs.readFileSync("./keys/private.pem"));
+//     const publicKey = crypto.createPublicKey(fs.readFileSync("./keys/public.pem"));
+//     const privateKey = crypto.createPrivateKey(fs.readFileSync("./keys/private.pem"));
 
-    const fileStorage = new FileStorage("./test");
-    const encryptedStorage = new EncryptedStorage(fileStorage, publicKey, privateKey);
+//     const fileStorage = new FileStorage("./test");
+//     const encryptedStorage = new EncryptedStorage(fileStorage, publicKey, privateKey);
 
-    const readStream = fs.createReadStream("./src/index.ts");
-    await encryptedStorage.writeStream("test", "index.ts.enc", "text/plain", readStream);
+//     const readStream = fs.createReadStream("./src/index.ts");
+//     await encryptedStorage.writeStream("test", "index.ts.enc", "text/plain", readStream);
 
-    const decryptedStream = await encryptedStorage.readStream("test", "index.ts.enc");
-    const writeStream = fs.createWriteStream("./src/index.ts.dec");
-    decryptedStream.pipe(writeStream);
+//     const decryptedStream = await encryptedStorage.readStream("test", "index.ts.enc");
+//     const writeStream = fs.createWriteStream("./src/index.ts.dec");
+//     decryptedStream.pipe(writeStream);
 
-    await sleep(1000);
+//     await sleep(1000);
 
-    const file = fs.readFileSync("./src/index.ts");
-    const decryptedData = fs.readFileSync("./src/index.ts.dec");
+//     const file = fs.readFileSync("./src/index.ts");
+//     const decryptedData = fs.readFileSync("./src/index.ts.dec");
 
-    // // Write the file to storage.
-    // await encryptedStorage.write("test", "index.ts.enc", "text/plain", file);
+//     // // Write the file to storage.
+//     // await encryptedStorage.write("test", "index.ts.enc", "text/plain", file);
 
-    // // Read the file from storage.
-    // const decryptedData = await encryptedStorage.read("test", "index.ts.enc");
+//     // // Read the file from storage.
+//     // const decryptedData = await encryptedStorage.read("test", "index.ts.enc");
 
-    if (!file.equals(decryptedData)) {
-        throw new Error(`Decrypted data does not match the original data.`);
-    }
-    else {
-        console.log(`Decrypted data matches the original data.`);
-    }
+//     if (!file.equals(decryptedData)) {
+//         throw new Error(`Decrypted data does not match the original data.`);
+//     }
+//     else {
+//         console.log(`Decrypted data matches the original data.`);
+//     }
 
-})();
+// })();
+
 
 

@@ -2,7 +2,7 @@ name: Frontend Demo Deploy
 on:
   push:
     branches:
-      - main
+      - demo
     paths:
       - frontend/**
       - packages/user-interface/**

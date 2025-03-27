@@ -14,30 +14,44 @@ export class EncryptedStorage implements IStorage {
     //
     // List files in storage.
     //
-    async list(path: string, max: number, next?: string): Promise<IListResult> {
-        return this.storage.list(path, max, next);
+    listFiles(path: string, max: number, next?: string): Promise<IListResult> {
+        return this.storage.listFiles(path, max, next);
+    }
+
+    //
+    // List directories in storage.
+    //
+    listDirs(path: string, max: number, next?: string): Promise<IListResult> {
+        return this.storage.listDirs(path, max, next);
     }
 
     //
     // Returns true if the specified file exists.
     //
-    async exists(path: string, fileName: string): Promise<boolean> {
-        return this.storage.exists(path, fileName);
+    fileExists(filePath: string): Promise<boolean> {
+        return this.storage.fileExists(filePath);
     }
 
     //
-    // Gets info about an asset.
+    // Returns true if the specified directory exists (contains at least one file or subdirectory).
     //
-    async info(path: string, fileName: string): Promise<IFileInfo | undefined> {
-        return this.storage.info(path, fileName);
+    dirExists(dirPath: string): Promise<boolean> {
+        return this.storage.dirExists(dirPath);
+    }
+
+    //
+    // Gets info about a file.
+    //
+    info(filePath: string): Promise<IFileInfo | undefined> {
+        return this.storage.info(filePath);
     }
 
     //
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    async read(path: string, fileName: string): Promise<Buffer | undefined> {
-        const data = await this.storage.read(path, fileName);
+    async read(filePath: string): Promise<Buffer | undefined> {
+        const data = await this.storage.read(filePath);
         if (!data) {
             return undefined;
         }
@@ -48,16 +62,16 @@ export class EncryptedStorage implements IStorage {
     //
     // Writes a file to storage.
     //
-    async write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void> {               
-        await this.storage.write(path, fileName, contentType, await encryptBuffer(this.publicKey, data));
+    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {               
+        await this.storage.write(filePath, contentType, await encryptBuffer(this.publicKey, data));
     }
 
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, fileName: string): Readable {
+    readStream(filePath: string): Readable {
         const decryptionStream = createDecryptionStream(this.privateKey);
-        const readStream = this.storage.readStream(path, fileName)
+        const readStream = this.storage.readStream(filePath)
         readStream.pipe(decryptionStream);
         return decryptionStream;
     }
@@ -65,16 +79,24 @@ export class EncryptedStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
-    async writeStream(path: string, fileName: string, contentType: string, inputStream: Readable, contentLength?: number): Promise<void> {
+    async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {
         const encryptionStream = createEncryptionStream(this.publicKey);
         inputStream.pipe(encryptionStream);
-        await this.storage.writeStream(path, fileName, contentType, encryptionStream, contentLength);
+        await this.storage.writeStream(filePath, contentType, encryptionStream, contentLength);
     }
 
     //
     // Deletes the file from storage.
     //
-    async delete(path: string, fileName: string): Promise<void> {
-        return this.storage.delete(path, fileName);
+    async delete(filePath: string): Promise<void> {
+        return this.storage.delete(filePath);
+    }
+
+    //
+    // Copies a file from one location to another.
+    //
+    copyTo(srcPath: string, destPath: string): Promise<void> {
+        //TODO: This might have to decrypt and recrypt the file.
+        return this.storage.copyTo(srcPath, destPath);
     }
 }

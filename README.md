@@ -3,9 +3,9 @@
 This is the official ongoing monorepo for Photosphere, a cross-platform application for managing your photos and videos.
 
 Photosphere is designed to be self-hosted and requires the following resources:
-- Host the static web page.
-- Host the Docker container.
-- Provide a MongoDB database.
+- Host the static web page (in this process of removing this step).
+- Host the Docker container
+- Provide a MongoDB database (in this process of removing this step).
 - Provide an AWS S3 bucket (other storage providers coming later).
 - Provide an Auth0 account for authentication.
 

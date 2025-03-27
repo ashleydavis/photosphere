@@ -1,7 +1,7 @@
 @base_url = http://localhost:3000
 # @base_url = https://photosphere-api.codecapers.com.au
 @token = not needed
-@setId = demo
+@setId = 93886ac9-16e4-48e6-983b-ec65566018d0
 @asset = 1234
 @hash_id = 4567
 @hash = ABCD

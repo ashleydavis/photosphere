@@ -36,8 +36,6 @@
         "PORT",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
-        "AWS_BUCKET",
-        "AWS_DEFAULT_REGION",
-        "DB_CONNECTION_STRING"
+        "AWS_DEFAULT_REGION"
     ]
 }

@@ -2,6 +2,11 @@ import { IOpSelection } from "./op";
 
 export interface IDatabaseOp {
     //
+    // The database the operation is applied to.
+    //
+    setId: string;
+
+    //
     // The name of the database collection to which the operation is applied.
     //
     collectionName: string;

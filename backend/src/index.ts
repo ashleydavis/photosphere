@@ -1,7 +1,5 @@
-import { MongoClient } from "mongodb";
 import { createServer } from "./server";
-import { CloudStorage, IStorage } from "storage";
-import { FileStorage } from "storage";
+import { StoragePrefixWrapper, IStorage, createStorage } from "storage";
 
 async function main() {
 
@@ -10,38 +8,25 @@ async function main() {
         throw new Error(`Set environment variable PORT.`);
     }
 
-    const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING;
-    if (DB_CONNECTION_STRING === undefined) {
-        throw new Error(`Set environment variable DB_CONNECTION_STRING.`);
-    }
-
-    const DB_NAME = process.env.DB_NAME;
-    if (DB_NAME === undefined) {
-        throw new Error(`Set environment variable DB_NAME.`);
-    }
-
-    const client = new MongoClient(DB_CONNECTION_STRING);
-    await client.connect();
-
-    const db = client.db(DB_NAME);
-    
     console.log(`Running in mode: ${process.env.NODE_ENV} on port ${PORT}.`);
 
-    let storage: IStorage;
-
-    if (process.env.NODE_ENV === "production") {
-        const bucket = process.env.AWS_BUCKET as string;
-        if (bucket === undefined) {
-            throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
-        }
-
-        storage = new CloudStorage(bucket);    
-    }
-    else {
-        storage = new FileStorage();
+    const assetStorageConnection = process.env.ASSET_STORAGE_CONNECTION;
+    if (!assetStorageConnection) {
+        throw new Error(`Set the asset databases storage type and root path through the environment variable ASSET_STORAGE_CONNECTION.`);
     }
 
-    const app = await createServer(() => new Date(Date.now()), db, storage);
+    const databaseStorageConnection = process.env.DB_STORAGE_CONNECTION;
+    if (!databaseStorageConnection) {
+        throw new Error(`Set the generate database storage type and root path through the environment variable DB_STORAGE_CONNECTION.`);
+    }
+
+    const { storage: assetStorage, normalizedPath: assetPath } = createStorage(assetStorageConnection);
+    const assetStorageWrapper = new StoragePrefixWrapper(assetStorage, assetPath);
+
+    const { storage: dbStorage, normalizedPath: dbPath } = createStorage(databaseStorageConnection);
+    const databaseStorageWrapper = new StoragePrefixWrapper(dbStorage, dbPath);
+
+    const app = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper);
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);
     });

@@ -1,71 +1,111 @@
 import * as fs from "fs-extra";
-import { join, dirname } from "path";
+import * as path from "path";
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "./storage";
 
 export class FileStorage implements IStorage {
 
-    private readonly rootDir: string = "files";
-
-    constructor(rootDir?: string) {
-        if (rootDir) {
-            this.rootDir = rootDir;
+    //
+    // List files in storage.
+    //
+    async listFiles(path: string, max: number, next?: string): Promise<IListResult> {
+        if (!await fs.pathExists(path)) {
+            return {
+                names: [],
+                next: undefined,
+            };
         }
+
+        let entries = await fs.readdir(path, { withFileTypes: true });
+        entries = entries.filter(entry => !entry.name.endsWith(".info"));
+        entries = entries.filter(entry => !entry.isDirectory());
+
+        //
+        // Alphanumeric sort to simulate the order of file listing from S3.
+        // This allows the files to be listed in the same order as they would be listed in S3.
+        // This is important for building the hash tree as the order of files affects the hash tree.
+        //
+        entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        return {
+            names: entries.map(entry => entry.name),
+            next: undefined,
+        };
     }
 
     //
     // List files in storage.
     //
-    async list(path: string, max: number, next?: string): Promise<IListResult> {
-        const dir = join(this.rootDir, path);
-        if (!await fs.pathExists(dir)) {
+    async listDirs(path: string, max: number, next?: string): Promise<IListResult> {
+        if (!await fs.pathExists(path)) {
             return {
-                fileNames: [],
+                names: [],
                 next: undefined,
             };
         }
 
-        let fileNames = await fs.readdir(dir);
-        fileNames = fileNames.filter(file => !file.endsWith(".info"));
-        return {
-            fileNames,
-            next: undefined,
-        };        
-    }
+        let entries = await fs.readdir(path, { withFileTypes: true });
+        entries = entries.filter(entry => entry.isDirectory());
 
-    //
-    // Determines the local file name for a file.
-    //
-    getLocalFileName(path: string, fileName: string): string {
-        return join(this.rootDir, path, fileName);
+        //
+        // Alphanumeric sort to simulate the order of file listing from S3.
+        // This allows the files to be listed in the same order as they would be listed in S3.
+        // This is important for building the hash tree as the order of files affects the hash tree.
+        //
+        entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        return {
+            names: entries.map(entry => entry.name),
+            next: undefined,
+        };
     }
 
     //
     // Determines the local info file for a file.
-    //    
-    getInfoFileName(path: string, fileName: string): string {
-        return this.getLocalFileName(path, fileName) + `.info`;
+    //
+    getInfoFileName(filePath: string): string {
+        return filePath + `.info`;
     }
 
     //
     // Returns true if the specified file exists.
     //
-    async exists(path: string, fileName: string): Promise<boolean> {
-        return await fs.pathExists(this.getLocalFileName(path, fileName));
+    async fileExists(filePath: string): Promise<boolean> {
+        if (!await fs.pathExists(filePath)) {
+            return false;
+        }
+        
+        // Ensure it's a file, not a directory
+        const stats = await fs.stat(filePath);
+        return stats.isFile();
     }
-
+    
+    //
+    // Returns true if the specified directory exists.
+    //
+    async dirExists(dirPath: string): Promise<boolean> {
+        if (!await fs.pathExists(dirPath)) {
+            return false;
+        }
+        
+        // Ensure it's a directory
+        const stats = await fs.stat(dirPath);
+        return stats.isDirectory();
+    }
+    
     //
     // Gets info about a file.
     //
-    async info(path: string, fileName: string): Promise<IFileInfo | undefined> {
-        const filePath = this.getInfoFileName(path, fileName)
-        if (!await fs.pathExists(filePath)) {
-            return undefined;
+    async info(filePath: string): Promise<IFileInfo | undefined> {
+        const infoFilePath = this.getInfoFileName(filePath)
+        let contentType: string | undefined = undefined;
+        if (await fs.pathExists(infoFilePath)) {
+            const info = JSON.parse(await fs.readFile(infoFilePath, "utf8"));
+            contentType = info.contentType;
         }
-        const info = JSON.parse(await fs.readFile(filePath, "utf8"));
-        const stat = await fs.stat(this.getLocalFileName(path, fileName));
+        const stat = await fs.stat(filePath);
         return {
-            contentType: info.contentType,
+            contentType,
             length: stat.size,
         };
     }
@@ -74,69 +114,91 @@ export class FileStorage implements IStorage {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    async read(path: string, fileName: string): Promise<Buffer | undefined> {
-        const filePath = this.getLocalFileName(path, fileName);
+    async read(filePath: string): Promise<Buffer | undefined> {
         if (!await fs.pathExists(filePath)) {
             // Returns undefined if the file doesn't exist.
             return undefined;
         }
-        
+
         return await fs.readFile(filePath);
     }
 
     //
     // Writes a file to storage.
     //
-    async write(path: string, fileName: string, contentType: string, data: Buffer): Promise<void> {
-        await fs.ensureDir(join(this.rootDir, path));
-        await fs.writeFile(this.getLocalFileName(path, fileName), data);
-        await fs.writeFile(this.getInfoFileName(path, fileName), JSON.stringify({
-            contentType: contentType,
-        }, null, 2));
+    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
+        await fs.ensureDir(path.dirname(filePath));
+        await fs.writeFile(filePath, data);
+        if (contentType) {
+            await fs.writeFile(this.getInfoFileName(filePath), JSON.stringify({
+                contentType: contentType,
+            }, null, 2));
+        }
     }
 
     //
     // Streams a file from stroage.
     //
-    readStream(path: string, fileName: string): Readable {
-        return fs.createReadStream(this.getLocalFileName(path, fileName));
+    readStream(filePath: string): Readable {
+        return fs.createReadStream(filePath);
     }
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(path: string, fileName: string, contentType: string, inputStream: Readable): Promise<void> {
+    writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const infoFileName = this.getInfoFileName(path, fileName);
-            fs.ensureDir(dirname(infoFileName))
-                .then(() => {
-                    return fs.writeFile(infoFileName, JSON.stringify({
-                        contentType: contentType,
-                    }, null, 2))
+            if (contentType) {
+                const infoFileName = this.getInfoFileName(filePath);
+                fs.ensureDir(path.dirname(infoFileName))
                     .then(() => {
-                        const localFileName = this.getLocalFileName(path, fileName);
-                        const fileWriteStream = fs.createWriteStream(localFileName);
-                        inputStream.pipe(fileWriteStream)
-                            .on("error", (err: any) => {
-                                reject(err);
-                            })
-                            .on("finish", () => {
-                                resolve();
-                            });
-                    })
+                        return fs.writeFile(infoFileName, JSON.stringify({
+                            contentType: contentType,
+                        }, null, 2))
+                        .then(() => {
+                            const fileWriteStream = fs.createWriteStream(filePath);
+                            inputStream.pipe(fileWriteStream)
+                                .on("error", (err: any) => {
+                                    reject(err);
+                                })
+                                .on("finish", () => {
+                                    resolve();
+                                });
+                        })
 
-                })
-                .catch((err) => {
-                    reject(err);
-                });
+                    })
+                    .catch((err) => {
+                        reject(err);
+                    });
+            }
+            else {
+                const fileWriteStream = fs.createWriteStream(filePath);
+                inputStream.pipe(fileWriteStream)
+                    .on("error", (err: any) => {
+                        reject(err);
+                    })
+                    .on("finish", () => {
+                        resolve();
+                    });
+            }
         });
     }
 
     //
     // Deletes the file from storage.
     //
-    async delete(path: string, fileName: string): Promise<void> {
-        await fs.unlink(this.getLocalFileName(path, fileName));
-        await fs.unlink(this.getInfoFileName(path, fileName));
+    async delete(filePath: string): Promise<void> {
+        await fs.unlink(filePath);
+        await fs.unlink(this.getInfoFileName(filePath));
     }
+
+    //
+    // Copies a file from one location to another.
+    // Src file path is a full path, dest path is relative to the storage root.
+    //
+    async copyTo(srcPath: string, destPath: string): Promise<void> {
+        await fs.ensureDir(path.dirname(destPath));
+        await fs.copy(srcPath, destPath);
+    }
+
 }

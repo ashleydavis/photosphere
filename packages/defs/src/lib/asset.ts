@@ -15,7 +15,7 @@ export interface IAsset {
     //
     // The ID of the set that contains the asset.
     //
-    setId: string;
+    setId: string; //TODO: This shouldn't be needed now on the asset.
 
     //
     // The original name of the asset before it was uploaded.

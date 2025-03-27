@@ -1,4 +1,4 @@
-import { CloudStorage, streamAssetWithRetry, FileStorage, IStorage } from "storage";
+import { CloudStorage, FileStorage, IAssetMetadata, IStorage, StoragePrefixWrapper } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -24,7 +24,7 @@ async function computeHash(data: Buffer): Promise<string> {
 // Write JSON data to the destination storage.
 //
 function writeJson(destStorage: IStorage, setId: string, collectionName: string, documentId: string, document: any): Promise<void> {
-    return destStorage.write(`collections/${setId}/${collectionName}`, documentId, "application/json", Buffer.from(JSON.stringify(document)));
+    return destStorage.write(`collections/${setId}/${collectionName}/${documentId}`, "application/json", Buffer.from(JSON.stringify(document)));
 }
 
 //
@@ -90,8 +90,8 @@ async function main() {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const sourceStorage = source == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
-    const destStorage = dest == "s3" ? new CloudStorage(bucket) : new FileStorage(LOCAL_STORAGE_DIR);
+    const sourceStorage = source == "s3" ?  new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`) : new StoragePrefixWrapper(new FileStorage(), LOCAL_STORAGE_DIR);
+    const destStorage = dest == "s3" ? new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`) : new StoragePrefixWrapper(new FileStorage(), LOCAL_STORAGE_DIR);
 
     console.log(`Source storage: ${source}`);
     console.log(`Destination storage: ${dest}`);
@@ -133,7 +133,7 @@ async function main() {
 
         for (const batch of _.chunk(documents, batchSize)) {
             await Promise.all(batch.map(async (document: any) => {
-                const isAlreadyDownloaded = await destStorage.exists(`collections/${document.setId}/metadata`, document._id);
+                const isAlreadyDownloaded = await destStorage.fileExists(`collections/${document.setId}/metadata/${document._id}`);
                 if (isAlreadyDownloaded) {
                     numAlreadyDownloaded += 1;
                     // console.log(`Document ${document._id} already downloaded.`);
@@ -159,7 +159,7 @@ async function main() {
                 //
                 // Check the hash of the downloaded assets.
                 //
-                const fileData = await destStorage.read(`collections/${document.setId}/asset`, document._id);
+                const fileData = await destStorage.read(`collections/${document.setId}/asset/${document._id}`);
                 if (!fileData) {
                     throw new Error(`Document ${document._id} does not have data at ${dest}.`);
                 }
@@ -205,6 +205,68 @@ async function main() {
     await fs.ensureDir("./log");
     await fs.writeFile("./log/summary.json", JSON.stringify({ numMatching, numNotMatching, numDocuments: documentCount, numAlreadyDownloaded, numProcessed, numDownloaded }, null, 2));
 }
+
+//
+// Uploads a file stream with retries.
+//
+async function uploadFileStreamWithRetry(filePath: string, storage: IStorage, assetId: string, setId: string, assetType: string, contentType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const fileStream = fs.createReadStream(filePath);
+            await storage.writeStream(`collections/${setId}/${assetType}/${assetId}`, contentType, fileStream);
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to upload file ${filePath} to ${assetType}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
+//
+// Streams an asset from source to destination storage.
+//
+async function streamAsset(sourceStorage: IStorage, destStorage: IStorage, metadata: IAssetMetadata, assetType: string): Promise<void> {
+    const fileInfo = await sourceStorage.info(`collections/${metadata.setId}/${assetType}/${metadata._id}`);
+    if (!fileInfo) {
+        throw new Error(`Document ${metadata._id} does not have file info:\r\n${JSON.stringify(metadata)}`);
+    }
+
+    await destStorage.writeStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`, fileInfo.contentType,
+        sourceStorage.readStream(`collections/${metadata.setId}/${assetType}/${metadata._id}`)
+    );
+
+    // console.log(`Wrote asset for ${assetType}/${metadata._id}.`);
+}
+
+//
+// Streams an asset from source to destination storage.
+// Retries on failure.
+//
+async function streamAssetWithRetry(sourceStorage: IStorage, destStorage: IStorage, metadata: IAssetMetadata, assetType: string): Promise<void> {
+    let lastErr = undefined;
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await streamAsset(sourceStorage, destStorage, metadata, assetType);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            console.error(`Failed to download asset ${assetType}/${metadata._id}. Retries left: ${retries}.`);
+            console.error(err);
+            retries--;
+        }
+    }
+
+    throw lastErr;
+}
+
 
 main()
     .catch(err => {
