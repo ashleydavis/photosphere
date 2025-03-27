@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
+import { BsonIndex, IBsonIndex } from './index';
 
 //
 // Options when creating a BSON collection.
@@ -80,6 +81,31 @@ export interface IBsonCollection<RecordT extends IRecord> {
     replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean>;
 
     //
+    // Creates an index for the given field, but only if it doesn't already exist.
+    //
+    ensureIndex(fieldName: string): Promise<IBsonIndex<RecordT>>;
+
+    //
+    // Gets an existing index by field name
+    //
+    getIndex(fieldName: string): Promise<IBsonIndex<RecordT> | undefined>;
+
+    //
+    // List all indexes for this collection
+    //
+    listIndexes(): Promise<string[]>;
+
+    //
+    // Find records by index
+    //
+    findByIndex(fieldName: string, value: any): Promise<RecordT[]>;
+
+    //
+    // Deletes an index
+    //
+    deleteIndex(fieldName: string): Promise<boolean>;
+
+    //
     // Writes all pending changes and shuts down the collection.
     //
     shutdown(): Promise<void>;
@@ -97,6 +123,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private shardCache: Map<number, IShard<RecordT>> = new Map();
     private isAlive: boolean = true;
     private maxCachedShards: number;
+    private indexes: Map<string, IBsonIndex<RecordT>> = new Map();
 
     //
     // The last time the collection was saved.
@@ -110,6 +137,59 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.maxCachedShards = options.maxCachedShards || 10;
 
         this.keepWorkerAlive();
+    }
+
+    // Cache of loaded index field names to avoid checking storage multiple times
+    private loadedIndexFields: Set<string> = new Set();
+    // Cache of checked but nonexistent index fields
+    private nonexistentIndexFields: Set<string> = new Set();
+    // Flag to indicate if all indexes have been loaded
+    private allIndexesLoaded: boolean = false;
+
+    //
+    // Checks if an index exists on disk
+    //
+    private async indexExistsOnDisk(fieldName: string): Promise<boolean> {
+        // If we've already checked this field name, use the cached result
+        if (this.loadedIndexFields.has(fieldName)) return true;
+        if (this.nonexistentIndexFields.has(fieldName)) return false;
+
+        const indexFilePath = `${this.directory}/index/${fieldName}.dat`;
+        const exists = await this.storage.fileExists(indexFilePath);
+
+        // Cache the result
+        if (exists) {
+            this.loadedIndexFields.add(fieldName);
+        } else {
+            this.nonexistentIndexFields.add(fieldName);
+        }
+
+        return exists;
+    }
+
+    //
+    // Lazily loads an index if it exists
+    //
+    private async loadIndexIfExists(fieldName: string): Promise<IBsonIndex<RecordT> | undefined> {
+        // Return immediately if the index is already loaded
+        let index = this.indexes.get(fieldName);
+        if (index) return index;
+
+        // Check if the index file exists
+        const exists = await this.indexExistsOnDisk(fieldName);
+        if (!exists) return undefined;
+
+        // Create and initialize the index
+        index = new BsonIndex<RecordT>({
+            storage: this.storage,
+            directory: this.directory,
+            fieldName: fieldName
+        });
+
+        this.indexes.set(fieldName, index);
+        console.log(`Lazily loaded index for field '${fieldName}'`);
+
+        return index;
     }
 
     //
@@ -330,6 +410,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.isAlive = false; // Causes the worker to exit after saving.
         this.wakeWorker(); // Wake the worker so it can exit.
         await this.saveDirtyShards(); // Save any remaining dirty shards.
+
+        // Shut down all indexes
+        for (const index of this.indexes.values()) {
+            await index.shutdown();
+        }
     }
 
     //
@@ -343,8 +428,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         const hash = crypto.createHash('md5').update(recordIdBuffer).digest('hex');
         const decimal = parseInt(hash.substring(0, 8), 16);
-        const shardId = decimal % this.numShards;
-        return shardId;
+        return decimal % this.numShards;
     }
 
     //
@@ -545,10 +629,18 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             record._id = crypto.randomUUID();
         }
 
+        // Ensure all indexes are loaded before making changes
+        await this.loadAllIndexes();
+
         const shardId = this.generateShardId(record._id);
         const shard = await this.loadShard(shardId);
 
         this.setRecord(record._id, record, shard);
+
+        // Update all indexes
+        for (const index of this.indexes.values()) {
+            await index.indexRecord(record);
+        }
 
         this.scheduleSave(`inserted record ${record._id}`);
     }
@@ -645,6 +737,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Updates a record.
     //
     async updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean> {
+        // Ensure all indexes are loaded before making changes
+        await this.loadAllIndexes();
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
@@ -673,6 +767,16 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const updatedRecord: any = { ...existingRecord, ...updates };
         this.setRecord(id, updatedRecord, shard);
 
+        // Update all indexes
+        for (const index of this.indexes.values()) {
+            // Remove old record from index
+            if (existingRecord) {
+                await index.removeRecord(id);
+            }
+            // Add updated record to index
+            await index.indexRecord(updatedRecord);
+        }
+
         this.scheduleSave(`updated record ${id}`);
 
         return true;
@@ -682,24 +786,35 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Replaces a record with completely new data.
     //
     async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean> {
+        // Ensure all indexes are loaded before making changes
+        await this.loadAllIndexes();
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
-        if (!options?.upsert) {
+        const existingRecord = this.getRecord(id, shard);
+
+        if (!options?.upsert && !existingRecord) {
             //
             // If not upserting, finds the record to update.
             //
-            const existingRecord = this.getRecord(id, shard);
-            if (!existingRecord) {
-                return false; // Record not found
-            }
+            return false; // Record not found
         }
 
         //
         // Replaces the record.
         //
         this.setRecord(id, record, shard);
+
+        // Update all indexes
+        for (const index of this.indexes.values()) {
+            // Remove old record from index
+            if (existingRecord) {
+                await index.removeRecord(id);
+            }
+            // Add new record to index
+            await index.indexRecord(record);
+        }
 
         this.scheduleSave(`replaced record ${id}`);
 
@@ -710,6 +825,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Deletes a record.
     //
     async deleteOne(id: string): Promise<boolean> {
+        // Ensure all indexes are loaded before making changes
+        await this.loadAllIndexes();
 
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
@@ -727,7 +844,231 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         this.deleteRecord(id, shard);
 
+        // Remove from all indexes
+        for (const index of this.indexes.values()) {
+            await index.removeRecord(id);
+        }
+
         this.scheduleSave(`deleted record ${id}`);
+
+        return true;
+    }
+
+    //
+    // Creates an index for the given field, but only if it doesn't already exist.
+    //
+    async ensureIndex(fieldName: string): Promise<IBsonIndex<RecordT>> {
+        // Check if the index already exists in memory
+        let index = this.indexes.get(fieldName);
+
+        if (index) {
+            console.log(`Using existing in-memory index for field '${fieldName}'`);
+            return index;
+        }
+
+        // Check if the index exists on disk but isn't loaded
+        const existsOnDisk = await this.indexExistsOnDisk(fieldName);
+        if (existsOnDisk) {
+            // Load the existing index
+            index = await this.loadIndexIfExists(fieldName);
+            if (index) {
+                console.log(`Loaded existing index from disk for field '${fieldName}'`);
+                return index;
+            }
+        }
+
+        // Create a new index
+        index = new BsonIndex<RecordT>({
+            storage: this.storage,
+            directory: this.directory,
+            fieldName: fieldName
+        });
+
+        this.indexes.set(fieldName, index);
+        this.loadedIndexFields.add(fieldName);
+        this.nonexistentIndexFields.delete(fieldName);
+
+        // If we previously thought all indexes were loaded,
+        // we need to reset that since we're adding a new one
+        if (this.allIndexesLoaded) {
+            this.allIndexesLoaded = true; // Set to true since we know all indexes now
+        }
+
+        // Populate the index with existing records
+        for await (const record of this.iterateRecords()) {
+            await index.indexRecord(record);
+        }
+
+        return index;
+    }
+
+    //
+    // Gets an existing index by field name
+    //
+    async getIndex(fieldName: string): Promise<IBsonIndex<RecordT> | undefined> {
+        // Lazily load the index if it exists but isn't loaded yet
+        return await this.loadIndexIfExists(fieldName);
+    }
+
+    //
+    // Loads all indexes from disk to ensure they're available for record operations
+    //
+    private async loadAllIndexes(): Promise<void> {
+        // If we've already loaded all indexes, just return
+        if (this.allIndexesLoaded) {
+            return;
+        }
+
+        // Check for index files on disk
+        const indexDirPath = `${this.directory}/index`;
+
+        // Check if index directory exists
+        const dirExists = await this.storage.dirExists(indexDirPath);
+        if (!dirExists) {
+            // No indexes to load
+            this.allIndexesLoaded = true;
+            return;
+        }
+
+        // List index files
+        const result = await this.storage.listFiles(indexDirPath, 1000);
+        const indexFiles = result.names || [];
+
+        // Process each index file
+        for (const file of indexFiles) {
+            if (file === '.placeholder' || !file.endsWith('.dat')) {
+                continue; // Skip placeholder files or non-index files
+            }
+
+            // Extract field name from file name (remove .dat extension)
+            const fieldName = file.substring(0, file.length - 4);
+
+            // If the index is already loaded, skip it
+            if (this.indexes.has(fieldName)) {
+                continue;
+            }
+
+            // Load the index
+            await this.loadIndexIfExists(fieldName);
+        }
+
+        // Mark all indexes as loaded
+        this.allIndexesLoaded = true;
+    }
+
+    //
+    // List all indexes for this collection (both in memory and on disk)
+    //
+    async listIndexes(): Promise<string[]> {
+        // Start with indexes already loaded in memory
+        const indexNames = new Set<string>(this.indexes.keys());
+
+        // Add known index fields (may not be loaded yet)
+        for (const fieldName of this.loadedIndexFields) {
+            indexNames.add(fieldName);
+        }
+
+        // Check for any additional index files on disk
+        const indexDirPath = `${this.directory}/index`;
+
+        // Check if index directory exists
+        const dirExists = await this.storage.dirExists(indexDirPath);
+        if (dirExists) {
+            // List index files
+            const result = await this.storage.listFiles(indexDirPath, 1000);
+            const indexFiles = result.names || [];
+
+            for (const file of indexFiles) {
+                if (file === '.placeholder' || !file.endsWith('.dat')) {
+                    continue; // Skip placeholder files or non-index files
+                }
+
+                // Extract field name from file name (remove .dat extension)
+                const fieldName = file.substring(0, file.length - 4);
+                indexNames.add(fieldName);
+
+                // Update our cache of known index fields
+                this.loadedIndexFields.add(fieldName);
+                this.nonexistentIndexFields.delete(fieldName);
+            }
+        }
+
+        return Array.from(indexNames);
+    }
+
+    //
+    // Find records by index
+    //
+    async findByIndex(fieldName: string, value: any): Promise<RecordT[]> {
+        // Lazily load the index if it exists
+        const index = await this.loadIndexIfExists(fieldName);
+
+        if (!index) {
+            throw new Error(`Index for field "${fieldName}" does not exist`);
+        }
+
+        // Find record IDs matching the value
+        const recordIds = await index.findByValue(value);
+
+        if (recordIds.length === 0) {
+            return [];
+        }
+
+        // Retrieve the records
+        const records: RecordT[] = [];
+        for (const recordId of recordIds) {
+            const record = await this.getOne(recordId);
+            if (record) {
+                records.push(record);
+            }
+        }
+
+        return records;
+    }
+
+    //
+    // Deletes an index
+    //
+    async deleteIndex(fieldName: string): Promise<boolean> {
+        // Check if index exists in memory
+        let index = this.indexes.get(fieldName);
+
+        // If not in memory, check if it exists on disk
+        if (!index) {
+            const exists = await this.indexExistsOnDisk(fieldName);
+
+            if (!exists) {
+                return false; // Index doesn't exist
+            }
+
+            // Load the index if it exists on disk
+            index = await this.loadIndexIfExists(fieldName);
+
+            if (!index) {
+                return false; // Index couldn't be loaded
+            }
+        }
+
+        // Shut down the index
+        await index.shutdown();
+
+        // Remove from the indexes map
+        this.indexes.delete(fieldName);
+
+        // Remove from caches
+        this.loadedIndexFields.delete(fieldName);
+        this.nonexistentIndexFields.add(fieldName);
+
+        // Update the allIndexesLoaded flag if it was set
+        if (this.allIndexesLoaded) {
+            this.allIndexesLoaded = false;
+        }
+
+        // Delete the index file - now located in collection-dir/index/field.dat
+        const indexFilePath = `${this.directory}/index/${fieldName}.dat`;
+        if (await this.storage.fileExists(indexFilePath)) {
+            await this.storage.delete(indexFilePath);
+        }
 
         return true;
     }
@@ -738,6 +1079,24 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async drop(): Promise<void> {
         this.clearSchedule(); // Clear any pending saves.
         this.shardCache.clear(); // Clear all shards from memory.
-        await this.storage.delete(this.directory); // Delete the directory.
+
+        // Shutdown all indexes
+        for (const index of this.indexes.values()) {
+            await index.shutdown();
+        }
+        this.indexes.clear();
+
+        // Clear index caches
+        this.loadedIndexFields.clear();
+        this.nonexistentIndexFields.clear();
+
+        // Delete the index directory
+        const indexDirPath = `${this.directory}/index`;
+        if (await this.storage.dirExists(indexDirPath)) {
+            await this.storage.delete(indexDirPath);
+        }
+
+        // Delete the collection directory
+        await this.storage.delete(this.directory);
     }
 }
