@@ -570,7 +570,7 @@ async function main(): Promise<void> {
         throw new Error(`Set the AWS bucket through the environment variable AWS_BUCKET.`);
     }
 
-    const storage = new StoragePrefixWrapper(new CloudStorage(), `${bucket}:`);
+    const storage = new StoragePrefixWrapper(new CloudStorage(), `${bucket}/`);
 
     let numProcessed = 0;
 
