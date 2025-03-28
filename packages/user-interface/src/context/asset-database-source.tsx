@@ -579,7 +579,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 // Get a page of assets from the backend.
                 // Assumes the backend gives us the assets in sorted order.
                 //
-                const result = await api.getAll<IAsset>(setId, "metadata", next);
+                const result: IGetAllResponse<IAsset> = await api.getAll<IAsset>(setId, "metadata", next);
                 if (result.records.length === 0) {
                     // No more records.
                     break;
