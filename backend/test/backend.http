@@ -230,5 +230,5 @@ Authorization: Bearer {{token}}
 # Gets a page of assets.
 #
 
-GET {{base_url}}/get-all?set={{setId}}&col=metadata&skip=0&limit=5
+GET {{base_url}}/get-all?set={{setId}}&col=metadata
 Authorization: Bearer {{token}}
