@@ -390,14 +390,10 @@ export class CloudStorage implements IStorage {
         try {
             const upload = this.s3.upload(params, options);
     
-            // upload.on('httpUploadProgress', (progress) => {
-            //     console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
-    
-            //     if (progress.total) {
-            //         const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
-            //         console.log(`S3 Upload Progress: ${percentage}%`);
-            //     }
-            // });
+            upload.on('httpUploadProgress', (progress) => {
+                const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
+                console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB -- ${percentage}%`);
+            });
     
             await upload.promise();
         }
