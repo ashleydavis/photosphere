@@ -66,9 +66,14 @@ export interface IBsonCollection<RecordT extends IRecord> {
     iterateRecords(): AsyncGenerator<RecordT, void, unknown>;
 
     //
-    // Gets all records in the collection.
+    // Gets records from the collection with pagination and continuation support.
+    // @param continuation Optional token to continue from a previous query
+    // @returns An object containing records from one shard and a continuation token for the next query
     //
-    getAll(skip: number, limit: number): Promise<RecordT[]>;
+    getAll(next?: string): Promise<{
+        records: RecordT[],
+        next?: string
+    }>;
 
     //
     // Updates a record.
@@ -79,6 +84,11 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // Replaces a record with completely new data.
     //
     replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean>;
+
+    //
+    // Deletes a record.
+    //
+    deleteOne(id: string): Promise<boolean>;
 
     //
     // Creates an index for the given field, but only if it doesn't already exist.
@@ -710,27 +720,45 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Gets all records in the collection.
+    // Gets records from the collection with pagination and continuation support.
+    // @param next Optional token to continue from a previous query
+    // @returns An object containing records from one shard and a continuation token for the next query
     //
-    async getAll(skip: number, limit: number): Promise<RecordT[]> {
-        const results: RecordT[] = [];
+    async getAll(next?: string): Promise<{  records: RecordT[],  next?: string }> {
 
-        let count = 0;
-
-        // Use the generator to process records one by one
-        for await (const record of this.iterateRecords()) {
-            count ++;
-            if (count <= skip) {
-                continue; //TODO: It's expensive to discard records like this. But having an index might solve this.
-            }
-
-            results.push(record);
-            if (results.length >= limit) {
-                break;
-            }
+        // List one shard from storage.
+        const result = await this.storage.listFiles(this.directory, 1, next); //todo: It would better if somehow this could get all shard ids. The continuation token will have to be updated to support that.
+        const files = result.names || [];
+        
+        // If no files were found, return empty results.
+        if (files.length === 0) {
+            return { records: [] };
         }
-
-        return results;
+        
+        let validFile = files[0];
+        
+        // Parse the shard ID
+        const shardId = parseInt(validFile);
+        
+        // Check if the shard is already in memory
+        let records: RecordT[] = [];
+        const shard = this.shardCache.get(shardId);
+        
+        if (shard !== undefined) {
+            // The shard is already cached in memory
+            records = Array.from(shard.records.values());
+        } 
+        else {
+            // Load records from storage
+            const filePath = `${this.directory}/${validFile}`;
+            records = await this.loadRecords(filePath);
+        }
+       
+        // Return all records from this shard and the continuation token for the next query
+        return { 
+            records, 
+            next: result.next 
+        };
     }
 
     //

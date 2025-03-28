@@ -397,32 +397,12 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     app.get("/get-all", asyncErrorHandler(async (req, res) => {
         const setId = getValue<string>(req.query, "set");
         const collectionName = getValue<string>(req.query, "col");
-        const skip = getIntQueryParam(req, "skip");
-        const limit = getIntQueryParam(req, "limit");
-
-        //TODO: black list/white list collections the client access access.
-        //TODO: Ensure the user can access the set.
-
-        //
-        // TODO: bring this online later.
-        //
-        // const collectionMetdata = await assetDatabase.getCollectionMetadata(databaseName);
-        // if (!collectionMetdata) {
-        //     res.sendStatus(404);
-        //     return;
-        // }
-
-        // if (req.userId === undefined 
-        //     || !collectionMetdata.owners.includes(req.userId)) {
-        //     // The user doesn't own this collection. They can't view the assets.
-        //     res.sendStatus(403);
-        //     return;
-        // }
+        const next = req.query.next as string | undefined;
 
         const database = openDatabase(setId);
         const collection = database.collection(collectionName);
-        const records = await collection.getAll(skip, limit); //TODO: Ideally the output here would be sorted by date or place.
-        res.json(records);
+        const result = await collection.getAll(next);
+        res.json(result);
     }));
 
     //
