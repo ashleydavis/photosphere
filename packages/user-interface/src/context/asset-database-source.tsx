@@ -574,7 +574,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             // Load the assets from the cloud into memory.
             //
-            while (true) {
+            do {
                 //
                 // Get a page of assets from the backend.
                 // Assumes the backend gives us the assets in sorted order.
@@ -602,7 +602,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 }, 0);
 
                 next = result.next;
-            }
+            } while (next);
         }
         finally {
             loadingCount.current -= 1;
