@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
 import { BsonIndex, IBsonIndex } from './index';
+import { SortManager } from './sort-manager';
 
 //
 // Options when creating a BSON collection.
@@ -76,6 +77,45 @@ export interface IBsonCollection<RecordT extends IRecord> {
     }>;
 
     //
+    // Get records sorted by a specified field.
+    // @param fieldName The field to sort by
+    // @param options Options for sorting including direction and pagination
+    // @returns Paginated sorted records with metadata
+    //
+    getSorted(fieldName: string, options?: {
+        direction?: 'asc' | 'desc';
+        page?: number;
+        pageSize?: number
+    }): Promise<{
+        records: RecordT[];
+        totalRecords: number;
+        currentPage: number;
+        totalPages: number;
+        nextPage?: number;
+        previousPage?: number;
+    }>;
+
+    //
+    // Create or rebuild a sort index for the specified field
+    // @param fieldName The field to create a sort index for
+    // @param direction The sort direction
+    //
+    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc'): Promise<void>;
+
+    //
+    // List all sort indexes for this collection
+    //
+    listSortIndexes(): Promise<Array<{
+        fieldName: string;
+        direction: 'asc' | 'desc';
+    }>>;
+
+    //
+    // Delete a sort index
+    //
+    deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean>;
+
+    //
     // Updates a record.
     //
     updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean>
@@ -134,6 +174,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private isAlive: boolean = true;
     private maxCachedShards: number;
     private indexes: Map<string, IBsonIndex<RecordT>> = new Map();
+    private sortManager: SortManager | undefined;
 
     //
     // The last time the collection was saved.
@@ -146,7 +187,28 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.numShards = options.numShards || 100;
         this.maxCachedShards = options.maxCachedShards || 10;
 
+        // Create the sort manager for this collection
+        this.sortManager = new SortManager({
+            storage: this.storage,
+            baseDirectory: this.directory.split('/').slice(0, -1).join('/') // Parent directory
+        });
+
         this.keepWorkerAlive();
+    }
+
+    //
+    // Delete all sort indexes for this collection
+    //
+    private async deleteAllSortIndexes(): Promise<void> {
+        if (!this.sortManager) {
+            return;
+        }
+
+        // Get the collection name
+        const collectionName = this.directory.split('/').pop() || '';
+
+        // Delete all sort indexes
+        await this.sortManager.deleteAllSortIndexes(collectionName);
     }
 
     // Cache of loaded index field names to avoid checking storage multiple times
@@ -457,7 +519,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 //
                 // Delete empty files.
                 //
-                await this.storage.delete(shardFilePath);
+                await this.storage.deleteFile(shardFilePath);
             }
         }
         else {
@@ -652,6 +714,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             await index.indexRecord(record);
         }
 
+        // Delete all sort indexes since the data has changed
+        await this.deleteAllSortIndexes();
+
         this.scheduleSave(`inserted record ${record._id}`);
     }
 
@@ -681,42 +746,34 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateRecords(): AsyncGenerator<RecordT, void, unknown> {
 
-        let next: string | undefined = undefined;
-
-        do {
-            let result = await this.storage.listFiles(this.directory, 1000, next);
-            let files = result.names || [];
-            for (const file of files) {
-                const shardId = parseInt(file);
-                let shard = this.shardCache.get(shardId);
-                if (shard !== undefined) {
-                    //
-                    // The shard is already cached in memory.
-                    //
-                    for (const record of shard.records.values()) {
-                        yield record;
-                    }
-                    continue;
-                }
-
-                const buffer = await this.storage.read(`${this.directory}/${file}`);
-                if (!buffer || buffer.length === 0) {
-                    continue;
-                }
-
-                const version = buffer.readUInt32LE(0); // Version
-                const recordCount = buffer.readUInt32LE(4); // Record count
-
-                let offset = 8; // Skip the version and record count.
-
-                for (let i = 0; i < recordCount; i++) {
-                    const { record, offset: newOffset } = this.readRecord(buffer, offset);
+        for (let shardId = 0; shardId < this.numShards; shardId++) {
+            let shard = this.shardCache.get(shardId);
+            if (shard !== undefined) {
+                //
+                // The shard is already cached in memory.
+                //
+                for (const record of shard.records.values()) {
                     yield record;
-                    offset = newOffset;
                 }
+                continue;
+             }
+
+             const buffer = await this.storage.read(`${this.directory}/${shardId}`);
+             if (!buffer || buffer.length === 0) {
+                 continue;
+             }
+
+            const version = buffer.readUInt32LE(0); // Version
+            const recordCount = buffer.readUInt32LE(4); // Record count
+
+            let offset = 8; // Skip the version and record count.
+
+            for (let i = 0; i < recordCount; i++) {
+                const { record, offset: newOffset } = this.readRecord(buffer, offset);
+                yield record;
+                offset = newOffset;
             }
-            next = result.next;
-        } while (next);
+        }
     }
 
     //
@@ -724,41 +781,31 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // @param next Optional token to continue from a previous query
     // @returns An object containing records from one shard and a continuation token for the next query
     //
-    async getAll(next?: string): Promise<{  records: RecordT[],  next?: string }> {
+    async getAll(next?: string): Promise<{  records: RecordT[], next?: string }> {
 
-        // List one shard from storage.
-        const result = await this.storage.listFiles(this.directory, 1, next); //todo: It would better if somehow this could get all shard ids. The continuation token will have to be updated to support that.
-        const files = result.names || [];
-        
-        // If no files were found, return empty results.
-        if (files.length === 0) {
-            return { records: [] };
+        let shardId = next ? parseInt(next) : 0;
+        while (shardId < this.numShards) {
+            const shard = this.shardCache.get(shardId);
+            if (shard !== undefined) {
+                // The shard is already cached in memory
+                const records = Array.from(shard.records.values());
+                if (records.length > 0) {
+                    return { records, next: `${shardId + 1}` };
+                }
+            }
+            else {
+                // Load records from storage
+                const filePath = `${this.directory}/${shardId}`;
+                const records = await this.loadRecords(filePath);
+                if (records.length > 0) {
+                    return { records, next: `${shardId + 1}` };
+                }
+            }
+
+            shardId += 1;
         }
-        
-        let validFile = files[0];
-        
-        // Parse the shard ID
-        const shardId = parseInt(validFile);
-        
-        // Check if the shard is already in memory
-        let records: RecordT[] = [];
-        const shard = this.shardCache.get(shardId);
-        
-        if (shard !== undefined) {
-            // The shard is already cached in memory
-            records = Array.from(shard.records.values());
-        } 
-        else {
-            // Load records from storage
-            const filePath = `${this.directory}/${validFile}`;
-            records = await this.loadRecords(filePath);
-        }
-       
-        // Return all records from this shard and the continuation token for the next query
-        return { 
-            records, 
-            next: result.next 
-        };
+
+        return { records: [], next: undefined }; // No more records
     }
 
     //
@@ -777,7 +824,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             //
             // If not upserting, finds the record to update.
             //
-            
+
             if (!existingRecord) {
                 return false; // Record not found
             }
@@ -804,6 +851,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             // Add updated record to index
             await index.indexRecord(updatedRecord);
         }
+
+        // Delete all sort indexes since the data has changed
+        await this.deleteAllSortIndexes();
 
         this.scheduleSave(`updated record ${id}`);
 
@@ -844,6 +894,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             await index.indexRecord(record);
         }
 
+        // Delete all sort indexes since the data has changed
+        await this.deleteAllSortIndexes();
+
         this.scheduleSave(`replaced record ${id}`);
 
         return true;
@@ -876,6 +929,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         for (const index of this.indexes.values()) {
             await index.removeRecord(id);
         }
+
+        // Delete all sort indexes since the data has changed
+        await this.deleteAllSortIndexes();
 
         this.scheduleSave(`deleted record ${id}`);
 
@@ -1095,10 +1151,95 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Delete the index file - now located in collection-dir/index/field.dat
         const indexFilePath = `${this.directory}/index/${fieldName}.dat`;
         if (await this.storage.fileExists(indexFilePath)) {
-            await this.storage.delete(indexFilePath);
+            await this.storage.deleteFile(indexFilePath);
         }
 
         return true;
+    }
+
+    //
+    // Get records sorted by a specified field
+    //
+    async getSorted(fieldName: string, options?: {
+        direction?: 'asc' | 'desc';
+        page?: number;
+        pageSize?: number
+    }): Promise<{
+        records: RecordT[];
+        totalRecords: number;
+        currentPage: number;
+        totalPages: number;
+        nextPage?: number;
+        previousPage?: number;
+    }> {
+        if (!this.sortManager) {
+            throw new Error('Sort manager is not initialized');
+        }
+
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+
+        // The sort manager will automatically create the index if it doesn't exist
+        return await this.sortManager.getSortedRecords<RecordT>(
+            this,
+            collectionName,
+            fieldName,
+            options
+        );
+    }
+
+    //
+    // Create or rebuild a sort index for the specified field
+    //
+    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc'): Promise<void> {
+        if (!this.sortManager) {
+            throw new Error('Sort manager is not initialized');
+        }
+
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+
+        await this.sortManager.rebuildSortIndex<RecordT>(
+            this,
+            collectionName,
+            fieldName,
+            direction
+        );
+    }
+
+    //
+    // List all sort indexes for this collection
+    //
+    async listSortIndexes(): Promise<Array<{
+        fieldName: string;
+        direction: 'asc' | 'desc';
+    }>> {
+        if (!this.sortManager) {
+            throw new Error('Sort manager is not initialized');
+        }
+
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+
+        return await this.sortManager.listSortIndexes(collectionName);
+    }
+
+    //
+    // Delete a sort index
+    //
+    async deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean> {
+        if (!this.sortManager) {
+            throw new Error('Sort manager is not initialized');
+        }
+
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+
+        return await this.sortManager.deleteSortIndex(
+            collectionName,
+            fieldName,
+            direction
+        );
     }
 
     //
@@ -1118,13 +1259,19 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.loadedIndexFields.clear();
         this.nonexistentIndexFields.clear();
 
+        // Delete sort indexes if any
+        if (this.sortManager) {
+            const collectionName = this.directory.split('/').pop() || '';
+            await this.sortManager.deleteAllSortIndexes(collectionName);
+        }
+
         // Delete the index directory
         const indexDirPath = `${this.directory}/index`;
         if (await this.storage.dirExists(indexDirPath)) {
-            await this.storage.delete(indexDirPath);
+            await this.storage.deleteFile(indexDirPath);
         }
 
         // Delete the collection directory
-        await this.storage.delete(this.directory);
+        await this.storage.deleteDir(this.directory);
     }
 }

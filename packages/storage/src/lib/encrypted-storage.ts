@@ -88,8 +88,15 @@ export class EncryptedStorage implements IStorage {
     //
     // Deletes the file from storage.
     //
-    async delete(filePath: string): Promise<void> {
-        return this.storage.delete(filePath);
+    async deleteFile(filePath: string): Promise<void> {
+        return this.storage.deleteFile(filePath);
+    }
+
+    //
+    // Deletes the directory from storage.
+    //
+    async deleteDir(filePath: string): Promise<void> {
+        return this.storage.deleteDir(filePath);
     }
 
     //

@@ -1,7 +1,10 @@
 @base_url = http://localhost:3000
 # @base_url = https://photosphere-api.codecapers.com.au
+# @base_url =  https://photosphere-demo-7vjtd.ondigitalocean.app
+
 @token = not needed
-@setId = 93886ac9-16e4-48e6-983b-ec65566018d0
+# @setId = 93886ac9-16e4-48e6-983b-ec65566018d0
+@setId = 07156b64-d625-4aed-a53b-ede22866f718
 @asset = 1234
 @hash = ABCD
 
@@ -137,7 +140,7 @@ GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=display
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -166,7 +169,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -194,7 +197,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -222,7 +225,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ###

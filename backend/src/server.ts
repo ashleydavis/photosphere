@@ -398,11 +398,16 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         const setId = getValue<string>(req.query, "set");
         const collectionName = getValue<string>(req.query, "col");
         const next = req.query.next as string | undefined;
+        const nextPage = next ? parseInt(next) : 0;
 
         const database = openDatabase(setId);
         const collection = database.collection(collectionName);
-        const result = await collection.getAll(next);
-        res.json(result);
+        const result = await collection.getSorted("photoDate", { 
+            direction: "desc", //todo: The field and direction should be passed through the API.
+            page: nextPage,
+            pageSize: 1000, //todo: Be good to tie this in directly to the continuation token.            
+        }); 
+        res.json(result.records);
     }));
 
     //

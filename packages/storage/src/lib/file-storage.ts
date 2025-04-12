@@ -185,11 +185,31 @@ export class FileStorage implements IStorage {
     }
 
     //
-    // Deletes the file from storage.
+    // Deletes a file from storage.
     //
-    async delete(filePath: string): Promise<void> {
-        await fs.unlink(filePath);
-        await fs.unlink(this.getInfoFileName(filePath));
+    async deleteFile(filePath: string): Promise<void> {
+        try {
+            await fs.unlink(filePath);
+            // Try to delete the info file if it exists
+            try {
+                await fs.unlink(this.getInfoFileName(filePath));
+            } catch (err) {
+                // Ignore errors if the info file doesn't exist
+            }
+        } catch (err) {
+            // Ignore errors if the file doesn't exist
+        }
+    }
+    
+    //
+    // Deletes a directory and all its contents from storage.
+    //
+    async deleteDir(dirPath: string): Promise<void> {
+        try {
+            await fs.rm(dirPath, { recursive: true, force: true });
+        } catch (err) {
+            // Ignore errors if the directory doesn't exist
+        }
     }
 
     //

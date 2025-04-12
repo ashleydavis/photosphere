@@ -93,8 +93,15 @@ export class StoragePrefixWrapper implements IStorage {
     //
     // Deletes the file from storage.
     //
-    delete(filePath: string): Promise<void> {
-        return this.storage.delete(this.makeFullPath(filePath));
+    deleteFile(filePath: string): Promise<void> {
+        return this.storage.deleteFile(this.makeFullPath(filePath));
+    }
+
+    //
+    // Deletes the directory from storage.
+    //
+    deleteDir(filePath: string): Promise<void> {
+        return this.storage.deleteDir(this.makeFullPath(filePath));
     }
 
     //

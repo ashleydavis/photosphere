@@ -63,7 +63,7 @@ async function main() {
                 await Promise.all(batch.map(async fileName => {
                     const asset = await metadataCollection.findOne({ _id: fileName });
                     if (!asset) {
-                        await storage.delete(`${dir}/${fileName}`);
+                        await storage.deleteFile(`${dir}/${fileName}`);
                         console.log(`Deleted orphaned asset: ${fileName}`);
                         numOrphans++;
                     }
