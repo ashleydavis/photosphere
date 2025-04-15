@@ -398,7 +398,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         const setId = getValue<string>(req.query, "set");
         const collectionName = getValue<string>(req.query, "col");
         const next = req.query.next as string | undefined;
-        const nextPage = next ? parseInt(next) : 0;
+        const nextPage = next ? parseInt(next) : 1;
 
         const database = openDatabase(setId);
         const collection = database.collection(collectionName);
@@ -407,7 +407,10 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
             page: nextPage,
             pageSize: 1000, //todo: Be good to tie this in directly to the continuation token.            
         }); 
-        res.json(result.records);
+        res.json({
+            records: result.records,
+            next: (nextPage + 1).toString(),
+        });
     }));
 
     //

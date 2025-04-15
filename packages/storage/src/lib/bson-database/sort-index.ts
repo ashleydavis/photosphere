@@ -8,12 +8,15 @@ import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
 
-export interface ISortedIndexEntry {
+export interface ISortedIndexEntry<RecordT> {
     // The ID of the record
     recordId: string; //TODO: this should be a UUID buffer type.
 
     // The value used for sorting
     value: any;
+    
+    // The complete record
+    record: RecordT;
 }
 
 export interface ISortIndexOptions {
@@ -62,7 +65,7 @@ export class SortIndex<RecordT extends IRecord> {
     private fieldName: string;
     private direction: 'asc' | 'desc';
     private pageSize: number;
-    private pageFiles: Map<number, ISortedIndexEntry[]> = new Map();
+    private pageFiles: Map<number, ISortedIndexEntry<RecordT>[]> = new Map();
     private totalEntries: number = 0;
     private dirty: boolean = false;
     private initialized: boolean = false;
@@ -80,10 +83,10 @@ export class SortIndex<RecordT extends IRecord> {
         console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
 
         // Create a temporary array to hold all entries
-        const allEntries: ISortedIndexEntry[] = [];
-
         let recordCount = 0;
 
+        const allEntries: ISortedIndexEntry<RecordT>[] = [];
+        
         // Iterate through all records in the collection
         for await (const record of collection.iterateRecords()) {
             const value = record[this.fieldName];
@@ -95,7 +98,8 @@ export class SortIndex<RecordT extends IRecord> {
 
             allEntries.push({
                 recordId: record._id,
-                value: value
+                value: value,
+                record: record
             });
 
             recordCount++;
@@ -154,7 +158,7 @@ export class SortIndex<RecordT extends IRecord> {
     }
 
     // Save page file to storage
-    private async savePageFile(pageNum: number, entries: ISortedIndexEntry[]): Promise<void> {
+    private async savePageFile(pageNum: number, entries: ISortedIndexEntry<RecordT>[]): Promise<void> {
         const filePath = `${this.indexDirectory}/page_${pageNum}.dat`;
 
         // Serialize the entries
@@ -270,7 +274,7 @@ export class SortIndex<RecordT extends IRecord> {
     }
 
     // Load a specific page file
-    private async loadPageFile(pageNum: number): Promise<ISortedIndexEntry[] | undefined> {
+    private async loadPageFile(pageNum: number): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
         // Check if already loaded in memory
         if (this.pageFiles.has(pageNum)) {
             return this.pageFiles.get(pageNum);
@@ -303,7 +307,7 @@ export class SortIndex<RecordT extends IRecord> {
                     const bsonData = dataWithoutChecksum.subarray(4);
 
                     // Deserialize the page data
-                    const pageData = BSON.deserialize(bsonData) as { entries: ISortedIndexEntry[] };
+                    const pageData = BSON.deserialize(bsonData) as { entries: ISortedIndexEntry<RecordT>[] };
 
                     // Cache in memory
                     this.pageFiles.set(pageNum, pageData.entries);
@@ -359,14 +363,11 @@ export class SortIndex<RecordT extends IRecord> {
         if (!pageEntries) {
             throw new Error(`Failed to load page ${page} for sort index '${this.fieldName}'`);
         }
-
-        // Fetch the actual records
+        
+        // Use the stored records directly from the sort index
         const records: RecordT[] = [];
         for (const entry of pageEntries) {
-            const record = await collection.getOne(entry.recordId); //todo: This is super expensive. The records need to be embedded.
-            if (record) {
-                records.push(record);
-            }
+            records.push(entry.record);
         }
 
         // Return the result with pagination info
