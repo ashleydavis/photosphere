@@ -351,8 +351,16 @@ export class SortIndex<RecordT extends IRecord> {
         // Validate page number
         if (page < 1) {
             page = 1;
-        } else if (page > totalPages) {
-            page = totalPages || 1; // If totalPages is 0, use 1
+        } 
+        else if (page > totalPages) {
+            return {
+                records: [],
+                totalRecords: totalEntries,
+                currentPage: page,
+                totalPages,
+                nextPage: undefined,
+                previousPage: undefined
+            };
         }
 
         // Calculate zero-based page number
