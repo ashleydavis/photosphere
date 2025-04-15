@@ -579,7 +579,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 // Get a page of assets from the backend.
                 // Assumes the backend gives us the assets in sorted order.
                 //
-                const result: IGetAllResponse<IAsset> = await retry(() => api.getAll<IAsset>(setId, "metadata", next));
+                const result: IGetAllResponse<IAsset> = await retry(
+                    () => api.getAll<IAsset>(setId, "metadata", next),
+                    5, // Attempts
+                    600, // Starting wait time
+                    2, // Double the weight time on each retry.
+                );
                 if (result.records.length === 0) {
                     // No more records.
                     break;
