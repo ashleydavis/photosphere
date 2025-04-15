@@ -13,7 +13,7 @@ import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
-import { uuid } from "utils";
+import { retry, uuid } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
 const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.
@@ -579,7 +579,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 // Get a page of assets from the backend.
                 // Assumes the backend gives us the assets in sorted order.
                 //
-                const result: IGetAllResponse<IAsset> = await api.getAll<IAsset>(setId, "metadata", next);
+                const result: IGetAllResponse<IAsset> = await retry(() => api.getAll<IAsset>(setId, "metadata", next));
                 if (result.records.length === 0) {
                     // No more records.
                     break;
