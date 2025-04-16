@@ -65,7 +65,6 @@ export class SortIndex<RecordT extends IRecord> {
     private fieldName: string;
     private direction: 'asc' | 'desc';
     private pageSize: number;
-    private pageFiles: Map<number, ISortedIndexEntry<RecordT>[]> = new Map();
     private totalEntries: number = 0;
     private dirty: boolean = false;
     private initialized: boolean = false;
@@ -124,9 +123,6 @@ export class SortIndex<RecordT extends IRecord> {
         this.totalEntries = allEntries.length;
         const totalPages = Math.ceil(this.totalEntries / this.pageSize);
 
-        // Clear existing page files from memory
-        this.pageFiles.clear();
-
         let pageFileCount = 0;
 
         // Create and save page files
@@ -134,9 +130,6 @@ export class SortIndex<RecordT extends IRecord> {
             const start = pageNum * this.pageSize;
             const end = Math.min(start + this.pageSize, allEntries.length);
             const pageEntries = allEntries.slice(start, end);
-
-            // Save to memory
-            this.pageFiles.set(pageNum, pageEntries);
 
             // Save to storage
             await this.savePageFile(pageNum, pageEntries);
@@ -275,11 +268,6 @@ export class SortIndex<RecordT extends IRecord> {
 
     // Load a specific page file
     private async loadPageFile(pageNum: number): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
-        // Check if already loaded in memory
-        if (this.pageFiles.has(pageNum)) {
-            return this.pageFiles.get(pageNum);
-        }
-
         const filePath = `${this.indexDirectory}/page_${pageNum}.dat`;
 
         if (await this.storage.fileExists(filePath)) {
@@ -308,9 +296,6 @@ export class SortIndex<RecordT extends IRecord> {
 
                     // Deserialize the page data
                     const pageData = BSON.deserialize(bsonData) as { entries: ISortedIndexEntry<RecordT>[] };
-
-                    // Cache in memory
-                    this.pageFiles.set(pageNum, pageData.entries);
 
                     return pageData.entries;
                 }
@@ -411,7 +396,6 @@ export class SortIndex<RecordT extends IRecord> {
             await this.storage.deleteDir(this.indexDirectory);
         }
 
-        this.pageFiles.clear();
         this.totalEntries = 0;
         this.initialized = false;
     }
