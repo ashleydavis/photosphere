@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
+import fs from 'fs-extra';
 
 export interface ISortedIndexEntry<RecordT> {
     // The ID of the record
@@ -15,7 +16,7 @@ export interface ISortedIndexEntry<RecordT> {
     // The value used for sorting
     value: any;
     
-    // The complete record
+    // The complete record - for faster retrieval without loading from collection
     record: RecordT;
 }
 
@@ -76,15 +77,24 @@ export class SortIndex<RecordT extends IRecord> {
         this.direction = options.direction;
         this.pageSize = options.pageSize || 1000;
     }
-
-    // Initialize or update the index
+    
+    // Initialize or update the index using external sorting to handle large collections
     async initialize(collection: IBsonCollection<RecordT>): Promise<void> {
         console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
-
-        // Create a temporary array to hold all entries
+        
+        const CHUNK_SIZE = 10000; // Number of records to process at once
+        const localTmpDir = `/tmp/bsondb_sort_${Date.now()}`;
+        
+        // Create local temporary directory
+        await fs.ensureDir(localTmpDir);
+        
         let recordCount = 0;
-
-        const allEntries: ISortedIndexEntry<RecordT>[] = [];
+        let chunkCount = 0;
+        let totalRecords = 0;
+        
+        // Step 1: Create sorted chunks
+        console.log("Phase 1: Creating sorted chunks...");
+        let currentChunk: ISortedIndexEntry<RecordT>[] = [];
         
         // Iterate through all records in the collection
         for await (const record of collection.iterateRecords()) {
@@ -94,22 +104,70 @@ export class SortIndex<RecordT extends IRecord> {
             if (value === undefined) {
                 continue;
             }
-
-            allEntries.push({
+            
+            currentChunk.push({
                 recordId: record._id,
                 value: value,
                 record: record
             });
 
             recordCount++;
-
-            if (recordCount % 1000 === 0) {
-                console.log(`Read ${recordCount} records.`);
+            totalRecords++;
+            
+            // When we have enough records, sort and save this chunk to local storage
+            if (currentChunk.length >= CHUNK_SIZE) {
+                await this.sortAndSaveChunk(currentChunk, chunkCount, localTmpDir);
+                chunkCount++;
+                currentChunk = [];
+                console.log(`Processed ${recordCount} records. Created chunk #${chunkCount}`);
             }
         }
+        
+        // Save the last chunk if it has any records
+        if (currentChunk.length > 0) {
+            await this.sortAndSaveChunk(currentChunk, chunkCount, localTmpDir);
+            chunkCount++;
+            console.log(`Processed ${recordCount} records. Created final chunk #${chunkCount}`);
+        }
+        
+        // No records to sort
+        if (chunkCount === 0) {
+            console.log("No records found with the specified field. Creating empty index.");
+            this.totalEntries = 0;
+            await this.saveMetadata();
+            this.initialized = true;
+            this.dirty = false;
+            return;
+        }
+        
+        // Step 2: Merge sorted chunks into pages
+        console.log("Phase 2: Merging sorted chunks into pages...");
+        
+        // Set total entries for metadata
+        this.totalEntries = totalRecords;
+                
+        // Perform a k-way merge using local temporary files
+        await this.mergeChunks(chunkCount, localTmpDir);
+        
+        // Save metadata
+        await this.saveMetadata();
+        
+        // Clean up temporary directory
+        await fs.remove(localTmpDir);
+        
+        console.log(`Completed initializing sort index for field '${this.fieldName}' (${this.direction})`);
 
-        // Sort the entries
-        allEntries.sort((a, b) => {
+        const totalPages = Math.ceil(this.totalEntries / this.pageSize);
+        console.log(`Total records: ${totalRecords}, Total pages: ${totalPages}`);
+        
+        this.initialized = true;
+        this.dirty = false;
+    }
+    
+    // Helper method to sort and save a chunk of data
+    private async sortAndSaveChunk(chunk: ISortedIndexEntry<RecordT>[], chunkIndex: number, tmpDir: string): Promise<void> {
+        // Sort the chunk
+        chunk.sort((a, b) => {
             if (a.value < b.value) {
                 return this.direction === 'asc' ? -1 : 1;
             }
@@ -118,38 +176,182 @@ export class SortIndex<RecordT extends IRecord> {
             }
             return 0;
         });
-
-        // Divide into pages and save
-        this.totalEntries = allEntries.length;
-        const totalPages = Math.ceil(this.totalEntries / this.pageSize);
-
-        let pageFileCount = 0;
-
-        // Create and save page files
-        for (let pageNum = 0; pageNum < totalPages; pageNum++) {
-            const start = pageNum * this.pageSize;
-            const end = Math.min(start + this.pageSize, allEntries.length);
-            const pageEntries = allEntries.slice(start, end);
-
-            // Save to storage
-            await this.savePageFile(pageNum, pageEntries);
-
-            pageFileCount++;
-
-            if (pageFileCount % 10 === 0) {
-                console.log(`Saved ${pageFileCount} page files.`);
+        
+        // Save the sorted chunk
+        const chunkPath = `${tmpDir}/chunk_${chunkIndex}.dat`;
+        await this.saveChunkFile(chunkPath, chunk);
+    }
+    
+    // Helper method to save a chunk file to local storage
+    private async saveChunkFile(filePath: string, entries: ISortedIndexEntry<RecordT>[]): Promise<void> {
+        // Serialize the entries
+        const bsonData = BSON.serialize({ entries });
+        
+        // Add a version number (4 bytes) at the beginning
+        const versionBuffer = Buffer.alloc(4);
+        versionBuffer.writeUInt32LE(1, 0); // Version 1
+        
+        // Combine version and BSON data
+        const versionedData = Buffer.concat([versionBuffer, bsonData]);
+        
+        // Calculate checksum
+        const checksum = crypto.createHash('sha256').update(versionedData).digest();
+        
+        // Combine versioned data and checksum
+        const dataWithChecksum = Buffer.concat([versionedData, checksum]);
+        
+        // Write to local file storage
+        await fs.writeFile(filePath, dataWithChecksum);
+    }
+    
+    // Helper method to load a chunk file from local storage
+    private async loadChunkFile(filePath: string): Promise<ISortedIndexEntry<RecordT>[]> {
+        let fileData: Buffer;
+        
+        try {
+            fileData = await fs.readFile(filePath);
+        } catch (err) {
+            console.error(`Failed to read chunk file: ${filePath}`, err);
+            return [];
+        }
+        
+        if (!fileData || fileData.length === 0) {
+            return [];
+        }
+        
+        // Skip the 32-byte checksum at the end
+        const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
+        
+        // Calculate checksum of the data
+        const storedChecksum = fileData.subarray(fileData.length - 32);
+        const calculatedChecksum = crypto.createHash('sha256').update(dataWithoutChecksum).digest();
+        
+        // Verify checksum
+        if (!calculatedChecksum.equals(storedChecksum)) {
+            console.error(`Chunk file checksum verification failed: ${filePath}`);
+            return [];
+        }
+        
+        // Read version number (first 4 bytes)
+        const version = dataWithoutChecksum.readUInt32LE(0);
+        
+        if (version === 1) {
+            // Skip the version number to get to the BSON data
+            const bsonData = dataWithoutChecksum.subarray(4);
+            
+            // Deserialize the page data
+            const chunkData = BSON.deserialize(bsonData) as { entries: ISortedIndexEntry<RecordT>[] };
+            return chunkData.entries;
+        }
+        
+        return [];
+    }
+    
+    // Merges sorted chunks into pages
+    private async mergeChunks(chunkCount: number, localTmpDir: string): Promise<void> {
+        // Create chunk readers - we'll load chunks on demand instead of all at once
+        const chunkReaders: Array<{
+            path: string,
+            currentEntry: ISortedIndexEntry<RecordT> | null,
+            exhausted: boolean
+        }> = [];
+        
+        // Initialize chunk readers
+        for (let i = 0; i < chunkCount; i++) {
+            const chunkPath = `${localTmpDir}/chunk_${i}.dat`;
+            const chunkEntries = await this.loadChunkFile(chunkPath);
+            
+            chunkReaders.push({
+                path: chunkPath,
+                currentEntry: chunkEntries.length > 0 ? chunkEntries[0] : null,
+                exhausted: chunkEntries.length === 0
+            });
+        }
+        
+        // Process page by page
+        let currentPage = 0;
+        let entriesInCurrentPage = 0;
+        let currentPageEntries: ISortedIndexEntry<RecordT>[] = [];
+        
+        // Process all entries from all chunks
+        while (true) {
+            // Find chunk with the smallest next value
+            let smallestChunkIndex = -1;
+            let smallestEntry: ISortedIndexEntry<RecordT> | null = null;
+            
+            for (let i = 0; i < chunkReaders.length; i++) {
+                const reader = chunkReaders[i];
+                
+                // Skip exhausted readers
+                if (reader.exhausted) {
+                    continue;
+                }
+                
+                const entry = reader.currentEntry;
+                
+                // If this is the first valid entry or it's smaller than current smallest
+                if (smallestEntry === null || this.compareValues(entry!.value, smallestEntry.value) < 0) {
+                    smallestEntry = entry;
+                    smallestChunkIndex = i;
+                }
+            }
+            
+            // If no valid entry found, we're done
+            if (smallestChunkIndex === -1) {
+                break;
+            }
+            
+            // Add the smallest entry to current page
+            currentPageEntries.push(smallestEntry!);
+            entriesInCurrentPage++;
+            
+            // Advance to next entry in the selected chunk
+            const reader = chunkReaders[smallestChunkIndex];
+            const chunkPath = reader.path;
+            
+            // Load the chunk and find the next entry
+            const entries = await this.loadChunkFile(chunkPath);
+            const currentEntryIndex = entries.findIndex(e => e.recordId === smallestEntry!.recordId && e.value === smallestEntry!.value);
+            
+            if (currentEntryIndex !== -1 && currentEntryIndex + 1 < entries.length) {
+                // Move to next entry
+                reader.currentEntry = entries[currentEntryIndex + 1];
+            } else {
+                // Reached end of chunk
+                reader.currentEntry = null;
+                reader.exhausted = true;
+            }
+            
+            // If current page is full, save it to the remote storage and start a new one
+            if (entriesInCurrentPage >= this.pageSize) {
+                await this.savePageFile(currentPage, currentPageEntries);
+                currentPage++;
+                currentPageEntries = [];
+                entriesInCurrentPage = 0;
+                
+                if (currentPage % 10 === 0) {
+                    console.log(`Saved ${currentPage} pages.`);
+                }
             }
         }
-
-        // Save metadata
-        await this.saveMetadata();
-
-        this.initialized = true;
-        this.dirty = false;
-
-        console.log(`Completed initializing sort index for field '${this.fieldName}' (${this.direction})`);
+        
+        // Save last page if it contains any entries
+        if (currentPageEntries.length > 0) {
+            await this.savePageFile(currentPage, currentPageEntries);
+        }
     }
-
+    
+    // Helper for comparing values consistently
+    private compareValues(a: any, b: any): number {
+        if (a < b) {
+            return this.direction === 'asc' ? -1 : 1;
+        }
+        if (a > b) {
+            return this.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+    }
+    
     // Save page file to storage
     private async savePageFile(pageNum: number, entries: ISortedIndexEntry<RecordT>[]): Promise<void> {
         const filePath = `${this.indexDirectory}/page_${pageNum}.dat`;
@@ -518,11 +720,99 @@ export class SortIndex<RecordT extends IRecord> {
             return []; // No records in the index
         }
         
+        // Binary search to find the first page that might contain values in the range
+        let firstRelevantPage = 0;
+        let lastRelevantPage = totalPages - 1;
+        
+        // Find first page if min is specified
+        if (min !== null) {
+            let left = 0;
+            let right = totalPages - 1;
+            
+            while (left <= right) {
+                const mid = Math.floor((left + right) / 2);
+                const pageEntries = await this.loadPageFile(mid);
+                
+                if (!pageEntries || pageEntries.length === 0) {
+                    // Skip empty pages
+                    right = mid - 1;
+                    continue;
+                }
+                
+                const firstValue = pageEntries[0].value;
+                const lastValue = pageEntries[pageEntries.length - 1].value;
+                
+                if (this.direction === 'asc') {
+                    // For ascending pages
+                    if (minInclusive ? lastValue < min : lastValue <= min) {
+                        // All values in this page are before min, look in later pages
+                        left = mid + 1;
+                    } else {
+                        // This page might contain values >= min, or pages before it might
+                        right = mid - 1;
+                        firstRelevantPage = mid;
+                    }
+                } else {
+                    // For descending pages
+                    if (minInclusive ? firstValue < min : firstValue <= min) {
+                        // All values in this page are before min, look in earlier pages
+                        right = mid - 1;
+                    } else {
+                        // This page might contain values >= min, or pages after it might
+                        left = mid + 1;
+                        firstRelevantPage = mid;
+                    }
+                }
+            }
+        }
+        
+        // Find last page if max is specified
+        if (max !== null) {
+            let left = firstRelevantPage;
+            let right = totalPages - 1;
+            
+            while (left <= right) {
+                const mid = Math.floor((left + right) / 2);
+                const pageEntries = await this.loadPageFile(mid);
+                
+                if (!pageEntries || pageEntries.length === 0) {
+                    // Skip empty pages
+                    left = mid + 1;
+                    continue;
+                }
+                
+                const firstValue = pageEntries[0].value;
+                const lastValue = pageEntries[pageEntries.length - 1].value;
+                
+                if (this.direction === 'asc') {
+                    // For ascending pages
+                    if (maxInclusive ? firstValue > max : firstValue >= max) {
+                        // All values in this page are after max, look in earlier pages
+                        right = mid - 1;
+                    } else {
+                        // This page might contain values <= max, or pages after it might
+                        left = mid + 1;
+                        lastRelevantPage = mid;
+                    }
+                } else {
+                    // For descending pages
+                    if (maxInclusive ? lastValue > max : lastValue >= max) {
+                        // All values in this page are after max, look in later pages
+                        left = mid + 1;
+                    } else {
+                        // This page might contain values <= max, or pages before it might
+                        right = mid - 1;
+                        lastRelevantPage = mid;
+                    }
+                }
+            }
+        }
+        
         // If we need to scan multiple pages, we'll collect matching entries here
         const matchingRecords: RecordT[] = [];
         
-        // Scan all pages that might contain records in the range
-        for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+        // Scan only the relevant page range determined by binary search
+        for (let pageNum = firstRelevantPage; pageNum <= lastRelevantPage; pageNum++) {
             const pageEntries = await this.loadPageFile(pageNum);
             
             if (!pageEntries || pageEntries.length === 0) {
@@ -561,11 +851,66 @@ export class SortIndex<RecordT extends IRecord> {
                 }
             }
             
-            // Page might contain records in the range, so check each entry
-            for (const entry of pageEntries) {
+            // Use binary search within the page to find start and end indices
+            let startIdx = 0;
+            let endIdx = pageEntries.length - 1;
+            
+            // Find start index if min is specified
+            if (min !== null) {
+                let left = 0;
+                let right = pageEntries.length - 1;
+                let found = false;
+                
+                while (left <= right) {
+                    const mid = Math.floor((left + right) / 2);
+                    const value = pageEntries[mid].value;
+                    
+                    const compare = minInclusive ? 
+                        (value >= min) : (value > min);
+                        
+                    if (compare) {
+                        startIdx = mid;
+                        found = true;
+                        right = mid - 1; // Look for an earlier occurrence
+                    } else {
+                        left = mid + 1;
+                    }
+                }
+                
+                if (!found) continue; // No matching values in this page
+            }
+            
+            // Find end index if max is specified
+            if (max !== null) {
+                let left = startIdx;
+                let right = pageEntries.length - 1;
+                let found = false;
+                
+                while (left <= right) {
+                    const mid = Math.floor((left + right) / 2);
+                    const value = pageEntries[mid].value;
+                    
+                    const compare = maxInclusive ? 
+                        (value <= max) : (value < max);
+                        
+                    if (compare) {
+                        endIdx = mid;
+                        found = true;
+                        left = mid + 1; // Look for a later occurrence
+                    } else {
+                        right = mid - 1;
+                    }
+                }
+                
+                if (!found) continue; // No matching values in this page
+            }
+            
+            // Add the matching entries from this page using the range determined by binary search
+            for (let i = startIdx; i <= endIdx; i++) {
+                const entry = pageEntries[i];
                 const value = entry.value;
                 
-                // Check if the value is within the specified range
+                // Double-check to ensure the value is within the range
                 let inRange = true;
                 
                 if (min !== null) {
