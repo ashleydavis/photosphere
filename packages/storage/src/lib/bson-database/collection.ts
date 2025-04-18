@@ -213,7 +213,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Checks if a sort index exists for the given field
     //
     private async sortIndexExists(fieldName: string): Promise<boolean> {
-        if (!this.sortManager) return false;
+        if (!this.sortManager) {
+            return false;
+        }
         
         const collectionName = this.directory.split('/').pop() || '';
         
@@ -224,7 +226,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             'asc'
         );
         
-        if (ascIndex) return true;
+        if (ascIndex) {
+            return true;
+        }
         
         // Check for descending index
         const descIndex = await this.sortManager.getSortIndex<RecordT>(
