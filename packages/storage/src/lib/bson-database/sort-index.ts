@@ -8,6 +8,8 @@ import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
 import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
 
 export interface ISortedIndexEntry<RecordT> {
     // The ID of the record
@@ -83,10 +85,12 @@ export class SortIndex<RecordT extends IRecord> {
         console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
         
         const CHUNK_SIZE = 10000; // Number of records to process at once
-        const localTmpDir = `/tmp/bsondb_sort_${Date.now()}`;
+        const localTmpDir = path.join(os.tmpdir(), `bsondb_sort_${Date.now()}`);
         
         // Create local temporary directory
         await fs.ensureDir(localTmpDir);
+
+        console.log(`Using temporary directory: ${localTmpDir}`);
         
         let recordCount = 0;
         let chunkCount = 0;
