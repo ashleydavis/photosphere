@@ -101,7 +101,7 @@ export class SortIndex<RecordT extends IRecord> {
         let currentChunk: ISortedIndexEntry<RecordT>[] = [];
         
         // Iterate through all records in the collection
-        for await (const record of collection.iterateRecords()) {
+        for await (const record of collection.iterateRecords()) { //todo: It's not really ncessary to put records into chunks here. Given that the records are already sharded into chunks!
             const value = record[this.fieldName];
 
             // Skip records where the field doesn't exist
@@ -188,24 +188,8 @@ export class SortIndex<RecordT extends IRecord> {
     
     // Helper method to save a chunk file to local storage
     private async saveChunkFile(filePath: string, entries: ISortedIndexEntry<RecordT>[]): Promise<void> {
-        // Serialize the entries
-        const bsonData = BSON.serialize({ entries });
-        
-        // Add a version number (4 bytes) at the beginning
-        const versionBuffer = Buffer.alloc(4);
-        versionBuffer.writeUInt32LE(1, 0); // Version 1
-        
-        // Combine version and BSON data
-        const versionedData = Buffer.concat([versionBuffer, bsonData]);
-        
-        // Calculate checksum
-        const checksum = crypto.createHash('sha256').update(versionedData).digest();
-        
-        // Combine versioned data and checksum
-        const dataWithChecksum = Buffer.concat([versionedData, checksum]);
-        
         // Write to local file storage
-        await fs.writeFile(filePath, dataWithChecksum);
+        await fs.writeFile(filePath, BSON.serialize({ entries }));
     }
     
     // Helper method to load a chunk file from local storage
@@ -221,34 +205,11 @@ export class SortIndex<RecordT extends IRecord> {
         
         if (!fileData || fileData.length === 0) {
             return [];
-        }
+        }       
         
-        // Skip the 32-byte checksum at the end
-        const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
-        
-        // Calculate checksum of the data
-        const storedChecksum = fileData.subarray(fileData.length - 32);
-        const calculatedChecksum = crypto.createHash('sha256').update(dataWithoutChecksum).digest();
-        
-        // Verify checksum
-        if (!calculatedChecksum.equals(storedChecksum)) {
-            console.error(`Chunk file checksum verification failed: ${filePath}`);
-            return [];
-        }
-        
-        // Read version number (first 4 bytes)
-        const version = dataWithoutChecksum.readUInt32LE(0);
-        
-        if (version === 1) {
-            // Skip the version number to get to the BSON data
-            const bsonData = dataWithoutChecksum.subarray(4);
-            
-            // Deserialize the page data
-            const chunkData = BSON.deserialize(bsonData) as { entries: ISortedIndexEntry<RecordT>[] };
-            return chunkData.entries;
-        }
-        
-        return [];
+        // Deserialize the page data
+        const chunkData = BSON.deserialize(fileData) as { entries: ISortedIndexEntry<RecordT>[] };
+        return chunkData.entries;
     }
     
     // Merges sorted chunks into pages
