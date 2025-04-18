@@ -20,7 +20,7 @@ export interface ISortManagerOptions {
 export class SortManager {
     private storage: IStorage;
     private baseDirectory: string;
-    private sortIndexes: Map<string, SortIndex<any>> = new Map();
+    private sortIndexes: Map<string, any> = new Map();
     private defaultPageSize: number;
 
     constructor(options: ISortManagerOptions) {
@@ -75,7 +75,7 @@ export class SortManager {
         fieldName: string,
         direction: 'asc' | 'desc',
         pageSize?: number
-    ): Promise<SortIndex<RecordT> | undefined> {
+    ): Promise<SortIndex<RecordT>> {
         const key = this.getSortIndexKey(collectionName, fieldName, direction);
 
         // Check if this index is already in memory
@@ -127,16 +127,7 @@ export class SortManager {
             direction,
             pageSize
         );
-
-        if (!sortIndex) {
-            return {
-                records: [],
-                totalRecords: 0,
-                currentPage: 1,
-                totalPages: 0,               
-            };
-        }
-
+        
         // Get the requested page
         return await sortIndex.getPage(collection, page);
     }
@@ -163,11 +154,7 @@ export class SortManager {
             direction,
             this.defaultPageSize
         );
-
-        if (!sortIndex) {
-            return;
-        }
-
+        
         await sortIndex.delete(); // Delete the existing index
         await sortIndex.initialize(collection); // Rebuild
     }
@@ -183,7 +170,8 @@ export class SortManager {
             return [];
         }
 
-        const result = await this.storage.listFiles(collectionIndexPath, 1000);
+        
+        const result = await this.storage.listDirs(collectionIndexPath, 1000);
         const directories = result.names || [];
 
         const sortIndexes: Array<{fieldName: string; direction: 'asc' | 'desc'}> = [];
@@ -213,10 +201,8 @@ export class SortManager {
         // Remove from memory cache
         if (this.sortIndexes.has(key)) {
             const sortIndex = this.sortIndexes.get(key);
-            if (sortIndex) {
-                await sortIndex.delete();
-                this.sortIndexes.delete(key);
-            }
+            await sortIndex.delete();
+            this.sortIndexes.delete(key);
         } else {
             // If not in memory, try to delete from disk
             const indexPath = `${this.baseDirectory}/sort_indexes/${collectionName}/${fieldName}_${direction}`;

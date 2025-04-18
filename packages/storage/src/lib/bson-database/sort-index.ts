@@ -313,7 +313,6 @@ export class SortIndex<RecordT extends IRecord> {
 
         // Check if metadata file exists
         const metadataPath = `${this.indexDirectory}/metadata.dat`;
-        console.log(`Checking if sort index is initialized: ${metadataPath}`);
         return await this.storage.fileExists(metadataPath);
     }
 
@@ -398,5 +397,191 @@ export class SortIndex<RecordT extends IRecord> {
 
         this.totalEntries = 0;
         this.initialized = false;
+    }
+    
+    // Find records by exact value using binary search on the sorted index
+    async findByValue(value: any): Promise<RecordT[]> {
+        // Check if initialized
+        const isInit = await this.isInitialized();
+        if (!isInit) {
+            throw new Error(`Sort index for field '${this.fieldName}' is not initialized`);
+        }
+        
+        // Load metadata
+        const metadata = await this.loadMetadata();
+        if (!metadata) {
+            throw new Error(`Failed to load metadata for sort index '${this.fieldName}'`);
+        }
+        
+        const { totalPages } = metadata;
+        
+        if (totalPages === 0) {
+            return []; // No records in the index
+        }
+        
+        // Binary search to find the page containing the value
+        let left = 0;
+        let right = totalPages - 1;
+        let foundPage = -1;
+        
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const pageEntries = await this.loadPageFile(mid);
+            
+            if (!pageEntries || pageEntries.length === 0) {
+                break;
+            }
+            
+            // Check if value might be in this page
+            const firstValue = pageEntries[0].value;
+            const lastValue = pageEntries[pageEntries.length - 1].value;
+            
+            if (this.direction === 'asc') {
+                if (value < firstValue) {
+                    right = mid - 1;
+                } else if (value > lastValue) {
+                    left = mid + 1;
+                } else {
+                    // Value is within this page's range
+                    foundPage = mid;
+                    break;
+                }
+            } else {
+                // For 'desc' ordering
+                if (value > firstValue) {
+                    right = mid - 1;
+                } else if (value < lastValue) {
+                    left = mid + 1;
+                } else {
+                    // Value is within this page's range
+                    foundPage = mid;
+                    break;
+                }
+            }
+        }
+        
+        if (foundPage === -1) {
+            return []; // Value not found
+        }
+        
+        // Load the page and find the exact matches
+        const pageEntries = await this.loadPageFile(foundPage);
+        if (!pageEntries) {
+            return [];
+        }
+        
+        // Linear search within the page for exact matches
+        const matchingRecords: RecordT[] = [];
+        for (const entry of pageEntries) {
+            if (entry.value === value) {
+                matchingRecords.push(entry.record);
+            }
+        }
+        
+        return matchingRecords;
+    }
+    
+    // Find records by range query using binary search
+    async findByRange(options: {
+        min?: any;
+        max?: any;
+        minInclusive?: boolean;
+        maxInclusive?: boolean;
+    }): Promise<RecordT[]> {
+        const {
+            min = null,
+            max = null,
+            minInclusive = true,
+            maxInclusive = true
+        } = options;
+        
+        // At least one bound must be specified
+        if (min === null && max === null) {
+            throw new Error('At least one of min or max must be specified for range query');
+        }
+        
+        // Check if initialized
+        const isInit = await this.isInitialized();
+        if (!isInit) {
+            throw new Error(`Sort index for field '${this.fieldName}' is not initialized`);
+        }
+        
+        // Load metadata
+        const metadata = await this.loadMetadata();
+        if (!metadata) {
+            throw new Error(`Failed to load metadata for sort index '${this.fieldName}'`);
+        }
+        
+        const { totalPages } = metadata;
+        
+        if (totalPages === 0) {
+            return []; // No records in the index
+        }
+        
+        // If we need to scan multiple pages, we'll collect matching entries here
+        const matchingRecords: RecordT[] = [];
+        
+        // Scan all pages that might contain records in the range
+        for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+            const pageEntries = await this.loadPageFile(pageNum);
+            
+            if (!pageEntries || pageEntries.length === 0) {
+                continue;
+            }
+            
+            // Check if this page might contain values in the range
+            const firstValue = pageEntries[0].value;
+            const lastValue = pageEntries[pageEntries.length - 1].value;
+            
+            // Skip pages that are entirely outside the range
+            if (this.direction === 'asc') {
+                // Skip if page is entirely above max
+                if (max !== null) {
+                    if (maxInclusive && firstValue > max) continue;
+                    if (!maxInclusive && firstValue >= max) continue;
+                }
+                
+                // Skip if page is entirely below min
+                if (min !== null) {
+                    if (minInclusive && lastValue < min) continue;
+                    if (!minInclusive && lastValue <= min) continue;
+                }
+            } else {
+                // For 'desc' ordering (values are in descending order)
+                // Skip if page is entirely above max (now lastValue)
+                if (max !== null) {
+                    if (maxInclusive && lastValue > max) continue;
+                    if (!maxInclusive && lastValue >= max) continue;
+                }
+                
+                // Skip if page is entirely below min (now firstValue)
+                if (min !== null) {
+                    if (minInclusive && firstValue < min) continue;
+                    if (!minInclusive && firstValue <= min) continue;
+                }
+            }
+            
+            // Page might contain records in the range, so check each entry
+            for (const entry of pageEntries) {
+                const value = entry.value;
+                
+                // Check if the value is within the specified range
+                let inRange = true;
+                
+                if (min !== null) {
+                    inRange = minInclusive ? value >= min : value > min;
+                }
+                
+                if (inRange && max !== null) {
+                    inRange = maxInclusive ? value <= max : value < max;
+                }
+                
+                if (inRange) {
+                    matchingRecords.push(entry.record);
+                }
+            }
+        }
+        
+        return matchingRecords;
     }
 }

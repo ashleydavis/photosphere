@@ -6,7 +6,6 @@ import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
-import { BsonIndex, IBsonIndex } from './index';
 import { SortManager } from './sort-manager';
 
 //
@@ -131,14 +130,14 @@ export interface IBsonCollection<RecordT extends IRecord> {
     deleteOne(id: string): Promise<boolean>;
 
     //
-    // Creates an index for the given field, but only if it doesn't already exist.
+    // Creates an index for the given field (alias for ensureSortIndex with 'asc' direction)
     //
-    ensureIndex(fieldName: string): Promise<IBsonIndex<RecordT>>;
+    ensureIndex(fieldName: string): Promise<void>;
 
     //
-    // Gets an existing index by field name
+    // Checks if a sort index exists for the given field name
     //
-    getIndex(fieldName: string): Promise<IBsonIndex<RecordT> | undefined>;
+    hasIndex(fieldName: string): Promise<boolean>;
 
     //
     // List all indexes for this collection
@@ -173,7 +172,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private shardCache: Map<number, IShard<RecordT>> = new Map();
     private isAlive: boolean = true;
     private maxCachedShards: number;
-    private indexes: Map<string, IBsonIndex<RecordT>> = new Map();
     private sortManager: SortManager | undefined;
 
     //
@@ -210,58 +208,42 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Delete all sort indexes
         await this.sortManager.deleteAllSortIndexes(collectionName);
     }
-
-    // Cache of loaded index field names to avoid checking storage multiple times
-    private loadedIndexFields: Set<string> = new Set();
-    // Cache of checked but nonexistent index fields
-    private nonexistentIndexFields: Set<string> = new Set();
-    // Flag to indicate if all indexes have been loaded
-    private allIndexesLoaded: boolean = false;
-
+    
+    // Using SortIndex directly - no need to track legacy indexes
+    
     //
-    // Checks if an index exists on disk
+    // We no longer need to check for legacy indexes on disk
+    // This method is kept for backward compatibility but always returns false
     //
     private async indexExistsOnDisk(fieldName: string): Promise<boolean> {
-        // If we've already checked this field name, use the cached result
-        if (this.loadedIndexFields.has(fieldName)) return true;
-        if (this.nonexistentIndexFields.has(fieldName)) return false;
-
-        const indexFilePath = `${this.directory}/index/${fieldName}.dat`;
-        const exists = await this.storage.fileExists(indexFilePath);
-
-        // Cache the result
-        if (exists) {
-            this.loadedIndexFields.add(fieldName);
-        } else {
-            this.nonexistentIndexFields.add(fieldName);
-        }
-
-        return exists;
+        return false; // No legacy indexes
     }
 
     //
-    // Lazily loads an index if it exists
+    // Checks if a sort index exists for the given field
     //
-    private async loadIndexIfExists(fieldName: string): Promise<IBsonIndex<RecordT> | undefined> {
-        // Return immediately if the index is already loaded
-        let index = this.indexes.get(fieldName);
-        if (index) return index;
-
-        // Check if the index file exists
-        const exists = await this.indexExistsOnDisk(fieldName);
-        if (!exists) return undefined;
-
-        // Create and initialize the index
-        index = new BsonIndex<RecordT>({
-            storage: this.storage,
-            directory: this.directory,
-            fieldName: fieldName
-        });
-
-        this.indexes.set(fieldName, index);
-        console.log(`Lazily loaded index for field '${fieldName}'`);
-
-        return index;
+    private async sortIndexExists(fieldName: string): Promise<boolean> {
+        if (!this.sortManager) return false;
+        
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Check for ascending index
+        const ascIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            'asc'
+        );
+        
+        if (ascIndex) return true;
+        
+        // Check for descending index
+        const descIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            'desc'
+        );
+        
+        return !!descIndex;
     }
 
     //
@@ -482,11 +464,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.isAlive = false; // Causes the worker to exit after saving.
         this.wakeWorker(); // Wake the worker so it can exit.
         await this.saveDirtyShards(); // Save any remaining dirty shards.
-
-        // Shut down all indexes
-        for (const index of this.indexes.values()) {
-            await index.shutdown();
-        }
+        
+        // Nothing to shut down - we're using SortIndex directly
     }
 
     //
@@ -701,18 +680,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             record._id = crypto.randomUUID();
         }
 
-        // Ensure all indexes are loaded before making changes
-        await this.loadAllIndexes();
-
         const shardId = this.generateShardId(record._id);
         const shard = await this.loadShard(shardId);
 
         this.setRecord(record._id, record, shard);
-
-        // Update all indexes
-        for (const index of this.indexes.values()) {
-            await index.indexRecord(record);
-        }
 
         // Delete all sort indexes since the data has changed
         await this.deleteAllSortIndexes();
@@ -812,9 +783,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Updates a record.
     //
     async updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean> {
-        // Ensure all indexes are loaded before making changes
-        await this.loadAllIndexes();
-
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
@@ -842,16 +810,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const updatedRecord: any = { ...existingRecord, ...updates };
         this.setRecord(id, updatedRecord, shard);
 
-        // Update all indexes
-        for (const index of this.indexes.values()) {
-            // Remove old record from index
-            if (existingRecord) {
-                await index.removeRecord(id);
-            }
-            // Add updated record to index
-            await index.indexRecord(updatedRecord);
-        }
-
         // Delete all sort indexes since the data has changed
         await this.deleteAllSortIndexes();
 
@@ -864,9 +822,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Replaces a record with completely new data.
     //
     async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean> {
-        // Ensure all indexes are loaded before making changes
-        await this.loadAllIndexes();
-
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
@@ -884,16 +839,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         this.setRecord(id, record, shard);
 
-        // Update all indexes
-        for (const index of this.indexes.values()) {
-            // Remove old record from index
-            if (existingRecord) {
-                await index.removeRecord(id);
-            }
-            // Add new record to index
-            await index.indexRecord(record);
-        }
-
         // Delete all sort indexes since the data has changed
         await this.deleteAllSortIndexes();
 
@@ -906,9 +851,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Deletes a record.
     //
     async deleteOne(id: string): Promise<boolean> {
-        // Ensure all indexes are loaded before making changes
-        await this.loadAllIndexes();
-
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
@@ -925,11 +867,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         this.deleteRecord(id, shard);
 
-        // Remove from all indexes
-        for (const index of this.indexes.values()) {
-            await index.removeRecord(id);
-        }
-
         // Delete all sort indexes since the data has changed
         await this.deleteAllSortIndexes();
 
@@ -939,222 +876,170 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Creates an index for the given field, but only if it doesn't already exist.
+    // Creates an index for the given field (alias for ensureSortIndex with 'asc' direction)
     //
-    async ensureIndex(fieldName: string): Promise<IBsonIndex<RecordT>> {
-        // Check if the index already exists in memory
-        let index = this.indexes.get(fieldName);
-
-        if (index) {
-            console.log(`Using existing in-memory index for field '${fieldName}'`);
-            return index;
-        }
-
-        // Check if the index exists on disk but isn't loaded
-        const existsOnDisk = await this.indexExistsOnDisk(fieldName);
-        if (existsOnDisk) {
-            // Load the existing index
-            index = await this.loadIndexIfExists(fieldName);
-            if (index) {
-                console.log(`Loaded existing index from disk for field '${fieldName}'`);
-                return index;
-            }
-        }
-
-        // Create a new index
-        index = new BsonIndex<RecordT>({
-            storage: this.storage,
-            directory: this.directory,
-            fieldName: fieldName
-        });
-
-        this.indexes.set(fieldName, index);
-        this.loadedIndexFields.add(fieldName);
-        this.nonexistentIndexFields.delete(fieldName);
-
-        // If we previously thought all indexes were loaded,
-        // we need to reset that since we're adding a new one
-        if (this.allIndexesLoaded) {
-            this.allIndexesLoaded = true; // Set to true since we know all indexes now
-        }
-
-        // Populate the index with existing records
-        for await (const record of this.iterateRecords()) {
-            await index.indexRecord(record);
-        }
-
-        return index;
+    async ensureIndex(fieldName: string): Promise<void> {
+        // Just create an ascending sort index
+        await this.ensureSortIndex(fieldName, 'asc');
     }
 
     //
-    // Gets an existing index by field name
+    // Checks if a sort index exists for the given field name
     //
-    async getIndex(fieldName: string): Promise<IBsonIndex<RecordT> | undefined> {
-        // Lazily load the index if it exists but isn't loaded yet
-        return await this.loadIndexIfExists(fieldName);
+    async hasIndex(fieldName: string): Promise<boolean> {
+        return await this.sortIndexExists(fieldName);
     }
 
     //
-    // Loads all indexes from disk to ensure they're available for record operations
-    //
-    private async loadAllIndexes(): Promise<void> {
-        // If we've already loaded all indexes, just return
-        if (this.allIndexesLoaded) {
-            return;
-        }
-
-        // Check for index files on disk
-        const indexDirPath = `${this.directory}/index`;
-
-        // Check if index directory exists
-        const dirExists = await this.storage.dirExists(indexDirPath);
-        if (!dirExists) {
-            // No indexes to load
-            this.allIndexesLoaded = true;
-            return;
-        }
-
-        // List index files
-        const result = await this.storage.listFiles(indexDirPath, 1000);
-        const indexFiles = result.names || [];
-
-        // Process each index file
-        for (const file of indexFiles) {
-            if (file === '.placeholder' || !file.endsWith('.dat')) {
-                continue; // Skip placeholder files or non-index files
-            }
-
-            // Extract field name from file name (remove .dat extension)
-            const fieldName = file.substring(0, file.length - 4);
-
-            // If the index is already loaded, skip it
-            if (this.indexes.has(fieldName)) {
-                continue;
-            }
-
-            // Load the index
-            await this.loadIndexIfExists(fieldName);
-        }
-
-        // Mark all indexes as loaded
-        this.allIndexesLoaded = true;
-    }
-
-    //
-    // List all indexes for this collection (both in memory and on disk)
+    // List all sort indexes for this collection
     //
     async listIndexes(): Promise<string[]> {
-        // Start with indexes already loaded in memory
-        const indexNames = new Set<string>(this.indexes.keys());
-
-        // Add known index fields (may not be loaded yet)
-        for (const fieldName of this.loadedIndexFields) {
-            indexNames.add(fieldName);
-        }
-
-        // Check for any additional index files on disk
-        const indexDirPath = `${this.directory}/index`;
-
-        // Check if index directory exists
-        const dirExists = await this.storage.dirExists(indexDirPath);
-        if (dirExists) {
-            // List index files
-            const result = await this.storage.listFiles(indexDirPath, 1000);
-            const indexFiles = result.names || [];
-
-            for (const file of indexFiles) {
-                if (file === '.placeholder' || !file.endsWith('.dat')) {
-                    continue; // Skip placeholder files or non-index files
-                }
-
-                // Extract field name from file name (remove .dat extension)
-                const fieldName = file.substring(0, file.length - 4);
-                indexNames.add(fieldName);
-
-                // Update our cache of known index fields
-                this.loadedIndexFields.add(fieldName);
-                this.nonexistentIndexFields.delete(fieldName);
+        // Get all sort indexes and extract field names
+        const fieldNames = new Set<string>();
+        
+        if (this.sortManager) {
+            const collectionName = this.directory.split('/').pop() || '';
+            const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+            
+            // Add field names from sort indexes
+            for (const index of sortIndexes) {
+                fieldNames.add(index.fieldName);
             }
         }
-
-        return Array.from(indexNames);
+        
+        return Array.from(fieldNames);
     }
 
     //
-    // Find records by index
+    // Find records by index using SortIndex
     //
     async findByIndex(fieldName: string, value: any): Promise<RecordT[]> {
-        // Lazily load the index if it exists
-        const index = await this.loadIndexIfExists(fieldName);
-
-        if (!index) {
-            throw new Error(`Index for field "${fieldName}" does not exist`);
+        // Check if the sort manager is available
+        if (!this.sortManager) {
+            throw new Error("Sort manager is required for index operations");
         }
-
-        // Find record IDs matching the value
-        const recordIds = await index.findByValue(value);
-
-        if (recordIds.length === 0) {
-            return [];
+        
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Try to find an existing sort index for the field (check both asc and desc)
+        const ascIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            'asc'
+        );
+        
+        if (ascIndex) {
+            // Use the sort index for faster search with binary search
+            return await ascIndex.findByValue(value);
         }
-
-        // Retrieve the records
-        const records: RecordT[] = [];
-        for (const recordId of recordIds) {
-            const record = await this.getOne(recordId);
-            if (record) {
-                records.push(record);
-            }
+        
+        const descIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            'desc'
+        );
+        
+        if (descIndex) {
+            // Use the sort index for faster search with binary search
+            return await descIndex.findByValue(value);
         }
-
-        return records;
+        
+        // If no sort index exists, create one
+        await this.ensureSortIndex(fieldName, 'asc');
+        
+        // Get the newly created sort index
+        const newIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            'asc'
+        );
+        
+        if (!newIndex) {
+            throw new Error(`Failed to create index for field "${fieldName}"`);
+        }
+        
+        // Use the sort index for search
+        return await newIndex.findByValue(value);
+    }
+    
+    //
+    // Find records where the indexed field is within a range
+    //
+    async findByRange(
+        fieldName: string, 
+        options: {
+            min?: any;
+            max?: any;
+            minInclusive?: boolean;
+            maxInclusive?: boolean;
+            direction?: 'asc' | 'desc';
+        }
+    ): Promise<RecordT[]> {
+        const { direction = 'asc' } = options;
+        
+        // Require a sort index for range queries
+        if (!this.sortManager) {
+            throw new Error('Sort manager is required for range queries');
+        }
+        
+        // Get the collection name from the directory path
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Try to get the sort index with the specified direction
+        let sortIndex = await this.sortManager.getSortIndex<RecordT>(
+            collectionName,
+            fieldName,
+            direction
+        );
+        
+        // If the index doesn't exist, create it
+        if (!sortIndex) {
+            await this.ensureSortIndex(fieldName, direction);
+            sortIndex = await this.sortManager.getSortIndex<RecordT>(
+                collectionName,
+                fieldName,
+                direction
+            );
+        }
+        
+        if (!sortIndex) {
+            throw new Error(`Failed to create sort index for field '${fieldName}'`);
+        }
+        
+        // Use the sort index's range query method
+        return await sortIndex.findByRange(options);
     }
 
     //
-    // Deletes an index
+    // Deletes all indexes for a field (both asc and desc)
     //
     async deleteIndex(fieldName: string): Promise<boolean> {
-        // Check if index exists in memory
-        let index = this.indexes.get(fieldName);
-
-        // If not in memory, check if it exists on disk
-        if (!index) {
-            const exists = await this.indexExistsOnDisk(fieldName);
-
-            if (!exists) {
-                return false; // Index doesn't exist
-            }
-
-            // Load the index if it exists on disk
-            index = await this.loadIndexIfExists(fieldName);
-
-            if (!index) {
-                return false; // Index couldn't be loaded
-            }
+        if (!this.sortManager) {
+            return false;
         }
-
-        // Shut down the index
-        await index.shutdown();
-
-        // Remove from the indexes map
-        this.indexes.delete(fieldName);
-
-        // Remove from caches
-        this.loadedIndexFields.delete(fieldName);
-        this.nonexistentIndexFields.add(fieldName);
-
-        // Update the allIndexesLoaded flag if it was set
-        if (this.allIndexesLoaded) {
-            this.allIndexesLoaded = false;
-        }
-
-        // Delete the index file - now located in collection-dir/index/field.dat
-        const indexFilePath = `${this.directory}/index/${fieldName}.dat`;
-        if (await this.storage.fileExists(indexFilePath)) {
-            await this.storage.deleteFile(indexFilePath);
-        }
-
-        return true;
+        
+        // Get collection name
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Delete any existing sort indexes for the field
+        let deleted = false;
+        
+        // Try to delete an ascending index
+        const deleteAsc = await this.sortManager.deleteSortIndex(
+            collectionName,
+            fieldName,
+            'asc'
+        );
+        
+        // Try to delete a descending index
+        const deleteDesc = await this.sortManager.deleteSortIndex(
+            collectionName,
+            fieldName,
+            'desc'
+        );
+        
+        return deleteAsc || deleteDesc;
     }
 
     //
@@ -1248,17 +1133,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async drop(): Promise<void> {
         this.clearSchedule(); // Clear any pending saves.
         this.shardCache.clear(); // Clear all shards from memory.
-
-        // Shutdown all indexes
-        for (const index of this.indexes.values()) {
-            await index.shutdown();
-        }
-        this.indexes.clear();
-
-        // Clear index caches
-        this.loadedIndexFields.clear();
-        this.nonexistentIndexFields.clear();
-
+        
+        // No need to shutdown indexes - we're only using SortIndex
+        // which is managed by SortManager
+        
         // Delete sort indexes if any
         if (this.sortManager) {
             const collectionName = this.directory.split('/').pop() || '';
