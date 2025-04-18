@@ -137,7 +137,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Checks if a sort index exists for the given field name
     //
-    hasIndex(fieldName: string): Promise<boolean>;
+    hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean>;
 
     //
     // List all indexes for this collection
@@ -212,32 +212,20 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Checks if a sort index exists for the given field
     //
-    private async sortIndexExists(fieldName: string): Promise<boolean> {
+    private async sortIndexExists(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
         if (!this.sortManager) {
             return false;
         }
         
         const collectionName = this.directory.split('/').pop() || '';
         
-        // Check for ascending index
-        const ascIndex = await this.sortManager.getSortIndex<RecordT>(
+        const index = await this.sortManager.getSortIndex<RecordT>(
             collectionName,
             fieldName,
-            'asc'
+            direction
         );
-        
-        if (ascIndex) {
-            return true;
-        }
-        
-        // Check for descending index
-        const descIndex = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            'desc'
-        );
-        
-        return !!descIndex;
+       
+        return !!index;
     }
 
     //
@@ -880,8 +868,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Checks if a sort index exists for the given field name
     //
-    async hasIndex(fieldName: string): Promise<boolean> {
-        return await this.sortIndexExists(fieldName);
+    async hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
+        return await this.sortIndexExists(fieldName, direction);
     }
 
     //
@@ -1073,6 +1061,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc'): Promise<void> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
+        }
+
+        if (await this.hasIndex(fieldName, direction)) {
+            console.log(`Sort index for field "${fieldName}" already exists.`);
+            // Index already exists, no need to create it again.
+            return;
         }
 
         // Get the collection name from the directory path
