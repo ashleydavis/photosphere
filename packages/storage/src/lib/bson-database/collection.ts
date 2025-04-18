@@ -209,16 +209,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         await this.sortManager.deleteAllSortIndexes(collectionName);
     }
     
-    // Using SortIndex directly - no need to track legacy indexes
-    
-    //
-    // We no longer need to check for legacy indexes on disk
-    // This method is kept for backward compatibility but always returns false
-    //
-    private async indexExistsOnDisk(fieldName: string): Promise<boolean> {
-        return false; // No legacy indexes
-    }
-
     //
     // Checks if a sort index exists for the given field
     //
