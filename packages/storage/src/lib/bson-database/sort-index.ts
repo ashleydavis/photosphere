@@ -84,7 +84,7 @@ export class SortIndex<RecordT extends IRecord> {
     async initialize(collection: IBsonCollection<RecordT>): Promise<void> {
         console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
         
-        const CHUNK_SIZE = 10000; // Number of records to process at once
+        const CHUNK_SIZE = 1000; // Number of records to process at once
         const localTmpDir = path.join(os.tmpdir(), `bsondb_sort_${Date.now()}`);
         
         // Create local temporary directory
@@ -349,6 +349,8 @@ export class SortIndex<RecordT extends IRecord> {
         if (readBuffer.length !== dataWithChecksum.length) {
             throw new Error(`Page file verification failed (size mismatch: ${readBuffer.length} vs ${dataWithChecksum.length})`);
         }
+
+        console.log(`Saved page ${pageNum} with ${entries.length} entries to ${filePath}`);
     }
 
     // Save metadata file with total records and other info
