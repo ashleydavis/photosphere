@@ -193,21 +193,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         this.keepWorkerAlive();
     }
-
-    //
-    // Delete all sort indexes for this collection
-    //
-    private async deleteAllSortIndexes(): Promise<void> {
-        if (!this.sortManager) {
-            return;
-        }
-
-        // Get the collection name
-        const collectionName = this.directory.split('/').pop() || '';
-
-        // Delete all sort indexes
-        await this.sortManager.deleteAllSortIndexes(collectionName);
-    }
     
     //
     // Checks if a sort index exists for the given field
@@ -446,8 +431,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.isAlive = false; // Causes the worker to exit after saving.
         this.wakeWorker(); // Wake the worker so it can exit.
         await this.saveDirtyShards(); // Save any remaining dirty shards.
-        
-        // Nothing to shut down - we're using SortIndex directly
     }
 
     //
@@ -667,8 +650,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         this.setRecord(record._id, record, shard);
 
-        // Delete all sort indexes since the data has changed
-        await this.deleteAllSortIndexes();
+        // Add record to all indexes
+        if (this.sortManager) {
+            await this.updateRecordInAllIndexes(record);
+        }
 
         this.scheduleSave(`inserted record ${record._id}`);
     }
@@ -792,8 +777,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const updatedRecord: any = { ...existingRecord, ...updates };
         this.setRecord(id, updatedRecord, shard);
 
-        // Delete all sort indexes since the data has changed
-        await this.deleteAllSortIndexes();
+        // Update records in all indexes
+        if (this.sortManager) {
+            await this.updateRecordInAllIndexes(updatedRecord);
+        }
 
         this.scheduleSave(`updated record ${id}`);
 
@@ -821,12 +808,40 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         this.setRecord(id, record, shard);
 
-        // Delete all sort indexes since the data has changed
-        await this.deleteAllSortIndexes();
+        // Update records in all indexes
+        if (this.sortManager) {
+            await this.updateRecordInAllIndexes(record);
+        }
 
         this.scheduleSave(`replaced record ${id}`);
 
         return true;
+    }
+    
+    // Helper method to update a record in all existing sort indexes
+    private async updateRecordInAllIndexes(record: RecordT): Promise<void> {
+        if (!this.sortManager) {
+            return;
+        }
+        
+        // Get collection name
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Get all sort indexes for this collection
+        const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+        
+        // Update the record in each index
+        for (const indexInfo of sortIndexes) {
+            const sortIndex = await this.sortManager.getSortIndex<RecordT>(
+                collectionName,
+                indexInfo.fieldName,
+                indexInfo.direction
+            );
+            
+            if (sortIndex) {
+                await sortIndex.updateRecord(record);
+            }
+        }
     }
 
     //
@@ -849,12 +864,40 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         this.deleteRecord(id, shard);
 
-        // Delete all sort indexes since the data has changed
-        await this.deleteAllSortIndexes();
+        // Delete record from all indexes
+        if (this.sortManager) {
+            await this.deleteRecordFromAllIndexes(id);
+        }
 
         this.scheduleSave(`deleted record ${id}`);
 
         return true;
+    }
+    
+    // Helper method to delete a record from all existing sort indexes
+    private async deleteRecordFromAllIndexes(recordId: string): Promise<void> {
+        if (!this.sortManager) {
+            return;
+        }
+        
+        // Get collection name
+        const collectionName = this.directory.split('/').pop() || '';
+        
+        // Get all sort indexes for this collection
+        const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+        
+        // Delete the record from each index
+        for (const indexInfo of sortIndexes) {
+            const sortIndex = await this.sortManager.getSortIndex<RecordT>(
+                collectionName,
+                indexInfo.fieldName,
+                indexInfo.direction
+            );
+            
+            if (sortIndex) {
+                await sortIndex.deleteRecord(recordId);
+            }
+        }
     }
 
     //

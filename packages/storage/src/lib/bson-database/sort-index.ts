@@ -568,6 +568,238 @@ export class SortIndex<RecordT extends IRecord> {
         this.initialized = false;
     }
     
+    /**
+     * Updates a record in the index without rebuilding the entire index
+     * If the indexed field value has changed, the record will be removed and added again
+     */
+    async updateRecord(record: RecordT): Promise<void> {
+        // Check if initialized
+        const isInit = await this.isInitialized();
+        if (!isInit) {
+            throw new Error(`Sort index for field '${this.fieldName}' is not initialized`);
+        }
+        
+        const recordId = record._id;
+        const newValue = record[this.fieldName];
+        
+        // If the field doesn't exist in the record, remove it from the index
+        if (newValue === undefined) {
+            await this.deleteRecord(recordId);
+            return;
+        }
+        
+        // First, try to delete the record if it exists
+        await this.deleteRecord(recordId);
+        
+        // Then add the record with the new value
+        await this.addRecord(record);
+    }
+    
+    /**
+     * Deletes a record from the index without rebuilding the entire index
+     */
+    async deleteRecord(recordId: string): Promise<void> {
+        // Check if initialized
+        const isInit = await this.isInitialized();
+        if (!isInit) {
+            throw new Error(`Sort index for field '${this.fieldName}' is not initialized`);
+        }
+        
+        // Load metadata to get total pages
+        const metadata = await this.loadMetadata();
+        if (!metadata || metadata.totalPages === 0) {
+            return; // No pages, nothing to delete
+        }
+        
+        const totalPages = metadata.totalPages;
+        
+        // Search each page for the record
+        for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+            const pageEntries = await this.loadPageFile(pageNum);
+            if (!pageEntries || pageEntries.length === 0) {
+                continue; // Skip empty pages
+            }
+            
+            // Find the record in the page
+            const recordIndex = pageEntries.findIndex(entry => entry.recordId === recordId);
+            if (recordIndex === -1) {
+                continue; // Record not found in this page
+            }
+            
+            // Found the record, remove it from the page
+            pageEntries.splice(recordIndex, 1);
+            
+            // Update the page
+            await this.savePageFile(pageNum, pageEntries);
+            
+            // Decrement total entries
+            this.totalEntries--;
+            
+            // Update metadata
+            await this.saveMetadata();
+            
+            // Record found and deleted, no need to check more pages
+            break;
+        }
+    }
+    
+    /**
+     * Adds a new record to the index without rebuilding the entire index
+     */
+    async addRecord(record: RecordT): Promise<void> {
+        // Check if initialized
+        const isInit = await this.isInitialized();
+        if (!isInit) {
+            // If not initialized, initialize with this single record
+            const collection = {
+                iterateRecords: async function* () {
+                    yield record;
+                }
+            } as IBsonCollection<RecordT>;
+            
+            await this.initialize(collection);
+            return;
+        }
+        
+        const recordId = record._id;
+        const value = record[this.fieldName];
+        
+        // If the field doesn't exist in the record, don't add it to the index
+        if (value === undefined) {
+            return;
+        }
+        
+        // Load metadata to get total pages
+        const metadata = await this.loadMetadata();
+        if (!metadata) {
+            throw new Error(`Failed to load metadata for sort index '${this.fieldName}'`);
+        }
+        
+        const { totalPages } = metadata;
+        
+        if (totalPages === 0) {
+            // No pages yet, create the first page
+            await this.savePageFile(0, [{
+                recordId,
+                value,
+                record
+            }]);
+            
+            // Update total entries
+            this.totalEntries = 1;
+            
+            // Update metadata
+            await this.saveMetadata();
+            return;
+        }
+        
+        // Binary search to find the page where the record should be inserted
+        let left = 0;
+        let right = totalPages - 1;
+        let targetPage = 0;
+        
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const pageEntries = await this.loadPageFile(mid);
+            
+            if (!pageEntries || pageEntries.length === 0) {
+                targetPage = mid;
+                break;
+            }
+            
+            // Check where value belongs
+            const firstValue = pageEntries[0].value;
+            const lastValue = pageEntries[pageEntries.length - 1].value;
+            
+            if (this.direction === 'asc') {
+                if (value < firstValue) {
+                    right = mid - 1;
+                    targetPage = mid;
+                } else if (value > lastValue) {
+                    left = mid + 1;
+                    targetPage = left;
+                } else {
+                    // Value belongs in this page
+                    targetPage = mid;
+                    break;
+                }
+            } else {
+                // For 'desc' ordering
+                if (value > firstValue) {
+                    right = mid - 1;
+                    targetPage = mid;
+                } else if (value < lastValue) {
+                    left = mid + 1;
+                    targetPage = left;
+                } else {
+                    // Value belongs in this page
+                    targetPage = mid;
+                    break;
+                }
+            }
+        }
+        
+        // Clamp target page to existing pages
+        targetPage = Math.min(targetPage, totalPages - 1);
+        
+        // Load the target page
+        let pageEntries = await this.loadPageFile(targetPage);
+        if (!pageEntries) {
+            pageEntries = [];
+        }
+        
+        // Create the new entry
+        const newEntry: ISortedIndexEntry<RecordT> = {
+            recordId,
+            value,
+            record
+        };
+        
+        // Insert the entry in the correct position
+        let inserted = false;
+        for (let i = 0; i < pageEntries.length; i++) {
+            const compareResult = this.compareValues(value, pageEntries[i].value);
+            if ((this.direction === 'asc' && compareResult <= 0) ||
+                (this.direction === 'desc' && compareResult >= 0)) {
+                pageEntries.splice(i, 0, newEntry);
+                inserted = true;
+                break;
+            }
+        }
+        
+        if (!inserted) {
+            // Add to the end of the page
+            pageEntries.push(newEntry);
+        }
+        
+        // If the page is now too large, split it
+        if (pageEntries.length > this.pageSize * 1.2) { // Allow some buffer
+            const halfSize = Math.floor(pageEntries.length / 2);
+            const newPage = pageEntries.splice(halfSize);
+            
+            // Save the existing page
+            await this.savePageFile(targetPage, pageEntries);
+            
+            // Create a new page
+            await this.savePageFile(totalPages, newPage);
+            
+            // Increment total entries
+            this.totalEntries++;
+            
+            // Update metadata to reflect the new page
+            await this.saveMetadata();
+        } else {
+            // Save the updated page
+            await this.savePageFile(targetPage, pageEntries);
+            
+            // Increment total entries
+            this.totalEntries++;
+            
+            // Update metadata
+            await this.saveMetadata();
+        }
+    }
+    
     // Find records by exact value using binary search on the sorted index
     async findByValue(value: any): Promise<RecordT[]> {
         // Check if initialized
@@ -639,12 +871,50 @@ export class SortIndex<RecordT extends IRecord> {
             return [];
         }
         
-        // Linear search within the page for exact matches
-        const matchingRecords: RecordT[] = [];
-        for (const entry of pageEntries) {
-            if (entry.value === value) {
-                matchingRecords.push(entry.record);
+        // Binary search within the page for exact matches
+        let startIdx = -1;
+        let endIdx = -1;
+        
+        // Find the first occurrence of the value
+        left = 0;
+        right = pageEntries.length - 1;
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            if (pageEntries[mid].value === value) {
+                startIdx = mid;
+                right = mid - 1; // Look for earlier occurrences
+            } else if (this.compareValues(pageEntries[mid].value, value) < 0) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
             }
+        }
+        
+        if (startIdx === -1) {
+            return []; // Value not found
+        }
+        
+        // Find the last occurrence of the value
+        left = startIdx;
+        right = pageEntries.length - 1;
+        endIdx = startIdx; // At minimum, we have one match
+        
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            if (pageEntries[mid].value === value) {
+                endIdx = mid;
+                left = mid + 1; // Look for later occurrences
+            } else if (this.compareValues(pageEntries[mid].value, value) < 0) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+        
+        // Extract all matching records
+        const matchingRecords: RecordT[] = [];
+        for (let i = startIdx; i <= endIdx; i++) {
+            matchingRecords.push(pageEntries[i].record);
         }
         
         return matchingRecords;
