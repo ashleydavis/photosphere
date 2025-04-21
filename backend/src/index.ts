@@ -30,6 +30,16 @@ async function main() {
             privateKey: createPrivateKey(privateKey),
         };
     }
+    else if (process.env.ASSET_STORAGE_PRIVATE_KEY_FILE) {
+        const privateKeyFile = process.env.ASSET_STORAGE_PRIVATE_KEY_FILE;
+        const privateKey = await loadPrivateKey(privateKeyFile);
+        if (!privateKey) {
+            throw new Error(`Private key file ${privateKeyFile} not found.`);
+        }
+        storageOptions = {
+            privateKey: privateKey,
+        };
+    }
 
     const { storage: assetStorage, normalizedPath: assetPath } = createStorage(assetStorageConnection, storageOptions);
     const assetStorageWrapper = new StoragePrefixWrapper(assetStorage, assetPath);

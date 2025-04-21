@@ -8,7 +8,7 @@
         "sd": "pnpm run start:dev",
         "start": "node build/index.js",
         "start:demo": "pnpm run clean-uploads && cross-env NODE_ENV=production AUTH_TYPE=no-auth APP_MODE=readonly ASSET_STORAGE_CONNECTION=s3:photosphere-demo/collections DB_STORAGE_CONNECTION=s3:photosphere-demo/database PORT=3000 ts-node-dev --respawn src/index.ts",
-        "start:prod": "pnpm run clean-uploads && cross-env NODE_ENV=production AUTH_TYPE=auth0 APP_MODE=readwrite ASSET_STORAGE_CONNECTION=s3:photosphere-assets/collections DB_STORAGE_CONNECTION=s3:photosphere-assets/database PORT=3000 ts-node-dev --respawn src/index.ts",
+        "start:prod": "pnpm run clean-uploads && cross-env NODE_ENV=production AUTH_TYPE=auth0 APP_MODE=readwrite ASSET_STORAGE_CONNECTION=s3:photosphere-assets/sets DB_STORAGE_CONNECTION=s3:photosphere-assets/database ASSET_STORAGE_PRIVATE_KEY_FILE=./key PORT=3000 ts-node-dev --respawn src/index.ts",
         "start:dev": "pnpm run start:dev-multi-set",
         "start:dev-multi-set": "pnpm run clean-uploads && pnpm run copy-multi-set && pnpm run load-bson-fixture && pnpm run start-watch",
         "start:dev-50-assets": "pnpm run clean-uploads && pnpm run copy-50-assets && pnpm run load-bson-fixture && pnpm run start-watch",
