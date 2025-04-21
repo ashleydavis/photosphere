@@ -172,13 +172,19 @@ export class FileStorage implements IStorage {
                     });
             }
             else {
-                const fileWriteStream = fs.createWriteStream(filePath);
-                inputStream.pipe(fileWriteStream)
-                    .on("error", (err: any) => {
-                        reject(err);
+                fs.ensureDir(path.dirname(filePath))
+                    .then(() => {
+                        const fileWriteStream = fs.createWriteStream(filePath);
+                        inputStream.pipe(fileWriteStream)
+                            .on("error", (err: any) => {
+                                reject(err);
+                            })
+                            .on("finish", () => {
+                                resolve();
+                            });
                     })
-                    .on("finish", () => {
-                        resolve();
+                    .catch((err) => {
+                        reject(err);
                     });
             }
         });
