@@ -4,7 +4,6 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
 import { registerTerminationCallback } from "./lib/termination";
-import path from "path";
 
 declare global {
     namespace Express {

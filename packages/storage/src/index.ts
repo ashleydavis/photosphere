@@ -9,6 +9,7 @@ export * from "./lib/storage-prefix-wrapper";
 export * from "./lib/bson-database/database";
 export * from "./lib/bson-database/collection";
 export * from "./lib/storage-factory";
+export * from "./lib/key-utils";
 
 export interface IAssetMetadata {
   //
