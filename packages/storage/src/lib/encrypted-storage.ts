@@ -71,7 +71,7 @@ export class EncryptedStorage implements IStorage {
     //
     readStream(filePath: string): Readable {
         const decryptionStream = createDecryptionStream(this.privateKey);
-        const readStream = this.storage.readStream(filePath)
+        const readStream = this.storage.readStream(filePath);
         readStream.pipe(decryptionStream);
         return decryptionStream;
     }
@@ -86,17 +86,17 @@ export class EncryptedStorage implements IStorage {
     }
 
     //
-    // Deletes the file from storage.
+    // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
         return this.storage.deleteFile(filePath);
     }
 
     //
-    // Deletes the directory from storage.
+    // Deletes a directory from storage.
     //
-    async deleteDir(filePath: string): Promise<void> {
-        return this.storage.deleteDir(filePath);
+    async deleteDir(dirPath: string): Promise<void> {
+        return this.storage.deleteDir(dirPath);
     }
 
     //
