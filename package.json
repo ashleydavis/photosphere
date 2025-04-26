@@ -4,15 +4,15 @@
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
   "scripts": {
     "start": "turbo --concurrency=20 photosphere-backend#start:dev photosphere-frontend#start compile:watch",
-    "c": "pnpm run compile",
-    "cw": "pnpm run compile:watch",
-    "compile": "pnpm --stream -r run compile",
-    "compile:watch": "pnpm --stream -r --parallel run compile:watch",
-    "clean": "pnpm --stream -r run clean",
-    "test": "pnpm --stream -r run test",
-    "test:watch": "pnpm --stream -r --parallel run test:watch",
-    "t": "pnpm run test",
-    "tw": "pnpm run test:watch"
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
+    "compile": "bun --stream -r run compile",
+    "compile:watch": "bun --stream -r --parallel run compile:watch",
+    "clean": "bun --stream -r run clean",
+    "test": "bun --stream -r run test",
+    "test:watch": "bun --stream -r --parallel run test:watch",
+    "t": "bun run test",
+    "tw": "bun run test:watch"
   },
   "repository": {
     "type": "git",
@@ -25,8 +25,9 @@
     "url": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo/issues"
   },
   "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
-  "devDependencies": {
-    "turbo": "^2.0.6"
-  },
-  "packageManager": "pnpm@8.15.5"
+  "workspaces": [
+    "backend",
+    "frontend",
+    "packages/*"
+  ]
 }
