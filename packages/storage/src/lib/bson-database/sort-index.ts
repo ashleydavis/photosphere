@@ -276,7 +276,7 @@ export class SortIndex<RecordT extends IRecord> {
             
             // Load the chunk and find the next entry
             const entries = await this.loadChunkFile(chunkPath);
-            const currentEntryIndex = entries.findIndex(e => e.recordId === smallestEntry!.recordId && e.value === smallestEntry!.value);
+            const currentEntryIndex = entries.findIndex(e => e.recordId === smallestEntry!.recordId);
             
             if (currentEntryIndex !== -1 && currentEntryIndex + 1 < entries.length) {
                 // Move to next entry
