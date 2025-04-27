@@ -3,14 +3,11 @@
   "version": "1.0.0",
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
   "scripts": {
-    "start": "turbo --concurrency=20 photosphere-backend#start:dev photosphere-frontend#start compile:watch",
     "c": "bun run compile",
-    "cw": "bun run compile:watch",
-    "compile": "bun --stream -r run compile",
-    "compile:watch": "bun --stream -r --parallel run compile:watch",
-    "clean": "bun --stream -r run clean",
-    "test": "bun --stream -r run test",
-    "test:watch": "bun --stream -r --parallel run test:watch",
+    "compile": "bun --filter '*' compile",
+    "clean": "bun --filter '*' clean",
+    "test": "bun --filter '*' test",
+    "test:watch": "bun --filter '*' test:watch",
     "t": "bun run test",
     "tw": "bun run test:watch"
   },
