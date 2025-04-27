@@ -2,7 +2,7 @@
     "name": "photosphere-backend",
     "version": "1.0.0",
     "description": "",
-    "main": "build/index.js",
+    "main": "src/index.ts",
     "scripts": {
         "s": "bun start",
         "sd": "bun run start:dev",
