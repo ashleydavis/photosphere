@@ -2,7 +2,8 @@
   "name": "user-interface",
   "version": "1.0.0",
   "description": "The user-interface for the Photosphere application.",
-  "main": "build/index.js",
+  "main": "src/index.tsx",
+  "type": "module",
   "scripts": {
     "t": "bun run test",
     "tw": "bun run test:watch",

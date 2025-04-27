@@ -28,10 +28,10 @@ import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
 import Snackbar from "@mui/joy/Snackbar/Snackbar";
-const FPSStats = require("react-fps-stats").default;
+import FPSStats from "react-fps-stats";
 
-const isProduction = (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
-const APP_MODE = process.env.APP_MODE!;
+const isProduction = (import.meta.env.MODE !== "development" && import.meta.env.MODE !== "test");
+const APP_MODE = import.meta.env.VITE_APP_MODE!;
 
 export interface IMainProps {
     //

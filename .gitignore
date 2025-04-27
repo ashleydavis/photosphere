@@ -28,3 +28,7 @@ packages/node-utils/build/
 tools/database/storage-test
 /tools/find-orphans/build/
 backend/key
+# Vite
+.vite/
+# Local Netlify folder
+.netlify

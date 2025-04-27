@@ -49,7 +49,7 @@ export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProvide
     async function logout(): Promise<void> {
         _logout({
             logoutParams: {
-                returnTo: `${process.env.AUTH0_ORIGIN}/on_logout`,
+                returnTo: `${import.meta.env.VITE_AUTH0_ORIGIN}/on_logout`,
             },
             openUrl,
         });
@@ -97,8 +97,8 @@ function checkEnvironmentVariable(name: string, value: any): void {
 // Make sure auth0 settings are enabled.
 //
 function validateAuthSettings() {
-    checkEnvironmentVariable("AUTH0_DOMAIN", process.env.AUTH0_DOMAIN);
-    checkEnvironmentVariable("AUTH0_CLIENT_ID", process.env.AUTH0_CLIENT_ID);
-    checkEnvironmentVariable("AUTH0_AUDIENCE", process.env.AUTH0_AUDIENCE);
-    checkEnvironmentVariable("AUTH0_ORIGIN", process.env.AUTH0_ORIGIN);
+    checkEnvironmentVariable("VITE_AUTH0_DOMAIN", import.meta.env.VITE_AUTH0_DOMAIN);
+    checkEnvironmentVariable("VITE_AUTH0_CLIENT_ID", import.meta.env.VITE_AUTH0_CLIENT_ID);
+    checkEnvironmentVariable("VITE_AUTH0_AUDIENCE", import.meta.env.VITE_AUTH0_AUDIENCE);
+    checkEnvironmentVariable("VITE_AUTH0_ORIGIN", import.meta.env.VITE_AUTH0_ORIGIN);
 }

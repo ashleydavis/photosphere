@@ -6,9 +6,9 @@ import { IDatabaseOp, IUser } from "defs";
 import { IRecord } from "../lib/database/database-collection";
 import { useAuth } from "./auth-context";
 
-const BASE_URL = process.env.BASE_URL as string;
+const BASE_URL = import.meta.env.VITE_BASE_URL as string;
 if (!BASE_URL) {
-    throw new Error(`Set BASE_URL environment variable to the URL for the Photosphere backend.`);
+    throw new Error(`Set VITE_BASE_URL environment variable to the URL for the Photosphere backend.`);
 }
 
 console.log(`Expecting backend at ${BASE_URL}.`);

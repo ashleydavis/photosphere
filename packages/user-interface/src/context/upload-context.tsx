@@ -16,7 +16,7 @@ import { useGallery } from "./gallery-context";
 import { uuid } from "utils";
 import { useApp } from "./app-context";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
-const ColorThief = require("colorthief/dist/color-thief.umd.js");
+import ColorThief from 'colorthief/dist/color-thief.mjs'
 
 //
 // Size of the thumbnail to generate and display during uploaded.

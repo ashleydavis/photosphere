@@ -48,12 +48,12 @@ export function ScanContextProvider({ children }: IProps) {
     // Scan the file system for assets.
     //
     async function scanImages(): Promise<void> {
-        const backend = process.env.BASE_URL;
+        const backend = import.meta.env.VITE_BASE_URL;
         if (!backend) {
-            throw new Error(`BASE_URL environment variable should be set.`);
+            throw new Error(`VITE_BASE_URL environment variable should be set.`);
         }
         else {
-            console.log(`BASE_URL environment variable is set to ${backend}`);
+            console.log(`VITE_BASE_URL environment variable is set to ${backend}`);
         }
     
         await FileUploader.updateSettings({
