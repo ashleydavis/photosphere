@@ -3,12 +3,12 @@
   "description": "A backup tool for Photosphere.",
   "main": "src/index.js",
   "scripts": {
-    "s": "pnpm run start",
-    "sd": "pnpm run start:dev",
-    "start": "ts-node src/index.ts",
-    "start:dev": "ts-node-dev --respawn src/index.ts",
-    "c": "pnpm run compile",
-    "cw": "pnpm run compile:watch",
+    "s": "bun run start",
+    "sd": "`bun run` start:dev",
+    "start": "bun src/index.ts",
+    "start:dev": "bun --hot src/index.ts",
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build"
@@ -26,8 +26,6 @@
     "@types/fs-extra": "^11.0.1",
     "@types/lodash": "^4.17.5",
     "@types/node": "^22.9.1",
-    "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
     "typescript": "^5.6.3"
   }
 }

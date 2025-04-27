@@ -4,12 +4,12 @@
   "description": "Various utility functions that work both in the browser and Node.js.",
   "main": "build/index.js",
   "scripts": {
-    "t": "pnpm run test",
-    "tw": "pnpm run test:watch",
+    "t": "bun run test",
+    "tw": "bun run test:watch",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
-    "c": "pnpm run compile",
-    "cw": "pnpm run compile:watch",
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build"

@@ -4,8 +4,8 @@
   "description": "Shared definitions between backend and frontend.",
   "main": "build/index.js",
   "scripts": {
-    "c": "pnpm run compile",
-    "cw": "pnpm run compile:watch",
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build"
