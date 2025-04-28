@@ -12,7 +12,7 @@
     "sp": "bun run start:prod",
     "start:no-open": "cross-env VITE_NODE_ENV=development VITE_AUTH_TYPE=no-auth VITE_BASE_URL=http://localhost:3000 VITE_GOOGLE_API_KEY=\"\" vite --no-open",
     "b": "bun build",
-    "build": "cross-env VITE_NODE_ENV=production vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "start-backend-for-e2e-tests": "cd ../backend && bun run start-for-e2e-tests",
     "start-frontend-for-e2e-tests": "wait-port 3000 && bun start:no-open",
