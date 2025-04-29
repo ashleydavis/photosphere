@@ -32,3 +32,4 @@ backend/key
 .vite/
 # Local Netlify folder
 .netlify
+tsconfig.tsbuildinfo

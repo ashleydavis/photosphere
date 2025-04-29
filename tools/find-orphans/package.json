@@ -2,6 +2,7 @@
   "name": "find-orphans",
   "description": "A tool for finding orphaned assets in the database",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "s": "pnpm run start",
     "sd": "pnpm run start:dev",

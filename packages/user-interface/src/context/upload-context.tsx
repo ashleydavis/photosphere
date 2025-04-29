@@ -16,7 +16,11 @@ import { useGallery } from "./gallery-context";
 import { uuid } from "utils";
 import { useApp } from "./app-context";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
-import ColorThief from 'colorthief/dist/color-thief.mjs'
+
+// @ts-ignore
+import ColorThief from 'colorthief/dist/color-thief.mjs';
+
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string;
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -352,7 +356,7 @@ export function UploadContextProvider({ children }: IProps) {
                 if (exif.GPSLatitude && exif.GPSLongitude) {
                     const coordinates = convertExifCoordinates(exif);
                     if (isLocationInRange(coordinates)) {
-                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates), 3, 5000);
+                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, GOOGLE_API_KEY), 3, 5000);
                         if (reverseGeocodingResult) {
                             location = reverseGeocodingResult.location;
                             properties.reverseGeocoding = {

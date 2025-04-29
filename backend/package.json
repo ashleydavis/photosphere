@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "",
     "main": "src/index.ts",
+    "type": "module",
     "scripts": {
         "s": "bun start",
         "sd": "bun run start:dev",
@@ -26,7 +27,7 @@
         "copy-50-assets": "cp -r ../fixtures/50-assets/files files",
         "copy-1-asset": "cp -r ../fixtures/1-asset/files files",
         "load-bson-fixture": "bun src/test/load-bson-fixture.ts",
-        "clean": "rm -rf build",
+        "clean": "rm -rf build dist tsconfig.tsbuildinfo",
         "t": "bun run test",
         "tw": "bun run test:watch",
         "test": "cross-env NODE_ENV=development jest --coverage",

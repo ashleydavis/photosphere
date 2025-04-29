@@ -2,6 +2,7 @@
   "name": "upload",
   "description": "An upload tool for Photosphere.",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "s": "pnpm run start",
     "sd": "pnpm run start:dev",

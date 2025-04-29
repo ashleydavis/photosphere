@@ -28,6 +28,8 @@ import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
 import Snackbar from "@mui/joy/Snackbar/Snackbar";
+
+// @ts-ignore
 import FPSStats from "react-fps-stats";
 
 const isProduction = (import.meta.env.MODE !== "development" && import.meta.env.MODE !== "test");

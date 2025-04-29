@@ -12,8 +12,6 @@ import axios from "axios";
 // https://github.com/zhso/reverse-geocoding/blob/6ab209acd2c4d32438c947ecbd5bf4d50f4c5b8d/src/index.js#L18
 //
 
-const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
-
 export const LAT_MIN = -90
 export const LAT_MAX = 90;
 export const LNG_MIN = -180;
@@ -240,7 +238,12 @@ export function chooseBestResult(results: any[]): IReverseGeocodeResult {
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
-export async function reverseGeocode(location: ILocation): Promise<IReverseGeocodeResult | undefined> {
+export async function reverseGeocode(location: ILocation, googleApiKey: string | undefined): Promise<IReverseGeocodeResult | undefined> {
+
+    if (!googleApiKey) {
+        console.warn("No Google API key set. Not doing reverse geocoding.");
+        return undefined;
+    }    
 
     if (location === null || location === undefined) {
         throw new Error(`Invalid location ${location}`);
@@ -249,16 +252,12 @@ export async function reverseGeocode(location: ILocation): Promise<IReverseGeoco
     checkCoordinateOk(location.lat, `lat`, LAT_MIN, LAT_MAX);
     checkCoordinateOk(location.lng, `lng`, LNG_MIN, LNG_MAX);
 
-    if (!GOOGLE_API_KEY) {
-        throw new Error(`GOOGLE_API_KEY not set. Required for reverse geocoding.`);
-    }
-
     //
     // Uncomment this code to fake an error in the reverse geocoder.
     //
     // throw new Error("Reverse geocoding - fake error.");
 
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.lat},${location.lng}&key=${GOOGLE_API_KEY}`
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.lat},${location.lng}&key=${googleApiKey}`;
     const { data } = await axios.get(url, {
         headers: {
             Accept: "application/json",

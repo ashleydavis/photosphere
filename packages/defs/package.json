@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Shared definitions between backend and frontend.",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "c": "bun run compile",
     "cw": "bun run compile:watch",

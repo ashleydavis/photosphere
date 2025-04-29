@@ -2,6 +2,7 @@
   "name": "backup",
   "description": "A backup tool for Photosphere.",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "s": "bun run start",
     "sd": "`bun run` start:dev",

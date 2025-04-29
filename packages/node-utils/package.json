@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Various utility functions that only work under Node.js.",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "t": "bun run test",
     "tw": "bun run test:watch",
