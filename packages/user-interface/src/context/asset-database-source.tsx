@@ -129,7 +129,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         const asset: IAsset = {
             ...item,
-            setId,
         };
 
         _onNewItems([ asset ]); 

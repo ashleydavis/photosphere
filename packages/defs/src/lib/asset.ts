@@ -13,11 +13,6 @@ export interface IAsset {
     _id: string;
 
     //
-    // The ID of the set that contains the asset.
-    //
-    setId: string; //TODO: This shouldn't be needed now on the asset.
-
-    //
     // The original name of the asset before it was uploaded.
     //
     origFileName: string;
@@ -115,9 +110,4 @@ export interface IAsset {
     // Helps hide the pop when thumbnails are loaded.
     //
     color: [number, number, number];
-
-    //
-    // Set to true once encrypted.
-    //
-    encrypted?: boolean;
 }
