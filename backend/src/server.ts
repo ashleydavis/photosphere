@@ -4,38 +4,11 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
 import { registerTerminationCallback } from "./lib/termination";
-import os from "os";
-import path from "path";
-import fs from "fs";
-import AdmZip from "adm-zip";
 
-import pfe from  "../pfe.zip" with { type: "file" } ;
-
-//TODO: Be shouldn't do any of this.
-// It should simply serve files from the static path unless it is configured to do otherwise.
-// The CLI tool can then take care of unpacking the FE when the editor is started and then configuring the API to use it. 
 let FRONTEND_STATIC_PATH = process.env.FRONTEND_STATIC_PATH;
-if (!FRONTEND_STATIC_PATH) {
-    //
-    // Extract frontend code if doesn't exist.
-    //
-    const frontendPath = path.join(os.tmpdir(), "photosphere/frontend/v1");
-    if (!fs.existsSync(frontendPath)) {
-        fs.mkdirSync(frontendPath, { recursive: true });
-
-        const zip = new AdmZip(fs.readFileSync(pfe));
-        zip.extractAllTo(frontendPath, true); //TODO: Could also just stream the contents without extracing it.
-
-        console.log(`Extracted frontend to ${frontendPath}.`);
-    }
-    else {
-        console.log(`Frontend already exists at ${frontendPath}.`);
-    }
-
-    FRONTEND_STATIC_PATH = path.join(frontendPath, "dist");
+if (FRONTEND_STATIC_PATH) {
+    console.log(`Serving frontend from ${FRONTEND_STATIC_PATH}.`);
 }
-
-console.log(`Serving frontend from ${FRONTEND_STATIC_PATH}.`);
 
 declare global {
     namespace Express {
@@ -117,7 +90,9 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         res.sendStatus(200);
     });
 
-    app.use(express.static(FRONTEND_STATIC_PATH));
+    if (FRONTEND_STATIC_PATH) {
+        app.use(express.static(FRONTEND_STATIC_PATH));
+    }
 
     //
     // Extracts JWT from query parameters.

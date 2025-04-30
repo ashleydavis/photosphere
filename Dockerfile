@@ -17,19 +17,22 @@ ENV VITE_APP_MODE="readwrite"
 ENV VITE_AUTH_TYPE="no-auth"
 ENV VITE_GOOGLE_API_KEY=""
 
+# Build the frontend
 RUN bun run build
-RUN zip -r pfe.zip ./dist
-RUN mv pfe.zip ../backend/pfe.zip
 
 WORKDIR /build/backend
 
+# Build the backend
 RUN bun build --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile photosphere ./src/index.ts
 
 FROM ubuntu:25.04
 
 WORKDIR /app
 
+COPY --from=builder /build/frontend/dist ./public
 COPY --from=builder /build/backend/photosphere ./
+
+ENV FRONTEND_STATIC_PATH=/app/public
 
 CMD ./photosphere
 # CMD sleep infinity
