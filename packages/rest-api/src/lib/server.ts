@@ -3,7 +3,6 @@ import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
-import { registerTerminationCallback } from "./lib/termination";
 
 let FRONTEND_STATIC_PATH = process.env.FRONTEND_STATIC_PATH;
 if (FRONTEND_STATIC_PATH) {
@@ -72,15 +71,6 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         return bsonDatabase;
 
     }
-
-    registerTerminationCallback(async () => {
-        console.log("Shutting down server.");
-        for (const bsonDatabase of bsonDatabaseMap.values()) {
-            await bsonDatabase.shutdown();
-        }
-
-        bsonDatabaseMap.clear();
-    });
 
     const app = express();
     app.use(cors());
@@ -437,5 +427,16 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         });
     }));    
 
-    return app;
+    return {
+        app,
+        close: async () => {
+            console.log("Shutting down server.");
+
+            for (const bsonDatabase of bsonDatabaseMap.values()) {
+                await bsonDatabase.shutdown();
+            }
+    
+            bsonDatabaseMap.clear();            
+        },
+    };
 }

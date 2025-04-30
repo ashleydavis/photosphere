@@ -29,6 +29,7 @@
         "defs": "workspace:*",
         "express": "^5.0.0-beta.1",
         "express-oauth2-jwt-bearer": "^1.6.0",
+        "rest-api": "workspace:*",
         "storage": "workspace:*",
       },
       "devDependencies": {
@@ -94,6 +95,48 @@
     },
     "packages/node-utils": {
       "name": "node-utils",
+      "version": "1.0.0",
+      "dependencies": {
+        "@auth0/auth0-react": "^2.2.4",
+        "@emotion/react": "^11.13.3",
+        "@emotion/styled": "^11.13.0",
+        "@mui/icons-material": "^6.1.7",
+        "@mui/joy": "5.0.0-beta.48",
+        "@react-hook/resize-observer": "^1.2.6",
+        "axios": "^0.27.2",
+        "blob-util": "^2.0.2",
+        "classnames": "^2.5.1",
+        "dayjs": "^1.11.7",
+        "defs": "workspace:*",
+        "jszip": "^3.10.1",
+        "lodash": "^4.17.21",
+        "mime-types": "^2.1.35",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-fps-stats": "^0.3.1",
+        "react-router-dom": "^6.4.1",
+        "utils": "workspace:*",
+      },
+      "devDependencies": {
+        "@peculiar/webcrypto": "^1.4.1",
+        "@playwright/test": "^1.30.0",
+        "@types/fs-extra": "^11.0.1",
+        "@types/jest": "^29.4.0",
+        "@types/lodash": "^4.17.5",
+        "@types/mime-types": "^2.1.1",
+        "@types/node": "^22.9.1",
+        "@types/react": "^18.0.27",
+        "@types/react-dom": "^18.0.10",
+        "fs-extra": "^11.1.0",
+        "jest": "^29.0.1",
+        "jest-environment-jsdom": "^29.4.1",
+        "sharp": "^0.33.5",
+        "ts-jest": "^29.0.5",
+        "typescript": "^5.6.3",
+      },
+    },
+    "packages/rest-api": {
+      "name": "rest-api",
       "version": "1.0.0",
       "dependencies": {
         "@auth0/auth0-react": "^2.2.4",
@@ -1591,6 +1634,8 @@
     "resolve-from": ["resolve-from@5.0.0", "", {}, "sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw=="],
 
     "resolve.exports": ["resolve.exports@2.0.3", "", {}, "sha512-OcXjMsGdhL4XnbShKpAcSqPMzQoYkYyhbEaeSko47MjRP9NfEQMhZkXL1DoFlt9LWQn4YttrdnV6X2OiyzBi+A=="],
+
+    "rest-api": ["rest-api@workspace:packages/rest-api"],
 
     "reusify": ["reusify@1.1.0", "", {}, "sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw=="],
 

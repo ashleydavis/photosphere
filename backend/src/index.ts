@@ -1,6 +1,7 @@
 import { createPrivateKey } from "node:crypto";
-import { createServer } from "./server";
-import { StoragePrefixWrapper, IStorage, createStorage, IStorageOptions, loadPrivateKey } from "storage";
+import { createServer } from "rest-api";
+import { StoragePrefixWrapper, createStorage, IStorageOptions, loadPrivateKey } from "storage";
+import { registerTerminationCallback } from "./lib/termination";
 
 async function main() {
 
@@ -47,10 +48,15 @@ async function main() {
     const { storage: dbStorage, normalizedPath: dbPath } = createStorage(databaseStorageConnection);
     const databaseStorageWrapper = new StoragePrefixWrapper(dbStorage, dbPath);
 
-    const app = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper);
+    const { app, close } = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper);
     app.listen(PORT, () => {
         console.log(`Photosphere listening on port ${PORT}`);
     });
+
+    registerTerminationCallback(async () => {
+        // Shuts down the server gracefully on termination signals.
+        await close();
+    });    
 }
 
 main()
