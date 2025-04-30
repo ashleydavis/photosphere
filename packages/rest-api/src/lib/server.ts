@@ -4,11 +4,6 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
 import { IUser, IDatabaseOp } from "defs";
 
-let FRONTEND_STATIC_PATH = process.env.FRONTEND_STATIC_PATH;
-if (FRONTEND_STATIC_PATH) {
-    console.log(`Serving frontend from ${FRONTEND_STATIC_PATH}.`);
-}
-
 declare global {
     namespace Express {
         interface Request {
@@ -24,31 +19,37 @@ const dateFields = [
     "uploadDate",
 ];
 
-const APP_MODE = process.env.APP_MODE;
-if (!APP_MODE) {
-    throw new Error("Expected APP_MODE environment variable set to 'readonly' or 'readwrite'");
+export interface IAuth0Options {
+    audience: string;
+    baseUrl: string;
 }
 
-const AUTH_TYPE = process.env.AUTH_TYPE;
-if (!AUTH_TYPE) {
-    throw new Error("Expected AUTH_TYPE environment variable set to 'auth0' or 'no-auth'");
-}
-else {
-    if (AUTH_TYPE === "auth0") {
-        if (!process.env.AUTH0_AUDIENCE) {
-            throw new Error("Expected AUTH0_AUDIENCE environment variable");
-        }
+export interface IServerOptions {
+    //
+    // Sets the mode of the server.
+    //
+    appMode: string; // "readonly" | "readwrite"
 
-        if (!process.env.AUTH0_BASE_URL) {
-            throw new Error("Expected AUTH0_BASE_URL environment variable");
-        }
-    }
+    //
+    // Sets the type of authentication to use.
+    //
+    authType: string; // "auth0" | "no-auth"
+
+    //
+    // Authentication options for auth0.
+    //
+    auth0?: IAuth0Options;
+
+    //
+    // The path to the frontend static files.
+    //
+    frontendStaticPath?: string;
 }
 
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetStorage: IStorage, databaseStorage: IStorage) {
+export async function createServer(now: () => Date, assetStorage: IStorage, databaseStorage: IStorage, options: IServerOptions) {
 
     const db = new BsonDatabase({ storage: databaseStorage });
 
@@ -80,8 +81,8 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         res.sendStatus(200);
     });
 
-    if (FRONTEND_STATIC_PATH) {
-        app.use(express.static(FRONTEND_STATIC_PATH));
+    if (options.frontendStaticPath) {
+        app.use(express.static(options.frontendStaticPath));
     }
 
     //
@@ -98,11 +99,14 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     });
 
     
-    if (process.env.AUTH_TYPE === "auth0") {
+    if (options.authType === "auth0") {
+        if (!options.auth0) {
+            throw new Error("Expected auth0 options");
+        }
         
         const checkJwt = auth({
-            audience: process.env.AUTH0_AUDIENCE!,
-            issuerBaseURL: process.env.AUTH0_BASE_URL!,
+            audience: options.auth0.audience,
+            issuerBaseURL: options.auth0.baseUrl,
             tokenSigningAlg: 'RS256'        
         });
 
@@ -149,7 +153,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         });
 
     }
-    else if (process.env.AUTH_TYPE === "no-auth") {
+    else if (options.authType === "no-auth") {
         //
         //
         // Attaches user information to the request.
@@ -169,7 +173,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         });
     }
     else {
-        throw new Error(`Unknown AUTH_TYPE: ${process.env.AUTH_TYPE}`);
+        throw new Error(`Unknown auth type: ${options.authType}`);
     }
 
     //
@@ -239,7 +243,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        if (APP_MODE !== "readwrite") {
+        if (options.appMode !== "readwrite") {
             res.sendStatus(403); // Forbidden in readonly mode.
             return;
         }
@@ -284,7 +288,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
-        if (APP_MODE !== "readwrite") {
+        if (options.appMode !== "readwrite") {
             res.sendStatus(403); // Forbidden in readonly mode.
             return;
         }
