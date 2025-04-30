@@ -14,18 +14,13 @@ export interface ISet {
 }
 
 //
-// Defines a user.
+// Defines a collection of sets.
 //
-export interface IUser {
+export interface ISets {
     //
-    // The user id.
+    // The default set.
     //
-    _id: string;
-
-    //
-    // The users's default set.
-    //
-    defaultSet: string;
+    defaultSet?: string;
 
     //
     // The user's sets of assets.

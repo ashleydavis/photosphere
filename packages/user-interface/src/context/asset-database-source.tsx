@@ -44,7 +44,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
 
-    const { user } = useApp();
+    const { sets } = useApp();
     const { isOnline } = useOnline();
     const api = useApi();
     const { database } = useIndexeddb();
@@ -496,7 +496,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         let timer: NodeJS.Timeout | undefined = undefined;
         let done = false;
         
-        if (!isLoading && isOnline && user) {
+        if (!isLoading && isOnline && sets) {
             periodicSyncStarted.current = true;
 
             // 
@@ -542,7 +542,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             }
         };
 
-    }, [isLoading, isOnline, user]);
+    }, [isLoading, isOnline, sets]);
 
     //
     // Load assets into memory.

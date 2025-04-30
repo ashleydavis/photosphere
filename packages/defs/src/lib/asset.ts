@@ -96,11 +96,6 @@ export interface IAsset {
     deleted?: boolean;
 
     //
-    // The user that uploaded the asset.
-    //
-    userId: string;
-
-    //
     // Base64 image containing the micro thumbnail for the asset.
     //
     micro: string;

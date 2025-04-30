@@ -117,7 +117,7 @@ function __Main({ computerPage }: IMainProps) {
 
     const [readonlyMessageOpen, setReadonlyMessageOpen] = useState<boolean>(true);
 
-    const { user } = useApp();
+    const { sets } = useApp();
 
     const location = useLocation();
 
@@ -152,19 +152,19 @@ function __Main({ computerPage }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && user) {
+        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && sets) {
             //
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultSet("cloud");
         }
-        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && user) {
+        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && sets) {
             //
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultSet("upload");
         }
-    }, [user, location]);
+    }, [sets, location]);
 
     useEffect(() => {
         if (searchText.length > 0 && !openSearch) {
@@ -185,13 +185,18 @@ function __Main({ computerPage }: IMainProps) {
     // Navigate to the users default set.
     //
     function navigateToDefaultSet(page: string): void {
-        console.log(`Navigating to default set.`)
-
-        if (!user) {
-            throw new Error(`No user set.`);
+        if (!sets) {
+            throw new Error(`No sets available.`);
         }
 
-        navigateToSet(page, user.defaultSet);
+        if (sets.defaultSet) {
+            console.log(`Navigating to default set.`);
+            navigateToSet(page, sets.defaultSet);
+        }
+        else if (sets.sets.length > 0) {
+            console.log(`Navigating to first set.`);
+            navigateToSet(page, sets.sets[0].id);
+        }
     }
 
     //
@@ -380,7 +385,7 @@ function __Main({ computerPage }: IMainProps) {
                                     {selectedItems.size > 0
                                         && <>
                                             <ListSubheader>MOVE TO</ListSubheader>
-                                            {user?.sets.map(set => {
+                                            {sets?.sets.map(set => {
                                                 if (set.id === setId) {
                                                     return null; // Don't show the current set.
                                                 }

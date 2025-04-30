@@ -1,13 +1,13 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useOnline } from "../lib/use-online";
 import { useApi } from "./api-context";
-import { IUser } from "defs";
+import { ISets } from "defs";
 
 export interface IAppContext {
     //
-    // The current user, if known.
+    // The current sets that are available.
     //
-    user: IUser | undefined;
+    sets: ISets | undefined;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -22,26 +22,25 @@ export function AppContextProvider({ children }: IProps) {
     const api = useApi();
 
     //
-    // The current user.
+    // Available sets of assets.
     //
-    const [ user, setUser ] = useState<IUser | undefined>(undefined);
+    const [ sets, setSets ] = useState<ISets | undefined>(undefined);
 
     //
-    // Loads the user's details.
+    // Loads data from the backend.
     //
-    async function loadUser(): Promise<void> {
+    async function load(): Promise<void> {
         if (isOnline) {
-            // Not able to load user details offline.
-            const user = await await api.getUser();
-            if (user) {
-                setUser(user);
+            const sets = await await api.getSets();
+            if (sets) {
+                setSets(sets);
                 return;
             }
         }
     }
 
     useEffect(() => {
-        loadUser()
+        load()
             .catch(err => {
                 console.error(`Failed to load user:`);
                 console.error(err)            
@@ -49,7 +48,7 @@ export function AppContextProvider({ children }: IProps) {
     }, [api.isInitialised, isOnline]);
 
     const value: IAppContext = {
-        user,
+        sets,
     };
     
     return (

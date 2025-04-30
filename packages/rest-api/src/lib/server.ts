@@ -2,7 +2,11 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
-import { IUser, IDatabaseOp } from "defs";
+import { ISets, IDatabaseOp } from "defs";
+
+interface IUser extends ISets {
+    _id: string;
+}
 
 declare global {
     namespace Express {
@@ -98,7 +102,6 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         next();
     });
 
-    
     if (options.authType === "auth0") {
         if (!options.auth0) {
             throw new Error("Expected auth0 options");
@@ -154,23 +157,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
 
     }
     else if (options.authType === "no-auth") {
-        //
-        //
-        // Attaches user information to the request.
-        //
-        app.use(async (req, res, next) => {
-            req.userId = '8632edb0-8a4d-41d2-8648-f734bea0be4b'; //TOOD: This could be set by env var.
-
-            const user = await db.collection<IUser>("users").getOne(req.userId);
-            if (!user) {
-                console.log(`User not found: ${req.userId}`);
-                res.sendStatus(401);
-                return;
-            }
-
-            req.user = user;
-            next();
-        });
+        console.warn("No authentication enabled.");
     }
     else {
         throw new Error(`Unknown auth type: ${options.authType}`);
@@ -233,10 +220,33 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     }
 
     //
-    // Gets the user's metadata.
+    // Gets the sets the user has access to.
     //
-    app.get("/user", asyncErrorHandler(async (req, res) => {
-        res.json(req.user);
+    app.get("/sets", asyncErrorHandler(async (req, res) => {
+        if (req.user) {
+            res.json(req.user);
+        }
+        else {
+            //
+            // Read the sets from storage.
+            //
+            let next: string | undefined = undefined;
+            let sets: string[] = [];
+
+            do {
+                const result = await assetStorage.listDirs("", 1000, next);
+                sets.push(...result.names);
+                next = result.next;
+
+            } while (next);
+
+            res.json({
+                sets: sets.map(set => ({
+                    id: set,
+                    name: `${set.slice(0, 4)}-${set.slice(-4)}`,
+                })),
+            });
+        }
     }));
     
     //

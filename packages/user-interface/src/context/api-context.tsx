@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useState } from
 import axios from "axios";
 import { useClientId } from "../lib/use-client-id";
 import { IAssetData } from "../def/asset-data";
-import { IDatabaseOp, IUser } from "defs";
+import { IDatabaseOp, ISets } from "defs";
 import { IRecord } from "../lib/database/database-collection";
 import { useAuth } from "./auth-context";
 
@@ -36,9 +36,9 @@ export interface IApi {
     isInitialised: boolean;
 
     //
-    // Loads the user's details.
+    // Gets the available media libraries.
     //
-    getUser(): Promise<IUser>;
+    getSets(): Promise<ISets>;
 
     //
     // Retreives the data for an asset from the backend.
@@ -98,14 +98,13 @@ export function ApiContextProvider({ children }: IProps) {
     }, [isAuthenticated]);
 
     //
-    // Loads the user's details.
+    // Loads the available media libraries.
     //
-    async function getUser(): Promise<IUser> {
+    async function getSets(): Promise<ISets> {
 
         const { headers } = await getRequestConfig();
 
-
-        const url = `${BASE_URL}/user`;
+        const url = `${BASE_URL}/sets`;
         const response = await axios.get(
             url, 
             {
@@ -259,7 +258,7 @@ export function ApiContextProvider({ children }: IProps) {
 
     const value: IApi = {
     	isInitialised,
-        getUser,
+        getSets,
         getAsset,
         uploadSingleAsset,
         submitOperations,

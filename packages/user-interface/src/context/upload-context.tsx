@@ -97,8 +97,6 @@ export interface IProps {
 
 export function UploadContextProvider({ children }: IProps) {
 
-    const { user } = useApp();
-
     //
     // Interface to the gallery.
     //
@@ -535,7 +533,6 @@ export function UploadContextProvider({ children }: IProps) {
                 properties,
                 labels,
                 description: "",
-                userId: user!._id,
                 micro,
                 color,
             });

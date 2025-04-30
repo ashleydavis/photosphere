@@ -393,7 +393,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToSet }: ISidebarProps) {
 
-    const { user } = useApp();
+    const { sets } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
     const { search, setSortBy } = useGallery();
@@ -519,7 +519,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             </Typography>
 
             <List>
-                {user?.sets.map(set => {
+                {sets?.sets.map(set => {
                     return (
                         <ListItem
                             key={set.id}
