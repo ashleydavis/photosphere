@@ -8,10 +8,26 @@ To install dependencies:
 bun install
 ```
 
-To run:
+## Building the CLI tool with embedded frontend
+
+You need zip installed to zip the frontend package:
 
 ```bash
-bun run index.ts
+apt update 
+apt install zip
 ```
 
+First build the frontend:
+
+```bash
+cd frontend
+bun run build-cli
+```
+
+Then build the CLI tool (which embeds the frontend):
+
+```bash
+cd apps/cli
+bun run build-exe-linux
+```
 

@@ -14,6 +14,7 @@
     "b": "bun build",
     "build": "vite build",
     "preview": "vite preview",
+    "build-cli": "bun run build && zip -r pfe.zip ./dist && mv pfe.zip ../apps/cli/pfe.zip",
     "start-backend-for-e2e-tests": "cd ../backend && bun run start-for-e2e-tests",
     "start-frontend-for-e2e-tests": "wait-port 3000 && bun start:no-open",
     "start-for-e2e-tests": "concurrently --kill-others --names \"backend,frontend\" \"bun run start-backend-for-e2e-tests\" \"bun run start-frontend-for-e2e-tests\"",
