@@ -2,8 +2,10 @@
 .github
 **/node_modules
 fixtures
-frontend
 mobile
+testbed
 **/build
 **/coverage
 .do
+key
+key.pub

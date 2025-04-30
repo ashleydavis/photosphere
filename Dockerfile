@@ -1,29 +1,20 @@
-FROM node:20.10.0 AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /build
 
-RUN npm install -g pnpm@9.13.0
-RUN npm install -g hoist-modules
-
 COPY . .
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm run compile
+RUN bun install --frozen-lockfile
 
 WORKDIR /build/backend
 
-RUN hoist-modules ./ ./hoisted_node_modules
-RUN rm -rf ./node_modules
-RUN mv ./hoisted_node_modules ./node_modules
+RUN bun build --compile --minify --sourcemap --target=bun-linux-x64-baseline ./src/index.ts --outfile photosphere
 
-FROM node:20.10.0
+FROM ubuntu:25.04
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+COPY --from=builder /build/backend/photosphere ./
 
-COPY --from=builder /build/backend/package.json ./
-COPY --from=builder /build/backend/build ./build
-COPY --from=builder /build/backend/node_modules ./node_modules
-
-CMD npm start
+CMD ./photosphere
+# CMD sleep infinity
