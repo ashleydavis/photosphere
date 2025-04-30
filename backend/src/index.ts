@@ -1,7 +1,7 @@
 import { createPrivateKey } from "node:crypto";
 import { createServer, IAuth0Options } from "rest-api";
 import { StoragePrefixWrapper, createStorage, IStorageOptions, loadPrivateKey } from "storage";
-import { registerTerminationCallback } from "./lib/termination";
+import { registerTerminationCallback } from "node-utils";
 
 async function main() {
 
@@ -86,14 +86,15 @@ async function main() {
         frontendStaticPath: FRONTEND_STATIC_PATH,
         auth0: auth0Options,
     });
-    app.listen(PORT, () => {
-        console.log(`Photosphere listening on port ${PORT}`);
-    });
 
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
     });    
+
+    app.listen(PORT, () => {
+        console.log(`Photosphere listening on port ${PORT}`);
+    });
 }
 
 main()

@@ -19,6 +19,7 @@
   "dependencies": {
     "adm-zip": "^0.5.16",
     "commander": "^13.1.0",
-    "express": "^5.1.0"
+    "rest-api": "workspace:*",
+    "storage": "workspace:*"
   }
 }
