@@ -1,4 +1,4 @@
-import { createServer } from "../server";
+import { createServer } from "../lib/server";
 import * as fs from "fs-extra";
 import dayjs from "dayjs";
 import { Readable } from "stream";
@@ -11,7 +11,7 @@ describe("photosphere backend", () => {
     const dateNow = dayjs("2023-02-08T01:27:01.419Z").toDate();
     const setId = "automated-tests-collection";
 
-    let servers: http.Server[] = [];
+    let servers: { server: http.Server, close: () => Promise<void> }[] = [];
 
     //
     // Initialises the server for testing.
@@ -61,10 +61,14 @@ describe("photosphere backend", () => {
             },
         };
 
-        const app = await createServer(() => dateNow, mockDatabase, mockStorage);
+        const { app, close } = await createServer(() => dateNow, mockDatabase, mockStorage, {
+            appMode: "readwrite",
+            authType: "no-auth",
+            frontendStaticPath: "./test/test-assets"
+        });
 
         const server = app.listen();
-        servers.push(server);
+        servers.push({ server, close });
 
         const address = server.address() as AddressInfo;
         const baseUrl = `http://localhost:${address.port}`;
@@ -89,6 +93,7 @@ describe("photosphere backend", () => {
   
     afterEach(() => {
         for (const server of servers) {
+            server.server.close();
             server.close();
         }
         servers = [];
