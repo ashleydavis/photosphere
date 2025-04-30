@@ -35,16 +35,15 @@ export class CloudStorage implements IStorage {
     // Parse the path and extract the bucket and key.
     //
     private parsePath(path: string): { bucket: string, key: string } {
-        const firstSlashIndex = path.indexOf("/");
-        if (firstSlashIndex === -1) {
-            throw new Error(`Invalid path: ${path}`);
+        const slashIndex = path.indexOf("/");
+        if (slashIndex === -1) {
+            throw new Error(`Invalid path: ${path}. Expected <bucket-name>/<path>`);
         }
-
-        const bucket = path.slice(0, firstSlashIndex);
-        const key = path.slice(firstSlashIndex + 1);
-
-        if (bucket === "" || key === "") {
-            throw new Error(`Invalid path: ${path}`);
+        
+        const bucket = path.slice(0, slashIndex);
+        const key = path.slice(slashIndex + 1);
+        if (bucket.length === 0 || key.length === 0) {
+            throw new Error(`Invalid path: ${path}. Expected <bucket-name>/<path>`);
         }
 
         return {
@@ -312,6 +311,9 @@ export class CloudStorage implements IStorage {
             ContentLength: data.length,
         };    
         
+        //
+        // NOTE: These values have been tuned to allow uploading of 2GB+ files.
+        //    
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
             partSize: 100 * 1024 * 1024, // 100 MB
             queueSize: 1,
@@ -382,6 +384,9 @@ export class CloudStorage implements IStorage {
             ContentLength: contentLength,
         };    
 
+        //
+        // NOTE: These values have been tuned to allow uploading of 2GB+ files.
+        //    
         const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
             partSize: 100 * 1024 * 1024, // 100 MB
             queueSize: 1,
@@ -406,9 +411,9 @@ export class CloudStorage implements IStorage {
     }
 
     //
-    // Deletes the file from storage.
+    // Deletes a file from storage.
     //
-    async delete(filePath: string): Promise<void> {
+    async deleteFile(filePath: string): Promise<void> {
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
@@ -423,13 +428,62 @@ export class CloudStorage implements IStorage {
             await this.s3.deleteObject(deleteParams).promise();
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to delete ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            // Ignore errors if the file doesn't exist
         }
     }
-
+    
+    //
+    // Deletes a directory and all its contents from storage.
+    //
+    async deleteDir(dirPath: string): Promise<void> {
+        let { bucket, key } = this.parsePath(dirPath);
+        if (key.startsWith("/")) {
+            key = key.slice(1); // Remove leading slash.
+        }
+        
+        // Make sure the key ends with a slash to indicate a directory
+        if (!key.endsWith("/")) {
+            key = key + "/";
+        }
+        
+        try {
+            // List all objects with the directory prefix
+            const listParams: aws.S3.Types.ListObjectsV2Request = {
+                Bucket: bucket,
+                Prefix: key
+            };
+            
+            let isTruncated = true;
+            let continuationToken: string | undefined = undefined;
+            
+            while (isTruncated) {
+                if (continuationToken) {
+                    listParams.ContinuationToken = continuationToken;
+                }
+                
+                const listResult = await this.s3.listObjectsV2(listParams).promise();
+                
+                if (listResult.Contents && listResult.Contents.length > 0) {
+                    // Batch delete objects (up to 1000 at a time)
+                    const deleteParams: aws.S3.Types.DeleteObjectsRequest = {
+                        Bucket: bucket,
+                        Delete: {
+                            Objects: listResult.Contents.map(obj => ({ Key: obj.Key! }))
+                        }
+                    };
+                    
+                    await this.s3.deleteObjects(deleteParams).promise();
+                }
+                
+                isTruncated = !!listResult.IsTruncated;
+                continuationToken = listResult.NextContinuationToken;
+            }
+        }
+        catch (err: any) {
+            // Ignore errors if the directory doesn't exist
+        }
+    }
+ 
     //
     // Copies a file from one location to another.
     // srcPath can include the src bucket name.

@@ -79,9 +79,14 @@ export interface IStorage {
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void>;
 
     //
-    // Deletes the file from storage.
+    // Deletes a file from storage.
     //
-    delete(filePath: string): Promise<void>;
+    deleteFile(filePath: string): Promise<void>;
+    
+    //
+    // Deletes a directory and all its contents from storage.
+    //
+    deleteDir(dirPath: string): Promise<void>;
 
     //
     // Copies a file from one location to another.

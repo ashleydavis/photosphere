@@ -1,5 +1,6 @@
+import { createPrivateKey } from "node:crypto";
 import { createServer } from "./server";
-import { StoragePrefixWrapper, IStorage, createStorage } from "storage";
+import { StoragePrefixWrapper, IStorage, createStorage, IStorageOptions, loadPrivateKey } from "storage";
 
 async function main() {
 
@@ -20,7 +21,27 @@ async function main() {
         throw new Error(`Set the generate database storage type and root path through the environment variable DB_STORAGE_CONNECTION.`);
     }
 
-    const { storage: assetStorage, normalizedPath: assetPath } = createStorage(assetStorageConnection);
+    let storageOptions: IStorageOptions | undefined = undefined;
+
+    if (process.env.ASSET_STORAGE_PRIVATE_KEY) {
+        const privateKey = process.env.ASSET_STORAGE_PRIVATE_KEY;
+
+        storageOptions = {
+            privateKey: createPrivateKey(privateKey),
+        };
+    }
+    else if (process.env.ASSET_STORAGE_PRIVATE_KEY_FILE) {
+        const privateKeyFile = process.env.ASSET_STORAGE_PRIVATE_KEY_FILE;
+        const privateKey = await loadPrivateKey(privateKeyFile);
+        if (!privateKey) {
+            throw new Error(`Private key file ${privateKeyFile} not found.`);
+        }
+        storageOptions = {
+            privateKey: privateKey,
+        };
+    }
+
+    const { storage: assetStorage, normalizedPath: assetPath } = createStorage(assetStorageConnection, storageOptions);
     const assetStorageWrapper = new StoragePrefixWrapper(assetStorage, assetPath);
 
     const { storage: dbStorage, normalizedPath: dbPath } = createStorage(databaseStorageConnection);

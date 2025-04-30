@@ -27,3 +27,4 @@ packages/utils/build/
 packages/node-utils/build/
 tools/database/storage-test
 /tools/find-orphans/build/
+backend/key

@@ -6,14 +6,14 @@ import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
 import { IAssetRecord } from "../def/asset-record";
-import { useApi } from "./api-context";
+import { IGetAllResponse, useApi } from "./api-context";
 import { useApp } from "./app-context";
 import { applyOperations } from "../lib/apply-operation";
 import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
-import { uuid } from "utils";
+import { retry, uuid } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
 const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.
@@ -569,23 +569,26 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             onReset.current.invoke();
 
+            let next: string  | undefined = undefined;
+
             //
             // Load the assets from the cloud into memory.
             //
-            let skip = 0;
-            const pageSize = 1000;
-            while (true) {
+            do {
                 //
                 // Get a page of assets from the backend.
                 // Assumes the backend gives us the assets in sorted order.
                 //
-                const page = await api.getAll<IAsset>(setId, "metadata", skip, pageSize);
-                if (page.length === 0) {
+                const result: IGetAllResponse<IAsset> = await retry(
+                    () => api.getAll<IAsset>(setId, "metadata", next),
+                    5, // Attempts
+                    600, // Starting wait time
+                    2, // Double the weight time on each retry.
+                );
+                if (result.records.length === 0) {
                     // No more records.
                     break;
                 }
-
-                skip += pageSize;
 
                 //
                 // Continue if the set index matches the current loading index.
@@ -598,11 +601,13 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 }     
 
                 setTimeout(() => {
-                    _onNewItems(page);  // Starts the next request before setting the new assets.
+                    _onNewItems(result.records);  // Starts the next request before setting the new assets.
 
-                    console.log(`Loaded ${page.length} assets for set ${setId}`);
+                    console.log(`Loaded ${result.records.length} assets for set ${setId}`);
                 }, 0);
-            }
+
+                next = result.next;
+            } while (next);
         }
         finally {
             loadingCount.current -= 1;

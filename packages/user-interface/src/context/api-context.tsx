@@ -14,6 +14,21 @@ if (!BASE_URL) {
 console.log(`Expecting backend at ${BASE_URL}.`);
 
 //
+// Response from the backend when getting a page of records.
+//
+export interface IGetAllResponse<RecordT> {
+    //
+    // The records returned from the database.
+    //
+    records: RecordT[];
+
+    //
+    // The next page of records, if available.
+    //
+    next: string | undefined;
+}
+
+//
 // Client-side interface to the Photosphere API.
 //
 export interface IApi {
@@ -51,7 +66,7 @@ export interface IApi {
     //
     // Gets a page of records from the database.
     //
-    getAll<RecordT extends IRecord>(setId: string, collectionName: string, skip: number, limit: number): Promise<RecordT[]>;
+    getAll<RecordT extends IRecord>(setId: string, collectionName: string, next: string | undefined): Promise<IGetAllResponse<RecordT>>;
 
     //
     // Check if an asset witha  particular hash is already uploaded.
@@ -203,11 +218,14 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Gets a page of records from the database.
     //
-    async function getAll<RecordT extends IRecord>(setId: string, collectionName: string, skip: number, limit: number): Promise<RecordT[]> {
+    async function getAll<RecordT extends IRecord>(setId: string, collectionName: string, next: string | undefined): Promise<IGetAllResponse<RecordT>> {
 
         const { headers } = await getRequestConfig();
 
-        const url = `${BASE_URL}/get-all?set=${setId}&col=${collectionName}&skip=${skip}&limit=${limit}`;
+        let url = `${BASE_URL}/get-all?set=${setId}&col=${collectionName}`;
+        if (next) {
+            url += `&next=${next}`;
+        }
         const response = await axios.get(
             url, 
             {

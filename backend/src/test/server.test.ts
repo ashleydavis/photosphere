@@ -126,7 +126,9 @@ describe("photosphere backend", () => {
 
         const response = await axios.get(`${baseUrl}/get-all?set=${setId}&col=metadata&skip=0&limit=100`);
         expect(response.status).toBe(200);
-        expect(response.data).toEqual([]);
+        expect(response.data).toEqual({
+            records: [],
+        });
     });
 
     test("upload asset metadata", async () => {
@@ -324,7 +326,9 @@ describe("photosphere backend", () => {
         const response = await axios.get(`${baseUrl}/get-all?set=${setId}&skip=2&limit=3&col=metadata`);
         
         expect(response.status).toBe(200);
-        expect(response.data).toEqual([ mockAsset1, mockAsset2 ]);
+        expect(response.data).toEqual({
+            records: [ mockAsset1, mockAsset2 ]
+        });
     });
 });
 

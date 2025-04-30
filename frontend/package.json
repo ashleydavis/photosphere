@@ -5,8 +5,10 @@
   "source": "src/index.html",
   "scripts": {
     "s": "pnpm start",
-    "start": "cross-env NODE_ENV=development APP_MODE=readwrite AUTH_TYPE=no-auth BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
+    "start": "cross-env NODE_ENV=development APP_MODE=readwrite AUTH_TYPE=auth0 BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
+    "start:demo": "cross-env NODE_ENV=development APP_MODE=readonly AUTH_TYPE=no-auth BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
     "start:prod": "cross-env NODE_ENV=development APP_MODE=readwrite AUTH_TYPE=auth0 BASE_URL=https://photosphere-api.codecapers.com.au GOOGLE_API_KEY=\"\" webpack serve --open",
+    "start:prod:localbe": "cross-env NODE_ENV=development APP_MODE=readwrite AUTH_TYPE=auth0 BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve --open",
     "sp": "pnpm run start:prod",
     "start:no-open": "cross-env NODE_ENV=development AUTH_TYPE=no-auth BASE_URL=http://localhost:3000 GOOGLE_API_KEY=\"\" webpack serve",
     "b": "pnpm build",

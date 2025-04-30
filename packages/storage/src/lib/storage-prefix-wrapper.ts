@@ -53,7 +53,7 @@ export class StoragePrefixWrapper implements IStorage {
     // Returns true if the specified directory exists (contains at least one file or subdirectory).
     //
     dirExists(dirPath: string): Promise<boolean> {
-        return this.storage.dirExists(this.prefix + dirPath);
+        return this.storage.dirExists(this.makeFullPath(dirPath));
     }
 
     //
@@ -95,14 +95,21 @@ export class StoragePrefixWrapper implements IStorage {
     //
     // Deletes the file from storage.
     //
-    delete(filePath: string): Promise<void> {
-        return this.storage.delete(this.makeFullPath(filePath));
+    deleteFile(filePath: string): Promise<void> {
+        return this.storage.deleteFile(this.makeFullPath(filePath));
+    }
+
+    //
+    // Deletes the directory from storage.
+    //
+    deleteDir(filePath: string): Promise<void> {
+        return this.storage.deleteDir(this.makeFullPath(filePath));
     }
 
     //
     // Copies a file from one location to another.
     //
-    copyTo(srcPath: string, destPath: string): Promise<void> {
-        return this.storage.copyTo(this.prefix + srcPath, this.prefix + destPath);
+    copyTo(srcPath: string, destPath: string): Promise<void> {        
+        return this.storage.copyTo(this.makeFullPath(srcPath), this.makeFullPath(destPath));
     }
 }
