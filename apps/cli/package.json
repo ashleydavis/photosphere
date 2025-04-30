@@ -1,0 +1,22 @@
+{
+  "name": "cli",
+  "version": "0.0.1",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "start:dev": "bun run --hot src/index.ts",
+    "build-exe-linux": "bun build --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile psi ./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "express": "^5.1.0"
+  }
+}

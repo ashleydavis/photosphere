@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
   "workspaces": [
+    "apps/*",
     "backend",
     "frontend",
     "packages/*"

@@ -33,3 +33,4 @@ backend/key
 # Local Netlify folder
 .netlify
 tsconfig.tsbuildinfo
+apps/cli/psi
