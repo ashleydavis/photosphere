@@ -11,6 +11,9 @@ import AdmZip from "adm-zip";
 
 import pfe from  "../pfe.zip" with { type: "file" } ;
 
+//TODO: Be shouldn't do any of this.
+// It should simply serve files from the static path unless it is configured to do otherwise.
+// The CLI tool can then take care of unpacking the FE when the editor is started and then configuring the API to use it. 
 let FRONTEND_STATIC_PATH = process.env.FRONTEND_STATIC_PATH;
 if (!FRONTEND_STATIC_PATH) {
     //
