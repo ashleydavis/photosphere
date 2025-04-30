@@ -34,3 +34,4 @@ backend/key
 .netlify
 tsconfig.tsbuildinfo
 apps/cli/psi
+apps/cli/pfe.zip

@@ -10,12 +10,14 @@
     "build-exe-linux": "bun build --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile psi ./src/index.ts"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "commander": "^13.1.0",
     "express": "^5.1.0"
   }
