@@ -29,5 +29,16 @@ Then build the CLI tool (which embeds the frontend):
 ```bash
 cd apps/cli
 bun run build-exe-linux
+bun run build-exe-win
+bun run build-exe-mac
 ```
+
+The executable is built to:
+
+```bash
+bin/linux/psi
+bin/win/psi.exe
+bin/mac/psi
+```
+
 
