@@ -51,3 +51,12 @@ bun run build-mac
 For MacOS you need to build it on a Mac.
 
 Results can be found under `./tmp/build`.
+
+## Permissions issue
+
+To get the Electron app to start on Linux I had to set the following permissions after installing dependencies:
+
+```bash
+sudo chown root photosphere/node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 photosphere/node_modules/electron/dist/chrome-sandbox
+```bash
