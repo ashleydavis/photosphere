@@ -10,7 +10,7 @@
         "sd": "bun run start:dev",
         "start:dev": "concurrently --names=\"dev-server,electron\" \"bun --filter electron-frontend start\" \"wait-on --interval 5000 http://localhost:8080 && cross-env HTML_PAGE=http://localhost:8080 electron .\"",
         "start": "bun run start:dev",
-        "package-electron": "npx electron-builder -c.mac.identity=null --publish=never",
+        "package-electron": "electron-builder -c.mac.identity=null --publish=never",
         "build-setup": "node ./scripts/build-setup.js",
         "build-win": "bun run pack-web-page && bun run build-setup && cd ./tmp/build && pwd && bun run package-electron -- --win",
         "build-linux": "bun run pack-web-page && bun run build-setup && cd ./tmp/build && bun run package-electron -- --linux",
@@ -28,7 +28,7 @@
         "cross-env": "^7.0.3",
         "electron": "^29.1.0",
         "fs-extra": "^11.2.0",
-        "hoist-modules": "^1.1.4"
+        "hoist-modules": "^1.1.5"
     },
     "build": {
         "asar": true,
@@ -41,6 +41,7 @@
             "buildResources": "assets"
         },
         "files": [
+            "main.js",
             "frontend/dist/*",
             "build/**/*",
             "node_modules/**/*",

@@ -60,7 +60,7 @@
         "electron": "^29.1.0",
         "electron-builder": "^24.13.3",
         "fs-extra": "^11.2.0",
-        "hoist-modules": "^1.1.4",
+        "hoist-modules": "^1.1.5",
         "wait-on": "^7.2.0",
       },
     },
@@ -1401,7 +1401,7 @@
 
     "hmac-drbg": ["hmac-drbg@1.0.1", "", { "dependencies": { "hash.js": "^1.0.3", "minimalistic-assert": "^1.0.0", "minimalistic-crypto-utils": "^1.0.1" } }, "sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg=="],
 
-    "hoist-modules": ["hoist-modules@1.1.4", "", { "dependencies": { "fs-extra": "^11.1.1", "minimist": "^1.2.8", "semver": "^7.5.4" }, "bin": { "hoist-modules": "cli" } }, "sha512-S+A+oSFdwfxhWqHVmElh3k1fQEtLVtyBkr40QWUwimrtgR8MnOVYml6jrgGb5lDZHASNvPMbVRJHXMw+2qQdkw=="],
+    "hoist-modules": ["hoist-modules@1.1.5", "", { "dependencies": { "fs-extra": "^11.1.1", "minimist": "^1.2.8", "semver": "^7.5.4" }, "bin": { "hoist-modules": "cli" } }, "sha512-xVEG9DjsKZLBto4aqaE9Icb75EcQTBEhZ0p+e0rEU0Gyq1jY7HO75M86r2ePfcg/bw4BWwiYibP4RHBUYlNH2Q=="],
 
     "hoist-non-react-statics": ["hoist-non-react-statics@3.3.2", "", { "dependencies": { "react-is": "^16.7.0" } }, "sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw=="],
 
