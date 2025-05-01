@@ -28,9 +28,9 @@ Then build the CLI tool (which embeds the frontend):
 
 ```bash
 cd apps/cli
-bun run build-exe-linux
-bun run build-exe-win
-bun run build-exe-mac
+bun run build-linux
+bun run build-win
+bun run build-mac
 ```
 
 The executable is built to:
