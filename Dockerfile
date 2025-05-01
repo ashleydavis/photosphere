@@ -23,16 +23,16 @@ RUN bun run build
 WORKDIR /build/backend
 
 # Build the backend
-RUN bun build --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile photosphere ./src/index.ts
+RUN bun build --compile --minify --sourcemap --target=bun-linux-x64 --outfile photosphere-server ./src/index.ts
 
 FROM ubuntu:25.04
 
 WORKDIR /app
 
 COPY --from=builder /build/frontend/dist ./public
-COPY --from=builder /build/backend/photosphere ./
+COPY --from=builder /build/backend/photosphere-server ./
 
 ENV FRONTEND_STATIC_PATH=/app/public
 
-CMD ./photosphere
+CMD ./photosphere-server
 # CMD sleep infinity
