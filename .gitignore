@@ -36,3 +36,4 @@ tsconfig.tsbuildinfo
 apps/cli/psi
 apps/cli/pfe.zip
 apps/cli/bin/
+frontend/pfe.zip
