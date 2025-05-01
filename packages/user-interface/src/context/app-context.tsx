@@ -42,7 +42,7 @@ export function AppContextProvider({ children }: IProps) {
     useEffect(() => {
         load()
             .catch(err => {
-                console.error(`Failed to load user:`);
+                console.error(`Failed to load sets:`);
                 console.error(err)            
             });
     }, [api.isInitialised, isOnline]);
