@@ -119,5 +119,10 @@ export VERSION=?
 docker build -t codecapers/photosphere:$VERSION -t codecapers/photosphere:latest .
 docker push codecapers/photosphere:$VERSION
 docker push codecapers/photosphere:latest
+```
 
+Test the deployed image:
+
+```bash
+docker run codecapers/photosphere:$VERSION
 ```
