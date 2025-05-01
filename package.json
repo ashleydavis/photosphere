@@ -26,6 +26,8 @@
     "apps/*",
     "backend",
     "frontend",
+    "electron",
+    "electron/frontend",
     "packages/*"
   ]
 }

@@ -23,7 +23,7 @@ See the [Electron frontend readme](./frontend/README.md) for the environment var
 If you are running the Electron frontend in dev mode, start the Electron app like this:
 
 ```bash
-pnpm run start:dev
+bun run start:dev
 ```
 
 This command also starts the dev server.
@@ -33,7 +33,7 @@ This command also starts the dev server.
 To build the Electron frontend to a static web page, start the Electron app like this:
 
 ```bash
-pnpm start
+bun run start
 ```
 
 This command also builds the static version of the web page.
@@ -43,9 +43,9 @@ This command also builds the static version of the web page.
 Run build script for each platform:
 
 ```bash
-pnpm run build-win
-pnpm run build-linux
-pnpm run build-mac
+bun run build-win
+bun run build-linux
+bun run build-mac
 ```
 
 For MacOS you need to build it on a Mac.
