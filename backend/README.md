@@ -17,7 +17,7 @@ cd backend
 Start the application in development mode with live reload:
 
 ```bash
-pnpm run start:dev
+bun run start:dev
 ```
 
 ## Test the REST API
@@ -29,13 +29,13 @@ Install [VS Code REST Client](https://marketplace.visualstudio.com/items?itemNam
 Compile the whole project:
 
 ```bash
-pnpm run compile
+bun run compile
 ```
 
 Compile in watch mode in another terminal, if you want to make changes to the code while it is running:
 
 ```bash
-pnpm run compile:watch
+bun run compile:watch
 ```
 
 Set the following environment variables:
@@ -59,7 +59,7 @@ Run the backend in production mode:
 
 ```bash
 cd backend
-pnpm start
+bun start
 ```
 
 ## Run in production
@@ -69,13 +69,13 @@ Make sure relevant environment variables are set.
 Start the application in production mode:
 
 ```bash
-pnpm start
+bun run start
 ```
 
 ## Run tests
 
 ```bash
-pnpm test
+bun run test
 ```
 
 ## Environment variables
@@ -103,3 +103,21 @@ If using S3 for storage:
 Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
 - `AUTH0_BASE_URL`
 - `AUTH0_AUDIENCE`
+
+## Run the Docker container for testing
+
+```bash
+cd photosphere
+docker compose up --build
+```
+
+### Deploy the image to Dockerhub
+
+```bash
+cd photosphere
+export VERSION=?
+docker build -t codecapers/photosphere:$VERSION -t codecapers/photosphere:latest .
+docker push codecapers/photosphere:$VERSION
+docker push codecapers/photosphere:latest
+
+```
