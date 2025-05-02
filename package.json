@@ -28,6 +28,8 @@
     "frontend",
     "electron",
     "electron/frontend",
+    "mobile",
+    "mobile/frontend",
     "packages/*"
   ]
 }

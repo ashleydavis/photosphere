@@ -4,11 +4,11 @@
   "description": "The mobile application for Photosphere",
   "keywords": [],
   "scripts": {
-    "start": "pnpm --filter mobile-frontend start",
-    "start:prod": "pnpm --filter mobile-frontend run start:prod",
-    "build": "pnpm --filter mobile-frontend build",
-    "android": "npx cap update && npx cap sync && npx cap open android",
-    "ios": "npx cap update && npx cap sync && npx cap open ios"
+    "start": "bun --filter mobile-frontend start",
+    "start:prod": "bun --filter mobile-frontend start:prod",
+    "build": "bun --filter mobile-frontend build",
+    "android": "bunx cap update && bunx cap sync && bunx cap open android",
+    "ios": "bunx cap update && bunx cap sync && bunx cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^5.7.4",

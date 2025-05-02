@@ -24,7 +24,7 @@ cd mobile
 Run it in the browser with live reload:
 
 ```bash
-bun run start
+bun start
 ```
 
 ## Build and run for Android
