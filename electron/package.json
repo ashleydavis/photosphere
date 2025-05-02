@@ -5,7 +5,7 @@
     "main": "main.js",
     "scripts": {
         "pack-web-page": "bun run --filter electron-frontend build",
-        "start:prod:static": "pnm run pack-web-page && electron .",
+        "start:prod:static": "bun run pack-web-page && electron .",
         "start:prod": "concurrently --names=\"dev-server,electron\" \"bun --filter electron-frontend start:prod\" \"bun run electron:dev\"",
         "sd": "bun run start:dev",
         "start:dev": "concurrently --names=\"dev-server,electron\" \"bun --filter electron-frontend start\" \"wait-on --interval 5000 http://localhost:8080 && cross-env HTML_PAGE=http://localhost:8080 electron .\"",
