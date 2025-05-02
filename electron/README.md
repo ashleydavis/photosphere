@@ -78,3 +78,5 @@ Alternatively you can run with the `--no-sandbox` option:
 
 This is an annoying problem for all Electron applications on Linux.
 
+Open issue here:
+- https://github.com/electron/electron/issues/42510
