@@ -4,11 +4,10 @@ The mobile phone version of [the Photosphere application](https://rapidfullstack
 
 ## Pre-reqs
 
-- Node.js.
+- Bun.
 - A computer with Android Studio to build for Android.
 - A MacOS computer with Xcode to build for iPhone/iPad. 
 - Run [the backend](../backend/README.md).
-- Compile [the user-interface code](../packages/user-interface/README.md).
 
 ## Setup
 
@@ -25,7 +24,7 @@ cd mobile
 Run it in the browser with live reload:
 
 ```bash
-pnpm start
+bun run start
 ```
 
 ## Build and run for Android
@@ -35,8 +34,8 @@ You need Android Studio installed for this.
 ```bash 
 set BASE_URL=http://localhost:3000
 set GOOGLE_API_KEY=""
-pnpm run build 
-pnpm run android
+bun run build 
+bun run android
 ```
 
 Now build and run using Android Studio.
@@ -48,8 +47,8 @@ You need Xcode installed for this.
 ```bash 
 export BASE_URL=http://localhost:3000
 export GOOGLE_API_KEY=""
-pnpm run build
-pnpm run ios 
+bun run build
+bun run ios 
 ```
 
 Now build and run using Xcode.
