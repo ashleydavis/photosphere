@@ -21,10 +21,11 @@ async function main() {
     // Copy files.
     //
     fs.copySync('main.js', `${buildDir}/main.js`);
-    fs.copySync('frontend/dist', `${buildDir}/dist`);
+    fs.copySync('frontend/dist', `${buildDir}/frontend/dist`);
 
     //
     // Copy and hoist node-modules.
+    // An `npm install` is not enough due to the shared packages in the monorepo.
     //
     await hoist("./", `${buildDir}/node_modules`, { devDependencies: true });
 }
