@@ -54,7 +54,16 @@ Results can be found under `./tmp/build`.
 
 ## Permissions issue
 
-To get the Electron app to start on Linux I had to set the following permissions after unpacking the installer:
+To get the Electron app to start on Linux I had to set permissions.
+
+After installing dependencies and running Photosphere Electron in dev mode:
+
+```bash
+sudo chown root photosphere/node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 photosphere/node_modules/electron/dist/chrome-sandbox
+```
+
+After unpacking the Photosphere installer:
 
 ```bash
 sudo chown root chrome-sandbox
