@@ -9,18 +9,15 @@ COPY . .
 
 RUN bun install --frozen-lockfile
 
-WORKDIR /build/frontend
+WORKDIR /build/apps/frontend
 
 ENV VITE_BASE_URL=""
 ENV VITE_NODE_ENV="production"
-ENV VITE_APP_MODE="readwrite"
-ENV VITE_AUTH_TYPE="no-auth"
-ENV VITE_GOOGLE_API_KEY=""
 
 # Build the frontend
 RUN bun run build
 
-WORKDIR /build/backend
+WORKDIR /build/apps/backend
 
 # Build the backend
 RUN bun build --compile --minify --sourcemap --target=bun-linux-x64 --outfile photosphere-server ./src/index.ts
@@ -33,8 +30,8 @@ FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-COPY --from=builder /build/frontend/dist ./public
-COPY --from=builder /build/backend/photosphere-server ./
+COPY --from=builder /build/apps/frontend/dist ./public
+COPY --from=builder /build/apps/backend/photosphere-server ./
 
 # Have to add sharp otherwise it doesn't work.
 RUN bun add sharp
