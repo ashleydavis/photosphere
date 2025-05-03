@@ -131,7 +131,7 @@ export function AuthContextProvider({ openUrl, children }: IAuthContextProviderP
                 clientId={authConfig.auth0.clientId}
                 authorizationParams={{
                     audience: authConfig.auth0.audience,
-                    redirect_uri: `${redirectUrl}/on_login`,
+                    redirect_uri: redirectUrl,
                 }}
                 >
                 <Auth0ContextProvider

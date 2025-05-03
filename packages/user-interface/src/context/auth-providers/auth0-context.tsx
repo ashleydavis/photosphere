@@ -60,7 +60,7 @@ export function Auth0ContextProvider({ appMode, googleApiKey, redirectUrl, openU
     async function logout(): Promise<void> {
         _logout({
             logoutParams: {
-                returnTo: `${redirectUrl}/on_logout`,
+                returnTo: redirectUrl,
             },
             openUrl,
         });
