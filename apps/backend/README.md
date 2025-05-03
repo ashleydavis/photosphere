@@ -101,8 +101,10 @@ If using S3 for storage:
 ### Auth0 authentication details:
 
 Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
-- `AUTH0_BASE_URL`
+- `AUTH0_DOMAIN`
 - `AUTH0_AUDIENCE`
+- `AUTH0_CLIENT_ID`
+- `AUTH0_REDIRECT_URL`
 
 ## Run the Docker container for testing
 

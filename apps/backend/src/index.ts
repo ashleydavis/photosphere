@@ -78,10 +78,15 @@ async function main() {
             throw new Error("Expected AUTH0_CLIENT_ID environment variable");
         }
 
+        if (!process.env.AUTH0_REDIRECT_URL) {
+            throw new Error("Expected AUTH0_REDIRECT_URL environment variable");
+        }
+
         auth0Options = {
             audience: process.env.AUTH0_AUDIENCE,
             domain: process.env.AUTH0_DOMAIN,
             clientId: process.env.AUTH0_CLIENT_ID,
+            redirectUrl: process.env.AUTH0_REDIRECT_URL,
         };
     }
 

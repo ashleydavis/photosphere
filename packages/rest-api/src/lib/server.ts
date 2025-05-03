@@ -27,6 +27,7 @@ export interface IAuth0Options {
     clientId: string;
     audience: string;
     domain: string;
+    redirectUrl: string;
 }
 
 export interface IServerOptions {
@@ -113,7 +114,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
                     domain: options.auth0.domain,
                     clientId: options.auth0.clientId,
                     audience: options.auth0.audience,
-                    redirectUrl: `${req.protocol}://${req.get("host")}`,
+                    redirectUrl: options.auth0.redirectUrl,
                 },
                 goopleApiKey: options.googleApiKey,
             });
