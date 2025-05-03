@@ -26,7 +26,6 @@
     "apps/*",
     "apps/electron/frontend",
     "apps/mobile/frontend",
-    "frontend",
     "packages/*"
   ]
 }
