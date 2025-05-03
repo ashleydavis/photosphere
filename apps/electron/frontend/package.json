@@ -4,9 +4,9 @@
   "description": "The frontend for the Electron version of the Photosphere application.",
   "type": "module",
   "scripts": {
-    "start": "cross-env VITE_NODE_ENV=development VITE_BASE_URL=http://localhost:3000 vite",
-    "start:prod": "cross-env VITE_NODE_ENV=production VITE_BASE_URL=https://photosphere-api.codecapers.com.au VITE_GOOGLE_API_KEY=\"\" vite",
-    "build": "cross-env VITE_NODE_ENV=production VITE_BASE_URL=https://photosphere-api.codecapers.com.au vite build",
+    "start": "cross-env VITE_BASE_URL=http://localhost:3000 vite",
+    "start:prod": "cross-env VITE_BASE_URL=https://photosphere-api.codecapers.com.au vite",
+    "build": "cross-env VITE_BASE_URL=https://photosphere-api.codecapers.com.au vite build",
     "preview": "vite preview",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
@@ -33,7 +33,6 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "dependencies": {
-    "@auth0/auth0-react": "^2.2.4",
     "@react-hook/resize-observer": "^1.2.6",
     "axios": "^0.27.2",
     "blob-util": "^2.0.2",

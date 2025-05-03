@@ -238,7 +238,7 @@ export function chooseBestResult(results: any[]): IReverseGeocodeResult {
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
-export async function reverseGeocode(location: ILocation, googleApiKey: string | undefined): Promise<IReverseGeocodeResult | undefined> {
+export async function reverseGeocode(location: ILocation, googleApiKey: string): Promise<IReverseGeocodeResult | undefined> {
 
     if (!googleApiKey) {
         console.warn("No Google API key set. Not doing reverse geocoding.");

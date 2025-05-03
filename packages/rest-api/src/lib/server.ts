@@ -24,8 +24,9 @@ const dateFields = [
 ];
 
 export interface IAuth0Options {
+    clientId: string;
     audience: string;
-    baseUrl: string;
+    domain: string;
 }
 
 export interface IServerOptions {
@@ -43,6 +44,11 @@ export interface IServerOptions {
     // Authentication options for auth0.
     //
     auth0?: IAuth0Options;
+
+    //
+    // The Google API key for reverse geocoding, if provided.
+    //
+    googleApiKey?: string;
 
     //
     // The path to the frontend static files.
@@ -90,6 +96,42 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     }
 
     //
+    // Configures authentication in the frontend.
+    //
+    app.get("/auth/config", (req, res) => {
+        if (options.authType === "auth0") {
+            if (!options.auth0) {
+                console.error("Expected auth0 options");
+                res.sendStatus(500);
+                return;
+            }
+
+            res.json({
+                appMode: options.appMode,
+                authMode: "auth0",
+                auth0: {
+                    domain: options.auth0.domain,
+                    clientId: options.auth0.clientId,
+                    audience: options.auth0.audience,
+                    redirectUrl: `${req.protocol}://${req.get("host")}`,
+                },
+                goopleApiKey: options.googleApiKey,
+            });
+        }
+        else if (options.authType === "no-auth") {
+            res.json({
+                appMode: options.appMode,
+                authMode: "no-auth",
+                goopleApiKey: options.googleApiKey,
+            });
+        }
+        else {
+            console.error(`Unknown auth type: ${options.authType}`);
+            res.status(500);
+        }
+    });
+
+    //
     // Extracts JWT from query parameters.
     //
     app.use((req, res, next) => {
@@ -109,8 +151,8 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         
         const checkJwt = auth({
             audience: options.auth0.audience,
-            issuerBaseURL: options.auth0.baseUrl,
-            tokenSigningAlg: 'RS256'        
+            issuerBaseURL: options.auth0.domain,
+            tokenSigningAlg: 'RS256'
         });
 
         //

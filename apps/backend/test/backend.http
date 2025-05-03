@@ -13,6 +13,12 @@
 GET {{base_url}}/alive
 
 ###
+# Check auth configuration.
+#
+
+GET {{base_url}}/auth/config
+
+###
 #
 # Gets available sets.
 #

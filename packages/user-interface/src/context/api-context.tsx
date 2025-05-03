@@ -6,7 +6,7 @@ import { IDatabaseOp, ISets } from "defs";
 import { IRecord } from "../lib/database/database-collection";
 import { useAuth } from "./auth-context";
 
-const BASE_URL = import.meta.env.VITE_BASE_URL as string;
+export const BASE_URL = import.meta.env.VITE_BASE_URL as string;
 
 console.log(`Expecting backend at ${BASE_URL}.`);
 

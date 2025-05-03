@@ -12,6 +12,21 @@ import { AuthContext, IAuthContext } from "user-interface";
 
 export interface IAuth0ContextProviderProps {
     //
+    // The mode of the app.
+    //
+    appMode: string; // "readonly" or "readwrite".
+
+    //
+    // The Google API key for reverse geocoding, if provided.
+    //
+    googleApiKey?: string;
+
+    //
+    // The URL to redirect to after login/logout.
+    //
+    redirectUrl: string;
+
+    //
     // Used to control the login/logout redirect and not rely on the SDK to do the actual redirect.
     //
     openUrl?: (url: string) => Promise<void> | void;
@@ -19,7 +34,7 @@ export interface IAuth0ContextProviderProps {
     children: ReactNode | ReactNode[];
 }
 
-export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProviderProps) {
+export function Auth0ContextProvider({ appMode, googleApiKey, redirectUrl, openUrl, children }: IAuth0ContextProviderProps) {
 
     const {
         isLoading,
@@ -29,10 +44,6 @@ export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProvide
         logout: _logout,
         getAccessTokenSilently,
     } = useAuth0();
-
-    useEffect(() => {
-        validateAuthSettings();
-    }, []);
 
     //
     // Logs in.
@@ -49,7 +60,7 @@ export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProvide
     async function logout(): Promise<void> {
         _logout({
             logoutParams: {
-                returnTo: `${import.meta.env.VITE_AUTH0_ORIGIN}/on_logout`,
+                returnTo: `${redirectUrl}/on_logout`,
             },
             openUrl,
         });
@@ -68,6 +79,8 @@ export function Auth0ContextProvider({ openUrl, children }: IAuth0ContextProvide
     }
 
     const value: IAuthContext = {
+        appMode,
+        googleApiKey,
         isAuthEnabled: true,
         isLoading: isLoading,
         isAuthenticated: isAuthenticated,
@@ -91,14 +104,4 @@ function checkEnvironmentVariable(name: string, value: any): void {
     if (!value) {
         throw new Error(`Environment variable ${name} is not set.`);
     }
-}
-
-//
-// Make sure auth0 settings are enabled.
-//
-function validateAuthSettings() {
-    checkEnvironmentVariable("VITE_AUTH0_DOMAIN", import.meta.env.VITE_AUTH0_DOMAIN);
-    checkEnvironmentVariable("VITE_AUTH0_CLIENT_ID", import.meta.env.VITE_AUTH0_CLIENT_ID);
-    checkEnvironmentVariable("VITE_AUTH0_AUDIENCE", import.meta.env.VITE_AUTH0_AUDIENCE);
-    checkEnvironmentVariable("VITE_AUTH0_ORIGIN", import.meta.env.VITE_AUTH0_ORIGIN);
 }

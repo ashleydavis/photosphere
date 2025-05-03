@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "s": "pnpm start",
-    "start": "cross-env VITE_NODE_ENV=development VITE_BASE_URL=http://localhost:3000 VITE_GOOGLE_API_KEY=\"\" vite",
-    "start:prod": "cross-env VITE_NODE_ENV=production VITE_BASE_URL=https://photosphere-api.codecapers.com.au VITE_GOOGLE_API_KEY=\"\" vite",
-    "start:no-open": "cross-env VITE_NODE_ENV=development VITE_BASE_URL=http://localhost:3000 VITE_GOOGLE_API_KEY=\"\" vite --no-open",
+    "start": "cross-env VITE_BASE_URL=http://localhost:3000 vite",
+    "start:prod": "cross-env VITE_NODE_ENV=production VITE_BASE_URL=https://photosphere-api.codecapers.com.au vite",
+    "start:no-open": "cross-env VITE_BASE_URL=http://localhost:3000 vite --no-open",
     "build": "cross-env VITE_NODE_ENV=production VITE_BASE_URL=https://photosphere-api.codecapers.com.au vite build",
     "preview": "vite preview",
     "compile": "tsc",

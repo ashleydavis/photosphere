@@ -68,7 +68,6 @@
       "name": "electron-frontend",
       "version": "1.0.0",
       "dependencies": {
-        "@auth0/auth0-react": "^2.2.4",
         "@react-hook/resize-observer": "^1.2.6",
         "axios": "^0.27.2",
         "blob-util": "^2.0.2",
@@ -103,7 +102,6 @@
       "name": "photosphere-frontend",
       "version": "1.0.0",
       "dependencies": {
-        "@auth0/auth0-react": "^2.2.4",
         "@react-hook/resize-observer": "^1.2.6",
         "axios": "^0.27.2",
         "blob-util": "^2.0.2",
@@ -329,6 +327,7 @@
       "name": "user-interface",
       "version": "1.0.0",
       "dependencies": {
+        "@auth0/auth0-react": "^2.2.4",
         "@emotion/react": "^11.13.3",
         "@emotion/styled": "^11.13.0",
         "@mui/icons-material": "^6.1.7",

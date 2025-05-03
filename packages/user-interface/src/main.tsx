@@ -32,8 +32,7 @@ import Snackbar from "@mui/joy/Snackbar/Snackbar";
 // @ts-ignore
 import FPSStats from "react-fps-stats";
 
-const isProduction = (import.meta.env.MODE !== "development" && import.meta.env.MODE !== "test");
-const APP_MODE = import.meta.env.VITE_APP_MODE!;
+const isProduction = (import.meta.env.MODE === "production");
 
 export interface IMainProps {
     //
@@ -48,6 +47,7 @@ export interface IMainProps {
 function __Main({ computerPage }: IMainProps) {
 
     const {
+        appMode,
         isAuthEnabled,
         isLoading,
         isAuthenticated,
@@ -565,7 +565,7 @@ function __Main({ computerPage }: IMainProps) {
                     />
             }
 
-            {(APP_MODE === "readonly")
+            {(appMode === "readonly")
                 && <Snackbar
                     open={readonlyMessageOpen}
                     onClose={() => setReadonlyMessageOpen(false)}

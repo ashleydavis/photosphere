@@ -70,14 +70,23 @@ async function main() {
             throw new Error("Expected AUTH0_AUDIENCE environment variable");
         }
 
-        if (!process.env.AUTH0_BASE_URL) {
-            throw new Error("Expected AUTH0_BASE_URL environment variable");
+        if (!process.env.AUTH0_DOMAIN) {
+            throw new Error("Expected AUTH0_DOMAIN environment variable");
+        }
+
+        if (!process.env.AUTH0_CLIENT_ID) {
+            throw new Error("Expected AUTH0_CLIENT_ID environment variable");
         }
 
         auth0Options = {
             audience: process.env.AUTH0_AUDIENCE,
-            baseUrl: process.env.AUTH0_BASE_URL,
+            domain: process.env.AUTH0_DOMAIN,
+            clientId: process.env.AUTH0_CLIENT_ID,
         };
+    }
+
+    if (!process.env.GOOGLE_API_KEY) {
+        console.warn("Google API key not set. Reverse geocoding will not work.");
     }
 
     const { app, close } = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper, {
@@ -85,6 +94,7 @@ async function main() {
         authType: AUTH_TYPE,
         frontendStaticPath: FRONTEND_STATIC_PATH,
         auth0: auth0Options,
+        googleApiKey: process.env.GOOGLE_API_KEY,
     });
 
     registerTerminationCallback(async () => {

@@ -79,6 +79,8 @@ async function main() {
             const { storage: dbStorage, normalizedPath: dbPath } = createStorage(databaseStorageConnection);
             const databaseStorageWrapper = new StoragePrefixWrapper(dbStorage, dbPath);
 
+            //todo: Need to write in Google API key from somewhere.
+
             const { app, close } = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper, {
                 appMode: "readwrite", 
                 authType: "no-auth",

@@ -14,13 +14,11 @@ import { retry } from "utils";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { uuid } from "utils";
-import { useApp } from "./app-context";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
 
 // @ts-ignore
 import ColorThief from 'colorthief/dist/color-thief.mjs';
-
-const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string;
+import { useAuth } from "./auth-context";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -101,6 +99,8 @@ export function UploadContextProvider({ children }: IProps) {
     // Interface to the gallery.
     //
     const { addGalleryItem, uploadAsset, checkAssetHash } = useGallery();
+
+    const { googleApiKey } = useAuth();
 
     //
     // List of uploads that failed.
@@ -353,8 +353,11 @@ export function UploadContextProvider({ children }: IProps) {
 
                 if (exif.GPSLatitude && exif.GPSLongitude) {
                     const coordinates = convertExifCoordinates(exif);
-                    if (isLocationInRange(coordinates)) {
-                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, GOOGLE_API_KEY), 3, 5000);
+                    if (!googleApiKey) {
+                        console.warn(`Reverse geocoding is not supported without a Google API key.`);
+                    }
+                    else if (isLocationInRange(coordinates)) {
+                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, googleApiKey), 3, 5000);
                         if (reverseGeocodingResult) {
                             location = reverseGeocodingResult.location;
                             properties.reverseGeocoding = {
