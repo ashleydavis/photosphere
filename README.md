@@ -59,13 +59,13 @@ bun run compile
 
 ### Start the components that you need
 
-To start the backend, follow the instructions in [./backend/README.md](./backend/README.md).
+To start the backend, follow the instructions in [./apps/backend/README.md](./apps/backend/README.md).
 
-To start the web-based frontend, follow the instructions in [./frontend/README.md](./frontend/README.md).
+To start the web-based frontend, follow the instructions in [./apps/frontend/README.md](./apps/frontend/README.md).
 
-To start the Electron-based frontend, follow the instructions in [./electron/README.md](./electron/README.md).
+To start the Electron-based frontend, follow the instructions in [./electron/README.md](./apps/electron/README.md).
 
-To start the mobile frontend, follow the instructions in [./mobile/README.md](./mobile/README.md).
+To start the mobile frontend, follow the instructions in [./apps/mobile/README.md](./apps/mobile/README.md).
 
 
 
