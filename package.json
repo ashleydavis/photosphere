@@ -25,10 +25,9 @@
   "workspaces": [
     "apps/*",
     "apps/electron/frontend",
+    "apps/mobile/frontend",
     "backend",
     "frontend",
-    "mobile",
-    "mobile/frontend",
     "packages/*"
   ]
 }
