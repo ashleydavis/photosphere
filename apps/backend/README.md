@@ -9,7 +9,7 @@ First, follow the instructions in [the main readme](../README.md).
 Then open a terminal and change directory to the backend project:
 
 ```bash
-cd backend
+cd apps/backend
 ```
 
 ## Run it in development
@@ -32,12 +32,6 @@ Compile the whole project:
 bun run compile
 ```
 
-Compile in watch mode in another terminal, if you want to make changes to the code while it is running:
-
-```bash
-bun run compile:watch
-```
-
 Set the following environment variables:
 
 ```bash
@@ -52,7 +46,7 @@ export DB_STORAGE_CONNECTION=s3:your-s3-bucket-name:/database
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=ap-southeast-2
-export AWS_ENDPOINT=... (if needed)
+export AWS_ENDPOINT=...endpoint for S3 on Digitial Ocean...
 ```
 
 Run the backend in production mode:

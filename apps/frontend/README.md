@@ -9,7 +9,7 @@ First, follow the instructions in [the main readme](../README.md).
 Then open a terminal and change directory to the frontend project:
 
 ```bash
-cd frontend
+cd apps/frontend
 ```
 
 To enable the frontend you must first run the [backend](../backend/README.md).
@@ -26,16 +26,16 @@ Then click the link or point your browser at the default location for Webpack: [
 
 ## Build the static web page
 
-Set the BASE_URL environment variable to point the frontend to the backend:
+Set the VITE_BASE_URL environment variable to point the frontend to the backend:
 
 ```bash
-export BASE_URL=http://localhost:3000
+export VITE_BASE_URL=http://localhost:3000
 ```
 
 Or on Windows:
 
 ```bash
-set BASE_URL=http://localhost:3000
+set VITE_BASE_URL=http://localhost:3000
 ```
 
 Build the project to a static web page like this:
@@ -87,10 +87,7 @@ pnpm run compile:watch
 Set environment variables:
 
 ```bash
-export AUTH0_DOMAIN=...
-export AUTH0_CLIENT_ID=...
-export AUTH0_AUDIENCE=...
-export GOOGLE_API_KEY=...
+export VITE_BASE_URL=<photosphere-api-url>
 ```
 
 Run it in prod mode:
@@ -126,16 +123,6 @@ set PWDEBUG=1
 
 ## Environment variables
 
-- `NODE_ENV` - Set to "production" for production use.
-- `BASE_URL` - Sets the URL for the connection to the backend.
-- `GOOGLE_API_KEY` - Sets to a valid Google API key to enable reverse geocoding of photo location in the browser.
-- `APP_MODE` - Can be set to `readonly` or `readwrite`.
-- `AUTH_TYPE` - Can be set to `auth0` or `no-auth`.
+- `VITE_NODE_ENV` - Set to "production" for production use.
+- `VITE_BASE_URL` - Sets the URL for the connection to the backend.
 
-### Auth0 authentication details:
-
-Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
-- `AUTH0_DOMAIN`
-- `AUTH0_CLIENT_ID`
-- `AUTH0_AUDIENCE`
-- `AUTH0_ORIGIN`
