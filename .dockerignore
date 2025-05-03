@@ -2,11 +2,11 @@
 .github
 **/node_modules
 test
-app/electron
-apps/mobile
 testbed
 **/build
+**/dist
 **/coverage
 .do
 key
 key.pub
+**/tsconfig.tsbuildinfo
