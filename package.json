@@ -24,10 +24,9 @@
   "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
   "workspaces": [
     "apps/*",
+    "apps/electron/frontend",
     "backend",
     "frontend",
-    "electron",
-    "electron/frontend",
     "mobile",
     "mobile/frontend",
     "packages/*"
