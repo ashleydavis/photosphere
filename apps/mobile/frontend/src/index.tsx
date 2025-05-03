@@ -4,9 +4,8 @@ import { App } from "./app";
 import '@fortawesome/fontawesome-free/css/all.css';
 import "./tailwind.css";
 import "./styles.css";
-import { Auth0ContextProvider } from "./lib/auth0-context";
+import { Auth0ContextProvider, NoAuthContextProvider } from "user-interface";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
-import { NoAuthContextProvider } from "./lib/no-auth-context";
 import { Browser } from "@capacitor/browser";
 import { App as CapacitorApp } from "@capacitor/app";
 
