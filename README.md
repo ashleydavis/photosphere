@@ -20,7 +20,7 @@ Early development of Photosphere was covered in the book [The Feedback-Driven De
 
 Photos, videos and folders can be uploaded via the Upload page in the Web frontend.
 
-Alternatively, the CLI tool for bulk uploads.
+Alternatively, use the CLI tool for bulk uploads.
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
@@ -46,6 +46,15 @@ Then install all dependencies at the root of the monorepo:
 cd photosphere
 bun install
 ```
+
+## Project layout
+
+- photosphere/
+    - apps - Top level apps live here (frontend, backend, mobile, Electron, cli tool)
+    - aux - Auxillary and test projects.
+    - packages - Shared code libraries.
+    - test - Data for testing.
+
 
 ### Compile the project
 
