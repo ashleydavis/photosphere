@@ -1,8 +1,9 @@
 .git
 .github
 **/node_modules
-fixtures
-mobile
+test
+app/electron
+apps/mobile
 testbed
 **/build
 **/coverage

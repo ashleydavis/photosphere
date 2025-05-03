@@ -1,5 +1,5 @@
-backend/uploads/**
-backend/files/**
+apps/backend/uploads/**
+apps/backend/files/**
 dist
 node_modules
 coverage
