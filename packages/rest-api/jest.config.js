@@ -1,5 +1,4 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} */
-module.exports = {
+export default {
     preset: 'ts-jest',
     //
     // This would allow the image tests to work, except jsdom depends on
