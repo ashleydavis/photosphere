@@ -16,7 +16,7 @@ import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { retry, uuid } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
-const SYNC_POLL_PERIOD = 60 * 1000; // 1 minute.
+const SYNC_POLL_PERIOD = 1000; // 1 second.
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -509,7 +509,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     return;
                 }
 
-                console.log(`Periodic sync...`);
+                // console.log(`Periodic sync...`);
 
                 try {
                     await syncOutgoing({
@@ -522,7 +522,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                     console.error(err);
                 }
             
-                console.log(`Periodic sync done.`);
+                // console.log(`Periodic sync done.`);
     
                 timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
             }
