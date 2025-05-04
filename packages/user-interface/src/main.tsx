@@ -28,9 +28,7 @@ import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
 import Snackbar from "@mui/joy/Snackbar/Snackbar";
-
-// @ts-ignore
-import FPSStats from "react-fps-stats";
+import { Fps } from "./components/fps";
 
 const isProduction = (import.meta.env.MODE === "production");
 
@@ -546,14 +544,7 @@ function __Main({ computerPage }: IMainProps) {
                 && <FullscreenSpinner />
             }
 
-            {!isProduction 
-                && <FPSStats 
-                    top="auto"
-                    left="auto"
-                    right={30}
-                    bottom={10}
-                    />
-            }
+            <Fps />
 
             {(appMode === "readonly")
                 && <Snackbar
