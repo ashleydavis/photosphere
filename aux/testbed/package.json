@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
-    "clean": "rm -rf build dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo"
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",

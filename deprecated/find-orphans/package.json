@@ -12,7 +12,7 @@
     "cw": "pnpm run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
-    "clean": "rm -rf build"
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "axios": "^1.7.2",

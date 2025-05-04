@@ -27,7 +27,7 @@
         "copy-50-assets": "bunx cp -r ../../test/fixtures/50-assets/files files",
         "copy-1-asset": "bunx cp -r ../../test/fixtures/1-asset/files files",
         "load-bson-fixture": "bun src/test/load-bson-fixture.ts",
-        "clean": "rm -rf build dist tsconfig.tsbuildinfo",
+        "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
         "t": "bun run test",
         "tw": "bun run test:watch",
         "test": "cross-env NODE_ENV=development jest --coverage",
