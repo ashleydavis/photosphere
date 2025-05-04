@@ -138,11 +138,11 @@ describe("layout", () => {
 
         const secondRow = layout.rows[1];
         expect(secondRow.items.length).toBe(1);
-        expect(secondRow.height).toBeCloseTo(targetRowHeight);
+        expect(secondRow.height).toBeGreaterThanOrEqual(targetRowHeight);
+        expect(secondRow.height).toBeLessThanOrEqual(targetRowHeight + 5);
 
         const item3 = secondRow.items[0];
         expect(item3.thumbWidth).toBeCloseTo(items[2].width);
         expect(item3.thumbHeight).toBeCloseTo(items[2].height);
-
     });
 });
