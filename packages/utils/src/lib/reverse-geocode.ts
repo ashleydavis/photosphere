@@ -240,17 +240,17 @@ export function chooseBestResult(results: any[]): IReverseGeocodeResult {
 //
 export async function reverseGeocode(location: ILocation, googleApiKey: string): Promise<IReverseGeocodeResult | undefined> {
 
-    if (!googleApiKey) {
-        console.warn("No Google API key set. Not doing reverse geocoding.");
-        return undefined;
-    }    
-
     if (location === null || location === undefined) {
         throw new Error(`Invalid location ${location}`);
     }
 
     checkCoordinateOk(location.lat, `lat`, LAT_MIN, LAT_MAX);
     checkCoordinateOk(location.lng, `lng`, LNG_MIN, LNG_MAX);
+
+    if (!googleApiKey) {
+        console.warn("No Google API key set. Not doing reverse geocoding.");
+        return undefined;
+    }    
 
     //
     // Uncomment this code to fake an error in the reverse geocoder.
