@@ -19,7 +19,7 @@ async function main() {
         .description("The Photosphere CLI tool for managing your media file library.");
 
     program
-        .command("edit")
+        .command("ui")
         .description("Starts the Photosphere editor to view, search and edit photos and videos.")
         .action(async () => {
             //
