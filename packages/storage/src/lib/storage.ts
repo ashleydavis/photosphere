@@ -28,6 +28,11 @@ export interface IFileInfo {
     // The length of the file in bytes.
     //
     length: number;
+
+    //
+    // The last modified date of the file.
+    //
+    lastModified: Date;
 }
 
 export interface IStorage {

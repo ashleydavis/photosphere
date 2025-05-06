@@ -248,9 +248,13 @@ export class CloudStorage implements IStorage {
         };
         try {
             const headResult = await this.s3.headObject(headParams).promise();
+            if (!headResult.LastModified) {
+                throw new Error(`LastModified is undefined for ${filePath}`);
+            }
             return {
                 contentType: headResult.ContentType as string,
                 length: headResult.ContentLength as number,
+                lastModified: headResult.LastModified!,
             };
         }
         catch (err: any) {
