@@ -71,8 +71,8 @@ export function createStorage(
     }
 
     // Wrap with encryption if keys are provided
-    if (options.privateKey) {
-        storage = new EncryptedStorage(storage, options.publicKey || options.privateKey, options.privateKey);
+    if (options.publicKey && options.privateKey) {
+        storage = new EncryptedStorage(storage, options.publicKey, options.privateKey);
         type = `encrypted-${type}`;
     }
 
