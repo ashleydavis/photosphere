@@ -17,10 +17,8 @@ export class FileStorage implements IStorage {
         }
 
         let entries = await fs.readdir(path, { withFileTypes: true });
-        entries = entries.filter(entry => 
-            entry.name
-            && !entry.name.endsWith(".info")
-            && !entry.isDirectory());
+        entries = entries.filter(entry => !entry.name.endsWith(".info"));
+        entries = entries.filter(entry => !entry.isDirectory());
 
         //
         // Alphanumeric sort to simulate the order of file listing from S3.
@@ -47,7 +45,7 @@ export class FileStorage implements IStorage {
         }
 
         let entries = await fs.readdir(path, { withFileTypes: true });
-        entries = entries.filter(entry => entry.name && entry.isDirectory());
+        entries = entries.filter(entry => entry.isDirectory());
 
         //
         // Alphanumeric sort to simulate the order of file listing from S3.
