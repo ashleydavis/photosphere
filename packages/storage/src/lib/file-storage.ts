@@ -109,6 +109,7 @@ export class FileStorage implements IStorage {
         return {
             contentType,
             length: stat.size,
+            lastModified: stat.mtime,
         };
     }
 
