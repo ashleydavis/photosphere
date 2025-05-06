@@ -97,6 +97,9 @@ export class FileStorage implements IStorage {
     // Gets info about a file.
     //
     async info(filePath: string): Promise<IFileInfo | undefined> {
+        if (!await fs.pathExists(filePath)) {
+            return undefined;
+        }
         const infoFilePath = this.getInfoFileName(filePath)
         let contentType: string | undefined = undefined;
         if (await fs.pathExists(infoFilePath)) {
