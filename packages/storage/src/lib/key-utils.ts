@@ -1,6 +1,7 @@
 import { generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { IStorageOptions } from './storage-factory';
 
 /**
  * Interface for key pair
@@ -125,4 +126,61 @@ export async function loadOrGenerateKeyPair(keyFilePath: string, generate = fals
     }
     
     return null;
+}
+
+/**
+ * Load encryption keys for storage
+ * 
+ * @param keyPath Path to the key file
+ * @param generateKey Whether to generate a key if it doesn't exist
+ * @param description Description for logging
+ * @returns Storage options with encryption keys, or empty object if no key provided
+ */
+export async function loadEncryptionKeys(
+    keyPath: string | undefined, 
+    generateKey: boolean,
+    description: string
+): Promise<{ options: IStorageOptions, isEncrypted: boolean }> {
+    if (!keyPath) {
+        return { options: {}, isEncrypted: false };
+    }
+    
+    console.log(`Using ${description} encryption key: ${keyPath}`);
+    
+    if (generateKey) {
+        // Try to load or generate key pair
+        const keyPair = await loadOrGenerateKeyPair(keyPath, true);
+        
+        if (!keyPair) {
+            throw new Error(`Failed to generate key pair at ${keyPath}`);
+        }
+        
+        return {
+            options: {
+                publicKey: keyPair.publicKey,
+                privateKey: keyPair.privateKey
+            },
+            isEncrypted: true
+        };
+    } 
+    else {
+        // Just load existing keys
+        const privateKey = await loadPrivateKey(keyPath);
+        if (!privateKey) {
+            throw new Error(`Private key not found: ${keyPath}\nSpecify --generate-key to create a new key.`);
+        }
+        
+        let publicKey = await loadPublicKey(`${keyPath}.pub`);
+        if (!publicKey) {
+            publicKey = privateKey; // Use private key as public key if public key not found.            
+        }
+        
+        return {
+            options: {
+                publicKey,
+                privateKey
+            },
+            isEncrypted: true
+        };
+    }
 }

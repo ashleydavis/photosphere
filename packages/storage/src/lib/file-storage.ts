@@ -5,6 +5,17 @@ import { IFileInfo, IListResult, IStorage } from "./storage";
 
 export class FileStorage implements IStorage {
 
+    constructor(public readonly location: string) {
+    }
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    async isEmpty(path: string): Promise<boolean> {
+        const entries = await fs.readdir(path);
+        return entries.length === 0;
+    }
+
     //
     // List files in storage.
     //

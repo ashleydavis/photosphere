@@ -5,7 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { BsonDatabase, FileStorage } from 'storage';
+import { BsonDatabase, createStorage, FileStorage } from 'storage';
 
 async function main(): Promise<void> {
     const rootPath = './files';
@@ -53,11 +53,8 @@ async function loadFixture(fixturesPath: string, file: string, bsonDatabase: Bso
 async function loadFixtures(fixturesPath: string, databasePath: string): Promise<void> {
     
     const files = fs.readdirSync(fixturesPath);
-    const storage = new FileStorage();
-    const bsonDatabase = new BsonDatabase({
-        storage,
-        directory: databasePath,
-    });
+    const { storage } = await createStorage(databasePath);
+    const bsonDatabase = new BsonDatabase({ storage });
 
     try {
         for (const file of files) {
@@ -67,6 +64,6 @@ async function loadFixtures(fixturesPath: string, databasePath: string): Promise
         }
     }
     finally {
-        await bsonDatabase.shutdown();
+        await bsonDatabase.close();
     }
 }

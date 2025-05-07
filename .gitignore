@@ -37,3 +37,5 @@ apps/cli/psi
 apps/cli/pfe.zip
 apps/cli/bin/
 frontend/pfe.zip
+apps/frontend/pfe.zip
+# apps/cli/test/db

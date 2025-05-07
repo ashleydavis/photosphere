@@ -38,6 +38,16 @@ export interface IFileInfo {
 export interface IStorage {
 
     //
+    // Gets the location of the storage.
+    //
+    readonly location: string;
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    isEmpty(path: string): Promise<boolean>;
+
+    //
     // List files in storage.
     //
     listFiles(path: string, max: number, next?: string): Promise<IListResult>;

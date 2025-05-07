@@ -47,11 +47,8 @@ async function main() {
         };
     }
 
-    const { storage: assetStorage, normalizedPath: assetPath } = createStorage(assetStorageConnection, storageOptions);
-    const assetStorageWrapper = new StoragePrefixWrapper(assetStorage, assetPath);
-
-    const { storage: dbStorage, normalizedPath: dbPath } = createStorage(databaseStorageConnection);
-    const databaseStorageWrapper = new StoragePrefixWrapper(dbStorage, dbPath);
+    const { storage: assetStorage } = createStorage(assetStorageConnection, storageOptions);    
+    const { storage: dbStorage } = createStorage(databaseStorageConnection);
 
     const APP_MODE = process.env.APP_MODE;
     if (!APP_MODE) {
@@ -94,7 +91,7 @@ async function main() {
         console.warn("Google API key not set. Reverse geocoding will not work.");
     }
 
-    const { app, close } = await createServer(() => new Date(Date.now()), assetStorageWrapper, databaseStorageWrapper, {
+    const { app, close } = await createServer(() => new Date(Date.now()), assetStorage, dbStorage, {
         appMode: APP_MODE,
         authType: AUTH_TYPE,
         frontendStaticPath: FRONTEND_STATIC_PATH,

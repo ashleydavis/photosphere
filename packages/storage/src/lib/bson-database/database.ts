@@ -20,7 +20,7 @@ export interface IBsonDatabase {
     //
     // Writes all pending changes to the database and shuts down the database.
     //
-    shutdown(): Promise<void>;
+    close(): Promise<void>;
 }
 
 //
@@ -33,17 +33,17 @@ export interface IBsonDatabaseOptions {
     storage: IStorage;
 
     //
-    // The directory where the collection is stored.
-    //
-    directory?: string;
-
-    //
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
+
+    //
+    // Callback when database files are saved.
+    //
+    onFilesSaved?: (files: string[]) => Promise<void>;
 }
 
-export class BsonDatabase implements IBsonDatabase {
+export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
 
     //
     // Caches created collections.
@@ -62,7 +62,7 @@ export class BsonDatabase implements IBsonDatabase {
 
         let next: string | undefined = undefined;
         do {
-            const storageResult = await this.options.storage.listDirs(this.options.directory || "", 1000, next);
+            const storageResult = await this.options.storage.listDirs("", 1000, next);
             for (const name of storageResult.names) { 
                 uniqueSet.add(name);
             }
@@ -82,14 +82,11 @@ export class BsonDatabase implements IBsonDatabase {
     collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT> {
         let collection = this._collections.get(name);
         if (!collection) {
-            let collectionPath = name;
-            if (this.options.directory) {
-                collectionPath = `${this.options.directory}/${name}`;
-            }
             collection = new BsonCollection<IRecord>({
                 storage: this.options.storage,
-                directory: collectionPath,
+                directory: name,
                 maxCachedShards: this.options.maxCachedShards,
+                onFilesSaved: this.options.onFilesSaved,
             });
             this._collections.set(name, collection);
         }        
@@ -99,7 +96,7 @@ export class BsonDatabase implements IBsonDatabase {
     //
     // Writes all pending changes to the database and shuts down the database.
     //
-    async shutdown(): Promise<void> {
+    async close(): Promise<void> {
         for (let collection of this._collections.values()) {
             await collection.shutdown();
         }

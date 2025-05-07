@@ -24,8 +24,7 @@ export class CloudStorage implements IStorage {
     //
     private s3!: aws.S3;
 
-    constructor(private verbose?: boolean) {
-        
+    constructor(public readonly location: string, private verbose?: boolean) {
         this.s3 = new aws.S3({
             endpoint: process.env.AWS_ENDPOINT,
         });
@@ -50,6 +49,23 @@ export class CloudStorage implements IStorage {
             bucket,
             key,
         };
+    }
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    async isEmpty(path: string): Promise<boolean> {
+        const files = await this.listFiles(path, 1);
+        if (files.names.length > 0) {
+            return false;
+        }
+
+        const dirs = await this.listDirs(path, 1);
+        if (dirs.names.length > 0) {
+            return false;
+        }
+
+        return true;
     }
 
     //

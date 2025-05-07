@@ -31,6 +31,11 @@ export interface IBsonCollectionOptions {
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
+
+    //
+    // Callback function to be called when database files are saved.
+    //
+    onFilesSaved?: (files: string[]) => Promise<void>;
 }
 
 export interface IRecord {
@@ -173,6 +178,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private isAlive: boolean = true;
     private maxCachedShards: number;
     private sortManager: SortManager | undefined;
+    private onFilesSaved?: (files: string[]) => Promise<void>;
 
     //
     // The last time the collection was saved.
@@ -184,6 +190,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
         this.maxCachedShards = options.maxCachedShards || 10;
+        this.onFilesSaved = options.onFilesSaved;
 
         // Create the sort manager for this collection
         this.sortManager = new SortManager({
@@ -267,10 +274,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return;
         }
 
+        const filesSaved: string[] = [];
+
         const promises = dirtyShards
             .map(async shard => {
                 const filePath = `${this.directory}/${shard.id}`;
                 await this.saveShardFile(filePath, shard);
+                filesSaved.push(filePath);
                 shard.dirty = false;
 
                 // console.log(`  Saved shard ${shard.id}`);
@@ -285,6 +295,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Now that we have saved we can evict the oldest shards.
         //
         this.evictOldestShards();
+
+        if (this.onFilesSaved) {
+            await this.onFilesSaved(filesSaved);
+        }
     }
 
     //

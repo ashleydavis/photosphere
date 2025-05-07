@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { BsonDatabase, IBsonDatabase, IStorage } from "storage";
+import { BsonDatabase, IBsonDatabase, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { ISets, IDatabaseOp } from "defs";
 
 interface IUser extends ISets {
@@ -74,8 +74,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         if (!bsonDatabase) {
             const directory = `${setId}/metadata`;
             bsonDatabase = new BsonDatabase({
-                storage: assetStorage,
-                directory,
+                storage: new StoragePrefixWrapper(pathJoin(assetStorage.location, directory), assetStorage, directory),
             });
             bsonDatabaseMap.set(setId, bsonDatabase);
             console.log(`Opened BSON database in ${directory}.`);
@@ -490,7 +489,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
             console.log("Shutting down server.");
 
             for (const bsonDatabase of bsonDatabaseMap.values()) {
-                await bsonDatabase.shutdown();
+                await bsonDatabase.close();
             }
     
             bsonDatabaseMap.clear();            

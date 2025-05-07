@@ -5,8 +5,36 @@ The Photosphere CLI tool.
 To install dependencies:
 
 ```bash
+cd apps/cli
 bun install
 ```
+
+## Building the frontend
+
+The CLI tool embeds the frontend UI, when testing locally, you need to build that first.
+
+Run one of the following:
+
+```bash
+bun run build-fe-linux
+bun run build-fe-win
+bun run build-fe-mac
+```
+
+## Testing the CLI tool locally
+
+```bash
+bun run start -- <command> [db-path]
+bun run start:dev -- <command> [db-path]
+```
+
+Example commands for testing are encoded in this script:
+
+```bash
+bun run create-simple-database-test
+```
+
+Use Git diff (or similar) to determine if the test worked.
 
 ## Building the CLI tool with embedded frontend
 
@@ -24,7 +52,7 @@ cd frontend
 bun run build-cli
 ```
 
-Then build the CLI tool (which embeds the frontend):
+Build the CLI tool:
 
 ```bash
 cd apps/cli

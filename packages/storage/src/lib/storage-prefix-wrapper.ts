@@ -8,7 +8,7 @@ import { join } from "path";
 
 export class StoragePrefixWrapper implements IStorage {
 
-    constructor(private storage: IStorage, private prefix: string) {
+    constructor(public readonly location: string, private storage: IStorage, private prefix: string) {
         if (prefix === "") {
             throw new Error("Prefix must not be empty.");            
         }
@@ -24,6 +24,13 @@ export class StoragePrefixWrapper implements IStorage {
         else {
             return join(this.prefix, path);
         }
+    }
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    isEmpty(path: string): Promise<boolean> {
+        return this.storage.isEmpty(this.makeFullPath(path));
     }
 
     //

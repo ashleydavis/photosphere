@@ -9,7 +9,15 @@ import { createDecryptionStream, createEncryptionStream } from "./encrypt-stream
 //
 export class EncryptedStorage implements IStorage {
 
-    constructor(private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) { }
+    constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {        
+    }
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    isEmpty(path: string): Promise<boolean> {
+        return this.storage.isEmpty(path);
+    }        
 
     //
     // List files in storage.
