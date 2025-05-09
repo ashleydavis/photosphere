@@ -1,4 +1,4 @@
-import { MerkleTree, FileHash } from '../lib/merkle-tree';
+import { MerkleTree, FileHash } from '../../lib/merkle-tree';
 import * as crypto from 'crypto';
 
 // Mock the IStorage interface with minimal implementation

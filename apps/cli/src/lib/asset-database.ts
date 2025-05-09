@@ -58,7 +58,7 @@ export class AssetDatabase {
         this.merkleTree.addFileHash({
             fileName: filePath,
             hash: hashedFile.hash,
-            size: hashedFile.length,
+            length: hashedFile.length,
         })
     }
 }

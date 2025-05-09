@@ -1,15 +1,6 @@
-import fs from "fs/promises";
 import { MediaFileDatabase } from "../lib/media-file-database";
 import { log } from "../lib/log";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-
-//
-// Checks if the database directory is empty.
-//
-export async function checkDatabaseIsEmpty(dbDir: string): Promise<boolean> {
-    const items = await fs.readdir(dbDir);
-    return items.length === 0;
-}
 
 //
 // Initializes a new Photosphere media file database.
