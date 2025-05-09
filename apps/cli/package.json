@@ -22,7 +22,8 @@
     "build-fe-linux": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && rm -f pfe.zip && zip -r pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
     "build-fe-win": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && tar acvf pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
     "build-fe-mac": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && tar acvf pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
-    "create-simple-database-test": "rm -rf ./test/db && bun run start -- init ./test/db && bun run start -- add ./test/db ../../test/test.png"
+    "test-simple-database": "rm -rf ./test/db && bun run start -- init ./test/db && bun run start -- add ./test/db ../../test/test.png",
+    "test-ui": "bun run start -- ui ./test/db"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
