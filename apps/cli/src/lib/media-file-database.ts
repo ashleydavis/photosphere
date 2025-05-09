@@ -199,17 +199,19 @@ export class MediaFileDatabase {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
         this.bsonDatabase = new BsonDatabase({
-            storage: new StoragePrefixWrapper(pathJoin(metadataStorage.location, `metadata`), metadataStorage, `metadata`),
+            storage: new StoragePrefixWrapper(pathJoin(assetStorage.location, `metadata`), assetStorage, `metadata`),
             maxCachedShards: 100,
             onFilesSaved: async (filesSaved) => {
                 for (const fileSaved of filesSaved) {
-                    console.log(`Updating file "${fileSaved}" in the asset database.`);
+                    const filePath = pathJoin(`metadata`, fileSaved);
 
-                    const info = await this.assetStorage.info(fileSaved);
+                    console.log(`Updating file "${filePath}" in the asset database.`);
+
+                    const info = await this.assetStorage.info(filePath);
                     if (!info) {
-                        throw new Error(`Failed to get info for file "${fileSaved}"`);
+                        throw new Error(`Failed to get info for file "${filePath}"`);
                     }
-                    const hash = await computeHash(this.assetStorage.readStream(fileSaved));
+                    const hash = await computeHash(this.assetStorage.readStream(filePath));
                     this.assetDatabase.addFile(fileSaved, {
                         hash,
                         contentType: undefined, // Don't need to worry about content type for the binary metadata files.
