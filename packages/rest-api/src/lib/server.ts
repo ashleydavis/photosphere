@@ -2,9 +2,9 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IBsonDatabase, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
-import { ISets, IDatabaseOp } from "defs";
+import { IMediaFileDatabases, IDatabaseOp } from "defs";
 
-interface IUser extends ISets {
+interface IUser extends IMediaFileDatabases {
     _id: string;
 }
 
@@ -28,6 +28,133 @@ export interface IAuth0Options {
     audience: string;
     domain: string;
     redirectUrl: string;
+}
+
+/**
+ * Interface for asset storage providers
+ */
+export interface IStorageProvider {
+    /**
+     * Gets an asset path for the given parameters.
+     */
+    getAssetPath(databaseId: string, assetType: string, assetId: string): string;
+    
+    /**
+     * Gets the storage object to use for operations.
+     */
+    getStorage(): IStorage;
+    
+    /**
+     * Gets a metadata database for a particular media file database.
+     */
+    getDatabase(setId: string): IBsonDatabase;
+    
+    /**
+     * Gets the list of available sets.
+     */
+    listAssetDatabases(): Promise<{id: string, name: string}[]>;
+    
+    /**
+     * Close any resources held by the provider
+     */
+    close(): Promise<void>;
+}
+
+/**
+ * Multi-set asset storage provider for backend use
+ * This provider supports multiple collection sets under one storage root
+ */
+export class MultiSetStorageProvider implements IStorageProvider {
+    private assetStorage: IStorage;
+    private bsonDatabaseMap = new Map<string, IBsonDatabase>();
+    
+    constructor(assetStorage: IStorage) {
+        this.assetStorage = assetStorage;
+    }
+    
+    getAssetPath(databaseId: string, assetType: string, assetId: string): string {
+        return `${databaseId}/${assetType}/${assetId}`;
+    }
+    
+    getStorage(): IStorage {
+        return this.assetStorage;
+    }
+    
+    getDatabase(databaseId: string): IBsonDatabase {
+        let bsonDatabase = this.bsonDatabaseMap.get(databaseId);
+        if (!bsonDatabase) {
+            const directory = `${databaseId}/metadata`;
+            const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, directory), this.assetStorage, "metadata");
+            bsonDatabase = new BsonDatabase({
+                storage: metadataStorage,
+            });
+            this.bsonDatabaseMap.set(databaseId, bsonDatabase);
+            console.log(`Opened BSON database in ${directory}.`);
+        }
+        return bsonDatabase;
+    }
+    
+    async listAssetDatabases(): Promise<{id: string, name: string}[]> {
+        let next: string | undefined = undefined;
+        let sets: string[] = [];
+        
+        do {
+            const result = await this.assetStorage.listDirs("", 1000, next);
+            sets.push(...result.names);
+            next = result.next;
+        } while (next);
+        
+        return sets.map(set => ({
+            id: set,
+            name: `${set.slice(0, 4)}-${set.slice(-4)}`,
+        }));
+    }
+    
+    async close(): Promise<void> {
+        for (const bsonDatabase of this.bsonDatabaseMap.values()) {
+            await bsonDatabase.close();
+        }
+        this.bsonDatabaseMap.clear();
+    }
+}
+
+/**
+ * Single-set asset storage provider for CLI use
+ * This provider works with a single collection set at the root of the storage
+ */
+export class SingleSetStorageProvider implements IStorageProvider {
+    private database: IBsonDatabase;
+    
+    constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string) {
+        const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, "metadata"), this.assetStorage, "metadata");
+        this.database = new BsonDatabase({ storage: metadataStorage });
+        console.log(`Opened single BSON database at ${assetStorage.location}.`);
+    }
+    
+    getAssetPath(_setId: string, assetType: string, assetId: string): string {
+        // Ignore the setId parameter and use the configured setId
+        return `${assetType}/${assetId}`;
+    }
+    
+    getStorage(): IStorage {
+        return this.assetStorage;
+    }
+    
+    getDatabase(_setId: string): IBsonDatabase {        
+        return this.database; // Ignore the setId parameter and use the single database.
+    }
+    
+    async listAssetDatabases(): Promise<{id: string, name: string}[]> {
+        // Always return just the one set.
+        return [{
+            id: this.databaseId,
+            name: this.databaseName,
+        }];
+    }
+    
+    async close(): Promise<void> {
+        await this.database.close();
+    }
 }
 
 export interface IServerOptions {
@@ -60,27 +187,15 @@ export interface IServerOptions {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, assetStorage: IStorage, databaseStorage: IStorage, options: IServerOptions) {
+export async function createServer(now: () => Date, storageProvider: IStorageProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
 
-    const db = new BsonDatabase({ storage: databaseStorage });
-
-    const bsonDatabaseMap = new Map<string, IBsonDatabase>();
-
+    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage }) : undefined;
+    
     //
     // Opens a database for a particular set.
     //
     function openDatabase(setId: string): IBsonDatabase {
-        let bsonDatabase = bsonDatabaseMap.get(setId);
-        if (!bsonDatabase) {
-            const directory = `${setId}/metadata`;
-            bsonDatabase = new BsonDatabase({
-                storage: new StoragePrefixWrapper(pathJoin(assetStorage.location, directory), assetStorage, directory),
-            });
-            bsonDatabaseMap.set(setId, bsonDatabase);
-            console.log(`Opened BSON database in ${directory}.`);
-        }
-        return bsonDatabase;
-
+        return storageProvider.getDatabase(setId);
     }
 
     const app = express();
@@ -148,6 +263,10 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         if (!options.auth0) {
             throw new Error("Expected auth0 options");
         }
+
+        if (!db) {
+            throw new Error("Expected database when authentication is enabled.");
+        }
         
         const checkJwt = auth({
             audience: options.auth0.audience,
@@ -183,7 +302,7 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
 
                 userId += '0'.repeat(numPadding); // Pad the user id to 32 characters to match the database.
             }
-            const user = await db.collection<IUser>("users").getOne(userId);
+            const user = await db!.collection<IUser>("users").getOne(userId);
             if (!user) {
                 console.log(`User not found: ${userId}`);
                 res.sendStatus(401);
@@ -264,30 +383,14 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     //
     // Gets the sets the user has access to.
     //
-    app.get("/sets", asyncErrorHandler(async (req, res) => {
+    app.get("/dbs", asyncErrorHandler(async (req, res) => {
         if (req.user) {
             res.json(req.user);
         }
         else {
-            //
-            // Read the sets from storage.
-            //
-            let next: string | undefined = undefined;
-            let sets: string[] = [];
-
-            do {
-                const result = await assetStorage.listDirs("", 1000, next);
-                sets.push(...result.names);
-                next = result.next;
-
-            } while (next);
-
-            res.json({
-                sets: sets.map(set => ({
-                    id: set,
-                    name: `${set.slice(0, 4)}-${set.slice(-4)}`,
-                })),
-            });
+            // Get the databases from the storage provider.
+            const dbs = await storageProvider.listAssetDatabases();
+            res.json({ dbs });
         }
     }));
     
@@ -333,7 +436,10 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
                 await recordCollection.updateOne(op.recordId, { [op.op.field]: updatedArray }, { upsert: true });
             }
         }
+
         res.sendStatus(200);
+
+        //todo: be sure to update the merkle tree as the bson files are saved.
     }));
 
     //
@@ -346,11 +452,11 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         }
 
         const assetId = getHeader(req, "id");
-        const setId = getHeader(req, "set");
+        const databaseId = getHeader(req, "db");
         const contentType = getHeader(req, "content-type");
         const assetType = getHeader(req, "asset-type");
 
-        console.log(`Receiving asset ${assetId} of type ${assetType} for set ${setId}.`);
+        console.log(`Receiving asset ${assetId} of type ${assetType} for set ${databaseId}.`);
 
         //
         // Load the entire asset into memory.
@@ -373,9 +479,14 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         //
         res.sendStatus(200);
 
-        await assetStorage.write(`${setId}/${assetType}/${assetId}`, contentType, buffer);            
+        // Use the storage provider to determine the asset path and storage.
+        const assetPath = storageProvider.getAssetPath(databaseId, assetType, assetId);
+        const storage = storageProvider.getStorage();
+        await storage.write(assetPath, contentType, buffer);    
+        
+        //todo: update the merkle tree for the new file.
 
-        console.log(`Uploaded ${buffer.length} bytes.`);
+        console.log(`Uploaded ${buffer.length} bytes to ${assetPath}.`);
 
         //
         // Streaming alternative that doesn't work for large files.
@@ -406,14 +517,18 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     //
     app.get("/asset", asyncErrorHandler(async (req, res) => {
         const assetId = req.query.id as string;
-        const setId = req.query.set as string;
+        const databaseId = req.query.db as string;
         const assetType = req.query.type as string;
-        if (!assetId || !setId || !assetType) {
+        if (!assetId || !databaseId || !assetType) {
             res.sendStatus(400);
             return;
         }
 
-        const info = await assetStorage.info(`${setId}/${assetType}/${assetId}`);
+        // Use the storage provider to determine the asset path and storage.
+        const assetPath = storageProvider.getAssetPath(databaseId, assetType, assetId);
+        const storage = storageProvider.getStorage();
+        
+        const info = await storage.info(assetPath);
         if (!info) {
             res.sendStatus(404);
             return;
@@ -423,18 +538,17 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
             "Content-Type": info.contentType,
         });
 
-        assetStorage.readStream(`${setId}/${assetType}/${assetId}`)
-            .pipe(res);
+        storage.readStream(assetPath).pipe(res);
     }));
 
     //
     // Gets a record from the database.
     //
     app.get("/get-one", asyncErrorHandler(async (req, res) => {
-        const setId = getValue<string>(req.query, "set");
+        const databaseId = getValue<string>(req.query, "db");
         const collectionName = getValue<string>(req.query, "col");
         const recordId = getValue<string>(req.query, "id");
-        const database = openDatabase(setId);
+        const database = openDatabase(databaseId);
         const collection = database.collection(collectionName);
         const record = await collection.getOne(recordId);
         if (!record) {
@@ -449,12 +563,12 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     // Gets all records in the database.
     //
     app.get("/get-all", asyncErrorHandler(async (req, res) => {
-        const setId = getValue<string>(req.query, "set");
+        const databaseId = getValue<string>(req.query, "db");
         const collectionName = getValue<string>(req.query, "col");
         const next = req.query.next as string | undefined;
         const nextPage = next ? parseInt(next) : 1;
 
-        const database = openDatabase(setId);
+        const database = openDatabase(databaseId);
         const collection = database.collection(collectionName);
         const result = await collection.getSorted("photoDate", { 
             direction: "desc", //todo: The field and direction should be passed through the API.
@@ -471,9 +585,9 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
     // Gets a record from the database based on their hash.
     //
     app.get("/check-hash", asyncErrorHandler(async (req, res) => {
-        const setId = getValue<string>(req.query, "set");
+        const databaseId = getValue<string>(req.query, "db");
         const hash = getValue<string>(req.query, "hash");
-        const db = openDatabase(setId);
+        const db = openDatabase(databaseId);
         const metadataCollection = db.collection("metadata");
         await metadataCollection.ensureIndex("hash");
         const records = await metadataCollection.findByIndex("hash", hash);
@@ -488,11 +602,14 @@ export async function createServer(now: () => Date, assetStorage: IStorage, data
         close: async () => {
             console.log("Shutting down server.");
 
-            for (const bsonDatabase of bsonDatabaseMap.values()) {
-                await bsonDatabase.close();
+            // Close the asset storage provider
+            await storageProvider.close();
+            
+            // Close the user database if it exists.
+            if (db) {
+                await db.close();
+                db = undefined;
             }
-    
-            bsonDatabaseMap.clear();            
         },
     };
 }

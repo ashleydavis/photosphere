@@ -2,9 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import AdmZip from "adm-zip";
 import os from 'os';
-import { createServer } from 'rest-api';
-import { createPrivateKey } from "node:crypto";
-import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
+import { createServer, SingleSetStorageProvider } from 'rest-api';
+import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { registerTerminationCallback } from "node-utils";
 
 // @ts-ignore
@@ -13,7 +12,7 @@ import pfe from  "../../pfe.zip" with { type: "file" } ;
 //
 // Starts the Photosphere ui.
 //
-export async function uiCommand(): Promise<void> {
+export async function uiCommand(dbDir: string, options: any): Promise<void> {
     //
     // Extract frontend code if doesn't exist.
     //
@@ -32,43 +31,14 @@ export async function uiCommand(): Promise<void> {
 
     console.log(`Serving frontend from ${frontendPath}.`);
 
+    const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
+    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
+    const assetStorageProvider = new SingleSetStorageProvider(assetStorage, "local", "local");
+
     //
     // Start the Photosphere REST API.
     //
-    const assetStorageConnection = process.env.ASSET_STORAGE_CONNECTION;
-    if (!assetStorageConnection) {
-        throw new Error(`Set the asset databases storage type and root path through the environment variable ASSET_STORAGE_CONNECTION.`);
-    }
-
-    const databaseStorageConnection = process.env.DB_STORAGE_CONNECTION;
-    if (!databaseStorageConnection) {
-        throw new Error(`Set the generate database storage type and root path through the environment variable DB_STORAGE_CONNECTION.`);
-    }
-
-    let storageOptions: IStorageOptions | undefined = undefined;
-
-    if (process.env.ASSET_STORAGE_PRIVATE_KEY) {
-        const privateKey = process.env.ASSET_STORAGE_PRIVATE_KEY;
-
-        storageOptions = {
-            privateKey: createPrivateKey(privateKey),
-        };
-    }
-    else if (process.env.ASSET_STORAGE_PRIVATE_KEY_FILE) {
-        const privateKeyFile = process.env.ASSET_STORAGE_PRIVATE_KEY_FILE;
-        const privateKey = await loadPrivateKey(privateKeyFile);
-        if (!privateKey) {
-            throw new Error(`Private key file ${privateKeyFile} not found.`);
-        }
-        storageOptions = {
-            privateKey: privateKey,
-        };
-    }
-
-    const { storage: assetStorage } = createStorage(assetStorageConnection, storageOptions);    
-    const { storage: dbStorage } = createStorage(databaseStorageConnection);
-
-    const { app, close } = await createServer(() => new Date(Date.now()), assetStorage, dbStorage, {
+    const { app, close } = await createServer(() => new Date(Date.now()), assetStorageProvider, undefined, {
         appMode: "readwrite", 
         authType: "no-auth",
         frontendStaticPath: path.join(frontendPath, "dist"),

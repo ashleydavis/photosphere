@@ -115,7 +115,7 @@ function __Main({ computerPage }: IMainProps) {
 
     const [readonlyMessageOpen, setReadonlyMessageOpen] = useState<boolean>(true);
 
-    const { sets } = useApp();
+    const { dbs } = useApp();
 
     const location = useLocation();
 
@@ -150,19 +150,19 @@ function __Main({ computerPage }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && sets) {
+        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && dbs) {
             //
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultSet("cloud");
         }
-        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && sets) {
+        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && dbs) {
             //
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultSet("upload");
         }
-    }, [sets, location]);
+    }, [dbs, location]);
 
     useEffect(() => {
         if (searchText.length > 0 && !openSearch) {
@@ -183,17 +183,17 @@ function __Main({ computerPage }: IMainProps) {
     // Navigate to the users default set.
     //
     function navigateToDefaultSet(page: string): void {
-        if (!sets) {
+        if (!dbs) {
             throw new Error(`No sets available.`);
         }
 
-        if (sets.defaultSet) {
+        if (dbs.defaultDb) {
             console.log(`Navigating to default set.`);
-            navigateToSet(page, sets.defaultSet);
+            navigateToSet(page, dbs.defaultDb);
         }
-        else if (sets.sets.length > 0) {
+        else if (dbs.dbs.length > 0) {
             console.log(`Navigating to first set.`);
-            navigateToSet(page, sets.sets[0].id);
+            navigateToSet(page, dbs.dbs[0].id);
         }
     }
 
@@ -383,16 +383,16 @@ function __Main({ computerPage }: IMainProps) {
                                     {selectedItems.size > 0
                                         && <>
                                             <ListSubheader>MOVE TO</ListSubheader>
-                                            {sets?.sets.map(set => {
-                                                if (set.id === setId) {
+                                            {dbs?.dbs.map(db => {
+                                                if (db.id === setId) {
                                                     return null; // Don't show the current set.
                                                 }
                                                 return (
                                                     <MenuItem 
-                                                        key={set.id}
-                                                        onClick={() => onMoveSelectedToSet(set.id)}
+                                                        key={db.id}
+                                                        onClick={() => onMoveSelectedToSet(db.id)}
                                                         >
-                                                        {set.name}                                        
+                                                        {db.name}                                        
                                                     </MenuItem>
                                                 );
                                             })}

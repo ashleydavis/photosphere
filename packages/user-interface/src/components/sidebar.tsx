@@ -393,7 +393,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToSet }: ISidebarProps) {
 
-    const { sets } = useApp();
+    const { dbs } = useApp();
     const theme = useTheme();
     const { setId } = useAssetDatabase();
     const { search, setSortBy } = useGallery();
@@ -519,23 +519,23 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
             </Typography>
 
             <List>
-                {sets?.sets.map(set => {
+                {dbs?.dbs.map(db => {
                     return (
                         <ListItem
-                            key={set.id}
+                            key={db.id}
                             onClick={() => {
                                 setSidebarOpen(false);
-                                navigateToSet("cloud", set.id)
+                                navigateToSet("cloud", db.id)
                             }}
                             >
                             <ListItemButton>
                                 <ListItemDecorator>
-                                    {set.id === setId
+                                    {db.id === setId
                                         ? <FolderOpen />
                                         : <Folder />
                                     }
                                 </ListItemDecorator>
-                                <ListItemContent>{set.name}</ListItemContent>
+                                <ListItemContent>{db.name}</ListItemContent>
                             </ListItemButton>
                         </ListItem>
                     );

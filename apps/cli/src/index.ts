@@ -29,6 +29,7 @@ async function main() {
     program
         .command("ui")
         .description("Starts the Photosphere editor to view, search and edit photos and videos.")
+        .argument(...dbArgument)
         .action(uiCommand);
 
     await program.parseAsync(process.argv);

@@ -20,9 +20,9 @@ GET {{base_url}}/auth/config
 
 ###
 #
-# Gets available sets.
+# Gets available media file databases.
 #
-GET {{base_url}}/sets
+GET {{base_url}}/dbs
 Authorization: Bearer {{token}}
 
 ###

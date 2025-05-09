@@ -14,10 +14,10 @@ import { getImageDetails } from "./image";
 import { IResolution } from "node-utils";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
+import { AssetDatabase, computeHash, fullPath, HashCache, IHashedFile } from "adb";
 
 // @ts-ignore
 import ColorThief from "colorthief";
-import { AssetDatabase, computeHash, fullPath, HashCache, IHashedFile } from "adb";
 
 //
 // A function that validates a file.
@@ -140,8 +140,6 @@ export interface IAssetDetails {
     //
     duration?: number;
 }
-
-
 
 //
 // Implements the Photosphere media file database.

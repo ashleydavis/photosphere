@@ -44,7 +44,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
 
-    const { sets } = useApp();
+    const { dbs: sets } = useApp();
     const { isOnline } = useOnline();
     const api = useApi();
     const { database } = useIndexeddb();

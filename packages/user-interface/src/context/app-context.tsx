@@ -1,13 +1,13 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useOnline } from "../lib/use-online";
 import { useApi } from "./api-context";
-import { ISets } from "defs";
+import { IMediaFileDatabases } from "defs";
 
 export interface IAppContext {
     //
-    // The current sets that are available.
+    // Available media file databases.
     //
-    sets: ISets | undefined;
+    dbs: IMediaFileDatabases | undefined;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -22,18 +22,18 @@ export function AppContextProvider({ children }: IProps) {
     const api = useApi();
 
     //
-    // Available sets of assets.
+    // Available media file databases.
     //
-    const [ sets, setSets ] = useState<ISets | undefined>(undefined);
+    const [ dbs, setDbs ] = useState<IMediaFileDatabases | undefined>(undefined);
 
     //
     // Loads data from the backend.
     //
     async function load(): Promise<void> {
         if (isOnline) {
-            const sets = await await api.getSets();
-            if (sets) {
-                setSets(sets);
+            const dbs = await await api.getDatabases();
+            if (dbs) {
+                setDbs(dbs);
                 return;
             }
         }
@@ -48,7 +48,7 @@ export function AppContextProvider({ children }: IProps) {
     }, [api.isInitialised, isOnline]);
 
     const value: IAppContext = {
-        sets,
+        dbs,
     };
     
     return (
