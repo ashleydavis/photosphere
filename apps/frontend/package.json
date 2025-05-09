@@ -6,7 +6,7 @@
   "scripts": {
     "s": "bun start",
     "start": "cross-env VITE_BASE_URL=http://localhost:3000 VITE_AUTH0_REDIRECT_URL=http://localhost:8080 vite",
-    "start:prod": "cross-env VITE_BASE_URL=https://photosphere-api.codecapers.com.au VITE_AUTH0_REDIRECT_URL=http://localhost:8080 vite",
+    "start:prod": "cross-env VITE_BASE_URL=https://photosphere.codecapers.com.au VITE_AUTH0_REDIRECT_URL=http://localhost:8080 vite",
     "start:prod:localbe": "cross-env VITE_BASE_URL=http://localhost:3000 VITE_AUTH0_REDIRECT_URL=http://localhost:8080 vite",
     "sp": "bun run start:prod",
     "start:no-open": "cross-env VITE_BASE_URL=http://localhost:3000 vite --no-open",
