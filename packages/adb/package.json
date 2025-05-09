@@ -1,14 +1,14 @@
 {
-  "name": "rest-api",
+  "name": "adb",
   "version": "1.0.0",
-  "description": "Implements the Photosphere REST API.",
+  "description": "API for interacting with the asset database.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "t": "bun run test",
     "tw": "bun run test:watch",
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
+    "test": "jest --coverage --passWithNoTests",
+    "test:watch": "jest --watch --passWithNoTests",
     "c": "bun run compile",
     "cw": "bun run compile:watch",
     "compile": "tsc",
@@ -27,14 +27,11 @@
     "fs-extra": "^11.1.0",
     "jest": "^29.0.1",
     "ts-jest": "^29.0.5",
-    "typescript": "^5.6.3",
-    "sharp": "^0.33.5"
+    "typescript": "^5.6.3"
   },
   "dependencies": {
     "axios": "^0.27.2",
     "dayjs": "^1.11.7",
-    "defs": "workspace:*",
-    "utils": "workspace:*",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35"

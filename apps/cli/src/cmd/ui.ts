@@ -7,6 +7,7 @@ import { createPrivateKey } from "node:crypto";
 import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
 import { registerTerminationCallback } from "node-utils";
 
+// @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
 
 //

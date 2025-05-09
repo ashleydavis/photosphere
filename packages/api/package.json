@@ -1,14 +1,14 @@
 {
-  "name": "rest-api",
+  "name": "api",
   "version": "1.0.0",
-  "description": "Implements the Photosphere REST API.",
+  "description": "API for interacting with the Photosphere media file database.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "t": "bun run test",
     "tw": "bun run test:watch",
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
+    "test": "jest --coverage --passWithNoTests",
+    "test:watch": "jest --watch --passWithNoTests",
     "c": "bun run compile",
     "cw": "bun run compile:watch",
     "compile": "tsc",
@@ -35,6 +35,7 @@
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
     "utils": "workspace:*",
+    "adb": "workspace:adb",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35"

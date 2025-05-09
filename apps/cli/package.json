@@ -45,6 +45,7 @@
     "jszip": "^3.10.1",
     "mime": "^4.0.7",
     "rest-api": "workspace:*",
-    "storage": "workspace:*"
+    "storage": "workspace:*",
+    "api": "workspace:*"
   }
 }

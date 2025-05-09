@@ -10,6 +10,7 @@ export * from "./lib/bson-database/database";
 export * from "./lib/bson-database/collection";
 export * from "./lib/storage-factory";
 export * from "./lib/key-utils";
+export * from "./lib/walk-directory";
 
 export interface IAssetMetadata {
   //

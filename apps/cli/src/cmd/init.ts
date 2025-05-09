@@ -1,6 +1,6 @@
-import { MediaFileDatabase } from "../lib/media-file-database";
-import { log } from "../lib/log";
+import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
+import { log } from "utils";
 
 //
 // Initializes a new Photosphere media file database.

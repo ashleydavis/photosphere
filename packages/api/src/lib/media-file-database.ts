@@ -2,16 +2,13 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
-import { AssetDatabase, IHashedFile } from "./asset-database";
+import { BsonDatabase, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import mime from "mime";
-import { log } from "./log";
-import { ILocation, retry, reverseGeocode, uuid, WrappedError } from "utils";
+import { ILocation, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
-import { HashCache } from "./hash-cache";
 import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
 import { IResolution } from "node-utils";
@@ -20,9 +17,7 @@ import { buffer } from "node:stream/consumers";
 
 // @ts-ignore
 import ColorThief from "colorthief";
-import { walkDirectory } from "./walk-directory";
-import { fullPath } from "./merkle-tree";
-import { computeHash } from "./hash";
+import { AssetDatabase, computeHash, fullPath, HashCache, IHashedFile } from "adb";
 
 //
 // A function that validates a file.
