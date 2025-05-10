@@ -44,7 +44,7 @@ Authorization: Bearer {{token}}
             "op": {
                 "type": "set",
                 "fields": {
-                    "setId": "{{setId}}",
+                    "db": "{{databaseId}}",
                     "contentType": "image/jpeg", 
                     "fileName": "./test-assets/1.jpeg", 
                     "width": 4160, 
@@ -75,7 +75,7 @@ Authorization: Bearer {{token}}
 ###
 # Check the asset's hash.
 
-GET {{base_url}}/check-hash?set={{setId}}&hash={{hash}}
+GET {{base_url}}/check-hash?db={{databaseId}}&hash={{hash}}
 Authorization: Bearer {{token}}
 
 ###
@@ -86,7 +86,7 @@ Authorization: Bearer {{token}}
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-set: {{setId}}
+db: {{databaseId}}
 asset-type: original
 Authorization: Bearer {{token}}
 
@@ -97,7 +97,7 @@ Authorization: Bearer {{token}}
 # Retrieve an asset.
 #
 
-GET {{base_url}}/asset?id={{asset}}&set={{setId}}&type=original
+GET {{base_url}}/asset?id={{asset}}&db={{databaseId}}&type=original
 Authorization: Bearer {{token}}
 
 ###
@@ -108,7 +108,7 @@ Authorization: Bearer {{token}}
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-set: {{setId}}
+db: {{databaseId}}
 asset-type: thumb
 Authorization: Bearer {{token}}
 
@@ -118,7 +118,7 @@ Authorization: Bearer {{token}}
 # Retrieve an thumbnail.
 #
 
-GET {{base_url}}/asset?id={{asset}}&set={{setId}}&type=thumb
+GET {{base_url}}/asset?id={{asset}}&db={{databaseId}}&type=thumb
 Authorization: Bearer {{token}}
 
 ###
@@ -129,7 +129,7 @@ Authorization: Bearer {{token}}
 POST {{base_url}}/asset
 Content-Type: image/jpeg
 id: {{asset}}
-set: {{setId}}
+db: {{databaseId}}
 asset-type: display
 Authorization: Bearer {{token}}
 
@@ -139,13 +139,13 @@ Authorization: Bearer {{token}}
 # Retrieve the display asset.
 #
 
-GET {{base_url}}/asset?id={{asset}}&set={{setId}}&tok={{token}}&type=display
+GET {{base_url}}/asset?id={{asset}}&db={{databaseId}}&tok={{token}}&type=display
 
 ###
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&db={{databaseId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -174,7 +174,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&db={{databaseId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -202,7 +202,7 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&db={{databaseId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ### 
@@ -230,12 +230,12 @@ Authorization: Bearer {{token}}
 # Gets metadata for an asset.
 #
 
-GET {{base_url}}/get-one?id={{asset}}&set={{setId}}&col=metadata
+GET {{base_url}}/get-one?id={{asset}}&db={{databaseId}}&col=metadata
 Authorization: Bearer {{token}}
 
 ###
 # Gets a page of assets.
 #
 
-GET {{base_url}}/get-all?set={{setId}}&col=metadata
+GET {{base_url}}/get-all?db={{databaseId}}&col=metadata
 Authorization: Bearer {{token}}
