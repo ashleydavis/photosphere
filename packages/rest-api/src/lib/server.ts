@@ -84,7 +84,7 @@ export class MultiSetStorageProvider implements IStorageProvider {
         let bsonDatabase = this.bsonDatabaseMap.get(databaseId);
         if (!bsonDatabase) {
             const directory = `${databaseId}/metadata`;
-            const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, directory), this.assetStorage, "metadata");
+            const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, directory), this.assetStorage, directory);
             bsonDatabase = new BsonDatabase({
                 storage: metadataStorage,
             });
