@@ -36,11 +36,6 @@ export interface IBsonDatabaseOptions {
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
-
-    //
-    // Callback when database files are saved.
-    //
-    onFilesSaved?: (files: string[]) => Promise<void>;
 }
 
 export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
@@ -86,7 +81,6 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
                 storage: this.options.storage,
                 directory: name,
                 maxCachedShards: this.options.maxCachedShards,
-                onFilesSaved: this.options.onFilesSaved,
             });
             this._collections.set(name, collection);
         }        

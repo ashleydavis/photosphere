@@ -46,7 +46,7 @@ jest.mock('storage', () => ({
 }));
 
 // Mock log module
-jest.mock('../../lib/log', () => ({
+jest.mock('utils', () => ({
     log: {
         success: jest.fn(),
         verbose: jest.fn(),
@@ -59,7 +59,7 @@ jest.mock('../../lib/log', () => ({
 
 // Mock MediaFileDatabase
 const mockCreate = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../lib/media-file-database', () => ({
+jest.mock('api', () => ({
     MediaFileDatabase: jest.fn().mockImplementation(() => ({
         create: mockCreate
     }))
@@ -71,7 +71,7 @@ describe('init command', () => {
     beforeEach(() => {
         // Reset mocks
         jest.clearAllMocks();
-        mockMediaFileDatabase = require('../../lib/media-file-database').MediaFileDatabase;
+        mockMediaFileDatabase = require('api').MediaFileDatabase;
     });
 
     test('initCommand creates database with the correct storage objects', async () => {
@@ -99,7 +99,7 @@ describe('init command', () => {
     });
 
     test('initCommand logs success message', async () => {
-        const { log } = require('../../lib/log');
+        const { log } = require('utils');
 
         await initCommand('/test/db', {});
 

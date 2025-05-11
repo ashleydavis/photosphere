@@ -14,7 +14,7 @@ import { getImageDetails } from "./image";
 import { IResolution } from "node-utils";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
-import { AssetDatabase, computeHash, fullPath, HashCache, IHashedFile } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, fullPath, HashCache, IHashedFile } from "adb";
 
 // @ts-ignore
 import ColorThief from "colorthief";
@@ -192,27 +192,8 @@ export class MediaFileDatabase {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
         this.bsonDatabase = new BsonDatabase({
-            storage: new StoragePrefixWrapper(pathJoin(assetStorage.location, `metadata`), assetStorage, `metadata`),
+            storage: new AssetDatabaseStorage(new StoragePrefixWrapper(assetStorage, `metadata`), this.assetDatabase),
             maxCachedShards: 100,
-            onFilesSaved: async (filesSaved) => {
-                for (const fileSaved of filesSaved) {
-                    const filePath = pathJoin(`metadata`, fileSaved);
-
-                    console.log(`Updating file "${filePath}" in the asset database.`);
-
-                    const info = await this.assetStorage.info(filePath);
-                    if (!info) {
-                        throw new Error(`Failed to get info for file "${filePath}"`);
-                    }
-                    const hash = await computeHash(this.assetStorage.readStream(filePath));
-                    this.assetDatabase.addFile(fileSaved, {
-                        hash,
-                        contentType: undefined, // Don't need to worry about content type for the binary metadata files.
-                        lastModified: info.lastModified,
-                        length: info.length,
-                    });
-                }
-            }
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");

@@ -2,11 +2,10 @@
 # @base_url = https://photosphere.codecapers.com.au
 # @base_url =  https://photosphere-demo-7vjtd.ondigitalocean.app
 
-@token = not needed
-# @setId = 93886ac9-16e4-48e6-983b-ec65566018d0
-@setId = 07156b64-d625-4aed-a53b-ede22866f718
-@asset = 1234
-@hash = ABCD
+@token = not need for dev
+@databaseId = xxxx
+@asset = yyyy
+@hash = zzzz
 
 ###
 

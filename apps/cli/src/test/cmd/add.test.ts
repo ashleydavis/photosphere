@@ -78,7 +78,7 @@ jest.mock('storage', () => ({
 }));
 
 // Mock log module
-jest.mock('../../lib/log', () => ({
+jest.mock('utils', () => ({
     log: {
         success: jest.fn(),
         verbose: jest.fn(),
@@ -90,7 +90,7 @@ jest.mock('../../lib/log', () => ({
 }));
 
 // Mock MediaFileDatabase
-jest.mock('../../lib/media-file-database', () => ({
+jest.mock('api', () => ({
     MediaFileDatabase: jest.fn().mockImplementation(() => ({
         load: mockLoad,
         addPaths: mockAddPaths,
@@ -108,7 +108,7 @@ describe('add command', () => {
 
     test('addCommand creates database with the correct storage objects', async () => {
         const { createStorage } = require('storage');
-        const { MediaFileDatabase } = require('../../lib/media-file-database');
+        const { MediaFileDatabase } = require('api');
 
         await addCommand('/test/db', ['/path/to/file.jpg'], { meta: '/test/metadata' });
 
@@ -133,7 +133,7 @@ describe('add command', () => {
     });
 
     test('addCommand calls database.load()', async () => {
-        const { MediaFileDatabase } = require('../../lib/media-file-database');
+        const { MediaFileDatabase } = require('api');
 
         await addCommand('/test/db', ['/path/to/file.jpg'], {});
 
@@ -142,7 +142,7 @@ describe('add command', () => {
     });
 
     test('addCommand calls addPaths with the provided file paths', async () => {
-        const { MediaFileDatabase } = require('../../lib/media-file-database');
+        const { MediaFileDatabase } = require('api');
         const filePaths = ['/path/to/file1.jpg', '/path/to/file2.jpg', '/path/to/dir'];
 
         await addCommand('/test/db', filePaths, {});
@@ -152,7 +152,7 @@ describe('add command', () => {
     });
 
     test('addCommand closes the database when done', async () => {
-        const { MediaFileDatabase } = require('../../lib/media-file-database');
+        const { MediaFileDatabase } = require('api');
 
         await addCommand('/test/db', ['/path/to/file.jpg'], {});
 
@@ -161,8 +161,8 @@ describe('add command', () => {
     });
 
     test('addCommand gets and displays the add summary', async () => {
-        const { MediaFileDatabase } = require('../../lib/media-file-database');
-        const { log } = require('../../lib/log');
+        const { MediaFileDatabase } = require('api');
+        const { log } = require('utils');
 
         await addCommand('/test/db', ['/path/to/file.jpg'], {});
 

@@ -78,7 +78,7 @@ export function createStorage(
         type = `encrypted-${type}`;
     }
 
-    storage = new StoragePrefixWrapper(path, storage, normalizedPath);
+    storage = new StoragePrefixWrapper(storage, normalizedPath);
 
     return { storage, normalizedPath, type };
 }

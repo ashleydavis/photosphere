@@ -84,7 +84,7 @@ export class MultiSetStorageProvider implements IStorageProvider {
         let bsonDatabase = this.bsonDatabaseMap.get(databaseId);
         if (!bsonDatabase) {
             const directory = `${databaseId}/metadata`;
-            const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, directory), this.assetStorage, directory);
+            const metadataStorage = new StoragePrefixWrapper(this.assetStorage, directory);
             bsonDatabase = new BsonDatabase({
                 storage: metadataStorage,
             });
@@ -126,7 +126,7 @@ export class SingleSetStorageProvider implements IStorageProvider {
     private database: IBsonDatabase;
     
     constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string) {
-        const metadataStorage = new StoragePrefixWrapper(pathJoin(this.assetStorage.location, "metadata"), this.assetStorage, "metadata");
+        const metadataStorage = new StoragePrefixWrapper(this.assetStorage, "metadata");
         this.database = new BsonDatabase({ storage: metadataStorage });
         console.log(`Opened single BSON database at ${assetStorage.location}.`);
     }

@@ -482,6 +482,77 @@ export class MerkleTree {
         this.metadata.totalFileSize += fileHash.length;
         this.metadata.lastUpdatedDate = new Date().toISOString();
    }
+   
+   /**
+    * Deletes a file from the tree
+    * @param fileName - The name of the file to delete
+    * @param directory - The directory of the file
+    * @param fileSize - Optional file size - if not provided, will not decrease totalFileSize
+    * @returns true if the file was found and deleted, false otherwise
+    */
+   deleteFile(fileName: string, directory?: IDirectory, fileSize?: number): boolean {
+       if (!this.rootNode) {
+           return false;
+       }
+       
+       // Find the file node
+       const existingNode = this.findFileNode(fileName, directory);
+       if (!existingNode) {
+           return false;
+       }
+       
+       // If we found the node and it has a parent, we need to restructure the tree
+       if (existingNode.parent) {
+           const parent = existingNode.parent;
+           
+           // Determine which child is the one to be deleted
+           const isLeftChild = parent.leftNode === existingNode.node;
+           
+           // Keep the sibling node
+           const siblingNode = isLeftChild ? parent.rightNode : parent.leftNode;
+           
+           if (!siblingNode) {
+               throw new Error('Invalid tree structure: node has only one child');
+           }
+           
+           // If there's a grandparent, replace the parent with the sibling
+           const pathToParent = this.findPathToNode(parent);
+           if (pathToParent && pathToParent.length > 1) {
+               const grandParent = pathToParent[pathToParent.length - 2];
+               
+               // Replace the parent with the sibling in the grandparent
+               if (grandParent.leftNode === parent) {
+                   grandParent.leftNode = siblingNode;
+               } else {
+                   grandParent.rightNode = siblingNode;
+               }
+               
+               // Update hashes all the way up to the root
+               this.updateNodeHashes(grandParent);
+           } else {
+               // The parent is the root, so make the sibling the new root
+               this.rootNode = siblingNode;
+           }
+           
+           // We removed two nodes (the file node and its parent) and kept one (the sibling)
+           // So the net change is -1 node
+           this.metadata.totalNodes -= 1;
+       } else {
+           // If the node has no parent, it must be the root (single node tree)
+           this.rootNode = undefined;
+           // In this case, we're just removing the single node
+           this.metadata.totalNodes -= 1;
+       }
+       
+       // Update metadata
+       this.metadata.totalFiles--;
+       if (fileSize !== undefined) {
+           this.metadata.totalFileSize -= fileSize;
+       }
+       this.metadata.lastUpdatedDate = new Date().toISOString();
+       
+       return true;
+   }
 
     /**
      * Process a node at a specific level of the tree.

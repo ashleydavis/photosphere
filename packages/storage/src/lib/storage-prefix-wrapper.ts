@@ -5,13 +5,18 @@
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "./storage";
 import { join } from "path";
+import { pathJoin } from "./storage-factory";
 
 export class StoragePrefixWrapper implements IStorage {
 
-    constructor(public readonly location: string, private storage: IStorage, private prefix: string) {
+    constructor(private storage: IStorage, private prefix: string) {
         if (prefix === "") {
             throw new Error("Prefix must not be empty.");            
         }
+    }
+
+    get location(): string {
+        return pathJoin(this.storage.location, this.prefix);
     }
 
     //
