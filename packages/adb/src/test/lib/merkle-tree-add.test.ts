@@ -486,4 +486,181 @@ describe('MerkleTree Adding Files', () => {
         expect(findFileNode(tree.getRootNode(), 'file2.txt')).toBe(true);
         expect(findFileNode(tree.getRootNode(), 'file3.txt')).toBe(true);
     });
+    
+    test('adding a file to a tree with odd number of files', () => {
+        // Create a tree with an odd number of files (3)
+        const { tree } = createSampleTree(3);
+        
+        // Initial state - should have 3 files
+        expect(tree.getMetadata().totalFiles).toBe(3);
+        
+        // Add a 4th file to make it even
+        const file4 = createFileHash('file4.txt', 'content 4');
+        
+        // Record the initial root hash
+        const initialRootHash = tree.getRootHash();
+        
+        // Add and complete
+        tree.addFileHash(file4);
+        tree.complete();
+        
+        // Now we should have 4 files total
+        expect(tree.getMetadata().totalFiles).toBe(4);
+        
+        // The root hash should have changed
+        expect(tree.getRootHash()).not.toBe(initialRootHash);
+        
+        // Function to collect all leaf node file names
+        function collectLeafNodes(node: any): string[] {
+            if (!node) return [];
+            if (node.fileName) return [node.fileName]; // Leaf node
+            return [
+                ...collectLeafNodes(node.leftNode),
+                ...collectLeafNodes(node.rightNode)
+            ];
+        }
+        
+        // Verify all 4 files exist in the tree
+        const fileNames = collectLeafNodes(tree.getRootNode());
+        expect(fileNames.length).toBe(4);
+        expect(fileNames).toContain('file1.txt');
+        expect(fileNames).toContain('file2.txt');
+        expect(fileNames).toContain('file3.txt');
+        expect(fileNames).toContain('file4.txt');
+    });
+    
+    test('properly pair multiple odd nodes added over time', () => {
+        // Create an empty tree
+        const mockStorage = new MockStorage('test');
+        const tree = new MerkleTree(mockStorage);
+        
+        // Add files one by one and check pairing
+        
+        // Add file 1 - should be alone
+        const file1 = createFileHash('file1.txt', 'content 1');
+        tree.addFileHash(file1);
+        tree.complete();
+        
+        // Verify file 1 is at the root
+        let root = tree.getRootNode();
+        expect(root!.fileName).toBe('file1.txt');
+        
+        // Add file 2 - should pair with file 1
+        const file2 = createFileHash('file2.txt', 'content 2');
+        tree.addFileHash(file2);
+        tree.complete();
+        
+        // Structure should be:
+        // root
+        // ├── file1
+        // └── file2
+        root = tree.getRootNode();
+        expect(root!.fileName).toBeUndefined(); // Root is no longer a leaf
+        expect(root!.leftNode).toBeDefined();
+        expect(root!.rightNode).toBeDefined();
+        
+        // One of the children should be file1 and the other file2
+        const rootLeftIs1 = root!.leftNode!.fileName === 'file1.txt';
+        const rootRightIs1 = root!.rightNode!.fileName === 'file1.txt';
+        const rootLeftIs2 = root!.leftNode!.fileName === 'file2.txt';
+        const rootRightIs2 = root!.rightNode!.fileName === 'file2.txt';
+        
+        expect(rootLeftIs1 || rootRightIs1).toBe(true); // One of them should be file1
+        expect(rootLeftIs2 || rootRightIs2).toBe(true); // One of them should be file2
+        
+        // Add file 3 - should be alone
+        const file3 = createFileHash('file3.txt', 'content 3');
+        tree.addFileHash(file3);
+        tree.complete();
+        
+        // Structure should now be:
+        // root
+        // ├── parent_node(file1, file2)
+        // └── file3
+        root = tree.getRootNode();
+        expect(root!.fileName).toBeUndefined(); // Root is an internal node
+        
+        // One child should be an internal node (parent of file1,file2) and the other file3
+        const leftIsFile3 = root!.leftNode!.fileName === 'file3.txt';
+        const rightIsFile3 = root!.rightNode!.fileName === 'file3.txt';
+        
+        // Function to count leaf nodes in a subtree
+        function countLeafNodes(node: any): number {
+            if (!node) return 0;
+            if (node.fileName) return 1; // This is a leaf
+            return countLeafNodes(node.leftNode) + countLeafNodes(node.rightNode);
+        }
+        
+        // The internal node should have 2 leaf children (file1 and file2)
+        const internalNode = leftIsFile3 ? root!.rightNode! : root!.leftNode!;
+        expect(countLeafNodes(internalNode)).toBe(2);
+        
+        // Add file 4 - should pair with file 3
+        const file4 = createFileHash('file4.txt', 'content 4');
+        tree.addFileHash(file4);
+        tree.complete();
+        
+        // After adding 4 files, we should have a structure with internal nodes and leaf nodes
+        root = tree.getRootNode();
+        expect(root!.fileName).toBeUndefined(); // Root is an internal node
+        expect(root!.leftNode).toBeDefined();
+        expect(root!.rightNode).toBeDefined();
+        
+        // Total leaf count should be 4
+        expect(countLeafNodes(root!)).toBe(4);
+        
+        // Add file 5 - should be alone, waiting to be paired
+        const file5 = createFileHash('file5.txt', 'content 5');
+        tree.addFileHash(file5);
+        tree.complete();
+        
+        // Structure should now have file5 as a leaf hanging off the root
+        root = tree.getRootNode();
+        
+        // Function to collect all leaf node file names in the tree
+        function collectLeafNodeFileNames(node: any): string[] {
+            if (!node) return [];
+            if (node.fileName) return [node.fileName];
+            return [
+                ...collectLeafNodeFileNames(node.leftNode),
+                ...collectLeafNodeFileNames(node.rightNode)
+            ];
+        }
+        
+        const leafFiles = collectLeafNodeFileNames(root);
+        expect(leafFiles.length).toBe(5);
+        expect(leafFiles).toContain('file5.txt');
+        
+        // Add file 6 - should pair with file 5
+        const file6 = createFileHash('file6.txt', 'content 6');
+        tree.addFileHash(file6);
+        tree.complete();
+        
+        // Function to find the parent of a file
+        function findParentOf(node: any, fileName: string): any {
+            if (!node) return null;
+            if (node.leftNode && node.leftNode.fileName === fileName) return node;
+            if (node.rightNode && node.rightNode.fileName === fileName) return node;
+            
+            const leftResult = findParentOf(node.leftNode, fileName);
+            if (leftResult) return leftResult;
+            
+            return findParentOf(node.rightNode, fileName);
+        }
+        
+        // Find the parent of file5 and file6
+        root = tree.getRootNode();
+        const file5Parent = findParentOf(root, 'file5.txt');
+        const file6Parent = findParentOf(root, 'file6.txt');
+        
+        // Check that file5 and file6 exist in updated tree
+        const allLeafFiles = collectLeafNodeFileNames(root);
+        expect(allLeafFiles.length).toBe(6);
+        expect(allLeafFiles).toContain('file5.txt');
+        expect(allLeafFiles).toContain('file6.txt');
+        
+        // Make sure both files are found and have parents
+        expect(file5Parent).toBeDefined();
+        expect(file6Parent).toBeDefined();
+    });
 });
