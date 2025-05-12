@@ -29,6 +29,7 @@ import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
 import Snackbar from "@mui/joy/Snackbar/Snackbar";
 import { Fps } from "./components/fps";
+import { AboutPage } from "./pages/about";
 
 const isProduction = (import.meta.env.MODE === "production");
 
@@ -330,6 +331,16 @@ function __Main({ computerPage }: IMainProps) {
                             </div>
                         </NavLink>
 
+                        <NavLink
+                            className="mr-1 sm:mr-3"
+                            to="/about"
+                            >
+                            <div className="flex flex-row items-center">
+                                <i className="w-5 text-center fa-solid fa-circle-info"></i>
+                                <div className="hidden sm:block ml-2">About</div>
+                            </div>
+                        </NavLink>                        
+
                         <div className="ml-auto"></div>
 
                         {(isGalleryLoading)
@@ -508,6 +519,7 @@ function __Main({ computerPage }: IMainProps) {
                             path="/upload/:setId" 
                             element={<UploadPage />} 
                             />
+                            
 
                         {/* Placeholder route to avoid the warning before the redirect. */}
                         <Route
@@ -515,6 +527,11 @@ function __Main({ computerPage }: IMainProps) {
                             element={<div/>}
                             />
 
+                        <Route 
+                            path="/about" 
+                            element={<AboutPage />} 
+                            />
+                            
                         <Route  
                             path="/"
                             element={
