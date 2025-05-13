@@ -22,7 +22,6 @@ export class AssetDatabaseStorage implements IStorage {
         const hash = await computeHash(this.storage.readStream(filePath));
         this.assetDatabase.addFile(filePath, {
             hash,
-            contentType: info.contentType,
             lastModified: info.lastModified,
             length: info.length,
         });

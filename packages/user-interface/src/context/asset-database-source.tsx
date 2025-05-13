@@ -1,6 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
-import { IAssetData } from "../def/asset-data";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import { PersistentQueue } from "../lib/sync/persistent-queue";
@@ -390,7 +389,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset from the current set.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
         if (!setId) {
             throw new Error("No set id provided.");
         }
@@ -401,7 +400,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Loads data for an asset from a particular set.
     //
-    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<IAssetData | undefined> {
+    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<Blob | undefined> {
         const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
             return assetRecord.assetData;
@@ -414,8 +413,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         // Fallback to cloud.
         //
-        const assetBlob = await api.getAsset(setId!, assetId, assetType);
-        if (!assetBlob) {
+        const assetData = await api.getAsset(setId!, assetId, assetType);
+        if (!assetData) {
             return undefined;
         }
 
@@ -425,26 +424,20 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         database.collection<IAssetRecord>(assetType).setOne({
                 _id: assetId,
                 storeDate: new Date(),
-                assetData: {
-                    contentType: assetBlob.type,
-                    data: assetBlob,
-                },
+                assetData,
             })
             .catch(err => {
                 console.error(`Failed to store asset locally:`);
                 console.error(err);            
             });
 
-        return {
-            contentType: assetBlob.type,
-            data: assetBlob,
-        };
+        return assetData;
     }
 
     //
     // Stores an asset to the current set.
     //
-    async function storeAsset(assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
         if (!setId) {
             throw new Error("No set id provided.");
         }
@@ -455,7 +448,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Stores an asset to a particular set.
     //
-    async function storeAssetToSet(assetId: string, assetType: string, assetData: IAssetData, setId: string): Promise<void> {
+    async function storeAssetToSet(assetId: string, assetType: string, assetData: Blob, setId: string): Promise<void> {
         // 
         // Store the asset locally.
         //
@@ -470,7 +463,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         await outgoingUpdateQueue.current.add({
             type: "upload",
-            setId: setId!,
+            setId: setId!, //todo: Should be databaseId now.
             assetId,
             assetType,
             assetData,

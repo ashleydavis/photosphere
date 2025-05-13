@@ -8,7 +8,7 @@ import dayjs from "dayjs";
 import { loadFileInfo, loadFileToBlob, loadFileToThumbnail } from "../lib/file";
 import path from "path";
 import { IAsset } from "defs";
-import { IAssetData, IGalleryItem, useUpload } from "user-interface";
+import { IGalleryItem, useUpload } from "user-interface";
 
 export interface IScanContext {
     //
@@ -94,7 +94,7 @@ export function ScanContextProvider({ children }: IProps) {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
         const contentType = getContentType(assetId);
         if (!contentType) {
             throw new Error(`Unknown content type for asset ${assetId}`);
@@ -102,17 +102,11 @@ export function ScanContextProvider({ children }: IProps) {
 
         switch (assetType) {
             case "thumb": {
-                return {
-                    data: await loadFileToThumbnail(assetId, contentType),
-                    contentType,
-                };
+                return await loadFileToThumbnail(assetId, contentType);
             }
 
             case "display": {
-                return {
-                    data: await loadFileToBlob(assetId, contentType),
-                    contentType,
-                };
+                return await loadFileToBlob(assetId, contentType);
             }
 
             default: {

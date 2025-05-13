@@ -502,20 +502,20 @@ export function UploadContextProvider({ children }: IProps) {
             //
             // Uploads the full asset.
             //
-            await uploadAsset(assetId, "asset", nextUpload.assetContentType, fileData);
+            await uploadAsset(assetId, "asset", fileData);
 
             //
             // Uploads the thumbnail separately for simplicity and no restriction on size (e.g. if it were passed as a header).
             //
             const thumnailBlob = base64StringToBlob(thumbnail, thumbContentType);
-            await uploadAsset(assetId, "thumb", thumbContentType, thumnailBlob);
+            await uploadAsset(assetId, "thumb", thumnailBlob);
 
             if (displayData) {
                 //
                 // Uploads the display asset separately for simplicity and no restriction on size.
                 //
                 const displayBlob = base64StringToBlob(displayData, displayContentType!);
-                await uploadAsset(assetId, "display", displayContentType!, displayBlob);
+                await uploadAsset(assetId, "display", displayBlob);
             }
             
             //

@@ -4,11 +4,21 @@ import { MerkleTree } from "./merkle-tree";
 //
 // The hash and other information about a file.
 //
-export interface IHashedFile extends IFileInfo {
+export interface IHashedFile {
     //
     // The sha256 hash of the file.
     //
     hash: Buffer;
+
+    //
+    // The length of the file in bytes.
+    //
+    length: number;
+
+    //
+    // The last modified date of the file.
+    //
+    lastModified: Date;
 }
 
 //

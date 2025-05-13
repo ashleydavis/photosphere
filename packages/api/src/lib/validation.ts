@@ -10,9 +10,9 @@ ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, fileInfo: IFileInfo, openStream: () => Readable): Promise<boolean> {
+export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
 
-    if (fileInfo.contentType?.startsWith("image")) {
+    if (contentType.startsWith("image")) {
         const imageStream = sharp();
         openStream().pipe(imageStream);
         const metadata = await imageStream.metadata()
@@ -21,18 +21,18 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, openSt
             return true;
         }
         else {
-            console.error(`Invalid image ${filePath} (${fileInfo.contentType})`);
+            console.error(`Invalid image ${filePath} (${contentType})`);
             return false;
         }
     }
-    else if (fileInfo.contentType?.startsWith("video")) {
+    else if (contentType.startsWith("video")) {
         const metadata = await getVideoMetadata(openStream());
         if (typeof (metadata.width) === 'number' && typeof (metadata.height) === 'number') {
             // console.log(`Video ${filePath} (${fileInfo.contentType}) has dimensions ${metadata.width}x${metadata.height}`);
             return true;
         }
         else {
-            console.error(`Invalid video ${filePath} (${fileInfo.contentType})`);
+            console.error(`Invalid video ${filePath} (${contentType})`);
             return false;
         }
     }

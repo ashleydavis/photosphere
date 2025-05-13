@@ -2,7 +2,7 @@
 // Provides a source of assets for the gallery from the local computer.
 //
 
-import { IAssetData, IGalleryItem, IGallerySource } from "user-interface";
+import { IGalleryItem } from "user-interface";
 import { useScan } from "../scan-context";
 
 //
@@ -32,7 +32,7 @@ export function useComputerGallerySource(): unknown {
     //
     // Loads data for an asset.
     //
-    async function loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined> {
+    async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
         //TODO: 
         return undefined;
     }

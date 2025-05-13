@@ -22,7 +22,7 @@ import ColorThief from "colorthief";
 //
 // A function that validates a file.
 //
-export type FileValidator = (filePath: string, fileInfo: IFileInfo, openStream: () => Readable) => Promise<boolean>;
+export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable) => Promise<boolean>;
 
 //
 // Size of the micro thumbnail.
@@ -253,11 +253,20 @@ export class MediaFileDatabase {
         const fileStat = await fsPromises.stat(filePath);
         if (fileStat.isFile()) {
             const contentType = mime.getType(filePath) || undefined;
+            if (!contentType) {
+                log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
+                log.json("file-ignored", {
+                    filePath,
+                    reason: "unknown content type",
+                });
+                this.addSummary.numFilesIgnored++;
+                return;
+            }
             await this.addFile(filePath, {
                 contentType,
                 length: fileStat.size,
                 lastModified: fileStat.mtime,
-            }, fileStat.birthtime, [], () => fs.createReadStream(filePath));
+            }, fileStat.birthtime, contentType, [], () => fs.createReadStream(filePath));
         }
         else if (fileStat.isDirectory()) {
             return await this.scanDirectory(filePath);
@@ -270,15 +279,16 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    async addFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, labels: string[], openStream: () => Readable): Promise<void> {
+    async addFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable): Promise<void> {
 
-        if (fileInfo.contentType === "application/zip") {
+        if (contentType === "application/zip") {
             return await this.scanZipFile(filePath, fileInfo, fileDate, openStream);
         }
 
         log.verbose(`Adding file "${filePath}" to the media file database.`);
 
-        const localHashedFile = await this.hashFile(filePath, fileInfo, validateFile, openStream, this.localHashCache);
+
+        const localHashedFile = await this.hashFile(filePath, fileInfo, contentType, validateFile, openStream, this.localHashCache);
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
 
@@ -303,11 +313,11 @@ export class MediaFileDatabase {
 
         let assetDetails: IAssetDetails | undefined = undefined;
 
-        if (fileInfo.contentType?.startsWith("video")) {
+        if (contentType?.startsWith("video")) {
             assetDetails = await getVideoDetails(filePath, openStream);
         }
-        else if (fileInfo.contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, fileInfo.contentType, openStream);
+        else if (contentType?.startsWith("image")) {
+            assetDetails = await getImageDetails(filePath, contentType, openStream);
         }
 
         const assetId = uuid();
@@ -320,20 +330,19 @@ export class MediaFileDatabase {
             //
             // Uploads the full asset.
             //
-            await retry(() => this.assetStorage.writeStream(assetPath, fileInfo.contentType, openStream(), fileInfo.length));
+            await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream(), fileInfo.length));
             await this.assetDatabase.addFile(filePath, localHashedFile);
 
             const assetInfo = await this.assetStorage.info(assetPath);
             if (!assetInfo) {
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
-            const hashedAsset = await this.hashFile(assetPath, assetInfo, undefined, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
+            const hashedAsset = await this.hashFile(assetPath, assetInfo, contentType, undefined, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
             await this.assetDatabase.addFile(assetPath, {
                 hash: hashedAsset.hash,
-                contentType: assetInfo.contentType,
                 lastModified: assetInfo.lastModified,
                 length: assetInfo.length,
             });
@@ -342,13 +351,13 @@ export class MediaFileDatabase {
                 //
                 // Uploads the thumbnail.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType, openStream()));
+                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, openStream()));
 
                 const thumbInfo = await this.assetStorage.info(thumbPath);
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.hashFile(thumbPath, thumbInfo, undefined, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
+                const hashedThumb = await this.hashFile(thumbPath, thumbInfo, assetDetails.thumbnailContentType!, undefined, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
@@ -362,7 +371,7 @@ export class MediaFileDatabase {
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.hashFile(displayPath, displayInfo, undefined, () => Readable.from(assetDetails.display!), this.databaseHashCache);
+                const hashedDisplay = await this.hashFile(displayPath, displayInfo, assetDetails.displayContentType!, undefined, () => Readable.from(assetDetails.display!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
@@ -413,7 +422,7 @@ export class MediaFileDatabase {
                 height: assetDetails?.resolution.height,
                 origFileName: path.basename(filePath),
                 origPath: fileDir,
-                contentType: fileInfo.contentType,
+                contentType,
                 hash: localHashStr,
                 coordinates,
                 location,
@@ -480,7 +489,7 @@ export class MediaFileDatabase {
                     contentType,
                     length: fileStat.size,
                     lastModified: fileStat.mtime,
-                }, fileStat.birthtime, [], () => fs.createReadStream(filePath));
+                }, fileStat.birthtime, contentType, [], () => fs.createReadStream(filePath));
             }
             else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
@@ -536,7 +545,7 @@ export class MediaFileDatabase {
                         contentType,
                         length: fileData.length,
                         lastModified: fileDate,
-                    }, fileDate, ["From zip file"], () => Readable.from(fileData));
+                    }, fileDate, contentType, ["From zip file"], () => Readable.from(fileData));
                 }
             }
 
@@ -570,7 +579,7 @@ export class MediaFileDatabase {
     //
     // It is assume we already have the file size and last modified date.
     //
-    async hashFile(filePath: string, fileInfo: IFileInfo, validateFile: FileValidator | undefined, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
+    async hashFile(filePath: string, fileInfo: IFileInfo, contentType: string, validateFile: FileValidator | undefined, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified === fileInfo.lastModified) {
@@ -578,7 +587,6 @@ export class MediaFileDatabase {
                 // If a hash is commited to the hash cache, the file is assumed to be valid.
                 return {
                     hash: cacheEntry.hash,
-                    contentType: fileInfo.contentType,
                     lastModified: fileInfo.lastModified,
                     length: fileInfo.length,
                 }
@@ -590,13 +598,13 @@ export class MediaFileDatabase {
         //
         if (validateFile) {
             try {
-                const isValid = await validateFile(filePath, fileInfo, openStream);
+                const isValid = await validateFile(filePath, fileInfo, contentType, openStream);
                 if (!isValid) {
                     throw new Error(`File "${filePath}" failed validation.`);
                 }
             }
             catch (error: any) {
-                throw new WrappedError(`Validation failed for ${filePath} (${fileInfo.contentType})`, { cause: error });
+                throw new WrappedError(`Validation failed for ${filePath}`, { cause: error });
             }
         }
 
@@ -606,7 +614,6 @@ export class MediaFileDatabase {
         const hash = await computeHash(openStream());
         const hashedFile: IHashedFile = {
             hash,
-            contentType: fileInfo.contentType,
             lastModified: fileInfo.lastModified,
             length: fileInfo.length,
         };

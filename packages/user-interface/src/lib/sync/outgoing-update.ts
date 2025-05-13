@@ -1,4 +1,3 @@
-import { IAssetData } from "../../def/asset-data";
 import { IDatabaseOp } from "defs";
 
 //
@@ -28,7 +27,7 @@ export interface IAssetUploadRecord {
     //
     // Data of the asset.
     //
-    assetData: IAssetData;
+    assetData: Blob;
 }
 
 //

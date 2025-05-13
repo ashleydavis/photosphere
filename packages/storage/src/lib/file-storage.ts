@@ -28,7 +28,6 @@ export class FileStorage implements IStorage {
         }
 
         let entries = await fs.readdir(path, { withFileTypes: true });
-        entries = entries.filter(entry => !entry.name.endsWith(".info"));
         entries = entries.filter(entry => !entry.isDirectory());
 
         //
@@ -72,13 +71,6 @@ export class FileStorage implements IStorage {
     }
 
     //
-    // Determines the local info file for a file.
-    //
-    getInfoFileName(filePath: string): string {
-        return filePath + `.info`;
-    }
-
-    //
     // Returns true if the specified file exists.
     //
     async fileExists(filePath: string): Promise<boolean> {
@@ -111,15 +103,9 @@ export class FileStorage implements IStorage {
         if (!await fs.pathExists(filePath)) {
             return undefined;
         }
-        const infoFilePath = this.getInfoFileName(filePath)
-        let contentType: string | undefined = undefined;
-        if (await fs.pathExists(infoFilePath)) {
-            const info = JSON.parse(await fs.readFile(infoFilePath, "utf8"));
-            contentType = info.contentType;
-        }
         const stat = await fs.stat(filePath);
         return {
-            contentType,
+            contentType: undefined, // This is not available in file storage.
             length: stat.size,
             lastModified: stat.mtime,
         };
@@ -144,11 +130,6 @@ export class FileStorage implements IStorage {
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
         await fs.ensureDir(path.dirname(filePath));
         await fs.writeFile(filePath, data);
-        if (contentType) {
-            await fs.writeFile(this.getInfoFileName(filePath), JSON.stringify({
-                contentType: contentType,
-            }, null, 2));
-        }
     }
 
     //
@@ -163,45 +144,20 @@ export class FileStorage implements IStorage {
     //
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            if (contentType) {
-                const infoFileName = this.getInfoFileName(filePath);
-                fs.ensureDir(path.dirname(infoFileName))
-                    .then(() => {
-                        return fs.writeFile(infoFileName, JSON.stringify({
-                            contentType: contentType,
-                        }, null, 2))
-                        .then(() => {
-                            const fileWriteStream = fs.createWriteStream(filePath);
-                            inputStream.pipe(fileWriteStream)
-                                .on("error", (err: any) => {
-                                    reject(err);
-                                })
-                                .on("finish", () => {
-                                    resolve();
-                                });
+            fs.ensureDir(path.dirname(filePath))
+                .then(() => {
+                    const fileWriteStream = fs.createWriteStream(filePath);
+                    inputStream.pipe(fileWriteStream)
+                        .on("error", (err: any) => {
+                            reject(err);
                         })
-
-                    })
-                    .catch((err) => {
-                        reject(err);
-                    });
-            }
-            else {
-                fs.ensureDir(path.dirname(filePath))
-                    .then(() => {
-                        const fileWriteStream = fs.createWriteStream(filePath);
-                        inputStream.pipe(fileWriteStream)
-                            .on("error", (err: any) => {
-                                reject(err);
-                            })
-                            .on("finish", () => {
-                                resolve();
-                            });
-                    })
-                    .catch((err) => {
-                        reject(err);
-                    });
-            }
+                        .on("finish", () => {
+                            resolve();
+                        });
+                })
+                .catch((err) => {
+                    reject(err);
+                });
         });
     }
 
@@ -211,12 +167,6 @@ export class FileStorage implements IStorage {
     async deleteFile(filePath: string): Promise<void> {
         try {
             await fs.unlink(filePath);
-            // Try to delete the info file if it exists
-            try {
-                await fs.unlink(this.getInfoFileName(filePath));
-            } catch (err) {
-                // Ignore errors if the info file doesn't exist
-            }
         } catch (err) {
             // Ignore errors if the file doesn't exist
         }

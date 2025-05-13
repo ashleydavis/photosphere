@@ -1,15 +1,12 @@
 
 //
-// Details of an asset to be uploaded.
-//
-
-import { IResolution } from "./image";
-
-//
 // The state of an individual upload.
 //
 export type UploadState = "already-uploaded" | "pending" | "uploading" | "uploaded" | "failed";
 
+//
+// Details of an asset to be uploaded.
+//
 export interface IQueuedUpload {
     //
     // The name of the file.

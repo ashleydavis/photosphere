@@ -16,7 +16,6 @@ export * from "./lib/database/indexeddb/indexeddb-database";
 export * from "./lib/database/indexeddb/indexeddb-database-collection";
 export * from "./lib/sync/persistent-queue";
 export * from "./lib/sync/outgoing-update";
-export * from "./def/asset-data";
 export * from "./context/gallery-source";
 export * from "./context/asset-database-source";
 export * from "./context/auth-context";

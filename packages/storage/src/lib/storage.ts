@@ -21,6 +21,7 @@ export interface IListResult {
 export interface IFileInfo {
     //
     // The content type of the file.
+    // This is returned from cloud storage, but not from file storage.
     //
     contentType: string | undefined;
 

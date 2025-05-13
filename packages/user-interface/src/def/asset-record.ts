@@ -1,5 +1,3 @@
-import { IAssetData } from "./asset-data";
-
 //
 // Specifies the local record for an asset.
 // 
@@ -17,5 +15,5 @@ export interface IAssetRecord {
     //
     // Data for the asset.
     //
-    assetData: IAssetData;
+    assetData: Blob;
 }

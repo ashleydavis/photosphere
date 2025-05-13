@@ -142,7 +142,7 @@ export interface IGalleryContext {
     //
     // Uploads an asset.
     //
-    uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void>;
+    uploadAsset(assetId: string, assetType: string, assetData: Blob): Promise<void>;
 
     //
     // Loads data for an asset.
@@ -319,11 +319,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         // Object URL for the asset.
         //
         objectUrl: string;
-
-        //
-        // The content type for the asset.
-        //
-        contentType: string;
     }
 
     //
@@ -514,11 +509,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Uploads an asset.
     //
-    async function uploadAsset(assetId: string, assetType: string, contentType: string, data: Blob): Promise<void> {
-        await storeAsset(assetId, assetType, { 
-            contentType, 
-            data
-        });
+    async function uploadAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
+        await storeAsset(assetId, assetType, assetData);
     }
 
     //
@@ -539,11 +531,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             return undefined;
         }
 
-        const objectUrl = URL.createObjectURL(assetData.data);
+        const objectUrl = URL.createObjectURL(assetData);
         assetCache.current.set(key, { 
             numRefs: 1, 
             objectUrl, 
-            contentType: assetData.contentType,
         });
 
         return {

@@ -1,7 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useClientId } from "../lib/use-client-id";
-import { IAssetData } from "../def/asset-data";
 import { IDatabaseOp, IMediaFileDatabases } from "defs";
 import { IRecord } from "../lib/database/database-collection";
 import { useAuth } from "./auth-context";
@@ -48,7 +47,7 @@ export interface IApi {
     //
     // Uploads an asset to the backend.
     //
-    uploadSingleAsset(databaseId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void>;
+    uploadSingleAsset(databaseId: string, assetId: string, assetType: string, assetData: Blob): Promise<void>;
 
     //
     // Submits database operations to the cloud.
@@ -145,17 +144,17 @@ export function ApiContextProvider({ children }: IProps) {
     //
     // Uploads an asset to the backend.
     //
-    async function uploadSingleAsset(databaseId: string, assetId: string, assetType: string, assetData: IAssetData): Promise<void> {
+    async function uploadSingleAsset(databaseId: string, assetId: string, assetType: string, assetData: Blob): Promise<void> {
 
         const { headers } = await getRequestConfig();
 
         await axios.post(
             `${BASE_URL}/asset`, 
-            assetData.data, 
+            assetData, 
             {
                 headers: {
                     ...headers,
-                    "content-type": assetData.contentType,
+                    "content-type": assetData.type,
                     db: databaseId,
                     id: assetId,
                     "asset-type": assetType,

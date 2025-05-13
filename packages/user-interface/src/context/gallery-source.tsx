@@ -1,6 +1,5 @@
 import { createContext, useContext } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
-import { IAssetData } from "../def/asset-data";
 import { IObservable } from "../lib/subscription";
 
 export interface IGalleryItemMap {
@@ -100,12 +99,12 @@ export interface IGallerySource {
     //
     // Loads data for an asset.
     //
-    loadAsset(assetId: string, assetType: string): Promise<IAssetData | undefined>;
+    loadAsset(assetId: string, assetType: string): Promise<Blob | undefined>;
 
     //
     // Stores an asset.
     //
-    storeAsset(assetId: string, assetType: string, assetData: IAssetData): Promise<void>;    
+    storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void>;    
 
     //
     // Gets a gallery item by id.

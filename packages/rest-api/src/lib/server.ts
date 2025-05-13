@@ -527,16 +527,6 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         // Use the storage provider to determine the asset path and storage.
         const assetPath = storageProvider.getAssetPath(databaseId, assetType, assetId);
         const storage = storageProvider.getStorage();
-        
-        const info = await storage.info(assetPath);
-        if (!info) {
-            res.sendStatus(404);
-            return;
-        }
-
-        res.writeHead(200, {
-            "Content-Type": info.contentType,
-        });
 
         storage.readStream(assetPath).pipe(res);
     }));
