@@ -35,5 +35,5 @@ const PREVIEW_THUMBNAIL_MIN_SIZE = 120;
 export async function loadFileToThumbnail(filePath: string, contentType: string): Promise<Blob> {
     const blob = await loadFileToBlob(filePath, contentType);
     const image = await loadBlobToImage(blob);
-    return await resizeImageToBlob(image, PREVIEW_THUMBNAIL_MIN_SIZE);
+    return await resizeImageToBlob(image, PREVIEW_THUMBNAIL_MIN_SIZE, contentType);
 }

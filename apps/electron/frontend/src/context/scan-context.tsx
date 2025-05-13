@@ -104,7 +104,7 @@ export function ScanContextProvider({ children }: IProps) {
             case "thumb": {
                 return {
                     data: await loadFileToThumbnail(assetId, contentType),
-                    contentType: "image/png", // Thumbnail always png.
+                    contentType,
                 };
             }
 

@@ -102,7 +102,7 @@ export function resizeImage(image: HTMLImageElement, minSize: number): { dataUrl
 //
 // https://stackoverflow.com/a/43354901/25868
 //
-export function resizeImageToBlob(image: HTMLImageElement, minSize: number): Promise<Blob> { 
+export function resizeImageToBlob(image: HTMLImageElement, minSize: number, outputContentType: string): Promise<Blob> { 
     return new Promise<Blob>(resolve => {
         const oc = document.createElement('canvas'); // As long as we don't reference this it will be garbage collected.
         const octx = oc.getContext('2d')!;
@@ -122,7 +122,7 @@ export function resizeImageToBlob(image: HTMLImageElement, minSize: number): Pro
 
         octx.drawImage(oc, 0, 0, oc.width, oc.height);
         octx.drawImage(image, 0, 0, oc.width, oc.height);
-        oc.toBlob(blob => resolve(blob!));
+        oc.toBlob(blob => resolve(blob!), outputContentType);
     });
 }
 
