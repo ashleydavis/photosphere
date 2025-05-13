@@ -14,11 +14,6 @@ export interface IAuthContext {
     appMode: string; // "readonly" or "readwrite".
 
     //
-    // Google API key for reverse geocoding, if provided.
-    //
-    googleApiKey?: string;
-
-    //
     // Set to true when authentication is enabled.
     //
     isAuthEnabled: boolean;

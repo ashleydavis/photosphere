@@ -7,15 +7,10 @@ export interface INoAuthContextProviderProps {
     //
     appMode: string; // "readonly" or "readwrite".
 
-    //
-    // The Google API key for reverse geocoding, if provided.
-    //
-    googleApiKey?: string;
-
     children: ReactNode | ReactNode[];
 }
 
-export function NoAuthContextProvider({ appMode, googleApiKey, children }: INoAuthContextProviderProps) {
+export function NoAuthContextProvider({ appMode, children }: INoAuthContextProviderProps) {
 
     //
     // Logs in.
@@ -42,7 +37,6 @@ export function NoAuthContextProvider({ appMode, googleApiKey, children }: INoAu
 
     const value: IAuthContext = {
         appMode,
-        googleApiKey,
         isAuthEnabled: false,
         isLoading: false,
         isAuthenticated: true,

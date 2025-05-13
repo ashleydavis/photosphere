@@ -25,6 +25,16 @@ export interface IGetAllResponse<RecordT> {
 }
 
 //
+// Configuration for API keys.
+//
+export interface IApiKeysConfig { 
+    //
+    // Google API key for reverse geocoding, if provided.
+    //
+    googleApiKey?: string; 
+}
+
+//
 // Client-side interface to the Photosphere API.
 //
 export interface IApi {
@@ -33,6 +43,11 @@ export interface IApi {
     // Set to true once the api is ready to use.
     //
     isInitialised: boolean;
+
+    //
+    // Gets the Google API key from the backend.
+    //
+    getApiKeys(): Promise<IApiKeysConfig>;
 
     //
     // Gets the available media libraries.
@@ -95,6 +110,24 @@ export function ApiContextProvider({ children }: IProps) {
             setIsInitialised(true);
         }
     }, [isAuthenticated]);
+
+    //
+    // Gets the Google API key from the backend.
+    //
+    async function getApiKeys(): Promise<IApiKeysConfig> {
+        const { headers } = await getRequestConfig();
+        const url = `${BASE_URL}/auth/api-keys`;
+        const response = await axios.get(
+            url,
+            {
+                headers: {
+                    ...headers,
+                    Accept: "application/json",
+                },
+            }
+        );
+        return response.data;
+    }
 
     //
     // Loads the available media libraries.
@@ -257,6 +290,7 @@ export function ApiContextProvider({ children }: IProps) {
 
     const value: IApi = {
     	isInitialised,
+        getApiKeys,
         getDatabases,
         getAsset,
         uploadSingleAsset,

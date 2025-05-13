@@ -17,11 +17,6 @@ export interface IAuth0ContextProviderProps {
     appMode: string; // "readonly" or "readwrite".
 
     //
-    // The Google API key for reverse geocoding, if provided.
-    //
-    googleApiKey?: string;
-
-    //
     // The URL to redirect to after login/logout.
     //
     redirectUrl: string;
@@ -34,7 +29,7 @@ export interface IAuth0ContextProviderProps {
     children: ReactNode | ReactNode[];
 }
 
-export function Auth0ContextProvider({ appMode, googleApiKey, redirectUrl, openUrl, children }: IAuth0ContextProviderProps) {
+export function Auth0ContextProvider({ appMode, redirectUrl, openUrl, children }: IAuth0ContextProviderProps) {
 
     const {
         isLoading,
@@ -80,7 +75,6 @@ export function Auth0ContextProvider({ appMode, googleApiKey, redirectUrl, openU
 
     const value: IAuthContext = {
         appMode,
-        googleApiKey,
         isAuthEnabled: true,
         isLoading: isLoading,
         isAuthenticated: isAuthenticated,

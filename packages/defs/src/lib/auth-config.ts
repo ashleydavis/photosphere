@@ -26,9 +26,4 @@ export interface IAuthConfig {
     // When authMode is "auth0", this is the configuration for Auth0.
     //
     auth0?: IAuth0Config;
-
-    //
-    // Google API key for reverse geocoding, if provided.
-    //
-    googleAPIKey?: string; 
 }

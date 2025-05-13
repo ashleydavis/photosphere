@@ -17,6 +17,13 @@ GET {{base_url}}/alive
 
 GET {{base_url}}/auth/config
 
+
+###
+# Get API keys.
+#
+
+GET {{base_url}}/auth/api-keys
+
 ###
 #
 # Gets available media file databases.

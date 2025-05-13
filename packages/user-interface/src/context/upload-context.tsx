@@ -1,7 +1,7 @@
-import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { getExifData, getImageResolution, IResolution, loadImage, resizeImage } from "../lib/image";
 import { computeHash, loadDataURL } from "../lib/file";
-import { convertExifCoordinates, getImageTransformation, isLocationInRange, reverseGeocode } from "utils";
+import { convertExifCoordinates, isLocationInRange, reverseGeocode } from "utils";
 import { IQueuedUpload, UploadState } from "../lib/upload-details";
 
 import dayjs from "dayjs";
@@ -15,10 +15,10 @@ import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { uuid } from "utils";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
+import { IApiKeysConfig, useApi } from "./api-context";
 
 // @ts-ignore
 import ColorThief from 'colorthief/dist/color-thief.mjs';
-import { useAuth } from "./auth-context";
 
 //
 // Size of the thumbnail to generate and display during uploaded.
@@ -100,7 +100,12 @@ export function UploadContextProvider({ children }: IProps) {
     //
     const { addGalleryItem, uploadAsset, checkAssetHash } = useGallery();
 
-    const { googleApiKey } = useAuth();
+    const { getApiKeys } = useApi();
+
+    //
+    // The Google API key for reverse geocoding.
+    //
+    const apiKeys = useRef<IApiKeysConfig | undefined>(undefined);
 
     //
     // List of uploads that failed.
@@ -145,6 +150,20 @@ export function UploadContextProvider({ children }: IProps) {
         doNextUpload();
 
     }, [uploads, uploadIndex]);
+
+    useEffect(() => {
+        //
+        // Retreives the Google API key for reverse geocoding.
+        //
+        getApiKeys()
+            .then(_apiKeys => {
+                apiKeys.current = _apiKeys;                
+            }) 
+            .catch(err => {
+                console.error(`Failed to get API keys from backend.`);
+                console.error(err && err.stack || err);
+            });               
+    }, []);
 
     //
     // Do an partial update of an existing upload.
@@ -353,11 +372,11 @@ export function UploadContextProvider({ children }: IProps) {
 
                 if (exif.GPSLatitude && exif.GPSLongitude) {
                     const coordinates = convertExifCoordinates(exif);
-                    if (!googleApiKey) {
+                    if (!apiKeys.current?.googleApiKey) {
                         console.warn(`Reverse geocoding is not supported without a Google API key.`);
                     }
                     else if (isLocationInRange(coordinates)) {
-                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, googleApiKey), 3, 5000);
+                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, apiKeys.current!.googleApiKey!), 3, 5000);
                         if (reverseGeocodingResult) {
                             location = reverseGeocodingResult.location;
                             properties.reverseGeocoding = {

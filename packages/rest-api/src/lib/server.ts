@@ -230,14 +230,12 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
                     audience: options.auth0.audience,
                     redirectUrl: options.auth0.redirectUrl,
                 },
-                goopleApiKey: options.googleApiKey,
             });
         }
         else if (options.authType === "no-auth") {
             res.json({
                 appMode: options.appMode,
                 authMode: "no-auth",
-                goopleApiKey: options.googleApiKey,
             });
         }
         else {
@@ -379,6 +377,15 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
             }
         };
     }
+
+    //
+    // Gets the Google API key for reverse geocoding.
+    //
+    app.get("/auth/api-keys", asyncErrorHandler(async (req, res) => {
+        res.json({
+            googleApiKey: options.googleApiKey,
+        });
+    }));
 
     //
     // Gets the sets the user has access to.
