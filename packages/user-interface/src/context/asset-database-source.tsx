@@ -22,19 +22,19 @@ const SYNC_POLL_PERIOD = 1000; // 1 second.
 //
 export interface IAssetDatabase extends IGallerySource {
     //
-    // The currently viewed set.
+    // The currently viewed database.
     //
-    setId: string | undefined;
+    databaseId: string | undefined;
 
     //
-    // Sets the viewed set.
+    // Sets the viewed database.
     //
-    setSetId(setId: string): void;
+    setDatabaseId(databaseId: string): void;
 
     //
-    // Moves assets to another set.
+    // Moves assets to another database.
     //
-    moveToSet(assetIds: string[], setId: string): Promise<void>;
+    moveToDatabase(assetIds: string[], databaseId: string): Promise<void>;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -59,12 +59,12 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // The number of asset loads in progress.
     // This number can increase when the user changes sets during the initial load, causing
-    // additional set loads to start while the previous ones are still in progress.
+    // additional database loads to start while the previous ones are still in progress.
     //
     const loadingCount = useRef<number>(0);
 
     //
-    // Counts up IDs for each set currently being loaded.
+    // Counts up IDs for each database currently being loaded.
     //
     const loadingId = useRef<number>(0);
 
@@ -79,9 +79,9 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const loadedAssets = useRef<IGalleryItemMap>({});
 
     //
-    // The set currently being viewed.
+    // The database currently being viewed.
     //
-    const [ setId, setSetId ] = useState<string | undefined>(undefined);
+    const [ databaseId, setDatabaseId ] = useState<string | undefined>(undefined);
 
     //
     // Assets that have been loaded.
@@ -119,11 +119,11 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     const onItemsDeleted = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
 
     //
-    // Adds an asset to the default set.
+    // Adds an asset to the default database.
     //
     function addAsset(item: IGalleryItem): void {
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
         const asset: IAsset = {
@@ -132,7 +132,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
         _onNewItems([ asset ]); 
 
-        addAssetToSet(asset, setId)
+        addAssetToDatabase(asset, databaseId)
             .catch(err => {
                 console.error(`Failed to add asset:`);
                 console.error(err);
@@ -140,20 +140,19 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Adds an asset to a particular set.
+    // Adds an asset to a particular database.
     //
-    async function addAssetToSet(asset: IGalleryItem, setId: string): Promise<void> {
+    async function addAssetToDatabase(asset: IGalleryItem, databaseId: string): Promise<void> {
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
                 recordId: asset._id,
-                setId,
+                databaseId,
                 op: {
                     type: "set",
                     fields: {
                         ...asset,
                         uploadDate: dayjs().toISOString(),
-                        setId, //TODO: Shouldn't be needed.
                     },
                 },
             }
@@ -173,8 +172,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void> {
 
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
         const updatedAsset = { ...loadedAssets.current[assetId], ...partialAsset };
@@ -185,7 +184,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            setId,
+            databaseId,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -206,8 +205,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
 
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
         for (const { assetId, partialAsset } of assetUpdates) {
@@ -222,7 +221,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
             recordId: assetId,
-            setId,
+            databaseId,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -250,8 +249,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
@@ -268,7 +267,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            setId,
+            databaseId,
             op: {
                 type: "push",
                 field: field,
@@ -290,8 +289,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
@@ -307,7 +306,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            setId,
+            databaseId,
             op: {
                 type: "pull",
                 field: field,
@@ -338,15 +337,15 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Moves assets to another set.
+    // Moves assets to another database.
     //
-    async function moveToSet(assetIds: string[], destSetId: string): Promise<void> {
+    async function moveToDatabase(assetIds: string[], destSetId: string): Promise<void> {
 
         try {
             setIsWorking(true);
 
             //
-            // Saves asset data to other set.
+            // Saves asset data to other database.
             //
             for (const assetId of assetIds) {
                 const asset = loadedAssets.current[assetId];        
@@ -355,14 +354,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 for (const assetType of assetTypes) {
                     const assetData = await loadAsset(assetId, assetType);
                     if (assetData) {
-                        await storeAssetToSet(newAssetId, assetType, assetData, destSetId);
+                        await storeAssetToDatabase(newAssetId, assetType, assetData, destSetId);
                     }
                 }
     
                 //
                 // Adds new asset to the database.
                 //
-                await addAssetToSet({ ...asset, _id: newAssetId }, destSetId);
+                await addAssetToDatabase({ ...asset, _id: newAssetId }, destSetId);
             }
     
             //
@@ -379,28 +378,28 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Checks if an asset is already uploaded.
     //
     async function checkAssetHash(hash: string): Promise<boolean> {
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
-        return await api.checkAssetHash(setId, hash);
+        return await api.checkAssetHash(databaseId, hash);
     }
 
     //
-    // Loads data for an asset from the current set.
+    // Loads data for an asset from the current database.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
-        return await loadAssetFromSet(assetId, assetType, setId);
+        return await loadAssetFromDatabase(assetId, assetType, databaseId);
     }
 
     //
-    // Loads data for an asset from a particular set.
+    // Loads data for an asset from a particular database.
     //
-    async function loadAssetFromSet(assetId: string, assetType: string, setId: string): Promise<Blob | undefined> {
+    async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob | undefined> {
         const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
         if (assetRecord) {
             return assetRecord.assetData;
@@ -413,7 +412,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         // Fallback to cloud.
         //
-        const assetData = await api.getAsset(setId!, assetId, assetType);
+        const assetData = await api.getAsset(databaseId!, assetId, assetType);
         if (!assetData) {
             return undefined;
         }
@@ -435,20 +434,20 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     }
 
     //
-    // Stores an asset to the current set.
+    // Stores an asset to the current database.
     //
     async function storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
-        if (!setId) {
-            throw new Error("No set id provided.");
+        if (!databaseId) {
+            throw new Error("No database id provided.");
         }
 
-        await storeAssetToSet(assetId, assetType, assetData, setId);
+        await storeAssetToDatabase(assetId, assetType, assetData, databaseId);
     }
 
     //
-    // Stores an asset to a particular set.
+    // Stores an asset to a particular database.
     //
-    async function storeAssetToSet(assetId: string, assetType: string, assetData: Blob, setId: string): Promise<void> {
+    async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databaseId: string): Promise<void> {
         // 
         // Store the asset locally.
         //
@@ -463,7 +462,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         //
         await outgoingUpdateQueue.current.add({
             type: "upload",
-            setId: setId!, //todo: Should be databaseId now.
+            databaseId,
             assetId,
             assetType,
             assetData,
@@ -540,7 +539,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Load assets into memory.
     //
-    async function loadAssets(setId: string) {
+    async function loadAssets(databaseId: string) {
     
         try {
             setIsLoading(true);
@@ -551,7 +550,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
 
             //
             // Start with no assets.
-            // This clears out any existing set of assets.
+            // This clears out any existing database of assets.
             //
             loadedAssets.current = {};
 
@@ -572,7 +571,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 // Assumes the backend gives us the assets in sorted order.
                 //
                 const result: IGetAllResponse<IAsset> = await retry(
-                    () => api.getAll<IAsset>(setId, "metadata", next),
+                    () => api.getAll<IAsset>(databaseId, "metadata", next),
                     5, // Attempts
                     600, // Starting wait time
                     2, // Double the weight time on each retry.
@@ -583,7 +582,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 }
 
                 //
-                // Continue if the set index matches the current loading index.
+                // Continue if the database index matches the current loading index.
                 // This allows loading to be aborted if the user changes what they are looking at.
                 //
                 const shouldContinue = latestLoadingId === loadingId.current;
@@ -595,7 +594,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
                 setTimeout(() => {
                     _onNewItems(result.records);  // Starts the next request before setting the new assets.
 
-                    console.log(`Loaded ${result.records.length} assets for set ${setId}`);
+                    console.log(`Loaded ${result.records.length} assets for database ${databaseId}`);
                 }, 0);
 
                 next = result.next;
@@ -613,14 +612,14 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Load assets.
     //
     useEffect(() => {
-        if (setId) {
-            loadAssets(setId)
+        if (databaseId) {
+            loadAssets(databaseId)
                 .catch(err => {
                     console.error(`Failed to load assets:`);
                     console.error(err);
                 });
         }
-    }, [setId]);
+    }, [databaseId]);
 
     const value: IAssetDatabase = {
         // Gallery source.
@@ -644,9 +643,9 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
         getItemById,
 
         // Asset database source.
-        setId,
-        setSetId,
-        moveToSet,
+        databaseId,
+        setDatabaseId,
+        moveToDatabase,
     };
     
     return (

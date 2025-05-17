@@ -33,7 +33,6 @@ export function Gallery() {
     //
     const [openAssetView, setOpenAssetView] = useState<boolean>(false);
 
-
     //
     // Reference to the gallery container element.
     //

@@ -21,8 +21,7 @@ const metadata = [
         },
         "hash" : "9de67bcbd8c2a996081461f66ecc766a494809cd29367d6a169f4a91519044e8",
         "fileDate" : new Date("2023-02-03T00:26:56Z"),
-        "photoDate" : new Date("2023-02-03T00:26:56Z"),
-		"setId": "other-collection"
+        "photoDate" : new Date("2023-02-03T00:26:56Z")
     },
     /* 27 */
     {

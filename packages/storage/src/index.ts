@@ -12,14 +12,3 @@ export * from "./lib/storage-factory";
 export * from "./lib/key-utils";
 export * from "./lib/walk-directory";
 
-export interface IAssetMetadata {
-  //
-  // The ID of the asset.
-  //
-  _id: string;
-
-  //
-  // The ID of the set that the asset belongs to.
-  //
-  setId: string;
-}

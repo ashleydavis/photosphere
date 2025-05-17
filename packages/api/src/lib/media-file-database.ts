@@ -2,7 +2,7 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
+import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import mime from "mime";
 import { ILocation, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
@@ -147,6 +147,11 @@ export interface IAssetDetails {
 export class MediaFileDatabase {
 
     //
+    // The storage for the asset files.
+    //
+    private readonly assetStorage: IStorage;
+
+    //
     // For interacting with the asset database.
     //
     private readonly assetDatabase: AssetDatabase;
@@ -185,20 +190,39 @@ export class MediaFileDatabase {
     };
 
     constructor(
-        private readonly assetStorage: IStorage,
+        assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined
             ) {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
+
+        // Anything that goes through this.assetStorage automatically updates the merkle tree.
+        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase); 
+
         this.bsonDatabase = new BsonDatabase({
-            storage: new AssetDatabaseStorage(new StoragePrefixWrapper(assetStorage, `metadata`), this.assetDatabase),
+            storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
             maxCachedShards: 100,
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");
-        this.localHashCache = new HashCache(metadataStorage, path.join(os.tmpdir(), `photosphere`));
+        const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
+        this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
         this.databaseHashCache = new HashCache(metadataStorage, `.db`);
+    }
+
+    //
+    // Gets the asset storage for reading and writing files.
+    //
+    getAssetStorage(): IStorage {
+        return this.assetStorage;
+    }
+
+    //
+    // Gets the database for reading and writing metadata for assets.
+    //
+    getMetadataDatabase(): BsonDatabase {
+        return this.bsonDatabase;
     }
 
     //
@@ -226,7 +250,7 @@ export class MediaFileDatabase {
         await this.metadataCollection.ensureIndex("hash");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc");
 
-        log.verbose(`Loaded existing media file database from: ${this.assetDatabase.toString()} / ${this.metadataStorage.toString()}`);
+        log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
 
     //

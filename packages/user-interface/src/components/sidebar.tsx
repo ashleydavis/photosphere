@@ -42,9 +42,9 @@ export interface ISidebarProps {
     computerPage?: JSX.Element;
 
     //
-    // Navigates to a set.
+    // Navigates to a database.
     //
-    navigateToSet: (page: string, setId: string) => void;
+    navigateToDatabase: (page: string, databaseId: string) => void;
 }
 
 //
@@ -391,11 +391,11 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToSet }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToDatabase }: ISidebarProps) {
 
     const { dbs } = useApp();
     const theme = useTheme();
-    const { setId } = useAssetDatabase();
+    const { databaseId } = useAssetDatabase();
     const { search, setSortBy } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
@@ -525,12 +525,12 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                             key={db.id}
                             onClick={() => {
                                 setSidebarOpen(false);
-                                navigateToSet("cloud", db.id)
+                                navigateToDatabase("cloud", db.id)
                             }}
                             >
                             <ListItemButton>
                                 <ListItemDecorator>
-                                    {db.id === setId
+                                    {db.id === databaseId
                                         ? <FolderOpen />
                                         : <Folder />
                                     }

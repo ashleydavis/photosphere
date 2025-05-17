@@ -273,7 +273,7 @@ export function ApiContextProvider({ children }: IProps) {
         
         const { headers } = await getRequestConfig();
 
-        const url = `${BASE_URL}/check-hash?set=${databaseId}&hash=${hash}`;
+        const url = `${BASE_URL}/check-hash?db=${databaseId}&hash=${hash}`;
         const response = await axios.get(
             url, 
             {

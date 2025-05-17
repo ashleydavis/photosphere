@@ -4,7 +4,7 @@ export interface IDatabaseOp {
     //
     // The database the operation is applied to.
     //
-    setId: string;
+    databaseId: string;
 
     //
     // The name of the database collection to which the operation is applied.

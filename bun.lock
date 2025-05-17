@@ -315,6 +315,8 @@
       "name": "rest-api",
       "version": "1.0.0",
       "dependencies": {
+        "adb": "workspace:*",
+        "api": "workspace:*",
         "axios": "^0.27.2",
         "dayjs": "^1.11.7",
         "defs": "workspace:*",

@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto";
-import { createServer, IAuth0Options, MultiSetStorageProvider } from "rest-api";
-import { StoragePrefixWrapper, createStorage, IStorageOptions, loadPrivateKey } from "storage";
+import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider } from "rest-api";
+import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
 import { registerTerminationCallback } from "node-utils";
 
 async function main() {
@@ -48,9 +48,10 @@ async function main() {
     }
 
     const { storage: assetStorage } = createStorage(assetStorageConnection, storageOptions);    
+    const { storage: metadataStorage } = createStorage(assetStorageConnection);    
     const { storage: dbStorage } = createStorage(databaseStorageConnection);
     
-    const assetStorageProvider = new MultiSetStorageProvider(assetStorage);
+    const mediaFileDatabaseProvider = new MultipleMediaFileDatabaseProvider(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
 
     const APP_MODE = process.env.APP_MODE;
     if (!APP_MODE) {
@@ -93,7 +94,7 @@ async function main() {
         console.warn("Google API key not set. Reverse geocoding will not work.");
     }
 
-    const { app, close } = await createServer(() => new Date(Date.now()), assetStorageProvider, dbStorage, {
+    const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, dbStorage, {
         appMode: APP_MODE,
         authType: AUTH_TYPE,
         frontendStaticPath: FRONTEND_STATIC_PATH,

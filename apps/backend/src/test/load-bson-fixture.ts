@@ -13,10 +13,10 @@ async function main(): Promise<void> {
     const databasePath = `${rootPath}/database`;    
     await loadFixtures(databaseFixturePath, databasePath);
 
-    const setsPath = './files/collections';
-    const sets = fs.readdirSync(setsPath);
-    for (const setId of sets) {
-        const setPath = `${setsPath}/${setId}`;
+    const databasesPath = './files/collections';
+    const databases = fs.readdirSync(databasesPath);
+    for (const databaseId of databases) {
+        const setPath = `${databasesPath}/${databaseId}`;
         const fixturesPath = `${setPath}/bson`;
         const databasePath = `${setPath}/metadata`;
         await loadFixtures(fixturesPath, databasePath);

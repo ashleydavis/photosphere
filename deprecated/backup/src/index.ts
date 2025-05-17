@@ -1,4 +1,4 @@
-import { CloudStorage, FileStorage, IAssetMetadata, IStorage, StoragePrefixWrapper } from "storage";
+import { CloudStorage, FileStorage, IStorage, StoragePrefixWrapper } from "storage";
 import { MongoClient } from "mongodb";
 const _ = require("lodash");
 const minimist = require("minimist");
@@ -226,6 +226,18 @@ async function uploadFileStreamWithRetry(filePath: string, storage: IStorage, as
     }
 
     throw lastErr;
+}
+
+export interface IAssetMetadata {
+  //
+  // The ID of the asset.
+  //
+  _id: string;
+
+  //
+  // The ID of the set that the asset belongs to.
+  //
+  setId: string;
 }
 
 //

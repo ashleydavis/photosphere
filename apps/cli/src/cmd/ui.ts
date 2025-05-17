@@ -2,8 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import AdmZip from "adm-zip";
 import os from 'os';
-import { createServer, SingleSetStorageProvider } from 'rest-api';
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
+import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
+import { createStorage, loadEncryptionKeys } from "storage";
 import { registerTerminationCallback } from "node-utils";
 
 // @ts-ignore
@@ -33,12 +33,13 @@ export async function uiCommand(dbDir: string, options: any): Promise<void> {
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const assetStorageProvider = new SingleSetStorageProvider(assetStorage, "local", "local");
+    const { storage: metadataStorage } = createStorage(dbDir);
+    const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
 
     //
     // Start the Photosphere REST API.
     //
-    const { app, close } = await createServer(() => new Date(Date.now()), assetStorageProvider, undefined, {
+    const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, undefined, {
         appMode: "readwrite", 
         authType: "no-auth",
         frontendStaticPath: path.join(frontendPath, "dist"),

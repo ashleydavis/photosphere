@@ -74,8 +74,8 @@ function __Main({ computerPage }: IMainProps) {
 
     const { 
         isWorking,
-        setId,
-        moveToSet, 
+        databaseId,
+        moveToDatabase, 
         deleteAssets,
     } = useAssetDatabase();
 
@@ -155,13 +155,13 @@ function __Main({ computerPage }: IMainProps) {
             //
             // If the user is logged in, navigate to their default set.
             //
-            navigateToDefaultSet("cloud");
+            navigateToDefaultDatabase("cloud");
         }
         else if ((location.pathname === "/upload" || location.pathname === "/upload/") && dbs) {
             //
             // If the user is logged in, navigate to their default set.
             //
-            navigateToDefaultSet("upload");
+            navigateToDefaultDatabase("upload");
         }
     }, [dbs, location]);
 
@@ -174,27 +174,27 @@ function __Main({ computerPage }: IMainProps) {
 
 
     //
-    // Navigate to the specified set.
+    // Navigate to the specified database.
     //
-    function navigateToSet(page: string, setId: string): void {
-        navigate(`/${page}/${setId}`);
+    function navigateToDatabase(page: string, databaseId: string): void {
+        navigate(`/${page}/${databaseId}`);
     }
 
     //
-    // Navigate to the users default set.
+    // Navigate to the users default database.
     //
-    function navigateToDefaultSet(page: string): void {
+    function navigateToDefaultDatabase(page: string): void {
         if (!dbs) {
             throw new Error(`No sets available.`);
         }
 
         if (dbs.defaultDb) {
             console.log(`Navigating to default set.`);
-            navigateToSet(page, dbs.defaultDb);
+            navigateToDatabase(page, dbs.defaultDb);
         }
         else if (dbs.dbs.length > 0) {
             console.log(`Navigating to first set.`);
-            navigateToSet(page, dbs.dbs[0].id);
+            navigateToDatabase(page, dbs.dbs[0].id);
         }
     }
 
@@ -203,7 +203,7 @@ function __Main({ computerPage }: IMainProps) {
     //
     function onOpenSearch(): void {
     	setOpenSearch(true);
-        navigateToDefaultSet("cloud");
+        navigateToDefaultDatabase("cloud");
     }
 
     //
@@ -232,10 +232,10 @@ function __Main({ computerPage }: IMainProps) {
     }
 
     //
-    // Moves selected items to the specified set.
+    // Moves selected items to the specified database.
     //
-    async function onMoveSelectedToSet(setId: string) {
-        await moveToSet(Array.from(selectedItems), setId);
+    async function onMoveSelectedToDatabase(databaseid: string) {
+        await moveToDatabase(Array.from(selectedItems), databaseid);
     }
 
     if (isLoading) {
@@ -395,13 +395,13 @@ function __Main({ computerPage }: IMainProps) {
                                         && <>
                                             <ListSubheader>MOVE TO</ListSubheader>
                                             {dbs?.dbs.map(db => {
-                                                if (db.id === setId) {
+                                                if (db.id === databaseId) {
                                                     return null; // Don't show the current set.
                                                 }
                                                 return (
                                                     <MenuItem 
                                                         key={db.id}
-                                                        onClick={() => onMoveSelectedToSet(db.id)}
+                                                        onClick={() => onMoveSelectedToDatabase(db.id)}
                                                         >
                                                         {db.name}                                        
                                                     </MenuItem>
@@ -479,7 +479,7 @@ function __Main({ computerPage }: IMainProps) {
                 <Sidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
-                    navigateToSet={navigateToSet}
+                    navigateToDatabase={navigateToDatabase}
                     onOpenSearch={onOpenSearch}
                     />               
             </Drawer>
@@ -495,7 +495,7 @@ function __Main({ computerPage }: IMainProps) {
                 <div id="content" >
                     <Routes>
                         <Route 
-                            path="/cloud/:setId/:assetId?" 
+                            path="/cloud/:databaseId/:assetId?" 
                             element={
                                 <GalleryPage
                                     />
@@ -516,7 +516,7 @@ function __Main({ computerPage }: IMainProps) {
                         }
 
                         <Route 
-                            path="/upload/:setId" 
+                            path="/upload/:databaseId" 
                             element={<UploadPage />} 
                             />
                             

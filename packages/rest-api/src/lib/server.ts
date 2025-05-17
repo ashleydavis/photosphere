@@ -1,8 +1,10 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { BsonDatabase, IBsonDatabase, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
+import { BsonDatabase, IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
+import { MediaFileDatabase } from "api";
+import { Readable } from "stream";
 
 interface IUser extends IMediaFileDatabases {
     _id: string;
@@ -31,69 +33,72 @@ export interface IAuth0Options {
 }
 
 /**
- * Interface for asset storage providers
+ * Provies access to media file databases.
  */
-export interface IStorageProvider {
-    /**
-     * Gets an asset path for the given parameters.
-     */
-    getAssetPath(databaseId: string, assetType: string, assetId: string): string;
+export interface IMediaFileDatabaseProvider {
     
-    /**
-     * Gets the storage object to use for operations.
-     */
-    getStorage(): IStorage;
-    
-    /**
-     * Gets a metadata database for a particular media file database.
-     */
-    getDatabase(setId: string): IBsonDatabase;
-    
-    /**
-     * Gets the list of available sets.
-     */
+    //
+    // Gets the list of available databases.
+    //
     listAssetDatabases(): Promise<{id: string, name: string}[]>;
+
+    //
+    // Opens a media file database.
+    //
+    openDatabase(databaseId: string): Promise<MediaFileDatabase>;
+
+    //
+    // Reads a streaming asset from the storage provider.
+    //
+    readStream(databaseId: string, assetType: string, assetId: string): Readable;
+
+    //
+    // Writes an asset to the storage provider.
+    //
+    write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void>;
     
-    /**
-     * Close any resources held by the provider
-     */
+    //
+    // Closes any resources held by the provider.
+    //
     close(): Promise<void>;
 }
 
-/**
- * Multi-set asset storage provider for backend use
- * This provider supports multiple collection sets under one storage root
- */
-export class MultiSetStorageProvider implements IStorageProvider {
-    private assetStorage: IStorage;
-    private bsonDatabaseMap = new Map<string, IBsonDatabase>();
+//
+// Gives access to multiple media file databases.
+//
+export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProvider {
+
+    //
+    // Tracks open databases that need to be closed.
+    //
+    private databaseMap = new Map<string, MediaFileDatabase>();
     
-    constructor(assetStorage: IStorage) {
-        this.assetStorage = assetStorage;
+    constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage, private readonly googleApiKey: string | undefined) {
     }
-    
-    getAssetPath(databaseId: string, assetType: string, assetId: string): string {
-        return `${databaseId}/${assetType}/${assetId}`;
-    }
-    
-    getStorage(): IStorage {
-        return this.assetStorage;
-    }
-    
-    getDatabase(databaseId: string): IBsonDatabase {
-        let bsonDatabase = this.bsonDatabaseMap.get(databaseId);
-        if (!bsonDatabase) {
-            const directory = `${databaseId}/metadata`;
-            const metadataStorage = new StoragePrefixWrapper(this.assetStorage, directory);
-            bsonDatabase = new BsonDatabase({
-                storage: metadataStorage,
-            });
-            this.bsonDatabaseMap.set(databaseId, bsonDatabase);
-            console.log(`Opened BSON database in ${directory}.`);
+
+    //
+    // Opens a media file database.
+    //
+    async openDatabase(databaseId: string): Promise<MediaFileDatabase> {
+        let mediaFileDatabase = this.databaseMap.get(databaseId);
+        if (!mediaFileDatabase) {
+            const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
+            const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `${databaseId}/.db`);
+            mediaFileDatabase = new MediaFileDatabase(
+                assetStorage,
+                metadataStorage,
+                this.googleApiKey
+            );
+            await mediaFileDatabase.load();
+            this.databaseMap.set(databaseId, mediaFileDatabase);
+            console.log(`Opened media file database in ${databaseId}.`);
         }
-        return bsonDatabase;
+        return mediaFileDatabase;
     }
-    
+        
+    //
+    // Gets the list of available databases.
+    //
     async listAssetDatabases(): Promise<{id: string, name: string}[]> {
         let next: string | undefined = undefined;
         let sets: string[] = [];
@@ -109,51 +114,106 @@ export class MultiSetStorageProvider implements IStorageProvider {
             name: `${set.slice(0, 4)}-${set.slice(-4)}`,
         }));
     }
+
+    //
+    // Reads a streaming asset from the storage provider.
+    //
+    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+        const assetPath = `${databaseId}/${assetType}/${assetId}`;
+        return this.assetStorage.readStream(assetPath);
+    }
+
+    //
+    // Writes an asset to the storage provider.
+    //
+    async write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
+        const assetPath = `${databaseId}/${assetType}/${assetId}`;
+        await this.assetStorage.write(assetPath, contentType, buffer);
+    }
     
+    //
+    // Closes any resources held by the provider.
+    //
     async close(): Promise<void> {
-        for (const bsonDatabase of this.bsonDatabaseMap.values()) {
-            await bsonDatabase.close();
+        for (const mediaFileDatabase of this.databaseMap.values()) {
+            await mediaFileDatabase.close();
         }
-        this.bsonDatabaseMap.clear();
+        this.databaseMap.clear();
     }
 }
 
-/**
- * Single-set asset storage provider for CLI use
- * This provider works with a single collection set at the root of the storage
- */
-export class SingleSetStorageProvider implements IStorageProvider {
-    private database: IBsonDatabase;
+//
+// Gives access to a single media file database.
+//
+export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvider {
+
+    private mediaFileDatabase: MediaFileDatabase | undefined = undefined;
     
-    constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string) {
-        const metadataStorage = new StoragePrefixWrapper(this.assetStorage, "metadata");
-        this.database = new BsonDatabase({ storage: metadataStorage });
-        console.log(`Opened single BSON database at ${assetStorage.location}.`);
+    constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
     }
-    
-    getAssetPath(_setId: string, assetType: string, assetId: string): string {
-        // Ignore the setId parameter and use the configured setId
-        return `${assetType}/${assetId}`;
+
+    //
+    // Opens a media file database.
+    //
+    async openDatabase(_databaseId: string): Promise<MediaFileDatabase> {
+        if (this.mediaFileDatabase) {
+            return this.mediaFileDatabase;
+        }
+
+        const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `.db`);
+        this.mediaFileDatabase = new MediaFileDatabase(
+            this.assetStorage,
+            metadataStorage,
+            this.googleApiKey
+        );
+        await this.mediaFileDatabase.load();
+
+        return this.mediaFileDatabase;
     }
-    
-    getStorage(): IStorage {
-        return this.assetStorage;
-    }
-    
-    getDatabase(_setId: string): IBsonDatabase {        
-        return this.database; // Ignore the setId parameter and use the single database.
-    }
-    
+
+    //
+    // Gets the list of available databases.
+    //
     async listAssetDatabases(): Promise<{id: string, name: string}[]> {
-        // Always return just the one set.
+        // Always return just the one database.
         return [{
             id: this.databaseId,
             name: this.databaseName,
         }];
     }
-    
+
+    //
+    // Reads a streaming asset from the storage provider.
+    //
+    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+        if (!this.mediaFileDatabase) {
+            throw new Error(`Database not opened`);
+        }
+        const assetPath = `${assetType}/${assetId}`; // Ignores the databaseId parameter.
+        const storage = this.mediaFileDatabase.getAssetStorage();
+        return storage.readStream(assetPath);
+    }
+
+    //
+    // Writes an asset to the storage provider.
+    //
+    async write(_databaseId_: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
+        if (!this.mediaFileDatabase) {
+            throw new Error(`Database not opened`);
+        }
+        const assetPath = `${assetType}/${assetId}`;
+        const storage = this.mediaFileDatabase.getAssetStorage();
+        await storage.write(assetPath, contentType, buffer);
+    }            
+
+    //
+    // Closes any resources held by the provider.
+    //
     async close(): Promise<void> {
-        await this.database.close();
+        if (this.mediaFileDatabase) {
+            await this.mediaFileDatabase.close();
+            this.mediaFileDatabase = undefined;
+        }
     }
 }
 
@@ -187,17 +247,10 @@ export interface IServerOptions {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, storageProvider: IStorageProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
+export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
 
     let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage }) : undefined;
     
-    //
-    // Opens a database for a particular set.
-    //
-    function openDatabase(setId: string): IBsonDatabase {
-        return storageProvider.getDatabase(setId);
-    }
-
     const app = express();
     app.use(cors());
 
@@ -396,7 +449,7 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         }
         else {
             // Get the databases from the storage provider.
-            const dbs = await storageProvider.listAssetDatabases();
+            const dbs = await mediaFileDatabaseProvider.listAssetDatabases();
             res.json({ dbs });
         }
     }));
@@ -412,8 +465,9 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
 
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
-            const database = openDatabase(op.setId);
-            const recordCollection = database.collection(op.collectionName);
+            const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(op.databaseId);
+            const metadataDatabase = mediaFileDatabase.getMetadataDatabase();            
+            const recordCollection = metadataDatabase.collection(op.collectionName);
             
             if (op.op.type === "set") {
 
@@ -445,8 +499,6 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         }
 
         res.sendStatus(200);
-
-        //todo: be sure to update the merkle tree as the bson files are saved.
     }));
 
     //
@@ -486,14 +538,9 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         //
         res.sendStatus(200);
 
-        // Use the storage provider to determine the asset path and storage.
-        const assetPath = storageProvider.getAssetPath(databaseId, assetType, assetId);
-        const storage = storageProvider.getStorage();
-        await storage.write(assetPath, contentType, buffer);    
+        await mediaFileDatabaseProvider.write(databaseId, assetType, assetId, contentType, buffer);
         
-        //todo: update the merkle tree for the new file.
-
-        console.log(`Uploaded ${buffer.length} bytes to ${assetPath}.`);
+        console.log(`Uploaded ${buffer.length} bytes to ${assetType}/${assetId}.`);
 
         //
         // Streaming alternative that doesn't work for large files.
@@ -504,7 +551,7 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         //
 
         // const contentLength = parseInt(getHeader(req, "content-length"));
-        // const uploadPromise = storage.writeStream(`collections/${setId}/${assetType}`, assetId, contentType, req, contentLength);
+        // const uploadPromise = storage.writeStream(`collections/${databaseId}/${assetType}`, assetId, contentType, req, contentLength);
 
         //
         // Sends the response before the upload is complete.
@@ -531,11 +578,8 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
             return;
         }
 
-        // Use the storage provider to determine the asset path and storage.
-        const assetPath = storageProvider.getAssetPath(databaseId, assetType, assetId);
-        const storage = storageProvider.getStorage();
-
-        storage.readStream(assetPath).pipe(res);
+        const readStream = mediaFileDatabaseProvider.readStream(databaseId, assetType, assetId);
+        readStream.pipe(res);
     }));
 
     //
@@ -545,8 +589,9 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         const databaseId = getValue<string>(req.query, "db");
         const collectionName = getValue<string>(req.query, "col");
         const recordId = getValue<string>(req.query, "id");
-        const database = openDatabase(databaseId);
-        const collection = database.collection(collectionName);
+        const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
+        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const collection = metadataDatabase.collection(collectionName);
         const record = await collection.getOne(recordId);
         if (!record) {
             res.sendStatus(404);
@@ -565,8 +610,9 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
         const next = req.query.next as string | undefined;
         const nextPage = next ? parseInt(next) : 1;
 
-        const database = openDatabase(databaseId);
-        const collection = database.collection(collectionName);
+        const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
+        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const collection = metadataDatabase.collection(collectionName);
         const result = await collection.getSorted("photoDate", { 
             direction: "desc", //todo: The field and direction should be passed through the API.
             page: nextPage,
@@ -584,8 +630,9 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
     app.get("/check-hash", asyncErrorHandler(async (req, res) => {
         const databaseId = getValue<string>(req.query, "db");
         const hash = getValue<string>(req.query, "hash");
-        const db = openDatabase(databaseId);
-        const metadataCollection = db.collection("metadata");
+        const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
+        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const metadataCollection = metadataDatabase.collection("metadata");
         await metadataCollection.ensureIndex("hash");
         const records = await metadataCollection.findByIndex("hash", hash);
         const matchingRecordIds = records.map(record => record._id);
@@ -600,7 +647,7 @@ export async function createServer(now: () => Date, storageProvider: IStoragePro
             console.log("Shutting down server.");
 
             // Close the asset storage provider
-            await storageProvider.close();
+            await mediaFileDatabaseProvider.close();
             
             // Close the user database if it exists.
             if (db) {

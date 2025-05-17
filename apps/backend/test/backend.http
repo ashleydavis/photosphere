@@ -23,6 +23,7 @@ GET {{base_url}}/auth/config
 #
 
 GET {{base_url}}/auth/api-keys
+Authorization: Bearer {{token}}
 
 ###
 #

@@ -8,26 +8,26 @@ export interface IGalleryPageProps {
 }
 
 export function GalleryPage({}: IGalleryPageProps) {
-    const { setId: _setId, setSetId } = useAssetDatabase();
+    const { databaseId: _databaseId, setDatabaseId } = useAssetDatabase();
     const {  selectedItemId,  setSelectedItemId } = useGallery();
-    const { setId, assetId } = useParams();
+    const { databaseId, assetId } = useParams();
 
     useEffect(() => {
-        if (setId && setId !== _setId) {
+        if (databaseId && databaseId !== _databaseId) {
             // Selects the set specified in the URL.
-            setSetId(setId);
+            setDatabaseId(databaseId);
         }
 
         if (assetId && assetId !== selectedItemId) {
             // Selects the asset specified in the URL.
             setSelectedItemId(assetId);
         }
-    }, [setId, assetId]);
+    }, [databaseId, assetId]);
 
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">
             <Gallery
-                key={setId} // Resets the gallery completely when the set changes. Simplest way to reset the scroll of the gallery.
+                key={databaseId} // Resets the gallery completely when the set changes. Simplest way to reset the scroll of the gallery.
                 />
         </div>
     );

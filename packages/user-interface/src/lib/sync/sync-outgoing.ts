@@ -30,7 +30,7 @@ export async function syncOutgoing({ outgoingUpdateQueue, api }: IProps): Promis
 
         switch (outgoingUpdate.type) {
             case "upload":
-                await api.uploadSingleAsset(outgoingUpdate.setId, outgoingUpdate.assetId, outgoingUpdate.assetType, outgoingUpdate.assetData);
+                await api.uploadSingleAsset(outgoingUpdate.databaseId, outgoingUpdate.assetId, outgoingUpdate.assetType, outgoingUpdate.assetData);
                 break;
             case "update":
                 await api.submitOperations(outgoingUpdate.ops);

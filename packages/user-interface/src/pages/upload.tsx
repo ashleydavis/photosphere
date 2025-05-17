@@ -6,8 +6,8 @@ import { useAssetDatabase } from "../context/asset-database-source";
 
 export function UploadPage() {
 
-    const { setId: _setId, setSetId } = useAssetDatabase();
-    const { setId } = useParams();
+    const { databaseId: _databaseId, setDatabaseId } = useAssetDatabase();
+    const { databaseId } = useParams();
 
     //
     // Interface to the upload context.
@@ -22,11 +22,11 @@ export function UploadPage() {
     } = useUpload();
 
     useEffect(() => {
-        if (setId && setId !== _setId) {
-            // Selects the set specified in the URL.
-            setSetId(setId);
+        if (databaseId && databaseId !== _databaseId) {
+            // Selects the database specified in the URL.
+            setDatabaseId(databaseId);
         }
-    }, [setId]);
+    }, [databaseId]);
 
     //
     // Set to true when something is dragged over the upload area.

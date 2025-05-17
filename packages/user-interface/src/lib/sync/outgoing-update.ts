@@ -10,9 +10,9 @@ export interface IAssetUploadRecord {
     type: "upload";
 
     //
-    // ID of the collection to upload to.
+    // ID of the database to upload to.
     //
-    setId: string;
+    databaseId: string;
 
     //
     // ID of the asset.
