@@ -28,12 +28,11 @@ class MockStorage {
 }
 
 // Helper function to create a file hash
-function createFileHash(fileName: string, content: string, directory?: { name: string }): FileHash {
+function createFileHash(fileName: string, content: string): FileHash {
     const buffer = Buffer.from(content);
     const hash = crypto.createHash('sha256').update(buffer).digest();
     return {
         fileName,
-        directory,
         hash,
         length: buffer.length
     };
@@ -59,7 +58,7 @@ describe('MerkleTree Delete Functionality', () => {
         expect(tree.getMetadata().totalFiles).toBe(1);
         
         // Delete the file
-        const deleted = tree.deleteFile('file1.txt', undefined, file.length);
+        const deleted = tree.deleteFile('file1.txt', file.length);
         
         // Verify it was deleted
         expect(deleted).toBe(true);
@@ -84,7 +83,7 @@ describe('MerkleTree Delete Functionality', () => {
         const originalRootHash = tree.getRootHash();
         
         // Delete file2
-        const deleted = tree.deleteFile('file2.txt', undefined, file2.length);
+        const deleted = tree.deleteFile('file2.txt', file2.length);
         
         // Verify it was deleted
         expect(deleted).toBe(true);
@@ -103,21 +102,21 @@ describe('MerkleTree Delete Functionality', () => {
     
     test('should handle files with directories correctly', () => {
         // Create files in directories
-        const fileA = createFileHash('fileA.txt', 'content A', { name: 'dirA' });
-        const fileB = createFileHash('fileB.txt', 'content B', { name: 'dirB' });
+        const fileA = createFileHash('dirA/fileA.txt', 'content A');
+        const fileB = createFileHash('dirB/fileB.txt', 'content B');
         
         tree.addFileHash(fileA);
         tree.addFileHash(fileB);
         tree.complete();
         
         // Delete fileA from dirA
-        const deleted = tree.deleteFile('fileA.txt', { name: 'dirA' }, fileA.length);
+        const deleted = tree.deleteFile('dirA/fileA.txt', fileA.length);
         
         // Verify it was deleted
         expect(deleted).toBe(true);
         
         // fileB should still be there
-        const foundNode = tree.findFileNode('fileB.txt', { name: 'dirB' });
+        const foundNode = tree.findFileNode('dirB/fileB.txt');
         expect(foundNode).toBeDefined();
         
         // Tree should now have 1 file
@@ -153,7 +152,7 @@ describe('MerkleTree Delete Functionality', () => {
         const initialMetadata = tree.getMetadata();
         
         // Delete file1
-        const deleted = tree.deleteFile('file1.txt', undefined, file1.length);
+        const deleted = tree.deleteFile('file1.txt', file1.length);
         
         // Verify it was deleted
         expect(deleted).toBe(true);
@@ -192,7 +191,7 @@ describe('MerkleTree Delete Functionality', () => {
         const originalFileCount = tree.getMetadata().totalFiles;
         
         // Delete file3
-        const deleted = tree.deleteFile('file3.txt', undefined, files[2].length);
+        const deleted = tree.deleteFile('file3.txt', files[2].length);
         
         // Verify deletion was successful
         expect(deleted).toBe(true);
@@ -227,7 +226,7 @@ describe('MerkleTree Delete Functionality', () => {
         expect(tree.getMetadata().totalFileSize).toBe(18);
         
         // Delete file1 with its size
-        const deleted = tree.deleteFile('file1.txt', undefined, file1.length);
+        const deleted = tree.deleteFile('file1.txt', file1.length);
         
         // Verify totalFileSize was reduced
         expect(tree.getMetadata().totalFileSize).toBe(9);
@@ -248,7 +247,7 @@ describe('MerkleTree Delete Functionality', () => {
         const originalMetadata = tree.getMetadata();
         
         // Delete a file
-        tree.deleteFile('file1.txt', undefined, file1.length);
+        tree.deleteFile('file1.txt', file1.length);
         
         // Verify the state before saving
         const afterDeleteMetadata = tree.getMetadata();

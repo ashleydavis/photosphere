@@ -115,7 +115,7 @@ export class AssetDatabase implements IAssetDatabase {
     async deleteFile(filePath: string): Promise<void> {
         const fileInfo = await this.assetStorage.info(filePath);
         const fileSize = fileInfo?.length;
-        this.merkleTree.deleteFile(filePath, undefined, fileSize);
+        this.merkleTree.deleteFile(filePath, fileSize);
     }
 
     //

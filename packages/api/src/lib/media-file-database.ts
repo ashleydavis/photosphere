@@ -14,7 +14,7 @@ import { getImageDetails } from "./image";
 import { IResolution } from "node-utils";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, fullPath, HashCache, IHashedFile } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile } from "adb";
 
 // @ts-ignore
 import ColorThief from "colorthief";
@@ -491,9 +491,9 @@ export class MediaFileDatabase {
 
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
-        for await (const orderedFile of walkDirectory(this.assetStorage, "", undefined, [/\.db/])) {
+        for await (const orderedFile of walkDirectory(this.assetStorage, "", [/\.db/])) {
             const contentType = mime.getType(orderedFile.fileName);
-            const filePath = fullPath(orderedFile.fileName, orderedFile.directory)
+            const filePath = orderedFile.fileName;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
                 log.json("file-ignored", {

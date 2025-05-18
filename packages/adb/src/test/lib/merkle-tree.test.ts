@@ -203,11 +203,8 @@ describe('MerkleTree', () => {
     
     test('handle nested directory structure', () => {
         // Create file hashes with directory structure
-        const fileHash1 = createFileHash('file1.txt', 'content 1');
-        fileHash1.directory = { name: 'dir1' };
-        
-        const fileHash2 = createFileHash('file2.txt', 'content 2');
-        fileHash2.directory = { name: 'dir2' };
+        const fileHash1 = createFileHash('dir1/file1.txt', 'content 1');
+        const fileHash2 = createFileHash('dir2/file2.txt', 'content 2');
         
         // Add files to the tree
         tree.addFileHash(fileHash1);
@@ -215,19 +212,15 @@ describe('MerkleTree', () => {
         tree.complete();
         
         // Find the files by full path
-        const foundNode1 = tree.findFileNode('file1.txt', { name: 'dir1' });
-        const foundNode2 = tree.findFileNode('file2.txt', { name: 'dir2' });
+        const foundNode1 = tree.findFileNode('dir1/file1.txt');
+        const foundNode2 = tree.findFileNode('dir2/file2.txt');
         
         // Check that we found the nodes with correct directories
         expect(foundNode1).toBeDefined();
-        expect(foundNode1!.node.fileName).toBe('file1.txt');
-        expect(foundNode1!.node.directory).toBeDefined();
-        expect(foundNode1!.node.directory!.name).toBe('dir1');
+        expect(foundNode1!.node.fileName).toBe('dir1/file1.txt');
         
         expect(foundNode2).toBeDefined();
-        expect(foundNode2!.node.fileName).toBe('file2.txt');
-        expect(foundNode2!.node.directory).toBeDefined();
-        expect(foundNode2!.node.directory!.name).toBe('dir2');
+        expect(foundNode2!.node.fileName).toBe('dir2/file2.txt');
     });
     
     test('save and load the tree', async () => {

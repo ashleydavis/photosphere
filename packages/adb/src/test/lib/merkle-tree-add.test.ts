@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { FileHash, MerkleTree } from '../../lib/merkle-tree';
+import { FileHash, MerkleNode, MerkleTree } from '../../lib/merkle-tree';
 
 // Mock the IStorage interface
 class MockStorage {
@@ -28,12 +28,11 @@ class MockStorage {
 }
 
 // Helper function to create a file hash
-function createFileHash(fileName: string, content: string, directory?: { name: string }): FileHash {
+function createFileHash(fileName: string, content: string): FileHash {
     const buffer = Buffer.from(content);
     const hash = crypto.createHash('sha256').update(buffer).digest();
     return {
         fileName,
-        directory,
         hash,
         length: buffer.length
     };
@@ -348,8 +347,8 @@ describe('MerkleTree Adding Files', () => {
         const { tree } = createSampleTree(2);
         
         // Add files with directories
-        const fileA = createFileHash('fileA.txt', 'content A', { name: 'dirA' });
-        const fileB = createFileHash('fileB.txt', 'content B', { name: 'dirB' });
+        const fileA = createFileHash('dirA/fileA.txt', 'content A');
+        const fileB = createFileHash('dirB/fileB.txt', 'content B');
         
         tree.addFileHash(fileA);
         tree.addFileHash(fileB);
@@ -359,39 +358,36 @@ describe('MerkleTree Adding Files', () => {
         expect(tree.getMetadata().totalFiles).toBe(4);
         
         // Test tree structure directly by traversing all nodes and collecting file info
-        function collectFileInfo(node: any): Array<{name: string, dir?: string}> {
+        function collectFileInfo(node: MerkleNode): string[] {
             if (!node) return [];
             
             if (node.fileName) {
-                return [{
-                    name: node.fileName,
-                    dir: node.directory ? node.directory.name : undefined
-                }];
+                return [node.fileName];
             }
             
             return [
-                ...collectFileInfo(node.leftNode),
-                ...collectFileInfo(node.rightNode)
+                ...collectFileInfo(node.leftNode!),
+                ...collectFileInfo(node.rightNode!)
             ];
         }
         
-        const files = collectFileInfo(tree.getRootNode());
+        const files = collectFileInfo(tree.getRootNode()!);
         expect(files.length).toBe(4);
         
         // Verify regular files without directories
-        const regularFiles = files.filter(f => !f.dir);
+        const regularFiles = files.filter(f => !f.startsWith('dirA/') && !f.startsWith('dirB/'));
         expect(regularFiles.length).toBe(2);
-        expect(regularFiles.some(f => f.name === 'file1.txt')).toBe(true);
-        expect(regularFiles.some(f => f.name === 'file2.txt')).toBe(true);
+        expect(regularFiles.some(f => f === 'file1.txt')).toBe(true);
+        expect(regularFiles.some(f => f=== 'file2.txt')).toBe(true);
         
         // Verify files with directories
-        const dirAFiles = files.filter(f => f.dir === 'dirA');
+        const dirAFiles = files.filter(f => f.startsWith('dirA/'));
         expect(dirAFiles.length).toBe(1);
-        expect(dirAFiles[0].name).toBe('fileA.txt');
+        expect(dirAFiles[0]).toBe('dirA/fileA.txt');
         
-        const dirBFiles = files.filter(f => f.dir === 'dirB');
+        const dirBFiles = files.filter(f => f.startsWith('dirB/'));
         expect(dirBFiles.length).toBe(1);
-        expect(dirBFiles[0].name).toBe('fileB.txt');
+        expect(dirBFiles[0]).toBe('dirB/fileB.txt');
     });
     
     test('add file to exactly fill a balanced tree level', () => {

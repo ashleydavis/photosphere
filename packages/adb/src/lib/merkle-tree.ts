@@ -3,21 +3,13 @@ import * as path from 'path';
 import { IStorage, pathJoin } from 'storage';
 import { uuid } from 'utils';
 
-//
-// Represents a directory.
-//
-export interface IDirectory {
-    name: string;
-    directory?: IDirectory;
-}
 
 /**
  * Interface for a node in the Merkle tree
  */
 export interface MerkleNode {
-    hash: Buffer; // The hash for this node.
+    hash: Buffer; // The hash of the node.
     fileName?: string; // The file this hash represents, for leaf nodes only.
-    directory?: IDirectory; // The directory that contains the file.
     leftNode?: MerkleNode; // Left child node.
     rightNode?: MerkleNode; // Right child node.
 }
@@ -27,36 +19,8 @@ export interface MerkleNode {
  */
 export interface FileHash {
     fileName: string; // The file this hash represents. This is relative to the asset database directory.
-    directory?: IDirectory; // The directory that contains the file.
-    hash: Buffer; // The hash for this file.
+    hash: Buffer; // The hash of the file.
     length: number; // The size of the file in bytes.
-}
-
-export function fullDir(directory: IDirectory): string {
-    if (directory.directory) {
-        return fullDir(directory.directory) + `/` + directory.name;
-    }
-    else {
-        return directory.name;
-    }
-}
-
-export function fullPath(fileName: string, directory?: IDirectory): string {
-    if (directory) {
-        return pathJoin(fullDir(directory), fileName);
-    }
-    else {
-        return fileName;
-    }
-}
-
-export function _fullPath(fileHash: FileHash): string {
-    if (fileHash.directory) {
-        return pathJoin(fullDir(fileHash.directory), fileHash.fileName);
-    }
-    else {
-        return fileHash.fileName;
-    }
 }
 
 /**
@@ -169,8 +133,7 @@ export class MerkleTree {
             // Create node
             const node: MerkleNode = {
                 hash,
-                fileName: filePath && path.basename(filePath),
-                directory: filePath && { name: path.dirname(filePath) } || undefined,
+                fileName: filePath,
                 leftNode,
                 rightNode
             };
@@ -205,7 +168,7 @@ export class MerkleTree {
                 throw new Error(`Invalid hash length: ${node.hash.length}`);
             }
 
-            const fullFilePath = node.fileName && fullPath(node.fileName, node.directory);
+            const fullFilePath = node.fileName;
             const filePathLength = fullFilePath ? Buffer.byteLength(fullFilePath, 'utf8') : 0;
 
             const nodeBufferSize = node.hash.length + 2 + filePathLength;
@@ -311,10 +274,9 @@ export class MerkleTree {
     /**
      * Finds a node for a file in the tree
      * @param fileName - The name of the file to find
-     * @param directory - The directory of the file
      * @returns The node if found, undefined otherwise, and its parent node if it has one
      */
-    findFileNode(fileName: string, directory?: IDirectory): { node: MerkleNode, parent?: MerkleNode } | undefined {
+    findFileNode(fileName: string): { node: MerkleNode, parent?: MerkleNode } | undefined {
         if (!this.rootNode) {
             return undefined;
         }
@@ -327,11 +289,7 @@ export class MerkleTree {
             
             // Check if this is the file node we're looking for.
             if (node.fileName === fileName) {
-                // For directory comparison, we need to check the full path.
-                const nodePath = fullPath(fileName, node.directory);
-                const searchPath = fullPath(fileName, directory);
-                
-                if (nodePath === searchPath) {
+                if (node.fileName === fileName) {
                     return { node, parent };
                 }
             }
@@ -421,18 +379,18 @@ export class MerkleTree {
         
         // Update the hashes for each node in the path.
         for (const node of nodesToUpdate) {
-
-            if (node.fileName) {
-                // Leaf node, this should have the hash of the updated file.
+            if (!node.leftNode || !node.rightNode) {
+                throw new Error('Invalid tree structure: node has no children');
             }
-            else {
-                // Combine hashes to create parent hash
-                node.hash = crypto.createHash('sha256')
-                    .update(node.leftNode!.hash)
-                    .update(node.rightNode!.hash)
-                    .digest();
-            }            
-        }
+            
+            const leftHash = node.leftNode.hash;
+            const rightHash = node.rightNode.hash;
+            const newHash = crypto.createHash('sha256')
+                .update(leftHash)
+                .update(rightHash)
+                .digest();
+            node.hash = newHash;
+        }        
     }
 
     /**
@@ -442,7 +400,7 @@ export class MerkleTree {
      */
     addFileHash(fileHash: FileHash): void {
         // Check if the file already exists in the tree.
-        const existingNode = this.findFileNode(fileHash.fileName, fileHash.directory);        
+        const existingNode = this.findFileNode(fileHash.fileName);
         if (existingNode) {
             // Update the existing node's hash
             existingNode.node.hash = fileHash.hash;
@@ -460,7 +418,6 @@ export class MerkleTree {
         const leafNode: MerkleNode = {
             hash: fileHash.hash,
             fileName: fileHash.fileName,
-            directory: fileHash.directory,
         };
 
         //
@@ -490,13 +447,13 @@ export class MerkleTree {
     * @param fileSize - Optional file size - if not provided, will not decrease totalFileSize
     * @returns true if the file was found and deleted, false otherwise
     */
-   deleteFile(fileName: string, directory?: IDirectory, fileSize?: number): boolean {
+   deleteFile(fileName: string, fileSize?: number): boolean {
        if (!this.rootNode) {
            return false;
        }
        
        // Find the file node
-       const existingNode = this.findFileNode(fileName, directory);
+       const existingNode = this.findFileNode(fileName);
        if (!existingNode) {
            return false;
        }
@@ -590,20 +547,15 @@ export class MerkleTree {
     // Creates a parent node from two child nodes.
     //
     private createParentNode(leftNode: MerkleNode, rightNode: MerkleNode): MerkleNode {
-
-        // Combine hashes to create parent.
         const parentHashGenerator = crypto.createHash('sha256')
             .update(leftNode.hash)
             .update(rightNode.hash);
         const parentHash = parentHashGenerator.digest();
-
-        // Create parent node
         const parent: MerkleNode = {
             hash: parentHash,
             leftNode,
             rightNode,
         };
-
         return parent;
     }
 
@@ -728,8 +680,8 @@ export class MerkleTree {
         isLeft: boolean = true,
         depth: number = 0
     ): string {
-        // Prepare the hash representation (shortened or full)
-        const nodeHashHex = node.hash.toString('hex');
+        const hashData = node.hash;
+        const nodeHashHex = hashData.toString('hex');
         const hashStr = `${nodeHashHex.slice(0, 4)}-${nodeHashHex.slice(-4)}`;
 
         // Create the node representation
@@ -742,7 +694,7 @@ export class MerkleTree {
 
         try {
             // If it's a leaf node with a file path
-            const filePath = node.fileName && fullPath(node.fileName, node.directory);
+            const filePath = node.fileName;
             if (filePath) {
                 result += `📄 [${hashStr}] ${filePath}\n`;
             }

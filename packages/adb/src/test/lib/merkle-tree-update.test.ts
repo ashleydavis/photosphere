@@ -28,12 +28,11 @@ class MockStorage {
 }
 
 // Helper function to create a file hash
-function createFileHash(fileName: string, content: string, directory?: { name: string }): FileHash {
+function createFileHash(fileName: string, content: string): FileHash {
     const buffer = Buffer.from(content);
     const hash = crypto.createHash('sha256').update(buffer).digest();
     return {
         fileName,
-        directory,
         hash,
         length: buffer.length
     };
@@ -95,10 +94,10 @@ describe('MerkleTree Update Functionality', () => {
     
     test('should correctly update files in nested directories', () => {
         // Create files in various directories
-        const fileA1 = createFileHash('fileA1.txt', 'content A1', { name: 'dirA' });
-        const fileA2 = createFileHash('fileA2.txt', 'content A2', { name: 'dirA' });
-        const fileB1 = createFileHash('fileB1.txt', 'content B1', { name: 'dirB' });
-        const fileB2 = createFileHash('fileB2.txt', 'content B2', { name: 'dirB' });
+        const fileA1 = createFileHash('dirA/fileA1.txt', 'content A1');
+        const fileA2 = createFileHash('dirA/fileA2.txt', 'content A2');
+        const fileB1 = createFileHash('dirB/fileB1.txt', 'content B1');
+        const fileB2 = createFileHash('dirB/fileB2.txt', 'content B2');
         
         // Add files to the tree
         tree.addFileHash(fileA1);
@@ -111,7 +110,7 @@ describe('MerkleTree Update Functionality', () => {
         const originalRootHash = tree.getRootHash();
         
         // Update a file in dirA
-        const updatedFileA1 = createFileHash('fileA1.txt', 'updated content for A1', { name: 'dirA' });
+        const updatedFileA1 = createFileHash('dirA/fileA1.txt', 'updated content for A1');
         tree.addFileHash(updatedFileA1);
         
         // The root hash should have changed
@@ -119,7 +118,7 @@ describe('MerkleTree Update Functionality', () => {
         expect(newRootHash).not.toBe(originalRootHash);
         
         // Try to find the updated file
-        const foundNode = tree.findFileNode('fileA1.txt', { name: 'dirA' });
+        const foundNode = tree.findFileNode('dirA/fileA1.txt');
         expect(foundNode).toBeDefined();
         
         // Make sure file counts haven't changed
