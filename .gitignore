@@ -39,3 +39,4 @@ apps/cli/bin/
 frontend/pfe.zip
 apps/frontend/pfe.zip
 # apps/cli/test/db
+tools/upload/log.*
