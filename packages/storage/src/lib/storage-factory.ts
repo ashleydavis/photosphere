@@ -52,21 +52,21 @@ export function createStorage(
 
     // Check for storage prefix
     if (path.startsWith('fs:')) {
-        storage = new FileStorage(path);
+        storage = new FileStorage(`fs:`);
         normalizedPath = path.substring('fs:'.length);
         type = 'fs';
     } 
     else if (path.startsWith('s3:')) {
         // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = path.substring('s3:'.length);
-        storage = new CloudStorage(path, true);
+        storage = new CloudStorage(`s3:`, true);
         normalizedPath = s3Path;
         type = 's3';
     } 
     else {
         // Assume local file system for backward compatibility
         console.warn('Storage prefix missing, assuming local file system');
-        storage = new FileStorage(path);
+        storage = new FileStorage(`fs:`);
         normalizedPath = path;
         type = 'fs';
     }
@@ -74,7 +74,7 @@ export function createStorage(
     // Wrap with encryption if keys are provided
     if (options.privateKey) {
         storage = new EncryptedStorage(path, storage, options.publicKey || options.privateKey, options.privateKey);
-        console.log(`Loading encrypted storage for path: ${path}`); //fio:
+        console.log(`Loading encrypted storage for path: ${path}`);
         type = `encrypted-${type}`;
     }
 

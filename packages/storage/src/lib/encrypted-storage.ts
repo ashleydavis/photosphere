@@ -111,7 +111,6 @@ export class EncryptedStorage implements IStorage {
     // Copies a file from one location to another.
     //
     copyTo(srcPath: string, destPath: string): Promise<void> {
-        //TODO: This might have to decrypt and recrypt the file.
         return this.storage.copyTo(srcPath, destPath);
     }
 }

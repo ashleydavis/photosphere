@@ -1,5 +1,5 @@
-import { IFileInfo, IStorage, pathJoin } from "storage";
-import { MerkleTree } from "./merkle-tree";
+import { IStorage, pathJoin } from "storage";
+import { addFile, markFileAsDeleted, createTree, IMerkleTree, loadTreeV2, saveTreeV2 } from "./merkle-tree";
 
 //
 // The hash and other information about a file.
@@ -66,10 +66,9 @@ export class AssetDatabase implements IAssetDatabase {
     //
     // The merkle tree that helps protect against corruption.
     //
-    private merkleTree: MerkleTree;
+    private merkleTree: IMerkleTree | undefined = undefined;
 
     constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage) {
-        this.merkleTree = new MerkleTree(metadataStorage);
     }
 
     //
@@ -81,41 +80,49 @@ export class AssetDatabase implements IAssetDatabase {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        await this.merkleTree.create();
+        this.merkleTree = createTree();
+        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //
     // Loads an existing asset database.
     //
     async load(): Promise<void> {
-        await this.merkleTree.load();
+        this.merkleTree = await loadTreeV2("tree.dat", this.metadataStorage);
     }
 
     //
     // Closes the database and saves any outstanding data.
     //
     async close(): Promise<void> {
-        await this.merkleTree.save();
+        if (!this.merkleTree) {
+            throw new Error("Cannot close database. No database loaded.");
+        }
+        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //
     // Adds a file or directory to the merkle tree.
     //
     addFile(filePath: string, hashedFile: IHashedFile): void {
-        this.merkleTree.addFileHash({
+        if (!this.merkleTree) {
+            throw new Error("Cannot add file to database. No database loaded.");
+        }
+        this.merkleTree = addFile(this.merkleTree, {
             fileName: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
-        })
+        });
     }
 
     //
     // Deletes a file from the merkle tree.
     //
     async deleteFile(filePath: string): Promise<void> {
-        const fileInfo = await this.assetStorage.info(filePath);
-        const fileSize = fileInfo?.length;
-        this.merkleTree.deleteFile(filePath, fileSize);
+        if (!this.merkleTree) {
+            throw new Error("Cannot delete file from database. No database loaded.");
+        }
+        markFileAsDeleted(this.merkleTree, filePath);
     }
 
     //

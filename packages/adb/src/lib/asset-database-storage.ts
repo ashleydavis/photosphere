@@ -127,7 +127,6 @@ export class AssetDatabaseStorage implements IStorage {
     //
     async copyTo(srcPath: string, destPath: string): Promise<void> {
         await this.storage.copyTo(srcPath, destPath);
-
-        //todo: update merkle tree.
+        await this.updateMerkleTree(destPath); //TODO: This won't work unless dest path is relative to this storage.
     }
 }
