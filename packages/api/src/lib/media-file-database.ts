@@ -2,7 +2,7 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import os from "os";
 import path from "path";
-import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
+import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import mime from "mime";
 import { ILocation, ILog, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
@@ -30,7 +30,7 @@ export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType:
 //
 // Progress callback for the add operation.
 //
-export type ProgressCallback = (filesAdded: number, totalSize: number, currentlyScanning: string | undefined) => void;
+export type ProgressCallback = (currentlyScanning: string | undefined) => void;
 
 //
 // Size of the micro thumbnail.
@@ -471,7 +471,7 @@ export class MediaFileDatabase {
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
-                progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+                progressCallback(this.currentlyScanning);
             }
         }
         catch (err: any) {
@@ -493,12 +493,12 @@ export class MediaFileDatabase {
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
         this.currentlyScanning = directoryPath;
-        progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+        progressCallback(this.currentlyScanning);
 
         for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
 
             this.currentlyScanning = path.dirname(orderedFile.fileName);
-            progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+            progressCallback(this.currentlyScanning);
 
             const contentType = mime.getType(orderedFile.fileName);
             const filePath = orderedFile.fileName;
@@ -552,7 +552,7 @@ export class MediaFileDatabase {
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
         this.currentlyScanning = filePath;
-        progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+        progressCallback(this.currentlyScanning);
 
         const zip = new JSZip();
         const unpacked = await zip.loadAsync(await buffer(openStream()));
