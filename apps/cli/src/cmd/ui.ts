@@ -9,10 +9,17 @@ import { registerTerminationCallback } from "node-utils";
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
 
+export interface IUiCommandOptions {
+    //
+    // Sets the path to private key file for encryption.
+    //
+    key: string;
+}
+
 //
-// Starts the Photosphere ui.
+// Command that starts the Photosphere ui.
 //
-export async function uiCommand(dbDir: string, options: any): Promise<void> {
+export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
     //
     // Extract frontend code if doesn't exist.
     //
@@ -31,7 +38,7 @@ export async function uiCommand(dbDir: string, options: any): Promise<void> {
 
     console.log(`Serving frontend from ${frontendPath}.`);
 
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
+    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(dbDir);
     const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);

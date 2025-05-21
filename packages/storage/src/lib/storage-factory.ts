@@ -65,7 +65,6 @@ export function createStorage(
     } 
     else {
         // Assume local file system for backward compatibility
-        console.warn('Storage prefix missing, assuming local file system');
         storage = new FileStorage(`fs:`);
         normalizedPath = path;
         type = 'fs';

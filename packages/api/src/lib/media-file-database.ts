@@ -5,7 +5,7 @@ import path from "path";
 import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import mime from "mime";
-import { ILocation, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
+import { ILocation, ILog, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -23,6 +23,11 @@ import ColorThief from "colorthief";
 // A function that validates a file.
 //
 export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable) => Promise<boolean>;
+
+//
+// Progress callback for the add operation.
+//
+export type ProgressCallback = (filesAdded: number, totalSize: number) => void;
 
 //
 // Size of the micro thumbnail.
@@ -264,36 +269,40 @@ export class MediaFileDatabase {
     //
     // Adds a list of files or directories to the media file database.
     //
-    async addPaths(paths: string[]): Promise<void> {
+    async addPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
         for (const path of paths) {
-            await this.addPath(path);
+            await this.addPath(path, progressCallback);
         }
     }
 
     //
     // Adds a file or directory to the media file database.
     //
-    async addPath(filePath: string): Promise<void> {
+    async addPath(filePath: string, progressCallback: ProgressCallback): Promise<void> {
         const fileStat = await fsPromises.stat(filePath);
         if (fileStat.isFile()) {
             const contentType = mime.getType(filePath) || undefined;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
-                log.json("file-ignored", {
-                    filePath,
-                    reason: "unknown content type",
-                });
                 this.addSummary.numFilesIgnored++;
                 return;
             }
-            await this.addFile(filePath, {
-                contentType,
-                length: fileStat.size,
-                lastModified: fileStat.mtime,
-            }, fileStat.birthtime, contentType, [], () => fs.createReadStream(filePath));
+            await this.addFile(
+                filePath, 
+                {
+                    contentType,
+                    length: fileStat.size,
+                    lastModified: fileStat.mtime,
+                }, 
+                fileStat.birthtime, 
+                contentType, 
+                [], 
+                () => fs.createReadStream(filePath), 
+                progressCallback
+            );
         }
         else if (fileStat.isDirectory()) {
-            return await this.scanDirectory(filePath);
+            return await this.scanDirectory(filePath, progressCallback);
         }
         else {
             throw new Error(`Unsupported file type: ${filePath}`);
@@ -303,14 +312,13 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    async addFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable): Promise<void> {
+    async addFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> {
 
         if (contentType === "application/zip") {
-            return await this.scanZipFile(filePath, fileInfo, fileDate, openStream);
+            return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, progressCallback);
         }
 
-        log.verbose(`Adding file "${filePath}" to the media file database.`);
-
+        log.verbose(`Adding file "${filePath}" to the media file database.`);        
 
         const localHashedFile = await this.hashFile(filePath, fileInfo, contentType, validateFile, openStream, this.localHashCache);
 
@@ -324,14 +332,6 @@ export class MediaFileDatabase {
             //
             log.info(`File "${filePath}" already in the database, don't need to add it.`);
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            log.json("file-exists", {
-                filePath,
-                hash: localHashStr,
-                size: fileInfo.length,
-                lastModified: fileInfo.lastModified,
-                matchingRecords: records.map(r => r._id),
-            });
-
             this.addSummary.numFilesAlreadyAdded++;
         }
 
@@ -462,16 +462,12 @@ export class MediaFileDatabase {
             });
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
-            log.json("file-added", {
-                filePath,
-                hash: localHashStr,
-                size: fileInfo.length,
-                lastModified: fileInfo.lastModified,
-                assetId,
-            });
 
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
+            if (progressCallback) {
+                progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize);
+            }
         }
         catch (err: any) {
             log.exception(`Failed to upload asset data for file "${filePath}"`, err);
@@ -487,7 +483,7 @@ export class MediaFileDatabase {
     //
     // Scans a directory for files and adds them to the media file database.
     //
-    async scanDirectory(directoryPath: string): Promise<void> {
+    async scanDirectory(directoryPath: string, progressCallback: ProgressCallback): Promise<void> {
 
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
@@ -496,10 +492,6 @@ export class MediaFileDatabase {
             const filePath = orderedFile.fileName;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
-                log.json("file-ignored", {
-                    filePath,
-                    reason: "unknown content type",
-                });
                 this.addSummary.numFilesIgnored++;
                 continue;
             }
@@ -509,18 +501,22 @@ export class MediaFileDatabase {
                 || contentType.startsWith("image")) {
 
                 const fileStat = await fsPromises.stat(filePath);
-                await this.addFile(filePath, {
-                    contentType,
-                    length: fileStat.size,
-                    lastModified: fileStat.mtime,
-                }, fileStat.birthtime, contentType, [], () => fs.createReadStream(filePath));
+                await this.addFile(
+                    filePath, 
+                    {
+                        contentType,
+                        length: fileStat.size,
+                        lastModified: fileStat.mtime,
+                    }, 
+                    fileStat.birthtime, 
+                    contentType, 
+                    [], 
+                    () => fs.createReadStream(filePath),
+                    progressCallback
+                );
             }
             else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
-                log.json("file-ignored", {
-                    filePath,
-                    reason: "unsupported content type",
-                });
                 this.addSummary.numFilesIgnored++;
             }
 
@@ -539,7 +535,7 @@ export class MediaFileDatabase {
     //
     // Adds files from a zip file to the media file database.
     //
-    async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable): Promise<void> {
+    async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> {
 
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
@@ -551,10 +547,6 @@ export class MediaFileDatabase {
                 const contentType = mime.getType(fileName) || undefined;
                 if (!contentType) {
                     log.verbose(`Ignoring file "${fullPath}" with unknown content type.`);
-                    log.json("file-ignored", {
-                        filePath: fullPath,
-                        reason: "unknown content type",
-                    });
                     this.addSummary.numFilesIgnored++;
                     continue;
                 }
@@ -565,11 +557,19 @@ export class MediaFileDatabase {
 
 
                     const fileData = await zipObject.async("nodebuffer");
-                    await this.addFile(`zip://${fullPath}`, {
-                        contentType,
-                        length: fileData.length,
-                        lastModified: fileDate,
-                    }, fileDate, contentType, ["From zip file"], () => Readable.from(fileData));
+                    await this.addFile(
+                        `zip://${fullPath}`, 
+                        {
+                            contentType,
+                            length: fileData.length,
+                            lastModified: fileDate,
+                        }, 
+                        fileDate, 
+                        contentType, 
+                        ["From zip file"], 
+                        () => Readable.from(fileData),
+                        progressCallback                    
+                    );
                 }
             }
 

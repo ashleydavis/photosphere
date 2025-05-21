@@ -1,40 +1,35 @@
-export const log = {
-    info(message: string) {
+export interface ILog {
+    info(message: string): void;
+    verbose(message: string): void;
+    error(message: string): void;
+    exception(message: string, error: Error): void;
+    warn(message: string): void;
+}
+
+//
+// Sets the global log.
+//
+export function setLog(_log: ILog): void {
+    log = _log;
+}
+
+export let log: ILog = {
+    info(message: string): void {
         console.log(message);
     },
-    success(message: string) {
+    verbose(message: string): void {
         console.log(message);
     },
-    verbose(message: string) {
-        console.log(message);
-    },
-    fail(message: string) {
-        console.log(message);
-    },
-    error(message: string) {
+    error(message: string): void {
         console.error(message);
     },
-    exception(message: string, error: Error) {
+    exception(message: string, error: Error): void {
         console.error(message);
         console.error(error.stack || error.message || error);
-
-        this.json("exception", {
-            message: message,
-            error, //logo: serialize error.
-        });
     },
-    debug(message: string) {
-        console.debug(message);
-    },
-    warn(message: string) {
+    warn(message: string): void {
         console.warn(message);
     },
-
-    //
-    // Includes streaming JSON data in the output.
-    //
-    json(key: string, data: any) {
-        console.log(`JSON: ${key}:`);
-        console.log(JSON.stringify(data, null, 2));
-    }
 };
+
+
