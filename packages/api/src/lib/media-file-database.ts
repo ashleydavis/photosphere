@@ -487,7 +487,7 @@ export class MediaFileDatabase {
 
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
-        for await (const orderedFile of walkDirectory(this.assetStorage, "", [/\.db/])) {
+        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
             const contentType = mime.getType(orderedFile.fileName);
             const filePath = orderedFile.fileName;
             if (!contentType) {
