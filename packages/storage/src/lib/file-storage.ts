@@ -12,6 +12,9 @@ export class FileStorage implements IStorage {
     // Returns true if the specified directory is empty.
     //
     async isEmpty(path: string): Promise<boolean> {
+        if (!await fs.pathExists(path)) {
+            return true;
+        }
         const entries = await fs.readdir(path);
         return entries.length === 0;
     }
