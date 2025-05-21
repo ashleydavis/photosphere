@@ -16,6 +16,9 @@ import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
 import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile } from "adb";
 
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
+
 // @ts-ignore
 import ColorThief from "colorthief";
 
