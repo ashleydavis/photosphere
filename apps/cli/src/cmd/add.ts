@@ -41,16 +41,19 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);
     const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
 
-    process.stdout.write(`Added 0 files (0 bytes)`);
+    process.stdout.write(`Searching for files`);
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
     await database.load();
 
     try {
-        await database.addPaths(paths, (filesAdded, totalSize) => {
+        await database.addPaths(paths, (filesAdded, totalSize, currentlyScanning) => {
             process.stdout.clearLine(0);
             process.stdout.cursorTo(0);
-            process.stdout.write(`Added ${filesAdded} files (${totalSize} bytes)`);
+            process.stdout.write(`Added ${filesAdded} files (${totalSize} bytes).`);
+            if (currentlyScanning) {
+                process.stdout.write(` Scanning ${currentlyScanning}...`);
+            }
         });
 
         const addSummary = database.getAddSummary();

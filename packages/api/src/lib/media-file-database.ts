@@ -27,7 +27,7 @@ export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType:
 //
 // Progress callback for the add operation.
 //
-export type ProgressCallback = (filesAdded: number, totalSize: number) => void;
+export type ProgressCallback = (filesAdded: number, totalSize: number, currentlyScanning: string | undefined) => void;
 
 //
 // Size of the micro thumbnail.
@@ -193,6 +193,11 @@ export class MediaFileDatabase {
         totalSize: 0,
         averageSize: 0,
     };
+
+    //
+    // The currently scanning directory.
+    //
+    private currentlyScanning: string | undefined = undefined;
 
     constructor(
         assetStorage: IStorage,
@@ -466,7 +471,7 @@ export class MediaFileDatabase {
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
-                progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize);
+                progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
             }
         }
         catch (err: any) {
@@ -487,7 +492,14 @@ export class MediaFileDatabase {
 
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
+        this.currentlyScanning = directoryPath;
+        progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+
         for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
+
+            this.currentlyScanning = path.dirname(orderedFile.fileName);
+            progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
+
             const contentType = mime.getType(orderedFile.fileName);
             const filePath = orderedFile.fileName;
             if (!contentType) {
@@ -538,6 +550,9 @@ export class MediaFileDatabase {
     async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> {
 
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
+
+        this.currentlyScanning = filePath;
+        progressCallback(this.addSummary.numFilesAdded, this.addSummary.totalSize, this.currentlyScanning);
 
         const zip = new JSZip();
         const unpacked = await zip.loadAsync(await buffer(openStream()));
