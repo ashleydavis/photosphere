@@ -54,6 +54,8 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
         });
 
         const addSummary = database.getAddSummary();
+
+        process.stdout.write(`\n`); // Flush the progress message.
     
         console.log(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
         
