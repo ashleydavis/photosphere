@@ -418,10 +418,7 @@ export class MediaFileDatabase {
             if (assetDetails?.coordinates) {
                 coordinates = assetDetails.coordinates;
                 const googleApiKey = this.googleApiKey;
-                if (!googleApiKey) {
-                    log.warn(`Google API key not set, skipping reverse geocoding.`);
-                }
-                else {
+                if (googleApiKey) {
                     const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
                     if (reverseGeocodingResult) {
                         location = reverseGeocodingResult.location;
