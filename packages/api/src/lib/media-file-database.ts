@@ -338,7 +338,7 @@ export class MediaFileDatabase {
             //
             // The file is already in the database.
             //
-            log.info(`File "${filePath}" already in the database, don't need to add it.`);
+            // log.info(`File "${filePath}" already in the database, don't need to add it.`);
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
         }
