@@ -26,7 +26,7 @@ export class AssetDatabaseStorage implements IStorage {
             length: info.length,
         });
 
-        console.log(`Updated the merkle tree for file "${filePath}"`);
+        // console.log(`Updated the merkle tree for file "${filePath}"`);
     }
 
     get location(): string {

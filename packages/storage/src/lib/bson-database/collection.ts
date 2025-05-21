@@ -340,7 +340,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
             if (!this.isAlive) {
                 // Exit the worker if the collection is shutting down.
-                console.log(`Worker exiting on shutdown.`);
+                // console.log(`Worker exiting on shutdown.`);
                 break;
             }
 
@@ -429,7 +429,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Writes all pending changes and shuts down the collection.
     //
     async shutdown(): Promise<void> {
-        console.log(`Shutting down collection.`);
+        // console.log(`Shutting down collection.`);
         this.clearSchedule(); // Clear any pending saves.
         this.isAlive = false; // Causes the worker to exit after saving.
         this.wakeWorker(); // Wake the worker so it can exit.
@@ -1110,7 +1110,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
 
         if (await this.hasIndex(fieldName, direction)) {
-            console.log(`Sort index for field "${fieldName}" already exists.`);
+            // console.log(`Sort index for field "${fieldName}" already exists.`);
             // Index already exists, no need to create it again.
             return;
         }

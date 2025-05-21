@@ -82,7 +82,7 @@ export class SortIndex<RecordT extends IRecord> {
     
     // Initialize or update the index using external sorting to handle large collections
     async initialize(collection: IBsonCollection<RecordT>): Promise<void> {
-        console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
+        // console.log(`Initializing sort index for field '${this.fieldName}' (${this.direction})`);
         
         const CHUNK_SIZE = 1000; // Number of records to process at once
         const localTmpDir = path.join(os.tmpdir(), `bsondb_sort_${Date.now()}`);
@@ -90,14 +90,14 @@ export class SortIndex<RecordT extends IRecord> {
         // Create local temporary directory
         await fs.ensureDir(localTmpDir);
 
-        console.log(`Using temporary directory: ${localTmpDir}`);
+        // console.log(`Using temporary directory: ${localTmpDir}`);
         
         let recordCount = 0;
         let chunkCount = 0;
         let totalRecords = 0;
         
         // Step 1: Create sorted chunks
-        console.log("Phase 1: Creating sorted chunks...");
+        // console.log("Phase 1: Creating sorted chunks...");
         let currentChunk: ISortedIndexEntry<RecordT>[] = [];
         
         // Iterate through all records in the collection
@@ -136,7 +136,7 @@ export class SortIndex<RecordT extends IRecord> {
         
         // No records to sort
         if (chunkCount === 0) {
-            console.log("No records found with the specified field. Creating empty index.");
+            // console.log("No records found with the specified field. Creating empty index.");
             this.totalEntries = 0;
             await this.saveMetadata();
             this.initialized = true;
@@ -159,7 +159,7 @@ export class SortIndex<RecordT extends IRecord> {
         // Clean up temporary directory
         await fs.remove(localTmpDir);
         
-        console.log(`Completed initializing sort index for field '${this.fieldName}' (${this.direction})`);
+        // console.log(`Completed initializing sort index for field '${this.fieldName}' (${this.direction})`);
 
         const totalPages = Math.ceil(this.totalEntries / this.pageSize);
         console.log(`Total records: ${totalRecords}, Total pages: ${totalPages}`);
