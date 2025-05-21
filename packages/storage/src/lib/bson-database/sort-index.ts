@@ -350,7 +350,7 @@ export class SortIndex<RecordT extends IRecord> {
             throw new Error(`Page file verification failed (size mismatch: ${readBuffer.length} vs ${dataWithChecksum.length})`);
         }
 
-        console.log(`Saved page ${pageNum} with ${entries.length} entries to ${filePath}`);
+        // console.log(`Saved page ${pageNum} with ${entries.length} entries to ${filePath}`);
     }
 
     // Save metadata file with total records and other info
