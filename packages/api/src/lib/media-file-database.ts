@@ -328,7 +328,13 @@ export class MediaFileDatabase {
 
         log.verbose(`Adding file "${filePath}" to the media file database.`);        
 
-        const localHashedFile = await this.hashFile(filePath, fileInfo, contentType, validateFile, openStream, this.localHashCache);
+        if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
+            log.error(`File "${filePath}" has failed validation.`);
+            this.addSummary.numFilesFailed++;
+            return;
+        }
+
+        const localHashedFile = await this.hashFile(filePath, fileInfo, openStream, this.localHashCache);
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
 
@@ -369,7 +375,7 @@ export class MediaFileDatabase {
             if (!assetInfo) {
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
-            const hashedAsset = await this.hashFile(assetPath, assetInfo, contentType, undefined, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
+            const hashedAsset = await this.hashFile(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
@@ -389,7 +395,7 @@ export class MediaFileDatabase {
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.hashFile(thumbPath, thumbInfo, assetDetails.thumbnailContentType!, undefined, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
+                const hashedThumb = await this.hashFile(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
@@ -403,7 +409,7 @@ export class MediaFileDatabase {
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.hashFile(displayPath, displayInfo, assetDetails.displayContentType!, undefined, () => Readable.from(assetDetails.display!), this.databaseHashCache);
+                const hashedDisplay = await this.hashFile(displayPath, displayInfo, () => Readable.from(assetDetails.display!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
@@ -613,6 +619,19 @@ export class MediaFileDatabase {
     }
 
     //
+    // Validates the local file.
+    //
+    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
+        try {
+            return await validateFile(filePath, fileInfo, contentType, openStream);
+        }
+        catch (error: any) {
+            log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);                
+            return false;
+        }
+    }
+
+    //
     // Gets the hash of a file.
     //
     // Retreive's the hash from the hash cache if it exists and the file size and last modified date match.
@@ -620,7 +639,7 @@ export class MediaFileDatabase {
     //
     // It is assume we already have the file size and last modified date.
     //
-    async hashFile(filePath: string, fileInfo: IFileInfo, contentType: string, validateFile: FileValidator | undefined, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
+    async hashFile(filePath: string, fileInfo: IFileInfo, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified === fileInfo.lastModified) {
@@ -631,21 +650,6 @@ export class MediaFileDatabase {
                     lastModified: fileInfo.lastModified,
                     length: fileInfo.length,
                 }
-            }
-        }
-
-        //
-        // Validates the file if requested.
-        //
-        if (validateFile) {
-            try {
-                const isValid = await validateFile(filePath, fileInfo, contentType, openStream);
-                if (!isValid) {
-                    throw new Error(`File "${filePath}" failed validation.`);
-                }
-            }
-            catch (error: any) {
-                throw new WrappedError(`Validation failed for ${filePath}`, { cause: error });
             }
         }
 
