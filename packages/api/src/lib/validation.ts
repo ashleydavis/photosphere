@@ -12,6 +12,11 @@ ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 //
 export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
 
+    if (contentType === "image/psd") {
+        // Not sure how to validate PSD files just yet.
+        return true;
+    }
+
     if (contentType.startsWith("image")) {
         const imageStream = sharp();
         openStream().pipe(imageStream);
