@@ -1,4 +1,5 @@
 import { IStorage, pathJoin } from "storage";
+import { log } from "utils";
 
 /**
  * Represents a file that has been ordered by where it was found in the file system.
@@ -30,7 +31,7 @@ export async function* walkDirectory(
             // Check if path matches any ignore patterns
             const shouldIgnore = ignorePatterns.some(pattern => pattern.test(fullPath));
             if (shouldIgnore) {
-                console.log(`Ignoring ${fullPath}`);
+                log.verbose(`Ignoring ${fullPath}`);
                 continue;
             }
 
@@ -55,7 +56,7 @@ export async function* walkDirectory(
             // Check if path matches any ignore patterns
             const shouldIgnore = ignorePatterns.some(pattern => pattern.test(fullPath));
             if (shouldIgnore) {
-                console.log(`Ignoring ${fullPath}`);
+                log.verbose(`Ignoring ${fullPath}`);
                 continue;
             }
 
