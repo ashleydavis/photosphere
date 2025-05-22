@@ -538,6 +538,7 @@ export class MediaFileDatabase {
                 //
                 await this.localHashCache.save();
                 await this.databaseHashCache.save();
+                await this.assetDatabase.save();                
             }
         }
 
@@ -594,6 +595,7 @@ export class MediaFileDatabase {
                 //
                 await this.localHashCache.save();
                 await this.databaseHashCache.save();
+                await this.assetDatabase.save();                
             }
         }
 

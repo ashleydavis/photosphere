@@ -95,6 +95,16 @@ export class AssetDatabase implements IAssetDatabase {
     }
 
     //
+    // Saves the database to disk.
+    //
+    async save(): Promise<void> {
+        if (!this.merkleTree) {
+            throw new Error("Cannot save database. No database loaded.");
+        }
+        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
+    }
+
+    //
     // Closes the database and saves any outstanding data.
     //
     async close(): Promise<void> {
