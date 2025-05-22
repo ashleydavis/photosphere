@@ -642,7 +642,7 @@ export class MediaFileDatabase {
     async hashFile(filePath: string, fileInfo: IFileInfo, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
-            if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified === fileInfo.lastModified) {
+            if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified.getTime() === fileInfo.lastModified.getTime()) {
                 // The hash cache entry is valid, so return it.
                 // If a hash is commited to the hash cache, the file is assumed to be valid.
                 return {
