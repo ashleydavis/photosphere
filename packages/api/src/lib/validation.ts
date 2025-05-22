@@ -12,7 +12,7 @@ ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
 //
 export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
 
-    if (contentType === "image/psd") {
+    if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
         return true;
     }
