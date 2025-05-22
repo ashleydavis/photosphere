@@ -11,7 +11,7 @@ export interface MerkleNode {
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
     leafCount: number; // Number of leaf nodes in the subtree rooted at this node. Set to 1 for leaf nodes.
     isDeleted?: boolean; // Indicates if this file has been deleted (for leaf nodes only).
-    size: number; // The size of the node and children in bytes.
+    size: bigint; // The size of the node and children in bytes.
 }
 
 //
@@ -46,7 +46,7 @@ export interface TreeMetadata {
     totalFiles: number;
 
     //  Total size of all files in the tree (in bytes)
-    totalSize: number;
+    totalSize: bigint;
     
     // Creation timestamp (in milliseconds since epoch)
     createdAt: number;
@@ -183,7 +183,7 @@ export function createLeafNode(fileHash: FileHash): MerkleNode {
         fileName: fileHash.fileName,
         nodeCount: 1, // Leaf nodes have a node count of 1.
         leafCount: 1, // Leaf nodes have a leaf count of 1.
-        size: fileHash.length, // Size is the length of the file.
+        size: BigInt(fileHash.length), // Size is the length of the file.
     };
 }
 
@@ -246,7 +246,7 @@ export function createDefaultMetadata(): TreeMetadata {
         id: uuidv4(),
         totalNodes: 0,
         totalFiles: 0,
-        totalSize: 0,
+        totalSize: 0n,
         createdAt: now,
         modifiedAt: now
     };
@@ -255,7 +255,7 @@ export function createDefaultMetadata(): TreeMetadata {
 /**
  * Update metadata when tree is modified
  */
-export function updateMetadata(metadata: TreeMetadata, totalNodes: number, totalFiles: number, totalSize: number): TreeMetadata {
+export function updateMetadata(metadata: TreeMetadata, totalNodes: number, totalFiles: number, totalSize: bigint): TreeMetadata {
     return {
         ...metadata,
         totalNodes,
@@ -476,7 +476,7 @@ export function updateFile(merkleTree: IMerkleTree | undefined, fileHash: FileHa
     
     // Update the leaf node's hash
     node.hash = fileHash.hash;
-    node.size = fileHash.length; // Update the size of the node.
+    node.size = BigInt(fileHash.length); // Update the size of the node.
     
     // Calculate the path from the root to the updated node (root first)
     const pathToRoot = calculatePathToRoot(nodeIndex, merkleTree.nodes);
@@ -617,7 +617,7 @@ export async function loadTree(filePath: string, storage: IStorage): Promise<IMe
             fileName: filePath,
             nodeCount: 0,
             leafCount: 0,
-            size: 0,
+            size: 0n,
         };
         nodes.push(node);
 
@@ -952,13 +952,13 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
     let totalSize = 4; // 4 bytes version
 
     // Add metadata size.
-    // 16 bytes UUID + 4 bytes totalNodes + 4 bytes totalFiles + 4 bytes totalSize + 8 bytes createdAt + 8 bytes modifiedAt
-    totalSize += 16 + 4 + 4 + 4 + 8 + 8;
+    // 16 bytes UUID + 4 bytes totalNodes + 4 bytes totalFiles + 8 bytes totalSize + 8 bytes createdAt + 8 bytes modifiedAt
+    totalSize += 16 + 4 + 4 + 8 + 8 + 8;
     
     // Calculate size needed for all nodes
     for (const node of tree.nodes) {
-        // 32 bytes hash + 4 bytes nodeCount + 4 bytes leafCount + 4 bytes size + 4 bytes fileNameLength + 1 byte isDeleted
-        totalSize += 32 + 4 + 4 + 4 + 4 + 1;
+        // 32 bytes hash + 4 bytes nodeCount + 4 bytes leafCount + 8 bytes size + 4 bytes fileNameLength + 1 byte isDeleted
+        totalSize += 32 + 4 + 4 + 8 + 4 + 1;
         
         // Add fileName size if present
         if (node.fileName) {
@@ -1002,8 +1002,11 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
     offset += 4;
 
     // Write totalSize
-    buffer.writeUInt32LE(tree.metadata.totalSize, offset);
-    offset += 4;
+    const low = Number(tree.metadata.totalSize & 0xFFFFFFFFn); // Lower 32 bits: 2,508,816,352
+    const high = Number(tree.metadata.totalSize >> 32n);
+    buffer.writeUInt32LE(low, offset);
+    buffer.writeUInt32LE(high, offset + 4);
+    offset += 8;
     
     // Write creation timestamp
     // Split into two 32-bit values since Node.js Buffer doesn't have writeUInt64LE
@@ -1037,8 +1040,11 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
         offset += 4;
 
         // Write tree size
-        buffer.writeUInt32LE(node.size, offset);
-        offset += 4;
+        const low = Number(node.size & 0xFFFFFFFFn); // Lower 32 bits: 2,508,816,352
+        const high = Number(node.size >> 32n);
+        buffer.writeUInt32LE(low, offset);
+        buffer.writeUInt32LE(high, offset + 4);
+        offset += 8;
         
         // Write fileName if present
         if (node.fileName) {
@@ -1110,8 +1116,10 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
         const totalFiles = treeData.readUInt32LE(offset);
         offset += 4;
 
-        const totalSize = treeData.readUInt32LE(offset);
-        offset += 4;
+        const low = treeData.readUInt32LE(offset);
+        const high = treeData.readUInt32LE(offset + 4);
+        const totalSize = (BigInt(high) << 32n) | BigInt(low);
+        offset += 8;
         
         // Read created timestamp (64-bit value split into two 32-bit values)
         const createdLow = treeData.readUInt32LE(offset);
@@ -1154,9 +1162,11 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
             offset += 4;
 
             // Read tree size.
-            const size = treeData.readUInt32LE(offset);
-            offset += 4;
-            
+            const low = treeData.readUInt32LE(offset);
+            const high = treeData.readUInt32LE(offset + 4);
+            const size = (BigInt(high) << 32n) | BigInt(low);
+            offset += 8;
+
             // Read fileName if present
             const fileNameLength = treeData.readUInt32LE(offset);
             offset += 4;
@@ -1201,11 +1211,8 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
             offset += 4;
             
             // Read isDeleted flag (if exists in format)
-            let isDeleted: boolean | undefined;
-            if (offset < treeData.length) {
-                isDeleted = treeData.readUInt8(offset) === 1;
-                offset += 1;
-            }
+            const isDeleted = treeData.readUInt8(offset) === 1;
+            offset += 1;
             
             // Create nodeRef
             sortedNodeRefs.push({
@@ -1265,7 +1272,7 @@ export function markFileAsDeleted(merkleTree: IMerkleTree, fileName: string): bo
     // Mark node as deleted with a special tombstone hash
     node.isDeleted = true;
     node.hash = createTombstoneHash(fileName);
-    node.size = 0;
+    node.size = 0n;
     
     // Update parent hashes up to the root
     const pathToRoot = calculatePathToRoot(nodeIndex, merkleTree.nodes);
