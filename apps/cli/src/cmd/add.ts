@@ -80,6 +80,8 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
         log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
         log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
         log.info(`  - ${addSummary.averageSize} bytes average size.`);
+
+        process.exit(0);
     }
     finally {
         await database.close();

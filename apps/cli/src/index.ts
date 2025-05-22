@@ -44,9 +44,7 @@ async function main() {
         .argument(...dbArgument)
         .action(uiCommand);
 
-    await program.parseAsync(process.argv);
-
-    process.exit(0);
+    await program.parseAsync(process.argv);    
 }
 
 main()

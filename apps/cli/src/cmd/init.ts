@@ -51,4 +51,6 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     await database.create(); 
 
     log.info(pc.green(`Created new media file database in "${dbDir}".`))
+
+    process.exit(0);
 }
