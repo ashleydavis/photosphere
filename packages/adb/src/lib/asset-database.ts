@@ -89,6 +89,9 @@ export class AssetDatabase implements IAssetDatabase {
     //
     async load(): Promise<void> {
         this.merkleTree = await loadTreeV2("tree.dat", this.metadataStorage);
+        if (!this.merkleTree) {
+            throw new Error("Failed to load asset database. No tree found.");
+        }
     }
 
     //
