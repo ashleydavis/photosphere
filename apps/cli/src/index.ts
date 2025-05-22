@@ -42,6 +42,9 @@ async function main() {
         .command("ui")
         .description("Starts the Photosphere user-interface to view, search and edit photos and videos.")
         .argument(...dbArgument)
+        .option(...keyOption)
+        .option(...metadataDirOption)
+        .option("--no-open", "Disables opening the UI in the default browser.", false)
         .action(uiCommand);
 
     await program.parseAsync(process.argv);    

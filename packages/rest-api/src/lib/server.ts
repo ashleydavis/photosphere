@@ -160,10 +160,9 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             return this.mediaFileDatabase;
         }
 
-        const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `.db`);
         this.mediaFileDatabase = new MediaFileDatabase(
             this.assetStorage,
-            metadataStorage,
+            this.metadataStorage,
             this.googleApiKey
         );
         await this.mediaFileDatabase.load();

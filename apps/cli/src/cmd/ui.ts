@@ -3,17 +3,30 @@ import fs from 'fs';
 import AdmZip from "adm-zip";
 import os from 'os';
 import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
-import { createStorage, loadEncryptionKeys } from "storage";
+import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { registerTerminationCallback } from "node-utils";
+import open from "open";
+import { log } from "utils";
+import pc from "picocolors";
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
 
 export interface IUiCommandOptions {
     //
+    // Set the path to the database metadata.
+    //
+    meta: string;
+
+    //
     // Sets the path to private key file for encryption.
     //
     key: string;
+
+    //
+    // When true, the ui will not open in the browser.
+    //
+    noOpen: boolean;
 }
 
 //
@@ -39,8 +52,9 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     console.log(`Serving frontend from ${frontendPath}.`);
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(dbDir);
+
+    const { storage: assetStorage } = createStorage(dbDir, storageOptions);
+    const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
     const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
 
     //
@@ -59,6 +73,13 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     });
 
     app.listen(3000, () => {
-       console.log("Photosphere editor started at http://localhost:3000");
+        log.info(`Photosphere UI running on ${pc.green("http://localhost:3000")}`);
+        log.info(pc.cyan("Press Ctrl+C in this terminal to stop the server."));
+
+        if (!options.noOpen) {
+            open("http://localhost:3000").catch((err) => {
+                console.error("Failed to open browser:", err);
+            });
+        }
     });
 }
