@@ -492,12 +492,12 @@ export class MediaFileDatabase {
 
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
-        this.currentlyScanning = directoryPath;
+        this.currentlyScanning = path.basename(directoryPath);
         progressCallback(this.currentlyScanning);
 
         for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
 
-            this.currentlyScanning = path.dirname(orderedFile.fileName);
+            this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
             progressCallback(this.currentlyScanning);
 
             const contentType = mime.getType(orderedFile.fileName);
@@ -552,7 +552,7 @@ export class MediaFileDatabase {
 
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
-        this.currentlyScanning = filePath;
+        this.currentlyScanning = path.basename(filePath);
         progressCallback(this.currentlyScanning);
 
         const zip = new JSZip();

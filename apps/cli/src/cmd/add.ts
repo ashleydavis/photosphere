@@ -51,19 +51,18 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
             process.stdout.clearLine(0);
             process.stdout.cursorTo(0);
             const addSummary = database.getAddSummary();
-            process.stdout.write(`Added: ${addSummary.numFilesAdded}`);
-            if (addSummary.numFilesIgnored) {
-                process.stdout.write(` | Ignored: ${addSummary.numFilesIgnored}`);
+            process.stdout.write(`Added: ${pc.green(addSummary.numFilesAdded)}`);
+            if (addSummary.numFilesIgnored > 0) {
+                process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
             }
-            if (addSummary.numFilesFailed) {
-                process.stdout.write(` | Failed: ${addSummary.numFilesFailed}`);
-            }
-            if (addSummary.numFilesAlreadyAdded) {  
-                process.stdout.write(` | Skipped: ${addSummary.numFilesAlreadyAdded}`);
+            if (addSummary.numFilesFailed > 0) {
+                process.stdout.write(` | Failed: ${pc.red(addSummary.numFilesFailed)}`);
             }
             if (currentlyScanning) {
-                process.stdout.write(` | Scanning ${currentlyScanning}...`);
+                process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
             }
+
+            process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume this later.")}`);
         });
 
         const addSummary = database.getAddSummary();
