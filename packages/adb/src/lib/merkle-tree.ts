@@ -972,8 +972,8 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
     // Calculate size needed for all nodeRefs
     for (const nodeRef of tree.sortedNodeRefs) {
         const fileNameLength = Buffer.byteLength(nodeRef.fileName, 'utf8');
-        // 2 bytes fileNameLength + X bytes fileName + 4 bytes fileIndex + 1 byte isDeleted
-        totalSize += 2 + fileNameLength + 4 + 1;
+        // 4 bytes fileNameLength + X bytes fileName + 4 bytes fileIndex + 1 byte isDeleted
+        totalSize += 4 + fileNameLength + 4 + 1;
     }
     
     // Create buffer for the entire tree
@@ -1066,8 +1066,8 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
     for (const nodeRef of tree.sortedNodeRefs) {
         // Write fileName
         const fileNameLength = Buffer.byteLength(nodeRef.fileName, 'utf8');
-        buffer.writeUInt16LE(fileNameLength, offset);
-        offset += 2;
+        buffer.writeUInt32LE(fileNameLength, offset);
+        offset += 4;
         buffer.write(nodeRef.fileName, offset, 'utf8');
         offset += fileNameLength;
         
@@ -1168,11 +1168,8 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
             }
             
             // Read isDeleted flag (if exists in format)
-            let isDeleted: boolean | undefined;
-            if (offset < treeData.length) {
-                isDeleted = treeData.readUInt8(offset) === 1;
-                offset += 1;
-            }
+            const isDeleted = treeData.readUInt8(offset) === 1;
+            offset += 1;
             
             // Create node
             nodes.push({
@@ -1193,8 +1190,8 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
         
         for (let i = 0; i < nodeRefCount; i++) {
             // Read fileName
-            const fileNameLength = treeData.readUInt16LE(offset);
-            offset += 2;
+            const fileNameLength = treeData.readUInt32LE(offset);
+            offset += 4;
             
             const fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
             offset += fileNameLength;
