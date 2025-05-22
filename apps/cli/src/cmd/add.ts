@@ -62,7 +62,7 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
                 process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
             }
 
-            process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume this later.")}`);
+            process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`);
         });
 
         const addSummary = database.getAddSummary();
