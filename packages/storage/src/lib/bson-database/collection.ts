@@ -1110,7 +1110,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
 
         if (await this.hasIndex(fieldName, direction)) {
-            console.log(`Sort index for field "${fieldName}" already exists.`);
+            // console.log(`Sort index for field "${fieldName}" already exists.`);
             // Index already exists, no need to create it again.
             return;
         }
