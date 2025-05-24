@@ -94,8 +94,8 @@ export class SortManager {
         });
 
         // Initialize if needed
-        if (!await sortIndex.isInitialized()) {
-            await sortIndex.initialize(collection);
+        if (!await sortIndex.isBuilt()) {
+            await sortIndex.build(collection);
         }
 
         // Cache in memory
@@ -156,7 +156,7 @@ export class SortManager {
         );
         
         await sortIndex.delete(); // Delete the existing index
-        await sortIndex.initialize(collection); // Rebuild
+        await sortIndex.build(collection); // Rebuild
     }
 
     // List available sort indexes for a collection
@@ -231,5 +231,19 @@ export class SortManager {
         if (await this.storage.dirExists(collectionIndexPath)) {
             await this.storage.deleteDir(collectionIndexPath);
         }
+    }
+    
+    // Shut down all sort indexes, saving any dirty pages
+    async shutdown(): Promise<void> {
+        // Call shutdown on all sort indexes
+        const promises = Array.from(this.sortIndexes.values())
+            .map(async (sortIndex) => {
+                await sortIndex.shutdown();
+            });
+            
+        await Promise.all(promises);
+        
+        // Clear the cache
+        this.sortIndexes.clear();
     }
 }
