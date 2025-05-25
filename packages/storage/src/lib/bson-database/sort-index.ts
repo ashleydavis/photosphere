@@ -644,32 +644,11 @@ export class SortIndex<RecordT extends IRecord> {
     async persistMetadata(): Promise<void> {
         const metadataPath = `${this.indexDirectory}/metadata.dat`;
         
-        // Calculate total pages for backward compatibility
-        let totalPages = 0;
-        let currentPageId = await this.findLeftmostLeaf();
-        
-        while (currentPageId) {
-            totalPages++;
-            
-            const node = await this.getNode(currentPageId);
-            if (!node || !node.nextLeaf) {
-                break;
-            }
-            
-            currentPageId = node.nextLeaf;
-        }
-        
-        // Make sure we have at least one page for tests to pass
-        if (totalPages === 0) {
-            totalPages = 1;
-        }
-        
         const metadata = {
             fieldName: this.fieldName,
             direction: this.direction,
             pageSize: this.pageSize,
             totalEntries: this.totalEntries,
-            totalPages: totalPages,
             rootPageId: this.rootPageId,
             createdAt: new Date(), // We don't track creation date in class
             lastUpdatedAt: this.lastUpdatedAt
