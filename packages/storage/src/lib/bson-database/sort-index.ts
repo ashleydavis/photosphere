@@ -1246,9 +1246,8 @@ export class SortIndex<RecordT extends IRecord> {
     
     // Find records by exact value using binary search on the sorted index
     async findByValue(value: any): Promise<RecordT[]> {
-        // Check if initialized
-        const isInit = await this.isBuilt();
-        if (!isInit) {
+        const isBuilt = await this.isBuilt();
+        if (!isBuilt) {
             throw new Error(`Sort index for field '${this.fieldName}' is not initialized`);
         }
         
