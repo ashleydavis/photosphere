@@ -122,7 +122,9 @@ export class SortIndex<RecordT extends IRecord> {
             let currentPath = '';
             
             for (const part of parts) {
-                if (!part) continue;
+                if (!part) {
+                    continue;
+                }
                 currentPath += '/' + part;
                 const dirExists = await this.storage.dirExists(currentPath);
                 if (!dirExists) {
@@ -192,7 +194,9 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Traverse down the leftmost path to a leaf
         while (!currentNode.isLeaf) {
-            if (currentNode.children.length === 0) break;
+            if (currentNode.children.length === 0) {
+                break;
+            }
             
             currentId = currentNode.children[0];
             currentNode = await this.getNode(currentId);
@@ -660,7 +664,9 @@ export class SortIndex<RecordT extends IRecord> {
         }
         
         // Make sure we have at least one page for tests to pass
-        if (totalPages === 0) totalPages = 1;
+        if (totalPages === 0) {
+            totalPages = 1;
+        }
         
         const metadata = {
             fieldName: this.fieldName,
