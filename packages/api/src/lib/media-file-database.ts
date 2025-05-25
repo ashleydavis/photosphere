@@ -452,7 +452,7 @@ export class MediaFileDatabase {
             //
             // Add the asset's metadata to the database.
             //
-            this.bsonDatabase.collection("metadata").insertOne({
+            await this.bsonDatabase.collection("metadata").insertOne({
                 _id: assetId,
                 width: assetDetails?.resolution.width,
                 height: assetDetails?.resolution.height,
