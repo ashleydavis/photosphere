@@ -70,6 +70,8 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
+
+        await mediaFileDatabaseProvider.close();
     });
 
     app.listen(3000, () => {

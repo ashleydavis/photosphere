@@ -105,6 +105,8 @@ async function main() {
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
+
+        await mediaFileDatabaseProvider.close();
     });    
 
     app.listen(PORT, () => {

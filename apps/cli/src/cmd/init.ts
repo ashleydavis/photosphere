@@ -49,6 +49,7 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
     await database.create(); 
+    await database.close();
 
     log.info(pc.green(`Created new media file database in "${dbDir}".`))
 
