@@ -1006,7 +1006,7 @@ export class SortIndex<RecordT extends IRecord> {
     private async findLeafForValue(value: any): Promise<string> {
         const rootNode = await this.getNode(this.rootPageId);
         if (!rootNode) {
-            return '';
+            return ''; // TODO: Why return empty string?
         }
         
         let currentId = this.rootPageId;
@@ -1030,7 +1030,9 @@ export class SortIndex<RecordT extends IRecord> {
                 childIndex = currentNode.children.length - 1;
             }
             
-            if (currentNode.children.length === 0) break;
+            if (currentNode.children.length === 0) {
+                break;
+            }
             
             currentId = currentNode.children[childIndex];
             const nextNode = await this.getNode(currentId);
@@ -1097,7 +1099,9 @@ export class SortIndex<RecordT extends IRecord> {
             
             // Otherwise, check this child's subtree
             const childNode = await this.getNode(childId);
-            if (!childNode) continue;
+            if (!childNode) {
+                continue;
+            }
             
             const foundInChild = await this.updateKeysInPath(childId, childNode, targetNodeId, oldKey, newKey);
             
@@ -1189,7 +1193,9 @@ export class SortIndex<RecordT extends IRecord> {
      * Splits a leaf node when it gets too large
      */
     private async splitLeafNode(nodeId: string, node: IBTreeNode<RecordT>): Promise<void> {
-        if (!node.isLeaf || !node.records) return;
+        if (!node.isLeaf || !node.records) {
+            return;
+        }
         
         // Ensure entries are properly sorted first
         node.records.sort((a, b) => this.compareValues(a.value, b.value));
