@@ -347,6 +347,7 @@ export class MediaFileDatabase {
             // log.info(`File "${filePath}" already in the database, don't need to add it.`);
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
+            return;
         }
 
         let assetDetails: IAssetDetails | undefined = undefined;
