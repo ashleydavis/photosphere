@@ -1,29 +1,24 @@
 import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { log } from "utils";
-import { configureLog, LogOutputType } from "../lib/log";
+import { configureLog } from "../lib/log";
 import pc from "picocolors";
 
 export interface IAddCommandOptions { 
     //
     // Set the path to the database metadata.
     //
-    meta: string;
+    meta?: string;
 
     //
     // Sets the path to private key file for encryption.
     //
-    key: string;
-
-    //
-    // Sets the output type for the command.
-    //
-    output: LogOutputType;
+    key?: string;
 
     //
     // Enables verbose logging.
     //
-    verbose: boolean;
+    verbose?: boolean;
 }
 
 //
@@ -32,7 +27,6 @@ export interface IAddCommandOptions {
 export async function addCommand(dbDir: string, paths: string[], options: IAddCommandOptions): Promise<void> {
 
     configureLog({
-        output: options.output,
         verbose: options.verbose,
     });
 
