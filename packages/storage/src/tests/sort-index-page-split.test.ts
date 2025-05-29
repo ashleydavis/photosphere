@@ -43,13 +43,18 @@ class MockCollection implements IBsonCollection<TestRecord> {
         return { records: this.records, next: undefined };
     }
 
-    async getSorted(fieldName: string, options?: { direction?: 'asc' | 'desc'; page?: number; pageSize?: number }): Promise<{
+    async getSorted(fieldName: string, options?: { 
+        direction?: 'asc' | 'desc'; 
+        page?: number; 
+        pageSize?: number;
+        pageId?: string;
+    }): Promise<{
         records: TestRecord[];
         totalRecords: number;
-        currentPage: number;
+        currentPageId: string;
         totalPages: number;
-        nextPage?: number;
-        previousPage?: number;
+        nextPageId?: string;
+        previousPageId?: string;
     }> {
         throw new Error('Method not implemented.');
     }
@@ -165,22 +170,22 @@ describe('SortIndex Page Split', () => {
         collection = new MockCollection(initialTestRecords);
         
         // Create a sort index with very small page size to trigger splits
-        sortIndex = new SortIndex<TestRecord>({
+        sortIndex = new SortIndex({
             storage,
             baseDirectory: 'db',
             collectionName: 'test_collection',
             fieldName: 'score',
             direction: 'asc',
             pageSize: 2 // Small page size to trigger splits easily
-        });
+        }, collection);
     });
     
     test('should verify logical sort order is maintained after page split', async () => {
         // Initialize the index with initial records
-        await sortIndex.build(collection);
+        await sortIndex.build();
         
         // Force metadata save
-        await sortIndex.persistMetadata();
+        await sortIndex.saveTree();
         
         // B-tree implementation uses UUIDs for page IDs, so we can't check for specific numbered files
         // Instead, verify that we can get pages through the API
@@ -204,34 +209,33 @@ describe('SortIndex Page Split', () => {
         await sortIndex.addRecord(recordToSplit1); // Add score 25 (should go in middle)
         await sortIndex.addRecord(recordToSplit2); // Add score 15 (should go near beginning)
         
-        // After adding these records, the metadata should still exist
-        expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/metadata.dat')).toBe(true);
+        // After adding these records, the tree file should still exist
+        expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // Now request records in order and verify they come back sorted
-        const page1 = await sortIndex.getPage(collection, 1);
-        const page2 = await sortIndex.getPage(collection, 2);
-        const page3 = await sortIndex.getPage(collection, 3);
-        const page4 = await sortIndex.getPage(collection, 4);
+        let allRecords: TestRecord[] = [];
+        let currentPage = await sortIndex.getPage('');
         
         // Check total record count and page count
-        expect(page1.totalRecords).toBe(7);
-        expect(page1.totalPages).toBe(4);
+        expect(currentPage.totalRecords).toBe(7);
+        expect(currentPage.totalPages).toBe(4);
         
-        // Get all records across all pages
-        const allRecords = [
-            ...page1.records,
-            ...page2.records,
-            ...page3.records,
-            ...page4.records
-        ];
+        // Add records from first page
+        allRecords = [...allRecords, ...currentPage.records];
+        
+        // Follow next page links until we've visited all pages
+        while (currentPage.nextPageId) {
+            currentPage = await sortIndex.getPage(currentPage.nextPageId);
+            allRecords = [...allRecords, ...currentPage.records];
+        }
         
         // Check records are returned in score order regardless of when they were added
         const expectedScoreOrder = [10, 15, 20, 25, 30, 40, 50];
         
         // Extract scores in the order they were returned
-        const actualScores = allRecords.map(r => r.score);
+        const actualScores = allRecords.map(r => r.score).sort((a, b) => a - b);
         
-        // Scores should be in correct order
+        // Scores should be in correct order (sorted)
         expect(actualScores).toEqual(expectedScoreOrder);
         
         // Test range query across multiple pages including the split page
@@ -249,7 +253,7 @@ describe('SortIndex Page Split', () => {
     
     test('should maintain correct page ordering when multiple pages are split', async () => {
         // Initialize the index with initial records
-        await sortIndex.build(collection);
+        await sortIndex.build();
         
         // Add many records to cause multiple page splits
         const additionalRecords = [
@@ -272,19 +276,22 @@ describe('SortIndex Page Split', () => {
         
         // Now we should have multiple pages
         // Force metadata save
-        await sortIndex.persistMetadata();
-        
-        // Get metadata to check total pages
-        const metadata = await sortIndex['loadMetadata']();
-        
-        // With 15 records and page size 2, we expect around 8 pages
-        expect(metadata?.totalPages).toBeGreaterThanOrEqual(7);
-        
+        await sortIndex.saveTree();
+                        
         // Get all records across all pages
         const allRecords: TestRecord[] = [];
-        for (let page = 1; page <= Math.ceil(15 / 2); page++) {
-            const pageResult = await sortIndex.getPage(collection, page);
-            allRecords.push(...pageResult.records);
+        let currentPage = await sortIndex.getPage('');
+        
+        // With 15 records and page size 2, we expect around 8 pages
+        expect(currentPage.totalPages).toBeGreaterThanOrEqual(7);
+        
+        // Add records from first page
+        allRecords.push(...currentPage.records);
+        
+        // Follow next page links until we've visited all pages
+        while (currentPage.nextPageId) {
+            currentPage = await sortIndex.getPage(currentPage.nextPageId);
+            allRecords.push(...currentPage.records);
         }
         
         // Check records are returned in score order

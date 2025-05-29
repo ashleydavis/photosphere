@@ -77,7 +77,7 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
     collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT> {
         let collection = this._collections.get(name);
         if (!collection) {
-            collection = new BsonCollection<IRecord>({
+            collection = new BsonCollection<IRecord>(name, {
                 storage: this.options.storage,
                 directory: name,
                 maxCachedShards: this.options.maxCachedShards,
