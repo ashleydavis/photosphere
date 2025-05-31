@@ -394,8 +394,6 @@ describe('BsonCollection', () => {
         await collection.ensureSortIndex('age', 'asc');
         await collection.ensureSortIndex('role', 'asc');
         await collection.ensureSortIndex('name', 'desc');
-
-        await collection.shutdown(); // Force the indexes top save to disk. Probably shouldn't need to do this.
         
         // List indexes
         const indexes = await collection.listSortIndexes();

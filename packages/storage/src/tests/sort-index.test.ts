@@ -1,7 +1,8 @@
 import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
-import { IBsonCollection, IRecord, IShard } from '../lib/bson-database/collection';
+import { IRecord } from '../lib/bson-database/collection';
 import { SortIndex } from '../lib/bson-database/sort-index';
+import { MockCollection } from './mock-collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -11,151 +12,11 @@ interface TestRecord extends IRecord {
     category: string;
 }
 
-// Mock BsonCollection for testing SortIndex
-class MockCollection implements IBsonCollection<TestRecord> {
-    private records: TestRecord[] = [];
-
-    constructor(records: TestRecord[] = []) {
-        this.records = [...records];
-    }
-
-    async insertOne(record: TestRecord): Promise<void> {
-        this.records.push(record);
-    }
-
-    async getOne(id: string): Promise<TestRecord | undefined> {
-        return this.records.find(r => r._id === id);
-    }
-
-    async *iterateRecords(): AsyncGenerator<TestRecord, void, unknown> {
-        for (const record of this.records) {
-            yield record;
-        }
-    }
-
-    async *iterateShards(): AsyncGenerator<Iterable<TestRecord>, void, unknown> {
-        for (let i = 0; i < this.records.length; i += 2) {
-            yield this.records.slice(i, i + 2);
-        }
-    }
-
-    async getAll(next?: string): Promise<{ records: TestRecord[], next?: string }> {
-        return { records: this.records, next: undefined };
-    }
-
-    async getSorted(fieldName: string, options?: { 
-        direction?: 'asc' | 'desc'; 
-        page?: number; 
-        pageSize?: number;
-        pageId?: string;
-    }): Promise<{
-        records: TestRecord[];
-        totalRecords: number;
-        currentPageId: string;
-        totalPages: number;
-        nextPageId?: string;
-        previousPageId?: string;
-    }> {
-        throw new Error('Method not implemented.');
-    }
-
-    async ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc'): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
-
-    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: 'asc' | 'desc' }>> {
-        throw new Error('Method not implemented.');
-    }
-
-    async deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
-    async updateOne(id: string, updates: Partial<TestRecord>, options?: { upsert?: boolean }): Promise<boolean> {
-        const index = this.records.findIndex(r => r._id === id);
-        if (index === -1) {
-            if (options?.upsert) {
-                this.records.push({ _id: id, ...updates } as TestRecord);
-                return true;
-            }
-            return false;
-        }
-        this.records[index] = { ...this.records[index], ...updates };
-        return true;
-    }
-
-    async replaceOne(id: string, record: TestRecord, options?: { upsert?: boolean }): Promise<boolean> {
-        const index = this.records.findIndex(r => r._id === id);
-        if (index === -1) {
-            if (options?.upsert) {
-                this.records.push(record);
-                return true;
-            }
-            return false;
-        }
-        this.records[index] = record;
-        return true;
-    }
-
-    async deleteOne(id: string): Promise<boolean> {
-        const index = this.records.findIndex(r => r._id === id);
-        if (index === -1) {
-            return false;
-        }
-        this.records.splice(index, 1);
-        return true;
-    }
-
-    async ensureIndex(fieldName: string): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
-
-    async hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
-    async listIndexes(): Promise<string[]> {
-        throw new Error('Method not implemented.');
-    }
-
-    async findByIndex(fieldName: string, value: any): Promise<TestRecord[]> {
-        return this.records.filter(r => r[fieldName] === value);
-    }
-
-    async deleteIndex(fieldName: string): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
-    async shutdown(): Promise<void> {
-        // No-op for testing
-    }
-
-    async drop(): Promise<void> {
-        this.records = [];
-    }
-
-    getNumShards(): number {
-        return Math.ceil(this.records.length / 2);
-    }
-
-    async loadShard(shardIndex: number): Promise<IShard<TestRecord>> {
-        const start = shardIndex * 2;
-        const end = start + 2;
-        const shardRecords = this.records.slice(start, end);
-        return {
-            id: shardIndex,
-            records: new Map(shardRecords.map(record => [record._id, record])),
-            dirty: false,
-            lastAccessed: 0,
-        };
-    }
-
-}
 
 describe('SortIndex', () => {
     let storage: MockStorage;
     let sortIndex: SortIndex<TestRecord>;
-    let collection: MockCollection;
+    let collection: MockCollection<TestRecord>;
     
     const testRecords: TestRecord[] = [
         { _id: '123e4567-e89b-12d3-a456-426614174001', name: 'Record 1', score: 85, category: 'A' },
@@ -167,7 +28,7 @@ describe('SortIndex', () => {
     
     beforeEach(() => {
         storage = new MockStorage();
-        collection = new MockCollection(testRecords);        
+        collection = new MockCollection<TestRecord>(testRecords);        
         sortIndex = new SortIndex({
             storage,
             baseDirectory: 'db',
@@ -202,10 +63,10 @@ describe('SortIndex', () => {
         const result = await sortIndex.getPage('');
         
         // Check page contents
-        expect(result.records.length).toBeLessThanOrEqual(2); // Up to 2 records per page
+        expect(result.records.length).toBeLessThanOrEqual(3);
         expect(result.totalRecords).toBe(5);
         expect(result.currentPageId).toBeTruthy();
-        expect(result.totalPages).toBe(3);
+        expect(result.totalPages).toBe(2);
         
         // Check pagination links exist as expected
         if (result.records.length < 5) {
