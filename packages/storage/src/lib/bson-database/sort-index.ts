@@ -7,15 +7,25 @@ import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
+// let id = 0;
 
 function makeId() {
     return crypto.randomUUID();
+
+    //
+    // Compact id for readability.
+    //
     // const id = crypto.randomUUID();
     // return id.slice(0, 2) + "-" + id.slice(-2);
+
+    //
+    // Simple id for testing.
+    //
+    // ++id;
+    // return `id-${id}`;
 }
 
 // Constants for save debouncing
-const saveDebounceMs = 1_000;
 const maxSaveDelayMs = 10_000;
 
 export interface ISortedIndexEntry<RecordT> {
@@ -47,6 +57,13 @@ export interface ISortIndexOptions {
 
     // Number of records per page
     pageSize?: number;
+    
+    // Maximum number of keys per internal node
+    keySize?: number;
+    
+    // Optional type for value conversion before comparison
+    // Supports 'date' for ISO string date parsing, 'string' for string comparison, 'number' for numeric comparison
+    type?: 'date' | 'string' | 'number';
 }
 
 export interface ISortResult<RecordT> {
@@ -85,12 +102,15 @@ export class SortIndex<RecordT extends IRecord> {
     private fieldName: string;
     private direction: 'asc' | 'desc';
     private pageSize: number;
+    private keySize: number;
     private totalEntries: number = 0;
     private totalPages: number = 0; // Tracks only leaf nodes (user-facing pages)
     private loaded: boolean = false;
     private lastUpdatedAt: Date | undefined;
+    private saving: boolean = false; // Flag to prevent concurrent saves.
     private dirty: boolean = false;
     private rootPageId: string | undefined;
+    private type?: 'date' | 'string' | 'number'; // Optional type for value conversion
     
     // Path to the single file that contains all tree nodes and metadata
     private treeFilePath: string;
@@ -106,10 +126,8 @@ export class SortIndex<RecordT extends IRecord> {
     private treeNodes: Map<string, IBTreeNode> = new Map();
     
     // Maximum number of pages to keep in cache
-    private maxCachedPages: number = 100;
+    private maxCachedPages: number = 10;
     
-    // For debounced saving
-    private saveTimer: NodeJS.Timeout | undefined;
     private lastSaveTime: number | undefined = undefined;
     
     constructor(options: ISortIndexOptions, private readonly collection: IBsonCollection<RecordT>) {
@@ -118,6 +136,8 @@ export class SortIndex<RecordT extends IRecord> {
         this.fieldName = options.fieldName;
         this.direction = options.direction;
         this.pageSize = options.pageSize || 1000;
+        this.keySize = options.keySize || 100;
+        this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
     }
 
@@ -187,6 +207,19 @@ export class SortIndex<RecordT extends IRecord> {
                 offset += 4;
                 const directionBuffer = dataWithoutChecksum.subarray(offset, offset + directionLength);
                 offset += directionLength;
+                
+                // Read type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
+                const typeValue = dataWithoutChecksum.readUInt8(offset);
+                offset += 1;
+                if (typeValue === 1) {
+                    this.type = 'date';
+                } else if (typeValue === 2) {
+                    this.type = 'string';
+                } else if (typeValue === 3) {
+                    this.type = 'number';
+                } else {
+                    this.type = undefined;
+                }
                 
                 // Read pageSize
                 const pageSize = dataWithoutChecksum.readUInt32LE(offset);
@@ -268,74 +301,63 @@ export class SortIndex<RecordT extends IRecord> {
     }
 
     // Serialize a single node to a buffer
-    private serializeNode(node: IBTreeNode): Buffer {
-        const buffers: Buffer[] = [];
-        
-        // Write isLeaf flag (1 byte) - node is a leaf if children.length === 0
-        const isLeafBuffer = Buffer.alloc(1);
-        isLeafBuffer.writeUInt8(node.children.length === 0 ? 1 : 0, 0);
-        buffers.push(isLeafBuffer);
+    private serializeNode(node: IBTreeNode, buffer: Buffer, offset: number): number {
+        let currentOffset = offset;
         
         // Serialize keys as BSON and write length + data
         const keysBson = Buffer.from(BSON.serialize({ keys: node.keys }));
-        const keysLengthBuffer = Buffer.alloc(4);
-        keysLengthBuffer.writeUInt32LE(keysBson.length, 0);
-        buffers.push(keysLengthBuffer);
-        buffers.push(keysBson);
+        buffer.writeUInt32LE(keysBson.length, currentOffset);
+        currentOffset += 4;
+        keysBson.copy(buffer, currentOffset);
+        currentOffset += keysBson.length;
         
         // Write children count (4 bytes) and children data
-        const childrenCountBuffer = Buffer.alloc(4);
-        childrenCountBuffer.writeUInt32LE(node.children.length, 0);
-        buffers.push(childrenCountBuffer);
+        // Note: A node is a leaf if children.length === 0, no need for separate isLeaf flag
+        buffer.writeUInt32LE(node.children.length, currentOffset);
+        currentOffset += 4;
         
         for (const child of node.children) {
             const childBuffer = Buffer.from(child, 'utf8');
-            const childLengthBuffer = Buffer.alloc(4);
-            childLengthBuffer.writeUInt32LE(childBuffer.length, 0);
-            buffers.push(childLengthBuffer);
-            buffers.push(childBuffer);
+            buffer.writeUInt32LE(childBuffer.length, currentOffset);
+            currentOffset += 4;
+            childBuffer.copy(buffer, currentOffset);
+            currentOffset += childBuffer.length;
         }
         
         // Write nextLeaf if it exists
         if (node.nextLeaf) {
             const nextLeafBuffer = Buffer.from(node.nextLeaf, 'utf8');
-            const nextLeafLengthBuffer = Buffer.alloc(4);
-            nextLeafLengthBuffer.writeUInt32LE(nextLeafBuffer.length, 0);
-            buffers.push(nextLeafLengthBuffer);
-            buffers.push(nextLeafBuffer);
+            buffer.writeUInt32LE(nextLeafBuffer.length, currentOffset);
+            currentOffset += 4;
+            nextLeafBuffer.copy(buffer, currentOffset);
+            currentOffset += nextLeafBuffer.length;
         } else {
             // Write 0 length for no nextLeaf
-            const nextLeafLengthBuffer = Buffer.alloc(4);
-            nextLeafLengthBuffer.writeUInt32LE(0, 0);
-            buffers.push(nextLeafLengthBuffer);
+            buffer.writeUInt32LE(0, currentOffset);
+            currentOffset += 4;
         }
         
         // Write previousLeaf if it exists
         if (node.previousLeaf) {
             const previousLeafBuffer = Buffer.from(node.previousLeaf, 'utf8');
-            const previousLeafLengthBuffer = Buffer.alloc(4);
-            previousLeafLengthBuffer.writeUInt32LE(previousLeafBuffer.length, 0);
-            buffers.push(previousLeafLengthBuffer);
-            buffers.push(previousLeafBuffer);
+            buffer.writeUInt32LE(previousLeafBuffer.length, currentOffset);
+            currentOffset += 4;
+            previousLeafBuffer.copy(buffer, currentOffset);
+            currentOffset += previousLeafBuffer.length;
         } else {
             // Write 0 length for no previousLeaf
-            const previousLeafLengthBuffer = Buffer.alloc(4);
-            previousLeafLengthBuffer.writeUInt32LE(0, 0);
-            buffers.push(previousLeafLengthBuffer);
+            buffer.writeUInt32LE(0, currentOffset);
+            currentOffset += 4;
         }
-        
+               
         // parentId is deliberately not serialized - it will be reconstructed during load
         
-        return Buffer.concat(buffers);
+        return currentOffset;
     }
     
     // Deserialize a single node from a buffer
     private deserializeNode(buffer: Buffer, offset: number): { node: IBTreeNode, nextOffset: number } {
         let currentOffset = offset;
-        
-        // Read isLeaf flag (1 byte) - will be used to construct the node but not stored directly
-        const isLeaf = buffer.readUInt8(currentOffset) === 1;
-        currentOffset += 1;
         
         // Read keys length and data
         const keysLength = buffer.readUInt32LE(currentOffset);
@@ -380,6 +402,14 @@ export class SortIndex<RecordT extends IRecord> {
             previousLeaf = previousLeafBuffer.toString('utf8');
         }
         
+        // Read numRecords if there is data left
+        let numRecords = 0;
+        if (currentOffset < buffer.length) {
+            // Check if there's data for numRecords (for backward compatibility)
+            numRecords = buffer.readUInt32LE(currentOffset);
+            currentOffset += 4;
+        }
+        
         // parentId is not present in the serialized format anymore
         // It will be reconstructed after loading all nodes
         
@@ -389,7 +419,7 @@ export class SortIndex<RecordT extends IRecord> {
             nextLeaf,
             previousLeaf,
             // parentId is initially undefined
-            // Note: isLeaf is not stored explicitly, it's determined by children.length === 0
+            // A node is a leaf if children.length === 0
         };
         
         return { node, nextOffset: currentOffset };
@@ -408,14 +438,38 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Calculate size for all nodes
         let totalNodesSize = 0;
-        const serializedNodes: Array<{ pageIdBuffer: Buffer; nodeBuffer: Buffer }> = [];
         
+        // First pass: calculate the total size needed
         for (const [pageId, node] of this.treeNodes.entries()) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
-            const nodeBuffer = this.serializeNode(node);
-            serializedNodes.push({ pageIdBuffer, nodeBuffer });
             
-            totalNodesSize += 4 + pageIdBuffer.length + 4 + nodeBuffer.length; // lengths + data
+            // Estimate node size without actually serializing
+            let estimatedSize = 1; // isLeaf flag
+            
+            // Keys BSON size estimate
+            const keysBson = Buffer.from(BSON.serialize({ keys: node.keys }));
+            estimatedSize += 4 + keysBson.length; // keys length + data
+            
+            // Children size estimate
+            estimatedSize += 4; // children count
+            for (const child of node.children) {
+                estimatedSize += 4 + Buffer.from(child, 'utf8').length; // child length + data
+            }
+            
+            // nextLeaf and previousLeaf size estimate
+            estimatedSize += 4; // nextLeaf length
+            if (node.nextLeaf) {
+                estimatedSize += Buffer.from(node.nextLeaf, 'utf8').length;
+            }
+            
+            estimatedSize += 4; // previousLeaf length
+            if (node.previousLeaf) {
+                estimatedSize += Buffer.from(node.previousLeaf, 'utf8').length;
+            }
+            
+            estimatedSize += 4; // numRecords
+            
+            totalNodesSize += 4 + pageIdBuffer.length + 4 + estimatedSize; // pageId length + pageId + node length + node data
         }
         
         // Calculate total buffer size
@@ -426,6 +480,7 @@ export class SortIndex<RecordT extends IRecord> {
             4 + rootPageIdBuffer.length + // rootPageId length + data
             4 + fieldNameBuffer.length + // fieldName length + data
             4 + directionBuffer.length + // direction length + data
+            1 + // type (single byte: 0 for no type, 1 for date)
             4 + // pageSize
             8 + // lastUpdatedAt timestamp
             4 + // node count
@@ -464,6 +519,18 @@ export class SortIndex<RecordT extends IRecord> {
         directionBuffer.copy(buffer, offset);
         offset += directionBuffer.length;
         
+        // Write type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
+        let typeValue = 0;
+        if (this.type === 'date') {
+            typeValue = 1;
+        } else if (this.type === 'string') {
+            typeValue = 2;
+        } else if (this.type === 'number') {
+            typeValue = 3;
+        }
+        buffer.writeUInt8(typeValue, offset);
+        offset += 1;
+        
         // Write pageSize
         buffer.writeUInt32LE(this.pageSize, offset);
         offset += 4;
@@ -477,19 +544,29 @@ export class SortIndex<RecordT extends IRecord> {
         buffer.writeUInt32LE(this.treeNodes.size, offset);
         offset += 4;
         
-        // Write each node
-        for (const { pageIdBuffer, nodeBuffer } of serializedNodes) {
+        // Second pass: write the nodes
+        for (const [pageId, node] of this.treeNodes.entries()) {
+            const pageIdBuffer = Buffer.from(pageId, 'utf8');
+            
             // Write pageId length and data
             buffer.writeUInt32LE(pageIdBuffer.length, offset);
             offset += 4;
             pageIdBuffer.copy(buffer, offset);
             offset += pageIdBuffer.length;
             
-            // Write node length and data
-            buffer.writeUInt32LE(nodeBuffer.length, offset);
+            // Reserve space for node length (will fill in after serialization)
+            const nodeLengthPosition = offset;
             offset += 4;
-            nodeBuffer.copy(buffer, offset);
-            offset += nodeBuffer.length;
+            
+            // Serialize the node directly into the buffer
+            const endOffset = this.serializeNode(node, buffer, offset);
+            
+            // Calculate and write actual node length
+            const nodeLength = endOffset - offset;
+            buffer.writeUInt32LE(nodeLength, nodeLengthPosition);
+            
+            // Update offset to the end of the serialized node
+            offset = endOffset;
         }
         
         // Calculate checksum
@@ -516,7 +593,7 @@ export class SortIndex<RecordT extends IRecord> {
             children: [],
             nextLeaf: undefined,
             previousLeaf: undefined,
-            parentId: undefined
+            parentId: undefined,
         };
 
         this.rootPageId = makeId(); // Generate a new UUID for the root page ID.
@@ -533,6 +610,8 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Track whether we've added any records
         let recordsAdded = 0;
+
+        let startTime = Date.now();
         
         // Iterate through all records and add them directly to the B-tree
         for await (const record of this.collection.iterateRecords()) {
@@ -578,13 +657,104 @@ export class SortIndex<RecordT extends IRecord> {
     }
     
     //
-    // Compare values depending on the sort direction.
+    // Compare values depending on the sort direction and type.
+    // If type is 'date', string values will be converted to Date objects before comparison.
+    // If type is 'string', values will be compared as strings.
+    // If type is 'number', values will be compared as numbers.
+    // If type is not set, it will be inferred from the values.
     //
     private compareValues(a: any, b: any): number {
-        if (a < b) {
+        let valueA = a;
+        let valueB = b;
+        let inferredType = this.type;
+        
+        // If type is not set, infer it from the values
+        if (!inferredType) {
+            // Check if first value is a Date object
+            if (a instanceof Date) {
+                inferredType = 'date';
+            }
+            // Check if first value is a number
+            else if (typeof a === 'number') {
+                inferredType = 'number';
+            }
+            // Check if first value is a string
+            else if (typeof a === 'string') {
+                inferredType = 'string';
+            }
+            
+            // Verify both values are compatible types
+            if (inferredType === 'date') {
+                if (!(b instanceof Date) && typeof b !== 'string') {
+                    throw new Error(`Type mismatch in compareValues: first value is Date, second value is ${typeof b}`);
+                }
+            }
+            else if (inferredType === 'number') {
+                if (typeof b !== 'number') {
+                    throw new Error(`Type mismatch in compareValues: first value is number, second value is ${typeof b}`);
+                }
+            }
+            else if (inferredType === 'string') {
+                if (typeof b !== 'string') {
+                    throw new Error(`Type mismatch in compareValues: first value is string, second value is ${typeof b}`);
+                }
+            }
+        }
+        
+        // Convert values based on the specified or inferred type
+        if (inferredType === 'date') {
+            if (typeof a === 'string') {
+                try {
+                    valueA = new Date(a);
+                } catch (e) {
+                    // If parse fails, use original value
+                    valueA = a;
+                }
+            }
+            
+            if (typeof b === 'string') {
+                try {
+                    valueB = new Date(b);
+                } catch (e) {
+                    // If parse fails, use original value
+                    valueB = b;
+                }
+            }
+        } else if (inferredType === 'string') {
+            // Convert to strings for string comparison
+            valueA = String(a);
+            valueB = String(b);
+            
+            // Use localeCompare for proper string comparison
+            const compareResult = valueA.localeCompare(valueB);
+            if (compareResult < 0) {
+                return this.direction === 'asc' ? -1 : 1;
+            }
+            if (compareResult > 0) {
+                return this.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        } else if (inferredType === 'number') {
+            // Convert to numbers for numeric comparison
+            valueA = Number(a);
+            valueB = Number(b);
+            
+            // Handle NaN cases - treat NaN as smaller than any number
+            if (isNaN(valueA) && isNaN(valueB)) {
+                return 0;
+            }
+            if (isNaN(valueA)) {
+                return this.direction === 'asc' ? -1 : 1;
+            }
+            if (isNaN(valueB)) {
+                return this.direction === 'asc' ? 1 : -1;
+            }
+        }
+        
+        if (valueA < valueB) {
             return this.direction === 'asc' ? -1 : 1;
         }
-        if (a > b) {
+        if (valueA > valueB) {
             return this.direction === 'asc' ? 1 : -1;
         }
         return 0;
@@ -594,24 +764,64 @@ export class SortIndex<RecordT extends IRecord> {
     private async saveLeafRecords(pageId: string, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
-        // Create BSON data
-        const bsonData = BSON.serialize({ records });
+        // First pass: calculate total buffer size needed
+        let totalSize = 4 + 4; // version (4 bytes) + record count (4 bytes)
+        
+        for (const entry of records) {
+            const idSize = Buffer.byteLength(entry.recordId, 'utf8');
+            const valueBsonSize = BSON.calculateObjectSize({ value: entry.value });
+            const recordBsonSize = BSON.calculateObjectSize(entry.record);
+            
+            // Add to total: 4 bytes for ID length + ID data + 4 bytes for value length + value data + 4 bytes for record length + record data
+            totalSize += 4 + idSize + 4 + valueBsonSize + 4 + recordBsonSize;
+        }
+        
+        // Allocate buffer
+        const buffer = Buffer.alloc(totalSize);
+        let offset = 0;
+        
+        // Write version number (4 bytes) - version 1 for new format
+        buffer.writeUInt32LE(1, offset);
+        offset += 4;
+        
+        // Write record count
+        buffer.writeUInt32LE(records.length, offset);
+        offset += 4;
+        
+        // Second pass: write each record
+        for (const entry of records) {
+            // Write record ID
+            const idBuffer = Buffer.from(entry.recordId, 'utf8');
+            buffer.writeUInt32LE(idBuffer.length, offset);
+            offset += 4;
+            idBuffer.copy(buffer, offset);
+            offset += idBuffer.length;
+            
+            // Write value as BSON
+            const valueBson = Buffer.from(BSON.serialize({ value: entry.value }));
+            buffer.writeUInt32LE(valueBson.length, offset);
+            offset += 4;
+            valueBson.copy(buffer, offset);
+            offset += valueBson.length;
+            
+            // Write record as BSON
+            const recordBson = Buffer.from(BSON.serialize(entry.record));
+            buffer.writeUInt32LE(recordBson.length, offset);
+            offset += 4;
+            recordBson.copy(buffer, offset);
+            offset += recordBson.length;
+        }
         
         // Calculate checksum
-        const checksum = crypto.createHash('sha256').update(bsonData).digest();
+        const checksum = crypto.createHash('sha256').update(buffer).digest();
         
         // Combine data and checksum
-        const dataWithChecksum = Buffer.concat([bsonData, checksum]);
+        const dataWithChecksum = Buffer.concat([buffer, checksum]);
+
+        // console.log(`Saving leaf records for page ${pageId} with ${records.length}`);
         
         // Write to storage
         await retry(() =>  this.storage.write(filePath, undefined, dataWithChecksum));
-        
-        // Update cache
-        this.leafRecordsCache.set(pageId, {
-            records,
-            dirty: false,
-            lastAccessed: Date.now()
-        });
     }
     
     // Load leaf records from file
@@ -634,9 +844,67 @@ export class SortIndex<RecordT extends IRecord> {
                 return undefined;
             }
             
-            // Deserialize the records
-            const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
-            return leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
+            // Check if this is the new format by reading the first 4 bytes as version
+            if (dataWithoutChecksum.length >= 4 && dataWithoutChecksum.readUInt32LE(0) === 1) {
+                // New buffer format
+                let offset = 4; // Skip version (4 bytes)
+                
+                // Read record count
+                const recordCount = dataWithoutChecksum.readUInt32LE(offset);
+                offset += 4;
+                
+                const records: ISortedIndexEntry<RecordT>[] = [];
+                
+                // Read each record
+                for (let i = 0; i < recordCount; i++) {
+                    // Read record ID
+                    const idLength = dataWithoutChecksum.readUInt32LE(offset);
+                    offset += 4;
+                    const recordId = dataWithoutChecksum.subarray(offset, offset + idLength).toString('utf8');
+                    offset += idLength;
+                    
+                    // Read value BSON
+                    const valueLength = dataWithoutChecksum.readUInt32LE(offset);
+                    offset += 4;
+                    const valueBson = dataWithoutChecksum.subarray(offset, offset + valueLength);
+                    offset += valueLength;
+                    const valueObj = BSON.deserialize(valueBson);
+                    const value = valueObj.value;
+                    
+                    // Read record BSON
+                    const recordLength = dataWithoutChecksum.readUInt32LE(offset);
+                    offset += 4;
+                    const recordBson = dataWithoutChecksum.subarray(offset, offset + recordLength);
+                    offset += recordLength;
+                    const record = BSON.deserialize(recordBson) as RecordT;
+                    
+                    records.push({
+                        recordId,
+                        value,
+                        record
+                    });
+                }
+                
+                // Update numRecords in the node
+                const node = this.getNode(pageId);
+                if (node && node.children.length === 0) {
+                    this.markNodeDirty(pageId, node);
+                }
+                
+                return records;
+            } else {
+                // Old BSON array format (backward compatibility)
+                const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
+                const records = leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
+                
+                // Update numRecords in the node
+                const node = this.getNode(pageId);
+                if (node && node.children.length === 0) {
+                    this.markNodeDirty(pageId, node);
+                }
+                
+                return records;
+            }
         }
         
         return undefined;
@@ -669,26 +937,27 @@ export class SortIndex<RecordT extends IRecord> {
             });
             
             // Evict oldest records if cache is too large
-            this.evictOldestLeafRecords();
+            await this.evictOldestLeafRecords();
         }
         
         return records;
     }
     
     // Mark a node as dirty and schedule a save
-    private markNodeDirty(pageId: string, node: IBTreeNode): void {
+    private async markNodeDirty(pageId: string, node: IBTreeNode): Promise<void> {
         this.dirty = true;
 
         // Store in tree nodes map
         this.treeNodes.set(pageId, node);
                 
         // Schedule a save
-        this.scheduleSave(`updated node ${pageId}`);
+        await this.scheduleSave(`updated node ${pageId}`);
     }
     
     // Mark leaf records as dirty and schedule a save
-    private markLeafRecordsDirty(pageId: string, records: ISortedIndexEntry<RecordT>[]): void {
+    private async markLeafRecordsDirty(pageId: string, records: ISortedIndexEntry<RecordT>[], reason: string): Promise<void> {
         const cachedRecords = this.leafRecordsCache.get(pageId);
+        // console.log(`Marking leaf records for page ${pageId} as dirty because ${reason}`);
         if (cachedRecords) {
             // Update existing cache entry
             cachedRecords.records = records;
@@ -704,16 +973,21 @@ export class SortIndex<RecordT extends IRecord> {
         }
         
         // Schedule a save
-        this.scheduleSave(`updated leaf records ${pageId}`);
+        await this.scheduleSave(`updated leaf records ${pageId}`);
     }
         
     // Evict oldest leaf records that are not dirty from cache
-    private evictOldestLeafRecords(): void {
+    private async evictOldestLeafRecords(): Promise<void> {
+
+        //
+        // First stage of eviction: remove oldest non-dirty records.
+        //
+
         if (this.leafRecordsCache.size <= this.maxCachedPages) {
             return; // No need to evict
         }
         
-        const numRecordsToEvict = this.leafRecordsCache.size - this.maxCachedPages;
+        let numRecordsToEvict = this.leafRecordsCache.size - this.maxCachedPages;
         
         // Sort non-dirty records by last accessed time
         const records = Array.from(this.leafRecordsCache.entries())
@@ -722,14 +996,41 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Evict oldest records
         for (let i = 0; i < numRecordsToEvict && i < records.length; i++) {
+            // console.log(`Evicting non-dirty leaf records for page ${records[i][0]}`);
             this.leafRecordsCache.delete(records[i][0]);
+        }
+
+        //
+        // Second stage of eviction: if we still have too many cached pages,
+        // We will save and evict the oldest dirty records as well.
+        //
+
+        if (this.leafRecordsCache.size <= this.maxCachedPages) {
+            return; // No need to evict
+        }
+        
+        numRecordsToEvict = this.leafRecordsCache.size - this.maxCachedPages;
+
+        const dirtyRecords = Array.from(this.leafRecordsCache.entries())
+            .filter(([_, rec]) => rec.dirty)
+            .sort(([_a, recA], [_b, recB]) => recA.lastAccessed - recB.lastAccessed);
+
+        // Evict oldest dirty records
+        for (let i = 0; i < numRecordsToEvict && i < dirtyRecords.length; i++) {
+            const [pageId, cachedRecords] = dirtyRecords[i];
+
+            // console.log(`Saving and evicting dirty leaf records for page ${pageId}`);
+            
+            // Save dirty records before eviction.
+            await this.saveLeafRecords(pageId, cachedRecords.records);
+
+            // Evict from cache.
+            this.leafRecordsCache.delete(pageId);            
         }
     }
     
     // Schedule saving of all dirty nodes
-    private scheduleSave(reason: string): void {
-        this.clearSchedule();
-        
+    private async scheduleSave(reason: string): Promise<void> {        
         if (this.lastSaveTime === undefined) {
             this.lastSaveTime = Date.now();
         } 
@@ -739,49 +1040,50 @@ export class SortIndex<RecordT extends IRecord> {
             
             if (timeSinceLastSaveMs > maxSaveDelayMs) {
                 // Too much time elapsed, save immediately
-                this.saveDirtyNodes();
+                await this.saveDirtyNodes();
                 return;
             }
         }
-        
-        // Start a new timer for debounced save
-        this.saveTimer = setTimeout(() => {
-            this.saveTimer = undefined;
-            this.saveDirtyNodes();
-        }, saveDebounceMs);
-    }
-    
-    // Clear any current save schedule
-    private clearSchedule(): void {
-        if (this.saveTimer) {
-            clearTimeout(this.saveTimer);
-            this.saveTimer = undefined;
-        }
-    }
-    
+    }   
+   
     // Save all dirty nodes and metadata
     private async saveDirtyNodes(): Promise<void> {
-        // Save dirty metadata and tree nodes if exists
-        if (this.dirty) {
-            await this.saveTree();
+        if (this.saving) {            
+            console.warn(`Save already in progress, skipping save.`);
+            return; // Avoid concurrent saves.
         }
-                
-        // Save all dirty leaf records
-        const dirtyLeafRecords = Array.from(this.leafRecordsCache.entries())
-            .filter(([_, rec]) => rec.dirty);            
-        if (dirtyLeafRecords.length > 0) {
-            const promises = dirtyLeafRecords.map(async ([pageId, cachedRecords]) => {
-                await this.saveLeafRecords(pageId, cachedRecords.records);
-                cachedRecords.dirty = false;
-            });
+
+        this.saving = true;
+
+        try {
+            // Save dirty metadata and tree nodes if exists
+            if (this.dirty) {
+                await this.saveTree();
+            }
+                    
+            // Save all dirty leaf records
+            const dirtyLeafRecords = Array.from(this.leafRecordsCache.entries())
+                .filter(([_, rec]) => rec.dirty);            
+            if (dirtyLeafRecords.length > 0) {
+                for (const [pageId, cachedRecords] of dirtyLeafRecords) {
+                    console.log(`  ${pageId}`);
+                }
+    
+                for (const [pageId, cachedRecords] of dirtyLeafRecords) {
+                    await this.saveLeafRecords(pageId, cachedRecords.records);
+                    cachedRecords.dirty = false; // Mark as clean after saving
+
+                }
+            }
             
-            await Promise.all(promises);
+            this.lastSaveTime = Date.now();
+            
+            // Now that we've saved, we can evict oldest nodes and records
+            await this.evictOldestLeafRecords();
         }
-        
-        this.lastSaveTime = Date.now();
-        
-        // Now that we've saved, we can evict oldest nodes and records
-        this.evictOldestLeafRecords();
+        finally {
+            this.saving = false;
+        }
     }
     
     //
@@ -792,7 +1094,7 @@ export class SortIndex<RecordT extends IRecord> {
         this.dirty = true;
         
         // Schedule save
-        this.scheduleSave('updated metadata');
+        await this.scheduleSave('updated metadata');
     }
     
     
@@ -937,7 +1239,7 @@ export class SortIndex<RecordT extends IRecord> {
                                 if (prevLeafNode && prevLeafNode.children.length === 0) {
                                     // Update the next pointer to skip this empty node
                                     prevLeafNode.nextLeaf = leafNode.nextLeaf;
-                                    this.markNodeDirty(prevLeafId, prevLeafNode);
+                                    await this.markNodeDirty(prevLeafId, prevLeafNode);
                                 }
                             }
                             
@@ -946,7 +1248,7 @@ export class SortIndex<RecordT extends IRecord> {
                                 const nextLeafNode = this.getNode(leafNode.nextLeaf);
                                 if (nextLeafNode && nextLeafNode.children.length === 0) {
                                     nextLeafNode.previousLeaf = prevLeafId;
-                                    this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
+                                    await this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
                                 }
                             }
                             
@@ -961,7 +1263,7 @@ export class SortIndex<RecordT extends IRecord> {
                             this.totalPages--;
                         } else {
                             // Update leaf records
-                            this.markLeafRecordsDirty(leafId, leafRecords);
+                            await this.markLeafRecordsDirty(leafId, leafRecords, `removed index ${entryIndex}`);
                         }
                         
                         // Decrement total entries
@@ -1007,7 +1309,7 @@ export class SortIndex<RecordT extends IRecord> {
                                             const prevNode = this.getNode(prevNodeId);
                                             if (prevNode && prevNode.children.length === 0) {
                                                 prevNode.nextLeaf = currentNode.nextLeaf;
-                                                this.markNodeDirty(prevNodeId, prevNode);
+                                                await this.markNodeDirty(prevNodeId, prevNode);
                                             }
                                         }
                                         
@@ -1016,7 +1318,7 @@ export class SortIndex<RecordT extends IRecord> {
                                             const nextNode = this.getNode(currentNode.nextLeaf);
                                             if (nextNode && nextNode.children.length === 0) {
                                                 nextNode.previousLeaf = prevNodeId;
-                                                this.markNodeDirty(currentNode.nextLeaf, nextNode);
+                                                await this.markNodeDirty(currentNode.nextLeaf, nextNode);
                                             }
                                         }
                                         
@@ -1031,7 +1333,7 @@ export class SortIndex<RecordT extends IRecord> {
                                         this.totalPages--;
                                     } else {
                                         // Update leaf records
-                                        this.markLeafRecordsDirty(currentId, leafRecords);
+                                        await this.markLeafRecordsDirty(currentId, leafRecords, `removed index ${entryIndex}`);
                                     }
                                     
                                     // Decrement total entries
@@ -1090,7 +1392,7 @@ export class SortIndex<RecordT extends IRecord> {
                     // If this was the first entry and there are more entries,
                     // update the key in parent nodes
                     if (entryIndex === 0 && leafRecords.length > 0) {
-                        this.updateKeyInParents(leafId, value, leafRecords[0].value);
+                        await this.updateKeyInParents(leafId, value, leafRecords[0].value);
                     }
                     
                     // Check if the leaf node is now empty and needs to be removed
@@ -1133,7 +1435,7 @@ export class SortIndex<RecordT extends IRecord> {
                             const nextLeafNode = this.getNode(leafNode.nextLeaf);
                             if (nextLeafNode && nextLeafNode.children.length === 0) {
                                 nextLeafNode.previousLeaf = prevLeafId;
-                                this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
+                                await this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
                             }
                         }
                         
@@ -1148,7 +1450,7 @@ export class SortIndex<RecordT extends IRecord> {
                         this.totalPages--;
                     } else {
                         // Update the leaf records
-                        this.markLeafRecordsDirty(leafId, leafRecords);
+                        await this.markLeafRecordsDirty(leafId, leafRecords, `removed index ${entryIndex}`);
                     }
                     
                     // Decrement total entries
@@ -1193,7 +1495,7 @@ export class SortIndex<RecordT extends IRecord> {
                                 // If this was the first entry and there are more entries,
                                 // update the key in parent nodes
                                 if (entryIndex === 0 && leafRecords.length > 0) {
-                                    this.updateKeyInParents(currentId, value, leafRecords[0].value);
+                                    await this.updateKeyInParents(currentId, value, leafRecords[0].value);
                                 }
                                 
                                 // Check if the leaf node is now empty and needs to be removed
@@ -1203,7 +1505,7 @@ export class SortIndex<RecordT extends IRecord> {
                                         const prevNode = this.getNode(prevNodeId);
                                         if (prevNode && prevNode.children.length === 0) {
                                             prevNode.nextLeaf = currentNode.nextLeaf;
-                                            this.markNodeDirty(prevNodeId, prevNode);
+                                            await this.markNodeDirty(prevNodeId, prevNode);
                                         }
                                     }
                                     
@@ -1212,7 +1514,7 @@ export class SortIndex<RecordT extends IRecord> {
                                         const nextNode = this.getNode(currentNode.nextLeaf);
                                         if (nextNode && nextNode.children.length === 0) {
                                             nextNode.previousLeaf = prevNodeId;
-                                            this.markNodeDirty(currentNode.nextLeaf, nextNode);
+                                            await this.markNodeDirty(currentNode.nextLeaf, nextNode);
                                         }
                                     }
                                     
@@ -1227,7 +1529,7 @@ export class SortIndex<RecordT extends IRecord> {
                                     this.totalPages--;
                                 } else {
                                     // Update the leaf records
-                                    this.markLeafRecordsDirty(currentId, leafRecords);
+                                    await this.markLeafRecordsDirty(currentId, leafRecords, `removed index ${entryIndex}`);
                                 }
                                 
                                 // Decrement total entries
@@ -1309,7 +1611,7 @@ export class SortIndex<RecordT extends IRecord> {
      * This is essential for maintaining the B-tree structure when the minimum key in a leaf node changes
      * Using parent references for efficient traversal
      */
-    private updateKeyInParents(nodeId: string, oldKey: any, newKey: any): void {
+    private async updateKeyInParents(nodeId: string, oldKey: any, newKey: any): Promise<void> {
         if (!nodeId) return;
         
         const node = this.getNode(nodeId);
@@ -1324,11 +1626,11 @@ export class SortIndex<RecordT extends IRecord> {
         // If this isn't the leftmost child (i > 0), it has a key in the parent
         if (childIndex > 0 && this.compareValues(parentNode.keys[childIndex - 1], oldKey) === 0) {
             parentNode.keys[childIndex - 1] = newKey;
-            this.markNodeDirty(node.parentId, parentNode);
+            await this.markNodeDirty(node.parentId, parentNode);
         }
         
         // Recursively update parent nodes if needed
-        this.updateKeyInParents(node.parentId, oldKey, newKey);
+        await this.updateKeyInParents(node.parentId, oldKey, newKey);
     }
     
     /**
@@ -1374,9 +1676,9 @@ export class SortIndex<RecordT extends IRecord> {
             const mid = Math.floor((left + right) / 2);
             const compareResult = this.compareValues(value, leafRecords[mid].value);
             
-            if ((this.direction === 'asc' && compareResult < 0) ||
-                (this.direction === 'desc' && compareResult > 0)) {
+            if (compareResult < 0) {
                 // New value should go before the middle element
+                // (compareValues already accounts for direction)
                 insertIndex = mid;
                 right = mid - 1;
             } else {
@@ -1390,7 +1692,7 @@ export class SortIndex<RecordT extends IRecord> {
         
         // If this was inserted at the beginning, update keys in parent nodes
         if (insertIndex === 0 && leafRecords.length > 1) {
-            this.updateKeyInParents(leafId, leafRecords[1].value, value);
+            await this.updateKeyInParents(leafId, leafRecords[1].value, value);
         }
         
         // If the leaf is now too large, split it
@@ -1399,7 +1701,7 @@ export class SortIndex<RecordT extends IRecord> {
         } 
         else {
             // Just update the leaf records
-            this.markLeafRecordsDirty(leafId, leafRecords);
+            await this.markLeafRecordsDirty(leafId, leafRecords, `added index at ${insertIndex}`);
         }
         
         // Increment total entries
@@ -1407,6 +1709,9 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Update metadata
         await this.markDirty();
+
+        // Evict oldest records if cache is too large
+        await this.evictOldestLeafRecords();
     }
     
     /**
@@ -1434,7 +1739,7 @@ export class SortIndex<RecordT extends IRecord> {
             children: [],
             nextLeaf: node.nextLeaf,
             previousLeaf: nodeId,
-            parentId: node.parentId // Copy parent from original node
+            parentId: node.parentId, // Copy parent from original node
         };
         
         // Update pointers in the original node
@@ -1445,7 +1750,7 @@ export class SortIndex<RecordT extends IRecord> {
             const nextNode = this.getNode(newNode.nextLeaf);
             if (nextNode && nextNode.children.length === 0) {
                 nextNode.previousLeaf = newNodeId;
-                this.markNodeDirty(newNode.nextLeaf, nextNode);
+                await this.markNodeDirty(newNode.nextLeaf, nextNode);
             }
         }
         
@@ -1457,11 +1762,11 @@ export class SortIndex<RecordT extends IRecord> {
                 // Internal node (has children)
                 keys: [newEntries[0].value],
                 children: [nodeId, newNodeId],
-                parentId: undefined
+                parentId: undefined,
             };
             
             // Save the new root
-            this.markNodeDirty(newRootId, newRoot);
+            await this.markNodeDirty(newRootId, newRoot);
             
             // Update parent references for children
             node.parentId = newRootId;
@@ -1487,10 +1792,10 @@ export class SortIndex<RecordT extends IRecord> {
                     parentNode.keys.splice(childIndex, 0, newEntries[0].value);
                     
                     // Save the updated parent node
-                    this.markNodeDirty(parentId, parentNode);
+                    await this.markNodeDirty(parentId, parentNode);
                     
                     // If the parent node is now too large, we need to split it too
-                    if (parentNode.keys.length > this.pageSize) {
+                    if (parentNode.keys.length > this.keySize) {
                         await this.splitInternalNode(parentId, parentNode);
                     }
                 }
@@ -1498,12 +1803,12 @@ export class SortIndex<RecordT extends IRecord> {
         }
         
         // Save both nodes
-        this.markNodeDirty(nodeId, node);
-        this.markNodeDirty(newNodeId, newNode);
+        await this.markNodeDirty(nodeId, node);
+        await this.markNodeDirty(newNodeId, newNode);
         
         // Save leaf records for both nodes
-        this.markLeafRecordsDirty(nodeId, records);
-        this.markLeafRecordsDirty(newNodeId, newEntries);
+        await this.markLeafRecordsDirty(nodeId, records, `split leaf at ${splitIndex}`);
+        await this.markLeafRecordsDirty(newNodeId, newEntries, `split leaf at ${splitIndex}`);
         
         // Increment total pages since we created a new leaf page
         this.totalPages++;
@@ -1553,8 +1858,9 @@ export class SortIndex<RecordT extends IRecord> {
                     
                     if (nextMatches.length > 0) {
                         matchingEntries.push(...nextMatches);
-                    } else if (this.direction === 'asc' && this.compareValues(nextRecords[0].value, value) > 0) {
-                        // In ascending order, if first value > search value, we're done looking forward
+                    } else if (this.compareValues(nextRecords[0].value, value) > 0) {
+                        // If first value > search value, we're done looking forward
+                        // compareValues already accounts for direction
                         break;
                     }
                     
@@ -1575,8 +1881,9 @@ export class SortIndex<RecordT extends IRecord> {
                     
                     if (prevMatches.length > 0) {
                         matchingEntries.push(...prevMatches);
-                    } else if (this.direction === 'asc' && this.compareValues(prevRecords[prevRecords.length - 1].value, value) < 0) {
-                        // In ascending order, if last value < search value, we're done looking backward
+                    } else if (this.compareValues(prevRecords[prevRecords.length - 1].value, value) < 0) {
+                        // If last value < search value, we're done looking backward
+                        // compareValues already accounts for direction
                         break;
                     }
                     
@@ -1712,9 +2019,10 @@ export class SortIndex<RecordT extends IRecord> {
                 break;
             }
             
-            // If we're in descending order and we've found matches but the last entry is below the min,
+            // If we've found matches but the last entry is below the min,
             // all subsequent leaves will also be below min, so we can stop
-            if (this.direction === 'desc' && foundMatchInLeaf && max === null && 
+            // This applies regardless of direction because compareValues handles the direction
+            if (foundMatchInLeaf && max === null && 
                 leafRecords.length > 0 && min !== null) {
                 const lastEntry = leafRecords[leafRecords.length - 1];
                 const compareMin = this.compareValues(lastEntry.value, min);
@@ -1757,7 +2065,7 @@ export class SortIndex<RecordT extends IRecord> {
             // Internal node (has children)
             keys: node.keys.splice(middleIndex + 1), // Take keys after the middle
             children: node.children.splice(middleIndex + 1), // Take children after the middle
-            parentId: node.parentId
+            parentId: node.parentId,
         };
         
         // Remove the middle key from the original node (it goes up to the parent)
@@ -1768,7 +2076,7 @@ export class SortIndex<RecordT extends IRecord> {
             const childNode = this.getNode(childId);
             if (childNode) {
                 childNode.parentId = newNodeId;
-                this.markNodeDirty(childId, childNode);
+                await this.markNodeDirty(childId, childNode);
             }
         }
         
@@ -1779,7 +2087,7 @@ export class SortIndex<RecordT extends IRecord> {
                 // Internal node (has children)
                 keys: [middleKey],
                 children: [nodeId, newNodeId],
-                parentId: undefined
+                parentId: undefined,
             };
             
             // Update parent references
@@ -1787,7 +2095,7 @@ export class SortIndex<RecordT extends IRecord> {
             newNode.parentId = newRootId;
             
             // Save the new root
-            this.markNodeDirty(newRootId, newRoot);
+            await this.markNodeDirty(newRootId, newRoot);
             
             // Update the root page ID
             this.rootPageId = newRootId;
@@ -1809,10 +2117,10 @@ export class SortIndex<RecordT extends IRecord> {
                     parentNode.keys.splice(childIndex, 0, middleKey);
                     
                     // Save the updated parent
-                    this.markNodeDirty(parentId, parentNode);
+                    await this.markNodeDirty(parentId, parentNode);
                     
                     // Check if the parent needs to be split
-                    if (parentNode.keys.length > this.pageSize) {
+                    if (parentNode.keys.length > this.keySize) {
                         await this.splitInternalNode(parentId, parentNode);
                     }
                 }
@@ -1820,8 +2128,8 @@ export class SortIndex<RecordT extends IRecord> {
         }
         
         // Save both nodes
-        this.markNodeDirty(nodeId, node);
-        this.markNodeDirty(newNodeId, newNode);
+        await this.markNodeDirty(nodeId, node);
+        await this.markNodeDirty(newNodeId, newNode);
         
         // Note: Not incrementing totalPages here since internal nodes
         // don't count toward the user-facing page count
@@ -1831,9 +2139,7 @@ export class SortIndex<RecordT extends IRecord> {
      * Saves all dirty nodes and metadata, then clears the cache
      * Should be called when shutting down the database
      */
-    async shutdown(): Promise<void> {
-        this.clearSchedule(); // Clear any pending save timer
-        
+    async shutdown(): Promise<void> {        
         // Save all dirty nodes and metadata
         await this.saveDirtyNodes();
         
@@ -1903,5 +2209,124 @@ export class SortIndex<RecordT extends IRecord> {
         await visualizeNode(this.rootPageId, 0);
         
         return lines.join('\n');
+    }
+    
+    // Analyze the tree structure and return statistics about keys per node
+    async analyzeTreeStructure(): Promise<{
+        totalNodes: number;
+        leafNodes: number;
+        internalNodes: number;
+        minKeysPerNode: number;
+        maxKeysPerNode: number;
+        avgKeysPerNode: number;
+        nodeKeyDistribution: { nodeId: string; keyCount: number; isLeaf: boolean }[];
+        leafStats: {
+            minRecordsPerLeaf: number;
+            maxRecordsPerLeaf: number;
+            avgRecordsPerLeaf: number;
+        };
+        internalStats: {
+            minKeysPerInternal: number;
+            maxKeysPerInternal: number;
+            avgKeysPerInternal: number;
+        };
+    }> {
+        if (!this.loaded) {
+            await this.init();
+        }
+        
+        if (!this.rootPageId) {
+            return {
+                totalNodes: 0,
+                leafNodes: 0,
+                internalNodes: 0,
+                minKeysPerNode: 0,
+                maxKeysPerNode: 0,
+                avgKeysPerNode: 0,
+                nodeKeyDistribution: [],
+                leafStats: {
+                    minRecordsPerLeaf: 0,
+                    maxRecordsPerLeaf: 0,
+                    avgRecordsPerLeaf: 0
+                },
+                internalStats: {
+                    minKeysPerInternal: 0,
+                    maxKeysPerInternal: 0,
+                    avgKeysPerInternal: 0
+                }
+            };
+        }
+        
+        const nodeKeyDistribution: { nodeId: string; keyCount: number; isLeaf: boolean }[] = [];
+        let totalKeys = 0;
+        let minKeys = Number.MAX_SAFE_INTEGER;
+        let maxKeys = 0;
+        let leafNodes = 0;
+        let internalNodes = 0;
+        
+        // Separate stats for leaf and internal nodes
+        let leafTotalRecords = 0;
+        let leafMinRecords = Number.MAX_SAFE_INTEGER;
+        let leafMaxRecords = 0;
+        
+        let internalTotalKeys = 0;
+        let internalMinKeys = Number.MAX_SAFE_INTEGER;
+        let internalMaxKeys = 0;
+        
+        // Traverse all nodes
+        for (const [nodeId, node] of this.treeNodes.entries()) {
+            const isLeaf = node.children.length === 0;
+            let keyCount = node.keys.length;
+            
+            // For leaf nodes, also count the records
+            if (isLeaf) {
+                const records = await this.getLeafRecords(nodeId);
+                if (records) {
+                    keyCount = records.length;
+                    leafTotalRecords += keyCount;
+                    leafMinRecords = Math.min(leafMinRecords, keyCount);
+                    leafMaxRecords = Math.max(leafMaxRecords, keyCount);
+                }
+                leafNodes++;
+            } else {
+                // Internal node - count keys
+                internalTotalKeys += keyCount;
+                internalMinKeys = Math.min(internalMinKeys, keyCount);
+                internalMaxKeys = Math.max(internalMaxKeys, keyCount);
+                internalNodes++;
+            }
+            
+            nodeKeyDistribution.push({ nodeId, keyCount, isLeaf });
+            totalKeys += keyCount;
+            minKeys = Math.min(minKeys, keyCount);
+            maxKeys = Math.max(maxKeys, keyCount);
+        }
+        
+        const totalNodes = this.treeNodes.size;
+        const avgKeysPerNode = totalNodes > 0 ? totalKeys / totalNodes : 0;
+        
+        // Calculate averages for leaf and internal nodes
+        const avgRecordsPerLeaf = leafNodes > 0 ? leafTotalRecords / leafNodes : 0;
+        const avgKeysPerInternal = internalNodes > 0 ? internalTotalKeys / internalNodes : 0;
+        
+        return {
+            totalNodes,
+            leafNodes,
+            internalNodes,
+            minKeysPerNode: minKeys === Number.MAX_SAFE_INTEGER ? 0 : minKeys,
+            maxKeysPerNode: maxKeys,
+            avgKeysPerNode,
+            nodeKeyDistribution,
+            leafStats: {
+                minRecordsPerLeaf: leafMinRecords === Number.MAX_SAFE_INTEGER ? 0 : leafMinRecords,
+                maxRecordsPerLeaf: leafMaxRecords,
+                avgRecordsPerLeaf
+            },
+            internalStats: {
+                minKeysPerInternal: internalMinKeys === Number.MAX_SAFE_INTEGER ? 0 : internalMinKeys,
+                maxKeysPerInternal: internalMaxKeys,
+                avgKeysPerInternal
+            }
+        };
     }
 }

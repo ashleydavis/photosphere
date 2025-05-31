@@ -2,7 +2,7 @@
 // Manages the creation and usage of sort indexes for collections
 //
 
-import { IStorage } from '../storage';
+import { IStorage } from 'storage';
 import { IBsonCollection, IRecord } from './collection';
 import { SortIndex, ISortResult } from './sort-index';
 
@@ -39,7 +39,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Get an existing sort index (public version).,
     //
-    async getSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<SortIndex<RecordT> | undefined> {
+    async getSortIndex(fieldName: string, direction: 'asc' | 'desc', type?: 'date'): Promise<SortIndex<RecordT> | undefined> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         // Check if this index is already in memory.
@@ -56,7 +56,8 @@ export class SortManager<RecordT extends IRecord> {
                 baseDirectory: this.baseDirectory,
                 collectionName: this.collectionName,
                 fieldName,
-                direction
+                direction,
+                type
             }, this.collection);
             
             // Cache in memory.
@@ -74,7 +75,8 @@ export class SortManager<RecordT extends IRecord> {
     private async createOrGetSortIndex(
         fieldName: string,
         direction: 'asc' | 'desc',
-        pageSize?: number
+        pageSize?: number,
+        type?: "date" | "string" | "number"
     ): Promise<SortIndex<RecordT>> {
         const key = this.getSortIndexKey(fieldName, direction);
         
@@ -90,7 +92,8 @@ export class SortManager<RecordT extends IRecord> {
             collectionName: this.collectionName,
             fieldName,
             direction,
-            pageSize: pageSize || this.defaultPageSize,           
+            pageSize: pageSize || this.defaultPageSize,
+            type
         },  this.collection);
 
                
@@ -110,13 +113,15 @@ export class SortManager<RecordT extends IRecord> {
             page?: number;
             pageSize?: number;
             pageId?: string;
+            type?: 'date'; // Optional type for sorting
         }
     ): Promise<ISortResult<RecordT>> {
         const direction = options?.direction || 'asc';
         const pageSize = options?.pageSize || this.defaultPageSize;
+        const type = options?.type;
         
         // Get or create the sort index.
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, pageSize);
+        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, pageSize, type);
         
         // If page number is specified, convert to page ID
         if (options?.page !== undefined) {
@@ -147,7 +152,8 @@ export class SortManager<RecordT extends IRecord> {
     //
     async rebuildSortIndex(
         fieldName: string,
-        direction: 'asc' | 'desc'
+        direction: 'asc' | 'desc',
+        type?: "date" | "string" | "number"
     ): Promise<void> {
         const key = this.getSortIndexKey(fieldName, direction);
         
@@ -157,7 +163,7 @@ export class SortManager<RecordT extends IRecord> {
         }
         
         // Create and initialize the index
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, this.defaultPageSize);
+        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, this.defaultPageSize, type);
         
         await sortIndex.delete(); // Delete the existing index.
         await sortIndex.build(); // Rebuild.
@@ -167,6 +173,7 @@ export class SortManager<RecordT extends IRecord> {
     async listSortIndexes(): Promise<Array<{
         fieldName: string;
         direction: 'asc' | 'desc';
+        type?: 'date';
     }>> {
         const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
         
@@ -177,17 +184,29 @@ export class SortManager<RecordT extends IRecord> {
         
         const result = await this.storage.listDirs(collectionIndexPath, 1000);
         const directories = result.names || [];
-
-        const sortIndexes: Array<{fieldName: string; direction: 'asc' | 'desc'}> = [];
-
+        
+        const sortIndexes: Array<{fieldName: string; direction: 'asc' | 'desc'; type?: 'date'}> = [];
+        
         for (const dir of directories) {
             // Parse the directory name, which should be in format "fieldname_direction"
             const match = dir.match(/^(.+)_(asc|desc)$/);
             if (match) {
-                sortIndexes.push({
+                const indexInfo = {
                     fieldName: match[1],
                     direction: match[2] as 'asc' | 'desc'
-                });
+                };
+                
+                // Get the sort index to retrieve its type
+                const sortIndex = await this.getSortIndex(indexInfo.fieldName, indexInfo.direction);
+                if (sortIndex && 'type' in sortIndex) {
+                    // This is a safe cast because we know the structure of SortIndex
+                    const typedIndex = sortIndex as unknown as { type?: 'date' };
+                    if (typedIndex.type) {
+                        (indexInfo as any).type = typedIndex.type;
+                    }
+                }
+                
+                sortIndexes.push(indexInfo);
             }
         }
 

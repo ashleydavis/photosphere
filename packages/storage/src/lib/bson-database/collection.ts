@@ -106,7 +106,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // @param fieldName The field to create a sort index for
     // @param direction The sort direction
     //
-    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc'): Promise<void>;
+    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc', type?: "date" | "string" | "number"): Promise<void>;
 
     //
     // List all sort indexes for this collection
@@ -287,18 +287,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return;
         }
 
-        const filesSaved: string[] = [];
+        for (const shard of dirtyShards) {
+            const filePath = `${this.directory}/${shard.id}`;
+            await this.saveShardFile(filePath, shard);
+            shard.dirty = false;
 
-        const promises = dirtyShards
-            .map(async shard => {
-                const filePath = `${this.directory}/${shard.id}`;
-                await this.saveShardFile(filePath, shard);
-                filesSaved.push(filePath);
-                shard.dirty = false;
-
-                // console.log(`  Saved shard ${shard.id}`);
-            });
-        await Promise.all(promises);
+            // console.log(`  Saved shard ${shard.id}`);
+        }   
 
         // console.log(`Saved ${dirtyShards.length} dirty shards.`);
 
@@ -538,7 +533,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Writes the file.
         //
-        await this.storage.write(filePath, undefined, dataWithChecksum);
+        await retry(() => this.storage.write(filePath, undefined, dataWithChecksum));
 
         //
         // Read the file back to verify it.
@@ -1137,7 +1132,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Create or rebuild a sort index for the specified field
     //
-    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc'): Promise<void> {
+    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc', type: "date" | "string" | "number" | undefined = undefined): Promise<void> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
@@ -1148,7 +1143,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return;
         }
         
-        await this.sortManager.rebuildSortIndex(fieldName, direction);
+        await this.sortManager.rebuildSortIndex(fieldName, direction, type);
     }
 
     //
