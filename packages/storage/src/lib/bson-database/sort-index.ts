@@ -1065,9 +1065,9 @@ export class SortIndex<RecordT extends IRecord> {
             const dirtyLeafRecords = Array.from(this.leafRecordsCache.entries())
                 .filter(([_, rec]) => rec.dirty);            
             if (dirtyLeafRecords.length > 0) {
-                for (const [pageId, cachedRecords] of dirtyLeafRecords) {
-                    console.log(`  ${pageId}`);
-                }
+                // for (const [pageId, cachedRecords] of dirtyLeafRecords) {
+                //     console.log(`  ${pageId}`);
+                // }
     
                 for (const [pageId, cachedRecords] of dirtyLeafRecords) {
                     await this.saveLeafRecords(pageId, cachedRecords.records);
