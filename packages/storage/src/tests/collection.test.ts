@@ -17,7 +17,7 @@ describe('BsonCollection', () => {
     
     beforeEach(() => {
         storage = new MockStorage();
-        collection = new BsonCollection<TestUser>({
+        collection = new BsonCollection<TestUser>('users', {
             storage,
             directory: 'users',
             numShards: 10, 

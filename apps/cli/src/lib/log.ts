@@ -1,18 +1,10 @@
 import { ILog, setLog } from "utils";
 
-
-export type LogOutputType = "none" | "text" | "json" ;
-
 export interface ILogOptions {
-    //
-    // Changes the output type.
-    //
-    output: LogOutputType;
-
     //
     // Enables verbose logging.
     //
-    verbose: boolean;
+    verbose?: boolean;
 }
 
 class Log implements ILog {
@@ -20,15 +12,11 @@ class Log implements ILog {
     }
 
     info(message: string): void {
-        if (this.options.output === "none") {
-            return;
-        }
-
         console.log(message);
     }
     
     verbose(message: string): void {    
-        if (this.options.output === "none" || !this.options.verbose) {
+        if (!this.options.verbose) {
             return;
         }
         
@@ -36,27 +24,15 @@ class Log implements ILog {
     }
     
     error(message: string): void {
-        if (this.options.output === "none") {
-            return;
-        }
-
         console.error(message);
     }
     
     exception(message: string, error: Error): void {
-        if (this.options.output === "none") {
-            return;
-        }
-
         console.error(message);
         console.error(error.stack || error.message || error);
     }
 
     warn(message: string): void {
-        if (this.options.output === "none") {
-            return;
-        }
-
         console.warn(message);
     }
 }

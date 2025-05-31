@@ -16,17 +16,17 @@ export interface IUiCommandOptions {
     //
     // Set the path to the database metadata.
     //
-    meta: string;
+    meta?: string;
 
     //
     // Sets the path to private key file for encryption.
     //
-    key: string;
+    key?: string;
 
     //
     // When true, the ui will not open in the browser.
     //
-    noOpen: boolean;
+    noOpen?: boolean;
 }
 
 //

@@ -90,14 +90,15 @@ export interface IBsonCollection<RecordT extends IRecord> {
     getSorted(fieldName: string, options?: { 
         direction?: 'asc' | 'desc'; 
         page?: number; 
-        pageSize?: number 
+        pageSize?: number;
+        pageId?: string;
     }): Promise<{
         records: RecordT[];
         totalRecords: number;
-        currentPage: number;
+        currentPageId: string;
         totalPages: number;
-        nextPage?: number;
-        previousPage?: number;
+        nextPageId?: string;
+        previousPageId?: string;
     }>;
 
     //
@@ -105,7 +106,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // @param fieldName The field to create a sort index for
     // @param direction The sort direction
     //
-    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc'): Promise<void>;
+    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc', type?: "date" | "string" | "number"): Promise<void>;
 
     //
     // List all sort indexes for this collection
@@ -154,7 +155,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // Find records by index
     //
     findByIndex(fieldName: string, value: any): Promise<RecordT[]>;
-
+    
     //
     // Deletes an index
     //
@@ -188,25 +189,24 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private shardCache: Map<number, IShard<RecordT>> = new Map();
     private isAlive: boolean = true;
     private maxCachedShards: number;
-    private sortManager: SortManager | undefined;
+    private sortManager: SortManager<RecordT> | undefined;
 
     //
     // The last time the collection was saved.
     //
     private lastSaveTime: number | undefined = undefined;
 
-    constructor(options: IBsonCollectionOptions) {
+    constructor(private readonly name: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
         this.maxCachedShards = options.maxCachedShards || 10;
 
-        // Create the sort manager for this collection
         this.sortManager = new SortManager({
             storage: this.storage,
             baseDirectory: this.directory.split('/').slice(0, -1).join('/') // Parent directory
-        });
-
+        }, this, this.name);
+        
         this.keepWorkerAlive();
     }
     
@@ -218,14 +218,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return false;
         }
         
-        const collectionName = this.directory.split('/').pop() || '';
-        
-        const index = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            direction
-        );
-       
+        const index = await this.sortManager.getSortIndex(fieldName, direction);       
         return !!index;
     }
 
@@ -294,18 +287,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return;
         }
 
-        const filesSaved: string[] = [];
+        for (const shard of dirtyShards) {
+            const filePath = `${this.directory}/${shard.id}`;
+            await this.saveShardFile(filePath, shard);
+            shard.dirty = false;
 
-        const promises = dirtyShards
-            .map(async shard => {
-                const filePath = `${this.directory}/${shard.id}`;
-                await this.saveShardFile(filePath, shard);
-                filesSaved.push(filePath);
-                shard.dirty = false;
-
-                // console.log(`  Saved shard ${shard.id}`);
-            });
-        await Promise.all(promises);
+            // console.log(`  Saved shard ${shard.id}`);
+        }   
 
         // console.log(`Saved ${dirtyShards.length} dirty shards.`);
 
@@ -545,7 +533,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Writes the file.
         //
-        await this.storage.write(filePath, undefined, dataWithChecksum);
+        await retry(() => this.storage.write(filePath, undefined, dataWithChecksum));
 
         //
         // Read the file back to verify it.
@@ -840,7 +828,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             //
             // If not upserting, finds the record to update.
             //
-
+            
             if (!existingRecord) {
                 return false; // Record not found
             }
@@ -904,21 +892,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             return;
         }
-        
-        // Get collection name
-        const collectionName = this.directory.split('/').pop() || '';
-        
+       
         // Get all sort indexes for this collection
-        const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+        const sortIndexes = await this.sortManager.listSortIndexes();
         
         // Update the record in each index
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex<RecordT>(
-                collectionName,
-                indexInfo.fieldName,
-                indexInfo.direction
-            );
-            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
             if (sortIndex) {
                 await sortIndex.updateRecord(updatedRecord, oldRecord);
             }
@@ -931,21 +911,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             return;
         }
-        
-        // Get collection name
-        const collectionName = this.directory.split('/').pop() || '';
-        
+                
         // Get all sort indexes for this collection
-        const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+        const sortIndexes = await this.sortManager.listSortIndexes();
         
         // Add the record to each index
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex<RecordT>(
-                collectionName,
-                indexInfo.fieldName,
-                indexInfo.direction
-            );
-            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
             if (sortIndex) {
                 await sortIndex.addRecord(record);
             }
@@ -989,22 +961,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             return;
         }
-        
-       
-        // Get collection name.
-        const collectionName = this.directory.split('/').pop() || '';
-        
+                
         // Get all sort indexes for this collection.
-        const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+        const sortIndexes = await this.sortManager.listSortIndexes();
         
         // Delete the record from each index.
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex<RecordT>(
-                collectionName,
-                indexInfo.fieldName,
-                indexInfo.direction
-            );
-            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
             if (sortIndex) {
                 // Get the value for the indexed field from the record.
                 const indexedValue = record[indexInfo.fieldName];                
@@ -1030,7 +993,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
         return await this.sortIndexExists(fieldName, direction);
     }
-
+        
     //
     // List all sort indexes for this collection
     //
@@ -1039,8 +1002,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const fieldNames = new Set<string>();
         
         if (this.sortManager) {
-            const collectionName = this.directory.split('/').pop() || '';
-            const sortIndexes = await this.sortManager.listSortIndexes(collectionName);
+            const sortIndexes = await this.sortManager.listSortIndexes();
             
             // Add field names from sort indexes
             for (const index of sortIndexes) {
@@ -1060,27 +1022,14 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error("Sort manager is required for index operations");
         }
         
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-        
         // Try to find an existing sort index for the field (check both asc and desc)
-        const ascIndex = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            'asc'
-        );
-        
+        const ascIndex = await this.sortManager.getSortIndex(fieldName, 'asc');        
         if (ascIndex) {
             // Use the sort index for faster search with binary search
             return await ascIndex.findByValue(value);
         }
         
-        const descIndex = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            'desc'
-        );
-        
+        const descIndex = await this.sortManager.getSortIndex(fieldName, 'desc');        
         if (descIndex) {
             // Use the sort index for faster search with binary search
             return await descIndex.findByValue(value);
@@ -1090,12 +1039,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         await this.ensureSortIndex(fieldName, 'asc');
         
         // Get the newly created sort index
-        const newIndex = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            'asc'
-        );
-        
+        const newIndex = await this.sortManager.getSortIndex(fieldName, 'asc');        
         if (!newIndex) {
             throw new Error(`Failed to create index for field "${fieldName}"`);
         }
@@ -1123,25 +1067,14 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             throw new Error('Sort manager is required for range queries');
         }
-        
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-        
+                
         // Try to get the sort index with the specified direction
-        let sortIndex = await this.sortManager.getSortIndex<RecordT>(
-            collectionName,
-            fieldName,
-            direction
-        );
+        let sortIndex = await this.sortManager.getSortIndex(fieldName, direction);
         
         // If the index doesn't exist, create it
         if (!sortIndex) {
             await this.ensureSortIndex(fieldName, direction);
-            sortIndex = await this.sortManager.getSortIndex<RecordT>(
-                collectionName,
-                fieldName,
-                direction
-            );
+            sortIndex = await this.sortManager.getSortIndex(fieldName, direction );
         }
         
         if (!sortIndex) {
@@ -1151,7 +1084,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Use the sort index's range query method
         return await sortIndex.findByRange(options);
     }
-
+    
     //
     // Deletes all indexes for a field (both asc and desc)
     //
@@ -1159,65 +1092,47 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             return false;
         }
-        
-        // Get collection name
-        const collectionName = this.directory.split('/').pop() || '';
-        
+               
         // Delete any existing sort indexes for the field
         let deleted = false;
         
         // Try to delete an ascending index
-        const deleteAsc = await this.sortManager.deleteSortIndex(
-            collectionName,
-            fieldName,
-            'asc'
-        );
+        const deleteAsc = await this.sortManager.deleteSortIndex(fieldName, 'asc');
         
         // Try to delete a descending index
-        const deleteDesc = await this.sortManager.deleteSortIndex(
-            collectionName,
-            fieldName,
-            'desc'
-        );
+        const deleteDesc = await this.sortManager.deleteSortIndex(fieldName, 'desc');
         
         return deleteAsc || deleteDesc;
     }
-
+    
     //
     // Get records sorted by a specified field
     //
-    async getSorted(fieldName: string, options?: {
-        direction?: 'asc' | 'desc';
-        page?: number;
-        pageSize?: number
+    async getSorted(fieldName: string, options?: { 
+        direction?: 'asc' | 'desc'; 
+        page?: number; 
+        pageSize?: number;
+        pageId?: string;
     }): Promise<{
         records: RecordT[];
         totalRecords: number;
-        currentPage: number;
+        currentPageId: string;
         totalPages: number;
-        nextPage?: number;
-        previousPage?: number;
+        nextPageId?: string;
+        previousPageId?: string;
     }> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
-
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-
+        
         // The sort manager will automatically create the index if it doesn't exist
-        return await this.sortManager.getSortedRecords<RecordT>(
-            this,
-            collectionName,
-            fieldName,
-            options
-        );
+        return await this.sortManager.getSortedRecords(fieldName, options);
     }
 
     //
     // Create or rebuild a sort index for the specified field
     //
-    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc'): Promise<void> {
+    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc', type: "date" | "string" | "number" | undefined = undefined): Promise<void> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
@@ -1227,16 +1142,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             // Index already exists, no need to create it again.
             return;
         }
-
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-
-        await this.sortManager.rebuildSortIndex<RecordT>(
-            this,
-            collectionName,
-            fieldName,
-            direction
-        );
+        
+        await this.sortManager.rebuildSortIndex(fieldName, direction, type);
     }
 
     //
@@ -1249,11 +1156,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
-
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-
-        return await this.sortManager.listSortIndexes(collectionName);
+               
+        return await this.sortManager.listSortIndexes();
     }
 
     //
@@ -1263,15 +1167,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
-
-        // Get the collection name from the directory path
-        const collectionName = this.directory.split('/').pop() || '';
-
-        return await this.sortManager.deleteSortIndex(
-            collectionName,
-            fieldName,
-            direction
-        );
+        
+        return await this.sortManager.deleteSortIndex(fieldName, direction);
     }
 
     //
@@ -1281,22 +1178,18 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.clearSchedule(); // Clear any pending saves.
         this.shardCache.clear(); // Clear all shards from memory.
         
-        // No need to shutdown indexes - we're only using SortIndex
-        // which is managed by SortManager
-        
         // Delete sort indexes if any
         if (this.sortManager) {
-            const collectionName = this.directory.split('/').pop() || '';
-            await this.sortManager.deleteAllSortIndexes(collectionName);
+            await this.sortManager.deleteAllSortIndexes();
         }
-
+        
         // Delete the index directory
         const indexDirPath = `${this.directory}/index`;
         if (await this.storage.dirExists(indexDirPath)) {
             await this.storage.deleteFile(indexDirPath);
         }
-
+        
         // Delete the collection directory
-        await this.storage.deleteDir(this.directory);
+        await this.storage.deleteDir(this.directory); 
     }
 }

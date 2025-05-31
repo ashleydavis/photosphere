@@ -260,8 +260,8 @@ export class MediaFileDatabase {
         await this.databaseHashCache.load();
         await this.assetDatabase.load();
 
-        await this.metadataCollection.ensureIndex("hash");
-        await this.metadataCollection.ensureSortIndex("photoDate", "desc");
+        await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
+        await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
