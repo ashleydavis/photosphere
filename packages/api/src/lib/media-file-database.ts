@@ -246,8 +246,8 @@ export class MediaFileDatabase {
 
         await this.assetDatabase.create();
 
-        await this.metadataCollection.ensureIndex("hash");
-        await this.metadataCollection.ensureSortIndex("photoDate", "desc");
+        await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
+        await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
         log.verbose(`Created new media file database.`);
     }
