@@ -1426,7 +1426,7 @@ export class SortIndex<RecordT extends IRecord> {
                             if (prevLeafNode && prevLeafNode.children.length === 0) {
                                 // Update the next pointer to skip this empty node
                                 prevLeafNode.nextLeaf = leafNode.nextLeaf;
-                                this.markNodeDirty(prevLeafId, prevLeafNode);
+                                await this.markNodeDirty(prevLeafId, prevLeafNode);
                             }
                         }
                         
