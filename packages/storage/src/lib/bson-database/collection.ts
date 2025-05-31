@@ -236,7 +236,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Put id through a buffer and be sure it's in standarized v4 format.
     //
     private normalizeId(id: string) {
-        this.expectValidUuid(id);
+        //TODO: Would like to have this if my data wasn't full of invalid UUIDs.
+        // this.expectValidUuid(id);
 
         const idBuffer = Buffer.from(id.replace(/-/g, ''), "hex");
         if (idBuffer.length !== 16) {
