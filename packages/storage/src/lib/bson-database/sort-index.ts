@@ -7,6 +7,17 @@ import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
+
+//
+// Split internal nodes when they exceed 1.2x the key size.
+//
+const splitKeysThreshold = 1.2; 
+
+//
+// Split leaf nodes when they exceed 1.5x the page size
+//
+const leafSplitThreshold = 1.5;
+
 // let id = 0;
 
 function makeId() {
@@ -220,11 +231,7 @@ export class SortIndex<RecordT extends IRecord> {
                 } else {
                     this.type = undefined;
                 }
-                
-                // Read pageSize
-                const pageSize = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
-                
+                               
                 // Read lastUpdatedAt timestamp (8 bytes for Date)
                 const lastUpdatedTimestamp = dataWithoutChecksum.readBigUInt64LE(offset);
                 offset += 8;
@@ -481,7 +488,6 @@ export class SortIndex<RecordT extends IRecord> {
             4 + fieldNameBuffer.length + // fieldName length + data
             4 + directionBuffer.length + // direction length + data
             1 + // type (single byte: 0 for no type, 1 for date)
-            4 + // pageSize
             8 + // lastUpdatedAt timestamp
             4 + // node count
             totalNodesSize; // all nodes
@@ -530,11 +536,7 @@ export class SortIndex<RecordT extends IRecord> {
         }
         buffer.writeUInt8(typeValue, offset);
         offset += 1;
-        
-        // Write pageSize
-        buffer.writeUInt32LE(this.pageSize, offset);
-        offset += 4;
-        
+               
         // Write lastUpdatedAt timestamp (8 bytes for Date)
         const timestamp = this.lastUpdatedAt ? BigInt(this.lastUpdatedAt.getTime()) : BigInt(0);
         buffer.writeBigUInt64LE(timestamp, offset);
@@ -888,7 +890,7 @@ export class SortIndex<RecordT extends IRecord> {
                 // Update numRecords in the node
                 const node = this.getNode(pageId);
                 if (node && node.children.length === 0) {
-                    this.markNodeDirty(pageId, node);
+                    await this.markNodeDirty(pageId, node);
                 }
                 
                 return records;
@@ -1426,7 +1428,7 @@ export class SortIndex<RecordT extends IRecord> {
                             if (prevLeafNode && prevLeafNode.children.length === 0) {
                                 // Update the next pointer to skip this empty node
                                 prevLeafNode.nextLeaf = leafNode.nextLeaf;
-                                await this.markNodeDirty(prevLeafId, prevLeafNode);
+                                this.markNodeDirty(prevLeafId, prevLeafNode);
                             }
                         }
                         
@@ -1696,7 +1698,7 @@ export class SortIndex<RecordT extends IRecord> {
         }
         
         // If the leaf is now too large, split it
-        if (leafRecords.length > this.pageSize * 1.2) {
+        if (leafRecords.length > this.pageSize * leafSplitThreshold) {
             await this.splitLeafNode(leafId, leafNode, leafRecords);
         } 
         else {
@@ -1795,7 +1797,7 @@ export class SortIndex<RecordT extends IRecord> {
                     await this.markNodeDirty(parentId, parentNode);
                     
                     // If the parent node is now too large, we need to split it too
-                    if (parentNode.keys.length > this.keySize) {
+                    if (parentNode.keys.length > (this.keySize * splitKeysThreshold)) {
                         await this.splitInternalNode(parentId, parentNode);
                     }
                 }
@@ -2120,7 +2122,7 @@ export class SortIndex<RecordT extends IRecord> {
                     await this.markNodeDirty(parentId, parentNode);
                     
                     // Check if the parent needs to be split
-                    if (parentNode.keys.length > this.keySize) {
+                    if (parentNode.keys.length > (this.keySize * splitKeysThreshold)) {
                         await this.splitInternalNode(parentId, parentNode);
                     }
                 }
