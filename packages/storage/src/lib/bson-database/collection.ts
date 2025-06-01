@@ -607,21 +607,19 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         let records: RecordT[] = [];
 
-        if (await this.storage.fileExists(shardFilePath)) {
-            // Read all records from the file
-            const fileData = await this.storage.read(shardFilePath);
-            if (fileData && fileData.length > 0) {
+        // Read all records from the file
+        const fileData = await this.storage.read(shardFilePath);
+        if (fileData && fileData.length > 0) {
 
-                const version = fileData.readUInt32LE(0); // Version
+            const version = fileData.readUInt32LE(0); // Version
 
-                const recordCount = fileData.readUInt32LE(4); // Record count
-                let offset = 8; // Skip the version and record count.
+            const recordCount = fileData.readUInt32LE(4); // Record count
+            let offset = 8; // Skip the version and record count.
 
-                for (let i = 0; i < recordCount; i++) {
-                    const { record, offset: newOffset } = this.readRecord(fileData, offset);
-                    records.push(record);
-                    offset = newOffset;
-                }
+            for (let i = 0; i < recordCount; i++) {
+                const { record, offset: newOffset } = this.readRecord(fileData, offset);
+                records.push(record);
+                offset = newOffset;
             }
         }
 
