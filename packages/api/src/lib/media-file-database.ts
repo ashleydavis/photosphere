@@ -33,6 +33,11 @@ export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType:
 export type ProgressCallback = (currentlyScanning: string | undefined) => void;
 
 //
+// Callback for visiting a file when scanning a directory or zip file.
+//
+type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback) => Promise<void>;
+
+//
 // Size of the micro thumbnail.
 //
 export const MICRO_MIN_SIZE = 40;
@@ -310,7 +315,7 @@ export class MediaFileDatabase {
             );
         }
         else if (fileStat.isDirectory()) {
-            return await this.scanDirectory(filePath, progressCallback);
+            return await this.scanDirectory(filePath, this.addFile, progressCallback);
         }
         else {
             throw new Error(`Unsupported file type: ${filePath}`);
@@ -318,15 +323,173 @@ export class MediaFileDatabase {
     }
 
     //
-    // Adds a file to the media file database.
+    // Checks a list of files or directories to find files already added to the media file database.
     //
-    async addFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> {
+    async checkPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
+        for (const path of paths) {
+            await this.checkPath(path, progressCallback);
+        }
+    }
 
-        if (contentType === "application/zip") {
-            return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, progressCallback);
+    //
+    // Checks a file or directory to find files already added to the media file database.
+    //
+    async checkPath(filePath: string, progressCallback: ProgressCallback): Promise<void> {
+        const fileStat = await fsPromises.stat(filePath);
+        if (fileStat.isFile()) {
+            const contentType = mime.getType(filePath) || undefined;
+            if (!contentType) {
+                log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
+                this.addSummary.numFilesIgnored++;
+                return;
+            }
+            await this.checkFile(
+                filePath, 
+                {
+                    contentType,
+                    length: fileStat.size,
+                    lastModified: fileStat.mtime,
+                }, 
+                fileStat.birthtime, 
+                contentType, 
+                [], 
+                () => fs.createReadStream(filePath), 
+                progressCallback
+            );
+        }
+        else if (fileStat.isDirectory()) {
+            return await this.scanDirectory(filePath, this.checkFile, progressCallback);
+        }
+        else {
+            throw new Error(`Unsupported file type: ${filePath}`);
+        }
+    }
+
+    //
+    // Scans a directory for files and adds them to the media file database.
+    //
+    private async scanDirectory(directoryPath: string, visitFile: VisitFileCallback, progressCallback: ProgressCallback): Promise<void> {
+
+        log.verbose(`Scanning directory "${directoryPath}" for media files.`);
+
+        this.currentlyScanning = path.basename(directoryPath);
+        progressCallback(this.currentlyScanning);
+
+        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
+
+            this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
+            progressCallback(this.currentlyScanning);
+
+            const contentType = mime.getType(orderedFile.fileName);
+            const filePath = orderedFile.fileName;
+            if (!contentType) {
+                log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
+                this.addSummary.numFilesIgnored++;
+                continue;
+            }
+
+            if (contentType === "application/zip"
+                || contentType.startsWith("video")
+                || contentType.startsWith("image")) {
+
+                const fileStat = await fsPromises.stat(filePath);
+                await visitFile(
+                    filePath, 
+                    {
+                        contentType,
+                        length: fileStat.size,
+                        lastModified: fileStat.mtime,
+                    }, 
+                    fileStat.birthtime, 
+                    contentType, 
+                    [], 
+                    () => fs.createReadStream(filePath),
+                    progressCallback
+                );
+            }
+            else {
+                log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
+                this.addSummary.numFilesIgnored++;
+            }
+
+            if (this.addSummary.numFilesAdded % 100 === 0) {
+                //
+                // Save hash caches progressively to make the next run faster.
+                //
+                await this.localHashCache.save();
+                await this.databaseHashCache.save();
+                await this.assetDatabase.save();                
+            }
         }
 
-        log.verbose(`Adding file "${filePath}" to the media file database.`);        
+        log.verbose(`Finished scanning directory "${directoryPath}" for media files.`);
+    }
+
+    //
+    // Adds files from a zip file to the media file database.
+    //
+    private async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, visitFile: VisitFileCallback, progressCallback: ProgressCallback): Promise<void> {
+
+        log.verbose(`Scanning zip file "${filePath}" for media files.`);
+
+        this.currentlyScanning = path.basename(filePath);
+        progressCallback(this.currentlyScanning);
+
+        const zip = new JSZip();
+        const unpacked = await zip.loadAsync(await buffer(openStream()));
+        for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
+            if (!zipObject.dir) {
+                const fullPath = `${filePath}/${fileName}`;
+                const contentType = mime.getType(fileName) || undefined;
+                if (!contentType) {
+                    log.verbose(`Ignoring file "${fullPath}" with unknown content type.`);
+                    this.addSummary.numFilesIgnored++;
+                    continue;
+                }
+
+                if (contentType === "application/zip"
+                    || contentType.startsWith("video")
+                    || contentType.startsWith("image")) {
+
+
+                    const fileData = await zipObject.async("nodebuffer");
+                    await visitFile(
+                        `zip://${fullPath}`, 
+                        {
+                            contentType,
+                            length: fileData.length,
+                            lastModified: fileDate,
+                        }, 
+                        fileDate, 
+                        contentType, 
+                        ["From zip file"], 
+                        () => Readable.from(fileData),
+                        progressCallback                    
+                    );
+                }
+            }
+
+            if (this.addSummary.numFilesAdded % 100 === 0) {
+                //
+                // Save hash caches progressively to make the next run faster.
+                //
+                await this.localHashCache.save();
+                await this.databaseHashCache.save();
+                await this.assetDatabase.save();                
+            }
+        }
+
+        log.verbose(`Finished scanning zip file "${filePath}" for media files.`);
+    }
+
+    //
+    // Adds a file to the media file database.
+    //
+    private addFile = async (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> => {
+
+        if (contentType === "application/zip") {
+            return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, this.addFile, progressCallback);
+        }
 
         if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
             log.error(`File "${filePath}" has failed validation.`);
@@ -338,13 +501,14 @@ export class MediaFileDatabase {
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
 
+        log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
+
         const localHashStr = localHashedFile.hash.toString("hex");
         const records = await metadataCollection.findByIndex("hash", localHashStr);
         if (records.length > 0) {
             //
             // The file is already in the database.
             //
-            // log.info(`File "${filePath}" already in the database, don't need to add it.`);
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
             return;
@@ -493,120 +657,38 @@ export class MediaFileDatabase {
     }
 
     //
-    // Scans a directory for files and adds them to the media file database.
+    // Checks if a file has already been added to the media file database.
     //
-    async scanDirectory(directoryPath: string, progressCallback: ProgressCallback): Promise<void> {
+    private checkFile = async  (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> => {
 
-        log.verbose(`Scanning directory "${directoryPath}" for media files.`);
+        if (contentType === "application/zip") {
+            return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, this.checkFile, progressCallback);
+        }
 
-        this.currentlyScanning = path.basename(directoryPath);
-        progressCallback(this.currentlyScanning);
+        const localHashedFile = await this.hashFile(filePath, fileInfo, openStream, this.localHashCache);
 
-        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, [/\.db/])) {
+        const metadataCollection = this.bsonDatabase.collection("metadata");
 
-            this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
+        log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
+
+        const localHashStr = localHashedFile.hash.toString("hex");
+        const records = await metadataCollection.findByIndex("hash", localHashStr);
+        if (records.length > 0) {
+            //
+            // The file is already in the database.
+            //
+            log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
+            this.addSummary.numFilesAlreadyAdded++;
+            return;
+        }
+
+        log.verbose(`File "${filePath}" has not been added to the media file database.`);
+
+        this.addSummary.numFilesAdded++;
+        this.addSummary.totalSize += fileInfo.length;
+        if (progressCallback) {
             progressCallback(this.currentlyScanning);
-
-            const contentType = mime.getType(orderedFile.fileName);
-            const filePath = orderedFile.fileName;
-            if (!contentType) {
-                log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
-                this.addSummary.numFilesIgnored++;
-                continue;
-            }
-
-            if (contentType === "application/zip"
-                || contentType.startsWith("video")
-                || contentType.startsWith("image")) {
-
-                const fileStat = await fsPromises.stat(filePath);
-                await this.addFile(
-                    filePath, 
-                    {
-                        contentType,
-                        length: fileStat.size,
-                        lastModified: fileStat.mtime,
-                    }, 
-                    fileStat.birthtime, 
-                    contentType, 
-                    [], 
-                    () => fs.createReadStream(filePath),
-                    progressCallback
-                );
-            }
-            else {
-                log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
-                this.addSummary.numFilesIgnored++;
-            }
-
-            if (this.addSummary.numFilesAdded % 100 === 0) {
-                //
-                // Save hash caches progressively to make the next run faster.
-                //
-                await this.localHashCache.save();
-                await this.databaseHashCache.save();
-                await this.assetDatabase.save();                
-            }
         }
-
-        log.verbose(`Finished scanning directory "${directoryPath}" for media files.`);
-    }
-
-    //
-    // Adds files from a zip file to the media file database.
-    //
-    async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> {
-
-        log.verbose(`Scanning zip file "${filePath}" for media files.`);
-
-        this.currentlyScanning = path.basename(filePath);
-        progressCallback(this.currentlyScanning);
-
-        const zip = new JSZip();
-        const unpacked = await zip.loadAsync(await buffer(openStream()));
-        for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
-            if (!zipObject.dir) {
-                const fullPath = `${filePath}/${fileName}`;
-                const contentType = mime.getType(fileName) || undefined;
-                if (!contentType) {
-                    log.verbose(`Ignoring file "${fullPath}" with unknown content type.`);
-                    this.addSummary.numFilesIgnored++;
-                    continue;
-                }
-
-                if (contentType === "application/zip"
-                    || contentType.startsWith("video")
-                    || contentType.startsWith("image")) {
-
-
-                    const fileData = await zipObject.async("nodebuffer");
-                    await this.addFile(
-                        `zip://${fullPath}`, 
-                        {
-                            contentType,
-                            length: fileData.length,
-                            lastModified: fileDate,
-                        }, 
-                        fileDate, 
-                        contentType, 
-                        ["From zip file"], 
-                        () => Readable.from(fileData),
-                        progressCallback                    
-                    );
-                }
-            }
-
-            if (this.addSummary.numFilesAdded % 100 === 0) {
-                //
-                // Save hash caches progressively to make the next run faster.
-                //
-                await this.localHashCache.save();
-                await this.databaseHashCache.save();
-                await this.assetDatabase.save();                
-            }
-        }
-
-        log.verbose(`Finished scanning zip file "${filePath}" for media files.`);
     }
 
     //

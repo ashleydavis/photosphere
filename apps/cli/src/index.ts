@@ -2,6 +2,7 @@ import { program } from 'commander';
 import { version } from '../package.json';
 import { uiCommand } from './cmd/ui';
 import { addCommand } from './cmd/add';
+import { checkCommand } from './cmd/check';
 import { initCommand } from './cmd/init';
 import pc from "picocolors";
 
@@ -35,8 +36,18 @@ async function main() {
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
-        .argument("<files...>", "The media files to stage for adding to the database.")
+        .argument("<files...>", "The media files (or directories) to add to the database.")
         .action(addCommand);
+
+    program
+        .command("check")
+        .description("Checks files and direcotires to see what has already been added to the Photosphere media file database.")
+        .argument(...dbArgument)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .argument("<files...>", "The media files (or directories) to add to the database.")
+        .action(checkCommand);
 
     program
         .command("ui")

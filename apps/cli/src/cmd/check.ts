@@ -4,7 +4,7 @@ import { log } from "utils";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 
-export interface IAddCommandOptions { 
+export interface ICheckCommandOptions { 
     //
     // Set the path to the database metadata.
     //
@@ -22,9 +22,9 @@ export interface IAddCommandOptions {
 }
 
 //
-// Command that adds files and directories to the Photosphere media file database.
+// Command that checks which files and directories have been added to the Photosphere media file database.
 //
-export async function addCommand(dbDir: string, paths: string[], options: IAddCommandOptions): Promise<void> {
+export async function checkCommand(dbDir: string, paths: string[], options: ICheckCommandOptions): Promise<void> {
 
     configureLog({
         verbose: options.verbose,
@@ -41,11 +41,14 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     await database.load();
 
     try {
-        await database.addPaths(paths, (currentlyScanning) => {
+        await database.checkPaths(paths, (currentlyScanning) => {
             process.stdout.clearLine(0);
             process.stdout.cursorTo(0);
             const addSummary = database.getAddSummary();
-            process.stdout.write(`Added: ${pc.green(addSummary.numFilesAdded)}`);
+            process.stdout.write(`Added: ${pc.green(addSummary.numFilesAlreadyAdded)}`);
+            if (addSummary.numFilesAdded > 0) {
+                process.stdout.write(` | Not added: ${pc.yellow(addSummary.numFilesAdded)}`);
+            }
             if (addSummary.numFilesIgnored > 0) {
                 process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
             }
@@ -64,15 +67,12 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0); // Flush the progress message.
     
-        log.info(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
+        log.info(pc.green(`Have ${addSummary.numFilesAlreadyAdded} files already added to the media database.\n`));
         
         log.info(`Summary: `);
-        log.info(`  - ${addSummary.numFilesAdded} files added.`);
+        log.info(`  - ${addSummary.numFilesAdded} files not added.`);
         log.info(`  - ${addSummary.numFilesIgnored} files ignored.`);
-        log.info(`  - ${addSummary.numFilesFailed} files failed to be added.`);
         log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
-        log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
-        log.info(`  - ${addSummary.averageSize} bytes average size.`);
 
         process.exit(0);
     }
