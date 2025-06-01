@@ -4,6 +4,7 @@ export interface ILog {
     error(message: string): void;
     exception(message: string, error: Error): void;
     warn(message: string): void;
+    debug(message: string): void;
 }
 
 //
@@ -30,6 +31,9 @@ export let log: ILog = {
     warn(message: string): void {
         console.warn(message);
     },
+    debug(message: string): void {
+        console.debug(message);
+    }
 };
 
 

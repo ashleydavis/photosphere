@@ -5,6 +5,11 @@ export interface ILogOptions {
     // Enables verbose logging.
     //
     verbose?: boolean;
+
+    //
+    // Enables debug logging.
+    //
+    debug?: boolean;
 }
 
 class Log implements ILog {
@@ -34,6 +39,14 @@ class Log implements ILog {
 
     warn(message: string): void {
         console.warn(message);
+    }
+
+    debug(message: string): void {
+        if (!this.options.debug) {
+            return;
+        }
+
+        console.debug(message);
     }
 }
 
