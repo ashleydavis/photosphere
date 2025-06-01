@@ -2141,7 +2141,12 @@ export class SortIndex<RecordT extends IRecord> {
      * Saves all dirty nodes and metadata, then clears the cache
      * Should be called when shutting down the database
      */
-    async shutdown(): Promise<void> {        
+    async shutdown(): Promise<void> {
+        if (!this.loaded) {
+            // If the index is not loaded, there's nothing to save.
+            return;
+        }
+
         // Save all dirty nodes and metadata
         await this.saveDirtyNodes();
         
