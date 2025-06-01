@@ -267,15 +267,12 @@ export class SortManager<RecordT extends IRecord> {
     // Shut down all sort indexes, saving any dirty pages.
     //
     async shutdown(): Promise<void> {
-        // Call shutdown on all sort indexes
-        const promises = Array.from(this.sortIndexes.values())
-            .map(async (sortIndex) => {
-                await sortIndex.shutdown();
-            });
-            
-        await Promise.all(promises);
+        // Call shutdown on all sort indexes.
+        for (const sortIndex of this.sortIndexes.values()) {
+            await sortIndex.shutdown();
+        }
         
-        // Clear the cache
+        // Clear the cache.
         this.sortIndexes.clear();
     }
 }
