@@ -3,6 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import { log } from "utils";
 import pc from "picocolors";
+import { exit, registerTerminationCallback } from "node-utils";
 
 export interface IInitCommandOptions { 
     //
@@ -42,10 +43,14 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
+
+    registerTerminationCallback(async () => {
+        await database.close();
+    });    
+
     await database.create(); 
-    await database.close();
 
     log.info(pc.green(`Created new media file database in "${dbDir}".`))
 
-    process.exit(0);
+    exit(0);
 }

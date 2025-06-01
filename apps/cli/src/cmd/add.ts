@@ -3,6 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { log } from "utils";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
+import { exit, registerTerminationCallback } from "node-utils";
 
 export interface IAddCommandOptions { 
     //
@@ -38,45 +39,45 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     process.stdout.write(`Searching for files`);
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
+
+    registerTerminationCallback(async () => {
+        await database.close();
+    });    
+
     await database.load();
 
-    try {
-        await database.addPaths(paths, (currentlyScanning) => {
-            process.stdout.clearLine(0);
-            process.stdout.cursorTo(0);
-            const addSummary = database.getAddSummary();
-            process.stdout.write(`Added: ${pc.green(addSummary.numFilesAdded)}`);
-            if (addSummary.numFilesIgnored > 0) {
-                process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
-            }
-            if (addSummary.numFilesFailed > 0) {
-                process.stdout.write(` | Failed: ${pc.red(addSummary.numFilesFailed)}`);
-            }
-            if (currentlyScanning) {
-                process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
-            }
-
-            process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`);
-        });
-
-        const addSummary = database.getAddSummary();
-
+    await database.addPaths(paths, (currentlyScanning) => {
         process.stdout.clearLine(0);
-        process.stdout.cursorTo(0); // Flush the progress message.
-    
-        log.info(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
-        
-        log.info(`Summary: `);
-        log.info(`  - ${addSummary.numFilesAdded} files added.`);
-        log.info(`  - ${addSummary.numFilesIgnored} files ignored.`);
-        log.info(`  - ${addSummary.numFilesFailed} files failed to be added.`);
-        log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
-        log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
-        log.info(`  - ${addSummary.averageSize} bytes average size.`);
+        process.stdout.cursorTo(0);
+        const addSummary = database.getAddSummary();
+        process.stdout.write(`Added: ${pc.green(addSummary.numFilesAdded)}`);
+        if (addSummary.numFilesIgnored > 0) {
+            process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
+        }
+        if (addSummary.numFilesFailed > 0) {
+            process.stdout.write(` | Failed: ${pc.red(addSummary.numFilesFailed)}`);
+        }
+        if (currentlyScanning) {
+            process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
+        }
 
-        process.exit(0);
-    }
-    finally {
-        await database.close();
-    }
+        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`);
+    });
+
+    const addSummary = database.getAddSummary();
+
+    process.stdout.clearLine(0);
+    process.stdout.cursorTo(0); // Flush the progress message.
+
+    log.info(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
+    
+    log.info(`Summary: `);
+    log.info(`  - ${addSummary.numFilesAdded} files added.`);
+    log.info(`  - ${addSummary.numFilesIgnored} files ignored.`);
+    log.info(`  - ${addSummary.numFilesFailed} files failed to be added.`);
+    log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
+    log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
+    log.info(`  - ${addSummary.averageSize} bytes average size.`);
+
+    exit(0);
 }

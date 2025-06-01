@@ -1,7 +1,7 @@
 import { createPrivateKey } from "node:crypto";
 import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider } from "rest-api";
 import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
-import { registerTerminationCallback } from "node-utils";
+import { exit, registerTerminationCallback } from "node-utils";
 
 async function main() {
 
@@ -118,6 +118,6 @@ main()
     .catch(err => {
         console.error(`Something went wrong.`);
         console.error(err);
-        process.exit(1);
+        exit(1);
     });
 

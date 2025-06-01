@@ -5,6 +5,7 @@ import { addCommand } from './cmd/add';
 import { checkCommand } from './cmd/check';
 import { initCommand } from './cmd/init';
 import pc from "picocolors";
+import { exit } from 'node-utils';
 
 async function main() {
 
@@ -66,5 +67,5 @@ main()
         console.error(pc.red('An error occurred:'));
         console.error((pc.red(error.stack || error.message || error).toString()));
 
-        process.exit(1);
+        exit(1);
     });
