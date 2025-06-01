@@ -1,4 +1,4 @@
-import { IBsonCollection, IRecord, IShard } from '../lib/bson-database/collection';
+import { IBsonCollection, IGetAllResult, IRecord, IShard } from '../lib/bson-database/collection';
 import { SortDirection } from '../lib/bson-database/sort-index';
 
 // Mock BsonCollection for testing
@@ -29,16 +29,15 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         }
     }
 
-    async getAll(next?: string): Promise<{ records: T[], next?: string }> {
+    async getAll(next?: string): Promise<IGetAllResult<T>> {
         return { records: this.records, next: undefined };
     }
 
-    async getSorted(fieldName: string, options?: { 
-        direction?: SortDirection; 
-        page?: number; 
-        pageSize?: number;
-        pageId?: string;
-    }): Promise<{
+    async getSorted(
+        fieldName: string,
+        direction: SortDirection,
+        pageId?: string
+    ): Promise<{
         records: T[];
         totalRecords: number;
         currentPageId: string;

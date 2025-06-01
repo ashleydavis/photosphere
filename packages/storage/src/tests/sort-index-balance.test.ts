@@ -259,7 +259,7 @@ describe('SortIndex Tree Balance', () => {
         
         // Delete every 3rd record
         for (let i = 3; i <= 60; i += 3) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, i);
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, { value: i } as any);
         }
         
         // Verify tree balance after deletions
@@ -314,7 +314,7 @@ describe('SortIndex Tree Balance', () => {
             
             // Delete some records
             if (i <= 5) {
-                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, (i + 15) * 2);
+                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, { value: (i + 15) * 2 } as any);
             }
         }
         

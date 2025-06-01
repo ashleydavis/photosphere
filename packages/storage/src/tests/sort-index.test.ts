@@ -190,7 +190,7 @@ describe('SortIndex', () => {
         expect(oldScoreResult.length).toBe(1); // Now just Record 5
         
         // Delete a record
-        await sortIndex.deleteRecord('123e4567-e89b-12d3-a456-426614174005', 85); // Record 5 with score 85
+        await sortIndex.deleteRecord('123e4567-e89b-12d3-a456-426614174005', { score: 85 } as any); // Record 5 with score 85
         
         // Check that the record is gone
         const afterDeleteResult = await sortIndex.findByValue(85);

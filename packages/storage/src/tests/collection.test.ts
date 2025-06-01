@@ -325,7 +325,7 @@ describe('BsonCollection', () => {
         await collection.ensureSortIndex('age', 'asc', 'number');
         
         // Get sorted records
-        const result = await collection.getSorted('age', { direction: 'asc', type: 'number' });
+        const result = await collection.getSorted('age', 'asc');
         
         // Check that the records are sorted by age
         expect(result.records.length).toBe(users.length);

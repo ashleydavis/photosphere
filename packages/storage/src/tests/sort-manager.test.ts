@@ -37,8 +37,11 @@ describe('SortManager', () => {
     });
     
     test('should create and return a sort index', async () => {
+        // Ensure the sort index exists
+        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        
         // Get sort index for price (ascending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string', page: 1 });
+        const result = await sortManager.getSortedRecords('price', 'asc');
         
         // Check that the index was created correctly
         expect(result.records.length).toBeGreaterThan(0);
@@ -57,11 +60,7 @@ describe('SortManager', () => {
         }
         
         // Get next page using the nextPageId
-        const page2Result = await sortManager.getSortedRecords('price', { 
-            direction: 'asc', 
-            type: 'string', 
-            pageId: result.nextPageId 
-        });
+        const page2Result = await sortManager.getSortedRecords('price', 'asc', result.nextPageId);
         
         // Check page 2 contents
         expect(page2Result.records.length).toBeGreaterThan(0);
@@ -86,10 +85,11 @@ describe('SortManager', () => {
     
     test('should get existing sort index if already created', async () => {
         // Create the index first
-        await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string',  });
+        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.getSortedRecords('price', 'asc');
         
         // Get the same index again
-        const result1 = await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string',  });
+        const result1 = await sortManager.getSortedRecords('price', 'asc');
         
         // Ensure we got back valid data
         expect(result1.records.length).toBeGreaterThan(0);
@@ -97,8 +97,11 @@ describe('SortManager', () => {
     });
     
     test('should support descending order', async () => {
+        // Ensure the sort index exists
+        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        
         // Get sort index for price (descending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'desc', type: 'string', page: 1 });
+        const result = await sortManager.getSortedRecords('price', 'desc');
         
         // Collect all records across pages
         let allRecords: TestProduct[] = [];
@@ -109,11 +112,7 @@ describe('SortManager', () => {
         
         // Follow next page links until we've visited all pages
         while (currentPage.nextPageId) {
-            currentPage = await sortManager.getSortedRecords('price', { 
-                direction: 'desc', 
-                type: 'string', 
-                pageId: currentPage.nextPageId 
-            });
+            currentPage = await sortManager.getSortedRecords('price', 'desc', currentPage.nextPageId);
             allRecords.push(...currentPage.records);
         }
                 
@@ -135,20 +134,14 @@ describe('SortManager', () => {
     
     test('should list all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.getSortedRecords(
-            'price',
-            { direction: 'asc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.getSortedRecords(
-            'price',
-            { direction: 'desc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        await sortManager.getSortedRecords('price', 'desc');
         
-        await sortManager.getSortedRecords(
-            'category',
-            { direction: 'asc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.getSortedRecords('category', 'asc');
         
         // List the indexes
         const indexes = await sortManager.listSortIndexes();
@@ -168,10 +161,8 @@ describe('SortManager', () => {
     
     test('should delete a sort index', async () => {
         // Create an index
-        await sortManager.getSortedRecords(
-            'price',
-            { direction: 'asc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.getSortedRecords('price', 'asc');
         
         // Delete the index
         const result = await sortManager.deleteSortIndex('price', 'asc');
@@ -187,51 +178,13 @@ describe('SortManager', () => {
         expect(await storage.dirExists('db/sort_indexes/products/price_asc')).toBe(false);
     });
     
-    test('should rebuild an existing sort index', async () => {
-        // Create the index first
-        await sortManager.getSortedRecords(
-            'price',
-            { direction: 'asc', type: 'string' }
-        );
-        
-        // Add a new record to the collection
-        const newProduct: TestProduct = {
-            _id: '123e4567-e89b-12d3-a456-426614174006',
-            name: 'Product 6',
-            price: 5.99,
-            category: 'Books'
-        };
-        await collection.insertOne(newProduct);
-        
-        // Rebuild the index to include the new record
-        await sortManager.rebuildSortIndex(
-            'price',
-            'asc',
-            'string'
-        );
-        
-        // Get the updated index
-        const result = await sortManager.getSortedRecords(
-            'price',
-            { direction: 'asc', type: 'string', page: 1 }
-        );
-        
-        // Check that the new record is included
-        expect(result.totalRecords).toBe(6);
-        expect(result.records[0].price).toBe(5.99); // The new Product 6
-    });
-    
     test('should delete all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.getSortedRecords(
-            'price',
-            { direction: 'asc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.getSortedRecords(
-            'category',
-            { direction: 'asc', type: 'string' }
-        );
+        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.getSortedRecords('category', 'asc');
         
         // Delete all indexes for the collection
         await sortManager.deleteAllSortIndexes();

@@ -305,7 +305,7 @@ describe('SortIndex Key Constraints', () => {
         
         // Delete every 4th record
         for (let i = 4; i <= 80; i += 4) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, i);
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, { value: i } as any);
             
             // Check constraints after each deletion
             constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -353,7 +353,7 @@ describe('SortIndex Key Constraints', () => {
             
             // Delete some records
             if (i <= 8) {
-                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, (i + 20) * 2);
+                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, { value: (i + 20) * 2 } as any);
             }
             
             // Verify constraints after each set of operations

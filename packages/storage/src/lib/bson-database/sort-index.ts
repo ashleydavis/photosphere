@@ -11,6 +11,13 @@ import { retry } from 'utils';
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';
 
+export interface IRangeOptions {
+    min?: any;
+    max?: any;
+    minInclusive?: boolean;
+    maxInclusive?: boolean;
+}
+
 //
 // Split internal nodes when they exceed 1.2x the key size.
 //
@@ -77,7 +84,8 @@ export interface ISortIndexOptions {
     
     // Optional type for value conversion before comparison
     // Supports 'date' for ISO string date parsing, 'string' for string comparison, 'number' for numeric comparison
-    type?: SortDataType; //TODO: Might want to make this required.
+    // If not set, type will be inferred from the values.
+    type?: SortDataType;
 }
 
 export interface ISortResult<RecordT> {
@@ -625,6 +633,19 @@ export class SortIndex<RecordT extends IRecord> {
                 // Add each record directly to the index
                 await this.addRecord(record);
                 recordsAdded++;
+
+                // if ((recordsAdded % 1000) === 0) {
+                //     const endTime = Date.now();
+                //     const elapsedSeconds = (endTime - startTime)
+                //     console.log(``);
+                //     console.log(``);
+                //     console.log(`>>> Processed 1k records in ${elapsedSeconds}ms (${(1000 / elapsedSeconds).toFixed(2)} records/sec)`);
+
+                //     console.log(`Nodes in memory after adding record ${recordsAdded}: ${this.treeNodes.size}`);
+                //     // console.log(`Leaf records in memory after adding record ${recordsAdded}: ${this.leafRecordsCache.size}`);
+
+                //     startTime = endTime; // Reset start time for next batch.
+                // }
             }
         }
         
@@ -1368,12 +1389,13 @@ export class SortIndex<RecordT extends IRecord> {
      * @param recordId The ID of the record to delete
      * @param value The value of the indexed field, used to help locate the record
      */
-    async deleteRecord(recordId: string, value: any): Promise<void> {
+    async deleteRecord(recordId: string, oldRecord: RecordT): Promise<void> {
         await this.init();
-        
-        // Value is now required
+
+        const value = oldRecord[this.fieldName];
         if (value === undefined) {
-            throw new Error(`Value for field '${this.fieldName}' is required for deleting records from sort index`);
+            // Just assume the record is not indexed.
+            return;
         }
         
         let recordDeleted = false;
@@ -1718,8 +1740,6 @@ export class SortIndex<RecordT extends IRecord> {
 
         // Evict oldest records if cache is too large
         await this.evictOldestLeafRecords();
-
-        console.log(`Added record ${recordId} with value ${value} to index '${this.fieldName}'`);
     }
     
     /**
@@ -1934,12 +1954,7 @@ export class SortIndex<RecordT extends IRecord> {
     }
     
     // Find records by range query using optimized leaf traversal.
-    async findByRange(options: {
-        min?: any;
-        max?: any;
-        minInclusive?: boolean;
-        maxInclusive?: boolean;
-    }): Promise<RecordT[]> {
+    async findByRange(options: IRangeOptions): Promise<RecordT[]> {
         const {
             min = null,
             max = null,
@@ -2137,10 +2152,7 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Save both nodes
         await this.markNodeDirty(nodeId, node);
-        await this.markNodeDirty(newNodeId, newNode);
-        
-        // Note: Not incrementing totalPages here since internal nodes
-        // don't count toward the user-facing page count
+        await this.markNodeDirty(newNodeId, newNode);        
     }
 
     /**

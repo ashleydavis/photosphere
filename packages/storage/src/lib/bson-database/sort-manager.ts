@@ -37,56 +37,45 @@ export class SortManager<RecordT extends IRecord> {
     }
     
     //
-    // Get an existing sort index (public version).,
+    // Determines if a sort index exists or not.
     //
-    async getSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<SortIndex<RecordT> | undefined> {
+    async hasSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         // Check if this index is already in memory.
         if (this.sortIndexes.has(key)) {
-            return this.sortIndexes.get(key);
+            return true;
         }
         
         // Check if the index exists on disk.
         const indexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}/${fieldName}_${direction}`;
-        if (await this.storage.dirExists(indexPath)) {
-            // Create a new sort index but don't initialize it.
-            const sortIndex = new SortIndex<RecordT>({
-                storage: this.storage,
-                baseDirectory: this.baseDirectory,
-                collectionName: this.collectionName,
-                fieldName,
-                direction,
-                type
-            }, this.collection);
-            
-            // Cache in memory.
-            this.sortIndexes.set(key, sortIndex);
-
-            return sortIndex;
-        }
-
-        return undefined;
+        return await this.storage.dirExists(indexPath);
     }
-    
+
     //
-    // Create or get an existing sort index (private version).
+    // Gets a sort index by field name and direction.
     //
-    private async createOrGetSortIndex(
-        fieldName: string,
-        direction: SortDirection,
-        type: SortDataType,
-        pageSize?: number,
-    ): Promise<SortIndex<RecordT>> {
+    async getSortIndex( fieldName: string, direction: SortDirection): Promise<SortIndex<RecordT> | undefined> {
+        const key = this.getSortIndexKey(fieldName, direction);
+        return this.sortIndexes.get(key);
+    }
+        
+    //
+    // Create a existing sort index.
+    //
+    private async createSortIndex(fieldName: string, direction: SortDirection, type?: SortDataType, pageSize?: number): Promise<SortIndex<RecordT>> {
         const key = this.getSortIndexKey(fieldName, direction);
         
-        // Check if this index is already in memory.
-        if (this.sortIndexes.has(key)) {
-            return this.sortIndexes.get(key);
+        let sortIndex = this.sortIndexes.get(key);
+        if (sortIndex) {
+            // Sort index exists in memory.
+            if (sortIndex.type !== type) {
+                throw new Error(`Sort index for field "${fieldName}" in direction "${direction}" already exists with a different type: ${sortIndex.type}. Expected: ${type}`);
+            }
+            return sortIndex;
         }
         
-        // Create a new sort index.
-        const sortIndex = new SortIndex<RecordT>({
+        sortIndex = new SortIndex<RecordT>({
             storage: this.storage,
             baseDirectory: this.baseDirectory,
             collectionName: this.collectionName,
@@ -95,9 +84,7 @@ export class SortManager<RecordT extends IRecord> {
             pageSize: pageSize || this.defaultPageSize,
             type
         },  this.collection);
-
                
-        // Cache in memory.
         this.sortIndexes.set(key, sortIndex);
         
         return sortIndex;
@@ -106,74 +93,25 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Get sorted records with pagination.
     //
-    async getSortedRecords(
-        fieldName: string,
-        options: {
-            direction: SortDirection;
-            page?: number;
-            pageSize?: number;
-            pageId?: string;
-            type: SortDataType;
-        }
-    ): Promise<ISortResult<RecordT>> {
-        const direction = options.direction || 'asc';
-        const pageSize = options.pageSize || this.defaultPageSize;
-        const type = options.type;
-        
-        // Get or create the sort index.
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, type, pageSize);
-        
-        // If page number is specified, convert to page ID
-        if (options?.page !== undefined) {
-            // For backward compatibility, handle page numbers by fetching pages in sequence
-            if (options.page < 1) {
-                throw new Error('Page number must be greater than 0');
-            }
-            
-            // Get the first page, then follow next links until we reach the target page
-            let currentPage = 1;
-            let result = await sortIndex.getPage('');
-            
-            while (currentPage < options.page && result.nextPageId) {
-                result = await sortIndex.getPage(result.nextPageId);
-                currentPage++;
-            }
-            
-            return result;
+    async getSortedRecords(fieldName: string, direction: SortDirection, pageId?: string): Promise<ISortResult<RecordT>> {
+        const sortIndex = await this.getSortIndex(fieldName, direction);
+        if (!sortIndex) {
+            throw new Error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist.`);
         }
         
-        // Use pageId if provided, otherwise get the first page
-        const pageId = options?.pageId || '';
         return await sortIndex.getPage(pageId);
     }
     
     //
-    // Rebuild a specific sort index.
+    // Builds the sort index if it doesn't exist.
     //
-    async rebuildSortIndex(
-        fieldName: string,
-        direction: SortDirection,
-        type: SortDataType
-    ): Promise<void> {
-        const key = this.getSortIndexKey(fieldName, direction);
-        
-        // Remove from memory cache if it exists
-        if (this.sortIndexes.has(key)) {
-            this.sortIndexes.delete(key);
-        }
-        
-        // Create and initialize the index
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, type, this.defaultPageSize);
-        
-        await sortIndex.delete(); // Delete the existing index.
-        await sortIndex.build(); // Rebuild.
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
+        await sortIndex.init();
     }
     
     // List available sort indexes for a collection
-    async listSortIndexes(): Promise<Array<{
-        fieldName: string;
-        direction: SortDirection
-    }>> {
+    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
         const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
         
         if (!await this.storage.dirExists(collectionIndexPath)) {
@@ -204,10 +142,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Delete a sort index.
     //
-    async deleteSortIndex(
-        fieldName: string,
-        direction: SortDirection
-    ): Promise<boolean> {
+    async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         //
@@ -262,5 +197,32 @@ export class SortManager<RecordT extends IRecord> {
         
         // Clear the cache.
         this.sortIndexes.clear();
+    }
+
+    //
+    // Adds a record to all sort indexes for this collection.
+    //    
+    async addRecord(record: RecordT): Promise<void> {
+        for (const sortIndex of this.sortIndexes.values()) {
+            await sortIndex.addRecord(record);
+        }
+    }
+
+    // 
+    // Updates a record in all sort indexes.
+    //
+    async updateRecord(updatedRecord: RecordT, oldRecord: RecordT | undefined): Promise<void> {
+        for (const sortIndex of this.sortIndexes.values()) {
+            await sortIndex.updateRecord(updatedRecord, oldRecord);
+        }
+    }        
+
+    //
+    // Deletes a record from all existing sort indexes.
+    //
+    async deleteRecord(recordId: string, record: RecordT): Promise<void> {                
+        for (const sortIndex of this.sortIndexes.values()) {
+            await sortIndex.deleteRecord(recordId, record);
+        }
     }
 }
