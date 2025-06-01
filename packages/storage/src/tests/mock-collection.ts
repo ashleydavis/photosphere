@@ -1,4 +1,5 @@
 import { IBsonCollection, IRecord, IShard } from '../lib/bson-database/collection';
+import { SortDirection } from '../lib/bson-database/sort-index';
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
@@ -33,7 +34,7 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
     }
 
     async getSorted(fieldName: string, options?: { 
-        direction?: 'asc' | 'desc'; 
+        direction?: SortDirection; 
         page?: number; 
         pageSize?: number;
         pageId?: string;
@@ -48,15 +49,15 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         throw new Error('Method not implemented.');
     }
 
-    async ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc'): Promise<void> {
+    async ensureSortIndex(fieldName: string, direction?: SortDirection): Promise<void> {
         throw new Error('Method not implemented.');
     }
 
-    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: 'asc' | 'desc' }>> {
+    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
         throw new Error('Method not implemented.');
     }
 
-    async deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean> {
+    async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         throw new Error('Method not implemented.');
     }
 
@@ -99,7 +100,7 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         throw new Error('Method not implemented.');
     }
 
-    async hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
+    async hasIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         throw new Error('Method not implemented.');
     }
 

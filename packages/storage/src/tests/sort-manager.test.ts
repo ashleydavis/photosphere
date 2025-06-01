@@ -38,7 +38,7 @@ describe('SortManager', () => {
     
     test('should create and return a sort index', async () => {
         // Get sort index for price (ascending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'asc', page: 1 });
+        const result = await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string', page: 1 });
         
         // Check that the index was created correctly
         expect(result.records.length).toBeGreaterThan(0);
@@ -59,6 +59,7 @@ describe('SortManager', () => {
         // Get next page using the nextPageId
         const page2Result = await sortManager.getSortedRecords('price', { 
             direction: 'asc', 
+            type: 'string', 
             pageId: result.nextPageId 
         });
         
@@ -85,10 +86,10 @@ describe('SortManager', () => {
     
     test('should get existing sort index if already created', async () => {
         // Create the index first
-        await sortManager.getSortedRecords('price', { direction: 'asc' });
+        await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string',  });
         
         // Get the same index again
-        const result1 = await sortManager.getSortedRecords('price', { direction: 'asc' });
+        const result1 = await sortManager.getSortedRecords('price', { direction: 'asc', type: 'string',  });
         
         // Ensure we got back valid data
         expect(result1.records.length).toBeGreaterThan(0);
@@ -97,7 +98,7 @@ describe('SortManager', () => {
     
     test('should support descending order', async () => {
         // Get sort index for price (descending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'desc', page: 1 });
+        const result = await sortManager.getSortedRecords('price', { direction: 'desc', type: 'string', page: 1 });
         
         // Collect all records across pages
         let allRecords: TestProduct[] = [];
@@ -110,6 +111,7 @@ describe('SortManager', () => {
         while (currentPage.nextPageId) {
             currentPage = await sortManager.getSortedRecords('price', { 
                 direction: 'desc', 
+                type: 'string', 
                 pageId: currentPage.nextPageId 
             });
             allRecords.push(...currentPage.records);
@@ -135,17 +137,17 @@ describe('SortManager', () => {
         // Create several indexes
         await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         await sortManager.getSortedRecords(
             'price',
-            { direction: 'desc' }
+            { direction: 'desc', type: 'string' }
         );
         
         await sortManager.getSortedRecords(
             'category',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         // List the indexes
@@ -168,7 +170,7 @@ describe('SortManager', () => {
         // Create an index
         await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         // Delete the index
@@ -189,7 +191,7 @@ describe('SortManager', () => {
         // Create the index first
         await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         // Add a new record to the collection
@@ -204,13 +206,14 @@ describe('SortManager', () => {
         // Rebuild the index to include the new record
         await sortManager.rebuildSortIndex(
             'price',
-            'asc'
+            'asc',
+            'string'
         );
         
         // Get the updated index
         const result = await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc', page: 1 }
+            { direction: 'asc', type: 'string', page: 1 }
         );
         
         // Check that the new record is included
@@ -222,12 +225,12 @@ describe('SortManager', () => {
         // Create several indexes
         await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         await sortManager.getSortedRecords(
             'category',
-            { direction: 'asc' }
+            { direction: 'asc', type: 'string' }
         );
         
         // Delete all indexes for the collection

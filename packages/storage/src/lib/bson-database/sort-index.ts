@@ -8,6 +8,9 @@ import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
 
+export type SortDirection = 'asc' | 'desc';
+export type SortDataType = 'date' | 'string' | 'number';
+
 //
 // Split internal nodes when they exceed 1.2x the key size.
 //
@@ -64,7 +67,7 @@ export interface ISortIndexOptions {
     fieldName: string;
 
     // Sort direction: 'asc' or 'desc'
-    direction: 'asc' | 'desc';
+    direction: SortDirection;
 
     // Number of records per page
     pageSize?: number;
@@ -74,7 +77,7 @@ export interface ISortIndexOptions {
     
     // Optional type for value conversion before comparison
     // Supports 'date' for ISO string date parsing, 'string' for string comparison, 'number' for numeric comparison
-    type?: 'date' | 'string' | 'number';
+    type?: SortDataType; //TODO: Might want to make this required.
 }
 
 export interface ISortResult<RecordT> {
@@ -111,7 +114,7 @@ export class SortIndex<RecordT extends IRecord> {
     private storage: IStorage;
     private indexDirectory: string;
     private fieldName: string;
-    private direction: 'asc' | 'desc';
+    private direction: SortDirection;
     private pageSize: number;
     private keySize: number;
     private totalEntries: number = 0;
@@ -121,7 +124,7 @@ export class SortIndex<RecordT extends IRecord> {
     private saving: boolean = false; // Flag to prevent concurrent saves.
     private dirty: boolean = false;
     private rootPageId: string | undefined;
-    private type?: 'date' | 'string' | 'number'; // Optional type for value conversion
+    private type?: SortDataType; // Optional type for value conversion
     
     // Path to the single file that contains all tree nodes and metadata
     private treeFilePath: string;
@@ -1639,6 +1642,7 @@ export class SortIndex<RecordT extends IRecord> {
      * Adds a new record to the index without rebuilding the entire index
      */
     async addRecord(record: RecordT): Promise<void> {       
+        
         const recordId = record._id;
         const value = record[this.fieldName];
         
@@ -1714,6 +1718,8 @@ export class SortIndex<RecordT extends IRecord> {
 
         // Evict oldest records if cache is too large
         await this.evictOldestLeafRecords();
+
+        console.log(`Added record ${recordId} with value ${value} to index '${this.fieldName}'`);
     }
     
     /**

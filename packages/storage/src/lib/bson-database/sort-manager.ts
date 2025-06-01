@@ -4,7 +4,7 @@
 
 import { IStorage } from 'storage';
 import { IBsonCollection, IRecord } from './collection';
-import { SortIndex, ISortResult } from './sort-index';
+import { SortIndex, ISortResult, SortDataType, SortDirection } from './sort-index';
 
 export interface ISortManagerOptions {
     // Interface to the file storage system
@@ -32,14 +32,14 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Generates a unique key for each sort index.
     //
-    private getSortIndexKey(fieldName: string, direction: 'asc' | 'desc'): string {
+    private getSortIndexKey(fieldName: string, direction: SortDirection): string {
         return `${this.collectionName}:${fieldName}:${direction}`;
     }
     
     //
     // Get an existing sort index (public version).,
     //
-    async getSortIndex(fieldName: string, direction: 'asc' | 'desc', type?: 'date'): Promise<SortIndex<RecordT> | undefined> {
+    async getSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<SortIndex<RecordT> | undefined> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         // Check if this index is already in memory.
@@ -74,9 +74,9 @@ export class SortManager<RecordT extends IRecord> {
     //
     private async createOrGetSortIndex(
         fieldName: string,
-        direction: 'asc' | 'desc',
+        direction: SortDirection,
+        type: SortDataType,
         pageSize?: number,
-        type?: "date" | "string" | "number"
     ): Promise<SortIndex<RecordT>> {
         const key = this.getSortIndexKey(fieldName, direction);
         
@@ -108,20 +108,20 @@ export class SortManager<RecordT extends IRecord> {
     //
     async getSortedRecords(
         fieldName: string,
-        options?: {
-            direction?: 'asc' | 'desc';
+        options: {
+            direction: SortDirection;
             page?: number;
             pageSize?: number;
             pageId?: string;
-            type?: 'date'; // Optional type for sorting
+            type: SortDataType;
         }
     ): Promise<ISortResult<RecordT>> {
-        const direction = options?.direction || 'asc';
-        const pageSize = options?.pageSize || this.defaultPageSize;
-        const type = options?.type;
+        const direction = options.direction || 'asc';
+        const pageSize = options.pageSize || this.defaultPageSize;
+        const type = options.type;
         
         // Get or create the sort index.
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, pageSize, type);
+        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, type, pageSize);
         
         // If page number is specified, convert to page ID
         if (options?.page !== undefined) {
@@ -152,8 +152,8 @@ export class SortManager<RecordT extends IRecord> {
     //
     async rebuildSortIndex(
         fieldName: string,
-        direction: 'asc' | 'desc',
-        type?: "date" | "string" | "number"
+        direction: SortDirection,
+        type: SortDataType
     ): Promise<void> {
         const key = this.getSortIndexKey(fieldName, direction);
         
@@ -163,7 +163,7 @@ export class SortManager<RecordT extends IRecord> {
         }
         
         // Create and initialize the index
-        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, this.defaultPageSize, type);
+        const sortIndex = await this.createOrGetSortIndex(fieldName, direction, type, this.defaultPageSize);
         
         await sortIndex.delete(); // Delete the existing index.
         await sortIndex.build(); // Rebuild.
@@ -172,8 +172,7 @@ export class SortManager<RecordT extends IRecord> {
     // List available sort indexes for a collection
     async listSortIndexes(): Promise<Array<{
         fieldName: string;
-        direction: 'asc' | 'desc';
-        type?: 'date';
+        direction: SortDirection
     }>> {
         const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
         
@@ -185,7 +184,7 @@ export class SortManager<RecordT extends IRecord> {
         const result = await this.storage.listDirs(collectionIndexPath, 1000);
         const directories = result.names || [];
         
-        const sortIndexes: Array<{fieldName: string; direction: 'asc' | 'desc'; type?: 'date'}> = [];
+        const sortIndexes: Array<{fieldName: string; direction: SortDirection}> = [];
         
         for (const dir of directories) {
             // Parse the directory name, which should be in format "fieldname_direction"
@@ -193,19 +192,8 @@ export class SortManager<RecordT extends IRecord> {
             if (match) {
                 const indexInfo = {
                     fieldName: match[1],
-                    direction: match[2] as 'asc' | 'desc'
+                    direction: match[2] as SortDirection,
                 };
-                
-                // Get the sort index to retrieve its type
-                const sortIndex = await this.getSortIndex(indexInfo.fieldName, indexInfo.direction);
-                if (sortIndex && 'type' in sortIndex) {
-                    // This is a safe cast because we know the structure of SortIndex
-                    const typedIndex = sortIndex as unknown as { type?: 'date' };
-                    if (typedIndex.type) {
-                        (indexInfo as any).type = typedIndex.type;
-                    }
-                }
-                
                 sortIndexes.push(indexInfo);
             }
         }
@@ -218,7 +206,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     async deleteSortIndex(
         fieldName: string,
-        direction: 'asc' | 'desc'
+        direction: SortDirection
     ): Promise<boolean> {
         const key = this.getSortIndexKey(fieldName, direction);
         

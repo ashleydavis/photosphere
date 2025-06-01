@@ -322,10 +322,10 @@ describe('BsonCollection', () => {
         await forceSave();
         
         // Create an index on the age field
-        await collection.ensureSortIndex('age', 'asc');
+        await collection.ensureSortIndex('age', 'asc', 'number');
         
         // Get sorted records
-        const result = await collection.getSorted('age');
+        const result = await collection.getSorted('age', { direction: 'asc', type: 'number' });
         
         // Check that the records are sorted by age
         expect(result.records.length).toBe(users.length);
@@ -368,7 +368,7 @@ describe('BsonCollection', () => {
         await forceSave();
         
         // Create an index on the role field
-        await collection.ensureIndex('role');
+        await collection.ensureSortIndex('role', 'asc', 'string');
         
         // Find users with role 'user'
         const userRoleResults = await collection.findByIndex('role', 'user');
@@ -381,7 +381,7 @@ describe('BsonCollection', () => {
         expect(adminRoleResults[0].role).toBe('admin');
         
         // Create an index on the age field
-        await collection.ensureIndex('age');
+        await collection.ensureSortIndex('age', 'asc', 'number');
         
         // Find users with age 30
         const age30Results = await collection.findByIndex('age', 30);
@@ -391,9 +391,9 @@ describe('BsonCollection', () => {
     
     test('should list and delete sort indexes', async () => {
         // Create some indexes
-        await collection.ensureSortIndex('age', 'asc');
-        await collection.ensureSortIndex('role', 'asc');
-        await collection.ensureSortIndex('name', 'desc');
+        await collection.ensureSortIndex('age', 'asc', 'number');
+        await collection.ensureSortIndex('role', 'asc', 'string');
+        await collection.ensureSortIndex('name', 'desc', 'string');
         
         // List indexes
         const indexes = await collection.listSortIndexes();
@@ -427,7 +427,7 @@ describe('BsonCollection', () => {
         await forceSave();
         
         // Create an index
-        await collection.ensureIndex('role');
+        await collection.ensureSortIndex('role', 'asc', 'string');
         
         // Drop the collection
         await collection.drop();

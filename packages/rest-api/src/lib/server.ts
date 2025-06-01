@@ -613,9 +613,10 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
         const collection = metadataDatabase.collection(collectionName);
         const result = await collection.getSorted("photoDate", { 
-            direction: "desc", //todo: The field and direction should be passed through the API.
+            direction: "desc",
             page: nextPage,
-            pageSize: 1000, //todo: Be good to tie this in directly to the continuation token.            
+            pageSize: 1000,
+            type: 'date',
         }); 
         res.json({
             records: result.records,
@@ -632,7 +633,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
         const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
         const metadataCollection = metadataDatabase.collection("metadata");
-        await metadataCollection.ensureIndex("hash");
+        await metadataCollection.ensureSortIndex("hash", "asc", "string");
         const records = await metadataCollection.findByIndex("hash", hash);
         const matchingRecordIds = records.map(record => record._id);
         res.json({

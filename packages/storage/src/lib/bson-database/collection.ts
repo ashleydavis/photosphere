@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
 import { SortManager } from './sort-manager';
+import { SortDataType, SortDirection } from './sort-index';
 
 //
 // Options when creating a BSON collection.
@@ -88,10 +89,11 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // @returns Paginated sorted records with metadata
     //
     getSorted(fieldName: string, options?: { 
-        direction?: 'asc' | 'desc'; 
+        direction?: SortDirection 
         page?: number; 
         pageSize?: number;
         pageId?: string;
+        type?: SortDataType;
     }): Promise<{
         records: RecordT[];
         totalRecords: number;
@@ -106,20 +108,20 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // @param fieldName The field to create a sort index for
     // @param direction The sort direction
     //
-    ensureSortIndex(fieldName: string, direction?: 'asc' | 'desc', type?: "date" | "string" | "number"): Promise<void>;
+    ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void>;
 
     //
     // List all sort indexes for this collection
     //
     listSortIndexes(): Promise<Array<{
         fieldName: string;
-        direction: 'asc' | 'desc';
+        direction: SortDirection;
     }>>;
 
     //
     // Delete a sort index
     //
-    deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean>;
+    deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean>;
 
     //
     // Updates a record.
@@ -137,14 +139,9 @@ export interface IBsonCollection<RecordT extends IRecord> {
     deleteOne(id: string): Promise<boolean>;
 
     //
-    // Creates an index for the given field (alias for ensureSortIndex with 'asc' direction)
-    //
-    ensureIndex(fieldName: string): Promise<void>;
-
-    //
     // Checks if a sort index exists for the given field name
     //
-    hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean>;
+    hasIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<boolean>;
 
     //
     // List all indexes for this collection
@@ -213,12 +210,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Checks if a sort index exists for the given field
     //
-    private async sortIndexExists(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
+    private async sortIndexExists(fieldName: string, direction: SortDirection, type: SortDataType): Promise<boolean> {
         if (!this.sortManager) {
             return false;
         }
         
-        const index = await this.sortManager.getSortIndex(fieldName, direction);       
+        const index = await this.sortManager.getSortIndex(fieldName, direction, type);       
         return !!index;
     }
 
@@ -894,7 +891,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         
         // Update the record in each index
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction, "string"); //TODO: Wrong sort type.
             if (sortIndex) {
                 await sortIndex.updateRecord(updatedRecord, oldRecord);
             }
@@ -913,7 +910,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         
         // Add the record to each index
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction, "string");  //todo: Wrong sort type.           
             if (sortIndex) {
                 await sortIndex.addRecord(record);
             }
@@ -963,7 +960,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         
         // Delete the record from each index.
         for (const indexInfo of sortIndexes) {
-            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction);            
+            const sortIndex = await this.sortManager.getSortIndex(indexInfo.fieldName, indexInfo.direction, "string"); //TODO: Wrong sort type.
             if (sortIndex) {
                 // Get the value for the indexed field from the record.
                 const indexedValue = record[indexInfo.fieldName];                
@@ -976,18 +973,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Creates an index for the given field (alias for ensureSortIndex with 'asc' direction)
-    //
-    async ensureIndex(fieldName: string): Promise<void> {
-        // Just create an ascending sort index
-        await this.ensureSortIndex(fieldName, 'asc');
-    }
-
-    //
     // Checks if a sort index exists for the given field name
     //
-    async hasIndex(fieldName: string, direction: "asc" | "desc"): Promise<boolean> {
-        return await this.sortIndexExists(fieldName, direction);
+    async hasIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<boolean> {
+        return await this.sortIndexExists(fieldName, direction, type);
     }
         
     //
@@ -1019,23 +1008,23 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
         
         // Try to find an existing sort index for the field (check both asc and desc)
-        const ascIndex = await this.sortManager.getSortIndex(fieldName, 'asc');        
+        const ascIndex = await this.sortManager.getSortIndex(fieldName, 'asc', 'string'); //TODO: Wrong sort type.
         if (ascIndex) {
             // Use the sort index for faster search with binary search
             return await ascIndex.findByValue(value);
         }
         
-        const descIndex = await this.sortManager.getSortIndex(fieldName, 'desc');        
+        const descIndex = await this.sortManager.getSortIndex(fieldName, 'desc', 'string'); //TODO: Wrong sort type.
         if (descIndex) {
             // Use the sort index for faster search with binary search
             return await descIndex.findByValue(value);
         }
         
         // If no sort index exists, create one
-        await this.ensureSortIndex(fieldName, 'asc');
+        await this.ensureSortIndex(fieldName, 'asc', 'string'); //TODO: Wrong sort type.
         
         // Get the newly created sort index
-        const newIndex = await this.sortManager.getSortIndex(fieldName, 'asc');        
+        const newIndex = await this.sortManager.getSortIndex(fieldName, 'asc', 'string'); //TODO: Wrong sort type.
         if (!newIndex) {
             throw new Error(`Failed to create index for field "${fieldName}"`);
         }
@@ -1054,7 +1043,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             max?: any;
             minInclusive?: boolean;
             maxInclusive?: boolean;
-            direction?: 'asc' | 'desc';
+            direction?: SortDirection;
         }
     ): Promise<RecordT[]> {
         const { direction = 'asc' } = options;
@@ -1065,12 +1054,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
                 
         // Try to get the sort index with the specified direction
-        let sortIndex = await this.sortManager.getSortIndex(fieldName, direction);
+        let sortIndex = await this.sortManager.getSortIndex(fieldName, direction, 'string'); //TODO: Wrong sort type.
         
         // If the index doesn't exist, create it
         if (!sortIndex) {
-            await this.ensureSortIndex(fieldName, direction);
-            sortIndex = await this.sortManager.getSortIndex(fieldName, direction );
+            await this.ensureSortIndex(fieldName, direction, 'string'); //TODO: Wrong sort type.
+            sortIndex = await this.sortManager.getSortIndex(fieldName, direction, 'string'); //TODO: Wrong sort type.
         }
         
         if (!sortIndex) {
@@ -1104,11 +1093,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Get records sorted by a specified field
     //
-    async getSorted(fieldName: string, options?: { 
-        direction?: 'asc' | 'desc'; 
+    async getSorted(fieldName: string, options: { 
+        direction: SortDirection 
         page?: number; 
         pageSize?: number;
         pageId?: string;
+        type: SortDataType;
     }): Promise<{
         records: RecordT[];
         totalRecords: number;
@@ -1128,12 +1118,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Create or rebuild a sort index for the specified field
     //
-    async ensureSortIndex(fieldName: string, direction: 'asc' | 'desc' = 'asc', type: "date" | "string" | "number" | undefined = undefined): Promise<void> {
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
 
-        if (await this.hasIndex(fieldName, direction)) {
+        if (await this.hasIndex(fieldName, direction, type)) {
             // console.log(`Sort index for field "${fieldName}" already exists.`);
             // Index already exists, no need to create it again.
             return;
@@ -1147,7 +1137,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async listSortIndexes(): Promise<Array<{
         fieldName: string;
-        direction: 'asc' | 'desc';
+        direction: SortDirection;
     }>> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
@@ -1159,7 +1149,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Delete a sort index
     //
-    async deleteSortIndex(fieldName: string, direction: 'asc' | 'desc'): Promise<boolean> {
+    async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         if (!this.sortManager) {
             throw new Error('Sort manager is not initialized');
         }
