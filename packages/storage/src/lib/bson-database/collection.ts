@@ -684,10 +684,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         this.setRecord(record._id, record, shard);
 
-        // Add record to all indexes using optimized method for insertion
-        if (this.sortManager) {
-            await this.addRecordToAllIndexes(record);
-        }
+        await this.addRecordToAllIndexes(record);
 
         this.scheduleSave(`inserted record ${record._id}`);
     }
