@@ -2,6 +2,8 @@ name: Release CLI
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
 
@@ -11,6 +13,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          lscpu | grep Architecture
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -133,6 +141,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
@@ -157,19 +168,30 @@ jobs:
           cd ./artifacts/windows && zip ../psi-windows-x64.zip psi.exe && cd ../..
           cd ./artifacts/macos && chmod +x psi && tar -czf ../psi-macos-x64.tar.gz psi && cd ../..
 
+      - name: Delete existing nightly release
+        if: github.ref_type != 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+        continue-on-error: true
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Photosphere CLI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'nightly' }}
+          name: ${{ github.ref_type == 'tag' && format('Photosphere CLI {0}', github.ref_name) || 'Photosphere CLI Nightly' }}
           draft: false
-          prerelease: false
+          prerelease: ${{ github.ref_type != 'tag' }}
           files: |
             ./artifacts/psi-linux-x64.tar.gz
             ./artifacts/psi-windows-x64.zip
             ./artifacts/psi-macos-x64.tar.gz
           body: |
-            Photosphere CLI release ${{ github.ref_name }}
+            ${{ github.ref_type == 'tag' && format('Photosphere CLI release {0}', github.ref_name) || format('Photosphere CLI nightly build - {0}', github.sha) }}
+            
+            ${{ github.ref_type != 'tag' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+            ${{ github.ref_type != 'tag' && format('Built from commit: {0}', github.sha) || '' }}
             
             ## Download
             - **Linux**: `psi-linux-x64.tar.gz`
