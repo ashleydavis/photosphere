@@ -238,9 +238,10 @@ export interface IServerOptions {
     googleApiKey?: string;
 
     //
-    // The path to the frontend static files.
+    // Custom middleware for serving static files.
+    // If not provided, no static files will be served.
     //
-    frontendStaticPath?: string;
+    staticMiddleware?: express.RequestHandler;
 }
 
 //
@@ -258,8 +259,8 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         res.sendStatus(200);
     });
 
-    if (options.frontendStaticPath) {
-        app.use(express.static(options.frontendStaticPath));
+    if (options.staticMiddleware) {
+        app.use(options.staticMiddleware);
     }
 
     //

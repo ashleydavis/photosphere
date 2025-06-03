@@ -63,8 +63,7 @@ describe("photosphere backend", () => {
 
         const { app, close } = await createServer(() => dateNow, mockDatabase, mockStorage, {
             appMode: "readwrite",
-            authType: "no-auth",
-            frontendStaticPath: "./test/test-assets"
+            authType: "no-auth"
         });
 
         const server = app.listen();

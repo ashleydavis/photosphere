@@ -1,13 +1,11 @@
-import path from 'path';
-import fs from 'fs';
-import AdmZip from "adm-zip";
-import os from 'os';
+import fs from 'fs/promises';
 import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { registerTerminationCallback } from "node-utils";
 import open from "open";
 import { log } from "utils";
 import pc from "picocolors";
+import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
@@ -34,22 +32,15 @@ export interface IUiCommandOptions {
 //
 export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
     //
-    // Extract frontend code if doesn't exist.
+    // Load the embedded frontend zip file into memory
     //
-    const frontendPath = path.join(os.tmpdir(), "photosphere/frontend/v1");
-    if (!fs.existsSync(frontendPath)) {
-        fs.mkdirSync(frontendPath, { recursive: true });
-
-        const zip = new AdmZip(fs.readFileSync(pfe));
-        zip.extractAllTo(frontendPath, true);
-
-        console.log(`Extracted frontend to ${frontendPath}.`);
-    }
-    else {
-        console.log(`Frontend already exists at ${frontendPath}.`);
-    }
-
-    console.log(`Serving frontend from ${frontendPath}.`);
+    const zipBuffer = await fs.readFile(pfe);
+    
+    //
+    // Create middleware to serve files from the in-memory zip
+    // The frontend files are in the 'dist' directory within the zip
+    //
+    const staticMiddleware = createZipStaticMiddleware(zipBuffer, 'dist');
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
@@ -63,7 +54,7 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, undefined, {
         appMode: "readwrite", 
         authType: "no-auth",
-        frontendStaticPath: path.join(frontendPath, "dist"),
+        staticMiddleware,
         googleApiKey: process.env.GOOGLE_API_KEY,
     });
 

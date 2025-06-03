@@ -1,4 +1,5 @@
 import { createPrivateKey } from "node:crypto";
+import express from "express";
 import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider } from "rest-api";
 import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
 import { exit, registerTerminationCallback } from "node-utils";
@@ -97,7 +98,7 @@ async function main() {
     const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, dbStorage, {
         appMode: APP_MODE,
         authType: AUTH_TYPE,
-        frontendStaticPath: FRONTEND_STATIC_PATH,
+        staticMiddleware: FRONTEND_STATIC_PATH ? express.static(FRONTEND_STATIC_PATH) : undefined,
         auth0: auth0Options,
         googleApiKey: process.env.GOOGLE_API_KEY,        
     });
