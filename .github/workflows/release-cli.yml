@@ -1,0 +1,150 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Linux executable
+        working-directory: ./apps/cli
+        run: |
+          bun run build-linux
+          chmod +x bin/x64/linux/psi
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: psi-linux-x64
+          path: ./apps/cli/bin/x64/linux/psi
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build frontend
+        working-directory: ./apps/frontend
+        run: |
+          $env:VITE_BASE_URL = ""
+          bun run build
+
+      - name: Create frontend zip
+        working-directory: ./apps/frontend
+        run: |
+          Compress-Archive -Path dist -DestinationPath pfe.zip -Force
+          Copy-Item pfe.zip ../cli/pfe.zip -Force
+
+      - name: Build Windows executable
+        working-directory: ./apps/cli
+        run: bun build --compile --minify --sourcemap --target=bun-windows-x64 --outfile bin/x64/win/psi.exe ./src/index.ts
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: psi-windows-x64
+          path: ./apps/cli/bin/x64/win/psi.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build macOS executable
+        working-directory: ./apps/cli
+        run: |
+          bun run build-mac
+          chmod +x bin/x64/mac/psi
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: psi-macos-x64
+          path: ./apps/cli/bin/x64/mac/psi
+
+  create-release:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: psi-linux-x64
+          path: ./artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: psi-windows-x64
+          path: ./artifacts/windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: psi-macos-x64
+          path: ./artifacts/macos
+
+      - name: Create compressed archives
+        run: |
+          cd ./artifacts/linux && chmod +x psi && tar -czf ../psi-linux-x64.tar.gz psi && cd ../..
+          cd ./artifacts/windows && zip ../psi-windows-x64.zip psi.exe && cd ../..
+          cd ./artifacts/macos && chmod +x psi && tar -czf ../psi-macos-x64.tar.gz psi && cd ../..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Photosphere CLI ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts/psi-linux-x64.tar.gz
+            ./artifacts/psi-windows-x64.zip
+            ./artifacts/psi-macos-x64.tar.gz
+          body: |
+            Photosphere CLI release ${{ github.ref_name }}
+            
+            ## Download
+            - **Linux**: `psi-linux-x64.tar.gz`
+            - **Windows**: `psi-windows-x64.zip`
+            - **macOS**: `psi-macos-x64.tar.gz`
+            
+            ## Installation
+            1. Download the appropriate file for your platform
+            2. Extract the archive
+            3. Make the binary executable (Linux/macOS): `chmod +x psi`
+            4. Move to your PATH or run directly
