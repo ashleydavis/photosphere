@@ -6,6 +6,7 @@ import open from "open";
 import { log } from "utils";
 import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
+import { configureS3IfNeeded } from '../lib/s3-config';
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
@@ -32,6 +33,18 @@ export interface IUiCommandOptions {
 //
 export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
     //
+    // Configure S3 if the path requires it
+    //
+    if (!await configureS3IfNeeded(dbDir)) {
+        process.exit(1);
+    }
+    
+    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    if (!await configureS3IfNeeded(metaPath)) {
+        process.exit(1);
+    }
+    
+    //
     // Load the embedded frontend zip file into memory
     //
     const zipBuffer = await fs.readFile(pfe);
@@ -45,7 +58,7 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);
-    const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
+    const { storage: metadataStorage } = createStorage(metaPath);
     const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
 
     //

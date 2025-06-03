@@ -38,6 +38,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@clack/prompts": "^0.7.0",
     "adm-zip": "^0.5.16",
     "api": "workspace:*",
     "colorthief": "^2.6.0",

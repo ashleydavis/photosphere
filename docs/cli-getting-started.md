@@ -126,11 +126,19 @@ psi ui ~/photos --no-open
 Configure S3 credentials for cloud storage.
 
 **Options:**
-- `-p, --profile <name>`: Profile name (default: "default")
+- `-p, --profile <name>`: Suggested profile name (default: "default")
+- `-c, --clear`: Clear all S3 configuration files
 
 **Example:**
 ```bash
+# Configure with interactive profile name prompt
+psi configure
+
+# Configure with suggested profile name
 psi configure --profile backup
+
+# Clear all configuration
+psi configure --clear
 ```
 
 ## Database Structure
@@ -165,18 +173,89 @@ To protect your media with encryption:
    psi ui ~/photos --key ~/my-key.pem
    ```
 
-## Cloud Storage
+## Cloud Storage (S3)
 
-Configure S3-compatible storage for backups:
+Photosphere supports S3-compatible storage for both local and cloud deployments. You can use AWS S3, DigitalOcean Spaces, MinIO, or any S3-compatible service.
+
+### Configuring S3 Credentials
+
+Use the `configure` command to set up your S3 credentials:
 
 ```bash
-# Configure credentials
-psi configure --profile backup
+# Configure default profile
+psi configure
 
-# Use S3 storage in operations
-export ASSET_STORAGE_CONNECTION="s3:my-bucket:/photos"
-export DB_STORAGE_CONNECTION="s3:my-bucket:/photos-db"
+# Configure a named profile
+psi configure --profile backup
 ```
+
+The configuration wizard will prompt you for:
+- **Profile name**: A name for this configuration (default: "default")
+- **S3 Endpoint URL**: Leave empty for AWS S3, or enter the URL for other providers (e.g., `https://nyc3.digitaloceanspaces.com`)
+- **Region**: The S3 region (e.g., `us-east-1` for AWS, `nyc3` for DigitalOcean)
+- **Access Key ID**: Your S3 access key
+- **Secret Access Key**: Your S3 secret key
+
+Credentials can be saved in two locations:
+- **Local** (`.photosphere.json` in current directory): Best for project-specific credentials
+- **Global** (`~/.photosphere/.photosphere.json`): Best for personal use across projects
+
+### Using S3 Storage
+
+Once configured, you can use S3 paths directly in commands:
+
+```bash
+# Initialize database on S3
+psi init s3:my-bucket/photos
+
+# Add files to S3-backed database
+psi add s3:my-bucket/photos ~/Pictures/*.jpg
+
+# Launch UI for S3 database
+psi ui s3:my-bucket/photos
+```
+
+### Managing Profiles
+
+You can configure multiple profiles for different S3 services or buckets:
+
+```bash
+# Configure with interactive prompt for profile name
+psi configure
+
+# Configure with a suggested profile name (can be changed interactively)
+psi configure --profile aws-backup
+psi configure --profile spaces-primary
+
+# Use a specific profile (if not default)
+export S3_PROFILE=aws-backup
+psi ui s3:backup-bucket/photos
+```
+
+**Note**: The `--profile` flag provides a suggested name, but you'll be prompted to confirm or change it during configuration. This allows you to organize multiple S3 configurations for different environments or services.
+
+### Clearing Configuration
+
+To remove all S3 configuration files:
+
+```bash
+psi configure --clear
+```
+
+This will prompt for confirmation before deleting all credential files.
+
+### Security Notes
+
+- Credentials are stored with restrictive permissions (0600 on Unix systems)
+- Never commit `.photosphere.json` files to version control
+- Add `.photosphere.json` to your `.gitignore`
+- Consider using environment variables for CI/CD:
+  ```bash
+  export AWS_ACCESS_KEY_ID=your_key
+  export AWS_SECRET_ACCESS_KEY=your_secret
+  export AWS_DEFAULT_REGION=us-east-1
+  export AWS_ENDPOINT=https://custom.endpoint.com  # Optional
+  ```
 
 ## Tips
 

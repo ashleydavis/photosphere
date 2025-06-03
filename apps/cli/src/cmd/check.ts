@@ -4,6 +4,7 @@ import { log } from "utils";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
+import { configureS3IfNeeded } from '../lib/s3-config';
 
 export interface ICheckCommandOptions { 
     //
@@ -31,10 +32,22 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
         verbose: options.verbose,
     });
 
+    //
+    // Configure S3 if the path requires it
+    //
+    if (!await configureS3IfNeeded(dbDir)) {
+        process.exit(1);
+    }
+    
+    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    if (!await configureS3IfNeeded(metaPath)) {
+        process.exit(1);
+    }
+
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);
-    const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
+    const { storage: metadataStorage } = createStorage(metaPath);
 
     process.stdout.write(`Searching for files`);
 

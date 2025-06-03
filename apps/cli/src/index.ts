@@ -4,6 +4,7 @@ import { uiCommand } from './cmd/ui';
 import { addCommand } from './cmd/add';
 import { checkCommand } from './cmd/check';
 import { initCommand } from './cmd/init';
+import { configureCommand } from './cmd/configure';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -58,6 +59,13 @@ async function main() {
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
         .action(uiCommand);
+
+    program
+        .command("configure")
+        .description("Configure S3 credentials for cloud storage.")
+        .option("-p, --profile <name>", "The profile name to configure", "default")
+        .option("-c, --clear", "Clear all S3 configuration files")
+        .action(configureCommand);
 
     await program.parseAsync(process.argv);    
 }

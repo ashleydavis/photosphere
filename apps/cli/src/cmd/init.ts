@@ -4,6 +4,7 @@ import { configureLog } from "../lib/log";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
+import { configureS3IfNeeded } from '../lib/s3-config';
 
 export interface IInitCommandOptions { 
     //
@@ -37,10 +38,22 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
         verbose: options.verbose,
     });
 
+    //
+    // Configure S3 if the path requires it
+    //
+    if (!await configureS3IfNeeded(dbDir)) {
+        process.exit(1);
+    }
+    
+    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    if (!await configureS3IfNeeded(metaPath)) {
+        process.exit(1);
+    }
+
     const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
 
     const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(options.meta || pathJoin(dbDir, '.db'));
+    const { storage: metadataStorage } = createStorage(metaPath);
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
 

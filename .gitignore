@@ -41,3 +41,5 @@ apps/frontend/pfe.zip
 # apps/cli/test/db
 tools/upload/log.*
 apps/cli/test-db
+.photosphere.json
+.photosphere
