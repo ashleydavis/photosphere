@@ -130,7 +130,7 @@ export async function promptForS3Config(suggestedProfileName: string = 'default'
     }
     
     const region = await text({
-        message: 'Region (this should be us-east-1 for Digitial Ocean Spaces or the actual region name for AWS S3):',
+        message: 'Region (this should be us-east-1 for Digital Ocean Spaces or the actual region name for AWS S3):',
         placeholder: 'us-east-1',
         validate: (value) => {
             if (!value || value.trim() === '') {
