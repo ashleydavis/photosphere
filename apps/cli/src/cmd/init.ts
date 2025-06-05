@@ -79,7 +79,12 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     log.info(pc.green(`✓ Created new media file database in "${databaseDir}"`));
     log.info('');
     log.info(pc.dim('Your database is ready to receive photos and videos!'));
-    log.info(pc.dim(`Use ${pc.cyan(`psi add ${databaseDir} <files...>`)} to add media to your database.`));
+    log.info('');
+    log.info(pc.dim('To get started:'));
+    log.info(pc.dim(`  1. ${pc.cyan(`cd ${databaseDir}`)} (change to your database directory)`));
+    log.info(pc.dim(`  2. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+    log.info('');
+    log.info(pc.dim(`Or use the full path: ${pc.cyan(`psi add ${databaseDir} <source-media-directory>`)}`));
 
     exit(0);
 }
