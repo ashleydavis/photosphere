@@ -10,11 +10,12 @@ import { exit } from 'node-utils';
 
 async function main() {
 
-    const dbArgument: [string, string, string] = ["[database-dir]", `The directory that contains the media file database. Defaults to the current directory.`, process.cwd()];
+    const dbArgument: [string, string] = ["[database-dir]", `The directory that contains the media file database. Defaults to the current directory.`];
     const metadataDirOption: [string, string] = ["-m, --meta <db-metadata-dir>", `The directory in which to store asset database metadata. (default: "<current-dir>/.db")`];
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
     const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verbose logging.", false];
+    const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
 
     program
         .name("psi")
@@ -29,6 +30,7 @@ async function main() {
         .option(...keyOption)
         .option(...generateKeyOption)
         .option(...verboseOption)
+        .option(...yesOption)
         .action(initCommand);
 
     program
@@ -38,6 +40,7 @@ async function main() {
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
+        .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
         .action(addCommand);
 
@@ -48,6 +51,7 @@ async function main() {
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
+        .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
         .action(checkCommand);
 
@@ -58,6 +62,7 @@ async function main() {
         .option(...keyOption)
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
+        .option(...yesOption)
         .action(uiCommand);
 
     program
@@ -65,6 +70,7 @@ async function main() {
         .description("Configure S3 credentials for cloud storage.")
         .option("-p, --profile <name>", "The profile name to configure", "default")
         .option("-c, --clear", "Clear all S3 configuration files")
+        .option(...yesOption)
         .action(configureCommand);
 
     await program.parseAsync(process.argv);    

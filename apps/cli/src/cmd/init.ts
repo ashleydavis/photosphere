@@ -5,6 +5,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
+import { getDirectoryForCommand } from '../lib/directory-picker';
 
 export interface IInitCommandOptions { 
     //
@@ -27,6 +28,11 @@ export interface IInitCommandOptions {
     // Enables verbose logging.
     //
     verbose?: boolean;
+
+    //
+    // Non-interactive mode - use defaults and command line arguments.
+    //
+    yes?: boolean;
 }
 
 //
@@ -38,21 +44,27 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
         verbose: options.verbose,
     });
 
+    // Get the directory for the database (validates it's empty/non-existent)
+    const databaseDir = await getDirectoryForCommand('init', dbDir, options.yes || false);
+    
+    // Set up metadata directory
+    const metaPath = options.meta || pathJoin(databaseDir, '.db');
+
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureS3IfNeeded(databaseDir)) {
         process.exit(1);
     }
     
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
         process.exit(1);
     }
 
+    // Handle encryption keys
     const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
 
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
+    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
@@ -63,7 +75,11 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
 
     await database.create(); 
 
-    log.info(pc.green(`Created new media file database in "${dbDir}".`))
+    log.info('');
+    log.info(pc.green(`✓ Created new media file database in "${databaseDir}"`));
+    log.info('');
+    log.info(pc.dim('Your database is ready to receive photos and videos!'));
+    log.info(pc.dim(`Use ${pc.cyan(`psi add ${databaseDir} <files...>`)} to add media to your database.`));
 
     exit(0);
 }

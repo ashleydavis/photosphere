@@ -5,6 +5,7 @@ import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
+import { getDirectoryForCommand } from '../lib/directory-picker';
 
 export interface IAddCommandOptions { 
     //
@@ -21,6 +22,11 @@ export interface IAddCommandOptions {
     // Enables verbose logging.
     //
     verbose?: boolean;
+
+    //
+    // Non-interactive mode - use defaults and command line arguments.
+    //
+    yes?: boolean;
 }
 
 //
@@ -32,21 +38,25 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
         verbose: options.verbose,
     });
 
+    // Get the directory for the database (validates it exists and is a media database)
+    const databaseDir = await getDirectoryForCommand('existing', dbDir, options.yes || false);
+    
+    const metaPath = options.meta || pathJoin(databaseDir, '.db');
+
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureS3IfNeeded(databaseDir)) {
         process.exit(1);
     }
     
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
         process.exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);
+    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
     process.stdout.write(`Searching for files`);

@@ -5,6 +5,7 @@ import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
+import { getDirectoryForCommand } from '../lib/directory-picker';
 
 export interface ICheckCommandOptions { 
     //
@@ -21,6 +22,11 @@ export interface ICheckCommandOptions {
     // Enables verbose logging.
     //
     verbose?: boolean;
+
+    //
+    // Non-interactive mode - use defaults and command line arguments.
+    //
+    yes?: boolean;
 }
 
 //
@@ -32,24 +38,26 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
         verbose: options.verbose,
     });
 
+    // Get the directory for the database (validates it exists and is a media database)
+    const databaseDir = await getDirectoryForCommand('existing', dbDir, options.yes || false);
+    
+    const metaPath = options.meta || pathJoin(databaseDir, '.db');
+
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureS3IfNeeded(databaseDir)) {
         process.exit(1);
     }
     
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
         process.exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);
+    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
-
-    process.stdout.write(`Searching for files`);
 
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
 
@@ -59,25 +67,24 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
 
     await database.load();
 
+    process.stdout.write(`Checking files`);
+
     await database.checkPaths(paths, (currentlyScanning) => {
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
         const addSummary = database.getAddSummary();
-        process.stdout.write(`Added: ${pc.green(addSummary.numFilesAlreadyAdded)}`);
+        process.stdout.write(`Already in DB: ${pc.green(addSummary.numFilesAlreadyAdded)}`);
         if (addSummary.numFilesAdded > 0) {
-            process.stdout.write(` | Not added: ${pc.yellow(addSummary.numFilesAdded)}`);
+            process.stdout.write(` | Would add: ${pc.yellow(addSummary.numFilesAdded)}`);
         }
         if (addSummary.numFilesIgnored > 0) {
-            process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
-        }
-        if (addSummary.numFilesFailed > 0) {
-            process.stdout.write(` | Failed: ${pc.red(addSummary.numFilesFailed)}`);
+            process.stdout.write(` | Ignored: ${pc.gray(addSummary.numFilesIgnored)}`);
         }
         if (currentlyScanning) {
             process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
         }
 
-        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`);
+        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C")}`);
     });
 
     const addSummary = database.getAddSummary();
@@ -85,12 +92,13 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
     process.stdout.clearLine(0);
     process.stdout.cursorTo(0); // Flush the progress message.
 
-    log.info(pc.green(`Have ${addSummary.numFilesAlreadyAdded} files already added to the media database.\n`));
+    const totalFiles = addSummary.numFilesAdded + addSummary.numFilesAlreadyAdded + addSummary.numFilesIgnored;
+    log.info(pc.green(`Checked ${totalFiles} files.\n`));
     
     log.info(`Summary: `);
-    log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
-    log.info(`  - ${addSummary.numFilesAdded} files to be added.`);
-    log.info(`  - ${addSummary.numFilesIgnored} files ignored.`);
+    log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in database.`);
+    log.info(`  - ${addSummary.numFilesAdded} files would be added to database.`);
+    log.info(`  - ${addSummary.numFilesIgnored} files ignored (not media files).`);
 
     exit(0);
 }
