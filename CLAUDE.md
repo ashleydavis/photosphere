@@ -104,7 +104,7 @@ Frontend:
 ## Restrictions
 - TypeScript code should always compile after making changes.
 - All tests should pass after making changes.
-- Prefer to minimized the size of code changes.
+- Prefer to minimize the size of code changes.
 - Prefer not to update test code unless needed.
 - Add new tests for new code.
 - Backward compatibility is not required.

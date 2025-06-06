@@ -5,6 +5,7 @@ import { addCommand } from './cmd/add';
 import { checkCommand } from './cmd/check';
 import { initCommand } from './cmd/init';
 import { configureCommand } from './cmd/configure';
+import { infoCommand } from './cmd/info';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { ensureToolsAvailable } from 'tools';
@@ -84,6 +85,15 @@ async function main() {
         .option("-c, --clear", "Clear all S3 configuration files")
         .option(...yesOption)
         .action(configureCommand);
+
+    program
+        .command("info")
+        .description("Display detailed information about media files including EXIF data, metadata, and technical specifications.")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("-r, --raw", "Show raw EXIF/metadata properties", false)
+        .argument("<files...>", "The media files to analyze.")
+        .action((files: string[], options: any) => infoCommand('', files, options));
 
     await program.parseAsync(process.argv);    
 }
