@@ -447,9 +447,32 @@ run_multiple_commands() {
         set +e  # Disable exit on error for this command
         case "$command" in
             "all")
-                log_error "Cannot use 'all' command in a sequence"
-                set -e
-                exit 1
+                # Run all tests within the multiple command sequence
+                test_create_database
+                local result1=$?
+                test_view_media_files
+                local result2=$?
+                test_add_single_file
+                local result3=$?
+                test_add_same_file
+                local result4=$?
+                test_add_multiple_files
+                local result5=$?
+                test_add_same_multiple_files
+                local result6=$?
+                test_cannot_create_over_existing
+                local result7=$?
+                test_ui_skipped
+                local result8=$?
+                test_cloud_skipped
+                local result9=$?
+                
+                # Check if any test failed
+                if [ $result1 -ne 0 ] || [ $result2 -ne 0 ] || [ $result3 -ne 0 ] || [ $result4 -ne 0 ] || [ $result5 -ne 0 ] || [ $result6 -ne 0 ] || [ $result7 -ne 0 ] || [ $result8 -ne 0 ] || [ $result9 -ne 0 ]; then
+                    command_result=1
+                else
+                    command_result=0
+                fi
                 ;;
             "setup")
                 test_setup
