@@ -51,22 +51,22 @@ export class Video {
         const toolsDir = join(homedir(), '.photosphere', 'tools');
 
         // Possible paths to check for ffprobe binary
-        // PRIORITY ORDER: Local directories first, then system PATH
+        // PRIORITY ORDER: System PATH first, then local directories
         const possiblePaths = [
-            // 1. Photosphere tools directory (highest priority)
+            // 1. System PATH (highest priority)
+            { ffprobe: 'ffprobe', ffmpeg: 'ffmpeg' },
+            
+            // 2. Photosphere tools directory
             { ffprobe: join(toolsDir, 'ffprobe'), ffmpeg: join(toolsDir, 'ffmpeg') },
             { ffprobe: join(toolsDir, 'ffprobe.exe'), ffmpeg: join(toolsDir, 'ffmpeg.exe') },
             
-            // 2. Current working directory
+            // 3. Current working directory
             { ffprobe: join(currentDir, 'ffprobe'), ffmpeg: join(currentDir, 'ffmpeg') },
             { ffprobe: join(currentDir, 'ffprobe.exe'), ffmpeg: join(currentDir, 'ffmpeg.exe') },
             
-            // 3. Directory of the executable (for bundled apps)
+            // 4. Directory of the executable (for bundled apps)
             { ffprobe: join(execDir, 'ffprobe'), ffmpeg: join(execDir, 'ffmpeg') },
             { ffprobe: join(execDir, 'ffprobe.exe'), ffmpeg: join(execDir, 'ffmpeg.exe') },
-            
-            // 4. System PATH (lowest priority)
-            { ffprobe: 'ffprobe', ffmpeg: 'ffmpeg' },
         ];
 
         // Try to find working ffmpeg/ffprobe commands

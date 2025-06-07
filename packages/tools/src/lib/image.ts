@@ -51,23 +51,23 @@ export class Image {
         const toolsDir = join(homedir(), '.photosphere', 'tools');
 
         // Possible paths to check for magick binary
-        // PRIORITY ORDER: Local directories first, then system PATH
+        // PRIORITY ORDER: System PATH first, then local directories
         const possiblePaths = [
-            // 1. Photosphere tools directory (highest priority)
+            // 1. System PATH (highest priority)
+            'magick',
+            
+            // 2. Photosphere tools directory 
             join(toolsDir, 'magick'),
             join(toolsDir, 'magick.exe'),
             
-            // 2. Current working directory
+            // 3. Current working directory
             join(currentDir, 'squashfs-root', 'usr', 'bin', 'magick'),
             join(currentDir, 'magick'),
             join(currentDir, 'magick.exe'),
             
-            // 3. Directory of the executable (for bundled apps)
+            // 4. Directory of the executable (for bundled apps)
             join(execDir, 'magick'),
             join(execDir, 'magick.exe'),
-            
-            // 4. System PATH (lowest priority)
-            'magick',
         ];
 
         // Try to find working magick command
