@@ -61,7 +61,7 @@ run_command() {
             return 0
         else
             log_error "$description (expected failure but command succeeded)"
-            return 1
+            exit 1  # Exit immediately on failure
         fi
     else
         local actual_exit_code=$?
@@ -70,7 +70,7 @@ run_command() {
             return 0
         else
             log_error "$description (exit code: $actual_exit_code)"
-            return 1
+            exit 1  # Exit immediately on failure
         fi
     fi
 }
@@ -85,7 +85,7 @@ check_exists() {
         return 0
     else
         log_error "$description missing: $path"
-        return 1
+        exit 1  # Exit immediately on failure
     fi
 }
 
@@ -99,7 +99,7 @@ check_empty() {
         return 0
     else
         log_error "$description is not empty: $path"
-        return 1
+        exit 1  # Exit immediately on failure
     fi
 }
 
@@ -333,38 +333,21 @@ run_all_tests() {
     test_ui_skipped
     test_cloud_skipped
     
-    # Summary
+    # If we get here, all tests passed
     echo ""
     echo "======================================"
     echo "TEST SUMMARY"
     echo "======================================"
     echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
+    echo ""
+    echo -e "${GREEN}ALL SMOKE TESTS PASSED${NC}"
     
-    if [ $TESTS_FAILED -gt 0 ]; then
-        echo ""
-        echo "Failed tests:"
-        for test in "${FAILED_TESTS[@]}"; do
-            echo -e "  ${RED}- $test${NC}"
-        done
-        echo ""
-        echo -e "${RED}SMOKE TESTS FAILED${NC}"
-        
-        # Cleanup after all tests complete
-        echo ""
-        log_info "Cleaning up test artifacts..."
-        rm -rf "$TEST_DB_DIR" 2>/dev/null || true
-        exit 1
-    else
-        echo ""
-        echo -e "${GREEN}ALL SMOKE TESTS PASSED${NC}"
-        
-        # Cleanup after all tests complete
-        echo ""
-        log_info "Cleaning up test artifacts..."
-        rm -rf "$TEST_DB_DIR" 2>/dev/null || true
-        exit 0
-    fi
+    # Cleanup after all tests complete
+    echo ""
+    log_info "Cleaning up test artifacts..."
+    rm -rf "$TEST_DB_DIR" 2>/dev/null || true
+    exit 0
 }
 
 # Function to run a specific test
@@ -441,82 +424,54 @@ run_multiple_commands() {
         echo ""
         echo "--- Command $command_number/$total_commands: $command ---"
         
-        local command_result=0
-        
         # Execute command with error handling
-        set +e  # Disable exit on error for this command
+        # Keep set -e enabled to fail immediately
         case "$command" in
             "all")
                 # Run all tests within the multiple command sequence
+                # Each test will exit immediately on failure due to set -e
                 test_create_database
-                local result1=$?
                 test_view_media_files
-                local result2=$?
                 test_add_single_file
-                local result3=$?
                 test_add_same_file
-                local result4=$?
                 test_add_multiple_files
-                local result5=$?
                 test_add_same_multiple_files
-                local result6=$?
                 test_cannot_create_over_existing
-                local result7=$?
                 test_ui_skipped
-                local result8=$?
                 test_cloud_skipped
-                local result9=$?
-                
-                # Check if any test failed
-                if [ $result1 -ne 0 ] || [ $result2 -ne 0 ] || [ $result3 -ne 0 ] || [ $result4 -ne 0 ] || [ $result5 -ne 0 ] || [ $result6 -ne 0 ] || [ $result7 -ne 0 ] || [ $result8 -ne 0 ] || [ $result9 -ne 0 ]; then
-                    command_result=1
-                else
-                    command_result=0
-                fi
                 ;;
             "setup")
                 test_setup
-                command_result=$?
                 ;;
             "reset")
                 reset_environment
-                command_result=$?
                 ;;
             "create-database"|"1")
                 test_create_database
-                command_result=$?
                 ;;
             "view-media"|"2")
                 test_view_media_files
-                command_result=$?
                 ;;
             "add-single"|"3")
                 test_add_single_file
-                command_result=$?
                 ;;
             "add-same"|"4")
                 test_add_same_file
-                command_result=$?
                 ;;
             "add-multiple"|"5")
                 test_add_multiple_files
-                command_result=$?
                 ;;
             "add-same-multiple"|"6")
                 test_add_same_multiple_files
-                command_result=$?
                 ;;
             "no-overwrite"|"7")
                 test_cannot_create_over_existing
-                command_result=$?
                 ;;
             "ui"|"8")
                 test_ui_skipped
-                command_result=$?
                 ;;
             "cloud"|"9")
                 test_cloud_skipped
-                command_result=$?
                 ;;
             *)
                 log_error "Unknown command in sequence: $command"
@@ -526,20 +481,13 @@ run_multiple_commands() {
                 exit 1
                 ;;
         esac
-        set -e  # Re-enable exit on error after command
         
-        if [ $command_result -ne 0 ]; then
-            log_error "Command failed: $command (exit code: $command_result)"
-            log_error "Stopping command sequence"
-            set -e  # Re-enable before exit
-            exit 1
-        fi
-        
+        # If we get here, the command succeeded (otherwise it would have exited)
         log_success "Completed command $command_number/$total_commands: $command"
         command_number=$((command_number + 1))
     done
     
-    # Show final summary
+    # Show final summary - we only get here if all commands succeeded
     echo ""
     echo "======================================"
     echo "MULTIPLE COMMANDS SUMMARY"
@@ -547,21 +495,9 @@ run_multiple_commands() {
     echo -e "Commands run: ${BLUE}$total_commands${NC}"
     echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
-    
-    if [ $TESTS_FAILED -gt 0 ]; then
-        echo ""
-        echo "Failed tests:"
-        for test in "${FAILED_TESTS[@]}"; do
-            echo -e "  ${RED}- $test${NC}"
-        done
-        echo ""
-        echo -e "${RED}COMMAND SEQUENCE FAILED${NC}"
-        exit 1
-    else
-        echo ""
-        echo -e "${GREEN}ALL COMMANDS COMPLETED SUCCESSFULLY${NC}"
-        exit 0
-    fi
+    echo ""
+    echo -e "${GREEN}ALL COMMANDS COMPLETED SUCCESSFULLY${NC}"
+    exit 0
 }
 
 # Show usage information
@@ -662,28 +598,16 @@ main() {
     
     run_test "$1"
     
-    # Show individual test summary
+    # If we get here, test passed
     echo ""
     echo "======================================"
     echo "INDIVIDUAL TEST SUMMARY"
     echo "======================================"
     echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
-    
-    if [ $TESTS_FAILED -gt 0 ]; then
-        echo ""
-        echo "Failed tests:"
-        for test in "${FAILED_TESTS[@]}"; do
-            echo -e "  ${RED}- $test${NC}"
-        done
-        echo ""
-        echo -e "${RED}TEST FAILED${NC}"
-        exit 1
-    else
-        echo ""
-        echo -e "${GREEN}TEST PASSED${NC}"
-        exit 0
-    fi
+    echo ""
+    echo -e "${GREEN}TEST PASSED${NC}"
+    exit 0
 }
 
 # Handle script termination
