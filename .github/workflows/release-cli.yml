@@ -55,7 +55,7 @@ jobs:
 
       - name: Run smoke tests
         working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
+        run: ./smoke-tests.sh setup,all
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -115,7 +115,7 @@ jobs:
       - name: Run smoke tests (Windows)
         working-directory: ./apps/cli
         shell: bash
-        run: ./smoke-tests.sh all
+        run: ./smoke-tests.sh setup,all
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -164,7 +164,7 @@ jobs:
 
       - name: Run smoke tests (macOS)
         working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
+        run: ./smoke-tests.sh setup,all
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
