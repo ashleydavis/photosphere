@@ -231,7 +231,7 @@ test_view_media_files() {
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     show_tools_directory
     
-    run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/"
+    run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
 }
 
 test_add_single_file() {
@@ -296,7 +296,7 @@ test_ui_skipped() {
     echo ""
     echo "=== TEST 8: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
-    log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR"
+    log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
 }
 
