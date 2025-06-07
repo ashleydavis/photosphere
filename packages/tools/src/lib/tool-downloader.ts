@@ -415,7 +415,8 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
         return false;
     }
     
-    console.log('🔧 Missing Tools Detected');
+    console.log();
+    console.log('✗ Missing Tools Detected');
     console.log();
 
     
