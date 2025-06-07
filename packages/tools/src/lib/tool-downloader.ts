@@ -232,7 +232,7 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
 
 function getToolDescription(toolName: string): string {
     const descriptions = {
-        'magick (ImageMagick)': 'ImageMagick - Required for processing images (resizing, format conversion, metadata extraction)',
+        'magick': 'magick (ImageMagick) - Required for processing images (resizing, format conversion, metadata extraction)',
         'ffprobe': 'ffprobe - Required for analyzing video files and extracting metadata (duration, dimensions, codecs)',
         'ffmpeg': 'ffmpeg - Required for processing videos and extracting thumbnails from video files'
     };
