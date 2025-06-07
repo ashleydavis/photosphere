@@ -425,8 +425,9 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
     console.log();
     console.log('✗ Missing Tools Detected');
     console.log();
+    console.log('🏗️  This is a one-time setup - once the tools are installed, you\'re all set!');
+    console.log();
 
-    
     // Explain why tools are needed
     console.log('The following tools are required for media processing:');
     console.log();
@@ -502,46 +503,61 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
         return false;
     }
     
-    // Download tools
+    // Download tools in parallel for faster installation
     const downloadedPaths: string[] = [];
     const downloadedInfo: Array<{name: string, path: string, version?: string}> = [];
     
     try {
-        for (const { name, info } of toolsToDownload) {
-            const executablePaths = await downloadTool(name, info, toolsDir);
+        p.log.info('📦 Downloading tools in parallel for faster installation...');
+        
+        // Download all tools in parallel
+        const downloadPromises = toolsToDownload.map(({ name, info }) => 
+            downloadTool(name, info, toolsDir)
+        );
+        
+        const downloadResults = await Promise.all(downloadPromises);
+        
+        // Flatten all executable paths
+        for (const executablePaths of downloadResults) {
             downloadedPaths.push(...executablePaths);
-            
-            // Get version of each downloaded tool
-            for (const executablePath of executablePaths) {
-                const toolName = executablePath.includes('ffmpeg') ? 'ffmpeg' :
-                                executablePath.includes('ffprobe') ? 'ffprobe' : 
-                                executablePath.includes('magick') ? 'magick' : name;
-                
-                try {
-                    const { stdout } = await execAsync(`"${executablePath}" -version`);
-                    let version = 'unknown';
-                    
-                    if (toolName === 'magick') {
-                        const match = stdout.match(/Version: ImageMagick ([\d.-]+)/);
-                        version = match ? match[1] : 'unknown';
-                    } else if (toolName === 'ffprobe' || toolName === 'ffmpeg') {
-                        const match = stdout.match(new RegExp(`${toolName} version (\\S+)`));
-                        if (match) {
-                            version = match[1];
-                        } else {
-                            const altMatch = stdout.match(/version (\\S+)/);
-                            version = altMatch ? altMatch[1] : 'unknown';
-                        }
-                    }
-                    
-                    downloadedInfo.push({ name: toolName, path: executablePath, version });
-                    p.log.success(`✓ ${toolName} v${version} installed successfully`);
-                } catch {
-                    downloadedInfo.push({ name: toolName, path: executablePath });
-                    p.log.success(`✓ ${toolName} installed successfully`);
-                }
-            }
         }
+        
+        // Get version information for all downloaded tools
+        const versionPromises = downloadedPaths.map(async (executablePath) => {
+            const toolName = executablePath.includes('ffmpeg') ? 'ffmpeg' :
+                            executablePath.includes('ffprobe') ? 'ffprobe' : 
+                            executablePath.includes('magick') ? 'magick' : 'unknown';
+            
+            try {
+                const { stdout } = await execAsync(`"${executablePath}" -version`);
+                let version = 'unknown';
+                
+                if (toolName === 'magick') {
+                    const match = stdout.match(/Version: ImageMagick ([\d.-]+)/);
+                    version = match ? match[1] : 'unknown';
+                } else if (toolName === 'ffprobe' || toolName === 'ffmpeg') {
+                    const match = stdout.match(new RegExp(`${toolName} version (\\S+)`));
+                    if (match) {
+                        version = match[1];
+                    } else {
+                        const altMatch = stdout.match(/version (\\S+)/);
+                        version = altMatch ? altMatch[1] : 'unknown';
+                    }
+                }
+                
+                return { name: toolName, path: executablePath, version };
+            } catch {
+                return { name: toolName, path: executablePath };
+            }
+        });
+        
+        const versionResults = await Promise.all(versionPromises);
+        downloadedInfo.push(...versionResults);
+        
+        // Show success messages for all tools
+        downloadedInfo.forEach(({ name, version }) => {
+            p.log.success(`✓ ${name}${version ? ` v${version}` : ''} installed successfully`);
+        });
         
         // Show summary of downloaded tools
         if (downloadedInfo.length > 0) {
