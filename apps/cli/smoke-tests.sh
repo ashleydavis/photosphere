@@ -44,6 +44,17 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Show tools directory contents at start of each test
+show_tools_directory() {
+    log_info "Contents of ~/.photosphere/tools:"
+    if [ -d "$HOME/.photosphere/tools" ]; then
+        ls -la "$HOME/.photosphere/tools"
+    else
+        log_warning "~/.photosphere/tools directory does not exist"
+    fi
+    echo ""
+}
+
 # Run a command and check its exit code
 run_command() {
     local description="$1"
@@ -151,6 +162,7 @@ test_setup() {
 test_create_database() {
     echo ""
     echo "=== TEST 1: CREATE DATABASE ==="
+    show_tools_directory
     
     run_command "Initialize new database" "bun run start -- init $TEST_DB_DIR --yes"
     
@@ -166,6 +178,7 @@ test_create_database() {
 test_view_media_files() {
     echo ""
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
+    show_tools_directory
     
     run_command "Show info for test files" "bun run start -- info $TEST_FILES_DIR/"
 }
@@ -173,6 +186,7 @@ test_view_media_files() {
 test_add_single_file() {
     echo ""
     echo "=== TEST 3: ADD ONE FILE ==="
+    show_tools_directory
     
     run_command "Add single test file" "bun run start -- add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
@@ -182,6 +196,7 @@ test_add_single_file() {
 test_add_same_file() {
     echo ""
     echo "=== TEST 4: ADD SAME FILE (NO DUPLICATION) ==="
+    show_tools_directory
     
     run_command "Re-add same file" "bun run start -- add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
@@ -191,6 +206,7 @@ test_add_same_file() {
 test_add_multiple_files() {
     echo ""
     echo "=== TEST 5: ADD MULTIPLE FILES ==="
+    show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         run_command "Add multiple files" "bun run start -- add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -205,6 +221,7 @@ test_add_multiple_files() {
 test_add_same_multiple_files() {
     echo ""
     echo "=== TEST 6: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
+    show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         run_command "Re-add multiple files" "bun run start -- add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -219,6 +236,7 @@ test_add_same_multiple_files() {
 test_cannot_create_over_existing() {
     echo ""
     echo "=== TEST 7: CANNOT CREATE DATABASE OVER EXISTING ==="
+    show_tools_directory
     
     run_command "Fail to create database over existing" "bun run start -- init $TEST_DB_DIR --yes" 1
 }
@@ -226,6 +244,7 @@ test_cannot_create_over_existing() {
 test_ui_skipped() {
     echo ""
     echo "=== TEST 8: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    show_tools_directory
     log_info "UI test skipped - would run: bun run start -- ui $TEST_DB_DIR"
     log_info "This requires manual verification in a real environment"
 }
@@ -233,6 +252,7 @@ test_ui_skipped() {
 test_cloud_skipped() {
     echo ""
     echo "=== CLOUD TESTS SKIPPED ==="
+    show_tools_directory
     log_info "S3/Cloud database tests skipped - require AWS credentials"
 }
 
