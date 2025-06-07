@@ -184,6 +184,21 @@ test_setup() {
         log_warning "Frontend build failed, continuing anyway..."
     }
     
+}
+
+test_install_tools() {
+    echo ""
+    echo "=== INSTALL TOOLS ==="
+    
+    log_info "Changing to CLI directory"
+    if ! cd "$(dirname "$0")"; then
+        log_error "Failed to change to CLI directory"
+        return 1
+    fi
+    
+    local cli_command=$(get_cli_command)
+    log_info "Using CLI command: $cli_command"
+    
     log_info "Installing required tools via psi tools update"
     run_command "Install tools" "$(get_cli_command) tools update --yes"
     
@@ -383,7 +398,11 @@ run_all_tests() {
     log_info "Cleaning up previous test run"
     rm -rf "$TEST_DB_DIR"
     
-    # Run all tests in sequence (without setup)
+    # Install tools first (if needed) then run all tests
+    log_info "Installing tools before running tests"
+    test_install_tools
+    
+    # Run all tests in sequence 
     test_create_database
     test_view_media_files
     test_add_single_file
@@ -425,6 +444,9 @@ run_test() {
         "setup")
             # This is handled as a command in main(), but keeping here for completeness
             test_setup
+            ;;
+        "install-tools")
+            test_install_tools
             ;;
         "create-database"|"1")
             test_create_database
@@ -504,6 +526,9 @@ run_multiple_commands() {
             "setup")
                 test_setup
                 ;;
+            "install-tools")
+                test_install_tools
+                ;;
             "reset")
                 reset_environment
                 ;;
@@ -568,8 +593,9 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Commands:"
-    echo "  all                 - Run all tests (assumes executable already built)"
-    echo "  setup               - Setup environment and build frontend"
+    echo "  all                 - Install tools and run all tests (assumes executable already built)"
+    echo "  setup               - Build executable and frontend"
+    echo "  install-tools       - Install required media processing tools only"
     echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
     echo ""
@@ -588,14 +614,14 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0 all                    # Run all tests (exe must be built)"
-    echo "  $0 setup,all              # Build frontend and run all tests"
-    echo "  $0 setup                  # Setup environment only"
+    echo "  $0 all                    # Install tools and run all tests (exe must be built)"
+    echo "  $0 setup,all              # Build and run all tests with tools"
+    echo "  $0 setup                  # Build executable and frontend only"
+    echo "  $0 install-tools          # Install tools only"
     echo "  $0 reset                  # Clean up test artifacts"
     echo "  $0 create-database        # Run only database creation test"
     echo "  $0 3                      # Run test 3 (add single file)"
     echo "  $0 reset,setup,1,3        # Reset, setup, create DB, then test 3"
-    echo "  $0 setup,create-database,add-single  # Chain specific commands"
     echo "  $0 help                   # Show this help"
 }
 
@@ -631,6 +657,13 @@ main() {
     if [ "$1" = "setup" ]; then
         CLEANUP_ON_EXIT="true"  # Setup can cleanup after itself
         test_setup
+        exit 0
+    fi
+    
+    # Check if running install-tools command
+    if [ "$1" = "install-tools" ]; then
+        CLEANUP_ON_EXIT="false"  # Don't cleanup after installing tools
+        test_install_tools
         exit 0
     fi
     
