@@ -73,13 +73,6 @@ export async function ensureToolsAvailable(options?: {
         return true;
     }
 
-    if (!silent) {
-        console.log('✗ Missing required tools:');
-        toolsStatus.missingTools.forEach(tool => {
-            console.log(`  • ${tool}`);
-        });
-    }
-
     if (promptForInstall) {
         // Dynamically import the tool downloader to avoid circular dependencies
         const { promptAndDownloadTools } = await import('./tool-downloader');

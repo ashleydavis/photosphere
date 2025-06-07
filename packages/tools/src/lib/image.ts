@@ -97,7 +97,6 @@ export class Image {
         }
 
         // If we get here, we couldn't find ImageMagick
-        console.warn('ImageMagick (magick command) not found. Please install ImageMagick 7.0 or later.');
         Image.isInitialized = true;
     }
 

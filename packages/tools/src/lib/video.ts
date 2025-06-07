@@ -95,7 +95,6 @@ export class Video {
         }
 
         // If we get here, we couldn't find ffmpeg/ffprobe
-        console.warn('ffprobe not found. Please install ffmpeg.');
         Video.isInitialized = true;
     }
 
