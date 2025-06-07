@@ -13,6 +13,18 @@ Download the appropriate binary for your platform:
 - Windows: `psi.exe`
 - macOS: `psi`
 
+**Important**: After downloading, make sure the binary has execute permissions:
+
+```bash
+# On Linux/macOS
+chmod +x psi
+
+# Verify permissions
+ls -la psi
+```
+
+The binary should show execute permissions like `-rwxr-xr-x` for the user.
+
 ### Building from Source
 
 ```bash
