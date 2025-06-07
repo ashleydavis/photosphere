@@ -239,6 +239,62 @@ test_install_tools() {
     else
         log_warning "~/.photosphere/tools directory does not exist"
     fi
+    
+    echo ""
+    log_info "Verifying tools are installed and working..."
+    
+    # Check that required tools exist and can print versions
+    local tools_verified=true
+    
+    # Check ImageMagick
+    if [ -f "$HOME/.photosphere/tools/magick" ]; then
+        local magick_version=$("$HOME/.photosphere/tools/magick" -version 2>/dev/null | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "")
+        if [ -n "$magick_version" ]; then
+            log_success "ImageMagick verified: version $magick_version"
+        else
+            log_error "ImageMagick exists but cannot get version"
+            tools_verified=false
+        fi
+    else
+        log_error "ImageMagick not found at ~/.photosphere/tools/magick"
+        tools_verified=false
+    fi
+    
+    # Check ffprobe
+    if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
+        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
+        if [ -n "$ffprobe_version" ]; then
+            log_success "ffprobe verified: version $ffprobe_version"
+        else
+            log_error "ffprobe exists but cannot get version"
+            tools_verified=false
+        fi
+    else
+        log_error "ffprobe not found at ~/.photosphere/tools/ffprobe"
+        tools_verified=false
+    fi
+    
+    # Check ffmpeg
+    if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
+        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
+        if [ -n "$ffmpeg_version" ]; then
+            log_success "ffmpeg verified: version $ffmpeg_version"
+        else
+            log_error "ffmpeg exists but cannot get version"
+            tools_verified=false
+        fi
+    else
+        log_error "ffmpeg not found at ~/.photosphere/tools/ffmpeg"
+        tools_verified=false
+    fi
+    
+    # Fail the tests if any tools are not working
+    if [ "$tools_verified" = false ]; then
+        log_error "Tool verification failed - some required tools are missing or not working"
+        exit 1
+    fi
+    
+    log_success "All tools verified and working correctly"
 }
 
 test_create_database() {
