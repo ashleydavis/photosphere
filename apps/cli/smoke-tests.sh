@@ -139,6 +139,13 @@ test_setup() {
     
     log_info "Installing required tools via psi tools update"
     run_command "Install tools" "bun run start -- tools update --yes"
+    
+    log_info "Showing contents of ~/.photosphere/tools"
+    if [ -d "$HOME/.photosphere/tools" ]; then
+        ls -la "$HOME/.photosphere/tools"
+    else
+        log_warning "~/.photosphere/tools directory does not exist"
+    fi
 }
 
 test_create_database() {
