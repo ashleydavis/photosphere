@@ -22,7 +22,8 @@ async function main() {
     program
         .name("psi")
         .version(version)
-        .description("The Photosphere CLI tool for managing your media file database.");
+        .description("The Photosphere CLI tool for managing your media file database.")
+        .exitOverride();  // Prevent commander from calling process.exit
 
     program
         .command("init")
@@ -91,7 +92,21 @@ async function main() {
         .option(...yesOption)
         .action(toolsCommand);
 
-    await program.parseAsync(process.argv);    
+    // Parse the command line arguments
+    try {
+        await program.parseAsync(process.argv);
+    } catch (err: any) {
+        // Commander throws an error when no command is provided
+        // Check if this is just a help display situation
+        if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
+            exit(0);
+        }
+        // If no command was provided and we're showing help
+        if (process.argv.length <= 2) {
+            exit(0);
+        }
+        throw err;
+    }
 }
 
 main()
