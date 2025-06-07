@@ -96,7 +96,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
             }
             
             if (shouldInstall) {
-                const success = await promptAndDownloadTools(missingTools);
+                const success = await promptAndDownloadTools(missingTools, options.yes);
                 if (success) {
                     console.log(pc.green('✅ Tools installed successfully!'));
                 } else {
@@ -131,7 +131,7 @@ async function updateTools(options: IToolsCommandOptions): Promise<void> {
             }
         }
         
-        const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe']);
+        const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe'], options.yes);
         if (success) {
             console.log(pc.green('✅ Tools installed successfully!'));
         } else {
@@ -161,7 +161,7 @@ async function updateTools(options: IToolsCommandOptions): Promise<void> {
     }
     
     // Force reinstall all tools
-    const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe']);
+    const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe'], options.yes);
     if (success) {
         console.log(pc.green('✅ Tools updated successfully!'));
     } else {

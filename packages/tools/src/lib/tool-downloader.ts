@@ -404,7 +404,7 @@ async function handleManualInstallation(missingTools: string[]): Promise<boolean
     }
 }
 
-export async function promptAndDownloadTools(missingTools: string[]): Promise<boolean> {
+export async function promptAndDownloadTools(missingTools: string[], nonInteractive: boolean = false): Promise<boolean> {
     const toolUrls = getToolUrls();
     
     if (!toolUrls) {
@@ -428,35 +428,45 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
 
     console.log();
 
-    p.intro('🔧 Install Missing Tools');
+    let installChoice = 'auto';
     
-    const installChoice = await p.select({
-        message: 'How would you like to install the missing tools?',
-        options: [
-            { value: 'auto', label: 'Install automatically - Download portable versions to ~/.photosphere/tools' },
-            { value: 'manual', label: 'Install manually - Show installation instructions for your system' },
-            { value: 'exit', label: 'Exit - I will install tools later and run again' }
-        ]
-    });
-    
-    if (p.isCancel(installChoice)) {
-        p.log.info('Installation cancelled.');
-        return false;
-    }
-    
-    if (installChoice === 'exit') {
-        p.log.info('Exiting. Please install the required tools and try again.');
-        return false;
-    }
-    
-    if (installChoice === 'manual') {
-        const manualResult = await handleManualInstallation(missingTools);
-        if (manualResult === 'auto' as any) {
-            // User chose to switch to automatic installation from manual mode
-            // Continue to automatic installation below
-        } else {
-            return manualResult;
+    if (!nonInteractive) {
+        p.intro('🔧 Install Missing Tools');
+        
+        const choice = await p.select({
+            message: 'How would you like to install the missing tools?',
+            options: [
+                { value: 'auto', label: 'Install automatically - Download portable versions to ~/.photosphere/tools' },
+                { value: 'manual', label: 'Install manually - Show installation instructions for your system' },
+                { value: 'exit', label: 'Exit - I will install tools later and run again' }
+            ]
+        });
+        
+        if (p.isCancel(choice)) {
+            p.log.info('Installation cancelled.');
+            return false;
         }
+        
+        if (typeof choice === 'string') {
+            installChoice = choice;
+        }
+        
+        if (installChoice === 'exit') {
+            p.log.info('Exiting. Please install the required tools and try again.');
+            return false;
+        }
+        
+        if (installChoice === 'manual') {
+            const manualResult = await handleManualInstallation(missingTools);
+            if (manualResult === 'auto' as any) {
+                // User chose to switch to automatic installation from manual mode
+                // Continue to automatic installation below
+            } else {
+                return manualResult;
+            }
+        }
+    } else {
+        console.log('Installing tools automatically...');
     }
     
     // Show download details
@@ -503,14 +513,16 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
     const toolsDir = getToolsDirectory();
     p.log.info(`Installation directory: ${toolsDir}`);
     
-    const confirmDownload = await p.confirm({
-        message: 'Proceed with downloading these files to your system?',
-        initialValue: true
-    });
-    
-    if (p.isCancel(confirmDownload) || !confirmDownload) {
-        p.log.info('Download cancelled.');
-        return false;
+    if (!nonInteractive) {
+        const confirmDownload = await p.confirm({
+            message: 'Proceed with downloading these files to your system?',
+            initialValue: true
+        });
+        
+        if (p.isCancel(confirmDownload) || !confirmDownload) {
+            p.log.info('Download cancelled.');
+            return false;
+        }
     }
     
     // Download tools in parallel for faster installation

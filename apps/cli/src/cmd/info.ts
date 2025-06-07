@@ -51,7 +51,7 @@ export async function infoCommand(dbDir: string, paths: string[], options: IInfo
     });
 
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools();
+    await ensureMediaProcessingTools(options.yes || false);
 
     console.log(`Analyzing ${paths.length} path(s)...`);
     

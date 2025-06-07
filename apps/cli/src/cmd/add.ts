@@ -40,7 +40,7 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     });
 
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools();
+    await ensureMediaProcessingTools(options.yes || false);
 
     // Get the directory for the database (validates it exists and is a media database)
     const databaseDir = await getDirectoryForCommand('existing', dbDir, options.yes || false);

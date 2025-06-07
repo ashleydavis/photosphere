@@ -6,9 +6,9 @@ import { exit } from 'node-utils';
 // Ensures tools are available for commands that need media processing.
 // Shows user-friendly error and exits if tools are missing.
 //
-export async function ensureMediaProcessingTools(): Promise<void> {
+export async function ensureMediaProcessingTools(autoInstall: boolean = false): Promise<void> {
     const toolsAvailable = await ensureToolsAvailable({ 
-        promptForInstall: true, 
+        promptForInstall: !autoInstall,
         silent: false 
     });
     
