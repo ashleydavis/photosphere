@@ -349,6 +349,7 @@ async function handleManualInstallation(missingTools: string[]): Promise<boolean
             message: 'What would you like to do?',
             options: [
                 { value: 'continue', label: 'Continue - I have installed the tools' },
+                { value: 'auto', label: 'This is too hard, just install the missing tools automatically' },
                 { value: 'exit', label: 'Exit - I will install tools later' }
             ]
         });
@@ -356,6 +357,12 @@ async function handleManualInstallation(missingTools: string[]): Promise<boolean
         if (p.isCancel(action) || action === 'exit') {
             p.log.info('Exiting. Please install the required tools and try again.');
             return false;
+        }
+        
+        if (action === 'auto') {
+            p.log.info('Switching to automatic installation...');
+            // Return a special value to indicate we want to switch to auto installation
+            return 'auto' as any;
         }
         
         if (action === 'continue') {
@@ -452,7 +459,13 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
     }
     
     if (installChoice === 'manual') {
-        return await handleManualInstallation(missingTools);
+        const manualResult = await handleManualInstallation(missingTools);
+        if (manualResult === 'auto' as any) {
+            // User chose to switch to automatic installation from manual mode
+            // Continue to automatic installation below
+        } else {
+            return manualResult;
+        }
     }
     
     // Show download details
