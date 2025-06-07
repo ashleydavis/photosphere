@@ -27,6 +27,11 @@ export interface IUiCommandOptions {
     // When true, the ui will not open in the browser.
     //
     noOpen?: boolean;
+
+    //
+    // Non-interactive mode - use defaults and command line arguments.
+    //
+    yes?: boolean;
 }
 
 //
@@ -34,7 +39,7 @@ export interface IUiCommandOptions {
 //
 export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools();
+    await ensureMediaProcessingTools(options.yes || false);
 
     //
     // Configure S3 if the path requires it
