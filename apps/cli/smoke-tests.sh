@@ -253,9 +253,10 @@ test_install_tools() {
             log_success "ImageMagick verified - complete output:"
             echo "$magick_output"
         else
+            echo "%%%%%%%%%%%%"
+            echo "$magick_output"
             log_error "ImageMagick exists but cannot get version"
             tools_verified=false
-            echo "$magick_output"
         fi
     else
         log_error "ImageMagick not found at ~/.photosphere/tools/magick"
