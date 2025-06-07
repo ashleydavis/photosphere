@@ -249,12 +249,12 @@ test_install_tools() {
     # Check ImageMagick
     if [ -f "$HOME/.photosphere/tools/magick" ]; then
 
-        local magick_output_x=$("$HOME/.photosphere/tools/magick" 2>/dev/null || echo "")
+        local magick_output_x=$("$HOME/.photosphere/tools/magick" || echo "")
         echo "1111111"
         echo "$magick_output_x"
         echo "222222"
 
-        local magick_output=$("$HOME/.photosphere/tools/magick" --version 2>/dev/null || echo "")
+        local magick_output=$("$HOME/.photosphere/tools/magick" --version || echo "")
         if [ -n "$magick_output" ]; then
             log_success "ImageMagick verified - complete output:"
             echo "$magick_output"
