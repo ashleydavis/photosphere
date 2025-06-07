@@ -11,31 +11,13 @@ import { createStorage } from "storage";
 //
 export async function isMediaDatabase(dirPath: string): Promise<boolean> {
     try {
-        const collectionsDir = join(dirPath, 'collections');
-        if (!existsSync(collectionsDir)) {
+        const dbDir = join(dirPath, '.db');
+        if (!existsSync(dbDir)) {
             return false;
         }
 
-        // Look for at least one collection directory with a valid database
-        const collections = readdirSync(collectionsDir).filter(name => {
-            const collectionPath = join(collectionsDir, name);
-            return statSync(collectionPath).isDirectory();
-        });
-
-        if (collections.length === 0) {
-            return false;
-        }
-
-        // Check if at least one collection has a valid tree.dat file
-        for (const collectionId of collections) {
-            const metadataPath = join(collectionsDir, collectionId, 'metadata');
-            const treePath = join(metadataPath, 'tree.dat');
-            if (existsSync(treePath)) {
-                return true;
-            }
-        }
-
-        return false;
+        const treePath = join(dbDir, 'tree.dat');
+        return existsSync(treePath);
     } catch (error) {
         return false;
     }
