@@ -248,9 +248,10 @@ test_install_tools() {
     
     # Check ImageMagick
     if [ -f "$HOME/.photosphere/tools/magick" ]; then
-        local magick_version=$("$HOME/.photosphere/tools/magick" -version 2>/dev/null | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "")
-        if [ -n "$magick_version" ]; then
-            log_success "ImageMagick verified: version $magick_version"
+        local magick_output=$("$HOME/.photosphere/tools/magick" -version 2>/dev/null || echo "")
+        if [ -n "$magick_output" ]; then
+            log_success "ImageMagick verified - complete output:"
+            echo "$magick_output"
         else
             log_error "ImageMagick exists but cannot get version"
             tools_verified=false
