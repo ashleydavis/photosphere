@@ -26,7 +26,7 @@ async function main() {
 
     program
         .command("init")
-        .description("Initializes a new Photosphere media file database.")
+        .description("Initializes a new media file database.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
@@ -37,7 +37,7 @@ async function main() {
 
     program
         .command("add")
-        .description("Add files and directories to the Photosphere media file database.")
+        .description("Add files and directories to the media file database.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
@@ -48,7 +48,7 @@ async function main() {
 
     program
         .command("check")
-        .description("Checks files and direcotires to see what has already been added to the Photosphere media file database.")
+        .description("Checks files and direcotires to see what has already been added to the media file database.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
