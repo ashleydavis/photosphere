@@ -89,7 +89,7 @@ show_tool_versions() {
     
     # Check ffprobe version
     if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
-        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | grep -o 'ffprobe version [0-9.-]*' | sed 's/ffprobe version //' || echo "unknown")
+        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffprobe: $ffprobe_version"
     else
         echo "  • ffprobe: not found"
@@ -97,7 +97,7 @@ show_tool_versions() {
     
     # Check ffmpeg version
     if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
-        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | grep -o 'ffmpeg version [0-9.-]*' | sed 's/ffmpeg version //' || echo "unknown")
+        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffmpeg: $ffmpeg_version"
     else
         echo "  • ffmpeg: not found"
