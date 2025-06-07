@@ -16,7 +16,7 @@ export type ScanProgressCallback = (currentlyScanning: string | undefined) => vo
 //
 // Callback for visiting a file when scanning a directory or zip file.
 //
-export type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ScanProgressCallback) => Promise<void>;
+export type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ScanProgressCallback) => Promise<void>;
 
 //
 // Result of scanning a single file
@@ -27,7 +27,7 @@ export interface FileScannedResult {
     fileDate: Date;
     contentType: string;
     labels: string[];
-    openStream: () => Readable;
+    openStream?: () => Readable;
 }
 
 //
@@ -111,7 +111,7 @@ export class FileScanner {
                     fileDate: fileStat.birthtime,
                     contentType,
                     labels: [],
-                    openStream: () => fs.createReadStream(filePath)
+                    // Don't provide openStream for regular files - they can be read directly
                 });
             } else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
@@ -165,7 +165,7 @@ export class FileScanner {
                         fileDate: fileStat.birthtime,
                         contentType,
                         labels: [],
-                        openStream: () => fs.createReadStream(filePath)
+                        // Don't provide openStream for regular files - they can be read directly
                     });
                 }
             } else {
@@ -206,6 +206,7 @@ export class FileScanner {
                         fileDate: zipObject.date || fileDate,
                         contentType,
                         labels: [],
+                        // Provide openStream for zip files since they need to be extracted
                         openStream: () => {
                             const stream = new Readable();
                             zipObject.async('nodebuffer').then(data => {

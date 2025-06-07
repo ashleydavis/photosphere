@@ -11,9 +11,9 @@ const exifParser = require("exif-parser");
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, contentType: string, openStream: () => Readable): Promise<IAssetDetails> {
+export async function getImageDetails(filePath: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
 
-    let fileData = await buffer(openStream());
+    let fileData = openStream ? await buffer(openStream()) : await fs.promises.readFile(filePath);
     
     // Use the new Image class to get basic info and dimensions  
     const image = new Image(filePath);

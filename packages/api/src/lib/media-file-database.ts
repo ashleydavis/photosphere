@@ -25,7 +25,7 @@ import ColorThief from "colorthief";
 //
 // A function that validates a file.
 //
-export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable) => Promise<boolean>;
+export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType: string, openStream?: () => Readable) => Promise<boolean>;
 
 //
 // Progress callback for the add operation.
@@ -35,7 +35,7 @@ export type ProgressCallback = (currentlyScanning: string | undefined) => void;
 //
 // Callback for visiting a file when scanning a directory or zip file.
 //
-type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback) => Promise<void>;
+type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback) => Promise<void>;
 
 //
 // Size of the micro thumbnail.
@@ -310,7 +310,7 @@ export class MediaFileDatabase {
                 fileStat.birthtime, 
                 contentType, 
                 [], 
-                () => fs.createReadStream(filePath), 
+                undefined, // No openStream, just use the local file directly. 
                 progressCallback
             );
         }
@@ -353,7 +353,7 @@ export class MediaFileDatabase {
                 fileStat.birthtime, 
                 contentType, 
                 [], 
-                () => fs.createReadStream(filePath), 
+                undefined, // No openStream, just use the local file directly. 
                 progressCallback
             );
         }
@@ -403,7 +403,7 @@ export class MediaFileDatabase {
                     fileStat.birthtime, 
                     contentType, 
                     [], 
-                    () => fs.createReadStream(filePath),
+                    undefined, // No openStream, just use the local file directly. 
                     progressCallback
                 );
             }
@@ -428,7 +428,7 @@ export class MediaFileDatabase {
     //
     // Adds files from a zip file to the media file database.
     //
-    private async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, visitFile: VisitFileCallback, progressCallback: ProgressCallback): Promise<void> {
+    private async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: (() => Readable) | undefined, visitFile: VisitFileCallback, progressCallback: ProgressCallback): Promise<void> {
 
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
@@ -436,7 +436,8 @@ export class MediaFileDatabase {
         progressCallback(this.currentlyScanning);
 
         const zip = new JSZip();
-        const unpacked = await zip.loadAsync(await buffer(openStream()));
+        const zipBuffer = openStream ? await buffer(openStream()) : await fs.promises.readFile(filePath);
+        const unpacked = await zip.loadAsync(zipBuffer);
         for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
             if (!zipObject.dir) {
                 const fullPath = `${filePath}/${fileName}`;
@@ -451,8 +452,7 @@ export class MediaFileDatabase {
                     || contentType.startsWith("video")
                     || contentType.startsWith("image")) {
 
-
-                    const fileData = await zipObject.async("nodebuffer");
+                    const fileData = await zipObject.async("nodebuffer"); //todO: Could this be a stream instead of a buffer.
                     await visitFile(
                         `zip://${fullPath}`, 
                         {
@@ -463,7 +463,7 @@ export class MediaFileDatabase {
                         fileDate, 
                         contentType, 
                         ["From zip file"], 
-                        () => Readable.from(fileData),
+                        () => Readable.from(fileData), 
                         progressCallback                    
                     );
                 }
@@ -485,7 +485,7 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    private addFile = async (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> => {
+    private addFile = async (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         if (contentType === "application/zip") {
             return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, this.addFile, progressCallback);
@@ -533,7 +533,7 @@ export class MediaFileDatabase {
             //
             // Uploads the full asset.
             //
-            await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream(), fileInfo.length));
+            await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileInfo.length));
             await this.assetDatabase.addFile(filePath, localHashedFile);
 
             const assetInfo = await this.assetStorage.info(assetPath);
@@ -554,7 +554,7 @@ export class MediaFileDatabase {
                 //
                 // Uploads the thumbnail.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, openStream()));
+                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, Readable.from(assetDetails.thumbnail)));
 
                 const thumbInfo = await this.assetStorage.info(thumbPath);
                 if (!thumbInfo) {
@@ -568,7 +568,7 @@ export class MediaFileDatabase {
                 //
                 // Uploads the display asset.
                 //
-                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, openStream()));
+                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, Readable.from(assetDetails.display!)));
 
                 const displayInfo = await this.assetStorage.info(displayPath);
                 if (!displayInfo) {
@@ -659,7 +659,7 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: () => Readable, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         if (contentType === "application/zip") {
             return await this.scanZipFile(filePath, fileInfo, fileDate, openStream, this.checkFile, progressCallback);
@@ -704,7 +704,7 @@ export class MediaFileDatabase {
     //
     // Validates the local file.
     //
-    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
+    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: (() => Readable) | undefined): Promise<boolean> {
         try {
             return await validateFile(filePath, fileInfo, contentType, openStream);
         }
@@ -722,7 +722,7 @@ export class MediaFileDatabase {
     //
     // It is assume we already have the file size and last modified date.
     //
-    async hashFile(filePath: string, fileInfo: IFileInfo, openStream: () => Readable, hashCache: HashCache): Promise<IHashedFile> {
+    async hashFile(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified.getTime() === fileInfo.lastModified.getTime()) {
@@ -739,7 +739,7 @@ export class MediaFileDatabase {
         //
         // Compute the hash of the file.
         //
-        const hash = await computeHash(openStream());
+        const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
         const hashedFile: IHashedFile = {
             hash,
             lastModified: fileInfo.lastModified,

@@ -23,17 +23,19 @@ export async function writeStreamToFile(stream: Readable, filePath: string): Pro
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, openStream: () => Readable): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string, openStream?: () => Readable): Promise<IAssetDetails> {
 
     let videoPath: string;
     let shouldCleanup = false;
 
-    if (filePath.startsWith("zip://")) {
-        videoPath = path.join(os.tmpdir(), uuid());
-        await writeStreamToFile(openStream(), filePath);        
+    // If openStream is provided, we need to extract to a temporary file
+    if (openStream) {
+        videoPath = path.join(os.tmpdir(), `temp_video_${Date.now()}_${Math.random().toString(36).substring(2)}`);
+        await writeStreamToFile(openStream(), videoPath);        
         shouldCleanup = true;
     }
     else {
+        // Use the file directly from its location on disk
         videoPath = filePath;
     }
 

@@ -100,7 +100,7 @@ export async function infoCommand(dbDir: string, paths: string[], options: IInfo
     exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, openStream: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, contentType: string, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
     let details: any = {

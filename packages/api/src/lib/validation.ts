@@ -1,16 +1,14 @@
 import { Readable } from "node:stream";
 import { IFileInfo } from "storage";
-import { Video } from "tools";
+import { Video, Image } from "tools";
 import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-const sharp = require('sharp');
-
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: () => Readable): Promise<boolean> {
+export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream?: () => Readable): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -18,51 +16,128 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
     }
 
     if (contentType.startsWith("image")) {
-        const imageStream = sharp();
-        openStream().pipe(imageStream);
-        const metadata = await imageStream.metadata()
-        if (typeof (metadata.width) === 'number' && typeof (metadata.height) === 'number') {
-            // console.log(`Image ${filePath} (${fileInfo.contentType}) has dimensions ${metadata.width}x${metadata.height}`);
-            return true;
-        }
-        else {
-            console.error(`Invalid image ${filePath} (${contentType})`);
-            return false;
-        }
+        return await validateImage(filePath, openStream);
     }
     else if (contentType.startsWith("video")) {
-        const metadata = await getVideoMetadata(filePath, openStream());
-        if (typeof (metadata.width) === 'number' && typeof (metadata.height) === 'number') {
-            // console.log(`Video ${filePath} (${fileInfo.contentType}) has dimensions ${metadata.width}x${metadata.height}`);
-            return true;
-        }
-        else {
-            console.error(`Invalid video ${filePath} (${contentType})`);
-            return false;
-        }
+        return await validateVideo(filePath, openStream);
     }
 
     return true;
 }
 
 //
-// Gets the metadata data for a video using the tools package.
+// Validates an image file by checking if it has valid dimensions
 //
-export async function getVideoMetadata(filePath: string, inputStream: Readable): Promise<{ width: number, height: number }> {
-    // Create a temporary file from the stream since the Video class needs a file path
-    const tempPath = join(tmpdir(), `temp_video_${Date.now()}_${Math.random().toString(36).substring(2)}`);
-    
+async function validateImage(filePath: string, openStream?: () => Readable): Promise<boolean> {
+    let tempFilePath: string | undefined;
+    let actualFilePath = filePath;
+
     try {
-        // Write stream to temporary file
-        const chunks: Buffer[] = [];
-        for await (const chunk of inputStream) {
-            chunks.push(chunk);
+        // If openStream is provided, we need to extract to a temporary file
+        if (openStream) {
+            tempFilePath = await extractToTempFile(openStream, 'temp_image');
+            actualFilePath = tempFilePath;
         }
-        const fileBuffer = Buffer.concat(chunks);
-        writeFileSync(tempPath, fileBuffer);
+
+        const image = new Image(actualFilePath);
+        const dimensions = await image.getDimensions();
         
-        // Use the Video class from tools to get dimensions
-        const video = new Video(tempPath);
+        if (typeof dimensions.width === 'number' && typeof dimensions.height === 'number' && 
+            dimensions.width > 0 && dimensions.height > 0) {
+            return true;
+        } else {
+            console.error(`Invalid image ${filePath} - invalid dimensions: ${dimensions.width}x${dimensions.height}`);
+            return false;
+        }
+    } catch (error) {
+        console.error(`Invalid image ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return false;
+    } finally {
+        // Clean up temporary file if created
+        if (tempFilePath) {
+            try {
+                unlinkSync(tempFilePath);
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        }
+    }
+}
+
+//
+// Validates a video file by checking if it has valid dimensions
+//
+async function validateVideo(filePath: string, openStream?: () => Readable): Promise<boolean> {
+    let tempFilePath: string | undefined;
+    let actualFilePath = filePath;
+
+    try {
+        // If openStream is provided, we need to extract to a temporary file
+        if (openStream) {
+            tempFilePath = await extractToTempFile(openStream, 'temp_video');
+            actualFilePath = tempFilePath;
+        }
+
+        const video = new Video(actualFilePath);
+        const dimensions = await video.getDimensions();
+        
+        if (typeof dimensions.width === 'number' && typeof dimensions.height === 'number' && 
+            dimensions.width > 0 && dimensions.height > 0) {
+            return true;
+        } else {
+            console.error(`Invalid video ${filePath} - invalid dimensions: ${dimensions.width}x${dimensions.height}`);
+            return false;
+        }
+    } catch (error) {
+        console.error(`Invalid video ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return false;
+    } finally {
+        // Clean up temporary file if created
+        if (tempFilePath) {
+            try {
+                unlinkSync(tempFilePath);
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        }
+    }
+}
+
+//
+// Extracts stream data to a temporary file and returns the file path
+//
+async function extractToTempFile(openStream: () => Readable, prefix: string): Promise<string> {
+    const tempPath = join(tmpdir(), `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2)}`);
+    
+    const inputStream = openStream();
+    const chunks: Buffer[] = [];
+    
+    for await (const chunk of inputStream) {
+        chunks.push(chunk);
+    }
+    
+    const fileBuffer = Buffer.concat(chunks);
+    writeFileSync(tempPath, fileBuffer);
+    
+    return tempPath;
+}
+
+//
+// Gets the metadata data for a video using the tools package.
+// This function is kept for backward compatibility but now uses the same logic as validateVideo
+//
+export async function getVideoMetadata(filePath: string, inputStream?: Readable): Promise<{ width: number, height: number }> {
+    let tempFilePath: string | undefined;
+    let actualFilePath = filePath;
+
+    try {
+        // If inputStream is provided, we need to extract to a temporary file
+        if (inputStream) {
+            tempFilePath = await extractToTempFile(() => inputStream, 'temp_video_metadata');
+            actualFilePath = tempFilePath;
+        }
+
+        const video = new Video(actualFilePath);
         const dimensions = await video.getDimensions();
         
         return {
@@ -72,11 +147,13 @@ export async function getVideoMetadata(filePath: string, inputStream: Readable):
     } catch (error) {
         throw new Error(`Failed to get video metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-        // Clean up temporary file
-        try {
-            unlinkSync(tempPath);
-        } catch (err) {
-            // Ignore cleanup errors
+        // Clean up temporary file if created
+        if (tempFilePath) {
+            try {
+                unlinkSync(tempFilePath);
+            } catch (err) {
+                // Ignore cleanup errors
+            }
         }
     }
 }
