@@ -7,6 +7,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 import { configureS3IfNeeded } from '../lib/s3-config';
+import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
@@ -32,6 +33,9 @@ export interface IUiCommandOptions {
 // Command that starts the Photosphere ui.
 //
 export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
+    // Ensure media processing tools are available
+    await ensureMediaProcessingTools();
+
     //
     // Configure S3 if the path requires it
     //
