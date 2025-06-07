@@ -81,7 +81,7 @@ show_tool_versions() {
     
     # Check ImageMagick version
     if [ -f "$HOME/.photosphere/tools/magick" ]; then
-        local magick_version=$("$HOME/.photosphere/tools/magick" -version 2>/dev/null | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "unknown")
+        local magick_version=$("$HOME/.photosphere/tools/magick" --version | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "unknown")
         echo "  • ImageMagick: $magick_version"
     else
         echo "  • ImageMagick: not found"
@@ -89,7 +89,7 @@ show_tool_versions() {
     
     # Check ffprobe version
     if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
-        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "unknown")
+        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffprobe: $ffprobe_version"
     else
         echo "  • ffprobe: not found"
@@ -97,7 +97,7 @@ show_tool_versions() {
     
     # Check ffmpeg version
     if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
-        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "unknown")
+        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffmpeg: $ffmpeg_version"
     else
         echo "  • ffmpeg: not found"
@@ -248,19 +248,11 @@ test_install_tools() {
     
     # Check ImageMagick
     if [ -f "$HOME/.photosphere/tools/magick" ]; then
-
-        local magick_output_x=$("$HOME/.photosphere/tools/magick" || echo "")
-        echo "1111111"
-        echo "$magick_output_x"
-        echo "222222"
-
         local magick_output=$("$HOME/.photosphere/tools/magick" --version || echo "")
         if [ -n "$magick_output" ]; then
             log_success "ImageMagick verified - complete output:"
             echo "$magick_output"
         else
-            echo "%%%%%%%%%%%%"
-            echo "$magick_output"
             log_error "ImageMagick exists but cannot get version"
             tools_verified=false
         fi
@@ -271,7 +263,7 @@ test_install_tools() {
     
     # Check ffprobe
     if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
-        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
+        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
         if [ -n "$ffprobe_version" ]; then
             log_success "ffprobe verified: version $ffprobe_version"
         else
@@ -285,7 +277,7 @@ test_install_tools() {
     
     # Check ffmpeg
     if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
-        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
+        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
         if [ -n "$ffmpeg_version" ]; then
             log_success "ffmpeg verified: version $ffmpeg_version"
         else
