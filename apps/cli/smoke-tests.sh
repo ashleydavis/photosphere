@@ -307,8 +307,22 @@ run_all_tests() {
     echo "Photosphere CLI Smoke Tests - ALL"
     echo "======================================"
     
-    # Run all tests in sequence
-    test_setup
+    log_info "Running all tests (assumes executable is already built)"
+    log_info "To build and run all tests, use: ./smoke-tests.sh setup,all"
+    echo ""
+    
+    # Change to CLI directory for tests
+    log_info "Changing to CLI directory"
+    if ! cd "$(dirname "$0")"; then
+        log_error "Failed to change to CLI directory"
+        exit 1
+    fi
+    
+    # Clean up previous test run
+    log_info "Cleaning up previous test run"
+    rm -rf "$TEST_DB_DIR"
+    
+    # Run all tests in sequence (without setup)
     test_create_database
     test_view_media_files
     test_add_single_file
@@ -534,7 +548,7 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Commands:"
-    echo "  all                 - Run all tests in sequence"
+    echo "  all                 - Run all tests (assumes executable already built)"
     echo "  setup               - Setup environment and build frontend"
     echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
@@ -554,7 +568,8 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0 all                    # Run all tests"
+    echo "  $0 all                    # Run all tests (exe must be built)"
+    echo "  $0 setup,all              # Build frontend and run all tests"
     echo "  $0 setup                  # Setup environment only"
     echo "  $0 reset                  # Clean up test artifacts"
     echo "  $0 create-database        # Run only database creation test"
