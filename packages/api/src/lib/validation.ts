@@ -122,38 +122,3 @@ async function extractToTempFile(openStream: () => Readable, prefix: string): Pr
     return tempPath;
 }
 
-//
-// Gets the metadata data for a video using the tools package.
-// This function is kept for backward compatibility but now uses the same logic as validateVideo
-//
-export async function getVideoMetadata(filePath: string, inputStream?: Readable): Promise<{ width: number, height: number }> {
-    let tempFilePath: string | undefined;
-    let actualFilePath = filePath;
-
-    try {
-        // If inputStream is provided, we need to extract to a temporary file
-        if (inputStream) {
-            tempFilePath = await extractToTempFile(() => inputStream, 'temp_video_metadata');
-            actualFilePath = tempFilePath;
-        }
-
-        const video = new Video(actualFilePath);
-        const dimensions = await video.getDimensions();
-        
-        return {
-            width: dimensions.width,
-            height: dimensions.height,
-        };
-    } catch (error) {
-        throw new Error(`Failed to get video metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-        // Clean up temporary file if created
-        if (tempFilePath) {
-            try {
-                unlinkSync(tempFilePath);
-            } catch (err) {
-                // Ignore cleanup errors
-            }
-        }
-    }
-}
