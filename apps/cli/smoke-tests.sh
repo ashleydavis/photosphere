@@ -16,6 +16,26 @@ TEST_DB_DIR="./test/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 
+# Get CLI command based on platform - always use built executable
+get_cli_command() {
+    local platform=$(detect_platform)
+    
+    case "$platform" in
+        "linux")
+            echo "./bin/x64/linux/psi"
+            ;;
+        "mac")
+            echo "./bin/x64/mac/psi"
+            ;;
+        "win")
+            echo "./bin/x64/win/psi.exe"
+            ;;
+        *)
+            echo "./bin/x64/linux/psi"  # Default to linux
+            ;;
+    esac
+}
+
 # Track test results
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -140,8 +160,24 @@ test_setup() {
         return 1
     fi
     
+    local cli_command=$(get_cli_command)
+    log_info "Using CLI command: $cli_command"
+    
     log_info "Cleaning up previous test run"
     rm -rf "$TEST_DB_DIR"
+    
+    log_info "Building CLI executable for platform: $platform"
+    case "$platform" in
+        "linux")
+            run_command "Build Linux executable" "bun run build-linux"
+            ;;
+        "mac")
+            run_command "Build macOS executable" "bun run build-mac"
+            ;;
+        "win")
+            run_command "Build Windows executable" "bun run build-win"
+            ;;
+    esac
     
     log_info "Building frontend for platform: $platform"
     run_command "Build frontend" "bun run build-fe-$platform" || {
@@ -149,7 +185,7 @@ test_setup() {
     }
     
     log_info "Installing required tools via psi tools update"
-    run_command "Install tools" "bun run start -- tools update --yes"
+    run_command "Install tools" "$(get_cli_command) tools update --yes"
     
     log_info "Showing contents of ~/.photosphere/tools"
     if [ -d "$HOME/.photosphere/tools" ]; then
@@ -164,7 +200,7 @@ test_create_database() {
     echo "=== TEST 1: CREATE DATABASE ==="
     show_tools_directory
     
-    run_command "Initialize new database" "bun run start -- init $TEST_DB_DIR --yes"
+    run_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
     
     # Check if required files were created
     check_exists "$TEST_DB_DIR" "Database directory"
@@ -180,7 +216,7 @@ test_view_media_files() {
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     show_tools_directory
     
-    run_command "Show info for test files" "bun run start -- info $TEST_FILES_DIR/"
+    run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/"
 }
 
 test_add_single_file() {
@@ -188,9 +224,9 @@ test_add_single_file() {
     echo "=== TEST 3: ADD ONE FILE ==="
     show_tools_directory
     
-    run_command "Add single test file" "bun run start -- add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    run_command "Add single test file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
-    run_command "Check single file added" "bun run start -- check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    run_command "Check single file added" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 }
 
 test_add_same_file() {
@@ -198,9 +234,9 @@ test_add_same_file() {
     echo "=== TEST 4: ADD SAME FILE (NO DUPLICATION) ==="
     show_tools_directory
     
-    run_command "Re-add same file" "bun run start -- add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    run_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
-    run_command "Check file still in database" "bun run start -- check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    run_command "Check file still in database" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 }
 
 test_add_multiple_files() {
@@ -209,9 +245,9 @@ test_add_multiple_files() {
     show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        run_command "Add multiple files" "bun run start -- add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        run_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
         
-        run_command "Check multiple files added" "bun run start -- check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        run_command "Check multiple files added" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -224,9 +260,9 @@ test_add_same_multiple_files() {
     show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        run_command "Re-add multiple files" "bun run start -- add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        run_command "Re-add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
         
-        run_command "Check multiple files still in database" "bun run start -- check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        run_command "Check multiple files still in database" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -238,14 +274,14 @@ test_cannot_create_over_existing() {
     echo "=== TEST 7: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
-    run_command "Fail to create database over existing" "bun run start -- init $TEST_DB_DIR --yes" 1
+    run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
 
 test_ui_skipped() {
     echo ""
     echo "=== TEST 8: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
-    log_info "UI test skipped - would run: bun run start -- ui $TEST_DB_DIR"
+    log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR"
     log_info "This requires manual verification in a real environment"
 }
 
