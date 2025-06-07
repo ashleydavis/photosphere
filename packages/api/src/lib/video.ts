@@ -6,12 +6,7 @@ import dayjs from "dayjs";
 import { resizeImage, transformImage, IResolution } from "node-utils";
 import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
-const { execSync } = require('child_process');
-
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPaths = require('ffmpeg-ffprobe-static');
-ffmpeg.setFfmpegPath(ffmpegPaths.ffmpegPath);
-ffmpeg.setFfprobePath(ffmpegPaths.ffprobePath);
+import { Video, Image } from "tools";
 
 //
 // Writes a stream to a file.
@@ -31,112 +26,93 @@ export async function writeStreamToFile(stream: Readable, filePath: string): Pro
 export async function getVideoDetails(filePath: string, openStream: () => Readable): Promise<IAssetDetails> {
 
     let videoPath: string;
+    let shouldCleanup = false;
 
     if (filePath.startsWith("zip://")) {
         videoPath = path.join(os.tmpdir(), uuid());
         await writeStreamToFile(openStream(), filePath);        
+        shouldCleanup = true;
     }
     else {
         videoPath = filePath;
     }
 
-    const assetDetails = await getVideoMetadata(videoPath);
-    const screenshot = getVideoScreenshot(videoPath, assetDetails.duration);
-    let resolution = await getVideoResolution(videoPath);
-    let thumbnail = await resizeImage(screenshot, resolution, THUMBNAIL_MIN_SIZE);
+    try {
+        const video = new Video(videoPath);
+        const assetInfo = await video.getInfo();
+        
+        // Extract screenshot at 1 second or middle of video
+        const screenshotPath = path.join(os.tmpdir(), `thumb_${uuid()}.jpg`);
+        const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
+        await video.extractScreenshot(screenshotPath, screenshotTime);
+        
+        // Read screenshot as buffer
+        const screenshot = await fs.readFile(screenshotPath);
+        
+        // Clean up screenshot file
+        await fs.unlink(screenshotPath);
 
-    const imageTransformation = await getVideoTransformation(assetDetails.metadata);
-    if (imageTransformation) {
-        // Flips orientation depending on exif data.
-        thumbnail = await transformImage(thumbnail, imageTransformation);
-        if (imageTransformation.changeOrientation) {
-            resolution = {
-                width: resolution.height,
-                height: resolution.width,
-            };
-        }
-    }
+        let resolution = assetInfo.dimensions;
+        let thumbnail = await resizeImage(screenshot, resolution, THUMBNAIL_MIN_SIZE);
 
-    const micro = await resizeImage(thumbnail, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
-
-    if (assetDetails.photoDate === undefined) {
-        //
-        // See if we can get photo date from the JSON file.
-        //
-        const jsonFilePath = filePath + ".json";
-        if (await fs.pathExists(jsonFilePath)) {
-            const jsonFileData = await fs.readFile(jsonFilePath);
-            const photoData = JSON.parse(jsonFileData.toString());
-            if (photoData.photoTakenTime?.timestamp) {
-                try {
-                    assetDetails.photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
-                    console.log(`Parsed date ${assetDetails.photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
-                }
-                catch (err) {
-                    console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
-                    console.error(err);
-                }    
-            }
-        }
-    }
-
-    if (!filePath) {
-        await fs.unlink(videoPath);
-    }
-
-    return { 
-        resolution, 
-        micro, 
-        thumbnail, 
-        thumbnailContentType: "image/jpeg",
-        ...assetDetails 
-    };
-}
-
-//
-// Gets the resolution of a video.
-//
-export async function getVideoResolution(videoPath: string): Promise<IResolution> {
-    return new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            const videoStream = metadata.streams.find((stream: any) => stream.codec_type === 'video');
-            if (videoStream) {
-                const resolution = {
-                    width: videoStream.width,
-                    height: videoStream.height,
+        const imageTransformation = await getVideoTransformation(assetInfo.metadata);
+        if (imageTransformation) {
+            // Flips orientation depending on exif data.
+            thumbnail = await transformImage(thumbnail, imageTransformation);
+            if (imageTransformation.changeOrientation) {
+                resolution = {
+                    width: resolution.height,
+                    height: resolution.width,
                 };
-                resolve(resolution);
-            } else {
-                reject(new Error('No video stream found'));
             }
-        });
-    });
-}
+        }
 
+        const micro = await resizeImage(thumbnail, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
 
-//
-// Gets a screenshot from a video.
-//
-export function getVideoScreenshot(videoPath: string, duration: number | undefined): Buffer {
-    const outputFilePath = path.join(os.tmpdir(), `thumbs`, uuid() + '.jpeg');
-    fs.ensureDirSync(path.dirname(outputFilePath));
+        let photoDate = assetInfo.createdAt?.toISOString();
+        
+        if (photoDate === undefined) {
+            //
+            // See if we can get photo date from the JSON file.
+            //
+            const jsonFilePath = filePath + ".json";
+            if (await fs.pathExists(jsonFilePath)) {
+                const jsonFileData = await fs.readFile(jsonFilePath);
+                const photoData = JSON.parse(jsonFileData.toString());
+                if (photoData.photoTakenTime?.timestamp) {
+                    try {
+                        photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
+                        console.log(`Parsed date ${photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+                    }
+                    catch (err) {
+                        console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
+                        console.error(err);
+                    }    
+                }
+            }
+        }
 
-    const screenshotPosition = Math.min(duration ? duration / 2 : 0, 300); // Maxes out at 5 minutes into the video.
-    const cmd = `${ffmpegPaths.ffmpegPath} -y -ss ${screenshotPosition} -i "${videoPath}" -frames:v 1 -q:v 2 "${outputFilePath}"`;
-    console.log(cmd);
-    execSync(cmd);
-  
-    if (!fs.existsSync(outputFilePath)) {
-        throw new Error(`Failed to create thumbnail from video ${videoPath}`);
+        // Extract GPS coordinates from video metadata
+        let coordinates: ILocation | undefined = undefined;
+        if (assetInfo.metadata?.location) {
+            coordinates = parseVideoLocation(assetInfo.metadata.location);
+        }
+
+        return { 
+            resolution, 
+            micro, 
+            thumbnail, 
+            thumbnailContentType: "image/jpeg",
+            metadata: assetInfo.metadata,
+            coordinates,
+            photoDate,
+            duration: assetInfo.duration
+        };
+    } finally {
+        if (shouldCleanup) {
+            await fs.unlink(videoPath);
+        }
     }
-
-    const screenshot = fs.readFileSync(outputFilePath);
-    fs.unlinkSync(outputFilePath);
-    return screenshot;
 }
 
 const videoLocationRegex = /([+-]\d+\.\d+)([+-]\d+\.\d+)/;
@@ -154,40 +130,4 @@ function parseVideoLocation(location: string): ILocation | undefined {
     }
 
     return undefined;
-}
-
-//
-// Gets the metadata data for a video.
-//
-export function getVideoMetadata(videoPath: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string, duration?: number }> {
-    return new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
-            if (err) {
-                reject(err);
-            }
-            else {
-                let coordinates: ILocation | undefined = undefined;
-                if (metadata.format?.tags?.location) {
-                    coordinates = parseVideoLocation(metadata.format.tags.location);
-                }
-                
-                let photoDate: string | undefined = undefined;
-                if (metadata.format?.tags?.creation_time) {
-                    photoDate = metadata.format.tags.creation_time;
-                }
-
-                let duration: number | undefined = undefined;
-                if (metadata.format?.duration) {
-                    duration = metadata.format.duration;
-                }
-
-                resolve({
-                    metadata,
-                    coordinates,
-                    photoDate,
-                    duration,
-                });
-            }
-        });
-    });
 }

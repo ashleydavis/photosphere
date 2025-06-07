@@ -7,8 +7,20 @@ import { initCommand } from './cmd/init';
 import { configureCommand } from './cmd/configure';
 import pc from "picocolors";
 import { exit } from 'node-utils';
+import { ensureToolsAvailable } from 'tools';
 
 async function main() {
+
+    // Check if required tools are available, prompt for installation if needed
+    const toolsAvailable = await ensureToolsAvailable({ 
+        promptForInstall: true, 
+        silent: false 
+    });
+    
+    if (!toolsAvailable) {
+        console.error(pc.red('Required tools are not available. Please install them before continuing.'));
+        exit(1);
+    }
 
     const dbArgument: [string, string] = ["[database-dir]", `The directory that contains the media file database. Defaults to the current directory.`];
     const metadataDirOption: [string, string] = ["-m, --meta <db-metadata-dir>", `The directory in which to store asset database metadata. (default: "<current-dir>/.db")`];

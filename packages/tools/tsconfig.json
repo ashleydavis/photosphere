@@ -1,0 +1,22 @@
+{
+  "include": [
+     "src/**/*"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2020",
+    "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "module": "ESNext",
+    "rootDir": "./src",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./build",
+    "noEmit": false,
+    "strict": true,
+    "skipLibCheck": true
+  }
+}

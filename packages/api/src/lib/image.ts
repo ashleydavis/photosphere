@@ -1,10 +1,11 @@
 import dayjs from "dayjs";
-import { getImageResolution, transformImage, resizeImage } from "node-utils";
+import { transformImage, resizeImage } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, ILocation, isLocationInRange } from "utils";
 import fs from "fs-extra";
 import { Readable } from "stream";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { buffer } from "node:stream/consumers";
+import { Image } from "tools";
 const exifParser = require("exif-parser");
 
 //
@@ -14,9 +15,15 @@ export async function getImageDetails(filePath: string, contentType: string, ope
 
     let fileData = await buffer(openStream());
     
+    // Use the new Image class to get basic info and dimensions  
+    const image = new Image(filePath);
+    const assetInfo = await image.getInfo();
+    
+    // Still use the existing EXIF parsing for metadata compatibility
     const assetDetails = await getImageMetadata(filePath, fileData, contentType);
     const imageTransformation = await getImageTransformation(assetDetails.metadata);
-    let resolution = await getImageResolution(fileData);
+    let resolution = assetInfo.dimensions;
+    
     if (imageTransformation) {
         // Flips orientation depending on exif data.
         fileData = await transformImage(fileData, imageTransformation);
