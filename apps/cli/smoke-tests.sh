@@ -4,8 +4,6 @@
 # Based on test plan from photosphere-wiki/Test-plan-from-repo.md
 # This script runs smoke tests to verify basic CLI functionality
 
-set -e  # Exit on any error
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
