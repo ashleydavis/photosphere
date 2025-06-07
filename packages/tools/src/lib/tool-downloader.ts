@@ -466,11 +466,10 @@ export async function promptAndDownloadTools(missingTools: string[], nonInteract
             }
         }
     } else {
-        console.log('Installing tools automatically...');
+        p.intro('🔧 Installing tools automatically...');
     }
     
     // Show download details
-    p.log.info('Download details:');
     const toolsToDownload: Array<{name: string, info: DownloadInfo}> = [];
     const processedUrls = new Set<string>();
     const toolsFromSamePackage: Array<{tools: string[], info: DownloadInfo}> = [];
