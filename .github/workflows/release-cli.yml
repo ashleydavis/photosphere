@@ -38,16 +38,16 @@ jobs:
 
       - name: Install dependencies
         run: bun install
-
-      - name: Run smoke tests
-        working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
           
       - name: Build Linux executable
         working-directory: ./apps/cli
         run: |
           bun run build-linux
           chmod +x bin/x64/linux/psi
+
+      - name: Run smoke tests
+        working-directory: ./apps/cli
+        run: ./smoke-tests.sh all
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -79,11 +79,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install
-
-      - name: Run smoke tests (Windows)
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./smoke-tests.sh all
           
       - name: Build frontend
         working-directory: ./apps/frontend
@@ -100,6 +95,11 @@ jobs:
       - name: Build Windows executable
         working-directory: ./apps/cli
         run: bun build --compile --minify --sourcemap --target=bun-windows-x64 --outfile bin/x64/win/psi.exe ./src/index.ts
+
+      - name: Run smoke tests (Windows)
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests.sh all
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -132,15 +132,15 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run smoke tests (macOS)
-        working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
-
       - name: Build macOS executable
         working-directory: ./apps/cli
         run: |
           bun run build-mac
           chmod +x bin/x64/mac/psi
+
+      - name: Run smoke tests (macOS)
+        working-directory: ./apps/cli
+        run: ./smoke-tests.sh all
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
