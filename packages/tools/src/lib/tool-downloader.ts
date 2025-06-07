@@ -75,9 +75,11 @@ function getToolUrls(): ToolUrls | null {
             // Linux x64
             if (currentArch === 'x64') {
                 urls.magick = {
-                    url: 'https://download.imagemagick.org/archive/binaries/magick',
-                    filename: 'magick',
-                    executable: 'magick'
+                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-pc-linux-gnu.tar.gz',
+                    filename: 'ImageMagick-linux.tar.gz',
+                    executable: 'magick',
+                    extract: true,
+                    extractPath: 'ImageMagick-7.1.1/bin'
                 };
                 // ffmpeg package provides both ffmpeg and ffprobe
                 const ffmpegInfo = {
