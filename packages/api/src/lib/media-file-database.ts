@@ -20,7 +20,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 // @ts-ignore
-import ColorThief from "colorthief";
+const ColorThief = require("colorthief");
 
 //
 // A function that validates a file.
