@@ -39,6 +39,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Run smoke tests
+        working-directory: ./apps/cli
+        run: ./smoke-tests.sh all
+          
       - name: Build Linux executable
         working-directory: ./apps/cli
         run: |
@@ -76,6 +80,11 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Run smoke tests (Windows)
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests.sh all
+          
       - name: Build frontend
         working-directory: ./apps/frontend
         run: |
@@ -122,6 +131,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Run smoke tests (macOS)
+        working-directory: ./apps/cli
+        run: ./smoke-tests.sh all
 
       - name: Build macOS executable
         working-directory: ./apps/cli
