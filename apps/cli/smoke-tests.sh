@@ -75,6 +75,37 @@ show_tools_directory() {
     echo ""
 }
 
+# Get and display tool versions
+show_tool_versions() {
+    log_info "Tool versions:"
+    
+    # Check ImageMagick version
+    if [ -f "$HOME/.photosphere/tools/magick" ]; then
+        local magick_version=$("$HOME/.photosphere/tools/magick" -version 2>/dev/null | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "unknown")
+        echo "  • ImageMagick: $magick_version"
+    else
+        echo "  • ImageMagick: not found"
+    fi
+    
+    # Check ffprobe version
+    if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
+        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version 2>/dev/null | head -1 | grep -o 'ffprobe version [0-9.-]*' | sed 's/ffprobe version //' || echo "unknown")
+        echo "  • ffprobe: $ffprobe_version"
+    else
+        echo "  • ffprobe: not found"
+    fi
+    
+    # Check ffmpeg version
+    if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
+        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version 2>/dev/null | head -1 | grep -o 'ffmpeg version [0-9.-]*' | sed 's/ffmpeg version //' || echo "unknown")
+        echo "  • ffmpeg: $ffmpeg_version"
+    else
+        echo "  • ffmpeg: not found"
+    fi
+    
+    echo ""
+}
+
 # Run a command and check its exit code
 run_command() {
     local description="$1"
@@ -214,6 +245,7 @@ test_create_database() {
     echo ""
     echo "=== TEST 1: CREATE DATABASE ==="
     show_tools_directory
+    show_tool_versions
     
     run_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
     
@@ -230,6 +262,7 @@ test_view_media_files() {
     echo ""
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     show_tools_directory
+    show_tool_versions
     
     run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
 }
@@ -238,6 +271,7 @@ test_add_single_file() {
     echo ""
     echo "=== TEST 3: ADD ONE FILE ==="
     show_tools_directory
+    show_tool_versions
     
     run_command "Add single test file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
@@ -248,6 +282,7 @@ test_add_same_file() {
     echo ""
     echo "=== TEST 4: ADD SAME FILE (NO DUPLICATION) ==="
     show_tools_directory
+    show_tool_versions
     
     run_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
@@ -258,6 +293,7 @@ test_add_multiple_files() {
     echo ""
     echo "=== TEST 5: ADD MULTIPLE FILES ==="
     show_tools_directory
+    show_tool_versions
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         run_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -273,6 +309,7 @@ test_add_same_multiple_files() {
     echo ""
     echo "=== TEST 6: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
     show_tools_directory
+    show_tool_versions
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         run_command "Re-add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -288,6 +325,7 @@ test_cannot_create_over_existing() {
     echo ""
     echo "=== TEST 7: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
+    show_tool_versions
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
@@ -296,6 +334,7 @@ test_ui_skipped() {
     echo ""
     echo "=== TEST 8: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
+    show_tool_versions
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
 }
@@ -304,6 +343,7 @@ test_cloud_skipped() {
     echo ""
     echo "=== CLOUD TESTS SKIPPED ==="
     show_tools_directory
+    show_tool_versions
     log_info "S3/Cloud database tests skipped - require AWS credentials"
 }
 
