@@ -3,7 +3,7 @@ import { log } from "utils";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { Image, Video } from "tools";
+import { getFileInfo } from "tools";
 import path from "path";
 
 export interface IInfoCommandOptions { 
@@ -107,48 +107,41 @@ async function analyzeFile(filePath: string, contentType: string, openStream?: (
         contentType
     };
 
-    // Analyze file content based on type
-    if (contentType.startsWith('image/')) {
-        try {
-            const image = new Image(absolutePath);
-            const imageInfo = await image.getInfo();
-            const exifData = await image.getExifData();
-            
+    // Analyze file content using the unified getFileInfo function
+    try {
+        const fileInfo = await getFileInfo(absolutePath, contentType);
+        
+        if (fileInfo) {
             details = {
                 ...details,
-                type: 'image',
-                format: imageInfo.format,
-                dimensions: imageInfo.dimensions,
-                colorSpace: imageInfo.colorSpace,
-                fileSize: imageInfo.fileSize,
-                createdAt: imageInfo.createdAt,
-                modifiedAt: imageInfo.modifiedAt,
-                exif: exifData
+                type: fileInfo.type,
+                format: fileInfo.format,
+                dimensions: fileInfo.dimensions,
+                colorSpace: fileInfo.colorSpace,
+                fileSize: fileInfo.fileSize,
+                createdAt: fileInfo.createdAt,
+                modifiedAt: fileInfo.modifiedAt,
+                duration: fileInfo.duration,
+                fps: fileInfo.fps,
+                bitrate: fileInfo.bitrate,
+                hasAudio: fileInfo.hasAudio,
+                metadata: fileInfo.metadata
             };
-        } catch (error) {
-            details.analysisError = `Failed to analyze image: ${error}`;
-        }
-    } else if (contentType.startsWith('video/')) {
-        try {
-            const video = new Video(absolutePath);
-            const videoInfo = await video.getInfo();
             
-            details = {
-                ...details,
-                type: 'video',
-                format: videoInfo.format,
-                dimensions: videoInfo.dimensions,
-                duration: videoInfo.duration,
-                fps: videoInfo.fps,
-                bitrate: videoInfo.bitrate,
-                hasAudio: videoInfo.hasAudio,
-                fileSize: videoInfo.fileSize,
-                createdAt: videoInfo.createdAt,
-                modifiedAt: videoInfo.modifiedAt
-            };
-        } catch (error) {
-            details.analysisError = `Failed to analyze video: ${error}`;
+            // For images, also get EXIF data separately for display purposes
+            if (fileInfo.type === 'image') {
+                try {
+                    const { Image } = await import("tools");
+                    const image = new Image(absolutePath);
+                    const exifData = await image.getExifData();
+                    details.exif = exifData;
+                } catch {
+                    // Ignore EXIF errors
+                }
+            }
         }
+    } catch (error) {
+        details.analysisError = `Failed to analyze file: ${error}`;
     }
 
     return {

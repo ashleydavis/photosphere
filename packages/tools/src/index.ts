@@ -2,6 +2,9 @@
 export { Image } from './lib/image';
 export { Video } from './lib/video';
 
+// Export unified file info function
+export { getFileInfo } from './lib/file-info';
+
 // Export types
 export type {
     AssetInfo,

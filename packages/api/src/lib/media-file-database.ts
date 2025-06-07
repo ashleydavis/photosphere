@@ -517,7 +517,7 @@ export class MediaFileDatabase {
         let assetDetails: IAssetDetails | undefined = undefined;
 
         if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, openStream);
+            assetDetails = await getVideoDetails(filePath, contentType, openStream);
         }
         else if (contentType?.startsWith("image")) {
             assetDetails = await getImageDetails(filePath, contentType, openStream);

@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
 import { IFileInfo } from "storage";
-import { Video, Image } from "tools";
+import { getFileInfo } from "tools";
 import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -16,10 +16,10 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
     }
 
     if (contentType.startsWith("image")) {
-        return await validateImage(filePath, openStream);
+        return await validateImage(filePath, contentType, openStream);
     }
     else if (contentType.startsWith("video")) {
-        return await validateVideo(filePath, openStream);
+        return await validateVideo(filePath, contentType, openStream);
     }
 
     return true;
@@ -28,7 +28,7 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
 //
 // Validates an image file by checking if it has valid dimensions
 //
-async function validateImage(filePath: string, openStream?: () => Readable): Promise<boolean> {
+async function validateImage(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
@@ -39,14 +39,17 @@ async function validateImage(filePath: string, openStream?: () => Readable): Pro
             actualFilePath = tempFilePath;
         }
 
-        const image = new Image(actualFilePath);
-        const dimensions = await image.getDimensions();
+        const fileInfo = await getFileInfo(actualFilePath, contentType);
+        if (!fileInfo) {
+            console.error(`Invalid image ${filePath} - failed to get file info`);
+            return false;
+        }
         
-        if (typeof dimensions.width === 'number' && typeof dimensions.height === 'number' && 
-            dimensions.width > 0 && dimensions.height > 0) {
+        if (typeof fileInfo.dimensions.width === 'number' && typeof fileInfo.dimensions.height === 'number' && 
+            fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
             return true;
         } else {
-            console.error(`Invalid image ${filePath} - invalid dimensions: ${dimensions.width}x${dimensions.height}`);
+            console.error(`Invalid image ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return false;
         }
     } catch (error) {
@@ -67,7 +70,7 @@ async function validateImage(filePath: string, openStream?: () => Readable): Pro
 //
 // Validates a video file by checking if it has valid dimensions
 //
-async function validateVideo(filePath: string, openStream?: () => Readable): Promise<boolean> {
+async function validateVideo(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
@@ -78,14 +81,17 @@ async function validateVideo(filePath: string, openStream?: () => Readable): Pro
             actualFilePath = tempFilePath;
         }
 
-        const video = new Video(actualFilePath);
-        const dimensions = await video.getDimensions();
+        const fileInfo = await getFileInfo(actualFilePath, contentType);
+        if (!fileInfo) {
+            console.error(`Invalid video ${filePath} - failed to get file info`);
+            return false;
+        }
         
-        if (typeof dimensions.width === 'number' && typeof dimensions.height === 'number' && 
-            dimensions.width > 0 && dimensions.height > 0) {
+        if (typeof fileInfo.dimensions.width === 'number' && typeof fileInfo.dimensions.height === 'number' && 
+            fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
             return true;
         } else {
-            console.error(`Invalid video ${filePath} - invalid dimensions: ${dimensions.width}x${dimensions.height}`);
+            console.error(`Invalid video ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return false;
         }
     } catch (error) {

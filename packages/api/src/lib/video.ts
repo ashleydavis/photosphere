@@ -3,10 +3,10 @@ import path from "path";
 import fs from "fs-extra";
 import os from "os";
 import dayjs from "dayjs";
-import { resizeImage, transformImage, IResolution } from "node-utils";
+import { resizeImage, transformImage } from "node-utils";
 import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
-import { Video, Image } from "tools";
+import { getFileInfo, Video } from "tools";
 
 //
 // Writes a stream to a file.
@@ -23,7 +23,7 @@ export async function writeStreamToFile(stream: Readable, filePath: string): Pro
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
 
     let videoPath: string;
     let shouldCleanup = false;
@@ -40,10 +40,13 @@ export async function getVideoDetails(filePath: string, openStream?: () => Reada
     }
 
     try {
-        const video = new Video(videoPath);
-        const assetInfo = await video.getInfo();
+        const assetInfo = await getFileInfo(videoPath, contentType);
+        if (!assetInfo) {
+            throw new Error(`Unsupported file type: ${contentType}`);
+        }
         
         // Extract screenshot at 1 second or middle of video
+        const video = new Video(videoPath);
         const screenshotPath = path.join(os.tmpdir(), `thumb_${uuid()}.jpg`);
         const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
         await video.extractScreenshot(screenshotPath, screenshotTime);

@@ -5,7 +5,7 @@ import fs from "fs-extra";
 import { Readable } from "stream";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { buffer } from "node:stream/consumers";
-import { Image } from "tools";
+import { getFileInfo } from "tools";
 const exifParser = require("exif-parser");
 
 //
@@ -15,9 +15,11 @@ export async function getImageDetails(filePath: string, contentType: string, ope
 
     let fileData = openStream ? await buffer(openStream()) : await fs.promises.readFile(filePath);
     
-    // Use the new Image class to get basic info and dimensions  
-    const image = new Image(filePath);
-    const assetInfo = await image.getInfo();
+    // Use the new getFileInfo function to get basic info and dimensions  
+    const assetInfo = await getFileInfo(filePath, contentType);
+    if (!assetInfo) {
+        throw new Error(`Unsupported file type: ${contentType}`);
+    }
     
     // Still use the existing EXIF parsing for metadata compatibility
     const assetDetails = await getImageMetadata(filePath, fileData, contentType);
