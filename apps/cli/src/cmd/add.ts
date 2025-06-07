@@ -6,6 +6,7 @@ import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
+import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 export interface IAddCommandOptions { 
     //
@@ -37,6 +38,9 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     configureLog({
         verbose: options.verbose,
     });
+
+    // Ensure media processing tools are available
+    await ensureMediaProcessingTools();
 
     // Get the directory for the database (validates it exists and is a media database)
     const databaseDir = await getDirectoryForCommand('existing', dbDir, options.yes || false);

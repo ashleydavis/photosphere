@@ -5,6 +5,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { getFileInfo } from "tools";
 import path from "path";
+import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 export interface IInfoCommandOptions { 
     //
@@ -48,6 +49,9 @@ export async function infoCommand(dbDir: string, paths: string[], options: IInfo
     configureLog({
         verbose: options.verbose,
     });
+
+    // Ensure media processing tools are available
+    await ensureMediaProcessingTools();
 
     console.log(`Analyzing ${paths.length} path(s)...`);
     
