@@ -1,3 +1,4 @@
+import { exit } from 'node-utils';
 import { promptForS3Config, clearS3Config } from '../lib/s3-config';
 import pc from 'picocolors';
 
@@ -19,7 +20,7 @@ export interface IConfigureCommandOptions {
 export async function configureCommand(options: IConfigureCommandOptions): Promise<void> {
     if (options.clear) {
         const success = await clearS3Config();
-        process.exit(success ? 0 : 1);
+        exit(success ? 0 : 1);
     }
     
     const suggestedProfileName = options.profile || 'default';
@@ -28,7 +29,8 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
     
     if (!result) {
         console.error(pc.red('Configuration cancelled or failed.'));
-        process.exit(1);
+        exit(1);
+        return;
     }
     
     console.log(pc.green(`\nProfile '${result.profileName}' configured successfully!`));

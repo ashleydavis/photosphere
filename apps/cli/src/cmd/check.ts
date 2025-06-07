@@ -51,11 +51,11 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(databaseDir)) {
-        process.exit(1);
+        exit(1);
     }
     
     if (!await configureS3IfNeeded(metaPath)) {
-        process.exit(1);
+        exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { registerTerminationCallback } from "node-utils";
+import { exit, registerTerminationCallback } from "node-utils";
 import open from "open";
 import { log } from "utils";
 import pc from "picocolors";
@@ -45,12 +45,12 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(dbDir)) {
-        process.exit(1);
+        exit(1);
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
-        process.exit(1);
+        exit(1);
     }
     
     //
