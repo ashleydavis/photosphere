@@ -145,19 +145,11 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
     
     const downloadPath = join(tempDir, downloadInfo.filename);
     
-    p.log.step(`Downloading ${toolName} from ${downloadInfo.url}`);
-    
-    const spinner = p.spinner();
-    spinner.start(`Downloading ${downloadInfo.filename}...`);
-    
     try {
         await downloadFile(downloadInfo.url, downloadPath);
-        spinner.stop(`Downloaded ${downloadInfo.filename}`);
         
         if (downloadInfo.extract) {
-            spinner.start(`Extracting ${downloadInfo.filename}...`);
             await extractFile(downloadPath, tempDir, downloadInfo.extractPath);
-            spinner.stop(`Extracted ${downloadInfo.filename}`);
             
             // Find the executable in the extracted files
             const executablePath = downloadInfo.extractPath 
@@ -227,8 +219,6 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
             return [finalExecutablePath];
         }
     } catch (error) {
-        spinner.stop(`Failed to download ${toolName}`);
-        
         // Clean up temporary directory on error
         try {
             rmSync(tempDir, { recursive: true, force: true });
@@ -473,6 +463,7 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
     p.log.info('Download details:');
     const toolsToDownload: Array<{name: string, info: DownloadInfo}> = [];
     const processedUrls = new Set<string>();
+    const toolsFromSamePackage: Array<{tools: string[], info: DownloadInfo}> = [];
     
     for (const tool of missingTools) {
         const toolKey = tool.includes('magick') ? 'magick' : 
@@ -481,12 +472,31 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
                        
         if (toolKey && toolUrls[toolKey as keyof ToolUrls]) {
             const info = toolUrls[toolKey as keyof ToolUrls]!;
-            // Avoid downloading the same package twice (ffmpeg package contains both ffmpeg and ffprobe)
+            // Check if we already have this URL in our tracking
+            const existingPackage = toolsFromSamePackage.find(pkg => pkg.info.url === info.url);
+            
+            if (existingPackage) {
+                // Add this tool to the existing package
+                existingPackage.tools.push(toolKey);
+            } else {
+                // New package
+                toolsFromSamePackage.push({ tools: [toolKey], info });
+            }
+            
+            // Only add to download list if URL hasn't been processed
             if (!processedUrls.has(info.url)) {
                 toolsToDownload.push({ name: toolKey, info });
                 processedUrls.add(info.url);
-                p.log.info(`  ${toolKey}: ${info.url}`);
             }
+        }
+    }
+    
+    // Show what will be downloaded
+    for (const { tools, info } of toolsFromSamePackage) {
+        if (tools.length === 1) {
+            p.log.info(`  ${tools[0]}: ${info.url}`);
+        } else {
+            p.log.info(`  ${tools.join(' + ')}: ${info.url}`);
         }
     }
     
@@ -507,8 +517,13 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
     const downloadedPaths: string[] = [];
     const downloadedInfo: Array<{name: string, path: string, version?: string}> = [];
     
+    // Create a comma-separated list of tools being downloaded
+    const toolNames = toolsFromSamePackage.flatMap(pkg => pkg.tools).join(', ');
+    
+    const spinner = p.spinner();
+    
     try {
-        p.log.info('📦 Downloading tools in parallel for faster installation...');
+        spinner.start(`Downloading and installing ${toolNames}...`);
         
         // Download all tools in parallel
         const downloadPromises = toolsToDownload.map(({ name, info }) => 
@@ -516,6 +531,9 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
         );
         
         const downloadResults = await Promise.all(downloadPromises);
+        spinner.stop(`Downloaded and installed ${toolNames}`);
+        
+        p.log.success('🎉 All tools downloaded successfully!');
         
         // Flatten all executable paths
         for (const executablePaths of downloadResults) {
@@ -585,6 +603,7 @@ export async function promptAndDownloadTools(missingTools: string[]): Promise<bo
         return true;
         
     } catch (error) {
+        spinner.stop(`Download failed`);
         p.log.error(`Download failed: ${error}`);
         return false;
     }
