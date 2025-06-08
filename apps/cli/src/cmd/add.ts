@@ -7,6 +7,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface IAddCommandOptions { 
     //
@@ -74,27 +75,25 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     await database.load();
 
     await database.addPaths(paths, (currentlyScanning) => {
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(0);
         const addSummary = database.getAddSummary();
-        process.stdout.write(`Added: ${pc.green(addSummary.numFilesAdded)}`);
+        let progressMessage = `Added: ${pc.green(addSummary.numFilesAdded)}`;
         if (addSummary.numFilesIgnored > 0) {
-            process.stdout.write(` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`);
+            progressMessage += ` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`;
         }
         if (addSummary.numFilesFailed > 0) {
-            process.stdout.write(` | Failed: ${pc.red(addSummary.numFilesFailed)}`);
+            progressMessage += ` | Failed: ${pc.red(addSummary.numFilesFailed)}`;
         }
         if (currentlyScanning) {
-            process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
+            progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
         }
 
-        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`);
+        progressMessage += ` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`;
+        writeProgress(progressMessage);
     });
 
     const addSummary = database.getAddSummary();
 
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0); // Flush the progress message.
+    clearProgressMessage(); // Flush the progress message.
 
     log.info(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
     
