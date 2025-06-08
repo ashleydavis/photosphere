@@ -98,23 +98,12 @@ jobs:
       - name: Install dependencies
         run: bun install
           
-      - name: Build frontend
-        working-directory: ./apps/frontend
-        run: |
-          $env:VITE_BASE_URL = ""
-          bun run build
-
-      - name: Create frontend zip
-        working-directory: ./apps/frontend
-        run: |
-          Compress-Archive -Path dist -DestinationPath pfe.zip -Force
-          Copy-Item pfe.zip ../cli/pfe.zip -Force
-
-      - name: Build Windows executable
+      - name: Build Windows` executable
         working-directory: ./apps/cli
-        run: bun build --compile --minify --sourcemap --target=bun-windows-x64 --outfile bin/x64/win/psi.exe ./src/index.ts
+        run: |
+          bun run build-win
 
-      - name: Run smoke tests (Windows)
+      - name: Run smoke tests
         working-directory: ./apps/cli
         shell: bash
         run: ./smoke-tests.sh install-tools,all
@@ -179,7 +168,7 @@ jobs:
           bun run build-mac-x64
           chmod +x bin/x64/mac/psi
 
-      - name: Run smoke tests (macOS x64)
+      - name: Run smoke tests
         working-directory: ./apps/cli
         run: ./smoke-tests.sh all
 
@@ -243,7 +232,7 @@ jobs:
           bun run build-mac-arm64
           chmod +x bin/arm64/mac/psi
 
-      - name: Run smoke tests (macOS ARM64)
+      - name: Run smoke tests
         working-directory: ./apps/cli
         run: ./smoke-tests.sh all
 
