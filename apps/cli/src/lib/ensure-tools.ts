@@ -35,7 +35,7 @@ export async function ensureMediaProcessingTools(nonInteractive: boolean = false
             console.log();
             console.log(pc.dim('Please install the missing tools and try again.'));
             console.log(pc.dim('You can also run: ') + pc.cyan('psi tools') + pc.dim(' to see installation instructions'));
-            exit(1);
+            await exit(1);
         }
         showInstructions = userChoice as boolean;
     }
@@ -44,7 +44,7 @@ export async function ensureMediaProcessingTools(nonInteractive: boolean = false
         console.log();
         console.log(pc.dim('Please install the missing tools and try again.'));
         console.log(pc.dim('You can also run: ') + pc.cyan('psi tools') + pc.dim(' to see installation instructions'));
-        exit(1);
+        await exit(1);
     }
     
     console.log();
@@ -126,5 +126,5 @@ export async function ensureMediaProcessingTools(nonInteractive: boolean = false
     console.log();
     console.log(pc.dim('After installation, run this command again to verify all tools are available.'));
     
-    exit(1);
+    await exit(1);
 }

@@ -45,12 +45,12 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(dbDir)) {
-        exit(1);
+        await exit(1);
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
-        exit(1);
+        await exit(1);
     }
     
     //

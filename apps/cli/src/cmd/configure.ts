@@ -20,7 +20,7 @@ export interface IConfigureCommandOptions {
 export async function configureCommand(options: IConfigureCommandOptions): Promise<void> {
     if (options.clear) {
         const success = await clearS3Config();
-        exit(success ? 0 : 1);
+        await exit(success ? 0 : 1);
     }
     
     const suggestedProfileName = options.profile || 'default';
@@ -29,7 +29,7 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
     
     if (!result) {
         console.error(pc.red('Configuration cancelled or failed.'));
-        exit(1);
+        await exit(1);
         return;
     }
     
