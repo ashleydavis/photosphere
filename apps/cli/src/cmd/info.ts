@@ -53,11 +53,11 @@ export async function infoCommand(dbDir: string, paths: string[], options: IInfo
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
-
-    console.log(`Analyzing ${paths.length} path(s)...`);
     
     const results: FileAnalysis[] = [];
     let fileCount = 0;
+    
+    writeProgress(`Searching for files...`);
     
     // Scan all paths using the new file scanner
     await scanPaths(paths, async (fileResult) => {

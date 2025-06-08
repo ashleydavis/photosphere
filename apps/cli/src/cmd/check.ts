@@ -72,7 +72,7 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
 
     await database.load();
 
-    process.stdout.write(`Checking files`);
+    writeProgress(`Searching for files...`);
 
     await database.checkPaths(paths, (currentlyScanning) => {
         const addSummary = database.getAddSummary();

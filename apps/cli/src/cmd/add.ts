@@ -64,8 +64,6 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
-    process.stdout.write(`Searching for files`);
-
     const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
 
     registerTerminationCallback(async () => {
@@ -73,6 +71,8 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     });    
 
     await database.load();
+
+    writeProgress(`Searching for files...`);
 
     await database.addPaths(paths, (currentlyScanning) => {
         const addSummary = database.getAddSummary();
