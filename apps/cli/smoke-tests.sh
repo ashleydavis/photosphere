@@ -19,13 +19,18 @@ MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 # Get CLI command based on platform - always use built executable
 get_cli_command() {
     local platform=$(detect_platform)
+    local arch=$(detect_architecture)
     
     case "$platform" in
         "linux")
             echo "./bin/x64/linux/psi"
             ;;
         "mac")
-            echo "./bin/x64/mac/psi"
+            if [ "$arch" = "arm64" ]; then
+                echo "./bin/arm64/mac/psi"
+            else
+                echo "./bin/x64/mac/psi"
+            fi
             ;;
         "win")
             echo "./bin/x64/win/psi.exe"
@@ -194,10 +199,21 @@ detect_platform() {
     esac
 }
 
+# Detect architecture
+detect_architecture() {
+    case "$(uname -m)" in
+        x86_64|amd64)    echo "x64";;
+        arm64|aarch64)   echo "arm64";;
+        *)               echo "x64";;  # Default to x64
+    esac
+}
+
 # Individual test functions
 test_setup() {
     local platform=$(detect_platform)
+    local arch=$(detect_architecture)
     log_info "Detected platform: $platform"
+    log_info "Detected architecture: $arch"
     
     log_info "Changing to CLI directory"
     if ! cd "$(dirname "$0")"; then
@@ -211,13 +227,17 @@ test_setup() {
     log_info "Cleaning up previous test run"
     rm -rf "$TEST_DB_DIR"
     
-    log_info "Building CLI executable for platform: $platform"
+    log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
         "linux")
             run_command "Build Linux executable" "bun run build-linux"
             ;;
         "mac")
-            run_command "Build macOS executable" "bun run build-mac"
+            if [ "$arch" = "arm64" ]; then
+                run_command "Build macOS ARM64 executable" "bun run build-mac-arm64"
+            else
+                run_command "Build macOS x64 executable" "bun run build-mac-x64"
+            fi
             ;;
         "win")
             run_command "Build Windows executable" "bun run build-win"
