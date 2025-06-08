@@ -58,7 +58,7 @@ function getToolUrls(): ToolUrls | null {
                 filename: 'ImageMagick-mac.tar.gz',
                 executable: 'magick',
                 extract: true,
-                extractPath: 'ImageMagick-7.1.1/bin'
+                extractPath: undefined  // Will search for magick binary in extracted contents
             };
             // Use a single ffmpeg build that includes both tools
             const ffmpegInfo = {
@@ -254,54 +254,96 @@ exec "${actualBinaryPath}" "$@"
         } else if (downloadInfo.extract) {
             await extractFile(downloadPath, tempDir, downloadInfo.extractPath);
             
-            // Find the executable in the extracted files
-            const executablePath = downloadInfo.extractPath 
-                ? join(tempDir, downloadInfo.extractPath, downloadInfo.executable)
-                : join(tempDir, downloadInfo.executable);
+            const copiedExecutables: string[] = [];
+            
+            // For ffmpeg packages, copy both ffmpeg and ffprobe if they exist
+            const executablesToCheck = toolName === 'ffmpeg' || toolName === 'ffprobe' 
+                ? ['ffmpeg', 'ffprobe'] 
+                : [downloadInfo.executable];
+            
+            for (const execName of executablesToCheck) {
+                let executableInExtracted: string | null = null;
                 
-            if (existsSync(executablePath)) {
-                const copiedExecutables: string[] = [];
-                
-                // For ffmpeg packages, copy both ffmpeg and ffprobe if they exist
-                const executablesToCheck = toolName === 'ffmpeg' || toolName === 'ffprobe' 
-                    ? ['ffmpeg', 'ffprobe'] 
-                    : [downloadInfo.executable];
-                
-                for (const execName of executablesToCheck) {
-                    const executableInExtracted = downloadInfo.extractPath 
-                        ? join(tempDir, downloadInfo.extractPath, execName + (platform() === 'win32' ? '.exe' : ''))
-                        : join(tempDir, execName + (platform() === 'win32' ? '.exe' : ''));
+                if (downloadInfo.extractPath) {
+                    // Use the specific extract path
+                    executableInExtracted = join(tempDir, downloadInfo.extractPath, execName + (platform() === 'win32' ? '.exe' : ''));
+                    if (!existsSync(executableInExtracted)) {
+                        executableInExtracted = null;
+                    }
+                } else {
+                    // Search for the executable in common locations
+                    const searchPaths = [
+                        join(tempDir, execName),
+                        join(tempDir, 'bin', execName),
+                        join(tempDir, 'usr', 'bin', execName),
+                        join(tempDir, 'usr', 'local', 'bin', execName),
+                        // Search in any ImageMagick-* directory
+                        ...require('fs').readdirSync(tempDir)
+                            .filter((dir: string) => dir.startsWith('ImageMagick-'))
+                            .flatMap((dir: string) => [
+                                join(tempDir, dir, 'bin', execName),
+                                join(tempDir, dir, execName)
+                            ])
+                    ];
                     
-                    if (existsSync(executableInExtracted)) {
-                        // Copy executable to tools directory root
-                        const finalExecutablePath = join(toolsDir, execName + (platform() === 'win32' ? '.exe' : ''));
-                        copyFileSync(executableInExtracted, finalExecutablePath);
-                        
-                        // Make executable on Unix systems
-                        if (platform() !== 'win32') {
-                            chmodSync(finalExecutablePath, '755');
+                    if (platform() === 'win32') {
+                        searchPaths.push(...searchPaths.map(p => p + '.exe'));
+                    }
+                    
+                    for (const searchPath of searchPaths) {
+                        if (existsSync(searchPath)) {
+                            executableInExtracted = searchPath;
+                            console.log(`Found ${execName} at: ${searchPath}`);
+                            break;
                         }
-                        
-                        copiedExecutables.push(finalExecutablePath);
                     }
                 }
                 
-                if (copiedExecutables.length === 0) {
-                    throw new Error(`No executables found in package at expected path: ${executablePath}`);
+                if (executableInExtracted && existsSync(executableInExtracted)) {
+                    // Copy executable to tools directory root
+                    const finalExecutablePath = join(toolsDir, execName + (platform() === 'win32' ? '.exe' : ''));
+                    copyFileSync(executableInExtracted, finalExecutablePath);
+                    
+                    // Make executable on Unix systems
+                    if (platform() !== 'win32') {
+                        chmodSync(finalExecutablePath, '755');
+                    }
+                    
+                    copiedExecutables.push(finalExecutablePath);
                 }
-                
-                // Clean up: remove entire temporary directory
-                try {
-                    rmSync(tempDir, { recursive: true, force: true });
-                } catch (cleanupError) {
-                    // Log cleanup error but don't fail the installation
-                    console.warn(`Warning: Could not clean up temporary directory: ${tempDir}: ${cleanupError}`);
-                }
-                
-                return copiedExecutables;
-            } else {
-                throw new Error(`Executable not found at expected path: ${executablePath}`);
             }
+            
+            if (copiedExecutables.length === 0) {
+                // List directory contents for debugging
+                console.error(`No executables found. Temp directory contents:`);
+                const { readdirSync } = require('fs');
+                const listDir = (dir: string, prefix: string = '') => {
+                    try {
+                        const items = readdirSync(dir);
+                        items.forEach((item: string) => {
+                            console.error(`${prefix}${item}`);
+                            const itemPath = join(dir, item);
+                            if (require('fs').statSync(itemPath).isDirectory() && prefix.length < 12) {
+                                listDir(itemPath, prefix + '  ');
+                            }
+                        });
+                    } catch (err) {
+                        console.error(`${prefix}[Error reading directory]`);
+                    }
+                };
+                listDir(tempDir);
+                throw new Error(`No executables found in extracted package`);
+            }
+            
+            // Clean up: remove entire temporary directory
+            try {
+                rmSync(tempDir, { recursive: true, force: true });
+            } catch (cleanupError) {
+                // Log cleanup error but don't fail the installation
+                console.warn(`Warning: Could not clean up temporary directory: ${tempDir}: ${cleanupError}`);
+            }
+            
+            return copiedExecutables;
         } else {
             // For non-extracted files, copy directly to tools directory
             const finalExecutablePath = join(toolsDir, downloadInfo.executable);
