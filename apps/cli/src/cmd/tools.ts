@@ -1,8 +1,8 @@
-import { verifyTools, promptAndDownloadTools, getToolsDirectory } from "tools";
+import { verifyTools } from "tools";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { rmSync, existsSync } from "fs";
-import * as p from '@clack/prompts';
+import { platform } from "os";
+import { confirm, isCancel } from "@clack/prompts";
 
 export interface IToolsCommandOptions {
     //
@@ -12,68 +12,58 @@ export interface IToolsCommandOptions {
 }
 
 //
-// Command that manages media processing tools.
+// Command that checks for required media processing tools.
 //
-export async function toolsCommand(action?: string, options: IToolsCommandOptions = {}): Promise<void> {
-    const normalizedAction = action?.toLowerCase() || 'list';
-    
-    switch (normalizedAction) {
-        case 'list':
-        case 'ls':
-            await listTools(options);
-            break;
-            
-        case 'update':
-        case 'up':
-            await updateTools(options);
-            break;
-            
-        case 'delete':
-        case 'del':
-            await deleteTools(options);
-            break;
-            
-        default:
-            console.error(pc.red(`Unknown action: ${action}`));
-            console.log('Available actions: list/ls, update/up, delete/del');
-            exit(1);
-    }
+export async function toolsCommand(options: IToolsCommandOptions = {}): Promise<void> {
+    await listTools(options);
 }
 
 async function listTools(options: IToolsCommandOptions): Promise<void> {
     console.log(pc.bold('📦 Media Processing Tools Status\n'));
     
     const toolsStatus = await verifyTools();
-    const toolsDir = getToolsDirectory();
-    
-    console.log(`Tools directory: ${pc.cyan(toolsDir)}\n`);
     
     // Show status of each tool
     const tools = [
-        { name: 'ImageMagick', key: 'magick' as const, description: 'Image processing (resize, convert, metadata)' },
-        { name: 'ffmpeg', key: 'ffmpeg' as const, description: 'Video processing and thumbnail extraction' },
-        { name: 'ffprobe', key: 'ffprobe' as const, description: 'Video analysis and metadata extraction' }
+        { 
+            name: 'ImageMagick', 
+            key: 'magick' as const, 
+            command: 'magick',
+            description: 'Image processing - resizing, format conversion, metadata extraction' 
+        },
+        { 
+            name: 'ffmpeg', 
+            key: 'ffmpeg' as const,
+            command: 'ffmpeg',
+            description: 'Video processing - format conversion and thumbnail extraction' 
+        },
+        { 
+            name: 'ffprobe', 
+            key: 'ffprobe' as const,
+            command: 'ffprobe',
+            description: 'Video analysis - metadata extraction, duration, dimensions, codecs' 
+        }
     ];
     
     let allAvailable = true;
     const missingTools: string[] = [];
+    
+    console.log(pc.bold('Tool Status:'));
+    console.log();
     
     for (const tool of tools) {
         const status = toolsStatus[tool.key] as any;
         const icon = status.available ? '✅' : '❌';
         const statusText = status.available 
             ? pc.green(`Available${status.version ? ` (v${status.version})` : ''}`)
-            : pc.red('Missing');
+            : pc.red('Not found');
             
         console.log(`${icon} ${pc.bold(tool.name)}: ${statusText}`);
         console.log(`   ${pc.gray(tool.description)}`);
         
         if (!status.available) {
             allAvailable = false;
-            missingTools.push(tool.name.toLowerCase());
-            if (status.error) {
-                console.log(`   ${pc.red(`Error: ${status.error}`)}`);
-            }
+            missingTools.push(tool.name);
         }
         console.log();
     }
@@ -82,141 +72,109 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
         console.log(pc.green('🎉 All tools are available and ready to use!'));
     } else {
         console.log(pc.yellow(`⚠️  ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
+        console.log();
         
+        // Ask if user wants to see installation instructions (or show them automatically in --yes mode)
+        let showInstructions = true;
         if (!options.yes) {
+            const userChoice = await confirm({
+                message: 'Would you like to see installation instructions?',
+                initialValue: true
+            });
+            
+            if (isCancel(userChoice)) {
+                console.log();
+                console.log(pc.dim('Please install the missing tools and try again.'));
+                exit(1);
+            }
+            showInstructions = userChoice as boolean;
+        }
+        
+        if (!showInstructions) {
             console.log();
-            const shouldInstall = await p.confirm({
-                message: 'Would you like to install the missing tools?',
-                initialValue: true
-            });
-            
-            if (p.isCancel(shouldInstall)) {
-                console.log(pc.gray('Installation cancelled.'));
-                exit(0);
-            }
-            
-            if (shouldInstall) {
-                const success = await promptAndDownloadTools(missingTools, options.yes);
-                if (success) {
-                    console.log(pc.green('✅ Tools installed successfully!'));
-                } else {
-                    console.log(pc.red('❌ Tool installation failed.'));
-                    exit(1);
-                }
-            }
-        }
-    }
-}
-
-async function updateTools(options: IToolsCommandOptions): Promise<void> {
-    console.log(pc.bold('🔄 Updating Media Processing Tools\n'));
-    
-    const toolsStatus = await verifyTools();
-    const availableTools = Object.entries(toolsStatus)
-        .filter(([_, status]) => status.available)
-        .map(([name, _]) => name);
-    
-    if (availableTools.length === 0) {
-        console.log(pc.yellow('No tools are currently installed.'));
-        
-        if (!options.yes) {
-            const shouldInstall = await p.confirm({
-                message: 'Would you like to install all required tools?',
-                initialValue: true
-            });
-            
-            if (p.isCancel(shouldInstall) || !shouldInstall) {
-                console.log(pc.gray('Installation cancelled.'));
-                exit(0);
-            }
-        }
-        
-        const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe'], options.yes);
-        if (success) {
-            console.log(pc.green('✅ Tools installed successfully!'));
-        } else {
-            console.log(pc.red('❌ Tool installation failed.'));
+            console.log(pc.dim('Please install the missing tools and try again.'));
             exit(1);
         }
-        return;
-    }
-    
-    console.log('Currently installed tools:');
-    availableTools.forEach(tool => {
-        const status = toolsStatus[tool as keyof typeof toolsStatus] as any;
-        console.log(`  • ${tool}${status.version ? ` v${status.version}` : ''}`);
-    });
-    console.log();
-    
-    if (!options.yes) {
-        const shouldUpdate = await p.confirm({
-            message: 'Download and install the latest versions of all tools?',
-            initialValue: true
-        });
         
-        if (p.isCancel(shouldUpdate) || !shouldUpdate) {
-            console.log(pc.gray('Update cancelled.'));
-            exit(0);
-        }
-    }
-    
-    // Force reinstall all tools
-    const success = await promptAndDownloadTools(['magick', 'ffmpeg', 'ffprobe'], options.yes);
-    if (success) {
-        console.log(pc.green('✅ Tools updated successfully!'));
-    } else {
-        console.log(pc.red('❌ Tool update failed.'));
-        exit(1);
-    }
-}
-
-async function deleteTools(options: IToolsCommandOptions): Promise<void> {
-    console.log(pc.bold('🗑️  Delete Media Processing Tools\n'));
-    
-    const toolsDir = getToolsDirectory();
-    
-    if (!existsSync(toolsDir)) {
-        console.log(pc.yellow('No tools directory found. Nothing to delete.'));
-        exit(0);
-    }
-    
-    const toolsStatus = await verifyTools();
-    const installedTools = Object.entries(toolsStatus)
-        .filter(([_, status]) => status.available)
-        .map(([name, _]) => name);
-    
-    if (installedTools.length === 0) {
-        console.log(pc.yellow('No tools are currently installed.'));
-        exit(0);
-    }
-    
-    console.log('The following tools will be deleted:');
-    installedTools.forEach(tool => {
-        const status = toolsStatus[tool as keyof typeof toolsStatus] as any;
-        console.log(`  • ${tool}${status.version ? ` v${status.version}` : ''}`);
-    });
-    console.log();
-    console.log(`Tools directory: ${pc.cyan(toolsDir)}`);
-    console.log();
-    
-    if (!options.yes) {
-        const shouldDelete = await p.confirm({
-            message: pc.red('Are you sure you want to delete all installed tools?'),
-            initialValue: false
-        });
+        console.log();
+        console.log(pc.bold('Installation Instructions:'));
+        console.log();
         
-        if (p.isCancel(shouldDelete) || !shouldDelete) {
-            console.log(pc.gray('Deletion cancelled.'));
-            exit(0);
+        // Provide platform-specific installation instructions
+        const currentPlatform = platform();
+        
+        switch (currentPlatform) {
+            case 'win32':
+                console.log(pc.cyan('Windows:'));
+                console.log();
+                console.log(pc.bold('Using Chocolatey') + ' (recommended):');
+                console.log('  ' + pc.gray('choco install imagemagick ffmpeg'));
+                console.log('  Chocolatey: ' + pc.gray('https://chocolatey.org/install'));
+                console.log();
+                console.log(pc.bold('Using Scoop:'));
+                console.log('  ' + pc.gray('scoop install imagemagick ffmpeg'));
+                console.log('  Scoop: ' + pc.gray('https://scoop.sh'));
+                console.log();
+                console.log(pc.bold('Manual installation:'));
+                console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#windows'));
+                console.log('  • ffmpeg: ' + pc.gray('https://www.gyan.dev/ffmpeg/builds/'));
+                console.log('    (Download "release essentials" build)');
+                break;
+                
+            case 'darwin':
+                console.log(pc.cyan('macOS:'));
+                console.log();
+                console.log(pc.bold('Using Homebrew') + ' (recommended):');
+                console.log('  ' + pc.gray('brew install imagemagick ffmpeg'));
+                console.log('  Homebrew: ' + pc.gray('https://brew.sh'));
+                console.log();
+                console.log(pc.bold('Using MacPorts:'));
+                console.log('  ' + pc.gray('sudo port install ImageMagick +universal'));
+                console.log('  ' + pc.gray('sudo port install ffmpeg +universal'));
+                console.log('  MacPorts: ' + pc.gray('https://www.macports.org/install.php'));
+                console.log();
+                console.log(pc.bold('Manual installation:'));
+                console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#macosx'));
+                console.log('  • ffmpeg: ' + pc.gray('https://evermeet.cx/ffmpeg/'));
+                break;
+                
+            case 'linux':
+                console.log(pc.cyan('Linux:'));
+                console.log();
+                console.log(pc.bold('Ubuntu/Debian:'));
+                console.log('  ' + pc.gray('sudo apt update'));
+                console.log('  ' + pc.gray('sudo apt install imagemagick ffmpeg'));
+                console.log();
+                console.log(pc.bold('Fedora/RHEL/CentOS:'));
+                console.log('  ' + pc.gray('sudo dnf install ImageMagick ffmpeg'));
+                console.log();
+                console.log(pc.bold('Arch Linux:'));
+                console.log('  ' + pc.gray('sudo pacman -S imagemagick ffmpeg'));
+                console.log();
+                console.log(pc.bold('Alpine Linux:'));
+                console.log('  ' + pc.gray('sudo apk add imagemagick ffmpeg'));
+                console.log();
+                console.log(pc.bold('Manual/Binary installation:'));
+                console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#linux'));
+                console.log('  • ffmpeg: ' + pc.gray('https://johnvansickle.com/ffmpeg/'));
+                console.log('    (Static builds for Linux)');
+                break;
+                
+            default:
+                console.log('Please install the following tools for your system:');
+                console.log();
+                console.log(pc.bold('ImageMagick:'));
+                console.log('  Official site: ' + pc.gray('https://imagemagick.org'));
+                console.log('  Downloads: ' + pc.gray('https://imagemagick.org/script/download.php'));
+                console.log();
+                console.log(pc.bold('ffmpeg (includes ffprobe):'));
+                console.log('  Official site: ' + pc.gray('https://ffmpeg.org'));
+                console.log('  Downloads: ' + pc.gray('https://ffmpeg.org/download.html'));
         }
-    }
-    
-    try {
-        rmSync(toolsDir, { recursive: true, force: true });
-        console.log(pc.green('✅ All tools have been deleted successfully!'));
-        console.log(pc.gray(`Removed directory: ${toolsDir}`));
-    } catch (error) {
-        console.error(pc.red(`❌ Failed to delete tools: ${error}`));
+        
+        console.log();
+        console.log(pc.dim('After installation, run this command again to verify all tools are available.'));
+        
         exit(1);
     }
 }

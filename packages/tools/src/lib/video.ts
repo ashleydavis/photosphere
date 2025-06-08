@@ -1,8 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir, platform } from 'os';
+import { platform } from 'os';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 
 const execAsync = promisify(exec);
@@ -40,62 +39,30 @@ export class Video {
     }
 
     /**
-     * Initialize ffmpeg/ffprobe commands by checking multiple locations
+     * Initialize ffmpeg/ffprobe commands by checking system PATH
      */
     private static async initializeCommands() {
         if (Video.isInitialized) return;
 
-        // Get the directory of the current executable
-        const currentDir = process.cwd();
-        const execDir = dirname(process.execPath);
-        const toolsDir = join(homedir(), '.photosphere', 'tools');
-
-        // Possible paths to check for ffprobe binary
-        // PRIORITY ORDER: System PATH first, then local directories
-        const possiblePaths = [
-            // 1. System PATH (highest priority)
-            { ffprobe: 'ffprobe', ffmpeg: 'ffmpeg' },
+        try {
+            // Test if ffprobe command is available in system PATH
+            const { stdout } = await execAsync('ffprobe -version');
             
-            // 2. Photosphere tools directory
-            { ffprobe: join(toolsDir, 'ffprobe'), ffmpeg: join(toolsDir, 'ffmpeg') },
-            { ffprobe: join(toolsDir, 'ffprobe.exe'), ffmpeg: join(toolsDir, 'ffmpeg.exe') },
+            // If we get here, ffprobe works (and ffmpeg should too)
+            Video.ffprobeCommand = 'ffprobe';
+            Video.ffmpegCommand = 'ffmpeg';
+            Video.isInitialized = true;
             
-            // 3. Current working directory
-            { ffprobe: join(currentDir, 'ffprobe'), ffmpeg: join(currentDir, 'ffmpeg') },
-            { ffprobe: join(currentDir, 'ffprobe.exe'), ffmpeg: join(currentDir, 'ffmpeg.exe') },
+            // Get version info
+            const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
+            const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            // 4. Directory of the executable (for bundled apps)
-            { ffprobe: join(execDir, 'ffprobe'), ffmpeg: join(execDir, 'ffmpeg') },
-            { ffprobe: join(execDir, 'ffprobe.exe'), ffmpeg: join(execDir, 'ffmpeg.exe') },
-        ];
-
-        // Try to find working ffmpeg/ffprobe commands
-        for (const paths of possiblePaths) {
-            try {
-                // Test ffprobe command
-                const { stdout } = await execAsync(`"${paths.ffprobe}" -version`);
-                
-                // If we get here, ffprobe works
-                Video.ffprobeCommand = `"${paths.ffprobe}"`;
-                Video.ffmpegCommand = `"${paths.ffmpeg}"`;
-                Video.isInitialized = true;
-                
-                // Get version info
-                const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
-                const version = versionMatch ? versionMatch[1] : 'unknown';
-                
-                const isLocal = paths.ffprobe.startsWith(currentDir) || paths.ffprobe.startsWith(execDir) || paths.ffprobe.startsWith(toolsDir);
-                console.log(`Using ${isLocal ? 'local' : 'system'} ffprobe: ${paths.ffprobe}`);
-                console.log(`ffprobe version: ${version}`);
-                return;
-            } catch {
-                // Try next path
-                continue;
-            }
+            console.log(`Using system ffprobe: ffprobe`);
+            console.log(`ffprobe version: ${version}`);
+        } catch {
+            // ffprobe not found in PATH
+            Video.isInitialized = true;
         }
-
-        // If we get here, we couldn't find ffmpeg/ffprobe
-        Video.isInitialized = true;
     }
 
     /**
@@ -103,12 +70,7 @@ export class Video {
      */
     static async verifyFfprobe(): Promise<{ available: boolean; version?: string; error?: string }> {
         try {
-            // Initialize if not already done
-            if (!Video.isInitialized) {
-                await Video.initializeCommands();
-            }
-            
-            const { stdout } = await execAsync(`${Video.ffprobeCommand} -version`);
+            const { stdout } = await execAsync('ffprobe -version');
             
             const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
             return {
@@ -128,12 +90,7 @@ export class Video {
      */
     static async verifyFfmpeg(): Promise<{ available: boolean; version?: string; error?: string }> {
         try {
-            // Initialize if not already done
-            if (!Video.isInitialized) {
-                await Video.initializeCommands();
-            }
-            
-            const { stdout } = await execAsync(`${Video.ffmpegCommand} -version`);
+            const { stdout } = await execAsync('ffmpeg -version');
             
             const versionMatch = stdout.match(/ffmpeg version ([\d.-]+)/);
             return {
