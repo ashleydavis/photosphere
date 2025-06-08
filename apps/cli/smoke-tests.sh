@@ -518,8 +518,8 @@ run_all_tests() {
     echo "Photosphere CLI Smoke Tests - ALL"
     echo "======================================"
     
-    log_info "Running all tests (assumes executable is already built)"
-    log_info "To build and run all tests, use: ./smoke-tests.sh setup,all"
+    log_info "Running all tests (assumes executable is already built and tools are available)"
+    log_info "To build and run all tests with tool installation, use: ./smoke-tests.sh setup,install-tools,all"
     echo ""
     
     # Change to CLI directory for tests
@@ -532,10 +532,6 @@ run_all_tests() {
     # Clean up previous test run
     log_info "Cleaning up previous test run"
     rm -rf "$TEST_DB_DIR"
-    
-    # Install tools first (if needed) then run all tests
-    log_info "Installing tools before running tests"
-    test_install_tools
     
     # Run all tests in sequence 
     test_create_database
@@ -728,7 +724,7 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Commands:"
-    echo "  all                 - Install tools and run all tests (assumes executable already built)"
+    echo "  all                 - Run all tests (assumes executable built and tools available)"
     echo "  setup               - Build executable and frontend"
     echo "  install-tools       - Install required media processing tools only"
     echo "  reset               - Clean up test artifacts and reset environment"
@@ -749,8 +745,9 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0 all                    # Install tools and run all tests (exe must be built)"
-    echo "  $0 setup,all              # Build and run all tests with tools"
+    echo "  $0 all                    # Run all tests (exe must be built, tools available)"
+    echo "  $0 setup,all              # Build and run all tests (tools must be available)"
+    echo "  $0 setup,install-tools,all # Build, install tools, and run all tests"
     echo "  $0 setup                  # Build executable and frontend only"
     echo "  $0 install-tools          # Install tools only"
     echo "  $0 reset                  # Clean up test artifacts"

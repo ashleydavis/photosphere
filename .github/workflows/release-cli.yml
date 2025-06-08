@@ -164,6 +164,15 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install media processing tools (macOS x64)
+        run: |
+          echo "Installing ImageMagick and ffmpeg via Homebrew..."
+          brew install imagemagick ffmpeg
+          echo "Verifying installations..."
+          magick --version
+          ffmpeg -version
+          ffprobe -version
+
       - name: Build macOS executable
         working-directory: ./apps/cli
         run: |
@@ -218,6 +227,15 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install media processing tools (macOS ARM64)
+        run: |
+          echo "Installing ImageMagick and ffmpeg via Homebrew..."
+          brew install imagemagick ffmpeg
+          echo "Verifying installations..."
+          magick --version
+          ffmpeg -version
+          ffprobe -version
 
       - name: Build macOS ARM64 executable
         working-directory: ./apps/cli
