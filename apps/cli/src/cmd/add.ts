@@ -52,11 +52,11 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(databaseDir)) {
-        exit(1);
+        await exit(1);
     }
     
     if (!await configureS3IfNeeded(metaPath)) {
-        exit(1);
+        await exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
@@ -105,5 +105,5 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
     log.info(`  - ${addSummary.averageSize} bytes average size.`);
 
-    exit(0);
+    await exit(0);
 }

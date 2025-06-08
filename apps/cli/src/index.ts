@@ -98,20 +98,20 @@ async function main() {
         // Commander throws an error when no command is provided
         // Check if this is just a help display situation
         if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
-            exit(0);
+            await exit(0);
         }
         // If no command was provided and we're showing help
         if (process.argv.length <= 2) {
-            exit(0);
+            await exit(0);
         }
         throw err;
     }
 }
 
 main()
-    .catch(error => {
+    .catch((error) => {
         console.error(pc.red('An error occurred:'));
         console.error((pc.red(error.stack || error.message || error).toString()));
 
-        exit(1);
+        return exit(1);
     });

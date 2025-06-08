@@ -58,11 +58,11 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(databaseDir)) {
-        exit(1);
+        await exit(1);
     }
     
     if (!await configureS3IfNeeded(metaPath)) {
-        exit(1);
+        await exit(1);
     }
 
     // Handle encryption keys
@@ -90,5 +90,5 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     log.info('');
     log.info(pc.dim(`Or use the full path: ${pc.cyan(`psi add ${databaseDir} <source-media-directory>`)}`));
 
-    exit(0);
+    await exit(0);
 }

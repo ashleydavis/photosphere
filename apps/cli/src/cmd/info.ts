@@ -92,7 +92,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
         console.log(); // Add spacing between files
     }
 
-    exit(0);
+    await exit(0);
 }
 
 async function analyzeFile(filePath: string, contentType: string, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {

@@ -52,11 +52,11 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
     // Configure S3 if the path requires it
     //
     if (!await configureS3IfNeeded(databaseDir)) {
-        exit(1);
+        await exit(1);
     }
     
     if (!await configureS3IfNeeded(metaPath)) {
-        exit(1);
+        await exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
@@ -103,5 +103,5 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
     log.info(`  - ${addSummary.numFilesAdded} files would be added to database.`);
     log.info(`  - ${addSummary.numFilesIgnored} files ignored (not media files).`);
 
-    exit(0);
+    await exit(0);
 }

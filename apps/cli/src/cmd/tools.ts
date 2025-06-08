@@ -85,7 +85,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
             if (isCancel(userChoice)) {
                 console.log();
                 console.log(pc.dim('Please install the missing tools and try again.'));
-                exit(1);
+                await exit(1);
             }
             showInstructions = userChoice as boolean;
         }
@@ -93,7 +93,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
         if (!showInstructions) {
             console.log();
             console.log(pc.dim('Please install the missing tools and try again.'));
-            exit(1);
+            await exit(1);
         }
         
         console.log();
@@ -175,6 +175,6 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
         console.log();
         console.log(pc.dim('After installation, run this command again to verify all tools are available.'));
         
-        exit(1);
+        await exit(1);
     }
 }

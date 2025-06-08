@@ -268,7 +268,7 @@ export async function getDirectoryForCommand(
                 return resolvedDir;
             } else {
                 console.error(pc.red('Provided directory is not empty. Please specify an empty directory for initialization.'));
-                exit(1);
+                await exit(1);
                 return ''; // Never reached
             }
         } else {
@@ -277,7 +277,7 @@ export async function getDirectoryForCommand(
                 return resolvedDir;
             } else {
                 console.error(pc.red(`Provided directory is not valid: ${validation}`));
-                exit(1);
+                await exit(1);
                 return ''; // Never reached
             }
         }
@@ -298,7 +298,7 @@ export async function getDirectoryForCommand(
             });
             
             if (isCancel(useCurrentDir)) {
-                exit(1);
+                await exit(1);
             }
             
             if (useCurrentDir) {
@@ -308,7 +308,7 @@ export async function getDirectoryForCommand(
             // Current directory is not empty, skip asking and go straight to picker in interactive mode
             if (nonInteractive) {
                 console.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
-                exit(1);
+                await exit(1);
                 return ''; // Never reached but helps TypeScript
             }
         }
@@ -324,7 +324,7 @@ export async function getDirectoryForCommand(
             });
             
             if (isCancel(useCurrentDir)) {
-                exit(1);
+                await exit(1);
             }
             
             if (useCurrentDir) {
@@ -340,7 +340,7 @@ export async function getDirectoryForCommand(
         } else {
             console.error(pc.red('Current directory is not a media database. Please specify a valid media database directory.'));
         }
-        exit(1);
+        await exit(1);
     }
     
     // Interactive mode: show directory picker
@@ -356,7 +356,7 @@ export async function getDirectoryForCommand(
     
     if (!selectedDir) {
         outro(pc.red('No directory selected'));
-        exit(1);
+        await exit(1);
     }
     
     return selectedDir!;
