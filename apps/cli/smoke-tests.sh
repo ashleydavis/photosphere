@@ -69,14 +69,9 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Show tools directory contents at start of each test
+# Show tools status at start of each test
 show_tools_directory() {
-    log_info "Contents of ~/.photosphere/tools:"
-    if [ -d "$HOME/.photosphere/tools" ]; then
-        ls -la "$HOME/.photosphere/tools"
-    else
-        log_warning "~/.photosphere/tools directory does not exist"
-    fi
+    log_info "Checking for system-installed tools:"
     echo ""
 }
 
@@ -85,24 +80,24 @@ show_tool_versions() {
     log_info "Tool versions:"
     
     # Check ImageMagick version
-    if [ -f "$HOME/.photosphere/tools/magick" ]; then
-        local magick_version=$("$HOME/.photosphere/tools/magick" --version | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "unknown")
+    if command -v magick &> /dev/null; then
+        local magick_version=$(magick --version | head -1 | grep -o 'ImageMagick [0-9.-]*' | sed 's/ImageMagick //' || echo "unknown")
         echo "  • ImageMagick: $magick_version"
     else
         echo "  • ImageMagick: not found"
     fi
     
     # Check ffprobe version
-    if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
-        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "unknown")
+    if command -v ffprobe &> /dev/null; then
+        local ffprobe_version=$(ffprobe -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffprobe: $ffprobe_version"
     else
         echo "  • ffprobe: not found"
     fi
     
     # Check ffmpeg version
-    if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
-        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "unknown")
+    if command -v ffmpeg &> /dev/null; then
+        local ffmpeg_version=$(ffmpeg -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "unknown")
         echo "  • ffmpeg: $ffmpeg_version"
     else
         echo "  • ffmpeg: not found"
@@ -253,7 +248,7 @@ test_setup() {
 
 test_install_tools() {
     echo ""
-    echo "=== INSTALL TOOLS ==="
+    echo "=== CHECK TOOLS ==="
     
     log_info "Changing to CLI directory"
     if ! cd "$(dirname "$0")"; then
@@ -264,66 +259,55 @@ test_install_tools() {
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
     
-    log_info "Showing currently installed tools"
-    run_command "Show current tools" "$(get_cli_command) tools list --yes"
+    log_info "Checking for required tools in system PATH"
+    run_command "Check tools" "$(get_cli_command) tools --yes"
     echo ""
     
-    log_info "Installing required tools via psi tools update"
-    run_command "Install tools" "$(get_cli_command) tools update --yes"
-    
-    log_info "Showing contents of ~/.photosphere/tools"
-    if [ -d "$HOME/.photosphere/tools" ]; then
-        ls -la "$HOME/.photosphere/tools"
-    else
-        log_warning "~/.photosphere/tools directory does not exist"
-    fi
-    
-    echo ""
     log_info "Verifying tools are installed and working..."
     
     # Check that required tools exist and can print versions
     local tools_verified=true
     
     # Check ImageMagick
-    if [ -f "$HOME/.photosphere/tools/magick" ]; then
-        local magick_output=$("$HOME/.photosphere/tools/magick" --version || echo "")
+    if command -v magick &> /dev/null; then
+        local magick_output=$(magick --version || echo "")
         if [ -n "$magick_output" ]; then
             log_success "ImageMagick verified - complete output:"
             echo "$magick_output"
         else
-            log_error "ImageMagick exists but cannot get version"
+            log_error "ImageMagick command exists but cannot get version"
             tools_verified=false
         fi
     else
-        log_error "ImageMagick not found at ~/.photosphere/tools/magick"
+        log_error "ImageMagick not found in system PATH"
         tools_verified=false
     fi
     
     # Check ffprobe
-    if [ -f "$HOME/.photosphere/tools/ffprobe" ]; then
-        local ffprobe_version=$("$HOME/.photosphere/tools/ffprobe" -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
+    if command -v ffprobe &> /dev/null; then
+        local ffprobe_version=$(ffprobe -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
         if [ -n "$ffprobe_version" ]; then
             log_success "ffprobe verified: version $ffprobe_version"
         else
-            log_error "ffprobe exists but cannot get version"
+            log_error "ffprobe command exists but cannot get version"
             tools_verified=false
         fi
     else
-        log_error "ffprobe not found at ~/.photosphere/tools/ffprobe"
+        log_error "ffprobe not found in system PATH"
         tools_verified=false
     fi
     
     # Check ffmpeg
-    if [ -f "$HOME/.photosphere/tools/ffmpeg" ]; then
-        local ffmpeg_version=$("$HOME/.photosphere/tools/ffmpeg" -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
+    if command -v ffmpeg &> /dev/null; then
+        local ffmpeg_version=$(ffmpeg -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
         if [ -n "$ffmpeg_version" ]; then
             log_success "ffmpeg verified: version $ffmpeg_version"
         else
-            log_error "ffmpeg exists but cannot get version"
+            log_error "ffmpeg command exists but cannot get version"
             tools_verified=false
         fi
     else
-        log_error "ffmpeg not found at ~/.photosphere/tools/ffmpeg"
+        log_error "ffmpeg not found in system PATH"
         tools_verified=false
     fi
     

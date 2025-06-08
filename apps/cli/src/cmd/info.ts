@@ -45,7 +45,7 @@ interface FileAnalysis {
 //
 // Command that displays detailed information about media files.
 //
-export async function infoCommand(dbDir: string, paths: string[], options: IInfoCommandOptions): Promise<void> {
+export async function infoCommand(paths: string[], options: IInfoCommandOptions): Promise<void> {
 
     configureLog({
         verbose: options.verbose,

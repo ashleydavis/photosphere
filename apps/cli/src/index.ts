@@ -83,12 +83,11 @@ async function main() {
         .option(...yesOption)
         .option("-r, --raw", "Show raw EXIF/metadata properties", false)
         .argument("<files...>", "The media files to analyze.")
-        .action((files: string[], options: any) => infoCommand('', files, options));
+        .action(infoCommand);
 
     program
         .command("tools")
-        .description("Manage and check media processing tools (ImageMagick, ffmpeg, ffprobe).")
-        .argument("[action]", "Action to perform: list/ls (default), update/up, delete/del")
+        .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
         .action(toolsCommand);
 

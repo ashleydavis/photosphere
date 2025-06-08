@@ -1,8 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir, platform } from 'os';
+import { platform } from 'os';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
 
 const execAsync = promisify(exec);
@@ -40,64 +39,31 @@ export class Image {
     }
 
     /**
-     * Initialize ImageMagick commands by checking multiple locations
+     * Initialize ImageMagick commands by checking system PATH
      */
     private static async initializeCommands() {
         if (Image.isInitialized) return;
 
-        // Get the directory of the current executable
-        const currentDir = process.cwd();
-        const execDir = dirname(process.execPath);
-        const toolsDir = join(homedir(), '.photosphere', 'tools');
-
-        // Possible paths to check for magick binary
-        // PRIORITY ORDER: System PATH first, then local directories
-        const possiblePaths = [
-            // 1. System PATH (highest priority)
-            'magick',
+        try {
+            // Test if magick command is available in system PATH
+            const { stdout } = await execAsync('magick -version');
             
-            // 2. Photosphere tools directory 
-            join(toolsDir, 'magick'),
-            join(toolsDir, 'magick.exe'),
+            // If we get here, magick command works
+            // Store the command with appropriate subcommands
+            Image.convertCommand = 'magick convert';
+            Image.identifyCommand = 'magick identify';
+            Image.isInitialized = true;
             
-            // 3. Current working directory
-            join(currentDir, 'squashfs-root', 'usr', 'bin', 'magick'),
-            join(currentDir, 'magick'),
-            join(currentDir, 'magick.exe'),
+            // Get version info
+            const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
+            const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            // 4. Directory of the executable (for bundled apps)
-            join(execDir, 'magick'),
-            join(execDir, 'magick.exe'),
-        ];
-
-        // Try to find working magick command
-        for (const magickPath of possiblePaths) {
-            try {
-                // Test magick command
-                const { stdout } = await execAsync(`"${magickPath}" -version`);
-                
-                // If we get here, magick command works
-                // Store the command with appropriate subcommands
-                Image.convertCommand = `"${magickPath}" convert`;
-                Image.identifyCommand = `"${magickPath}" identify`;
-                Image.isInitialized = true;
-                
-                // Get version info
-                const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
-                const version = versionMatch ? versionMatch[1] : 'unknown';
-                
-                const isLocal = magickPath.startsWith(currentDir) || magickPath.startsWith(execDir) || magickPath.startsWith(toolsDir);
-                console.log(`Using ${isLocal ? 'local' : 'system'} ImageMagick: ${magickPath}`);
-                console.log(`ImageMagick version: ${version}`);
-                return;
-            } catch {
-                // Try next path
-                continue;
-            }
+            console.log(`Using system ImageMagick: magick`);
+            console.log(`ImageMagick version: ${version}`);
+        } catch {
+            // ImageMagick not found in PATH
+            Image.isInitialized = true;
         }
-
-        // If we get here, we couldn't find ImageMagick
-        Image.isInitialized = true;
     }
 
     /**
@@ -105,14 +71,7 @@ export class Image {
      */
     static async verifyImageMagick(): Promise<{ available: boolean; version?: string; error?: string }> {
         try {
-            // Initialize if not already done
-            if (!Image.isInitialized) {
-                await Image.initializeCommands();
-            }
-            
-            // Get the magick path from the convertCommand
-            const magickPath = Image.convertCommand.match(/"([^"]+)"/)?.[1] || Image.convertCommand.split(' ')[0];
-            const { stdout } = await execAsync(`"${magickPath}" -version`);
+            const { stdout } = await execAsync('magick -version');
             
             const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
             return {

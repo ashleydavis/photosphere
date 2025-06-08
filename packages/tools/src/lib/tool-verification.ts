@@ -47,13 +47,13 @@ export async function verifyTools(): Promise<ToolsStatus> {
 }
 
 /**
- * Check if all required tools are available, and optionally prompt for installation
+ * Check if all required tools are available
  */
 export async function ensureToolsAvailable(options?: {
     promptForInstall?: boolean;
     silent?: boolean;
 }): Promise<boolean> {
-    const { promptForInstall = false, silent = false } = options || {};
+    const { silent = false } = options || {};
     
     const toolsStatus = await verifyTools();
     
@@ -71,12 +71,6 @@ export async function ensureToolsAvailable(options?: {
             }
         }
         return true;
-    }
-
-    if (promptForInstall) {
-        // Dynamically import the tool downloader to avoid circular dependencies
-        const { promptAndDownloadTools } = await import('./tool-downloader');
-        return await promptAndDownloadTools(toolsStatus.missingTools);
     }
 
     return false;

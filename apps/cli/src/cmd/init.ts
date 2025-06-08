@@ -6,6 +6,7 @@ import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
+import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 export interface IInitCommandOptions { 
     //
@@ -43,6 +44,9 @@ export async function initCommand(dbDir: string, options: IInitCommandOptions): 
     configureLog({
         verbose: options.verbose,
     });
+
+    // Ensure required media processing tools are available
+    await ensureMediaProcessingTools(options.yes || false);
 
     // Get the directory for the database (validates it's empty/non-existent)
     const databaseDir = await getDirectoryForCommand('init', dbDir, options.yes || false);
