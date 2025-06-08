@@ -230,6 +230,10 @@ test_install_tools() {
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
     
+    log_info "Showing currently installed tools"
+    run_command "Show current tools" "$(get_cli_command) tools list --yes"
+    echo ""
+    
     log_info "Installing required tools via psi tools update"
     run_command "Install tools" "$(get_cli_command) tools update --yes"
     
