@@ -431,10 +431,10 @@ async function handleManualInstallation(missingTools: string[]): Promise<boolean
     const instructions = getManualInstallInstructions();
     p.note(instructions, '📖 Installation Instructions');
     
-    // Show where tools should be accessible
+    // Show where tools should be placed
     const toolsDir = getToolsDirectory();
-    p.log.info(`Tip: You can also place portable versions in: ${toolsDir}`);
-    p.log.info('This directory will be checked automatically.');
+    p.log.info(`Tip: You can place portable versions directly in: ${toolsDir}`);
+    p.log.info('Photosphere will automatically find tools in this directory.');
     
     // Wait for user to install tools
     while (true) {
@@ -703,16 +703,6 @@ export async function promptAndDownloadTools(missingTools: string[], nonInteract
             p.note(summary, '📦 Installation Complete');
         }
         
-        // Add tools directory to PATH for current session
-        const currentPath = process.env.PATH || '';
-        const newPath = `${toolsDir}${platform() === 'win32' ? ';' : ':'}${currentPath}`;
-        process.env.PATH = newPath;
-        
-        p.log.success(`Tools directory added to PATH for current session`);
-        
-        // Provide instructions for permanent PATH setup
-        p.note(getPermanentPathInstructions(toolsDir), 'Make PATH permanent');
-        
         p.outro('🎉 Tools downloaded and configured successfully!');
         return true;
         
@@ -720,44 +710,6 @@ export async function promptAndDownloadTools(missingTools: string[], nonInteract
         spinner.stop(`Download failed`);
         p.log.error(`Download failed: ${error}`);
         return false;
-    }
-}
-
-function getPermanentPathInstructions(toolsDir: string): string {
-    const currentPlatform = platform();
-    
-    switch (currentPlatform) {
-        case 'win32':
-            return `To permanently add tools to your PATH on Windows:
-1. Press Win + X and select "System"
-2. Click "Advanced system settings"
-3. Click "Environment Variables"
-4. Under "User variables", select "Path" and click "Edit"
-5. Click "New" and add: ${toolsDir}
-6. Click "OK" to save changes
-7. Restart your terminal
-
-Or run this PowerShell command as Administrator:
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";${toolsDir}", "User")`;
-
-        case 'darwin':
-            return `To permanently add tools to your PATH on macOS:
-Add this line to your shell profile (~/.zshrc, ~/.bash_profile, or ~/.profile):
-export PATH="${toolsDir}:$PATH"
-
-Then reload your shell:
-source ~/.zshrc  # or source ~/.bash_profile`;
-
-        case 'linux':
-            return `To permanently add tools to your PATH on Linux:
-Add this line to your shell profile (~/.bashrc, ~/.zshrc, or ~/.profile):
-export PATH="${toolsDir}:$PATH"
-
-Then reload your shell:
-source ~/.bashrc  # or source ~/.zshrc`;
-
-        default:
-            return `Add ${toolsDir} to your system PATH`;
     }
 }
 
