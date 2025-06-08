@@ -11,7 +11,7 @@ interface DownloadInfo {
     url: string;
     filename: string;
     executable: string;
-    extract?: boolean | 'appimage';
+    extract?: boolean | 'appimage' | 'macos-imagemagick';
     extractPath?: string;
 }
 
@@ -52,13 +52,12 @@ function getToolUrls(): ToolUrls | null {
             break;
             
         case 'darwin':
-            // macOS
+            // macOS - Use portable AppImage-like approach
             urls.magick = {
                 url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz',
                 filename: 'ImageMagick-mac.tar.gz',
                 executable: 'magick',
-                extract: true,
-                extractPath: undefined  // Will search for magick binary in extracted contents
+                extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
             };
             // Use a single ffmpeg build that includes both tools
             const ffmpegInfo = {
@@ -182,7 +181,83 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
     try {
         await downloadFile(downloadInfo.url, downloadPath);
         
-        if (downloadInfo.extract === 'appimage') {
+        if (downloadInfo.extract === 'macos-imagemagick') {
+            // Handle macOS ImageMagick with dylib dependencies
+            await extractFile(downloadPath, tempDir);
+            
+            // Create a dedicated directory for ImageMagick
+            const magickDir = join(toolsDir, 'imagemagick-macos');
+            if (!existsSync(magickDir)) {
+                mkdirSync(magickDir, { recursive: true });
+            }
+            
+            // Find and copy the entire ImageMagick directory
+            const { readdirSync } = require('fs');
+            const imageMagickDirs = readdirSync(tempDir).filter((dir: string) => dir.startsWith('ImageMagick-'));
+            
+            if (imageMagickDirs.length === 0) {
+                throw new Error('No ImageMagick directory found in extracted archive');
+            }
+            
+            const sourceDir = join(tempDir, imageMagickDirs[0]);
+            
+            // Copy entire ImageMagick directory to preserve structure
+            await execAsync(`cp -R "${sourceDir}"/* "${magickDir}"/`);
+            
+            // Find the magick binary
+            const possibleBinaryPaths = [
+                join(magickDir, 'bin', 'magick'),
+                join(magickDir, 'magick')
+            ];
+            
+            let actualBinaryPath = '';
+            for (const path of possibleBinaryPaths) {
+                if (existsSync(path)) {
+                    actualBinaryPath = path;
+                    break;
+                }
+            }
+            
+            if (!actualBinaryPath) {
+                throw new Error('Could not find magick binary in copied directory');
+            }
+            
+            // Create a wrapper script that sets up library paths
+            const wrapperPath = join(toolsDir, downloadInfo.executable);
+            const libPath = join(magickDir, 'lib');
+            
+            const wrapperScript = `#!/bin/bash
+# Wrapper script for ImageMagick on macOS
+export DYLD_LIBRARY_PATH="${libPath}:$DYLD_LIBRARY_PATH"
+export MAGICK_HOME="${magickDir}"
+export MAGICK_CONFIGURE_PATH="${magickDir}/lib/ImageMagick/config-Q16HDRI"
+export MAGICK_CODER_MODULE_PATH="${magickDir}/lib/ImageMagick/modules-Q16HDRI/coders"
+export MAGICK_FILTER_MODULE_PATH="${magickDir}/lib/ImageMagick/modules-Q16HDRI/filters"
+exec "${actualBinaryPath}" "$@"
+`;
+            
+            writeFileSync(wrapperPath, wrapperScript);
+            chmodSync(wrapperPath, '755');
+            
+            // Verify the wrapper script works
+            try {
+                const { stdout } = await execAsync(`"${wrapperPath}" --version`);
+                console.log(`✓ ImageMagick wrapper verification successful`);
+            } catch (verifyError) {
+                throw new Error(`ImageMagick wrapper verification failed: ${verifyError}`);
+            }
+            
+            // Clean up temporary files
+            try {
+                rmSync(downloadPath, { force: true });
+                rmSync(tempDir, { recursive: true, force: true });
+            } catch (cleanupError) {
+                console.warn(`Warning: Could not clean up temporary files: ${cleanupError}`);
+            }
+            
+            return [wrapperPath];
+            
+        } else if (downloadInfo.extract === 'appimage') {
             // Handle AppImage extraction
             const { binaryPath, extractedDir } = await extractAppImage(downloadPath, tempDir);
             
