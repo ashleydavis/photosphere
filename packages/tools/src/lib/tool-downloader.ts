@@ -11,7 +11,7 @@ interface DownloadInfo {
     url: string;
     filename: string;
     executable: string;
-    extract?: boolean;
+    extract?: boolean | 'appimage';
     extractPath?: string;
 }
 
@@ -75,11 +75,10 @@ function getToolUrls(): ToolUrls | null {
             // Linux x64
             if (currentArch === 'x64') {
                 urls.magick = {
-                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-pc-linux-gnu.tar.gz',
-                    filename: 'ImageMagick-linux.tar.gz',
+                    url: 'https://download.imagemagick.org/archive/binaries/magick',
+                    filename: 'magick',
                     executable: 'magick',
-                    extract: true,
-                    extractPath: 'ImageMagick-7.1.1/bin'
+                    extract: 'appimage'  // Special flag for AppImage extraction
                 };
                 // ffmpeg package provides both ffmpeg and ffprobe
                 const ffmpegInfo = {
@@ -140,6 +139,39 @@ async function extractFile(filePath: string, extractDir: string, extractPath?: s
     }
 }
 
+async function extractAppImage(appImagePath: string, extractDir: string): Promise<{binaryPath: string, extractedDir: string}> {
+    try {
+        // Make the AppImage executable
+        chmodSync(appImagePath, '755');
+        
+        // Extract the AppImage using --appimage-extract
+        const { stdout, stderr } = await execAsync(`cd "${extractDir}" && "${appImagePath}" --appimage-extract`);
+        
+        // AppImage extracts to squashfs-root directory
+        const extractedDir = join(extractDir, 'squashfs-root');
+        if (!existsSync(extractedDir)) {
+            throw new Error('AppImage extraction failed - squashfs-root directory not found');
+        }
+        
+        // Find the magick binary in the extracted directory
+        const possibleMagickPaths = [
+            join(extractedDir, 'usr', 'bin', 'magick'),
+            join(extractedDir, 'bin', 'magick'),
+            join(extractedDir, 'magick')
+        ];
+        
+        for (const magickPath of possibleMagickPaths) {
+            if (existsSync(magickPath)) {
+                return { binaryPath: magickPath, extractedDir };
+            }
+        }
+        
+        throw new Error('magick binary not found in extracted AppImage');
+    } catch (error) {
+        throw new Error(`Failed to extract AppImage ${appImagePath}: ${error}`);
+    }
+}
+
 async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsDir: string): Promise<string[]> {
     // Create temporary directory for downloads and extraction
     const tempDir = join(tmpdir(), `photosphere-download-${Date.now()}-${Math.random().toString(36).substring(2)}`);
@@ -150,7 +182,76 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
     try {
         await downloadFile(downloadInfo.url, downloadPath);
         
-        if (downloadInfo.extract) {
+        if (downloadInfo.extract === 'appimage') {
+            // Handle AppImage extraction
+            const { binaryPath, extractedDir } = await extractAppImage(downloadPath, tempDir);
+            
+            // Create a dedicated directory for this AppImage's files
+            const magickDir = join(toolsDir, 'imagemagick-appimage');
+            if (!existsSync(magickDir)) {
+                mkdirSync(magickDir, { recursive: true });
+            }
+            
+            // Copy the entire extracted directory to preserve library dependencies
+            const { stdout: cpOutput } = await execAsync(`cp -r "${extractedDir}"/* "${magickDir}"/`);
+            
+            // Find the actual binary in the copied directory
+            const possibleBinaryPaths = [
+                join(magickDir, 'usr', 'bin', 'magick'),
+                join(magickDir, 'bin', 'magick'),
+                join(magickDir, 'magick')
+            ];
+            
+            let actualBinaryPath = '';
+            for (const path of possibleBinaryPaths) {
+                if (existsSync(path)) {
+                    actualBinaryPath = path;
+                    break;
+                }
+            }
+            
+            if (!actualBinaryPath) {
+                throw new Error('Could not find magick binary in copied directory');
+            }
+            
+            // Create a wrapper script that sets up the library path
+            const wrapperPath = join(toolsDir, downloadInfo.executable);
+            const libPaths = [
+                join(magickDir, 'usr', 'lib'),
+                join(magickDir, 'usr', 'lib', 'x86_64-linux-gnu'),
+                join(magickDir, 'lib'),
+                join(magickDir, 'lib', 'x86_64-linux-gnu')
+            ].filter(existsSync).join(':');
+            
+            const wrapperScript = `#!/bin/bash
+# Wrapper script for ImageMagick AppImage
+export LD_LIBRARY_PATH="${libPaths}${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}"
+export MAGICK_HOME="${magickDir}"
+exec "${actualBinaryPath}" "$@"
+`;
+            
+            writeFileSync(wrapperPath, wrapperScript);
+            chmodSync(wrapperPath, '755');
+            
+            // Verify the wrapper script works
+            try {
+                const { stdout } = await execAsync(`"${wrapperPath}" --version`);
+                console.log(`✓ ImageMagick wrapper verification successful`);
+            } catch (verifyError) {
+                throw new Error(`ImageMagick wrapper verification failed: ${verifyError}`);
+            }
+            
+            // Clean up: remove temporary directory but keep the extracted files
+            try {
+                rmSync(downloadPath, { force: true });
+                rmSync(join(tempDir, 'squashfs-root'), { recursive: true, force: true });
+            } catch (cleanupError) {
+                console.warn(`Warning: Could not clean up temporary files: ${cleanupError}`);
+            }
+            
+            return [wrapperPath];
+            
+        } else if (downloadInfo.extract) {
             await extractFile(downloadPath, tempDir, downloadInfo.extractPath);
             
             // Find the executable in the extracted files
