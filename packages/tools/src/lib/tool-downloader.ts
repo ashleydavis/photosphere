@@ -52,22 +52,14 @@ function getToolUrls(): ToolUrls | null {
             break;
             
         case 'darwin':
-            // macOS - Architecture-specific ImageMagick downloads
-            if (currentArch === 'x64') {
-                urls.magick = {
-                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz',
-                    filename: 'ImageMagick-mac-x64.tar.gz',
-                    executable: 'magick',
-                    extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
-                };
-            } else if (currentArch === 'arm64') {
-                urls.magick = {
-                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-arm64-apple-darwin20.1.0.tar.gz',
-                    filename: 'ImageMagick-mac-arm64.tar.gz',
-                    executable: 'magick',
-                    extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
-                };
-            }
+            // macOS - Note: Official ImageMagick only provides x86_64 binaries
+            // For arm64, we'll use the x86_64 binary which works via Rosetta 2
+            urls.magick = {
+                url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz',
+                filename: `ImageMagick-mac-${currentArch}.tar.gz`,
+                executable: 'magick',
+                extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
+            };
             // Use a single ffmpeg build that includes both tools
             const ffmpegInfo = {
                 url: 'https://evermeet.cx/ffmpeg/getrelease/zip',
@@ -233,63 +225,84 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
             }
             
             const currentArch = arch();
-            const dependencies: Array<{name: string, url: string}> = [];
+            const dependencies: Array<{name: string, urls: string[], required: boolean}> = [];
             
-            // Add libXt.6.dylib for all architectures
+            // Add libXt.6.dylib for all architectures - try multiple sources
             dependencies.push({
                 name: 'libXt.6.dylib',
-                url: 'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libXt.6.dylib'
+                urls: [
+                    'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libXt.6.dylib',
+                    'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX11.3.sdk/usr/lib/libXt.6.dylib',
+                    'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX12.3.sdk/usr/lib/libXt.6.dylib'
+                ],
+                required: true
             });
             
-            // Add libfreetype.6.dylib for arm64
-            if (currentArch === 'arm64') {
-                dependencies.push({
-                    name: 'libfreetype.6.dylib',
-                    url: 'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libfreetype.6.dylib'
-                });
-            }
+            // Add libfreetype.6.dylib for font rendering (useful for both architectures)
+            dependencies.push({
+                name: 'libfreetype.6.dylib',
+                urls: [
+                    'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libfreetype.6.dylib',
+                    'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX11.3.sdk/usr/lib/libfreetype.6.dylib'
+                ],
+                required: false
+            });
             
             for (const dep of dependencies) {
-                try {
-                    console.log(`Downloading ${dep.name} dependency...`);
-                    const libPath = join(libDir, dep.name);
-                    await downloadFile(dep.url, libPath);
-                    console.log(`✓ ${dep.name} downloaded to ${libPath}`);
-                } catch (libError) {
-                    console.warn(`Warning: Could not download ${dep.name}: ${libError}`);
-                    console.log(`Trying alternative approach - using system library path for ${dep.name}...`);
-                    
-                    // Try to find the library in system locations and copy it
+                let libInstalled = false;
+                
+                // Try downloading from multiple URLs
+                for (const url of dep.urls) {
+                    try {
+                        console.log(`Downloading ${dep.name} from ${url}...`);
+                        const libPath = join(libDir, dep.name);
+                        await downloadFile(url, libPath);
+                        console.log(`✓ ${dep.name} downloaded successfully`);
+                        libInstalled = true;
+                        break;
+                    } catch (downloadError) {
+                        console.warn(`Failed to download from ${url}: ${downloadError}`);
+                        continue;
+                    }
+                }
+                
+                // If download failed, try system locations
+                if (!libInstalled) {
+                    console.log(`Trying to find ${dep.name} in system locations...`);
                     const systemLibPaths = [
+                        `/opt/X11/lib/${dep.name}`,  // XQuartz location
                         `/usr/lib/${dep.name}`,
                         `/usr/local/lib/${dep.name}`,
                         `/opt/homebrew/lib/${dep.name}`,
                         `/opt/local/lib/${dep.name}`
                     ];
                     
-                    let libFound = false;
                     for (const systemPath of systemLibPaths) {
                         if (existsSync(systemPath)) {
                             try {
                                 const libPath = join(libDir, dep.name);
                                 copyFileSync(systemPath, libPath);
                                 console.log(`✓ Copied ${dep.name} from ${systemPath}`);
-                                libFound = true;
+                                libInstalled = true;
                                 break;
                             } catch (copyError) {
                                 console.warn(`Could not copy from ${systemPath}: ${copyError}`);
                             }
                         }
                     }
-                    
-                    if (!libFound) {
-                        if (dep.name === 'libXt.6.dylib') {
-                            console.warn('Warning: libXt.6.dylib not found. ImageMagick may require XQuartz to be installed.');
-                            console.log('Install XQuartz from: https://www.xquartz.org/');
-                        } else if (dep.name === 'libfreetype.6.dylib') {
-                            console.warn('Warning: libfreetype.6.dylib not found. ImageMagick may have issues with font rendering.');
-                            console.log('Install freetype via Homebrew: brew install freetype');
-                        }
+                }
+                
+                // Handle missing libraries
+                if (!libInstalled) {
+                    if (dep.name === 'libXt.6.dylib') {
+                        console.warn(`Warning: ${dep.name} could not be installed automatically.`);
+                        console.log('ImageMagick may work without it, but if you encounter errors:');
+                        console.log('  • Install XQuartz: https://www.xquartz.org/');
+                        console.log('  • Or via Homebrew: brew install --cask xquartz');
+                        console.log('  • Then run the tools update command again');
+                    } else if (dep.name === 'libfreetype.6.dylib') {
+                        console.warn(`Warning: ${dep.name} not found. ImageMagick may have issues with font rendering.`);
+                        console.log('Install freetype via Homebrew: brew install freetype');
                     }
                 }
             }
@@ -316,13 +329,29 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
             const wrapperPath = join(toolsDir, downloadInfo.executable);
             const libPath = join(magickDir, 'lib');
             
+            // Build comprehensive library search paths
+            const libraryPaths = [
+                libPath,  // Our downloaded/copied libraries
+                join(magickDir, 'lib'),  // ImageMagick's own libraries
+                '/opt/X11/lib',  // XQuartz libraries
+                '/usr/local/lib',  // Homebrew libraries
+                '/opt/homebrew/lib',  // Apple Silicon Homebrew
+                '/opt/local/lib'  // MacPorts libraries
+            ].filter(existsSync).join(':');
+            
             const wrapperScript = `#!/bin/bash
 # Wrapper script for ImageMagick on macOS
-export DYLD_LIBRARY_PATH="${libPath}:$DYLD_LIBRARY_PATH"
+export DYLD_LIBRARY_PATH="${libraryPaths}:\${DYLD_LIBRARY_PATH}"
+export DYLD_FALLBACK_LIBRARY_PATH="${libraryPaths}:/usr/lib"
 export MAGICK_HOME="${magickDir}"
 export MAGICK_CONFIGURE_PATH="${magickDir}/lib/ImageMagick/config-Q16HDRI"
 export MAGICK_CODER_MODULE_PATH="${magickDir}/lib/ImageMagick/modules-Q16HDRI/coders"
 export MAGICK_FILTER_MODULE_PATH="${magickDir}/lib/ImageMagick/modules-Q16HDRI/filters"
+
+# Debug info (remove this in production)
+# echo "DYLD_LIBRARY_PATH: \${DYLD_LIBRARY_PATH}" >&2
+# echo "Looking for libraries in: ${libraryPaths}" >&2
+
 exec "${actualBinaryPath}" "$@"
 `;
             
