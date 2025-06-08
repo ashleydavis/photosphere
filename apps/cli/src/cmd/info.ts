@@ -6,6 +6,7 @@ import { exit } from "node-utils";
 import { getFileInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface IInfoCommandOptions { 
     //
@@ -73,25 +74,15 @@ export async function infoCommand(dbDir: string, paths: string[], options: IInfo
             fileCount++;
         }
     }, (currentlyScanning) => {
-        if (process.stdout.clearLine) {
-            process.stdout.clearLine(0);
-            process.stdout.cursorTo(0);
-        } else {
-            process.stdout.write('\r');
-        }
-        process.stdout.write(`Analyzed: ${pc.green(fileCount.toString())} files`);
+        let progressMessage = `Analyzed: ${pc.green(fileCount.toString())} files`;
         if (currentlyScanning) {
-            process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
+            progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
         }
-        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C")}`);
+        progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
+        writeProgress(progressMessage);
     });
 
-    if (process.stdout.clearLine) {
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(0);
-    } else {
-        process.stdout.write('\r');
-    }
+    clearProgressMessage();
 
     // Display detailed information for each file
     console.log(pc.green(`\nAnalyzed ${fileCount} files:\n`));

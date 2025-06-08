@@ -7,6 +7,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface ICheckCommandOptions { 
     //
@@ -74,27 +75,25 @@ export async function checkCommand(dbDir: string, paths: string[], options: IChe
     process.stdout.write(`Checking files`);
 
     await database.checkPaths(paths, (currentlyScanning) => {
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(0);
         const addSummary = database.getAddSummary();
-        process.stdout.write(`Already in DB: ${pc.green(addSummary.numFilesAlreadyAdded)}`);
+        let progressMessage = `Already in DB: ${pc.green(addSummary.numFilesAlreadyAdded)}`;
         if (addSummary.numFilesAdded > 0) {
-            process.stdout.write(` | Would add: ${pc.yellow(addSummary.numFilesAdded)}`);
+            progressMessage += ` | Would add: ${pc.yellow(addSummary.numFilesAdded)}`;
         }
         if (addSummary.numFilesIgnored > 0) {
-            process.stdout.write(` | Ignored: ${pc.gray(addSummary.numFilesIgnored)}`);
+            progressMessage += ` | Ignored: ${pc.gray(addSummary.numFilesIgnored)}`;
         }
         if (currentlyScanning) {
-            process.stdout.write(` | Scanning ${pc.cyan(currentlyScanning)}`);
+            progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
         }
 
-        process.stdout.write(` | ${pc.gray("Abort with Ctrl-C")}`);
+        progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
+        writeProgress(progressMessage);
     });
 
     const addSummary = database.getAddSummary();
 
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0); // Flush the progress message.
+    clearProgressMessage(); // Flush the progress message.
 
     const totalFiles = addSummary.numFilesAdded + addSummary.numFilesAlreadyAdded + addSummary.numFilesIgnored;
     log.info(pc.green(`Checked ${totalFiles} files.\n`));
