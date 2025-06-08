@@ -52,13 +52,22 @@ function getToolUrls(): ToolUrls | null {
             break;
             
         case 'darwin':
-            // macOS - Use portable AppImage-like approach
-            urls.magick = {
-                url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz',
-                filename: 'ImageMagick-mac.tar.gz',
-                executable: 'magick',
-                extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
-            };
+            // macOS - Architecture-specific ImageMagick downloads
+            if (currentArch === 'x64') {
+                urls.magick = {
+                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz',
+                    filename: 'ImageMagick-mac-x64.tar.gz',
+                    executable: 'magick',
+                    extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
+                };
+            } else if (currentArch === 'arm64') {
+                urls.magick = {
+                    url: 'https://download.imagemagick.org/archive/binaries/ImageMagick-arm64-apple-darwin20.1.0.tar.gz',
+                    filename: 'ImageMagick-mac-arm64.tar.gz',
+                    executable: 'magick',
+                    extract: 'macos-imagemagick'  // Special handling for macOS ImageMagick
+                };
+            }
             // Use a single ffmpeg build that includes both tools
             const ffmpegInfo = {
                 url: 'https://evermeet.cx/ffmpeg/getrelease/zip',
@@ -216,6 +225,74 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
             
             // Copy entire ImageMagick directory to preserve structure
             await execAsync(`cp -R "${sourceDir}"/* "${magickDir}"/`);
+            
+            // Download and add required dylib dependencies for macOS
+            const libDir = join(magickDir, 'lib');
+            if (!existsSync(libDir)) {
+                mkdirSync(libDir, { recursive: true });
+            }
+            
+            const currentArch = arch();
+            const dependencies: Array<{name: string, url: string}> = [];
+            
+            // Add libXt.6.dylib for all architectures
+            dependencies.push({
+                name: 'libXt.6.dylib',
+                url: 'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libXt.6.dylib'
+            });
+            
+            // Add libfreetype.6.dylib for arm64
+            if (currentArch === 'arm64') {
+                dependencies.push({
+                    name: 'libfreetype.6.dylib',
+                    url: 'https://github.com/phracker/MacOSX-SDKs/raw/master/MacOSX10.15.sdk/usr/lib/libfreetype.6.dylib'
+                });
+            }
+            
+            for (const dep of dependencies) {
+                try {
+                    console.log(`Downloading ${dep.name} dependency...`);
+                    const libPath = join(libDir, dep.name);
+                    await downloadFile(dep.url, libPath);
+                    console.log(`✓ ${dep.name} downloaded to ${libPath}`);
+                } catch (libError) {
+                    console.warn(`Warning: Could not download ${dep.name}: ${libError}`);
+                    console.log(`Trying alternative approach - using system library path for ${dep.name}...`);
+                    
+                    // Try to find the library in system locations and copy it
+                    const systemLibPaths = [
+                        `/usr/lib/${dep.name}`,
+                        `/usr/local/lib/${dep.name}`,
+                        `/opt/homebrew/lib/${dep.name}`,
+                        `/opt/local/lib/${dep.name}`
+                    ];
+                    
+                    let libFound = false;
+                    for (const systemPath of systemLibPaths) {
+                        if (existsSync(systemPath)) {
+                            try {
+                                const libPath = join(libDir, dep.name);
+                                copyFileSync(systemPath, libPath);
+                                console.log(`✓ Copied ${dep.name} from ${systemPath}`);
+                                libFound = true;
+                                break;
+                            } catch (copyError) {
+                                console.warn(`Could not copy from ${systemPath}: ${copyError}`);
+                            }
+                        }
+                    }
+                    
+                    if (!libFound) {
+                        if (dep.name === 'libXt.6.dylib') {
+                            console.warn('Warning: libXt.6.dylib not found. ImageMagick may require XQuartz to be installed.');
+                            console.log('Install XQuartz from: https://www.xquartz.org/');
+                        } else if (dep.name === 'libfreetype.6.dylib') {
+                            console.warn('Warning: libfreetype.6.dylib not found. ImageMagick may have issues with font rendering.');
+                            console.log('Install freetype via Homebrew: brew install freetype');
+                        }
+                    }
+                }
+            }
             
             // Find the magick binary
             const possibleBinaryPaths = [
