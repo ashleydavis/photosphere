@@ -107,6 +107,7 @@ export async function ensureMediaProcessingTools(nonInteractive: boolean = false
             console.log();
             console.log(pc.bold('Manual/Binary installation:'));
             console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#linux'));
+            console.log('    (Both modern "magick" and legacy "convert/identify" commands supported)');
             console.log('  • ffmpeg: ' + pc.gray('https://johnvansickle.com/ffmpeg/'));
             console.log('    (Static builds for Linux)');
             break;
@@ -117,6 +118,7 @@ export async function ensureMediaProcessingTools(nonInteractive: boolean = false
             console.log(pc.bold('ImageMagick:'));
             console.log('  Official site: ' + pc.gray('https://imagemagick.org'));
             console.log('  Downloads: ' + pc.gray('https://imagemagick.org/script/download.php'));
+            console.log('  (Provides both modern "magick" and legacy "convert/identify" commands)');
             console.log();
             console.log(pc.bold('ffmpeg (includes ffprobe):'));
             console.log('  Official site: ' + pc.gray('https://ffmpeg.org'));

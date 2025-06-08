@@ -12,6 +12,7 @@ export class Image {
     private static convertCommand: string = 'magick convert';
     private static identifyCommand: string = 'magick identify';
     private static isInitialized: boolean = false;
+    private static imageMagickType: 'modern' | 'legacy' | 'none' = 'none';
 
     constructor(filePath: string) {
         if (!existsSync(filePath)) {
@@ -45,45 +46,99 @@ export class Image {
         if (Image.isInitialized) return;
 
         try {
-            // Test if magick command is available in system PATH
+            // First try modern ImageMagick (magick command)
             const { stdout } = await execAsync('magick -version');
             
-            // If we get here, magick command works
-            // Store the command with appropriate subcommands
+            // If we get here, modern magick command works
             Image.convertCommand = 'magick convert';
             Image.identifyCommand = 'magick identify';
+            Image.imageMagickType = 'modern';
             Image.isInitialized = true;
             
             // Get version info
             const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
             const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            console.log(`Using system ImageMagick: magick`);
+            console.log(`Using modern ImageMagick: magick`);
             console.log(`ImageMagick version: ${version}`);
         } catch {
-            // ImageMagick not found in PATH
-            Image.isInitialized = true;
+            try {
+                // Try legacy ImageMagick (convert/identify commands)
+                const [convertResult, identifyResult] = await Promise.all([
+                    execAsync('convert -version'),
+                    execAsync('identify -version')
+                ]);
+                
+                // If we get here, legacy commands work
+                Image.convertCommand = 'convert';
+                Image.identifyCommand = 'identify';
+                Image.imageMagickType = 'legacy';
+                Image.isInitialized = true;
+                
+                // Get version info from convert command
+                const versionMatch = convertResult.stdout.match(/Version: ImageMagick ([\d.-]+)/);
+                const version = versionMatch ? versionMatch[1] : 'unknown';
+                
+                console.log(`Using legacy ImageMagick: convert/identify`);
+                console.log(`ImageMagick version: ${version}`);
+            } catch {
+                // Neither modern nor legacy ImageMagick found
+                Image.imageMagickType = 'none';
+                Image.isInitialized = true;
+            }
         }
     }
 
     /**
      * Verify that ImageMagick is available
      */
-    static async verifyImageMagick(): Promise<{ available: boolean; version?: string; error?: string }> {
-        try {
-            const { stdout } = await execAsync('magick -version');
-            
-            const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
-            return {
-                available: true,
-                version: versionMatch ? versionMatch[1] : 'unknown'
-            };
-        } catch (error) {
+    static async verifyImageMagick(): Promise<{ available: boolean; version?: string; error?: string; type?: 'modern' | 'legacy' }> {
+        // Initialize commands if not already done
+        await Image.initializeCommands();
+        
+        if (Image.imageMagickType === 'modern') {
+            try {
+                const { stdout } = await execAsync('magick -version');
+                const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
+                return {
+                    available: true,
+                    version: versionMatch ? versionMatch[1] : 'unknown',
+                    type: 'modern'
+                };
+            } catch (error) {
+                return {
+                    available: false,
+                    error: `Modern ImageMagick 'magick' command failed: ${error}`
+                };
+            }
+        } else if (Image.imageMagickType === 'legacy') {
+            try {
+                const { stdout } = await execAsync('convert -version');
+                const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
+                return {
+                    available: true,
+                    version: versionMatch ? versionMatch[1] : 'unknown',
+                    type: 'legacy'
+                };
+            } catch (error) {
+                return {
+                    available: false,
+                    error: `Legacy ImageMagick 'convert' command failed: ${error}`
+                };
+            }
+        } else {
             return {
                 available: false,
-                error: `ImageMagick not found. Make sure ImageMagick 7.0+ is installed and the 'magick' command is available.`
+                error: `ImageMagick not found. Please install ImageMagick and ensure either 'magick' or 'convert'/'identify' commands are available.`
             };
         }
+    }
+
+    /**
+     * Get the type of ImageMagick installation
+     */
+    static getImageMagickType(): 'modern' | 'legacy' | 'none' {
+        return Image.imageMagickType;
     }
 
     private async getImageInfo(): Promise<AssetInfo> {

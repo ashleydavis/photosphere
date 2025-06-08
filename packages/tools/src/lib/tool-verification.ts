@@ -28,7 +28,7 @@ export async function verifyTools(): Promise<ToolsStatus> {
     const missingTools: string[] = [];
     
     if (!magickStatus.available) {
-        missingTools.push('magick (ImageMagick)');
+        missingTools.push('ImageMagick');
     }
     if (!ffprobeStatus.available) {
         missingTools.push('ffprobe');
