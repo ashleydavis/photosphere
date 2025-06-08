@@ -32,17 +32,17 @@ jobs:
             ~/.bun/install/cache
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Cache Photosphere tools
         uses: actions/cache@v4
         with:
           path: ~/.photosphere/tools
-          key: ${{ runner.os }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
           restore-keys: |
-            ${{ runner.os }}-photosphere-tools-
+            ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-
 
       - name: Install dependencies
         run: bun install
@@ -81,17 +81,17 @@ jobs:
             ~/.bun/install/cache
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Cache Photosphere tools
         uses: actions/cache@v4
         with:
           path: ~/.photosphere/tools
-          key: ${{ runner.os }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
           restore-keys: |
-            ${{ runner.os }}-photosphere-tools-
+            ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-
 
       - name: Install dependencies
         run: bun install
@@ -141,17 +141,17 @@ jobs:
             ~/.bun/install/cache
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Cache Photosphere tools
         uses: actions/cache@v4
         with:
           path: ~/.photosphere/tools
-          key: ${{ runner.os }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-${{ hashFiles('packages/tools/src/lib/tool-downloader.ts') }}
           restore-keys: |
-            ${{ runner.os }}-photosphere-tools-
+            ${{ runner.os }}-${{ runner.arch }}-photosphere-tools-
 
       - name: Verify runner architecture
         run: |
