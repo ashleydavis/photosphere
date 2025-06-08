@@ -183,7 +183,7 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
         
         if (downloadInfo.extract === 'macos-imagemagick') {
             // Handle macOS ImageMagick with dylib dependencies
-            await extractFile(downloadPath, tempDir);
+            await extractFile(downloadPath, tempDir, downloadInfo.extractPath);
             
             // Create a dedicated directory for ImageMagick
             const magickDir = join(toolsDir, 'imagemagick-macos');
@@ -192,14 +192,27 @@ async function downloadTool(toolName: string, downloadInfo: DownloadInfo, toolsD
             }
             
             // Find and copy the entire ImageMagick directory
-            const { readdirSync } = require('fs');
-            const imageMagickDirs = readdirSync(tempDir).filter((dir: string) => dir.startsWith('ImageMagick-'));
+            const { readdirSync, statSync } = require('fs');
+            console.log(`Temp directory contents:`);
+            const tempContents = readdirSync(tempDir);
+            tempContents.forEach((item: string) => {
+                const itemPath = join(tempDir, item);
+                const isDir = statSync(itemPath).isDirectory();
+                console.log(`  ${item} ${isDir ? '(directory)' : '(file)'}`);
+            });
+            
+            const imageMagickDirs = tempContents.filter((item: string) => {
+                const itemPath = join(tempDir, item);
+                return statSync(itemPath).isDirectory() && item.startsWith('ImageMagick-');
+            });
             
             if (imageMagickDirs.length === 0) {
                 throw new Error('No ImageMagick directory found in extracted archive');
             }
             
             const sourceDir = join(tempDir, imageMagickDirs[0]);
+            console.log(`Copying from: ${sourceDir}`);
+            console.log(`Copying to: ${magickDir}`);
             
             // Copy entire ImageMagick directory to preserve structure
             await execAsync(`cp -R "${sourceDir}"/* "${magickDir}"/`);
