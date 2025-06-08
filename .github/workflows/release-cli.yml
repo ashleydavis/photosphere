@@ -153,6 +153,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-photosphere-tools-
 
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          echo "OS Version: $(sw_vers)"
+
       - name: Install dependencies
         run: bun install
 

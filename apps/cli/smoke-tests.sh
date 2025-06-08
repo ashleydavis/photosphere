@@ -115,6 +115,16 @@ run_command() {
     log_info "Running: $description"
     echo "Command: $command"
     
+    # For macOS, check if binary exists and is executable
+    if [[ "$OSTYPE" == "darwin"* ]] && [[ "$command" == *"psi"* ]]; then
+        local binary_path=$(echo "$command" | awk '{print $1}')
+        if [ -f "$binary_path" ]; then
+            log_info "Binary exists at: $binary_path"
+            file "$binary_path" || true
+            log_info "Binary permissions: $(ls -la "$binary_path")"
+        fi
+    fi
+    
     if eval "$command"; then
         if [ $expected_exit_code -eq 0 ]; then
             log_success "$description"
@@ -130,6 +140,10 @@ run_command() {
             return 0
         else
             log_error "$description (exit code: $actual_exit_code)"
+            # Special handling for macOS illegal instruction error
+            if [ $actual_exit_code -eq 132 ] && [[ "$OSTYPE" == "darwin"* ]]; then
+                log_error "Illegal instruction error on macOS - binary may be compiled for wrong architecture"
+            fi
             exit 1  # Exit immediately on failure
         fi
     fi
