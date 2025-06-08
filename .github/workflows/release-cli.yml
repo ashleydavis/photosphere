@@ -97,8 +97,17 @@ jobs:
 
       - name: Install dependencies
         run: bun install
-          
-      - name: Build Windows` executable
+
+      - name: Install media processing tools (Windows)
+        run: |
+          echo "Installing ImageMagick and ffmpeg via Chocolatey..."
+          choco install imagemagick ffmpeg -y
+          echo "Verifying installations..."
+          magick --version
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Build Windows executable
         working-directory: ./apps/cli
         run: |
           bun run build-win
@@ -106,7 +115,7 @@ jobs:
       - name: Run smoke tests
         working-directory: ./apps/cli
         shell: bash
-        run: ./smoke-tests.sh install-tools,all
+        run: ./smoke-tests.sh all
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
