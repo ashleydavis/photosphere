@@ -124,7 +124,7 @@ jobs:
           path: ./apps/cli/bin/x64/win/psi.exe
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-13 # x64 architecture
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
