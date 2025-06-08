@@ -1,4 +1,5 @@
 import { verifyTools } from "tools";
+import { Image } from "tools";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { platform } from "os";
@@ -23,12 +24,25 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
     
     const toolsStatus = await verifyTools();
     
+    // Get ImageMagick type to display the correct command name
+    const imageMagickType = Image.getImageMagickType();
+    let imageMagickName = 'ImageMagick';
+    let imageMagickCommand = 'magick';
+    
+    if (imageMagickType === 'legacy') {
+        imageMagickName = 'ImageMagick (convert/identify)';
+        imageMagickCommand = 'convert/identify';
+    } else if (imageMagickType === 'modern') {
+        imageMagickName = 'ImageMagick (magick)';
+        imageMagickCommand = 'magick';
+    }
+    
     // Show status of each tool
     const tools = [
         { 
-            name: 'ImageMagick', 
+            name: imageMagickName, 
             key: 'magick' as const, 
-            command: 'magick',
+            command: imageMagickCommand,
             description: 'Image processing - resizing, format conversion, metadata extraction' 
         },
         { 
@@ -63,7 +77,11 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
         
         if (!status.available) {
             allAvailable = false;
-            missingTools.push(tool.name);
+            if (tool.key === 'magick') {
+                missingTools.push('ImageMagick');
+            } else {
+                missingTools.push(tool.name);
+            }
         }
         console.log();
     }
@@ -117,6 +135,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
                 console.log();
                 console.log(pc.bold('Manual installation:'));
                 console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#windows'));
+                console.log('    (Installs both modern "magick" and legacy "convert/identify" commands)');
                 console.log('  • ffmpeg: ' + pc.gray('https://www.gyan.dev/ffmpeg/builds/'));
                 console.log('    (Download "release essentials" build)');
                 break;
@@ -135,6 +154,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
                 console.log();
                 console.log(pc.bold('Manual installation:'));
                 console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#macosx'));
+                console.log('    (Installs both modern "magick" and legacy "convert/identify" commands)');
                 console.log('  • ffmpeg: ' + pc.gray('https://evermeet.cx/ffmpeg/'));
                 break;
                 
@@ -156,6 +176,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
                 console.log();
                 console.log(pc.bold('Manual/Binary installation:'));
                 console.log('  • ImageMagick: ' + pc.gray('https://imagemagick.org/script/download.php#linux'));
+                console.log('    (Both modern "magick" and legacy "convert/identify" commands supported)');
                 console.log('  • ffmpeg: ' + pc.gray('https://johnvansickle.com/ffmpeg/'));
                 console.log('    (Static builds for Linux)');
                 break;
@@ -166,6 +187,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
                 console.log(pc.bold('ImageMagick:'));
                 console.log('  Official site: ' + pc.gray('https://imagemagick.org'));
                 console.log('  Downloads: ' + pc.gray('https://imagemagick.org/script/download.php'));
+                console.log('  (Provides both modern "magick" and legacy "convert/identify" commands)');
                 console.log();
                 console.log(pc.bold('ffmpeg (includes ffprobe):'));
                 console.log('  Official site: ' + pc.gray('https://ffmpeg.org'));
