@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
 import { platform } from 'os';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
+import { log } from 'utils';
 
 const execAsync = promisify(exec);
 
@@ -57,8 +58,8 @@ export class Video {
             const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
             const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            console.log(`Using system ffprobe: ffprobe`);
-            console.log(`ffprobe version: ${version}`);
+            log.verbose(`Using system ffprobe: ffprobe`);
+            log.verbose(`ffprobe version: ${version}`);
         } catch {
             // ffprobe not found in PATH
             Video.isInitialized = true;

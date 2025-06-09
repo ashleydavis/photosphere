@@ -1,8 +1,8 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
-import { platform } from 'os';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
+import { log } from 'utils';
 
 const execAsync = promisify(exec);
 
@@ -59,8 +59,8 @@ export class Image {
             const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
             const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            console.log(`Using modern ImageMagick: magick`);
-            console.log(`ImageMagick version: ${version}`);
+            log.verbose(`Using modern ImageMagick: magick`);
+            log.verbose(`ImageMagick version: ${version}`);
         } catch {
             try {
                 // Try legacy ImageMagick (convert/identify commands)
@@ -79,8 +79,8 @@ export class Image {
                 const versionMatch = convertResult.stdout.match(/Version: ImageMagick ([\d.-]+)/);
                 const version = versionMatch ? versionMatch[1] : 'unknown';
                 
-                console.log(`Using legacy ImageMagick: convert/identify`);
-                console.log(`ImageMagick version: ${version}`);
+                log.verbose(`Using legacy ImageMagick: convert/identify`);
+                log.verbose(`ImageMagick version: ${version}`);
             } catch {
                 // Neither modern nor legacy ImageMagick found
                 Image.imageMagickType = 'none';
@@ -418,7 +418,7 @@ export class Image {
             return dominantColor;
         } catch (error) {
             // Fallback to simple method if histogram fails
-            console.warn(`Histogram method failed, falling back to simple method: ${error}`);
+            log.verbose(`Histogram method failed, falling back to simple method: ${error}`);
             return await this.getDominantColor();
         }
     }
