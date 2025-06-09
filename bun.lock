@@ -40,7 +40,6 @@
         "@clack/prompts": "^0.7.0",
         "adm-zip": "^0.5.16",
         "api": "workspace:*",
-        "colorthief": "^2.6.0",
         "commander": "^13.1.0",
         "exif-parser": "^0.1.12",
         "jszip": "^3.10.1",
