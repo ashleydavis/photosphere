@@ -19,8 +19,40 @@ import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFil
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
-// @ts-ignore
-const ColorThief = require("colorthief");
+import { Image } from "tools";
+
+//
+// Extract dominant color from thumbnail buffer using ImageMagick
+//
+async function extractDominantColorFromThumbnail(thumbnailBuffer: Buffer): Promise<[number, number, number] | undefined> {
+    let tempFilePath: string | null = null;
+    try {
+        // Create a temporary file for the thumbnail
+        const tempDir = os.tmpdir();
+        tempFilePath = path.join(tempDir, `thumbnail_${uuid()}.jpg`);
+        
+        // Write the thumbnail buffer to the temporary file
+        await fsPromises.writeFile(tempFilePath, thumbnailBuffer);
+        
+        // Use the Image class to extract dominant color
+        const image = new Image(tempFilePath);
+        const dominantColor = await image.getDominantColor();
+        
+        return dominantColor;
+    } catch (error) {
+        log.error(`Failed to extract dominant color from thumbnail: ${error}`);
+        return undefined;
+    } finally {
+        // Clean up the temporary file
+        if (tempFilePath) {
+            try {
+                await fsPromises.unlink(tempFilePath);
+            } catch (cleanupError) {
+                log.warn(`Failed to cleanup temporary thumbnail file ${tempFilePath}: ${cleanupError}`);
+            }
+        }
+    }
+}
 
 //
 // A function that validates a file.
@@ -634,7 +666,7 @@ export class MediaFileDatabase {
                 labels,
                 description,
                 micro: assetDetails?.micro.toString("base64"),
-                color: assetDetails ? await ColorThief.getColor(assetDetails.thumbnail) : undefined,
+                color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnail) : undefined,
             });
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);

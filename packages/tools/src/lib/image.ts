@@ -346,6 +346,131 @@ export class Image {
         return `${basePath}_resized.${newExtension}`;
     }
 
+    /**
+     * Extract the dominant color from the image using ImageMagick
+     * Returns RGB values as [r, g, b] array
+     */
+    async getDominantColor(): Promise<[number, number, number]> {
+        try {
+            // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
+            const command = `${Image.convertCommand} "${this.filePath}" -resize 1x1! -format "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]" info:`;
+            const { stdout } = await execAsync(command);
+            
+            const rgbString = stdout.trim();
+            const rgbValues = rgbString.split(',').map(val => parseInt(val.trim()));
+            
+            if (rgbValues.length === 3 && rgbValues.every(val => !isNaN(val) && val >= 0 && val <= 255)) {
+                return [rgbValues[0], rgbValues[1], rgbValues[2]];
+            } else {
+                throw new Error(`Invalid RGB values: ${rgbString}`);
+            }
+        } catch (error) {
+            throw new Error(`Failed to extract dominant color: ${error}`);
+        }
+    }
+
+    /**
+     * Extract the dominant color using histogram analysis with k-means clustering
+     * This method provides more accurate dominant color but is slower
+     * Returns RGB values as [r, g, b] array
+     */
+    async getDominantColorHistogram(colorCount: number = 5): Promise<[number, number, number]> {
+        try {
+            // First resize to optimize performance, then use histogram analysis
+            let command: string;
+            
+            if (Image.imageMagickType === 'modern') {
+                // Use k-means clustering for ImageMagick 7 (more accurate)
+                command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 -kmeans ${colorCount} -format "%c" histogram:info:`;
+            } else {
+                // Use color reduction for legacy ImageMagick
+                command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
+            }
+            
+            const { stdout } = await execAsync(command);
+            
+            // Parse histogram output to find the most frequent color
+            const lines = stdout.trim().split('\n');
+            let maxCount = 0;
+            let dominantColor: [number, number, number] = [0, 0, 0];
+            
+            for (const line of lines) {
+                if (line.trim()) {
+                    // Parse line like: "   1234: (255,128,64) #FF8040 srgb(255,128,64)"
+                    // or "   30065: (48.4086,48.7393,51.1362) #303133 srgb(18.9837%,19.1135%,20.0534%)"
+                    const countMatch = line.match(/^\s*(\d+):/);
+                    const rgbMatch = line.match(/\(([0-9.]+),([0-9.]+),([0-9.]+)\)/);
+                    
+                    if (countMatch && rgbMatch) {
+                        const count = parseInt(countMatch[1]);
+                        const r = Math.round(parseFloat(rgbMatch[1]));
+                        const g = Math.round(parseFloat(rgbMatch[2]));
+                        const b = Math.round(parseFloat(rgbMatch[3]));
+                        
+                        if (count > maxCount) {
+                            maxCount = count;
+                            dominantColor = [r, g, b];
+                        }
+                    }
+                }
+            }
+            
+            return dominantColor;
+        } catch (error) {
+            // Fallback to simple method if histogram fails
+            console.warn(`Histogram method failed, falling back to simple method: ${error}`);
+            return await this.getDominantColor();
+        }
+    }
+
+    /**
+     * Get multiple dominant colors from the image
+     * Returns array of RGB values as [[r, g, b], [r, g, b], ...]
+     */
+    async getDominantColors(colorCount: number = 5): Promise<Array<[number, number, number]>> {
+        try {
+            let command: string;
+            
+            if (Image.imageMagickType === 'modern') {
+                // Use k-means clustering for ImageMagick 7
+                command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 -kmeans ${colorCount} -format "%c" histogram:info:`;
+            } else {
+                // Use color reduction for legacy ImageMagick
+                command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
+            }
+            
+            const { stdout } = await execAsync(command);
+            const lines = stdout.trim().split('\n');
+            const colors: Array<{ rgb: [number, number, number], count: number }> = [];
+            
+            for (const line of lines) {
+                if (line.trim()) {
+                    const countMatch = line.match(/^\s*(\d+):/);
+                    const rgbMatch = line.match(/\(([0-9.]+),([0-9.]+),([0-9.]+)\)/);
+                    
+                    if (countMatch && rgbMatch) {
+                        const count = parseInt(countMatch[1]);
+                        const r = Math.round(parseFloat(rgbMatch[1]));
+                        const g = Math.round(parseFloat(rgbMatch[2]));
+                        const b = Math.round(parseFloat(rgbMatch[3]));
+                        
+                        colors.push({ rgb: [r, g, b], count });
+                    }
+                }
+            }
+            
+            // Sort by count (most frequent first) and return RGB values
+            return colors
+                .sort((a, b) => b.count - a.count)
+                .map(color => color.rgb)
+                .slice(0, colorCount);
+        } catch (error) {
+            // Fallback to simple method for single color
+            const dominantColor = await this.getDominantColor();
+            return [dominantColor];
+        }
+    }
+
     getPath(): string {
         return this.filePath;
     }
