@@ -25,6 +25,15 @@ ls -la psi
 
 The binary should show execute permissions like `-rwxr-xr-x` for the user.
 
+**macOS Additional Step**: If you encounter "cannot be opened because the developer cannot be verified" or similar security warnings, you need to remove the quarantine attributes that macOS adds to downloaded files:
+
+```bash
+# Remove quarantine attributes on macOS
+xattr -c ./psi
+```
+
+This is required because macOS Gatekeeper automatically quarantines downloaded binaries that aren't code-signed by a registered Apple developer. The `xattr -c` command removes these extended attributes, allowing the binary to run normally. This is safe for trusted binaries like the Photosphere CLI.
+
 ### Building from Source
 
 ```bash

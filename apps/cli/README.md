@@ -69,4 +69,14 @@ bin/win/psi.exe
 bin/mac/psi
 ```
 
+## Running on macOS
+
+If you encounter "cannot be opened because the developer cannot be verified" when running the macOS binary, remove the quarantine attributes:
+
+```bash
+xattr -c ./psi
+```
+
+This removes the quarantine attributes that macOS Gatekeeper adds to downloaded or built unsigned binaries.
+
 
