@@ -7,6 +7,9 @@ import { getFileInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
+import { computeHash } from "adb";
+import fs from "fs";
+import { Readable } from "stream";
 
 export interface IInfoCommandOptions { 
     //
@@ -38,6 +41,7 @@ export interface IInfoCommandOptions {
 interface FileAnalysis {
     path: string;
     contentType: string;
+    hash?: string;
     details?: any;
     error?: string;
 }
@@ -95,12 +99,23 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, contentType: string, openStream?: () => Readable): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
     let details: any = {
         contentType
     };
+    
+    let hash: string | undefined;
+
+    // Calculate file hash
+    try {
+        const fileStream = openStream ? openStream() : fs.createReadStream(absolutePath);
+        const hashBuffer = await computeHash(fileStream);
+        hash = hashBuffer.toString("hex");
+    } catch (error) {
+        log.verbose(`Failed to calculate hash for ${filePath}: ${error}`);
+    }
 
     // Analyze file content using the unified getFileInfo function
     try {
@@ -142,12 +157,13 @@ async function analyzeFile(filePath: string, contentType: string, openStream?: (
     return {
         path: filePath,
         contentType,
+        hash,
         details
     };
 }
 
 function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
-    const { path, contentType, details, error } = analysis;
+    const { path, contentType, hash, details, error } = analysis;
     
     console.log(pc.bold(pc.blue(`📁 ${path}`)));
     
@@ -157,6 +173,10 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
     }
 
     console.log(`   Type: ${contentType}`);
+    
+    if (hash) {
+        console.log(`   Hash: ${pc.gray(hash)}`);
+    }
     
     if (details.fileSize) {
         console.log(`   Size: ${formatBytes(details.fileSize)}`);

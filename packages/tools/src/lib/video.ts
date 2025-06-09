@@ -1,7 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
-import { platform } from 'os';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
 
