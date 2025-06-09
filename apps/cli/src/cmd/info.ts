@@ -3,13 +3,14 @@ import { log } from "utils";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { getFileInfo } from "tools";
+import { getFileInfo, AssetInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { computeHash } from "adb";
 import fs from "fs";
 import { Readable } from "stream";
+import { IFileInfo } from "storage";
 
 export interface IInfoCommandOptions { 
     //
@@ -40,9 +41,9 @@ export interface IInfoCommandOptions {
 
 interface FileAnalysis {
     path: string;
-    contentType: string;
+    fileInfo: IFileInfo;
+    assetInfo?: AssetInfo;
     hash?: string;
-    details?: any;
     error?: string;
 }
 
@@ -66,13 +67,13 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     // Scan all paths using the new file scanner
     await scanPaths(paths, async (fileResult) => {
         try {
-            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.openStream);
+            const analysis = await analyzeFile(fileResult.filePath, fileResult.fileInfo, fileResult.openStream);
             results.push(analysis);
             fileCount++;
         } catch (error) {
             results.push({
                 path: fileResult.filePath,
-                contentType: fileResult.contentType,
+                fileInfo: fileResult.fileInfo,
                 error: error instanceof Error ? error.message : String(error)
             });
             fileCount++;
@@ -99,71 +100,40 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, openStream?: () => Readable): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, fileInfo: IFileInfo, openStream?: () => Readable): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
-    let details: any = {
-        contentType
+    let fileAnalysis: FileAnalysis = {
+        path: filePath,
+        fileInfo,        
     };
     
-    let hash: string | undefined;
-
     // Calculate file hash
     try {
         const fileStream = openStream ? openStream() : fs.createReadStream(absolutePath);
         const hashBuffer = await computeHash(fileStream);
-        hash = hashBuffer.toString("hex");
-    } catch (error) {
+        fileAnalysis.hash = hashBuffer.toString("hex");
+    } 
+    catch (error) {
         log.verbose(`Failed to calculate hash for ${filePath}: ${error}`);
     }
 
     // Analyze file content using the unified getFileInfo function
     try {
-        const fileInfo = await getFileInfo(absolutePath, contentType);
-        
-        if (fileInfo) {
-            details = {
-                ...details,
-                type: fileInfo.type,
-                format: fileInfo.format,
-                dimensions: fileInfo.dimensions,
-                colorSpace: fileInfo.colorSpace,
-                fileSize: fileInfo.fileSize,
-                createdAt: fileInfo.createdAt,
-                modifiedAt: fileInfo.modifiedAt,
-                duration: fileInfo.duration,
-                fps: fileInfo.fps,
-                bitrate: fileInfo.bitrate,
-                hasAudio: fileInfo.hasAudio,
-                metadata: fileInfo.metadata
-            };
-            
-            // For images, also get EXIF data separately for display purposes
-            if (fileInfo.type === 'image') {
-                try {
-                    const { Image } = await import("tools");
-                    const image = new Image(absolutePath);
-                    const exifData = await image.getExifData();
-                    details.exif = exifData;
-                } catch {
-                    // Ignore EXIF errors
-                }
-            }
+        const assetInfo = await getFileInfo(absolutePath, fileInfo.contentType!);        
+        if (assetInfo) {
+            fileAnalysis.assetInfo = assetInfo;
         }
-    } catch (error) {
-        details.analysisError = `Failed to analyze file: ${error}`;
+    } 
+    catch (error) {
+        fileAnalysis.error = `Failed to analyze file: ${error}`;
     }
 
-    return {
-        path: filePath,
-        contentType,
-        hash,
-        details
-    };
+    return fileAnalysis;
 }
 
 function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
-    const { path, contentType, hash, details, error } = analysis;
+    const { path, fileInfo, assetInfo, hash, error } = analysis;
     
     console.log(pc.bold(pc.blue(`📁 ${path}`)));
     
@@ -172,71 +142,21 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
         return;
     }
 
-    console.log(`   Type: ${contentType}`);
+    console.log(`   Type: ${fileInfo.contentType}`);
     
     if (hash) {
         console.log(`   Hash: ${pc.gray(hash)}`);
     }
     
-    if (details.fileSize) {
-        console.log(`   Size: ${formatBytes(details.fileSize)}`);
-    }
-    
-    if (details.modifiedAt) {
-        console.log(`   Modified: ${details.modifiedAt.toLocaleString()}`);
+    console.log(`   Size: ${formatBytes(fileInfo.length)}`);
+    console.log(`   Modified: ${fileInfo.lastModified.toLocaleString()}`);
+
+    if (assetInfo?.dimensions) {
+        console.log(`   Dimensions: ${assetInfo?.dimensions.width} × ${assetInfo?.dimensions.height}`);
     }
 
-    if (details.type === 'image') {
-        if (details.dimensions) {
-            console.log(`   Dimensions: ${details.dimensions.width} × ${details.dimensions.height}`);
-        }
-        console.log(`   Format: ${details.format.toUpperCase()}`);
-        if (details.colorSpace) {
-            console.log(`   Color Space: ${details.colorSpace}`);
-        }
-        
-        if (details.exif && Object.keys(details.exif).length > 0) {
-            console.log(`   EXIF Data: ${Object.keys(details.exif).length} properties`);
-            
-            // Show key EXIF properties
-            if (details.exif.DateTimeOriginal) {
-                console.log(`   📅 Date Taken: ${details.exif.DateTimeOriginal}`);
-            }
-            if (details.exif.GPSLatitude && details.exif.GPSLongitude) {
-                console.log(`   📍 GPS: ${details.exif.GPSLatitude}, ${details.exif.GPSLongitude}`);
-            }
-            if (details.exif.Model) {
-                console.log(`   📷 Camera: ${details.exif.Model}`);
-            }
-            
-            if (options.raw) {
-                console.log(`   Raw EXIF:`);
-                for (const [key, value] of Object.entries(details.exif)) {
-                    console.log(`     ${key}: ${value}`);
-                }
-            }
-        }
-    } else if (details.type === 'video') {
-        if (details.dimensions) {
-            console.log(`   Dimensions: ${details.dimensions.width} × ${details.dimensions.height}`);
-        }
-        console.log(`   Format: ${details.format.toUpperCase()}`);
-        if (details.duration) {
-            console.log(`   Duration: ${formatDuration(details.duration)}`);
-        }
-        if (details.fps) {
-            console.log(`   Frame Rate: ${details.fps} fps`);
-        }
-        if (details.bitrate) {
-            console.log(`   Bitrate: ${formatBitrate(details.bitrate)}`);
-        }
-        if (details.hasAudio !== undefined) {
-            console.log(`   Audio: ${details.hasAudio ? 'Yes' : 'No'}`);
-        }
-    }
-
-    if (details.analysisError) {
-        console.log(`   ${pc.yellow(`Analysis Error: ${details.analysisError}`)}`);
+    if (analysis.error) {
+        console.log(`   ${pc.yellow(`Analysis Error: ${analysis.error}`)}`);
     }
 }
 

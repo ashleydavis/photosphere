@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, statSync } from 'fs';
+import fs from 'fs';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
 
@@ -14,9 +14,6 @@ export class Video {
     private static isInitialized: boolean = false;
 
     constructor(filePath: string) {
-        if (!existsSync(filePath)) {
-            throw new Error(`File not found: ${filePath}`);
-        }
         this.filePath = filePath;
         
         // Initialize ffmpeg/ffprobe commands on first use
@@ -110,10 +107,12 @@ export class Video {
             return this._info;
         }
 
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+        
         try {
-            // Get file stats
-            const stats = statSync(this.filePath);
-            
+
             // Run ffprobe to get video information in JSON format
             const { stdout } = await execAsync(
                 `${Video.ffprobeCommand} -v quiet -print_format json -show_format -show_streams "${this.filePath}"`
@@ -165,7 +164,6 @@ export class Video {
                 mimeType: mimeTypes[formatName] || `video/${formatName}`,
                 
                 filePath: this.filePath,
-                fileSize: parseInt(format.size) || stats.size,
                 
                 dimensions: {
                     width: videoStream.width,
@@ -177,9 +175,7 @@ export class Video {
                 bitrate: parseInt(format.bit_rate),
                 hasAudio: !!audioStream,
                 
-                colorSpace: videoStream.color_space,
                 createdAt,
-                modifiedAt: stats.mtime,
                 
                 metadata: {
                     ...format.tags,
