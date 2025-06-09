@@ -229,11 +229,11 @@ export class FileScanner {
             return this.options.includeZipFiles;
         }
         
-        if (contentType.startsWith("image/")) {
+        if (contentType.startsWith("image")) {
             return this.options.includeImages;
         }
         
-        if (contentType.startsWith("video/")) {
+        if (contentType.startsWith("video")) {
             return this.options.includeVideos;
         }
         
