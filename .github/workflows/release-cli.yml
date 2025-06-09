@@ -47,11 +47,23 @@ jobs:
           echo "Installing ImageMagick and ffmpeg via apt..."
           sudo apt update
           sudo apt install -y imagemagick ffmpeg
-          echo "Verifying installations..."
-          convert --version
-          identify --version
-          ffmpeg -version
-          ffprobe -version
+          
+      - name: Verify media tool versions (Linux)
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1
+          echo ""
+          echo "ImageMagick (identify):"
+          identify --version | head -1
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
           
       - name: Build Linux executable
         working-directory: ./apps/cli
@@ -99,10 +111,23 @@ jobs:
         run: |
           echo "Installing ImageMagick and ffmpeg via Chocolatey..."
           choco install imagemagick ffmpeg -y
-          echo "Verifying installations..."
-          magick --version
-          ffmpeg -version
-          ffprobe -version
+
+      - name: Verify media tool versions (Windows)
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | Select-Object -First 1
+          echo ""
+          echo "ImageMagick (convert):"
+          magick convert --version | Select-Object -First 1
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version 2>&1 | Select-Object -First 1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version 2>&1 | Select-Object -First 1
+          echo ""
 
       - name: Build Windows executable
         working-directory: ./apps/cli
@@ -156,10 +181,23 @@ jobs:
         run: |
           echo "Installing ImageMagick and ffmpeg via Homebrew..."
           brew install imagemagick ffmpeg
-          echo "Verifying installations..."
-          magick --version
-          ffmpeg -version
-          ffprobe -version
+
+      - name: Verify media tool versions (macOS x64)
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | head -1 || echo "magick command not found"
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1 || echo "convert command not found"
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
 
       - name: Build macOS executable
         working-directory: ./apps/cli
@@ -213,10 +251,23 @@ jobs:
         run: |
           echo "Installing ImageMagick and ffmpeg via Homebrew..."
           brew install imagemagick ffmpeg
-          echo "Verifying installations..."
-          magick --version
-          ffmpeg -version
-          ffprobe -version
+
+      - name: Verify media tool versions (macOS ARM64)
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | head -1 || echo "magick command not found"
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1 || echo "convert command not found"
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
 
       - name: Build macOS ARM64 executable
         working-directory: ./apps/cli
