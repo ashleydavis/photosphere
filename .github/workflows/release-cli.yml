@@ -42,13 +42,13 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Install media processing tools (Linux)
+      - name: Install media processing tools
         run: |
           echo "Installing ImageMagick and ffmpeg via apt..."
           sudo apt update
           sudo apt install -y imagemagick ffmpeg
           
-      - name: Verify media tool versions (Linux)
+      - name: Verify media tool versions
         run: |
           echo "=== Media Tool Versions ==="
           echo ""
@@ -107,12 +107,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Install media processing tools (Windows)
+      - name: Install media processing tools
         run: |
           echo "Installing ImageMagick and ffmpeg via Chocolatey..."
           choco install imagemagick ffmpeg -y
 
-      - name: Verify media tool versions (Windows)
+      - name: Verify media tool versions
         run: |
           echo "=== Media Tool Versions ==="
           echo ""
@@ -177,12 +177,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Install media processing tools (macOS x64)
+      - name: Install media processing tools
         run: |
           echo "Installing ImageMagick and ffmpeg via Homebrew..."
           brew install imagemagick ffmpeg
 
-      - name: Verify media tool versions (macOS x64)
+      - name: Verify media tool versions
         run: |
           echo "=== Media Tool Versions ==="
           echo ""
@@ -237,7 +237,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-bun-
 
-
       - name: Verify runner architecture
         run: |
           echo "Architecture: $(uname -m)"
@@ -247,12 +246,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Install media processing tools (macOS ARM64)
+      - name: Install media processing tools
         run: |
           echo "Installing ImageMagick and ffmpeg via Homebrew..."
           brew install imagemagick ffmpeg
 
-      - name: Verify media tool versions (macOS ARM64)
+      - name: Verify media tool versions
         run: |
           echo "=== Media Tool Versions ==="
           echo ""
