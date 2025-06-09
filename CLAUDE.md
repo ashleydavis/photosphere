@@ -97,7 +97,7 @@ Frontend:
 - **Async**: Use async/await pattern for asynchronous code
 - **Error Handling**: Try/catch blocks with specific error handling, custom error classes
 - **Formatting**: 4-space indentation, braces on same line as control statements
-- **Comments**: Line comments with `//` preceded by blank line, method docs above function
+- **Comments**: Line comments with `//` preceded by blank line, method docs above function. Use `//` comments for method docs.
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
 - Use 4 space tabs for indentation.
 
