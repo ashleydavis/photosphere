@@ -11,8 +11,7 @@ export interface AssetInfo {
     
     // File information
     filePath: string;
-    fileSize: number;         // in bytes
-    
+
     // Visual properties
     dimensions: Dimensions;
     
@@ -23,9 +22,7 @@ export interface AssetInfo {
     hasAudio?: boolean;      // for videos
     
     // Common metadata
-    colorSpace?: string;
     createdAt?: Date;
-    modifiedAt?: Date;
     
     // Raw metadata (EXIF for images, format tags for videos)
     metadata?: Record<string, any>;
