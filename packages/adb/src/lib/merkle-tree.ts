@@ -920,6 +920,26 @@ export function visualizeTree(merkleTree: IMerkleTree): string {
     return result;
 }
 
+//
+// Splits a large number into high and low 32-bit parts.
+//
+function splitBigNum(input: bigint): { high: number, low: number } {
+    // Get low 32 bits using bitwise AND
+    const low = Number(input & 0xFFFFFFFFn);
+    
+    // Get high bits by right shifting 32 positions
+    const high = Number(input >> 32n);
+    
+    return { high, low };
+}
+
+//
+// Combines two 32-bit numbers into a single 64-bit bigint.
+//
+function combineBigNum(input: { low: number, high: number }): bigint {
+    return BigInt(input.high) * (1n << 32n) + BigInt(input.low);
+}
+
 /**
  * Save a Merkle tree to a file using V2 format (non-recursive, direct array serialization)
  * 
@@ -1002,27 +1022,24 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
     offset += 4;
 
     // Write totalSize
-    const low = tree.metadata.totalSize & 0xFFFFFFFF; // Lower 32 bits: 2,508,816,352
-    const high = tree.metadata.totalSize >> 32;
-    buffer.writeUInt32LE(low, offset);
-    buffer.writeUInt32LE(high, offset + 4);
+    const splitTotalSize = splitBigNum(BigInt(tree.metadata.totalSize));
+    buffer.writeUInt32LE(splitTotalSize.low, offset);
+    buffer.writeUInt32LE(splitTotalSize.high, offset + 4);
     offset += 8;
     
     // Write creation timestamp
     // Split into two 32-bit values since Node.js Buffer doesn't have writeUInt64LE
-    const createdLow = tree.metadata.createdAt % 0x100000000;
-    const createdHigh = Math.floor(tree.metadata.createdAt / 0x100000000);
-    buffer.writeUInt32LE(createdLow, offset);
+    const splitCreatedAt = splitBigNum(BigInt(tree.metadata.createdAt));
+    buffer.writeUInt32LE(splitCreatedAt.low, offset);
     offset += 4;
-    buffer.writeUInt32LE(createdHigh, offset);
+    buffer.writeUInt32LE(splitCreatedAt.high, offset);
     offset += 4;
     
     // Write modification timestamp
-    const modifiedLow = tree.metadata.modifiedAt % 0x100000000;
-    const modifiedHigh = Math.floor(tree.metadata.modifiedAt / 0x100000000);
-    buffer.writeUInt32LE(modifiedLow, offset);
+    const splitModifiedAt = splitBigNum(BigInt(tree.metadata.modifiedAt));
+    buffer.writeUInt32LE(splitModifiedAt.low, offset);
     offset += 4;
-    buffer.writeUInt32LE(modifiedHigh, offset);
+    buffer.writeUInt32LE(splitModifiedAt.high, offset);
     offset += 4;
     
     // Write all nodes
@@ -1040,10 +1057,9 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
         offset += 4;
 
         // Write tree size
-        const low = node.size & 0xFFFFFFFF; // Lower 32 bits: 2,508,816,352
-        const high = node.size >> 32;
-        buffer.writeUInt32LE(low, offset);
-        buffer.writeUInt32LE(high, offset + 4);
+        const splitSize = splitBigNum(BigInt(node.size));
+        buffer.writeUInt32LE(splitSize.low, offset);
+        buffer.writeUInt32LE(splitSize.high, offset + 4);
         offset += 8;
         
         // Write fileName if present
@@ -1115,25 +1131,23 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
         
         const totalFiles = treeData.readUInt32LE(offset);
         offset += 4;
-
+        
         const low = treeData.readUInt32LE(offset);
         const high = treeData.readUInt32LE(offset + 4);
-        const totalSize = (high << 32) | low;
+        const totalSize = Number(combineBigNum({ low, high }));
         offset += 8;
         
         // Read created timestamp (64-bit value split into two 32-bit values)
         const createdLow = treeData.readUInt32LE(offset);
-        offset += 4;
-        const createdHigh = treeData.readUInt32LE(offset);
-        offset += 4;
-        const createdAt = createdLow + createdHigh * 0x100000000;
+        const createdHigh = treeData.readUInt32LE(offset + 4);
+        const createdAt = Number(combineBigNum({ low: createdLow, high: createdHigh }));
+        offset += 8;
         
         // Read modified timestamp (64-bit value split into two 32-bit values)
         const modifiedLow = treeData.readUInt32LE(offset);
-        offset += 4;
-        const modifiedHigh = treeData.readUInt32LE(offset);
-        offset += 4;
-        const modifiedAt = modifiedLow + modifiedHigh * 0x100000000;
+        const modifiedHigh = treeData.readUInt32LE(offset + 4);
+        const modifiedAt = Number(combineBigNum({ low: modifiedLow, high: modifiedHigh }));
+        offset += 8;
         
         // Create metadata object
         const metadata: TreeMetadata = {
@@ -1164,7 +1178,7 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
             // Read tree size.
             const low = treeData.readUInt32LE(offset);
             const high = treeData.readUInt32LE(offset + 4);
-            const size = (high << 32) | low;
+            const size = Number(combineBigNum({ low, high }));
             offset += 8;
 
             // Read fileName if present
