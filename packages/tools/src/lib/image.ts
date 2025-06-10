@@ -1,7 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, statSync } from 'fs';
-import { platform } from 'os';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
 
 const execAsync = promisify(exec);

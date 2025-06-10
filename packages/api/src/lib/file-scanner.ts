@@ -129,14 +129,14 @@ export class FileScanner {
     private async scanDirectory(directoryPath: string, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
         log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
-        this.currentlyScanning = path.basename(directoryPath);
         if (progressCallback) {
+            this.currentlyScanning = path.basename(directoryPath);
             progressCallback(this.currentlyScanning);
         }
 
         for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, this.options.ignorePatterns)) {
-            this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
             if (progressCallback) {
+                this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
                 progressCallback(this.currentlyScanning);
             }
 
@@ -182,8 +182,8 @@ export class FileScanner {
     private async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
-        this.currentlyScanning = path.basename(filePath);
         if (progressCallback) {
+            this.currentlyScanning = path.basename(filePath);
             progressCallback(this.currentlyScanning);
         }
 
