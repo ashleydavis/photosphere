@@ -1,5 +1,4 @@
-import fs from "fs";
-import fsPromises from "fs/promises";
+import fs from "fs-extra";
 import os from "os";
 import path from "path";
 import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper } from "storage";
@@ -9,8 +8,7 @@ import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
-import { getImageDetails } from "./image";
-import { IResolution } from "node-utils";
+import { getImageDetails, IResolution } from "./image";
 import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile } from "adb";
 import { FileScanner } from "./file-scanner";
 
@@ -22,34 +20,9 @@ import { Image } from "tools";
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-async function extractDominantColorFromThumbnail(thumbnailBuffer: Buffer): Promise<[number, number, number] | undefined> {
-    let tempFilePath: string | null = null;
-    try {
-        // Create a temporary file for the thumbnail
-        const tempDir = os.tmpdir();
-        tempFilePath = path.join(tempDir, `thumbnail_${uuid()}.jpg`);
-        
-        // Write the thumbnail buffer to the temporary file
-        await fsPromises.writeFile(tempFilePath, thumbnailBuffer);
-        
-        // Use the Image class to extract dominant color
-        const image = new Image(tempFilePath);
-        const dominantColor = await image.getDominantColor();
-        
-        return dominantColor;
-    } catch (error) {
-        log.error(`Failed to extract dominant color from thumbnail: ${error}`);
-        return undefined;
-    } finally {
-        // Clean up the temporary file
-        if (tempFilePath) {
-            try {
-                await fsPromises.unlink(tempFilePath);
-            } catch (cleanupError) {
-                log.warn(`Failed to cleanup temporary thumbnail file ${tempFilePath}: ${cleanupError}`);
-            }
-        }
-    }
+async function extractDominantColorFromThumbnail(inputPath: string): Promise<[number, number, number] | undefined> {
+    const image = new Image(inputPath);
+    return await image.getDominantColor();
 }
 
 //
@@ -134,14 +107,14 @@ export interface IAssetDetails {
     resolution: IResolution;
 
     //
-    // The micro thumbnail of the image/video.
+    // The generated micro thumbnail of the image/video.
     //
-    micro: Buffer;
+    microPath: string;
 
     //
-    // The thumbnail of the image/video.
+    // The generated thumbnail of the image/video.
     //
-    thumbnail: Buffer;
+    thumbnailPath: string;
 
     //
     // The content type of the thumbnail.
@@ -151,7 +124,7 @@ export interface IAssetDetails {
     //
     // The display image.
     //
-    display?: Buffer;
+    displayPath?: string;
 
     //
     // The content type of the display image.
@@ -400,16 +373,17 @@ export class MediaFileDatabase {
             return;
         }
 
+        const assetId = uuid();
+
         let assetDetails: IAssetDetails | undefined = undefined;
+        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuid());
 
         if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, contentType, openStream);
+            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, openStream);
         }
         else if (contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, contentType, openStream);
+            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, openStream);
         }
-
-        const assetId = uuid();
 
         const assetPath = `assets/${assetId}`;
         const thumbPath = `thumb/${assetId}`;
@@ -437,31 +411,31 @@ export class MediaFileDatabase {
                 length: assetInfo.length,
             });
 
-            if (assetDetails?.thumbnail) {
+            if (assetDetails?.thumbnailPath) {
                 //
                 // Uploads the thumbnail.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, Readable.from(assetDetails.thumbnail)));
+                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, Readable.from(assetDetails.thumbnailPath)));
 
                 const thumbInfo = await this.assetStorage.info(thumbPath);
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
+                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnailPath), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
-            if (assetDetails?.display) {
+            if (assetDetails?.displayPath) {
                 //
                 // Uploads the display asset.
                 //
-                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, Readable.from(assetDetails.display!)));
+                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, Readable.from(assetDetails.displayPath!)));
 
                 const displayInfo = await this.assetStorage.info(displayPath);
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => Readable.from(assetDetails.display!), this.databaseHashCache);
+                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => Readable.from(assetDetails.displayPath!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
@@ -500,6 +474,14 @@ export class MediaFileDatabase {
 
             const description = "";
 
+            const micro = assetDetails?.microPath
+                ? (await fs.promises.readFile(assetDetails.microPath)).toString("base64")
+                : undefined;
+
+            const color = assetDetails 
+                ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
+                : undefined;
+
             //
             // Add the asset's metadata to the database.
             //
@@ -520,8 +502,8 @@ export class MediaFileDatabase {
                 properties,
                 labels,
                 description,
-                micro: assetDetails?.micro.toString("base64"),
-                color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnail) : undefined,
+                micro,
+                color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) : undefined,
             });
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
@@ -543,6 +525,12 @@ export class MediaFileDatabase {
             if (progressCallback) {
                 progressCallback(this.fileScanner.getCurrentlyScanning());
             }
+        }
+        finally {
+            //
+            // Remove all temporary assets created during the process.
+            //
+            await fs.remove(assetTempDir);
         }
     }
 

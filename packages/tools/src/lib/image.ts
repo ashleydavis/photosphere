@@ -292,7 +292,10 @@ export class Image {
         }
 
         try {
-            await execAsync(command);
+            console.error(`Resizing image with command: ${command}`);
+            const { stderr, stdout } = await execAsync(command);
+            console.log(`ImageMagick output: ${stdout}`);
+            console.error(`ImageMagick error: ${stderr}`);
             return new Image(output);
         } catch (error) {
             throw new Error(`Failed to resize image: ${error}`);
