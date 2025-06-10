@@ -257,6 +257,11 @@ export class FileScanner {
         if (contentType === "application/zip") {
             return this.options.includeZipFiles;
         }
+
+        if (contentType.startsWith("image/vnd.adobe.photoshop")) {
+            // Don't yet know how to validate or process PSD files. This might come later.
+            return false;
+        }
         
         if (contentType.startsWith("image")) {
             return this.options.includeImages;
