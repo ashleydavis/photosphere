@@ -77,6 +77,9 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
     await database.addPaths(paths, (currentlyScanning) => {
         const addSummary = database.getAddSummary();
         let progressMessage = `Added: ${pc.green(addSummary.numFilesAdded)}`;
+        if (addSummary.numFilesAlreadyAdded > 0) {
+            progressMessage += ` | Already added: ${pc.blue(addSummary.numFilesAlreadyAdded)}`;
+        }
         if (addSummary.numFilesIgnored > 0) {
             progressMessage += ` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`;
         }
