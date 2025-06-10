@@ -1,34 +1,43 @@
 import dayjs from "dayjs";
-import { transformImage, resizeImage } from "node-utils";
-import { convertExifCoordinates, getImageTransformation, ILocation, isLocationInRange } from "utils";
+import { writeStreamToFile } from "node-utils";
+import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange } from "utils";
 import fs from "fs-extra";
-import { Readable } from "stream";
+import path from "path";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
-import { buffer } from "node:stream/consumers";
 import { getFileInfo } from "tools";
+import { Readable } from "stream";
 const exifParser = require("exif-parser");
-
+import { Image } from "tools";
+import { exec } from 'child_process';
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getImageDetails(filePath: string, tempDir: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
 
-    let fileData = openStream ? await buffer(openStream()) : await fs.promises.readFile(filePath);
-    
-    // Use the new getFileInfo function to get basic info and dimensions  
-    const assetInfo = await getFileInfo(filePath, contentType);
+    let imagePath: string;
+
+    if (openStream) {
+        // If openStream is provided, we need to extract to a temporary file.
+        imagePath = path.join(tempDir, `temp_video_${crypto.randomUUID()}.jpg`);
+        await writeStreamToFile(openStream(), imagePath);        
+    }
+    else {
+        // Use the file directly from its location on disk.
+        imagePath = filePath;
+    }
+
+    const assetInfo = await getFileInfo(imagePath, contentType);
     if (!assetInfo) {
         throw new Error(`Unsupported file type: ${contentType}`);
     }
     
-    // Still use the existing EXIF parsing for metadata compatibility
-    const assetDetails = await getImageMetadata(filePath, fileData, contentType);
+    const assetDetails = await getImageMetadata(imagePath, contentType);
     const imageTransformation = await getImageTransformation(assetDetails.metadata);
     let resolution = assetInfo.dimensions;
     
     if (imageTransformation) {
         // Flips orientation depending on exif data.
-        fileData = await transformImage(fileData, imageTransformation);
+        imagePath = await transformImage(imagePath, tempDir, imageTransformation);
         if (imageTransformation.changeOrientation) {
             resolution = {
                 width: resolution.height,
@@ -37,16 +46,16 @@ export async function getImageDetails(filePath: string, contentType: string, ope
         }
     }
 
-    const micro = await resizeImage(fileData, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
-    const thumbnail = await resizeImage(fileData, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
-    const display = await resizeImage(fileData, resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
+    const microPath = await resizeImage(imagePath, tempDir, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
+    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
+    const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
 
     return { 
         resolution, 
-        micro,
-        thumbnail, 
+        microPath,
+        thumbnailPath, 
         thumbnailContentType: "image/jpeg",
-        display,
+        displayPath,
         displayContentType: "image/jpeg",
         ...assetDetails 
     };
@@ -55,13 +64,14 @@ export async function getImageDetails(filePath: string, contentType: string, ope
 //
 // Gets the metadata from the image.
 //
-export async function getImageMetadata(filePath: string, fileData: Buffer, contentType: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
+export async function getImageMetadata(filePath: string, contentType: string): Promise<{ metadata?: any, coordinates?: ILocation, photoDate?: string }> {
     if (contentType === "image/jpeg" || contentType === "image/jpg") {
         try {
             let coordinates: ILocation | undefined = undefined;
             let photoDate: string | undefined = undefined;
 
-            const parser = exifParser.create(fileData.buffer);
+            const fileData = await fs.readFile(filePath); //TODO: Move exif extraction to image magick so as not to load the entire file into memory.
+            const parser = exifParser.create(fileData);
             parser.enableSimpleValues(false);
             const exif = parser.parse();
             if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
@@ -101,5 +111,71 @@ export async function getImageMetadata(filePath: string, fileData: Buffer, conte
     }
     else {
         return {};
+    }
+}
+
+//
+// Represents the resolution of the image or video.
+//
+export interface IResolution {
+    //
+    // The width of the image or video.
+    //
+    width: number;
+
+    //
+    // The height of the image or video.
+    //
+    height: number;
+}
+
+//
+// Resize an image.
+//
+export async function resizeImage(inputPath: string, tempDir: string, resolution: { width: number, height: number }, minSize: number, quality: number = 90): Promise<string> {
+
+    let width: number;
+    let height: number;
+
+    if (resolution.width > resolution.height) {
+        height = minSize;
+        width = Math.trunc((resolution.width / resolution.height) * minSize);
+    }
+    else {
+        height = Math.trunc((resolution.height / resolution.width) * minSize);
+        width = minSize;
+    }
+
+    const image = new Image(inputPath);
+    const outputPath = path.join(tempDir, `temp_output_${crypto.randomUUID()}.jpg`);
+    await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg' }, outputPath);
+    return outputPath;
+}
+
+//
+// Transforms an image.
+//
+export async function transformImage(inputPath: string, tempDir: string, options: IImageTransformation): Promise<string> {
+
+    let transformCommand = '';
+
+    if (options.flipX) {
+        transformCommand += ' -flop';
+    }
+
+    if (options.rotate) {
+        transformCommand += ` -rotate ${options.rotate}`;
+    }
+
+    if (transformCommand) {
+        // Transform to a temporary file and return the path.
+        const outputPath = path.join(tempDir, `temp_transform_output_${crypto.randomUUID()}.jpg`);
+        const command = `magick convert "${inputPath}" ${transformCommand} "${outputPath}"`;
+        await exec(command);
+        return outputPath
+    }
+    else {
+        // No transformations needed, just return the original file.
+        return inputPath;
     }
 }
