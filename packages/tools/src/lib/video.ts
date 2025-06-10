@@ -121,29 +121,10 @@ export class Video {
             const probeData = JSON.parse(stdout);
             const format = probeData.format;
             const videoStream = probeData.streams.find((s: any) => s.codec_type === 'video');
-            const audioStream = probeData.streams.find((s: any) => s.codec_type === 'audio');
-            
+            const audioStream = probeData.streams.find((s: any) => s.codec_type === 'audio');            
             if (!videoStream) {
                 throw new Error('No video stream found in file');
             }
-
-            // Extract format name
-            const formatName = format.format_name.split(',')[0]; // e.g., 'mov,mp4,m4a,3gp,3g2,mj2' -> 'mov'
-            
-            // Determine MIME type
-            const mimeTypes: Record<string, string> = {
-                'mp4': 'video/mp4',
-                'mov': 'video/quicktime',
-                'avi': 'video/x-msvideo',
-                'mkv': 'video/x-matroska',
-                'webm': 'video/webm',
-                'flv': 'video/x-flv',
-                'wmv': 'video/x-ms-wmv',
-                'mpg': 'video/mpeg',
-                'mpeg': 'video/mpeg',
-                'm4v': 'video/mp4',
-                '3gp': 'video/3gpp'
-            };
 
             // Parse creation time if available
             let createdAt: Date | undefined;
@@ -158,11 +139,7 @@ export class Video {
                 fps = num / den;
             }
 
-            this._info = {
-                type: 'video',
-                format: formatName,
-                mimeType: mimeTypes[formatName] || `video/${formatName}`,
-                
+            this._info = {                
                 filePath: this.filePath,
                 
                 dimensions: {
@@ -198,11 +175,6 @@ export class Video {
     async getDimensions(): Promise<Dimensions> {
         const info = await this.getVideoInfo();
         return info.dimensions;
-    }
-
-    async getMimeType(): Promise<string> {
-        const info = await this.getVideoInfo();
-        return info.mimeType;
     }
 
     async getDuration(): Promise<number> {
