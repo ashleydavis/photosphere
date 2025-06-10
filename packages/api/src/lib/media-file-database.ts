@@ -4,8 +4,7 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
-import mime from "mime";
-import { ILocation, ILog, log, retry, reverseGeocode, uuid, WrappedError } from "utils";
+import { ILocation, log, retry, reverseGeocode, uuid } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -62,7 +61,6 @@ export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType:
 // Progress callback for the add operation.
 //
 export type ProgressCallback = (currentlyScanning: string | undefined) => void;
-
 
 //
 // Size of the micro thumbnail.
@@ -370,6 +368,9 @@ export class MediaFileDatabase {
         if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
             log.error(`File "${filePath}" has failed validation.`);
             this.addSummary.numFilesFailed++;
+            if (progressCallback) {
+                progressCallback(this.currentlyScanning);
+            }            
             return;
         }
 
@@ -387,6 +388,9 @@ export class MediaFileDatabase {
             //
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
+            if (progressCallback) {
+                progressCallback(this.currentlyScanning);
+            }
             return;
         }
 
@@ -529,6 +533,9 @@ export class MediaFileDatabase {
             await this.assetStorage.deleteFile(displayPath);
 
             this.addSummary.numFilesFailed++;
+            if (progressCallback) {
+                progressCallback(this.currentlyScanning);
+            }
         }
     }
 
