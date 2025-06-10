@@ -149,29 +149,12 @@ export class Image {
 
         try {           
             // Get format, dimensions
-            const command = `${Image.identifyCommand} -format "%m %w %h" "${this.filePath}"`;
+            const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
             const { stdout } = await execAsync(command);
             
             const parts = stdout.trim().split(' ');
-            const format = parts[0].toLowerCase();
-            const width = parseInt(parts[1]);
-            const height = parseInt(parts[2]);
-
-            // Determine MIME type based on format
-            const mimeTypes: Record<string, string> = {
-                'jpeg': 'image/jpeg',
-                'jpg': 'image/jpeg',
-                'png': 'image/png',
-                'gif': 'image/gif',
-                'webp': 'image/webp',
-                'bmp': 'image/bmp',
-                'tiff': 'image/tiff',
-                'tif': 'image/tiff',
-                'svg': 'image/svg+xml',
-                'ico': 'image/x-icon',
-                'heic': 'image/heic',
-                'heif': 'image/heif'
-            };
+            const width = parseInt(parts[0]);
+            const height = parseInt(parts[1]);
 
             // Get EXIF data for created date
             let createdAt: Date | undefined;
@@ -187,10 +170,6 @@ export class Image {
             }
 
             this._info = {
-                type: 'image',
-                format,
-                mimeType: mimeTypes[format] || `image/${format}`,
-                
                 filePath: this.filePath,
                 
                 dimensions: { width, height },
@@ -213,16 +192,6 @@ export class Image {
     async getDimensions(): Promise<Dimensions> {
         const info = await this.getImageInfo();
         return info.dimensions;
-    }
-
-    async getFormat(): Promise<string> {
-        const info = await this.getImageInfo();
-        return info.format;
-    }
-
-    async getMimeType(): Promise<string> {
-        const info = await this.getImageInfo();
-        return info.mimeType;
     }
 
     async getInfo(): Promise<AssetInfo> {

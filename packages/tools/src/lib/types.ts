@@ -3,12 +3,7 @@ export interface Dimensions {
     height: number;
 }
 
-export interface AssetInfo {
-    // Basic identification
-    type: 'image' | 'video';
-    format: string;           // e.g., 'jpeg', 'png', 'mp4', 'mov'
-    mimeType: string;         // e.g., 'image/jpeg', 'video/mp4'
-    
+export interface AssetInfo {    
     // File information
     filePath: string;
 
