@@ -365,16 +365,30 @@ export class MediaFileDatabase {
     //
     private addFile = async (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
-        if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
-            log.error(`File "${filePath}" has failed validation.`);
-            this.addSummary.numFilesFailed++;
-            if (progressCallback) {
-                progressCallback(this.currentlyScanning);
-            }            
-            return;
+        let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
+        if (localHashedFile) {
+            //
+            // Already hashed, which means the file is valid.
+            //
         }
+        else {
+            //
+            // We might not have seen this file before, so we need to validate it.
+            //
+            if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
+                log.error(`File "${filePath}" has failed validation.`);
+                this.addSummary.numFilesFailed++;
+                if (progressCallback) {
+                    progressCallback(this.currentlyScanning);
+                }            
+                return;
+            }
 
-        const localHashedFile = await this.hashFile(filePath, fileInfo, openStream, this.localHashCache);
+            //
+            // Compute (and cache) the hash of the file.
+            //
+            localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
+        }
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
 
@@ -420,7 +434,8 @@ export class MediaFileDatabase {
             if (!assetInfo) {
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
-            const hashedAsset = await this.hashFile(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
+            
+            const hashedAsset = await this.computeHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
@@ -440,7 +455,7 @@ export class MediaFileDatabase {
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.hashFile(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
+                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnail), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
@@ -454,7 +469,7 @@ export class MediaFileDatabase {
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.hashFile(displayPath, displayInfo, () => Readable.from(assetDetails.display!), this.databaseHashCache);
+                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => Readable.from(assetDetails.display!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
@@ -544,7 +559,10 @@ export class MediaFileDatabase {
     //
     private checkFile = async  (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
-        const localHashedFile = await this.hashFile(filePath, fileInfo, openStream, this.localHashCache);
+        let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
+        if (!localHashedFile) {            
+            localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
+        }
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
 
@@ -594,14 +612,9 @@ export class MediaFileDatabase {
     }
 
     //
-    // Gets the hash of a file.
+    // Gets the hash of a file from the hash cache or returns undefined if the file is not in the cache.
     //
-    // Retreive's the hash from the hash cache if it exists and the file size and last modified date match.
-    // Otherwise, calculates the hash and stores it in the hash cache.
-    //
-    // It is assume we already have the file size and last modified date.
-    //
-    async hashFile(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile> {
+    async getHash(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile | undefined> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified.getTime() === fileInfo.lastModified.getTime()) {
@@ -615,6 +628,13 @@ export class MediaFileDatabase {
             }
         }
 
+        return undefined;
+    }
+
+    //
+    // Computes the has h of a file and stores it in the hash cache.
+    //
+    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile> {
         //
         // Compute the hash of the file.
         //
