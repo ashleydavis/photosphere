@@ -319,7 +319,6 @@ export class MediaFileDatabase {
             await this.addFile(
                 result.filePath,
                 result.fileInfo,
-                result.fileDate,
                 result.contentType,
                 result.labels,
                 result.openStream,
@@ -350,9 +349,6 @@ export class MediaFileDatabase {
             await this.checkFile(
                 result.filePath,
                 result.fileInfo,
-                result.fileDate,
-                result.contentType,
-                result.labels,
                 result.openStream,
                 progressCallback
             );
@@ -363,7 +359,7 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    private addFile = async (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
         if (localHashedFile) {
@@ -522,8 +518,8 @@ export class MediaFileDatabase {
                 coordinates,
                 location,
                 duration: assetDetails?.duration,
-                fileDate: dayjs(fileDate).toISOString(),
-                photoDate: assetDetails?.photoDate || dayjs(fileDate).toISOString(),
+                fileDate: dayjs(fileInfo.lastModified).toISOString(),
+                photoDate: assetDetails?.photoDate || dayjs(fileInfo.lastModified).toISOString(),
                 uploadDate: dayjs().toISOString(),
                 properties,
                 labels,
@@ -557,7 +553,7 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
         if (!localHashedFile) {            
