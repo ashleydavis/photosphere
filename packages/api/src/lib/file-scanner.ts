@@ -24,7 +24,6 @@ export type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate
 export interface FileScannedResult {
     filePath: string;
     fileInfo: IFileInfo;
-    fileDate: Date;
     contentType: string;
     labels: string[];
     openStream?: () => Readable;
@@ -108,7 +107,6 @@ export class FileScanner {
                 await visitFile({
                     filePath,
                     fileInfo,
-                    fileDate: fileStat.birthtime,
                     contentType,
                     labels: [],
                     // Don't provide openStream for regular files - they can be read directly
@@ -162,7 +160,6 @@ export class FileScanner {
                     await visitFile({
                         filePath,
                         fileInfo,
-                        fileDate: fileStat.birthtime,
                         contentType,
                         labels: [],
                         // Don't provide openStream for regular files - they can be read directly
@@ -203,7 +200,6 @@ export class FileScanner {
                     await visitFile({
                         filePath: path.join(filePath, fileName),
                         fileInfo: zipFileInfo,
-                        fileDate: zipObject.date || fileDate,
                         contentType,
                         labels: [],
                         // Provide openStream for zip files since they need to be extracted

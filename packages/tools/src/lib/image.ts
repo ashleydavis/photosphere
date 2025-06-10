@@ -1,7 +1,8 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, statSync } from 'fs';
+import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
+import { log } from 'utils';
 
 const execAsync = promisify(exec);
 
@@ -14,9 +15,6 @@ export class Image {
     private static imageMagickType: 'modern' | 'legacy' | 'none' = 'none';
 
     constructor(filePath: string) {
-        if (!existsSync(filePath)) {
-            throw new Error(`File not found: ${filePath}`);
-        }
         this.filePath = filePath;
         
         // Initialize ImageMagick commands on first use
@@ -58,8 +56,8 @@ export class Image {
             const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
             const version = versionMatch ? versionMatch[1] : 'unknown';
             
-            console.log(`Using modern ImageMagick: magick`);
-            console.log(`ImageMagick version: ${version}`);
+            log.verbose(`Using modern ImageMagick: magick`);
+            log.verbose(`ImageMagick version: ${version}`);
         } catch {
             try {
                 // Try legacy ImageMagick (convert/identify commands)
@@ -78,8 +76,8 @@ export class Image {
                 const versionMatch = convertResult.stdout.match(/Version: ImageMagick ([\d.-]+)/);
                 const version = versionMatch ? versionMatch[1] : 'unknown';
                 
-                console.log(`Using legacy ImageMagick: convert/identify`);
-                console.log(`ImageMagick version: ${version}`);
+                log.verbose(`Using legacy ImageMagick: convert/identify`);
+                log.verbose(`ImageMagick version: ${version}`);
             } catch {
                 // Neither modern nor legacy ImageMagick found
                 Image.imageMagickType = 'none';
@@ -145,32 +143,19 @@ export class Image {
             return this._info;
         }
 
-        try {
-            // Get file stats for modification time
-            const stats = statSync(this.filePath);
-            
-            // Get format, dimensions, file size, and color space
-            const command = `${Image.identifyCommand} -format "%m %w %h %b %[colorspace]" "${this.filePath}"`;
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
+        try {           
+            // Get format, dimensions
+            const command = `${Image.identifyCommand} -format "%m %w %h" "${this.filePath}"`;
             const { stdout } = await execAsync(command);
             
             const parts = stdout.trim().split(' ');
             const format = parts[0].toLowerCase();
             const width = parseInt(parts[1]);
             const height = parseInt(parts[2]);
-            const fileSizeStr = parts[3];
-            const colorSpace = parts[4];
-            
-            // Parse file size (can be in B, KB, MB format)
-            let fileSize = 0;
-            if (fileSizeStr.endsWith('B')) {
-                fileSize = parseInt(fileSizeStr);
-            } else if (fileSizeStr.endsWith('KB')) {
-                fileSize = parseFloat(fileSizeStr) * 1024;
-            } else if (fileSizeStr.endsWith('MB')) {
-                fileSize = parseFloat(fileSizeStr) * 1024 * 1024;
-            } else {
-                fileSize = parseInt(fileSizeStr);
-            }
 
             // Determine MIME type based on format
             const mimeTypes: Record<string, string> = {
@@ -207,13 +192,10 @@ export class Image {
                 mimeType: mimeTypes[format] || `image/${format}`,
                 
                 filePath: this.filePath,
-                fileSize: fileSize || stats.size,
                 
                 dimensions: { width, height },
                 
-                colorSpace,
                 createdAt,
-                modifiedAt: stats.mtime,
                 
                 // Images don't have these properties
                 duration: undefined,
@@ -417,7 +399,7 @@ export class Image {
             return dominantColor;
         } catch (error) {
             // Fallback to simple method if histogram fails
-            console.warn(`Histogram method failed, falling back to simple method: ${error}`);
+            log.verbose(`Histogram method failed, falling back to simple method: ${error}`);
             return await this.getDominantColor();
         }
     }
