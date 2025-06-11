@@ -216,6 +216,11 @@ export class MediaFileDatabase {
     private readonly databaseHashCache: HashCache;
 
     //
+    // The file scanner for scanning directories and files.
+    //
+    private readonly fileScanner: FileScanner;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -227,10 +232,6 @@ export class MediaFileDatabase {
         averageSize: 0,
     };
 
-    //
-    // The currently scanning directory.
-    //
-    private currentlyScanning: string | undefined = undefined;
 
     constructor(
         assetStorage: IStorage,
@@ -252,6 +253,12 @@ export class MediaFileDatabase {
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
         this.databaseHashCache = new HashCache(metadataStorage, `.db`);
+        this.fileScanner = new FileScanner({
+            ignorePatterns: [/\.db/],
+            includeZipFiles: true,
+            includeImages: true,
+            includeVideos: true
+        });
     }
 
     //
@@ -308,14 +315,7 @@ export class MediaFileDatabase {
     // Adds a list of files or directories to the media file database.
     //
     async addPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        const scanner = new FileScanner({
-            ignorePatterns: [/\.db/],
-            includeZipFiles: true,
-            includeImages: true,
-            includeVideos: true
-        });
-
-        await scanner.scanPaths(paths, async (result) => {
+        await this.fileScanner.scanPaths(paths, async (result) => {
             await this.addFile(
                 result.filePath,
                 result.fileInfo,
@@ -334,21 +334,14 @@ export class MediaFileDatabase {
         }, progressCallback);
 
         // Update the number of ignored files after scanning
-        this.addSummary.numFilesIgnored += scanner.getNumFilesIgnored();
+        this.addSummary.numFilesIgnored += this.fileScanner.getNumFilesIgnored();
     }
 
     //
     // Checks a list of files or directories to find files already added to the media file database.
     //
     async checkPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        const scanner = new FileScanner({
-            ignorePatterns: [/\.db/],
-            includeZipFiles: true,
-            includeImages: true,
-            includeVideos: true
-        });
-
-        await scanner.scanPaths(paths, async (result) => {
+        await this.fileScanner.scanPaths(paths, async (result) => {
             await this.checkFile(
                 result.filePath,
                 result.fileInfo,
@@ -378,7 +371,7 @@ export class MediaFileDatabase {
                 log.error(`File "${filePath}" has failed validation.`);
                 this.addSummary.numFilesFailed++;
                 if (progressCallback) {
-                    progressCallback(this.currentlyScanning);
+                    progressCallback(this.fileScanner.getCurrentlyScanning());
                 }            
                 return;
             }
@@ -402,7 +395,7 @@ export class MediaFileDatabase {
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
             if (progressCallback) {
-                progressCallback(this.currentlyScanning);
+                progressCallback(this.fileScanner.getCurrentlyScanning());
             }
             return;
         }
@@ -536,7 +529,7 @@ export class MediaFileDatabase {
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
-                progressCallback(this.currentlyScanning);
+                progressCallback(this.fileScanner.getCurrentlyScanning());
             }
         }
         catch (err: any) {
@@ -548,7 +541,7 @@ export class MediaFileDatabase {
 
             this.addSummary.numFilesFailed++;
             if (progressCallback) {
-                progressCallback(this.currentlyScanning);
+                progressCallback(this.fileScanner.getCurrentlyScanning());
             }
         }
     }
@@ -583,7 +576,7 @@ export class MediaFileDatabase {
         this.addSummary.numFilesAdded++;
         this.addSummary.totalSize += fileInfo.length;
         if (progressCallback) {
-            progressCallback(this.currentlyScanning);
+            progressCallback(this.fileScanner.getCurrentlyScanning());
         }
     }
 
