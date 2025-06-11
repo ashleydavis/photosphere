@@ -1,7 +1,7 @@
 # Photosphere CLI Commands Documentation
 
 ## Overview
-The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, view database summaries, start the web UI, configure cloud storage, and analyze media file metadata.
+The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, view database summaries, verify database integrity, start the web UI, configure cloud storage, and analyze media file metadata.
 
 **CLI Tool Name:** `psi`  
 **Version:** 0.0.1
@@ -171,6 +171,58 @@ psi summary ~/photos --verbose
 
 ---
 
+### `verify` - Database Verification
+**Purpose:** Verify the integrity of the Photosphere media file database by checking file hashes against cached values
+
+**Usage:**
+```bash
+psi verify [database-dir] [file-path] [options]
+```
+
+**Arguments:**
+- `[database-dir]` - The directory containing the media file database (defaults to current directory)
+- `[file-path]` - Optional specific file to verify instead of entire database
+
+**Options:**
+- `--full` - Force full verification (bypass cached hash optimization)
+- `-o, --output <file>` - Write verification summary to JSON file
+- All global options listed above
+
+**Examples:**
+```bash
+psi verify
+psi verify ~/photos
+psi verify ~/photos photo.jpg
+psi verify ~/photos --full
+psi verify ~/photos --output verification-report.json
+```
+
+**Verification Process:**
+1. **Fast verification** (default): Uses cached hashes when file size/modification time unchanged
+2. **Full verification** (`--full`): Recomputes all file hashes regardless of cache
+3. **Single file**: Verifies just the specified file
+4. **Database scan**: Identifies new, modified, and removed files
+
+**Output Information:**
+- **Total files** - Number of files processed
+- **Unmodified** - Files that match their cached hashes
+- **Modified** - Files with different hashes than cached (potential corruption)
+- **New** - Files found in filesystem but not in database
+- **Removed** - Files in database but missing from filesystem
+- **Detailed lists** - Shows first 10 problematic files for each category
+
+**Use Cases:**
+- **Data integrity checks** - Detect file corruption or unauthorized modifications
+- **Database consistency** - Ensure filesystem matches database state
+- **Forensic analysis** - Identify changes since last verification
+- **Maintenance** - Regular health checks of media collections
+
+**Exit Codes:**
+- `0` - Verification completed successfully
+- `1` - Verification failed or errors encountered
+
+---
+
 ### `info` - Analyze Media Files
 **Purpose:** Display detailed information about media files including EXIF data, metadata, and technical specifications
 
@@ -229,8 +281,9 @@ The CLI automatically checks for required tools (ImageMagick, FFmpeg) and prompt
 1. **Initialize a database:** `psi init ~/my-photos`
 2. **Add media files:** `psi add ~/my-photos ~/source-photos`
 3. **View database summary:** `psi summary ~/my-photos`
-4. **Configure cloud storage (optional):** `psi configure`
-5. **Start the web UI:** `psi ui ~/my-photos`
-6. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
+4. **Verify database integrity:** `psi verify ~/my-photos`
+5. **Configure cloud storage (optional):** `psi configure`
+6. **Start the web UI:** `psi ui ~/my-photos`
+7. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
 
-This CLI provides a complete workflow for managing media databases from initialization through analysis and web viewing.
+This CLI provides a complete workflow for managing media databases from initialization through verification, analysis and web viewing.
