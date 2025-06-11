@@ -498,9 +498,71 @@ test_database_replicate() {
     rm -rf "$replica_dir"
 }
 
+test_database_compare() {
+    echo ""
+    echo "=== TEST 10: DATABASE COMPARISON ==="
+    show_tools_directory
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Create a replica for comparison testing
+    if [ -d "$replica_dir" ]; then
+        log_info "Cleaning up existing replica directory"
+        rm -rf "$replica_dir"
+    fi
+    
+    run_command "Create replica for comparison" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
+    
+    # Test comparison between identical databases (should show no differences)
+    run_command "Compare identical databases" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes"
+    
+    # Capture compare output to verify results
+    local compare_output
+    compare_output=$($(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes 2>&1)
+    
+    # Check that comparison shows no differences for identical databases
+    if echo "$compare_output" | grep -q "No differences detected\|Databases are identical"; then
+        log_success "Compare correctly identified identical databases"
+    else
+        log_error "Compare failed to identify identical databases"
+        echo "Compare output: $compare_output"
+        exit 1
+    fi
+    
+    # Test compare with output file
+    local compare_json="./compare-test-results.json"
+    run_command "Compare with JSON output" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --output $compare_json --yes"
+    
+    # Check that JSON file was created
+    if [ -f "$compare_json" ]; then
+        log_success "Compare JSON output file created"
+        
+        # Check JSON content contains expected fields
+        if grep -q '"treesMatch"' "$compare_json" && grep -q '"differences"' "$compare_json"; then
+            log_success "Compare JSON contains expected structure"
+        else
+            log_error "Compare JSON missing expected fields"
+            exit 1
+        fi
+        
+        # Clean up JSON file
+        rm -f "$compare_json"
+    else
+        log_error "Compare JSON output file not created"
+        exit 1
+    fi
+    
+    # Test comparison with self (database vs itself)
+    run_command "Compare database with itself" "$(get_cli_command) compare $TEST_DB_DIR $TEST_DB_DIR --yes"
+    
+    # Clean up replica
+    log_info "Cleaning up replica directory"
+    rm -rf "$replica_dir"
+}
+
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 10: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 11: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
@@ -508,7 +570,7 @@ test_cannot_create_over_existing() {
 
 test_ui_skipped() {
     echo ""
-    echo "=== TEST 11: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    echo "=== TEST 12: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
@@ -622,6 +684,7 @@ run_all_tests() {
     test_database_summary
     test_database_verify
     test_database_replicate
+    test_database_compare
     test_cannot_create_over_existing
     test_ui_skipped
     test_cloud_skipped
@@ -688,13 +751,16 @@ run_test() {
         "replicate"|"9")
             test_database_replicate
             ;;
-        "no-overwrite"|"10")
+        "compare"|"10")
+            test_database_compare
+            ;;
+        "no-overwrite"|"11")
             test_cannot_create_over_existing
             ;;
-        "ui"|"11")
+        "ui"|"12")
             test_ui_skipped
             ;;
-        "cloud"|"12")
+        "cloud"|"13")
             test_cloud_skipped
             ;;
         *)
@@ -744,6 +810,7 @@ run_multiple_commands() {
                 test_database_summary
                 test_database_verify
                 test_database_replicate
+                test_database_compare
                 test_cannot_create_over_existing
                 test_ui_skipped
                 test_cloud_skipped
@@ -784,13 +851,16 @@ run_multiple_commands() {
             "replicate"|"9")
                 test_database_replicate
                 ;;
-            "no-overwrite"|"10")
+            "compare"|"10")
+                test_database_compare
+                ;;
+            "no-overwrite"|"11")
                 test_cannot_create_over_existing
                 ;;
-            "ui"|"11")
+            "ui"|"12")
                 test_ui_skipped
                 ;;
-            "cloud"|"12")
+            "cloud"|"13")
                 test_cloud_skipped
                 ;;
             *)
@@ -843,9 +913,10 @@ show_usage() {
     echo "  summary (7)         - Display database summary"
     echo "  verify (8)          - Verify database integrity"
     echo "  replicate (9)       - Replicate database to new location"
-    echo "  no-overwrite (10)   - Cannot create database over existing"
-    echo "  ui (11)             - UI test (skipped)"
-    echo "  cloud (12)          - Cloud tests (skipped)"
+    echo "  compare (10)        - Compare two databases"
+    echo "  no-overwrite (11)   - Cannot create database over existing"
+    echo "  ui (12)             - UI test (skipped)"
+    echo "  cloud (13)          - Cloud tests (skipped)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"

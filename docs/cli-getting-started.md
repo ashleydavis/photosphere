@@ -108,7 +108,17 @@ psi replicate ~/my-photos ~/backup/my-photos
 
 This creates an exact copy that can be used for backup or migration.
 
-### 6. Launch the Web UI
+### 6. Compare Databases (Optional)
+
+Verify that your backup matches the original:
+
+```bash
+psi compare ~/my-photos ~/backup/my-photos
+```
+
+This analyzes the Merkle trees to identify any differences between databases.
+
+### 7. Launch the Web UI
 
 View and manage your media through the web interface:
 
@@ -206,6 +216,24 @@ Replicate an asset database from source to destination with incremental sync.
 psi replicate ~/photos ~/backup/photos
 psi replicate ~/photos s3:backup-bucket/photos
 psi replicate s3:source/photos ~/local-backup
+```
+
+### `compare <source-dir> <destination-dir>`
+Compare two asset databases by analyzing their Merkle trees to identify differences.
+
+**Options:**
+- `-s, --src-meta <dir>`: Source metadata directory override
+- `-d, --dest-meta <dir>`: Destination metadata directory override
+- `--sk, --src-key <keyfile>`: Source encryption key file
+- `--dk, --dest-key <keyfile>`: Destination encryption key file
+- `-o, --output <file>`: Write comparison results to JSON file
+- `-v, --verbose`: Enable verbose logging
+
+**Examples:**
+```bash
+psi compare ~/photos ~/backup/photos
+psi compare ~/photos s3:backup-bucket/photos
+psi compare s3:source/photos ~/local-copy --output report.json
 ```
 
 ### `ui [database-dir]`
@@ -363,7 +391,9 @@ This will prompt for confirmation before deleting all credential files.
 - View database overview anytime: `psi summary`
 - Verify database integrity regularly: `psi verify`
 - Create backups with incremental sync: `psi replicate`
+- Compare databases to verify backups: `psi compare`
 - Use `--full` flag for thorough verification if you suspect corruption
 - Replication is incremental - only changed files are copied on subsequent runs
+- Database comparison uses efficient Merkle tree analysis
 - The CLI automatically processes images and creates optimized versions
 - Supported formats: JPEG, PNG, WebP, HEIC, and common video formats
