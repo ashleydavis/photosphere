@@ -8,6 +8,7 @@ import { configureCommand } from './cmd/configure';
 import { infoCommand } from './cmd/info';
 import { toolsCommand } from './cmd/tools';
 import { summaryCommand } from './cmd/summary';
+import { verifyCommand } from './cmd/verify';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -101,6 +102,19 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .action(summaryCommand);
+
+    program
+        .command("verify")
+        .description("Verify the integrity of the media file database by checking file hashes.")
+        .argument(...dbArgument)
+        .argument("[file-path]", "Optional specific file to verify instead of entire database")
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .option("-o, --output <file>", "Write verification summary to JSON file")
+        .action(verifyCommand);
 
     // Parse the command line arguments
     try {

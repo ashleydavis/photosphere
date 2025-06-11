@@ -20,7 +20,7 @@ Early development of Photosphere was covered in the book [The Feedback-Driven De
 
 Photos, videos and folders can be uploaded via the Upload page in the Web frontend.
 
-Alternatively, use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics.
+Alternatively, use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics and `psi verify` to check integrity.
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.

@@ -88,7 +88,17 @@ psi summary ~/my-photos
 
 This shows total files, size, and database hash for verification.
 
-### 4. Launch the Web UI
+### 4. Verify Database Integrity
+
+Check that your files haven't been corrupted or modified:
+
+```bash
+psi verify ~/my-photos
+```
+
+This compares file hashes to detect any changes since they were added.
+
+### 5. Launch the Web UI
 
 View and manage your media through the web interface:
 
@@ -151,6 +161,23 @@ Display a summary of the database including total files, size, and integrity has
 **Example:**
 ```bash
 psi summary ~/photos
+```
+
+### `verify [database-dir] [file-path]`
+Verify the integrity of the database by checking file hashes for corruption or changes.
+
+**Options:**
+- `-m, --meta <dir>`: Metadata directory
+- `-k, --key <keyfile>`: Path to encryption key file
+- `-v, --verbose`: Enable verbose logging
+- `--full`: Force full verification (bypass cached hash optimization)
+- `-o, --output <file>`: Write verification summary to JSON file
+
+**Examples:**
+```bash
+psi verify ~/photos
+psi verify ~/photos photo.jpg
+psi verify ~/photos --full --output report.json
 ```
 
 ### `ui [database-dir]`
@@ -306,5 +333,7 @@ This will prompt for confirmation before deleting all credential files.
 - Use `--verbose` flag for detailed progress information
 - Check files before adding to avoid duplicates: `psi check`
 - View database overview anytime: `psi summary`
+- Verify database integrity regularly: `psi verify`
+- Use `--full` flag for thorough verification if you suspect corruption
 - The CLI automatically processes images and creates optimized versions
 - Supported formats: JPEG, PNG, WebP, HEIC, and common video formats

@@ -405,9 +405,53 @@ test_database_summary() {
     fi
 }
 
+test_database_verify() {
+    echo ""
+    echo "=== TEST 8: DATABASE VERIFICATION ==="
+    show_tools_directory
+    
+    run_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes"
+    
+    # Capture verify output to check results
+    local verify_output
+    verify_output=$($(get_cli_command) verify $TEST_DB_DIR --yes 2>&1)
+    
+    # Check that verification contains expected fields
+    if echo "$verify_output" | grep -q "Total files:"; then
+        log_success "Verify output contains total files count"
+    else
+        log_error "Verify output missing total files count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Unmodified:"; then
+        log_success "Verify output contains unmodified count"
+    else
+        log_error "Verify output missing unmodified count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Modified:"; then
+        log_success "Verify output contains modified count"
+    else
+        log_error "Verify output missing modified count"
+        exit 1
+    fi
+    
+    # Test single file verification
+    if [ -f "$TEST_FILES_DIR/test.png" ]; then
+        run_command "Verify single file" "$(get_cli_command) verify $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    else
+        log_warning "Test file not found for single file verification: $TEST_FILES_DIR/test.png"
+    fi
+    
+    # Test full verification mode
+    run_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes"
+}
+
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 8: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 9: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
@@ -415,7 +459,7 @@ test_cannot_create_over_existing() {
 
 test_ui_skipped() {
     echo ""
-    echo "=== TEST 9: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    echo "=== TEST 10: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
@@ -527,6 +571,7 @@ run_all_tests() {
     test_add_multiple_files
     test_add_same_multiple_files
     test_database_summary
+    test_database_verify
     test_cannot_create_over_existing
     test_ui_skipped
     test_cloud_skipped
@@ -587,13 +632,16 @@ run_test() {
         "summary"|"7")
             test_database_summary
             ;;
-        "no-overwrite"|"8")
+        "verify"|"8")
+            test_database_verify
+            ;;
+        "no-overwrite"|"9")
             test_cannot_create_over_existing
             ;;
-        "ui"|"9")
+        "ui"|"10")
             test_ui_skipped
             ;;
-        "cloud"|"10")
+        "cloud"|"11")
             test_cloud_skipped
             ;;
         *)
@@ -641,6 +689,7 @@ run_multiple_commands() {
                 test_add_multiple_files
                 test_add_same_multiple_files
                 test_database_summary
+                test_database_verify
                 test_cannot_create_over_existing
                 test_ui_skipped
                 test_cloud_skipped
@@ -675,13 +724,16 @@ run_multiple_commands() {
             "summary"|"7")
                 test_database_summary
                 ;;
-            "no-overwrite"|"8")
+            "verify"|"8")
+                test_database_verify
+                ;;
+            "no-overwrite"|"9")
                 test_cannot_create_over_existing
                 ;;
-            "ui"|"9")
+            "ui"|"10")
                 test_ui_skipped
                 ;;
-            "cloud"|"10")
+            "cloud"|"11")
                 test_cloud_skipped
                 ;;
             *)
@@ -732,9 +784,10 @@ show_usage() {
     echo "  add-multiple (5)    - Add multiple files"
     echo "  add-same-multiple (6) - Add same multiple files again"
     echo "  summary (7)         - Display database summary"
-    echo "  no-overwrite (8)    - Cannot create database over existing"
-    echo "  ui (9)              - UI test (skipped)"
-    echo "  cloud (10)          - Cloud tests (skipped)"
+    echo "  verify (8)          - Verify database integrity"
+    echo "  no-overwrite (9)    - Cannot create database over existing"
+    echo "  ui (10)             - UI test (skipped)"
+    echo "  cloud (11)          - Cloud tests (skipped)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
