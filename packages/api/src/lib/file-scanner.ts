@@ -65,6 +65,7 @@ export interface ScannerOptions {
 export class FileScanner {
     private currentlyScanning: string | undefined;
     private options: Required<ScannerOptions>;
+    private numFilesIgnored: number = 0;
 
     constructor(options: ScannerOptions = {}) {
         this.options = {
@@ -76,9 +77,24 @@ export class FileScanner {
     }
 
     //
+    // Gets the number of files ignored during the last scan
+    //
+    getNumFilesIgnored(): number {
+        return this.numFilesIgnored;
+    }
+
+    //
+    // Resets the ignored files counter
+    //
+    resetIgnoredCounter(): void {
+        this.numFilesIgnored = 0;
+    }
+
+    //
     // Scans a list of files or directories
     //
     async scanPaths(paths: string[], visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
+        this.resetIgnoredCounter();
         for (const path of paths) {
             await this.scanPath(path, visitFile, progressCallback);
         }
@@ -94,6 +110,7 @@ export class FileScanner {
             const contentType = mime.getType(filePath) || undefined;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
+                this.numFilesIgnored++;
                 return;
             }
             
@@ -113,6 +130,7 @@ export class FileScanner {
                 });
             } else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
+                this.numFilesIgnored++;
             }
         } else if (fileStat.isDirectory()) {
             await this.scanDirectory(filePath, visitFile, progressCallback);
@@ -142,6 +160,7 @@ export class FileScanner {
             const filePath = orderedFile.fileName;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
+                this.numFilesIgnored++;
                 continue;
             }
 
@@ -167,6 +186,7 @@ export class FileScanner {
                 }
             } else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
+                this.numFilesIgnored++;
             }
         }
 
@@ -190,7 +210,10 @@ export class FileScanner {
         for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
             if (!zipObject.dir) {
                 const contentType = mime.getType(fileName);
-                if (contentType && this.shouldIncludeFile(contentType)) {
+                if (!contentType) {
+                    log.verbose(`Ignoring file "${fileName}" in zip with unknown content type.`);
+                    this.numFilesIgnored++;
+                } else if (this.shouldIncludeFile(contentType)) {
                     const zipFileInfo: IFileInfo = {
                         contentType,
                         length: 0, // We can't reliably get the uncompressed size from JSZip
@@ -212,6 +235,9 @@ export class FileScanner {
                             return stream;
                         }
                     });
+                } else {
+                    log.verbose(`Ignoring file "${fileName}" in zip with content type "${contentType}".`);
+                    this.numFilesIgnored++;
                 }
             }
         }

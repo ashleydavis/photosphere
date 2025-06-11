@@ -332,6 +332,9 @@ export class MediaFileDatabase {
                 await this.assetDatabase.save();
             }
         }, progressCallback);
+
+        // Update the number of ignored files after scanning
+        this.addSummary.numFilesIgnored += scanner.getNumFilesIgnored();
     }
 
     //
