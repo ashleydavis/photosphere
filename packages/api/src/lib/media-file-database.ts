@@ -65,6 +65,28 @@ export const DISPLAY_MIN_SIZE = 1000;
 //
 export const DISPLAY_QUALITY = 95;
 
+export interface IDatabaseSummary {
+    //
+    // Total number of files in the database.
+    //
+    totalFiles: number;
+
+    //
+    // Total size of all files in bytes.
+    //
+    totalSize: number;
+
+    //
+    // Short hash of the tree root (first 8 characters).
+    //
+    shortHash: string;
+
+    //
+    // Full hash of the tree root.
+    //
+    fullHash: string;
+}
+
 export interface IAddSummary {
     //
     // The number of files added to the database.
@@ -249,6 +271,13 @@ export class MediaFileDatabase {
     }
 
     //
+    // Gets the asset database for accessing the merkle tree.
+    //
+    getAssetDatabase(): AssetDatabase {
+        return this.assetDatabase;
+    }
+
+    //
     // Creates a new media file database.
     //
     async create(): Promise<void> {
@@ -282,6 +311,26 @@ export class MediaFileDatabase {
     getAddSummary(): IAddSummary {
         this.addSummary.averageSize = this.addSummary.numFilesAdded > 0 ? Math.floor(this.addSummary.totalSize / this.addSummary.numFilesAdded) : 0;
         return this.addSummary;
+    }
+
+    //
+    // Gets a summary of the entire database.
+    //
+    async getDatabaseSummary(): Promise<IDatabaseSummary> {
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        const metadata = merkleTree.metadata;
+        
+        // Get root hash (first node is always the root)
+        const rootHash = merkleTree.nodes.length > 0 ? merkleTree.nodes[0].hash : Buffer.alloc(0);
+        const fullHash = rootHash.toString('hex');
+        const shortHash = fullHash.substring(0, 8);
+
+        return {
+            totalFiles: metadata.totalFiles,
+            totalSize: metadata.totalSize,
+            shortHash,
+            fullHash
+        };
     }
 
     //

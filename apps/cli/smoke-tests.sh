@@ -364,9 +364,50 @@ test_add_same_multiple_files() {
     fi
 }
 
+test_database_summary() {
+    echo ""
+    echo "=== TEST 7: DATABASE SUMMARY ==="
+    show_tools_directory
+    
+    run_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes"
+    
+    # Capture summary output to verify it contains expected fields
+    local summary_output
+    summary_output=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
+    
+    # Check that summary contains expected fields
+    if echo "$summary_output" | grep -q "Total files:"; then
+        log_success "Summary contains total files count"
+    else
+        log_error "Summary missing total files count"
+        exit 1
+    fi
+    
+    if echo "$summary_output" | grep -q "Total size:"; then
+        log_success "Summary contains total size"
+    else
+        log_error "Summary missing total size"
+        exit 1
+    fi
+    
+    if echo "$summary_output" | grep -q "Tree root hash (short):"; then
+        log_success "Summary contains short hash"
+    else
+        log_error "Summary missing short hash"
+        exit 1
+    fi
+    
+    if echo "$summary_output" | grep -q "Tree root hash (full):"; then
+        log_success "Summary contains full hash"
+    else
+        log_error "Summary missing full hash"
+        exit 1
+    fi
+}
+
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 7: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 8: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
@@ -374,7 +415,7 @@ test_cannot_create_over_existing() {
 
 test_ui_skipped() {
     echo ""
-    echo "=== TEST 8: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    echo "=== TEST 9: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
@@ -485,6 +526,7 @@ run_all_tests() {
     test_add_same_file
     test_add_multiple_files
     test_add_same_multiple_files
+    test_database_summary
     test_cannot_create_over_existing
     test_ui_skipped
     test_cloud_skipped
@@ -542,13 +584,16 @@ run_test() {
         "add-same-multiple"|"6")
             test_add_same_multiple_files
             ;;
-        "no-overwrite"|"7")
+        "summary"|"7")
+            test_database_summary
+            ;;
+        "no-overwrite"|"8")
             test_cannot_create_over_existing
             ;;
-        "ui"|"8")
+        "ui"|"9")
             test_ui_skipped
             ;;
-        "cloud"|"9")
+        "cloud"|"10")
             test_cloud_skipped
             ;;
         *)
@@ -595,6 +640,7 @@ run_multiple_commands() {
                 test_add_same_file
                 test_add_multiple_files
                 test_add_same_multiple_files
+                test_database_summary
                 test_cannot_create_over_existing
                 test_ui_skipped
                 test_cloud_skipped
@@ -626,13 +672,16 @@ run_multiple_commands() {
             "add-same-multiple"|"6")
                 test_add_same_multiple_files
                 ;;
-            "no-overwrite"|"7")
+            "summary"|"7")
+                test_database_summary
+                ;;
+            "no-overwrite"|"8")
                 test_cannot_create_over_existing
                 ;;
-            "ui"|"8")
+            "ui"|"9")
                 test_ui_skipped
                 ;;
-            "cloud"|"9")
+            "cloud"|"10")
                 test_cloud_skipped
                 ;;
             *)
@@ -682,9 +731,10 @@ show_usage() {
     echo "  add-same (4)        - Add same file again (no duplication)"
     echo "  add-multiple (5)    - Add multiple files"
     echo "  add-same-multiple (6) - Add same multiple files again"
-    echo "  no-overwrite (7)    - Cannot create database over existing"
-    echo "  ui (8)              - UI test (skipped)"
-    echo "  cloud (9)           - Cloud tests (skipped)"
+    echo "  summary (7)         - Display database summary"
+    echo "  no-overwrite (8)    - Cannot create database over existing"
+    echo "  ui (9)              - UI test (skipped)"
+    echo "  cloud (10)          - Cloud tests (skipped)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"

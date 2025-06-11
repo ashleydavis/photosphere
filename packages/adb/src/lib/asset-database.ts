@@ -95,6 +95,16 @@ export class AssetDatabase implements IAssetDatabase {
     }
 
     //
+    // Gets the merkle tree.
+    //
+    getMerkleTree(): IMerkleTree {
+        if (!this.merkleTree) {
+            throw new Error("Cannot access merkle tree. No database loaded.");
+        }
+        return this.merkleTree;
+    }
+
+    //
     // Saves the database to disk.
     //
     async save(): Promise<void> {
