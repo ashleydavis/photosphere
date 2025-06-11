@@ -84,6 +84,13 @@ export class FileScanner {
     }
 
     //
+    // Gets the currently scanning path
+    //
+    getCurrentlyScanning(): string | undefined {
+        return this.currentlyScanning;
+    }
+
+    //
     // Resets the ignored files counter
     //
     resetIgnoredCounter(): void {
