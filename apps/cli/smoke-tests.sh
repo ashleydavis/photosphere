@@ -449,9 +449,58 @@ test_database_verify() {
     run_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes"
 }
 
+test_database_replicate() {
+    echo ""
+    echo "=== TEST 9: DATABASE REPLICATION ==="
+    show_tools_directory
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Clean up any existing replica
+    if [ -d "$replica_dir" ]; then
+        log_info "Cleaning up existing replica directory"
+        rm -rf "$replica_dir"
+    fi
+    
+    run_command "Replicate database" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
+    
+    # Check that replica was created
+    check_exists "$replica_dir" "Replica database directory"
+    check_exists "$replica_dir/.db" "Replica metadata directory"
+    check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    
+    # Verify replica contents match source
+    run_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
+    
+    # Compare file counts between source and replica
+    local source_summary
+    source_summary=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
+    local replica_summary
+    replica_summary=$($(get_cli_command) summary $replica_dir --yes 2>&1)
+    
+    local source_files
+    source_files=$(echo "$source_summary" | grep "Total files:" | grep -o '[0-9]\+')
+    local replica_files
+    replica_files=$(echo "$replica_summary" | grep "Total files:" | grep -o '[0-9]\+')
+    
+    if [ "$source_files" = "$replica_files" ]; then
+        log_success "Replica has same file count as source ($source_files files)"
+    else
+        log_error "File count mismatch: source has $source_files files, replica has $replica_files files"
+        exit 1
+    fi
+    
+    # Test incremental replication (should skip files)
+    run_command "Test incremental replication" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
+    
+    # Clean up replica
+    log_info "Cleaning up replica directory"
+    rm -rf "$replica_dir"
+}
+
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 9: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 10: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
@@ -459,7 +508,7 @@ test_cannot_create_over_existing() {
 
 test_ui_skipped() {
     echo ""
-    echo "=== TEST 10: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    echo "=== TEST 11: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
@@ -572,6 +621,7 @@ run_all_tests() {
     test_add_same_multiple_files
     test_database_summary
     test_database_verify
+    test_database_replicate
     test_cannot_create_over_existing
     test_ui_skipped
     test_cloud_skipped
@@ -635,13 +685,16 @@ run_test() {
         "verify"|"8")
             test_database_verify
             ;;
-        "no-overwrite"|"9")
+        "replicate"|"9")
+            test_database_replicate
+            ;;
+        "no-overwrite"|"10")
             test_cannot_create_over_existing
             ;;
-        "ui"|"10")
+        "ui"|"11")
             test_ui_skipped
             ;;
-        "cloud"|"11")
+        "cloud"|"12")
             test_cloud_skipped
             ;;
         *)
@@ -690,6 +743,7 @@ run_multiple_commands() {
                 test_add_same_multiple_files
                 test_database_summary
                 test_database_verify
+                test_database_replicate
                 test_cannot_create_over_existing
                 test_ui_skipped
                 test_cloud_skipped
@@ -727,13 +781,16 @@ run_multiple_commands() {
             "verify"|"8")
                 test_database_verify
                 ;;
-            "no-overwrite"|"9")
+            "replicate"|"9")
+                test_database_replicate
+                ;;
+            "no-overwrite"|"10")
                 test_cannot_create_over_existing
                 ;;
-            "ui"|"10")
+            "ui"|"11")
                 test_ui_skipped
                 ;;
-            "cloud"|"11")
+            "cloud"|"12")
                 test_cloud_skipped
                 ;;
             *)
@@ -785,9 +842,10 @@ show_usage() {
     echo "  add-same-multiple (6) - Add same multiple files again"
     echo "  summary (7)         - Display database summary"
     echo "  verify (8)          - Verify database integrity"
-    echo "  no-overwrite (9)    - Cannot create database over existing"
-    echo "  ui (10)             - UI test (skipped)"
-    echo "  cloud (11)          - Cloud tests (skipped)"
+    echo "  replicate (9)       - Replicate database to new location"
+    echo "  no-overwrite (10)   - Cannot create database over existing"
+    echo "  ui (11)             - UI test (skipped)"
+    echo "  cloud (12)          - Cloud tests (skipped)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"

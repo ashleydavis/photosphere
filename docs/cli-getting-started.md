@@ -98,7 +98,17 @@ psi verify ~/my-photos
 
 This compares file hashes to detect any changes since they were added.
 
-### 5. Launch the Web UI
+### 5. Create a Backup (Optional)
+
+Replicate your database to create a backup:
+
+```bash
+psi replicate ~/my-photos ~/backup/my-photos
+```
+
+This creates an exact copy that can be used for backup or migration.
+
+### 6. Launch the Web UI
 
 View and manage your media through the web interface:
 
@@ -178,6 +188,24 @@ Verify the integrity of the database by checking file hashes for corruption or c
 psi verify ~/photos
 psi verify ~/photos photo.jpg
 psi verify ~/photos --full --output report.json
+```
+
+### `replicate [source-dir] <destination-dir>`
+Replicate an asset database from source to destination with incremental sync.
+
+**Options:**
+- `-s, --src-meta <dir>`: Source metadata directory override
+- `-d, --dest-meta <dir>`: Destination metadata directory override
+- `--sk, --src-key <keyfile>`: Source encryption key file
+- `--dk, --dest-key <keyfile>`: Destination encryption key file
+- `-g, --generate-key`: Generate encryption keys if needed
+- `-v, --verbose`: Enable verbose logging
+
+**Examples:**
+```bash
+psi replicate ~/photos ~/backup/photos
+psi replicate ~/photos s3:backup-bucket/photos
+psi replicate s3:source/photos ~/local-backup
 ```
 
 ### `ui [database-dir]`
@@ -334,6 +362,8 @@ This will prompt for confirmation before deleting all credential files.
 - Check files before adding to avoid duplicates: `psi check`
 - View database overview anytime: `psi summary`
 - Verify database integrity regularly: `psi verify`
+- Create backups with incremental sync: `psi replicate`
 - Use `--full` flag for thorough verification if you suspect corruption
+- Replication is incremental - only changed files are copied on subsequent runs
 - The CLI automatically processes images and creates optimized versions
 - Supported formats: JPEG, PNG, WebP, HEIC, and common video formats

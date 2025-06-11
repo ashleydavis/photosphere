@@ -1,7 +1,7 @@
 # Photosphere CLI Commands Documentation
 
 ## Overview
-The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, view database summaries, verify database integrity, start the web UI, configure cloud storage, and analyze media file metadata.
+The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, view database summaries, verify database integrity, replicate databases across storage systems, start the web UI, configure cloud storage, and analyze media file metadata.
 
 **CLI Tool Name:** `psi`  
 **Version:** 0.0.1
@@ -223,6 +223,75 @@ psi verify ~/photos --output verification-report.json
 
 ---
 
+### `replicate` - Database Replication
+**Purpose:** Replicate an asset database from source to destination location with incremental sync capabilities
+
+**Usage:**
+```bash
+psi replicate [source-dir] <destination-dir> [options]
+```
+
+**Arguments:**
+- `[source-dir]` - Source database directory (defaults to current directory)
+- `<destination-dir>` - Destination directory for replicated database (required)
+
+**Options:**
+- `-s, --src-meta <dir>` - Source metadata directory override
+- `-d, --dest-meta <dir>` - Destination metadata directory override
+- `--sk, --src-key <keyfile>` - Path to source encryption key file
+- `--dk, --dest-key <keyfile>` - Path to destination encryption key file
+- `-g, --generate-key` - Generate encryption keys if they don't exist
+- All global options listed above
+
+**Examples:**
+```bash
+psi replicate ~/photos ~/backup/photos
+psi replicate ~/photos s3:backup-bucket/photos
+psi replicate s3:source-bucket/photos ~/local-backup
+psi replicate ~/photos ~/backup --sk source.key --dk backup.key
+psi replicate ~/photos ~/backup --generate-key
+```
+
+**Replication Process:**
+1. **Incremental sync**: Uses hash cache to identify unchanged files and skip copying
+2. **Cross-storage support**: Replicates between filesystem, S3, encrypted storage
+3. **Hash verification**: Verifies file integrity during copy process
+4. **Progress tracking**: Shows real-time progress with batch updates
+5. **Resume capability**: Can be safely interrupted and resumed
+
+**Output Information:**
+- **Total files** - Number of files processed
+- **Copied** - Files that were copied to destination
+- **Skipped** - Files already present with matching hashes
+- **Failed** - Files that failed to copy with error details
+- **Copy percentage** - Percentage of files that needed copying
+
+**Storage Compatibility:**
+- **Filesystem to filesystem**: Direct file copy operations
+- **Filesystem to S3**: Upload to cloud storage
+- **S3 to filesystem**: Download from cloud storage
+- **Encrypted ↔ Unencrypted**: Seamless encryption/decryption during replication
+- **Cross-platform**: Works across different operating systems
+
+**Performance Features:**
+- **Batch progress updates**: Reports progress every 1,000 files
+- **Memory efficiency**: Streams large files without loading entirely into memory
+- **Retry mechanism**: Automatic retry for failed operations
+- **Hash cache optimization**: Avoids unnecessary file re-processing
+
+**Use Cases:**
+- **Backup creation**: Create full backup copies of media databases
+- **Cloud migration**: Move databases between local and cloud storage
+- **Load balancing**: Distribute databases across multiple locations
+- **Encryption migration**: Convert between encrypted and unencrypted storage
+- **Cross-platform sync**: Replicate databases between different systems
+
+**Exit Codes:**
+- `0` - Replication completed successfully
+- `1` - Replication failed or had errors
+
+---
+
 ### `info` - Analyze Media Files
 **Purpose:** Display detailed information about media files including EXIF data, metadata, and technical specifications
 
@@ -282,8 +351,9 @@ The CLI automatically checks for required tools (ImageMagick, FFmpeg) and prompt
 2. **Add media files:** `psi add ~/my-photos ~/source-photos`
 3. **View database summary:** `psi summary ~/my-photos`
 4. **Verify database integrity:** `psi verify ~/my-photos`
-5. **Configure cloud storage (optional):** `psi configure`
-6. **Start the web UI:** `psi ui ~/my-photos`
-7. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
+5. **Create backup/replica:** `psi replicate ~/my-photos ~/backup/photos`
+6. **Configure cloud storage (optional):** `psi configure`
+7. **Start the web UI:** `psi ui ~/my-photos`
+8. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
 
-This CLI provides a complete workflow for managing media databases from initialization through verification, analysis and web viewing.
+This CLI provides a complete workflow for managing media databases from initialization through replication, verification, analysis and web viewing.

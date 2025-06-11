@@ -9,6 +9,7 @@ import { infoCommand } from './cmd/info';
 import { toolsCommand } from './cmd/tools';
 import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
+import { replicateCommand } from './cmd/replicate';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -115,6 +116,20 @@ async function main() {
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-o, --output <file>", "Write verification summary to JSON file")
         .action(verifyCommand);
+
+    program
+        .command("replicate")
+        .description("Replicate an asset database from source to destination location.")
+        .argument("[source-dir]", "Source database directory (defaults to current directory)")
+        .argument("<destination-dir>", "Destination directory for replicated database")
+        .option("-s, --src-meta <dir>", "Source metadata directory override")
+        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
+        .option("--sk, --src-key <keyfile>", "Path to source encryption key file")
+        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
+        .option(...generateKeyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .action(replicateCommand);
 
     // Parse the command line arguments
     try {
