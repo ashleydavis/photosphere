@@ -9,7 +9,7 @@ const execAsync = promisify(exec);
 export class Image {
     private filePath: string;
     private _info: AssetInfo | null = null;
-    private static convertCommand: string = 'magick convert';
+    private static convertCommand: string = 'magick';
     private static identifyCommand: string = 'magick identify';
     private static isInitialized: boolean = false;
     private static imageMagickType: 'modern' | 'legacy' | 'none' = 'none';
@@ -47,7 +47,7 @@ export class Image {
             const { stdout } = await execAsync('magick -version');
             
             // If we get here, modern magick command works
-            Image.convertCommand = 'magick convert';
+            Image.convertCommand = 'magick';
             Image.identifyCommand = 'magick identify';
             Image.imageMagickType = 'modern';
             Image.isInitialized = true;
