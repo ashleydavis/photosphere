@@ -78,7 +78,17 @@ psi add ~/my-photos ~/Pictures/vacation.jpg ~/Videos/birthday.mp4
 psi add ~/my-photos ~/Pictures/2024/
 ```
 
-### 3. Launch the Web UI
+### 3. View Database Summary
+
+Check what's in your database:
+
+```bash
+psi summary ~/my-photos
+```
+
+This shows total files, size, and database hash for verification.
+
+### 4. Launch the Web UI
 
 View and manage your media through the web interface:
 
@@ -128,6 +138,19 @@ Check which files have already been added to the database.
 **Example:**
 ```bash
 psi check ~/photos ~/Pictures/vacation/
+```
+
+### `summary [database-dir]`
+Display a summary of the database including total files, size, and integrity hash.
+
+**Options:**
+- `-m, --meta <dir>`: Metadata directory
+- `-k, --key <keyfile>`: Path to encryption key file
+- `-v, --verbose`: Enable verbose logging
+
+**Example:**
+```bash
+psi summary ~/photos
 ```
 
 ### `ui [database-dir]`
@@ -282,5 +305,6 @@ This will prompt for confirmation before deleting all credential files.
 
 - Use `--verbose` flag for detailed progress information
 - Check files before adding to avoid duplicates: `psi check`
+- View database overview anytime: `psi summary`
 - The CLI automatically processes images and creates optimized versions
 - Supported formats: JPEG, PNG, WebP, HEIC, and common video formats

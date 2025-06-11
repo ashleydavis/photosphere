@@ -1,7 +1,7 @@
 # Photosphere CLI Commands Documentation
 
 ## Overview
-The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, start the web UI, configure cloud storage, and analyze media file metadata.
+The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. It provides commands to initialize databases, add media files, view database summaries, start the web UI, configure cloud storage, and analyze media file metadata.
 
 **CLI Tool Name:** `psi`  
 **Version:** 0.0.1
@@ -136,6 +136,41 @@ Once configured, you can use S3 storage paths like:
 
 ---
 
+### `summary` - Database Summary
+**Purpose:** Display a summary of the Photosphere media file database including total files, size, and tree hash
+
+**Usage:**
+```bash
+psi summary [database-dir] [options]
+```
+
+**Arguments:**
+- `[database-dir]` - The directory containing the media file database (defaults to current directory)
+
+**Options:**
+- All global options listed above
+
+**Examples:**
+```bash
+psi summary
+psi summary ~/photos
+psi summary ~/photos --verbose
+```
+
+**Output Information:**
+- **Total files** - Number of files in the database
+- **Total size** - Combined size of all files (formatted in B/KB/MB/GB)
+- **Tree root hash (short)** - First 8 characters of the Merkle tree root hash
+- **Tree root hash (full)** - Complete Merkle tree root hash for verification
+
+**Use Cases:**
+- Quick overview of database contents
+- Verification of database integrity using hash values
+- Monitoring database growth over time
+- Debugging and database health checks
+
+---
+
 ### `info` - Analyze Media Files
 **Purpose:** Display detailed information about media files including EXIF data, metadata, and technical specifications
 
@@ -193,8 +228,9 @@ The CLI automatically checks for required tools (ImageMagick, FFmpeg) and prompt
 
 1. **Initialize a database:** `psi init ~/my-photos`
 2. **Add media files:** `psi add ~/my-photos ~/source-photos`
-3. **Configure cloud storage (optional):** `psi configure`
-4. **Start the web UI:** `psi ui ~/my-photos`
-5. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
+3. **View database summary:** `psi summary ~/my-photos`
+4. **Configure cloud storage (optional):** `psi configure`
+5. **Start the web UI:** `psi ui ~/my-photos`
+6. **Analyze specific files:** `psi info ~/my-photos photo.jpg --raw`
 
 This CLI provides a complete workflow for managing media databases from initialization through analysis and web viewing.

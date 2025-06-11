@@ -7,6 +7,7 @@ import { initCommand } from './cmd/init';
 import { configureCommand } from './cmd/configure';
 import { infoCommand } from './cmd/info';
 import { toolsCommand } from './cmd/tools';
+import { summaryCommand } from './cmd/summary';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -90,6 +91,16 @@ async function main() {
         .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
         .action(toolsCommand);
+
+    program
+        .command("summary")
+        .description("Display a summary of the media file database including total files, size, and tree hash.")
+        .argument(...dbArgument)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .action(summaryCommand);
 
     // Parse the command line arguments
     try {
