@@ -10,6 +10,7 @@ import { toolsCommand } from './cmd/tools';
 import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
+import { compareCommand } from './cmd/compare';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -130,6 +131,20 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .action(replicateCommand);
+
+    program
+        .command("compare")
+        .description("Compare two asset databases by analyzing their Merkle trees.")
+        .argument("<source-dir>", "Source database directory")
+        .argument("<destination-dir>", "Destination database directory")
+        .option("-s, --src-meta <dir>", "Source metadata directory override")
+        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
+        .option("--sk, --src-key <keyfile>", "Path to source encryption key file")
+        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
+        .option("-o, --output <file>", "Write comparison results to JSON file")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .action(compareCommand);
 
     // Parse the command line arguments
     try {

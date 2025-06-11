@@ -292,6 +292,90 @@ psi replicate ~/photos ~/backup --generate-key
 
 ---
 
+### `compare` - Database Comparison
+**Purpose:** Compare two asset databases by analyzing their Merkle trees to identify differences
+
+**Usage:**
+```bash
+psi compare <source-dir> <destination-dir> [options]
+```
+
+**Arguments:**
+- `<source-dir>` - Source database directory (required)
+- `<destination-dir>` - Destination database directory (required)
+
+**Options:**
+- `-s, --src-meta <dir>` - Source metadata directory override
+- `-d, --dest-meta <dir>` - Destination metadata directory override
+- `--sk, --src-key <keyfile>` - Path to source encryption key file
+- `--dk, --dest-key <keyfile>` - Path to destination encryption key file
+- `-o, --output <file>` - Write comparison results to JSON file
+- All global options listed above
+
+**Examples:**
+```bash
+psi compare ~/photos ~/backup/photos
+psi compare ~/photos s3:backup-bucket/photos
+psi compare s3:source-bucket/photos ~/local-copy
+psi compare ~/photos ~/backup --sk source.key --dk backup.key
+psi compare ~/photos ~/backup --output comparison-report.json
+```
+
+**Comparison Process:**
+1. **Fast path optimization**: Compares root hashes first for identical databases
+2. **Detailed analysis**: Uses Merkle tree comparison for comprehensive differences
+3. **Cryptographic verification**: Leverages SHA-256 hashes for accurate change detection
+4. **Cross-storage support**: Compares databases across different storage systems
+
+**Output Categories:**
+- **Files only in source** - Files present in first database but missing from second
+- **Files only in destination** - Files present in second database but missing from first
+- **Modified files** - Files with same path but different content (hash mismatch)
+- **Deleted files** - Files marked as deleted in the tree structure
+
+**Display Format:**
+- **Console output**: Color-coded differences with limited display (first 10 items per category)
+- **JSON output**: Complete structured data for automation and further analysis
+- **Summary statistics**: File counts and difference metrics
+
+**JSON Structure:**
+```json
+{
+  "timestamp": "2023-12-01T10:30:00.000Z",
+  "treesMatch": false,
+  "message": "Found 5 differences",
+  "differences": {
+    "filesOnlyInA": ["photo1.jpg", "video1.mp4"],
+    "filesOnlyInB": ["photo2.jpg"],
+    "modifiedFiles": ["photo3.jpg"],
+    "deletedFiles": ["old_photo.jpg"]
+  },
+  "metrics": {
+    "filesInTreeA": 1250,
+    "filesInTreeB": 1248,
+    "totalDifferences": 5
+  }
+}
+```
+
+**Use Cases:**
+- **Backup verification** - Ensure backup copies are complete and current
+- **Synchronization audit** - Verify database synchronization between locations
+- **Migration validation** - Confirm successful database migration
+- **Change detection** - Identify what has changed between database versions
+- **Forensic analysis** - Investigate unauthorized modifications
+
+**Performance Features:**
+- **Root hash optimization** - O(1) comparison for identical databases
+- **Efficient tree traversal** - Only processes differing subtrees
+- **Memory efficient** - Streams through large trees without excessive memory use
+- **Cross-storage compatible** - Works with any supported storage backend
+
+**Exit Codes:**
+- `0` - Comparison completed successfully (regardless of differences found)
+
+---
+
 ### `info` - Analyze Media Files
 **Purpose:** Display detailed information about media files including EXIF data, metadata, and technical specifications
 
