@@ -227,7 +227,6 @@ export class MediaFileDatabase {
         averageSize: 0,
     };
 
-
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
@@ -248,12 +247,7 @@ export class MediaFileDatabase {
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
         this.databaseHashCache = new HashCache(metadataStorage, `.db`);
-        this.fileScanner = new FileScanner({
-            ignorePatterns: [/\.db/],
-            includeZipFiles: true,
-            includeImages: true,
-            includeVideos: true
-        });
+        this.fileScanner = new FileScanner({ ignorePatterns: [/\.db/] });
     }
 
     //

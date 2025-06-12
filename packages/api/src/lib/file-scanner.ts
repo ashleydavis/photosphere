@@ -41,22 +41,7 @@ export interface ScannerOptions {
     //
     // Patterns to ignore during scanning (default: [/\.db/])
     //
-    ignorePatterns?: RegExp[];
-    
-    //
-    // Whether to include zip files for scanning (default: true)
-    //
-    includeZipFiles?: boolean;
-    
-    //
-    // Whether to include image files (default: true)
-    //
-    includeImages?: boolean;
-    
-    //
-    // Whether to include video files (default: true)
-    //
-    includeVideos?: boolean;
+    ignorePatterns?: RegExp[];    
 }
 
 //
@@ -64,16 +49,9 @@ export interface ScannerOptions {
 //
 export class FileScanner {
     private currentlyScanning: string | undefined;
-    private options: Required<ScannerOptions>;
     private numFilesIgnored: number = 0;
 
-    constructor(options: ScannerOptions = {}) {
-        this.options = {
-            ignorePatterns: options.ignorePatterns || [/\.db/],
-            includeZipFiles: options.includeZipFiles ?? true,
-            includeImages: options.includeImages ?? true,
-            includeVideos: options.includeVideos ?? true
-        };
+    constructor(private readonly options?: ScannerOptions) {
     }
 
     //
@@ -157,7 +135,7 @@ export class FileScanner {
             progressCallback(this.currentlyScanning);
         }
 
-        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, this.options.ignorePatterns)) {
+        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, this.options?.ignorePatterns)) {
             if (progressCallback) {
                 this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
                 progressCallback(this.currentlyScanning);
@@ -180,7 +158,7 @@ export class FileScanner {
                     lastModified: fileStat.mtime,
                 };
 
-                if (contentType === "application/zip" && this.options.includeZipFiles) {
+                if (contentType === "application/zip") {
                     await this.scanZipFile(filePath, fileInfo, fileStat.birthtime, () => fs.createReadStream(filePath), visitFile, progressCallback);
                 } else {
                     await visitFile({
@@ -255,7 +233,7 @@ export class FileScanner {
     //
     private shouldIncludeFile(contentType: string): boolean {
         if (contentType === "application/zip") {
-            return this.options.includeZipFiles;
+            return true;
         }
 
         if (contentType.startsWith("image/vnd.adobe.photoshop")) {
@@ -264,11 +242,11 @@ export class FileScanner {
         }
         
         if (contentType.startsWith("image")) {
-            return this.options.includeImages;
+            return true;
         }
         
         if (contentType.startsWith("video")) {
-            return this.options.includeVideos;
+            return true;
         }
         
         return false;
