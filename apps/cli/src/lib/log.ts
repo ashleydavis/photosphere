@@ -48,6 +48,15 @@ class Log implements ILog {
 
         console.debug(message);
     }
+
+    tool(tool: string, data: { stdout?: string; stderr?: string }): void {
+        if (data.stdout) {
+            this.verbose(`== ${tool} stdout ==\n${data.stdout}`);
+        }
+        if (data.stderr) {
+            this.verbose(`== ${tool} stderr ==\n${data.stderr}`);
+        }
+    }
 }
 
 //

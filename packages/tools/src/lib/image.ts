@@ -1,10 +1,8 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
+import { exec } from 'node-utils';
 import { log } from 'utils';
 
-const execAsync = promisify(exec);
 
 export class Image {
     private filePath: string;
@@ -44,7 +42,7 @@ export class Image {
 
         try {
             // First try modern ImageMagick (magick command)
-            const { stdout } = await execAsync('magick -version');
+            const { stdout } = await exec('magick -version');
             
             // If we get here, modern magick command works
             Image.convertCommand = 'magick';
@@ -61,9 +59,9 @@ export class Image {
         } catch {
             try {
                 // Try legacy ImageMagick (convert/identify commands)
-                const [convertResult, identifyResult] = await Promise.all([
-                    execAsync('convert -version'),
-                    execAsync('identify -version')
+                const [convertResult, _] = await Promise.all([
+                    exec('convert -version'),
+                    exec('identify -version')
                 ]);
                 
                 // If we get here, legacy commands work
@@ -95,7 +93,7 @@ export class Image {
         
         if (Image.imageMagickType === 'modern') {
             try {
-                const { stdout } = await execAsync('magick -version');
+                const { stdout } = await exec('magick -version');
                 const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
                 return {
                     available: true,
@@ -110,7 +108,7 @@ export class Image {
             }
         } else if (Image.imageMagickType === 'legacy') {
             try {
-                const { stdout } = await execAsync('convert -version');
+                const { stdout } = await exec('convert -version');
                 const versionMatch = stdout.match(/Version: ImageMagick ([\d.-]+)/);
                 return {
                     available: true,
@@ -150,7 +148,7 @@ export class Image {
         try {           
             // Get format, dimensions
             const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
-            const { stdout } = await execAsync(command);
+            const { stdout } = await exec(command);
             
             const parts = stdout.trim().split(' ');
             const width = parseInt(parts[0]);
@@ -204,7 +202,7 @@ export class Image {
     async getExifData(): Promise<Record<string, string>> {
         try {
             const command = `${Image.identifyCommand} -format "%[EXIF:*]" "${this.filePath}"`;
-            const { stdout } = await execAsync(command);
+            const { stdout } = await exec(command);
             
             const exifData: Record<string, string> = {};
             const lines = stdout.trim().split('\n');
@@ -261,10 +259,7 @@ export class Image {
         }
 
         try {
-            console.error(`Resizing image with command: ${command}`);
-            const { stderr, stdout } = await execAsync(command);
-            console.log(`ImageMagick output: ${stdout}`);
-            console.error(`ImageMagick error: ${stderr}`);
+            await exec(command);
             return new Image(output);
         } catch (error) {
             throw new Error(`Failed to resize image: ${error}`);
@@ -284,7 +279,7 @@ export class Image {
         command += ` "${outputPath}"`;
 
         try {
-            await execAsync(command);
+            await exec(command);
             return new Image(outputPath);
         } catch (error) {
             throw new Error(`Failed to save image: ${error}`);
@@ -307,7 +302,7 @@ export class Image {
         try {
             // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
             const command = `${Image.convertCommand} "${this.filePath}" -resize 1x1! -format "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]" info:`;
-            const { stdout } = await execAsync(command);
+            const { stdout } = await exec(command);
             
             const rgbString = stdout.trim();
             const rgbValues = rgbString.split(',').map(val => parseInt(val.trim()));
@@ -340,7 +335,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await execAsync(command);
+            const { stdout } = await exec(command);
             
             // Parse histogram output to find the most frequent color
             const lines = stdout.trim().split('\n');
@@ -392,7 +387,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await execAsync(command);
+            const { stdout } = await exec(command);
             const lines = stdout.trim().split('\n');
             const colors: Array<{ rgb: [number, number, number], count: number }> = [];
             
