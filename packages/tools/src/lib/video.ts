@@ -1,10 +1,7 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
-
-const execAsync = promisify(exec);
+import { exec } from 'node-utils';
 
 export class Video {
     private filePath: string;
@@ -43,7 +40,7 @@ export class Video {
 
         try {
             // Test if ffprobe command is available in system PATH
-            const { stdout } = await execAsync('ffprobe -version');
+            const { stdout } = await exec('ffprobe -version');
             
             // If we get here, ffprobe works (and ffmpeg should too)
             Video.ffprobeCommand = 'ffprobe';
@@ -67,7 +64,7 @@ export class Video {
      */
     static async verifyFfprobe(): Promise<{ available: boolean; version?: string; error?: string }> {
         try {
-            const { stdout } = await execAsync('ffprobe -version');
+            const { stdout } = await exec('ffprobe -version');
             
             const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
             return {
@@ -87,7 +84,7 @@ export class Video {
      */
     static async verifyFfmpeg(): Promise<{ available: boolean; version?: string; error?: string }> {
         try {
-            const { stdout } = await execAsync('ffmpeg -version');
+            const { stdout } = await exec('ffmpeg -version');
             
             const versionMatch = stdout.match(/ffmpeg version ([\d.-]+)/);
             return {
@@ -114,7 +111,7 @@ export class Video {
         try {
 
             // Run ffprobe to get video information in JSON format
-            const { stdout } = await execAsync(
+            const { stdout } = await exec(
                 `${Video.ffprobeCommand} -v quiet -print_format json -show_format -show_streams "${this.filePath}"`
             );
             
@@ -209,7 +206,7 @@ export class Video {
         command += ` -y "${outputPath}"`;
         
         try {
-            await execAsync(command);
+            await exec(command);
             return outputPath;
         } catch (error) {
             throw new Error(`Failed to extract screenshot: ${error}`);

@@ -5,6 +5,7 @@ export interface ILog {
     exception(message: string, error: Error): void;
     warn(message: string): void;
     debug(message: string): void;
+    tool(tool: string, data: { stdout?: string; stderr?: string }): void;
 }
 
 //
@@ -33,6 +34,15 @@ export let log: ILog = {
     },
     debug(message: string): void {
         console.debug(message);
+    },
+
+    tool(tool: string, data: { stdout?: string; stderr?: string }): void {
+        if (data.stdout) {
+            console.log(`== ${tool} stdout ==\n${data.stdout}`);
+        }
+        if (data.stderr) {
+            console.error(`== ${tool} stderr ==\n${data.stderr}`);
+        }
     }
 };
 
