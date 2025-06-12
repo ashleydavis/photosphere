@@ -1,4 +1,3 @@
-import { IAsset } from "defs";
 import { isArray } from "lodash";
 
 //
@@ -24,7 +23,12 @@ export interface IImageTransformation {
 //
 // Gets the transformation for an image.
 //
-export function getImageTransformation(exif: any): IImageTransformation | undefined {
+export function getImageTransformation(exif?: any): IImageTransformation | undefined {
+
+    if (!exif) {
+        return undefined; // No transformation needed.
+    }
+
     let orientation = 1;
     if (exif?.Orientation) {
         if (isArray(exif.Orientation)) {
@@ -99,7 +103,11 @@ export function getImageTransformation(exif: any): IImageTransformation | undefi
 //
 // Gets the transformation for a video.
 //
-export function getVideoTransformation(metadata: any): IImageTransformation | undefined {
+export function getVideoTransformation(metadata?: any): IImageTransformation | undefined {
+
+    if (!metadata?.streams) {
+        return undefined; // No transformation needed for videos without rotation.
+    }
 
     let rotation: string | undefined = undefined;
 
