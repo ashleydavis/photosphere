@@ -311,21 +311,94 @@ test_view_media_files() {
     run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
 }
 
-test_add_single_file() {
+# Parameterized function to test adding a single file
+test_add_file_parameterized() {
+    local file_path="$1"
+    local file_type="$2"
+    local test_description="$3"
+    
+    # Check if file exists
+    if [ ! -f "$file_path" ]; then
+        log_warning "$file_type test file not found: $file_path"
+        log_warning "Skipping $file_type file test"
+        return
+    fi
+    
+    # Get initial database state - count files in metadata collection
+    # Use the info command output to track actual media files added
+    local before_check=$($(get_cli_command) check $TEST_DB_DIR $file_path --yes 2>&1)
+    local already_in_db=$(echo "$before_check" | grep -o '[0-9]\+ files already in database' | grep -o '[0-9]\+' || echo "0")
+    
+    # Add the file
+    local add_output
+    add_output=$($(get_cli_command) add $TEST_DB_DIR $file_path --yes 2>&1)
+    echo "$add_output"
+    
+    # Check if command succeeded
+    if [ $? -ne 0 ]; then
+        log_error "$test_description failed"
+        exit 1
+    fi
+    
+    # Extract from the add command summary how many files were actually added
+    local files_added=$(echo "$add_output" | grep -o '[0-9]\+ files added' | grep -o '[0-9]\+' | head -1 || echo "0")
+    local files_failed=$(echo "$add_output" | grep -o '[0-9]\+ files failed' | grep -o '[0-9]\+' | head -1 || echo "0")
+    local files_already=$(echo "$add_output" | grep -o '[0-9]\+ files already in the database' | grep -o '[0-9]\+' | head -1 || echo "0")
+    
+    # Verify exactly one file was added (or was already there)
+    if [ "$already_in_db" -eq "1" ]; then
+        if [ "$files_already" -eq "1" ] && [ "$files_added" -eq "0" ]; then
+            log_success "File was already in database (as expected)"
+        else
+            log_error "File was already in database but add command reported unexpected results"
+            exit 1
+        fi
+    else
+        if [ "$files_added" -eq "1" ] && [ "$files_failed" -eq "0" ]; then
+            log_success "Exactly 1 $file_type file was added to the database"
+        elif [ "$files_added" -eq "0" ]; then
+            log_error "No files were added to the database"
+            exit 1
+        else
+            log_error "Expected 1 file to be added, but $files_added files were added"
+            exit 1
+        fi
+    fi
+    
+    # Check that the specific file is now in the database
+    run_command "Check $file_type file added" "$(get_cli_command) check $TEST_DB_DIR $file_path --yes"
+}
+
+test_add_png_file() {
     echo ""
-    echo "=== TEST 3: ADD ONE FILE ==="
+    echo "=== TEST 3: ADD PNG FILE ==="
     show_tools_directory
     
-    run_command "Add single test file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file"
+}
+
+test_add_jpg_file() {
+    echo ""
+    echo "=== TEST 4: ADD JPG FILE ==="
+    show_tools_directory
     
-    run_command "Check single file added" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file"
+}
+
+test_add_mp4_file() {
+    echo ""
+    echo "=== TEST 5: ADD MP4 FILE ==="
+    show_tools_directory
+    
+    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file"
 }
 
 test_add_same_file() {
     echo ""
-    echo "=== TEST 4: ADD SAME FILE (NO DUPLICATION) ==="
+    echo "=== TEST 6: ADD SAME FILE (NO DUPLICATION) ==="
     show_tools_directory
     
+    # Try to re-add the PNG file (should not add it again)
     run_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
     run_command "Check file still in database" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
@@ -333,7 +406,7 @@ test_add_same_file() {
 
 test_add_multiple_files() {
     echo ""
-    echo "=== TEST 5: ADD MULTIPLE FILES ==="
+    echo "=== TEST 7: ADD MULTIPLE FILES ==="
     show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
@@ -348,7 +421,7 @@ test_add_multiple_files() {
 
 test_add_same_multiple_files() {
     echo ""
-    echo "=== TEST 6: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
+    echo "=== TEST 8: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
     show_tools_directory
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
@@ -363,7 +436,7 @@ test_add_same_multiple_files() {
 
 test_database_summary() {
     echo ""
-    echo "=== TEST 7: DATABASE SUMMARY ==="
+    echo "=== TEST 9: DATABASE SUMMARY ==="
     show_tools_directory
     
     run_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes"
@@ -404,7 +477,7 @@ test_database_summary() {
 
 test_database_verify() {
     echo ""
-    echo "=== TEST 8: DATABASE VERIFICATION ==="
+    echo "=== TEST 10: DATABASE VERIFICATION ==="
     show_tools_directory
     
     run_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes"
@@ -435,20 +508,55 @@ test_database_verify() {
         exit 1
     fi
     
-    # Test single file verification
-    if [ -f "$TEST_FILES_DIR/test.png" ]; then
-        run_command "Verify single file" "$(get_cli_command) verify $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    # Extract counts from the verification output
+    local new_count=$(echo "$verify_output" | grep -o "New: [0-9]\+" | grep -o "[0-9]\+")
+    local modified_count=$(echo "$verify_output" | grep -o "Modified: [0-9]\+" | grep -o "[0-9]\+")
+    local removed_count=$(echo "$verify_output" | grep -o "Removed: [0-9]\+" | grep -o "[0-9]\+")
+    
+    # Check that the database is in a good state (no new, modified, or removed files)
+    if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
+        log_error "Database verification failed - found issues:"
+        log_error "  New files: $new_count"
+        log_error "  Modified files: $modified_count"
+        log_error "  Removed files: $removed_count"
+        exit 1
     else
-        log_warning "Test file not found for single file verification: $TEST_FILES_DIR/test.png"
+        log_success "Database is in good state - no new, modified, or removed files"
     fi
+}
+
+test_database_verify_full() {
+    echo ""
+    echo "=== TEST 11: DATABASE VERIFICATION (FULL MODE) ==="
+    show_tools_directory
     
     # Test full verification mode
     run_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes"
+    
+    # Capture verify output to check results
+    local verify_output
+    verify_output=$($(get_cli_command) verify $TEST_DB_DIR --full --yes 2>&1)
+    
+    # Extract counts from the verification output
+    local new_count=$(echo "$verify_output" | grep -o "New: [0-9]\+" | grep -o "[0-9]\+")
+    local modified_count=$(echo "$verify_output" | grep -o "Modified: [0-9]\+" | grep -o "[0-9]\+")
+    local removed_count=$(echo "$verify_output" | grep -o "Removed: [0-9]\+" | grep -o "[0-9]\+")
+    
+    # Check that the database is in a good state even with full verification
+    if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
+        log_error "Full database verification failed - found issues:"
+        log_error "  New files: $new_count"
+        log_error "  Modified files: $modified_count"  
+        log_error "  Removed files: $removed_count"
+        exit 1
+    else
+        log_success "Full verification passed - database is in good state"
+    fi
 }
 
 test_database_replicate() {
     echo ""
-    echo "=== TEST 9: DATABASE REPLICATION ==="
+    echo "=== TEST 12: DATABASE REPLICATION ==="
     show_tools_directory
     
     local replica_dir="$TEST_DB_DIR-replica"
@@ -497,7 +605,7 @@ test_database_replicate() {
 
 test_database_compare() {
     echo ""
-    echo "=== TEST 10: DATABASE COMPARISON ==="
+    echo "=== TEST 13: DATABASE COMPARISON ==="
     show_tools_directory
     
     local replica_dir="$TEST_DB_DIR-replica"
@@ -559,7 +667,7 @@ test_database_compare() {
 
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 11: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 14: CANNOT CREATE DATABASE OVER EXISTING ==="
     show_tools_directory
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
@@ -567,7 +675,7 @@ test_cannot_create_over_existing() {
 
 test_ui_skipped() {
     echo ""
-    echo "=== TEST 12: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
+    echo "=== TEST 15: UI TEST (SKIPPED IN AUTOMATED RUN) ==="
     show_tools_directory
     log_info "UI test skipped - would run: $(get_cli_command) ui $TEST_DB_DIR --yes"
     log_info "This requires manual verification in a real environment"
@@ -674,12 +782,15 @@ run_all_tests() {
     # Run all tests in sequence 
     test_create_database
     test_view_media_files
-    test_add_single_file
+    test_add_png_file
+    test_add_jpg_file
+    test_add_mp4_file
     test_add_same_file
     test_add_multiple_files
     test_add_same_multiple_files
     test_database_summary
     test_database_verify
+    test_database_verify_full
     test_database_replicate
     test_database_compare
     test_cannot_create_over_existing
@@ -727,37 +838,46 @@ run_test() {
         "view-media"|"2")
             test_view_media_files
             ;;
-        "add-single"|"3")
-            test_add_single_file
+        "add-png"|"3")
+            test_add_png_file
             ;;
-        "add-same"|"4")
+        "add-jpg"|"4")
+            test_add_jpg_file
+            ;;
+        "add-mp4"|"5")
+            test_add_mp4_file
+            ;;
+        "add-same"|"6")
             test_add_same_file
             ;;
-        "add-multiple"|"5")
+        "add-multiple"|"7")
             test_add_multiple_files
             ;;
-        "add-same-multiple"|"6")
+        "add-same-multiple"|"8")
             test_add_same_multiple_files
             ;;
-        "summary"|"7")
+        "summary"|"9")
             test_database_summary
             ;;
-        "verify"|"8")
+        "verify"|"10")
             test_database_verify
             ;;
-        "replicate"|"9")
+        "verify-full"|"11")
+            test_database_verify_full
+            ;;
+        "replicate"|"12")
             test_database_replicate
             ;;
-        "compare"|"10")
+        "compare"|"13")
             test_database_compare
             ;;
-        "no-overwrite"|"11")
+        "no-overwrite"|"14")
             test_cannot_create_over_existing
             ;;
-        "ui"|"12")
+        "ui"|"15")
             test_ui_skipped
             ;;
-        "cloud"|"13")
+        "cloud"|"16")
             test_cloud_skipped
             ;;
         *)
@@ -800,12 +920,15 @@ run_multiple_commands() {
                 # Each test will exit immediately on failure due to set -e
                 test_create_database
                 test_view_media_files
-                test_add_single_file
+                test_add_png_file
+                test_add_jpg_file
+                test_add_mp4_file
                 test_add_same_file
                 test_add_multiple_files
                 test_add_same_multiple_files
                 test_database_summary
                 test_database_verify
+                test_database_verify_full
                 test_database_replicate
                 test_database_compare
                 test_cannot_create_over_existing
@@ -827,37 +950,46 @@ run_multiple_commands() {
             "view-media"|"2")
                 test_view_media_files
                 ;;
-            "add-single"|"3")
-                test_add_single_file
+            "add-png"|"3")
+                test_add_png_file
                 ;;
-            "add-same"|"4")
+            "add-jpg"|"4")
+                test_add_jpg_file
+                ;;
+            "add-mp4"|"5")
+                test_add_mp4_file
+                ;;
+            "add-same"|"6")
                 test_add_same_file
                 ;;
-            "add-multiple"|"5")
+            "add-multiple"|"7")
                 test_add_multiple_files
                 ;;
-            "add-same-multiple"|"6")
+            "add-same-multiple"|"8")
                 test_add_same_multiple_files
                 ;;
-            "summary"|"7")
+            "summary"|"9")
                 test_database_summary
                 ;;
-            "verify"|"8")
+            "verify"|"10")
                 test_database_verify
                 ;;
-            "replicate"|"9")
+            "verify-full"|"11")
+                test_database_verify_full
+                ;;
+            "replicate"|"12")
                 test_database_replicate
                 ;;
-            "compare"|"10")
+            "compare"|"13")
                 test_database_compare
                 ;;
-            "no-overwrite"|"11")
+            "no-overwrite"|"14")
                 test_cannot_create_over_existing
                 ;;
-            "ui"|"12")
+            "ui"|"15")
                 test_ui_skipped
                 ;;
-            "cloud"|"13")
+            "cloud"|"16")
                 test_cloud_skipped
                 ;;
             *)
@@ -903,17 +1035,20 @@ show_usage() {
     echo "Individual tests:"
     echo "  create-database (1) - Create new database"
     echo "  view-media (2)      - View local media files"
-    echo "  add-single (3)      - Add single file to database"
-    echo "  add-same (4)        - Add same file again (no duplication)"
-    echo "  add-multiple (5)    - Add multiple files"
-    echo "  add-same-multiple (6) - Add same multiple files again"
-    echo "  summary (7)         - Display database summary"
-    echo "  verify (8)          - Verify database integrity"
-    echo "  replicate (9)       - Replicate database to new location"
-    echo "  compare (10)        - Compare two databases"
-    echo "  no-overwrite (11)   - Cannot create database over existing"
-    echo "  ui (12)             - UI test (skipped)"
-    echo "  cloud (13)          - Cloud tests (skipped)"
+    echo "  add-png (3)         - Add PNG file to database"
+    echo "  add-jpg (4)         - Add JPG file to database"
+    echo "  add-mp4 (5)         - Add MP4 file to database"
+    echo "  add-same (6)        - Add same file again (no duplication)"
+    echo "  add-multiple (7)    - Add multiple files"
+    echo "  add-same-multiple (8) - Add same multiple files again"
+    echo "  summary (9)         - Display database summary"
+    echo "  verify (10)         - Verify database integrity"
+    echo "  verify-full (11)    - Verify database integrity (full mode)"
+    echo "  replicate (12)      - Replicate database to new location"
+    echo "  compare (13)        - Compare two databases"
+    echo "  no-overwrite (14)   - Cannot create database over existing"
+    echo "  ui (15)             - UI test (skipped)"
+    echo "  cloud (16)          - Cloud tests (skipped)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
