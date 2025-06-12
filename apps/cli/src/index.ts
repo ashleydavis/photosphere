@@ -115,7 +115,6 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
-        .option("-o, --output <file>", "Write verification summary to JSON file")
         .action(verifyCommand);
 
     program
