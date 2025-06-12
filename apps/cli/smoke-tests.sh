@@ -72,7 +72,6 @@ show_tools_directory() {
     echo ""
 }
 
-
 # Run a command and check its exit code
 run_command() {
     local description="$1"
@@ -80,7 +79,10 @@ run_command() {
     local expected_exit_code="${3:-0}"
     
     log_info "Running: $description"
-    echo "Command: $command"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$command${NC}"
+    echo ""
     
     # For macOS, check if binary exists and is executable
     if [[ "$OSTYPE" == "darwin"* ]] && [[ "$command" == *"psi"* ]]; then
