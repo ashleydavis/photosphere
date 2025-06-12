@@ -376,7 +376,12 @@ export class MediaFileDatabase {
         const assetId = uuid();
 
         let assetDetails: IAssetDetails | undefined = undefined;
+        
+        //
+        // Create a temporary directory for generates files like the thumbnail, display asset, etc.
+        //
         const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuid());
+        await fs.ensureDir(assetTempDir);
 
         if (contentType?.startsWith("video")) {
             assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, openStream);
