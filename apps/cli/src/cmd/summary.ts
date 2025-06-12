@@ -7,6 +7,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { formatBytes } from "../lib/format";
 
 export interface ISummaryCommandOptions { 
     //
@@ -84,10 +85,3 @@ export async function summaryCommand(dbDir: string, options: ISummaryCommandOpti
     await exit(0);
 }
 
-function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}

@@ -11,6 +11,7 @@ import { computeHash } from "adb";
 import fs from "fs";
 import { Readable } from "stream";
 import { IFileInfo } from "storage";
+import { formatBytes } from "../lib/format";
 
 export interface IInfoCommandOptions { 
     //
@@ -157,35 +158,5 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
 
     if (analysis.error) {
         console.log(`   ${pc.yellow(`Analysis Error: ${analysis.error}`)}`);
-    }
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function formatDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    } else {
-        return `${minutes}:${secs.toString().padStart(2, '0')}`;
-    }
-}
-
-function formatBitrate(bitrate: number): string {
-    if (bitrate >= 1000000) {
-        return `${(bitrate / 1000000).toFixed(1)} Mbps`;
-    } else if (bitrate >= 1000) {
-        return `${(bitrate / 1000).toFixed(1)} Kbps`;
-    } else {
-        return `${bitrate} bps`;
     }
 }
