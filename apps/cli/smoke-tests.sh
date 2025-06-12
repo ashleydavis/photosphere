@@ -46,9 +46,6 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
-# Control cleanup behavior
-CLEANUP_ON_EXIT="false"
-
 # Helper functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -944,14 +941,12 @@ main() {
     
     # Check if multiple commands are provided (contains comma)
     if [[ "$1" == *","* ]]; then
-        CLEANUP_ON_EXIT="false"  # Multiple commands handle their own flow
         run_multiple_commands "$1"
         return
     fi
     
     # Check if running all tests
     if [ "$1" = "all" ]; then
-        CLEANUP_ON_EXIT="false"  # run_all_tests handles its own cleanup
         run_all_tests
         return
     fi
@@ -964,14 +959,12 @@ main() {
     
     # Check if running setup command
     if [ "$1" = "setup" ]; then
-        CLEANUP_ON_EXIT="true"  # Setup can cleanup after itself
         test_setup
         exit 0
     fi
     
     # Check if running install-tools command
     if [ "$1" = "install-tools" ]; then
-        CLEANUP_ON_EXIT="false"  # Don't cleanup after installing tools
         test_install_tools
         exit 0
     fi
@@ -987,15 +980,12 @@ main() {
     case "$1" in
         "view-media"|"2")
             # view-media doesn't need or create a database, safe to cleanup
-            CLEANUP_ON_EXIT="true"
             ;;
         "create-database"|"1")
             # Don't cleanup after create-database - other tests might need it
-            CLEANUP_ON_EXIT="false"
             ;;
         *)
             # Other tests might depend on existing database, don't cleanup unless it's a standalone test
-            CLEANUP_ON_EXIT="false"
             ;;
     esac
     
@@ -1012,18 +1002,6 @@ main() {
     echo -e "${GREEN}TEST PASSED${NC}"
     exit 0
 }
-
-# Handle script termination
-cleanup() {
-    # Only cleanup if we're not running all tests or if we're running individual tests that don't need the database
-    if [ "$CLEANUP_ON_EXIT" = "true" ]; then
-        echo ""
-        log_info "Cleaning up test artifacts..."
-        rm -rf "$TEST_DB_DIR" 2>/dev/null || true
-    fi
-}
-
-trap cleanup EXIT
 
 # Run main function
 main "$@"
