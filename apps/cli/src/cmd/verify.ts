@@ -38,11 +38,6 @@ export interface IVerifyCommandOptions {
     // Force full verification (bypass cached hash optimization).
     //
     full?: boolean;
-
-    //
-    // Write verification summary to JSON file.
-    //
-    output?: string;
 }
 
 interface VerificationResult {
@@ -112,11 +107,6 @@ export async function verifyCommand(dbDir: string, filePath: string | undefined,
 
     // Display results
     displayResults(result);
-
-    // Write JSON summary if requested
-    if (options.output) {
-        await writeJsonSummary(result, options.output);
-    }
 
     await exit(0);
 }
@@ -336,23 +326,5 @@ function displayResults(result: VerificationResult): void {
         console.log(pc.green(`✅ Database verification passed - all files are intact`));
     } else {
         console.log(pc.yellow(`⚠️  Database verification found issues - see details above`));
-    }
-}
-
-async function writeJsonSummary(result: VerificationResult, outputPath: string): Promise<void> {
-    try {
-        const summary = {
-            timestamp: new Date().toISOString(),
-            totalFiles: result.totalFiles,
-            unmodified: result.unmodified,
-            modified: result.modified,
-            new: result.new,
-            removed: result.removed
-        };
-        
-        await fs.promises.writeFile(outputPath, JSON.stringify(summary, null, 2));
-        console.log(pc.gray(`Summary written to: ${outputPath}`));
-    } catch (error) {
-        log.error(pc.red(`Failed to write summary to ${outputPath}: ${error}`));
     }
 }
