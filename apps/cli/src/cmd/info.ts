@@ -1,5 +1,5 @@
-import { scanPaths } from "api";
-import { log } from "utils";
+import { FileScanner } from "api";
+import { FileStorage } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
@@ -12,6 +12,7 @@ import fs from "fs";
 import { Readable } from "stream";
 import { IFileInfo } from "storage";
 import { formatBytes } from "../lib/format";
+import { log } from "utils";
 
 export interface IInfoCommandOptions { 
     //
@@ -65,10 +66,10 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     
     writeProgress(`Searching for files...`);
     
-    // Scan all paths using the new file scanner
-    await scanPaths(paths, async (fileResult) => {
+    const fileScanner = new FileScanner(new FileStorage("fs:"));
+    await fileScanner.scanPaths(paths, async (fileResult) => {
         try {
-            const analysis = await analyzeFile(fileResult.filePath, fileResult.fileInfo, fileResult.openStream);
+            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileInfo, fileResult.openStream);
             results.push(analysis);
             fileCount++;
         } catch (error) {
@@ -101,7 +102,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, fileInfo: IFileInfo, openStream?: () => Readable): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileInfo, openStream?: () => Readable): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
     let fileAnalysis: FileAnalysis = {
@@ -121,7 +122,7 @@ async function analyzeFile(filePath: string, fileInfo: IFileInfo, openStream?: (
 
     // Analyze file content using the unified getFileInfo function
     try {
-        const assetInfo = await getFileInfo(absolutePath, fileInfo.contentType!);        
+        const assetInfo = await getFileInfo(absolutePath, contentType);        
         if (assetInfo) {
             fileAnalysis.assetInfo = assetInfo;
         }

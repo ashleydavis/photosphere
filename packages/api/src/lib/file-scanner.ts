@@ -1,9 +1,7 @@
-import fs from "fs";
-import fsPromises from "fs/promises";
 import path from "path";
-import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
+import { IFileInfo, IStorage, walkDirectory } from "storage";
 import mime from "mime";
-import { ILog, log } from "utils";
+import { log } from "utils";
 import { Readable } from "stream";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
@@ -51,7 +49,7 @@ export class FileScanner {
     private currentlyScanning: string | undefined;
     private numFilesIgnored: number = 0;
 
-    constructor(private readonly options?: ScannerOptions) {
+    constructor(private readonly storage: IStorage, private readonly options?: ScannerOptions) {
     }
 
     //
@@ -89,9 +87,10 @@ export class FileScanner {
     // Scans a single file or directory
     //
     async scanPath(filePath: string, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
-        const fileStat = await fsPromises.stat(filePath);
+        const fileInfo = await this.storage.info(filePath);
         
-        if (fileStat.isFile()) {
+        if (fileInfo) {
+            // It's a file
             const contentType = mime.getType(filePath) || undefined;
             if (!contentType) {
                 log.verbose(`Ignoring file "${filePath}" with unknown content type.`);
@@ -100,27 +99,19 @@ export class FileScanner {
             }
             
             if (this.shouldIncludeFile(contentType)) {
-                const fileInfo: IFileInfo = {
-                    contentType,
-                    length: fileStat.size,
-                    lastModified: fileStat.mtime,
-                };
-                
                 await visitFile({
                     filePath,
                     fileInfo,
                     contentType,
                     labels: [],
-                    // Don't provide openStream for regular files - they can be read directly
+                    openStream: () => this.storage.readStream(filePath)
                 });
             } else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
                 this.numFilesIgnored++;
             }
-        } else if (fileStat.isDirectory()) {
-            await this.scanDirectory(filePath, visitFile, progressCallback);
         } else {
-            throw new Error(`Unsupported file type: ${filePath}`);
+            await this.scanDirectory(filePath, visitFile, progressCallback);
         }
     }
 
@@ -135,7 +126,7 @@ export class FileScanner {
             progressCallback(this.currentlyScanning);
         }
 
-        for await (const orderedFile of walkDirectory(new FileStorage("fs:"), directoryPath, this.options?.ignorePatterns)) {
+        for await (const orderedFile of walkDirectory(this.storage, directoryPath, this.options?.ignorePatterns)) {
             if (progressCallback) {
                 this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
                 progressCallback(this.currentlyScanning);
@@ -150,23 +141,22 @@ export class FileScanner {
             }
 
             if (this.shouldIncludeFile(contentType)) {
-                const fileStat = await fsPromises.stat(filePath);
-                
-                const fileInfo: IFileInfo = {
-                    contentType,
-                    length: fileStat.size,
-                    lastModified: fileStat.mtime,
-                };
+                const fileInfo = await this.storage.info(filePath);
+                if (!fileInfo) {
+                    log.verbose(`Could not get file info for "${filePath}", skipping.`);
+                    this.numFilesIgnored++;
+                    continue;
+                }
 
                 if (contentType === "application/zip") {
-                    await this.scanZipFile(filePath, fileInfo, fileStat.birthtime, () => fs.createReadStream(filePath), visitFile, progressCallback);
+                    await this.scanZipFile(filePath, fileInfo, fileInfo.lastModified, () => this.storage.readStream(filePath), visitFile, progressCallback);
                 } else {
                     await visitFile({
                         filePath,
                         fileInfo,
                         contentType,
                         labels: [],
-                        // Don't provide openStream for regular files - they can be read directly
+                        openStream: () => this.storage.readStream(filePath)
                     });
                 }
             } else {
@@ -257,12 +247,13 @@ export class FileScanner {
 // Convenience function to scan paths with a simple callback
 //
 export async function scanPaths(
+    storage: IStorage,
     paths: string[], 
     visitFile: SimpleFileCallback, 
     progressCallback?: ScanProgressCallback,
     options?: ScannerOptions
 ): Promise<void> {
-    const scanner = new FileScanner(options);
+    const scanner = new FileScanner(storage, options);
     await scanner.scanPaths(paths, visitFile, progressCallback);
 }
 
@@ -270,11 +261,12 @@ export async function scanPaths(
 // Convenience function to scan a single path
 //
 export async function scanPath(
+    storage: IStorage,
     filePath: string, 
     visitFile: SimpleFileCallback, 
     progressCallback?: ScanProgressCallback,
     options?: ScannerOptions
 ): Promise<void> {
-    const scanner = new FileScanner(options);
+    const scanner = new FileScanner(storage, options);
     await scanner.scanPath(filePath, visitFile, progressCallback);
 }
