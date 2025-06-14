@@ -2,13 +2,14 @@ import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "storage";
 import { IAssetDatabase } from "./asset-database";
 import { computeHash } from "./hash";
+import { HashCache } from "./hash-cache";
 
 //
 // A type of storage that updates the asset database merkle tree when files are added or removed.
 //
 export class AssetDatabaseStorage implements IStorage {
 
-    constructor(private readonly storage: IStorage, private readonly assetDatabase: IAssetDatabase) {
+    constructor(private readonly storage: IStorage, private readonly assetDatabase: IAssetDatabase, private readonly hashCache: HashCache) {
     }
 
     //
@@ -20,11 +21,13 @@ export class AssetDatabaseStorage implements IStorage {
             throw new Error(`Failed to get info for file "${filePath}"`);
         }
         const hash = await computeHash(this.storage.readStream(filePath));
-        this.assetDatabase.addFile(filePath, {
+        const hashedFile = {
             hash,
             lastModified: info.lastModified,
             length: info.length,
-        });
+        };
+        this.hashCache.addHash(filePath, hashedFile);
+        this.assetDatabase.addFile(filePath, hashedFile);
 
         // console.log(`Updated the merkle tree for file "${filePath}"`);
     }
