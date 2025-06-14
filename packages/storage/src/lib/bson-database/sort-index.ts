@@ -130,7 +130,7 @@ export class SortIndex<RecordT extends IRecord> {
     private loaded: boolean = false;
     private lastUpdatedAt: Date | undefined;
     private saving: boolean = false; // Flag to prevent concurrent saves.
-    private dirty: boolean = false;
+    private dirty: boolean = false; // Set to true when the tree is modified and needs saving.
     private rootPageId: string | undefined;
     private type?: SortDataType; // Optional type for value conversion
     
@@ -449,6 +449,10 @@ export class SortIndex<RecordT extends IRecord> {
             throw new Error('Root page ID is not set. Cannot save tree.');
         }
 
+        if (!this.dirty) {
+            return; // No changes to save.
+        }
+
         // Calculate total size needed for the buffer
         const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
         const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
@@ -590,6 +594,8 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Write to storage        
         await retry(() => this.storage.write(this.treeFilePath, undefined, dataWithChecksum));
+
+        this.dirty = false; // Mark as clean after saving.
     }
 
     //
