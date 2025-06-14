@@ -276,6 +276,7 @@ export class MediaFileDatabase {
     //
     async create(): Promise<void> {
         await this.localHashCache.load();
+        await this.databaseHashCache.load();
 
         await this.assetDatabase.create();
 
