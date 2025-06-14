@@ -622,9 +622,16 @@ export class MediaFileDatabase {
     //
     async close(): Promise<void> {
         await this.localHashCache.save();
-        await this.databaseHashCache.save();
         await this.bsonDatabase.close();
         await this.assetDatabase.close();
+
+        //
+        // NOTE:    We save the database hash cache last 
+        //          because closing the database can flush 
+        //          changes to files that should be updated 
+        //          in the hash cache.
+        //
+        await this.databaseHashCache.save();
     }
 
     //
