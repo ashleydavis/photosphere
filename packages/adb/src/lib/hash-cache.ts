@@ -411,4 +411,40 @@ export class HashCache {
     getEntryCount(): number {
         return this.entryCount;
     }
+
+    /**
+     * Gets all entries from the cache
+     * @returns An array of cache entries
+     */
+    getAllEntries(): Array<{ filePath: string, hash: string, size: number, lastModified: Date }> {
+        const entries: Array<{ filePath: string, hash: string, size: number, lastModified: Date }> = [];
+        
+        if (!this.buffer || this.entryCount === 0) {
+            return entries;
+        }
+
+        for (let i = 0; i < this.entryCount; i++) {
+            const offset = this.getEntryOffsetByIndex(i);
+            if (offset < 0) continue;
+            
+            let currentOffset = offset;
+            const pathLength = this.buffer.readUInt32LE(currentOffset);
+            currentOffset += 4;
+            
+            const filePath = this.buffer.toString('utf8', currentOffset, currentOffset + pathLength);
+            currentOffset += pathLength;
+            
+            const hash = this.buffer.slice(currentOffset, currentOffset + 32).toString('hex');
+            currentOffset += 32;
+            
+            const size = this.buffer.readUIntLE(currentOffset, 6);
+            currentOffset += 6;
+            
+            const lastModified = new Date(this.buffer.readUIntLE(currentOffset, 6));
+            
+            entries.push({ filePath, hash, size, lastModified });
+        }
+        
+        return entries;
+    }
 }

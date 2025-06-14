@@ -11,6 +11,7 @@ import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
+import { hashCacheCommand } from './cmd/hash-cache';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -144,6 +145,17 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .action(compareCommand);
+
+    program
+        .command("hash-cache")
+        .description("Display information about the local and database hash caches.")
+        .argument(...dbArgument)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("-t, --type <type>", "Cache type to display: 'local', 'database', or 'both' (default: 'both')")
+        .action(hashCacheCommand);
 
     // Parse the command line arguments
     try {
