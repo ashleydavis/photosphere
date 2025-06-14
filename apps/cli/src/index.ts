@@ -165,7 +165,15 @@ async function main() {
 main()
     .catch((error) => {
         console.error(pc.red('An error occurred:'));
-        console.error((pc.red(error.stack || error.message || error).toString()));
+        if (error.message) {
+            console.error(pc.red(error.message).toString());
+        }
+        if (error.stack) {
+            console.error((pc.red(error.stack).toString()));
+        }
+        else {
+            console.error(pc.red(error.toString()).toString());
+        }
 
         return exit(1);
     });
