@@ -110,7 +110,6 @@ async function main() {
         .command("verify")
         .description("Verify the integrity of the media file database by checking file hashes.")
         .argument(...dbArgument)
-        .argument("[file-path]", "Optional specific file to verify instead of entire database")
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)

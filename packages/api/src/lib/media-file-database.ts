@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper } from "storage";
+import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, uuid } from "utils";
 import dayjs from "dayjs";
@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile, traverseTree } from "adb";
 import { FileScanner } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -175,6 +175,51 @@ export interface IAssetDetails {
 }
 
 //
+// Options for verifying the media file database.
+//
+export interface IVerifyOptions {
+    //
+    // Enables full verification where all files are re-hashed.
+    //
+    full?: boolean;
+}
+
+//
+// Result of the verification process.
+//
+export interface IVerifyResult {
+    //
+    // The total number of files in the database.
+    //
+    numFiles: number;
+
+    //
+    // The number of nodes in the merkle tree.
+    //
+    numNodes: 0;
+
+    //
+    // The number of files that were unmodified.
+    //
+    numUnmodified: number;
+
+    //
+    // The list of files that were modified.
+    //
+    modified: string[];
+
+    //
+    // The list of new files that were added to the database.
+    //
+    new: string[];
+
+    //
+    // The list of files that were removed from the database.
+    //
+    removed: string[];
+}
+
+//
 // Implements the Photosphere media file database.
 //
 export class MediaFileDatabase {
@@ -213,7 +258,7 @@ export class MediaFileDatabase {
     //
     // The file scanner for scanning directories and files.
     //
-    private readonly fileScanner: FileScanner;
+    private readonly localFileScanner: FileScanner;
 
     //
     // The summary of files added to the database.
@@ -235,8 +280,12 @@ export class MediaFileDatabase {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
 
+        const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
+        this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+        this.databaseHashCache = new HashCache(metadataStorage, ``);
+
         // Anything that goes through this.assetStorage automatically updates the merkle tree.
-        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase); 
+        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase, this.databaseHashCache); 
 
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
@@ -244,10 +293,9 @@ export class MediaFileDatabase {
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");
-        const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
-        this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
-        this.databaseHashCache = new HashCache(metadataStorage, `.db`);
-        this.fileScanner = new FileScanner({ ignorePatterns: [/\.db/] });
+        this.localFileScanner = new FileScanner(new FileStorage("fs:"), {
+            ignorePatterns: [/\.db/]
+        });
     }
 
     //
@@ -269,6 +317,13 @@ export class MediaFileDatabase {
     //
     getAssetDatabase(): AssetDatabase {
         return this.assetDatabase;
+    }
+
+    //
+    // Gets the database's hash cache.
+    //
+    getHashCache(): HashCache {
+        return this.databaseHashCache;
     }
 
     //
@@ -332,7 +387,7 @@ export class MediaFileDatabase {
     // Adds a list of files or directories to the media file database.
     //
     async addPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        await this.fileScanner.scanPaths(paths, async (result) => {
+        await this.localFileScanner.scanPaths(paths, async (result) => {
             await this.addFile(
                 result.filePath,
                 result.fileInfo,
@@ -351,14 +406,14 @@ export class MediaFileDatabase {
         }, progressCallback);
 
         // Update the number of ignored files after scanning
-        this.addSummary.numFilesIgnored += this.fileScanner.getNumFilesIgnored();
+        this.addSummary.numFilesIgnored += this.localFileScanner.getNumFilesIgnored();
     }
 
     //
     // Checks a list of files or directories to find files already added to the media file database.
     //
     async checkPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        await this.fileScanner.scanPaths(paths, async (result) => {
+        await this.localFileScanner.scanPaths(paths, async (result) => {
             await this.checkFile(
                 result.filePath,
                 result.fileInfo,
@@ -388,7 +443,7 @@ export class MediaFileDatabase {
                 log.error(`File "${filePath}" has failed validation.`);
                 this.addSummary.numFilesFailed++;
                 if (progressCallback) {
-                    progressCallback(this.fileScanner.getCurrentlyScanning());
+                    progressCallback(this.localFileScanner.getCurrentlyScanning());
                 }            
                 return;
             }
@@ -412,7 +467,7 @@ export class MediaFileDatabase {
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             this.addSummary.numFilesAlreadyAdded++;
             if (progressCallback) {
-                progressCallback(this.fileScanner.getCurrentlyScanning());
+                progressCallback(this.localFileScanner.getCurrentlyScanning());
             }
             return;
         }
@@ -560,7 +615,7 @@ export class MediaFileDatabase {
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
-                progressCallback(this.fileScanner.getCurrentlyScanning());
+                progressCallback(this.localFileScanner.getCurrentlyScanning());
             }
         }
         catch (err: any) {
@@ -572,7 +627,7 @@ export class MediaFileDatabase {
 
             this.addSummary.numFilesFailed++;
             if (progressCallback) {
-                progressCallback(this.fileScanner.getCurrentlyScanning());
+                progressCallback(this.localFileScanner.getCurrentlyScanning());
             }
         }
         finally {
@@ -613,7 +668,7 @@ export class MediaFileDatabase {
         this.addSummary.numFilesAdded++;
         this.addSummary.totalSize += fileInfo.length;
         if (progressCallback) {
-            progressCallback(this.fileScanner.getCurrentlyScanning());
+            progressCallback(this.localFileScanner.getCurrentlyScanning());
         }
     }
 
@@ -687,5 +742,81 @@ export class MediaFileDatabase {
         hashCache.addHash(filePath, hashedFile);
 
         return hashedFile;
+    }
+
+    //
+    // Verifies the media file database.
+    // Checks for missing files, modified files, and new files.
+    // If any files are corrupted, this will pick them up as modified.
+    //
+    async verify(options?: IVerifyOptions) : Promise<IVerifyResult> {
+
+        const result: IVerifyResult = {
+            numFiles: 0,
+            numUnmodified: 0,
+            numNodes: 0,
+            modified: [],
+            new: [],
+            removed: [],
+        };
+
+        //
+        // Check all files in the database to find new and modified files.
+        //
+        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+
+            const fileInfo = await this.assetStorage.info(file.fileName);
+            if (!fileInfo) {
+                // The file doesn't exist in the storage.
+                // This shouldn't happen because we literally just walked the directory..
+                log.warn(`File "${file.fileName}" is missing, even though we just found it by walking the directory.`);
+                continue;
+            }
+
+            result.numFiles++;
+
+            const fileHash = this.databaseHashCache.getHash(file.fileName);
+            if (!fileHash) {
+                result.new.push(file.fileName);
+                continue;
+            }
+
+            if (fileHash.length !== fileInfo.length  // File size doesn't match, indicating the file has changed.
+                || fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime()) { // File has been modified.
+                // The file has been modified.
+                result.modified.push(file.fileName);
+            }
+            else if (options?.full) {
+                // The file doesn't seem to have changed, but the full verification is requested.
+                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                if (freshHash.hash.toString("hex") === fileHash.hash.toString("hex")) {
+                    // The file is unmodified.
+                    result.numUnmodified++;
+                }
+                else {
+                    // The file has been modified.
+                    result.modified.push(file.fileName);
+                }
+            }
+        }
+
+        //
+        // Check the merkle tree to find files that have been removed.
+        //
+        await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
+            result.numNodes++;
+
+            if (node.fileName && !node.isDeleted) {
+                if (!this.assetStorage.fileExists(node.fileName)) {
+                    // The file is missing from the storage, but it exists in the merkle tree.
+                    result.removed.push(node.fileName);
+                }
+            }
+
+            return true;
+        });
+       
+
+        return result;
     }
 }
