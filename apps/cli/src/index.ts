@@ -11,8 +11,7 @@ import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
-import { hashCacheCommand } from './cmd/hash-cache';
-import { merkleTreeCommand } from './cmd/merkle-tree';
+import { createDebugCommand } from './cmd/debug';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -146,26 +145,8 @@ async function main() {
         .option(...yesOption)
         .action(compareCommand);
 
-    program
-        .command("hash-cache")
-        .description("Display information about the local and database hash caches.")
-        .argument(...dbArgument)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option("-t, --type <type>", "Cache type to display: 'local', 'database', or 'both' (default: 'both')")
-        .action(hashCacheCommand);
-
-    program
-        .command("merkle-tree")
-        .description("Visualize the merkle tree structure of the media file database.")
-        .argument(...dbArgument)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .action(merkleTreeCommand);
+    // Add the debug command with its subcommands
+    program.addCommand(createDebugCommand());
 
     // Parse the command line arguments
     try {
