@@ -530,10 +530,10 @@ test_database_verify() {
         exit 1
     fi
     
-    # Extract counts from the verification output
-    local new_count=$(echo "$verify_output" | grep -o "New: [0-9]\+" | grep -o "[0-9]\+")
-    local modified_count=$(echo "$verify_output" | grep -o "Modified: [0-9]\+" | grep -o "[0-9]\+")
-    local removed_count=$(echo "$verify_output" | grep -o "Removed: [0-9]\+" | grep -o "[0-9]\+")
+    # Extract counts from the verification output using sed for more robust parsing
+    local new_count=$(echo "$verify_output" | sed -n 's/.*New:[[:space:]]*\([0-9]\+\).*/\1/p')
+    local modified_count=$(echo "$verify_output" | sed -n 's/.*Modified:[[:space:]]*\([0-9]\+\).*/\1/p')
+    local removed_count=$(echo "$verify_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9]\+\).*/\1/p')
     
     # Check that the database is in a good state (no new, modified, or removed files)
     if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
@@ -601,10 +601,10 @@ test_database_verify_full() {
         exit 1
     fi
     
-    # Extract counts from the verification output
-    local new_count=$(echo "$verify_output" | grep -o "New: [0-9]\+" | grep -o "[0-9]\+")
-    local modified_count=$(echo "$verify_output" | grep -o "Modified: [0-9]\+" | grep -o "[0-9]\+")
-    local removed_count=$(echo "$verify_output" | grep -o "Removed: [0-9]\+" | grep -o "[0-9]\+")
+    # Extract counts from the verification output using sed for more robust parsing
+    local new_count=$(echo "$verify_output" | sed -n 's/.*New:[[:space:]]*\([0-9]\+\).*/\1/p')
+    local modified_count=$(echo "$verify_output" | sed -n 's/.*Modified:[[:space:]]*\([0-9]\+\).*/\1/p')
+    local removed_count=$(echo "$verify_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9]\+\).*/\1/p')
     
     # Check that the database is in a good state even with full verification
     if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
