@@ -1043,17 +1043,27 @@ run_multiple_commands() {
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
     echo ""
     echo -e "${GREEN}ALL COMMANDS COMPLETED SUCCESSFULLY${NC}"
+    
+    # Check if database should be preserved
+    if [ "${PRESERVE_DATABASE:-false}" = "true" ]; then
+        echo ""
+        log_info "Database preserved for inspection at: $TEST_DB_DIR"
+        log_info "To clean up when done: $0 reset"
+    fi
+    
     exit 0
 }
 
 # Show usage information
 show_usage() {
     echo "Usage: $0 <command|test-name> [command2,command3,...]"
+    echo "       $0 to <test-number>"
     echo ""
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
+    echo "  to <number>         - Run tests 1 through <number> (preserves database for inspection)"
     echo "  setup               - Build executable and frontend"
     echo "  install-tools       - Install required media processing tools only"
     echo "  reset               - Clean up test artifacts and reset environment"
@@ -1080,6 +1090,8 @@ show_usage() {
     echo ""
     echo "Examples:"
     echo "  $0 all                    # Run all tests (exe must be built, tools available)"
+    echo "  $0 to 5                   # Run tests 1-5 and keep database for inspection"
+    echo "  $0 to 10                  # Run tests 1-10 and keep database for inspection"
     echo "  $0 setup,all              # Build and run all tests (tools must be available)"
     echo "  $0 setup,install-tools,all # Build, install tools, and run all tests"
     echo "  $0 setup                  # Build executable and frontend only"
@@ -1097,6 +1109,28 @@ main() {
     if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
         show_usage
         exit 0
+    fi
+    
+    # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
+    if [ "$1" = "to" ] && [ $# -eq 2 ]; then
+        local end_test="$2"
+        # Validate that end_test is a number between 1 and 14
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 14 ]; then
+            # Build command list from 1 to end_test
+            local commands="1"
+            for ((i=2; i<=end_test; i++)); do
+                commands="$commands,$i"
+            done
+            log_info "Running tests 1 through $end_test"
+            # Set flag to preserve database
+            PRESERVE_DATABASE=true
+            run_multiple_commands "$commands"
+            return
+        else
+            log_error "Invalid test number: $end_test (must be 1-14)"
+            show_usage
+            exit 1
+        fi
     fi
     
     # Check if multiple commands are provided (contains comma)
