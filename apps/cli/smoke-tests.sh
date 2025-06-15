@@ -753,51 +753,13 @@ reset_environment() {
     log_info "Current directory: $(pwd)"
     log_info "Cleaning up test artifacts..."
     
-    # Remove test database directories with more comprehensive paths
-    local test_db_paths=(
-        "$TEST_DB_DIR"
-        "./test/test-db" 
-        "./test-db"
-        "./test/db"
-        "./test/test-database"
-        "./temp-test-setup"
-        "test/test-db"
-        "test-db"
-    )
-    
-    local found_any=false
-    
-    for path in "${test_db_paths[@]}"; do
-        if [ -d "$path" ]; then
-            log_info "Removing test database: $path"
-            rm -rf "$path"
-            log_success "Removed $path"
-            found_any=true
-        fi
-    done
-    
-    if [ "$found_any" = false ]; then
-        log_info "No test database directories found (already clean)"
-    fi
-    
-    # Clean up any leftover frontend build artifacts if they exist
-    if [ -f "pfe.zip" ]; then
-        log_info "Removing frontend build artifact: pfe.zip"
-        rm -f "pfe.zip"
-        log_success "Removed pfe.zip"
-    fi
-    
-    # Clean up any TypeScript build artifacts
-    if [ -f "tsconfig.tsbuildinfo" ]; then
-        log_info "Removing TypeScript build info"
-        rm -f "tsconfig.tsbuildinfo"
-        log_success "Removed TypeScript build info"
-    fi
-    
-    # Show what's left in test directory for debugging
-    if [ -d "./test" ]; then
-        log_info "Contents of ./test directory after cleanup:"
-        ls -la ./test/ 2>/dev/null || log_info "  (empty or no access)"
+    # Remove the specific test database directory
+    if [ -d "$TEST_DB_DIR" ]; then
+        log_info "Removing test database: $TEST_DB_DIR"
+        rm -rf "$TEST_DB_DIR"
+        log_success "Removed $TEST_DB_DIR"
+    else
+        log_info "Test database directory not found (already clean): $TEST_DB_DIR"
     fi
     
     log_success "Environment reset complete!"
@@ -827,7 +789,10 @@ run_all_tests() {
     
     # Clean up previous test run
     log_info "Cleaning up previous test run"
-    rm -rf "$TEST_DB_DIR"
+    if [ -d "$TEST_DB_DIR" ]; then
+        rm -rf "$TEST_DB_DIR"
+        log_info "Removed existing test database"
+    fi
     
     # Run all tests in sequence 
     test_create_database
@@ -858,7 +823,10 @@ run_all_tests() {
     # Cleanup after all tests complete
     echo ""
     log_info "Cleaning up test artifacts..."
-    rm -rf "$TEST_DB_DIR" 2>/dev/null || true
+    if [ -d "$TEST_DB_DIR" ]; then
+        rm -rf "$TEST_DB_DIR"
+        log_info "Removed test database"
+    fi
     exit 0
 }
 
