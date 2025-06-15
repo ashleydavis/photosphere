@@ -16,29 +16,36 @@ TEST_DB_DIR="./test/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 
-# Get CLI command based on platform - always use built executable
+# Debug mode flag (can be set via environment variable or command line)
+DEBUG_MODE=${DEBUG_MODE:-false}
+
+# Get CLI command based on platform and debug mode
 get_cli_command() {
-    local platform=$(detect_platform)
-    local arch=$(detect_architecture)
-    
-    case "$platform" in
-        "linux")
-            echo "./bin/x64/linux/psi"
-            ;;
-        "mac")
-            if [ "$arch" = "arm64" ]; then
-                echo "./bin/arm64/mac/psi"
-            else
-                echo "./bin/x64/mac/psi"
-            fi
-            ;;
-        "win")
-            echo "./bin/x64/win/psi.exe"
-            ;;
-        *)
-            echo "./bin/x64/linux/psi"  # Default to linux
-            ;;
-    esac
+    if [ "$DEBUG_MODE" = "true" ]; then
+        echo "bun run start --"
+    else
+        local platform=$(detect_platform)
+        local arch=$(detect_architecture)
+        
+        case "$platform" in
+            "linux")
+                echo "./bin/x64/linux/psi"
+                ;;
+            "mac")
+                if [ "$arch" = "arm64" ]; then
+                    echo "./bin/arm64/mac/psi"
+                else
+                    echo "./bin/x64/mac/psi"
+                fi
+                ;;
+            "win")
+                echo "./bin/x64/win/psi.exe"
+                ;;
+            *)
+                echo "./bin/x64/linux/psi"  # Default to linux
+                ;;
+        esac
+    fi
 }
 
 # Track test results
@@ -1056,10 +1063,14 @@ run_multiple_commands() {
 
 # Show usage information
 show_usage() {
-    echo "Usage: $0 <command|test-name> [command2,command3,...]"
-    echo "       $0 to <test-number>"
+    echo "Usage: $0 [options] <command|test-name> [command2,command3,...]"
+    echo "       $0 [options] to <test-number>"
     echo ""
     echo "Run Photosphere CLI smoke tests"
+    echo ""
+    echo "Options:"
+    echo "  -d, --debug         - Run tests using 'bun run start --' instead of built executable"
+    echo "  -h, --help          - Show this help message"
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
@@ -1089,26 +1100,50 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0 all                    # Run all tests (exe must be built, tools available)"
-    echo "  $0 to 5                   # Run tests 1-5 and keep database for inspection"
-    echo "  $0 to 10                  # Run tests 1-10 and keep database for inspection"
-    echo "  $0 setup,all              # Build and run all tests (tools must be available)"
-    echo "  $0 setup,install-tools,all # Build, install tools, and run all tests"
-    echo "  $0 setup                  # Build executable and frontend only"
-    echo "  $0 install-tools          # Install tools only"
-    echo "  $0 reset                  # Clean up test artifacts"
-    echo "  $0 create-database        # Run only database creation test"
-    echo "  $0 3                      # Run test 3 (add single file)"
-    echo "  $0 reset,setup,1,3        # Reset, setup, create DB, then test 3"
-    echo "  $0 help                   # Show this help"
+    echo "  $0 all                      # Run all tests (exe must be built, tools available)"
+    echo "  $0 --debug all              # Run all tests using debug mode (bun run start --)"
+    echo "  $0 to 5                     # Run tests 1-5 and keep database for inspection"
+    echo "  $0 -d to 10                 # Run tests 1-10 in debug mode and keep database"
+    echo "  $0 setup,all                # Build and run all tests (tools must be available)"
+    echo "  $0 setup,install-tools,all  # Build, install tools, and run all tests"
+    echo "  $0 setup                    # Build executable and frontend only"
+    echo "  $0 install-tools            # Install tools only"
+    echo "  $0 reset                    # Clean up test artifacts"
+    echo "  $0 create-database          # Run only database creation test"
+    echo "  $0 3                        # Run test 3 (add single file)"
+    echo "  $0 reset,setup,1,3          # Reset, setup, create DB, then test 3"
+    echo "  DEBUG_MODE=true $0 all      # Alternative way to enable debug mode"
+    echo "  $0 help                     # Show this help"
 }
 
 # Main test execution
 main() {
-    # Check for help request or no arguments
-    if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+    # Parse command line options
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -d|--debug)
+                DEBUG_MODE=true
+                shift
+                ;;
+            -h|--help|help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                break  # End of options, remaining arguments are commands
+                ;;
+        esac
+    done
+    
+    # Check for help request or no arguments after parsing options
+    if [ $# -eq 0 ]; then
         show_usage
         exit 0
+    fi
+    
+    # Show debug mode status if enabled
+    if [ "$DEBUG_MODE" = "true" ]; then
+        log_info "Debug mode enabled - using 'bun run start --' instead of built executable"
     fi
     
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
