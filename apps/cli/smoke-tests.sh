@@ -788,10 +788,12 @@ run_all_tests() {
     fi
     
     # Clean up previous test run
-    log_info "Cleaning up previous test run"
+    log_info "Resetting testing environment"
     if [ -d "$TEST_DB_DIR" ]; then
         rm -rf "$TEST_DB_DIR"
-        log_info "Removed existing test database"
+        log_success "Removed existing test database"
+    else
+        log_info "Test database directory not found (already clean)"
     fi
     
     # Run all tests in sequence 
@@ -1127,6 +1129,14 @@ main() {
             log_info "Running tests 1 through $end_test"
             # Set flag to preserve database
             PRESERVE_DATABASE=true
+            # Reset environment before running tests
+            log_info "Resetting testing environment"
+            if [ -d "$TEST_DB_DIR" ]; then
+                rm -rf "$TEST_DB_DIR"
+                log_success "Removed existing test database"
+            else
+                log_info "Test database directory not found (already clean)"
+            fi
             run_multiple_commands "$commands"
             return
         else
