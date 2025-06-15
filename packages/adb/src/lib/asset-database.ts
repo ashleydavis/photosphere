@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { addFile, markFileAsDeleted, createTree, IMerkleTree, loadTreeV2, saveTreeV2 } from "./merkle-tree";
+import { markFileAsDeleted, createTree, IMerkleTree, loadTreeV2, saveTreeV2, upsertFile } from "./merkle-tree";
 
 //
 // The hash and other information about a file.
@@ -131,7 +131,8 @@ export class AssetDatabase implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot add file to database. No database loaded.");
         }
-        this.merkleTree = addFile(this.merkleTree, {
+        
+        this.merkleTree = upsertFile(this.merkleTree, {
             fileName: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
