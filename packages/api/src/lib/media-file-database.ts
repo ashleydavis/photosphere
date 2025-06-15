@@ -505,7 +505,6 @@ export class MediaFileDatabase {
             // Uploads the full asset.
             //
             await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileInfo.length));
-            await this.assetDatabase.addFile(filePath, localHashedFile);
 
             const assetInfo = await this.assetStorage.info(assetPath);
             if (!assetInfo) {
