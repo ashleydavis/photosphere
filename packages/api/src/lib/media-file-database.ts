@@ -77,6 +77,11 @@ export interface IDatabaseSummary {
     totalSize: number;
 
     //
+    // Total number of nodes in the merkle tree.
+    //
+    totalNodes: number;
+
+    //
     // Short hash of the tree root (first 8 characters).
     //
     shortHash: string;
@@ -378,6 +383,7 @@ export class MediaFileDatabase {
         return {
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
+            totalNodes: metadata.totalNodes,
             shortHash,
             fullHash
         };
