@@ -481,6 +481,13 @@ test_database_verify() {
         exit 1
     fi
     
+    if echo "$verify_output" | grep -q "Total nodes:"; then
+        log_success "Verify output contains total nodes count"
+    else
+        log_error "Verify output missing total nodes count"
+        exit 1
+    fi
+    
     if echo "$verify_output" | grep -q "Unmodified:"; then
         log_success "Verify output contains unmodified count"
     else
@@ -492,6 +499,20 @@ test_database_verify() {
         log_success "Verify output contains modified count"
     else
         log_error "Verify output missing modified count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "New:"; then
+        log_success "Verify output contains new count"
+    else
+        log_error "Verify output missing new count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Removed:"; then
+        log_success "Verify output contains removed count"
+    else
+        log_error "Verify output missing removed count"
         exit 1
     fi
     
@@ -522,6 +543,49 @@ test_database_verify_full() {
     # Capture verify output to check results
     local verify_output
     verify_output=$($(get_cli_command) verify $TEST_DB_DIR --full --yes 2>&1)
+    
+    # Check that verification contains expected fields
+    if echo "$verify_output" | grep -q "Total files:"; then
+        log_success "Full verify output contains total files count"
+    else
+        log_error "Full verify output missing total files count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Total nodes:"; then
+        log_success "Full verify output contains total nodes count"
+    else
+        log_error "Full verify output missing total nodes count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Unmodified:"; then
+        log_success "Full verify output contains unmodified count"
+    else
+        log_error "Full verify output missing unmodified count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Modified:"; then
+        log_success "Full verify output contains modified count"
+    else
+        log_error "Full verify output missing modified count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "New:"; then
+        log_success "Full verify output contains new count"
+    else
+        log_error "Full verify output missing new count"
+        exit 1
+    fi
+    
+    if echo "$verify_output" | grep -q "Removed:"; then
+        log_success "Full verify output contains removed count"
+    else
+        log_error "Full verify output missing removed count"
+        exit 1
+    fi
     
     # Extract counts from the verification output
     local new_count=$(echo "$verify_output" | grep -o "New: [0-9]\+" | grep -o "[0-9]\+")
