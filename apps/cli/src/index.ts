@@ -12,6 +12,7 @@ import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { hashCacheCommand } from './cmd/hash-cache';
+import { merkleTreeCommand } from './cmd/merkle-tree';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -155,6 +156,16 @@ async function main() {
         .option(...yesOption)
         .option("-t, --type <type>", "Cache type to display: 'local', 'database', or 'both' (default: 'both')")
         .action(hashCacheCommand);
+
+    program
+        .command("merkle-tree")
+        .description("Visualize the merkle tree structure of the media file database.")
+        .argument(...dbArgument)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .action(merkleTreeCommand);
 
     // Parse the command line arguments
     try {

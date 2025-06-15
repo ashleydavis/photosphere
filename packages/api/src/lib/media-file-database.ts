@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile, traverseTree } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile, traverseTree, visualizeTree } from "adb";
 import { FileScanner } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -381,6 +381,13 @@ export class MediaFileDatabase {
             shortHash,
             fullHash
         };
+    }
+
+    //
+    // Visualizes the merkle tree structure
+    //
+    visualizeMerkleTree(): string {
+        return visualizeTree(this.assetDatabase.getMerkleTree());
     }
 
     //
