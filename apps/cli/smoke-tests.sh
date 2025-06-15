@@ -448,6 +448,13 @@ test_database_summary() {
         exit 1
     fi
     
+    if echo "$summary_output" | grep -q "Total nodes:"; then
+        log_success "Summary contains total nodes count"
+    else
+        log_error "Summary missing total nodes count"
+        exit 1
+    fi
+    
     if echo "$summary_output" | grep -q "Total size:"; then
         log_success "Summary contains total size"
     else
