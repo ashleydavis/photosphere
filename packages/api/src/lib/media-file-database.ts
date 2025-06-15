@@ -515,11 +515,7 @@ export class MediaFileDatabase {
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
-            await this.assetDatabase.addFile(assetPath, {
-                hash: hashedAsset.hash,
-                lastModified: assetInfo.lastModified,
-                length: assetInfo.length,
-            });
+            await this.assetDatabase.addFile(assetPath, hashedAsset);
 
             if (assetDetails?.thumbnailPath) {
                 //
