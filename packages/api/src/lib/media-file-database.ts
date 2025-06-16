@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, HashCache, IHashedFile, traverseTree, visualizeTree } from "adb";
+import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, MerkleNode, saveTreeV2, traverseTree, visualizeTree } from "adb";
 import { FileScanner } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -223,6 +223,27 @@ export interface IVerifyResult {
     //
     removed: string[];
 }
+
+//
+// Result of the replication process.
+//
+export interface IReplicationResult {
+    //
+    // The total number of files processed.
+    //
+    numFiles: number;
+
+    //
+    // The number of files already existing in the destination storage.
+    //
+    numExistingFiles: number;
+
+    //
+    // The number of files copied to the destination storage.
+    //
+    numCopiedFiles: number;
+}
+
 
 //
 // Implements the Photosphere media file database.
@@ -442,7 +463,7 @@ export class MediaFileDatabase {
     //
     private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
-        let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
+        let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
         if (localHashedFile) {
             //
             // Already hashed, which means the file is valid.
@@ -651,7 +672,7 @@ export class MediaFileDatabase {
     //
     private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
-        let localHashedFile = await this.getHash(filePath, fileInfo, openStream, this.localHashCache);
+        let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
         if (!localHashedFile) {            
             localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
         }
@@ -710,10 +731,14 @@ export class MediaFileDatabase {
         }
     }
 
+    // async getHash(filePath: string): Promise<IHashedFile | undefined> {
+
+    // }
+
     //
     // Gets the hash of a file from the hash cache or returns undefined if the file is not in the cache.
     //
-    async getHash(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile | undefined> {
+    async getHash(filePath: string, fileInfo: IFileInfo, hashCache: HashCache): Promise<IHashedFile | undefined> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified.getTime() === fileInfo.lastModified.getTime()) {
@@ -825,6 +850,117 @@ export class MediaFileDatabase {
         });
        
 
+        return result;
+    }
+
+    //
+    // Replicates the media file database to another storage.
+    //
+    async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage): Promise<IReplicationResult> {
+
+        const result: IReplicationResult = {
+            numFiles: 0,
+            numExistingFiles: 0,
+            numCopiedFiles: 0,
+        };
+
+        const srcStorage = this.assetStorage;
+
+        const destHashCache = new HashCache(destMetadataStorage, "");
+        await destHashCache.load();
+
+        let newDestTree = createTree();
+
+        //
+        // Copies an asset from the source storage to the destination storage.
+        // But only when necessary.
+        //
+        async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
+            const destHash = destHashCache.getHash(fileName);
+            if (destHash) {
+                //
+                // The file already exists in the destination database.
+                // Check if the hash matches. Compare the buffers.
+                //
+                if (Buffer.compare(sourceHash, destHash.hash) === 0) {
+                    //
+                    // The hash matches, so we don't need to copy the file.
+                    //
+                    result.numExistingFiles++;
+                    return;                
+                }
+            }
+
+            const srcFileInfo = await srcStorage.info(fileName);
+            if (!srcFileInfo) {
+                throw new Error(`Source file "${fileName}" does not exist in the source database.`);
+            }
+
+            //
+            // Copy the file from source to dest.
+            //
+            const readStream = srcStorage.readStream(fileName);
+            await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
+
+            //
+            // Compute hash for the copied file.
+            //
+            const copiedHash = await computeHash(destAssetStorage.readStream(fileName));
+            if (Buffer.compare(copiedHash, sourceHash) !== 0) {
+                throw new Error(`Copied file "${fileName}" hash does not match the source hash.`);
+            }
+
+            //
+            // Get the info for the copied file.
+            //
+            const copiedFileInfo = await destAssetStorage.info(fileName);
+            if (!copiedFileInfo) {
+                throw new Error(`Failed to read dest info for file: ${fileName}`);
+            }
+
+            //
+            // Add the file to the destination hash cache.
+            //
+            destHashCache.addHash(fileName, {
+                hash: copiedHash,
+                lastModified: copiedFileInfo.lastModified,
+                length: copiedFileInfo.length,
+            });
+
+            //
+            // Add the file to the destination merkle tree.
+            //
+            newDestTree = addFile(newDestTree, {
+                fileName,
+                hash: copiedHash,
+                length: copiedFileInfo.length,
+            });
+
+            result.numCopiedFiles++;
+        }
+
+        //
+        // Process a node in the soure merkle tree.
+        //
+        async function processSrcNode(srcNode: MerkleNode): Promise<boolean> {
+            if (srcNode.fileName && !srcNode.isDeleted) {               
+                await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
+
+                ++result.numFiles;
+
+                if (result.numFiles % 100 === 0) {
+                    await retry(() => destHashCache.save());
+                }
+            }
+            return true; // Continue traversing.
+        }
+
+        await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
+
+        await destHashCache.save();
+
+        await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
+        
         return result;
     }
 }

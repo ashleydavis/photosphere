@@ -623,62 +623,155 @@ test_database_verify_full() {
 test_database_replicate() {
     echo ""
     echo "=== TEST 12: DATABASE REPLICATION ==="
-    echo ""
-    log_warning "Replication test temporarily disabled - replicate command needs to be fixed"
-    log_warning "Skipping test 12: DATABASE REPLICATION"
-    return
     
-    # COMMENTED OUT UNTIL REPLICATE COMMAND IS FIXED
-    # local replica_dir="$TEST_DB_DIR-replica"
-    # 
-    # # Clean up any existing replica
-    # if [ -d "$replica_dir" ]; then
-    #     log_info "Cleaning up existing replica directory"
-    #     rm -rf "$replica_dir"
-    # fi
-    # 
-    # run_command "Replicate database" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
-    # 
-    # # Check that replica was created
-    # check_exists "$replica_dir" "Replica database directory"
-    # check_exists "$replica_dir/.db" "Replica metadata directory"
-    # check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
-    # 
-    # # Verify replica contents match source
-    # run_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
-    # 
-    # # Compare file counts between source and replica
-    # local source_summary
-    # source_summary=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
-    # local replica_summary
-    # replica_summary=$($(get_cli_command) summary $replica_dir --yes 2>&1)
-    # 
-    # local source_files
-    # source_files=$(echo "$source_summary" | grep "Total files:" | grep -o '[0-9]\+')
-    # local replica_files
-    # replica_files=$(echo "$replica_summary" | grep "Total files:" | grep -o '[0-9]\+')
-    # 
-    # if [ "$source_files" = "$replica_files" ]; then
-    #     log_success "Replica has same file count as source ($source_files files)"
-    # else
-    #     log_error "File count mismatch: source has $source_files files, replica has $replica_files files"
-    #     exit 1
-    # fi
-    # 
-    # # Test incremental replication (should skip files)
-    # run_command "Test incremental replication" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
-    # 
-    # # Clean up replica
-    # log_info "Cleaning up replica directory"
-    # rm -rf "$replica_dir"
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Clean up any existing replica
+    if [ -d "$replica_dir" ]; then
+        log_info "Cleaning up existing replica directory"
+        rm -rf "$replica_dir"
+    fi
+    
+    # Capture replication output to verify counts
+    local replicate_output
+    replicate_output=$($(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes 2>&1)
+    
+    # Display the command output
+    echo "$replicate_output"
+    
+    # Check if replication was successful
+    if echo "$replicate_output" | grep -q "Replication completed successfully"; then
+        log_success "Replicate database"
+    else
+        log_error "Database replication failed"
+        exit 1
+    fi
+    
+    # Parse the numbers from the replication output
+    local total_files=$(echo "$replicate_output" | grep "Total files:" | sed -n 's/.*Total files:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local copied_files=$(echo "$replicate_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local skipped_files=$(echo "$replicate_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    
+    # Check that 15 total files were reported
+    if [ "$total_files" = "15" ]; then
+        log_success "Replication reported 15 total files"
+    else
+        log_error "Replication reported $total_files total files, expected 15"
+        echo "Replication output: $replicate_output"
+        exit 1
+    fi
+    
+    # Check that 15 files were copied
+    if [ "$copied_files" = "15" ]; then
+        log_success "Replication copied 15 files"
+    else
+        log_error "Replication copied $copied_files files, expected 15"
+        echo "Replication output: $replicate_output"
+        exit 1
+    fi
+    
+    # Check that 0 files were skipped
+    if [ "$skipped_files" = "0" ]; then
+        log_success "Replication skipped 0 files (as expected for first run)"
+    else
+        log_error "Replication skipped $skipped_files files, expected 0"
+        echo "Replication output: $replicate_output"
+        exit 1
+    fi
+    
+    # Check that replica was created
+    check_exists "$replica_dir" "Replica database directory"
+    check_exists "$replica_dir/.db" "Replica metadata directory"
+    check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    
+    # Verify replica contents match source
+    run_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
+    
+    # Compare file counts between source and replica
+    local source_summary
+    source_summary=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
+    local replica_summary
+    replica_summary=$($(get_cli_command) summary $replica_dir --yes 2>&1)
+    
+    local source_files
+    source_files=$(echo "$source_summary" | grep "Total files:" | grep -o '[0-9]\+')
+    local replica_files
+    replica_files=$(echo "$replica_summary" | grep "Total files:" | grep -o '[0-9]\+')
+    
+    if [ "$source_files" = "$replica_files" ]; then
+        log_success "Replica has same file count as source ($source_files files)"
+    else
+        log_error "File count mismatch: source has $source_files files, replica has $replica_files files"
+        exit 1
+    fi
+}
+
+test_database_replicate_second() {
+    echo ""
+    echo "=== TEST 13: SECOND DATABASE REPLICATION - NO CHANGES ==="
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Check that replica exists from previous test
+    if [ ! -d "$replica_dir" ]; then
+        log_error "Replica directory not found from previous test"
+        exit 1
+    fi
+    
+    # Capture second replication output
+    local second_replication_output
+    second_replication_output=$($(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes 2>&1)
+    
+    # Display the command output
+    echo "$second_replication_output"
+    
+    # Check if replication was successful
+    if echo "$second_replication_output" | grep -q "Replication completed successfully"; then
+        log_success "Second replication (no changes)"
+    else
+        log_error "Second database replication failed"
+        exit 1
+    fi
+    
+    # Parse the numbers from the second replication output
+    local total_files=$(echo "$second_replication_output" | grep "Total files:" | sed -n 's/.*Total files:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local copied_files=$(echo "$second_replication_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local skipped_files=$(echo "$second_replication_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    
+    # Check that 15 total files were reported
+    if [ "$total_files" = "15" ]; then
+        log_success "Second replication reported 15 total files"
+    else
+        log_error "Second replication reported $total_files total files, expected 15"
+        echo "Second replication output: $second_replication_output"
+        exit 1
+    fi
+    
+    # Check that 0 files were copied
+    if [ "$copied_files" = "0" ]; then
+        log_success "Second replication copied 0 files (all up to date)"
+    else
+        log_error "Second replication copied $copied_files files, expected 0"
+        echo "Second replication output: $second_replication_output"
+        exit 1
+    fi
+    
+    # Check that 15 files were skipped
+    if [ "$skipped_files" = "15" ]; then
+        log_success "Second replication skipped 15 files (already exist)"
+    else
+        log_error "Second replication skipped $skipped_files files, expected 15"
+        echo "Second replication output: $second_replication_output"
+        exit 1
+    fi   
 }
 
 test_database_compare() {
     echo ""
-    echo "=== TEST 13: DATABASE COMPARISON ==="
+    echo "=== TEST 14: DATABASE COMPARISON ==="
     echo ""
     log_warning "Database comparison test temporarily disabled - depends on replicate command"
-    log_warning "Skipping test 13: DATABASE COMPARISON"
+    log_warning "Skipping test 14: DATABASE COMPARISON"
     return
     
     # COMMENTED OUT UNTIL REPLICATE COMMAND IS FIXED
@@ -741,7 +834,7 @@ test_database_compare() {
 
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 14: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 15: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
@@ -769,6 +862,16 @@ reset_environment() {
         log_success "Removed $TEST_DB_DIR"
     else
         log_info "Test database directory not found (already clean): $TEST_DB_DIR"
+    fi
+    
+    # Remove the replicated database directory
+    local replica_dir="$TEST_DB_DIR-replica"
+    if [ -d "$replica_dir" ]; then
+        log_info "Removing replicated database: $replica_dir"
+        rm -rf "$replica_dir"
+        log_success "Removed $replica_dir"
+    else
+        log_info "Replicated database directory not found (already clean): $replica_dir"
     fi
     
     log_success "Environment reset complete!"
@@ -818,6 +921,7 @@ run_all_tests() {
     test_database_verify
     test_database_verify_full
     test_database_replicate
+    test_database_replicate_second
     test_database_compare
     test_cannot_create_over_existing
     
@@ -895,10 +999,13 @@ run_test() {
         "replicate"|"12")
             test_database_replicate
             ;;
-        "compare"|"13")
+        "replicate-second"|"13")
+            test_database_replicate_second
+            ;;
+        "compare"|"14")
             test_database_compare
             ;;
-        "no-overwrite"|"14")
+        "no-overwrite"|"15")
             test_cannot_create_over_existing
             ;;
         *)
@@ -999,10 +1106,13 @@ run_multiple_commands() {
             "replicate"|"12")
                 test_database_replicate
                 ;;
-            "compare"|"13")
+            "replicate-second"|"13")
+                test_database_replicate_second
+                ;;
+            "compare"|"14")
                 test_database_compare
                 ;;
-            "no-overwrite"|"14")
+            "no-overwrite"|"15")
                 test_cannot_create_over_existing
                 ;;
             *)
@@ -1071,9 +1181,10 @@ show_usage() {
     echo "  summary (9)         - Display database summary"
     echo "  verify (10)         - Verify database integrity"
     echo "  verify-full (11)    - Verify database integrity (full mode)"
-    echo "  replicate (12)      - Replicate database to new location (DISABLED)"
-    echo "  compare (13)        - Compare two databases (DISABLED)"
-    echo "  no-overwrite (14)   - Cannot create database over existing"
+    echo "  replicate (12)      - Replicate database to new location"
+    echo "  replicate-second (13) - Second replication (no changes)"
+    echo "  compare (14)        - Compare two databases (DISABLED)"
+    echo "  no-overwrite (15)   - Cannot create database over existing"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"

@@ -44,3 +44,4 @@ apps/cli/test-db
 .photosphere.json
 .photosphere
 packages/tools/build/
+apps/cli/test/test-db-replica/
