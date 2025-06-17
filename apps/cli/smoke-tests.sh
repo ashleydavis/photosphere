@@ -127,11 +127,13 @@ parse_numeric() {
 }
 
 
-# Run a command and check its exit code
-run_command() {
+# Unified command invocation function
+invoke_command() {
     local description="$1"
     local command="$2"
     local expected_exit_code="${3:-0}"
+    local capture_output="${4:-false}"
+    local output_var_name="${5:-}"
     
     log_info "Running: $description"
     echo ""
@@ -149,29 +151,47 @@ run_command() {
         fi
     fi
     
-    if eval "$command"; then
-        if [ $expected_exit_code -eq 0 ]; then
-            log_success "$description"
-            return 0
-        else
-            log_error "$description (expected failure but command succeeded)"
-            exit 1  # Exit immediately on failure
+    local command_output=""
+    local actual_exit_code=0
+    
+    if [ "$capture_output" = "true" ]; then
+        # Capture output and display it
+        command_output=$(eval "$command" 2>&1)
+        actual_exit_code=$?
+        echo "$command_output"
+        
+        # Store output in caller's variable if provided
+        if [ -n "$output_var_name" ]; then
+            eval "$output_var_name=\"\$command_output\""
         fi
     else
-        local actual_exit_code=$?
-        if [ $expected_exit_code -ne 0 ]; then
-            log_success "$description (expected failure with exit code $actual_exit_code)"
-            return 0
+        # Execute without capturing output
+        eval "$command"
+        actual_exit_code=$?
+    fi
+    
+    # Check exit code and log results
+    if [ $actual_exit_code -eq $expected_exit_code ]; then
+        if [ $expected_exit_code -eq 0 ]; then
+            log_success "$description"
         else
+            log_success "$description (expected failure with exit code $actual_exit_code)"
+        fi
+        return 0
+    else
+        if [ $expected_exit_code -eq 0 ]; then
             log_error "$description (exit code: $actual_exit_code)"
             # Special handling for macOS illegal instruction error
             if [ $actual_exit_code -eq 132 ] && [[ "$OSTYPE" == "darwin"* ]]; then
                 log_error "Illegal instruction error on macOS - binary may be compiled for wrong architecture"
             fi
-            exit 1  # Exit immediately on failure
+        else
+            log_error "$description (expected failure but command succeeded)"
         fi
+        exit 1  # Exit immediately on failure
     fi
 }
+
 
 # Check if a directory/file exists
 check_exists() {
@@ -249,22 +269,22 @@ test_setup() {
     log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
         "linux")
-            run_command "Build Linux executable" "bun run build-linux"
+            invoke_command "Build Linux executable" "bun run build-linux"
             ;;
         "mac")
             if [ "$arch" = "arm64" ]; then
-                run_command "Build macOS ARM64 executable" "bun run build-mac-arm64"
+                invoke_command "Build macOS ARM64 executable" "bun run build-mac-arm64"
             else
-                run_command "Build macOS x64 executable" "bun run build-mac-x64"
+                invoke_command "Build macOS x64 executable" "bun run build-mac-x64"
             fi
             ;;
         "win")
-            run_command "Build Windows executable" "bun run build-win"
+            invoke_command "Build Windows executable" "bun run build-win"
             ;;
     esac
     
     log_info "Building frontend for platform: $platform"
-    run_command "Build frontend" "bun run build-fe-$platform" || {
+    invoke_command "Build frontend" "bun run build-fe-$platform" || {
         log_warning "Frontend build failed, continuing anyway..."
     }
     
@@ -284,7 +304,7 @@ test_install_tools() {
     log_info "Using CLI command: $cli_command"
     
     log_info "Checking for required tools in system PATH"
-    run_command "Check tools" "$(get_cli_command) tools --yes"
+    invoke_command "Check tools" "$(get_cli_command) tools --yes"
     echo ""
     
     log_info "Verifying tools are installed and working..."
@@ -348,7 +368,7 @@ test_create_database() {
     echo ""
     echo "=== TEST 1: CREATE DATABASE ==="
     
-    run_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
+    invoke_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
     
     # Check if required files were created
     check_exists "$TEST_DB_DIR" "Database directory"
@@ -363,7 +383,7 @@ test_view_media_files() {
     echo ""
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     
-    run_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
+    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
 }
 
 # Parameterized function to test adding a single file
@@ -384,16 +404,9 @@ test_add_file_parameterized() {
     local before_check=$($(get_cli_command) check $TEST_DB_DIR $file_path --yes 2>&1)
     local already_in_db=$(parse_numeric "$before_check" "files already in database")
     
-    # Add the file
+    # Add the file and capture output
     local add_output
-    add_output=$($(get_cli_command) add $TEST_DB_DIR $file_path --yes 2>&1)
-    echo "$add_output"
-    
-    # Check if command succeeded
-    if [ $? -ne 0 ]; then
-        log_error "$test_description failed"
-        exit 1
-    fi
+    invoke_command "$test_description" "$(get_cli_command) add $TEST_DB_DIR $file_path --yes" 0 "true" "add_output"
     
     # Extract from the add command summary how many files were actually added
     local files_added=$(parse_numeric "$add_output" "files added")
@@ -412,7 +425,7 @@ test_add_file_parameterized() {
     fi
     
     # Check that the specific file is now in the database
-    run_command "Check $file_type file added" "$(get_cli_command) check $TEST_DB_DIR $file_path --yes"
+    invoke_command "Check $file_type file added" "$(get_cli_command) check $TEST_DB_DIR $file_path --yes"
 }
 
 test_add_png_file() {
@@ -441,9 +454,9 @@ test_add_same_file() {
     echo "=== TEST 6: ADD SAME FILE (NO DUPLICATION) ==="
     
     # Try to re-add the PNG file (should not add it again)
-    run_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
-    run_command "Check file still in database" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Check file still in database" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 }
 
 test_add_multiple_files() {
@@ -451,9 +464,9 @@ test_add_multiple_files() {
     echo "=== TEST 7: ADD MULTIPLE FILES ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        run_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
         
-        run_command "Check multiple files added" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Check multiple files added" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -465,9 +478,9 @@ test_add_same_multiple_files() {
     echo "=== TEST 8: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        run_command "Re-add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Re-add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
         
-        run_command "Check multiple files still in database" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Check multiple files still in database" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -478,17 +491,9 @@ test_database_summary() {
     echo ""
     echo "=== TEST 9: DATABASE SUMMARY ==="
     
-    run_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes"
-    
-    # Capture summary output to verify it contains expected fields
-    log_info "Running: Verify summary output format"
-    echo ""
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$(get_cli_command) summary $TEST_DB_DIR --yes${NC}"
-    echo ""
-    
+    # Run summary command and capture output for verification
     local summary_output
-    summary_output=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
+    invoke_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes" 0 "true" "summary_output"
     
     # Check that summary contains expected fields
     if echo "$summary_output" | grep -q "Total files:"; then
@@ -531,17 +536,9 @@ test_database_verify() {
     echo ""
     echo "=== TEST 10: DATABASE VERIFICATION ==="
     
-    run_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes"
-    
-    # Capture verify output to check results
-    log_info "Running: Check verification output"
-    echo ""
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$(get_cli_command) verify $TEST_DB_DIR --yes${NC}"
-    echo ""
-    
+    # Run verify command and capture output for checking
     local verify_output
-    verify_output=$($(get_cli_command) verify $TEST_DB_DIR --yes 2>&1)
+    invoke_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
     if echo "$verify_output" | grep -q "Total files:"; then
@@ -596,18 +593,9 @@ test_database_verify_full() {
     echo ""
     echo "=== TEST 11: DATABASE VERIFICATION (FULL MODE) ==="
     
-    # Test full verification mode
-    run_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes"
-    
-    # Capture verify output to check results
-    log_info "Running: Check full verification output"
-    echo ""
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$(get_cli_command) verify $TEST_DB_DIR --full --yes${NC}"
-    echo ""
-    
+    # Run full verify command and capture output for checking
     local verify_output
-    verify_output=$($(get_cli_command) verify $TEST_DB_DIR --full --yes 2>&1)
+    invoke_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
     if echo "$verify_output" | grep -q "Total files:"; then
@@ -670,19 +658,9 @@ test_database_replicate() {
         rm -rf "$replica_dir"
     fi
     
-    # Run replicate command
-    log_info "Running: Replicate database"
-    echo ""
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes${NC}"
-    echo ""
-    
-    # Capture replication output to verify counts
+    # Run replicate command and capture output
     local replicate_output
-    replicate_output=$($(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes 2>&1)
-    
-    # Display the command output
-    echo "$replicate_output"
+    invoke_command "Replicate database" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "replicate_output"
     
     # Check if replication was successful
     if echo "$replicate_output" | grep -q "Replication completed successfully"; then
@@ -716,20 +694,14 @@ test_verify_replica() {
     fi
     
     # Verify replica contents match source
-    run_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
+    invoke_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
     
-    # Compare file counts between source and replica
-    log_info "Running: Compare source and replica file counts"
-    echo ""
-    echo -e "${YELLOW}Commands:${NC}"
-    echo -e "${BLUE}$(get_cli_command) summary $TEST_DB_DIR --yes${NC}"
-    echo -e "${BLUE}$(get_cli_command) summary $replica_dir --yes${NC}"
-    echo ""
-    
+    # Get source and replica summaries to compare file counts
     local source_summary
-    source_summary=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
+    invoke_command "Get source database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes" 0 "true" "source_summary"
+    
     local replica_summary
-    replica_summary=$($(get_cli_command) summary $replica_dir --yes 2>&1)
+    invoke_command "Get replica database summary" "$(get_cli_command) summary $replica_dir --yes" 0 "true" "replica_summary"
     
     local source_files=$(parse_numeric "$source_summary" "Total files:")
     local replica_files=$(parse_numeric "$replica_summary" "Total files:")
@@ -749,19 +721,9 @@ test_database_replicate_second() {
         exit 1
     fi
     
-    # Run second replicate command
-    log_info "Running: Second replication (no changes)"
-    echo ""
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes${NC}"
-    echo ""
-    
-    # Capture second replication output
+    # Run second replicate command and capture output
     local second_replication_output
-    second_replication_output=$($(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes 2>&1)
-    
-    # Display the command output
-    echo "$second_replication_output"
+    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "second_replication_output"
     
     # Check if replication was successful
     if echo "$second_replication_output" | grep -q "Replication completed successfully"; then
@@ -847,7 +809,7 @@ test_cannot_create_over_existing() {
     echo ""
     echo "=== TEST 16: CANNOT CREATE DATABASE OVER EXISTING ==="
     
-    run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
+    invoke_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
 
 
