@@ -419,11 +419,7 @@ test_add_file_parameterized() {
     local test_description="$3"
     
     # Check if file exists
-    if [ ! -f "$file_path" ]; then
-        log_warning "$file_type test file not found: $file_path"
-        log_warning "Skipping $file_type file test"
-        return
-    fi
+    check_exists "$file_path" "$file_type test file"
     
     # Get initial database state - count files in metadata collection
     # Use the info command output to track actual media files added
@@ -610,10 +606,7 @@ test_verify_replica() {
     local replica_dir="$TEST_DB_DIR-replica"
     
     # Check that replica exists from previous test
-    if [ ! -d "$replica_dir" ]; then
-        log_error "Replica directory not found from previous test"
-        exit 1
-    fi
+    check_exists "$replica_dir" "Replica directory from previous test"
     
     # Verify replica contents match source
     invoke_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
@@ -638,10 +631,7 @@ test_database_replicate_second() {
     local replica_dir="$TEST_DB_DIR-replica"
     
     # Check that replica exists from previous test
-    if [ ! -d "$replica_dir" ]; then
-        log_error "Replica directory not found from previous test"
-        exit 1
-    fi
+    check_exists "$replica_dir" "Replica directory from previous test"
     
     # Run second replicate command and capture output
     local second_replication_output
