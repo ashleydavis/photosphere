@@ -99,6 +99,32 @@ expect_output_value() {
     expect_value "$actual" "$expected" "$description"
 }
 
+# Check if output contains expected string pattern
+expect_output_string() {
+    local output="$1"
+    local pattern="$2"
+    local description="$3"
+    local should_contain="${4:-true}"
+    
+    if [ "$should_contain" = "true" ]; then
+        if echo "$output" | grep -q "$pattern"; then
+            log_success "$description"
+            return 0
+        else
+            log_error "$description (pattern '$pattern' not found in output)"
+            exit 1
+        fi
+    else
+        if echo "$output" | grep -q "$pattern"; then
+            log_error "$description (pattern '$pattern' should not be in output)"
+            exit 1
+        else
+            log_success "$description"
+            return 0
+        fi
+    fi
+}
+
 # Parse a numeric value from output based on a pattern
 parse_numeric() {
     local output="$1"
@@ -496,40 +522,11 @@ test_database_summary() {
     invoke_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes" 0 "true" "summary_output"
     
     # Check that summary contains expected fields
-    if echo "$summary_output" | grep -q "Total files:"; then
-        log_success "Summary contains total files count"
-    else
-        log_error "Summary missing total files count"
-        exit 1
-    fi
-    
-    if echo "$summary_output" | grep -q "Total nodes:"; then
-        log_success "Summary contains total nodes count"
-    else
-        log_error "Summary missing total nodes count"
-        exit 1
-    fi
-    
-    if echo "$summary_output" | grep -q "Total size:"; then
-        log_success "Summary contains total size"
-    else
-        log_error "Summary missing total size"
-        exit 1
-    fi
-    
-    if echo "$summary_output" | grep -q "Tree root hash (short):"; then
-        log_success "Summary contains short hash"
-    else
-        log_error "Summary missing short hash"
-        exit 1
-    fi
-    
-    if echo "$summary_output" | grep -q "Tree root hash (full):"; then
-        log_success "Summary contains full hash"
-    else
-        log_error "Summary missing full hash"
-        exit 1
-    fi
+    expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
+    expect_output_string "$summary_output" "Total nodes:" "Summary contains total nodes count"
+    expect_output_string "$summary_output" "Total size:" "Summary contains total size"
+    expect_output_string "$summary_output" "Tree root hash (short):" "Summary contains short hash"
+    expect_output_string "$summary_output" "Tree root hash (full):" "Summary contains full hash"
 }
 
 test_database_verify() {
@@ -541,47 +538,12 @@ test_database_verify() {
     invoke_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
-    if echo "$verify_output" | grep -q "Total files:"; then
-        log_success "Verify output contains total files count"
-    else
-        log_error "Verify output missing total files count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Total nodes:"; then
-        log_success "Verify output contains total nodes count"
-    else
-        log_error "Verify output missing total nodes count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Unmodified:"; then
-        log_success "Verify output contains unmodified count"
-    else
-        log_error "Verify output missing unmodified count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Modified:"; then
-        log_success "Verify output contains modified count"
-    else
-        log_error "Verify output missing modified count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "New:"; then
-        log_success "Verify output contains new count"
-    else
-        log_error "Verify output missing new count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Removed:"; then
-        log_success "Verify output contains removed count"
-    else
-        log_error "Verify output missing removed count"
-        exit 1
-    fi
+    expect_output_string "$verify_output" "Total files:" "Verify output contains total files count"
+    expect_output_string "$verify_output" "Total nodes:" "Verify output contains total nodes count"
+    expect_output_string "$verify_output" "Unmodified:" "Verify output contains unmodified count"
+    expect_output_string "$verify_output" "Modified:" "Verify output contains modified count"
+    expect_output_string "$verify_output" "New:" "Verify output contains new count"
+    expect_output_string "$verify_output" "Removed:" "Verify output contains removed count"
     
     # Check that the database is in a good state (no new, modified, or removed files)
     expect_output_value "$verify_output" "New:" "0" "New files in verification"
@@ -598,47 +560,12 @@ test_database_verify_full() {
     invoke_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
-    if echo "$verify_output" | grep -q "Total files:"; then
-        log_success "Full verify output contains total files count"
-    else
-        log_error "Full verify output missing total files count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Total nodes:"; then
-        log_success "Full verify output contains total nodes count"
-    else
-        log_error "Full verify output missing total nodes count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Unmodified:"; then
-        log_success "Full verify output contains unmodified count"
-    else
-        log_error "Full verify output missing unmodified count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Modified:"; then
-        log_success "Full verify output contains modified count"
-    else
-        log_error "Full verify output missing modified count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "New:"; then
-        log_success "Full verify output contains new count"
-    else
-        log_error "Full verify output missing new count"
-        exit 1
-    fi
-    
-    if echo "$verify_output" | grep -q "Removed:"; then
-        log_success "Full verify output contains removed count"
-    else
-        log_error "Full verify output missing removed count"
-        exit 1
-    fi
+    expect_output_string "$verify_output" "Total files:" "Full verify output contains total files count"
+    expect_output_string "$verify_output" "Total nodes:" "Full verify output contains total nodes count"
+    expect_output_string "$verify_output" "Unmodified:" "Full verify output contains unmodified count"
+    expect_output_string "$verify_output" "Modified:" "Full verify output contains modified count"
+    expect_output_string "$verify_output" "New:" "Full verify output contains new count"
+    expect_output_string "$verify_output" "Removed:" "Full verify output contains removed count"
     
     # Check that the database is in a good state even with full verification
     expect_output_value "$verify_output" "New:" "0" "New files in full verification"
@@ -663,12 +590,7 @@ test_database_replicate() {
     invoke_command "Replicate database" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "replicate_output"
     
     # Check if replication was successful
-    if echo "$replicate_output" | grep -q "Replication completed successfully"; then
-        log_success "Replicate database"
-    else
-        log_error "Database replication failed"
-        exit 1
-    fi
+    expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
     
     # Check expected values from replication output
     expect_output_value "$replicate_output" "Total files:" "15" "Total files reported"
@@ -726,12 +648,7 @@ test_database_replicate_second() {
     invoke_command "Second replication (no changes)" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "second_replication_output"
     
     # Check if replication was successful
-    if echo "$second_replication_output" | grep -q "Replication completed successfully"; then
-        log_success "Second replication (no changes)"
-    else
-        log_error "Second database replication failed"
-        exit 1
-    fi
+    expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
     
     # Check expected values from second replication output
     expect_output_value "$second_replication_output" "Total files:" "15" "Total files reported (second run)"
