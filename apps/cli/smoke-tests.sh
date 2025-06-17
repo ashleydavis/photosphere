@@ -88,6 +88,17 @@ expect_value() {
     fi
 }
 
+# Parse a value from output and check if it matches expected value
+expect_output_value() {
+    local output="$1"
+    local pattern="$2"
+    local expected="$3"
+    local description="$4"
+    
+    local actual=$(parse_numeric "$output" "$pattern")
+    expect_value "$actual" "$expected" "$description"
+}
+
 # Parse a numeric value from output based on a pattern
 parse_numeric() {
     local output="$1"
@@ -575,15 +586,10 @@ test_database_verify() {
         exit 1
     fi
     
-    # Extract counts from the verification output
-    local new_count=$(parse_numeric "$verify_output" "New:")
-    local modified_count=$(parse_numeric "$verify_output" "Modified:")
-    local removed_count=$(parse_numeric "$verify_output" "Removed:")
-    
     # Check that the database is in a good state (no new, modified, or removed files)
-    expect_value "$new_count" "0" "New files in verification"
-    expect_value "$modified_count" "0" "Modified files in verification"
-    expect_value "$removed_count" "0" "Removed files in verification"
+    expect_output_value "$verify_output" "New:" "0" "New files in verification"
+    expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
+    expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
 }
 
 test_database_verify_full() {
@@ -646,15 +652,10 @@ test_database_verify_full() {
         exit 1
     fi
     
-    # Extract counts from the verification output
-    local new_count=$(parse_numeric "$verify_output" "New:")
-    local modified_count=$(parse_numeric "$verify_output" "Modified:")
-    local removed_count=$(parse_numeric "$verify_output" "Removed:")
-    
     # Check that the database is in a good state even with full verification
-    expect_value "$new_count" "0" "New files in full verification"
-    expect_value "$modified_count" "0" "Modified files in full verification"
-    expect_value "$removed_count" "0" "Removed files in full verification"
+    expect_output_value "$verify_output" "New:" "0" "New files in full verification"
+    expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
+    expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
 }
 
 test_database_replicate() {
@@ -691,15 +692,10 @@ test_database_replicate() {
         exit 1
     fi
     
-    # Parse the numbers from the replication output
-    local total_files=$(parse_numeric "$replicate_output" "Total files:")
-    local copied_files=$(parse_numeric "$replicate_output" "Copied:")
-    local skipped_files=$(parse_numeric "$replicate_output" "Skipped (unchanged):")
-    
-    # Check expected values
-    expect_value "$total_files" "15" "Total files reported"
-    expect_value "$copied_files" "15" "Files copied"
-    expect_value "$skipped_files" "0" "Files skipped (first run)"
+    # Check expected values from replication output
+    expect_output_value "$replicate_output" "Total files:" "15" "Total files reported"
+    expect_output_value "$replicate_output" "Copied:" "15" "Files copied"
+    expect_output_value "$replicate_output" "Skipped (unchanged):" "0" "Files skipped (first run)"
     
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
@@ -775,15 +771,10 @@ test_database_replicate_second() {
         exit 1
     fi
     
-    # Parse the numbers from the second replication output
-    local total_files=$(parse_numeric "$second_replication_output" "Total files:")
-    local copied_files=$(parse_numeric "$second_replication_output" "Copied:")
-    local skipped_files=$(parse_numeric "$second_replication_output" "Skipped (unchanged):")
-    
-    # Check expected values
-    expect_value "$total_files" "15" "Total files reported (second run)"
-    expect_value "$copied_files" "0" "Files copied (all up to date)"
-    expect_value "$skipped_files" "15" "Files skipped (already exist)"   
+    # Check expected values from second replication output
+    expect_output_value "$second_replication_output" "Total files:" "15" "Total files reported (second run)"
+    expect_output_value "$second_replication_output" "Copied:" "0" "Files copied (all up to date)"
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"   
 }
 
 test_database_compare() {
