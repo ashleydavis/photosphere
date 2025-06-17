@@ -88,6 +88,33 @@ expect_value() {
     fi
 }
 
+# Parse a numeric value from output based on a pattern
+parse_numeric() {
+    local output="$1"
+    local pattern="$2"
+    local default_value="${3:-0}"
+    
+    # First strip ANSI color codes if present
+    local clean_output=$(echo "$output" | sed $'s/\033\[[0-9;]*m//g')
+    
+    # Escape special regex characters in the pattern
+    local escaped_pattern=$(echo "$pattern" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    
+    # Try to extract numeric value in different positions relative to pattern
+    local value=""
+    
+    # First try: number follows pattern (e.g., "Total files: 15")
+    value=$(echo "$clean_output" | sed -n "s/.*${escaped_pattern}[[:space:]]*\([0-9][0-9]*\).*/\1/p" | head -1)
+    
+    # If not found, try: number precedes pattern (e.g., "15 files added")
+    if [ -z "$value" ]; then
+        value=$(echo "$clean_output" | sed -n "s/.*\([0-9][0-9]*\)[[:space:]]*${escaped_pattern}.*/\1/p" | head -1)
+    fi
+    
+    # Return the value or default if not found
+    echo "${value:-$default_value}"
+}
+
 
 # Run a command and check its exit code
 run_command() {
@@ -344,7 +371,7 @@ test_add_file_parameterized() {
     # Get initial database state - count files in metadata collection
     # Use the info command output to track actual media files added
     local before_check=$($(get_cli_command) check $TEST_DB_DIR $file_path --yes 2>&1)
-    local already_in_db=$(echo "$before_check" | grep -o '[0-9]\+ files already in database' | grep -o '[0-9]\+' || echo "0")
+    local already_in_db=$(parse_numeric "$before_check" "files already in database")
     
     # Add the file
     local add_output
@@ -358,9 +385,9 @@ test_add_file_parameterized() {
     fi
     
     # Extract from the add command summary how many files were actually added
-    local files_added=$(echo "$add_output" | grep -o '[0-9]\+ files added' | grep -o '[0-9]\+' | head -1 || echo "0")
-    local files_failed=$(echo "$add_output" | grep -o '[0-9]\+ files failed' | grep -o '[0-9]\+' | head -1 || echo "0")
-    local files_already=$(echo "$add_output" | grep -o '[0-9]\+ files already in the database' | grep -o '[0-9]\+' | head -1 || echo "0")
+    local files_added=$(parse_numeric "$add_output" "files added")
+    local files_failed=$(parse_numeric "$add_output" "files failed")
+    local files_already=$(parse_numeric "$add_output" "files already in the database")
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -548,11 +575,10 @@ test_database_verify() {
         exit 1
     fi
     
-    # Extract counts from the verification output, stripping ANSI color codes first (cross-platform)
-    local clean_output=$(echo "$verify_output" | sed $'s/\033\[[0-9;]*m//g')
-    local new_count=$(echo "$clean_output" | sed -n 's/.*New:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local modified_count=$(echo "$clean_output" | sed -n 's/.*Modified:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local removed_count=$(echo "$clean_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    # Extract counts from the verification output
+    local new_count=$(parse_numeric "$verify_output" "New:")
+    local modified_count=$(parse_numeric "$verify_output" "Modified:")
+    local removed_count=$(parse_numeric "$verify_output" "Removed:")
     
     # Check that the database is in a good state (no new, modified, or removed files)
     expect_value "$new_count" "0" "New files in verification"
@@ -620,11 +646,10 @@ test_database_verify_full() {
         exit 1
     fi
     
-    # Extract counts from the verification output, stripping ANSI color codes first (cross-platform)
-    local clean_output=$(echo "$verify_output" | sed $'s/\033\[[0-9;]*m//g')
-    local new_count=$(echo "$clean_output" | sed -n 's/.*New:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local modified_count=$(echo "$clean_output" | sed -n 's/.*Modified:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local removed_count=$(echo "$clean_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    # Extract counts from the verification output
+    local new_count=$(parse_numeric "$verify_output" "New:")
+    local modified_count=$(parse_numeric "$verify_output" "Modified:")
+    local removed_count=$(parse_numeric "$verify_output" "Removed:")
     
     # Check that the database is in a good state even with full verification
     expect_value "$new_count" "0" "New files in full verification"
@@ -667,9 +692,9 @@ test_database_replicate() {
     fi
     
     # Parse the numbers from the replication output
-    local total_files=$(echo "$replicate_output" | grep "Total files:" | sed -n 's/.*Total files:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local copied_files=$(echo "$replicate_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local skipped_files=$(echo "$replicate_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local total_files=$(parse_numeric "$replicate_output" "Total files:")
+    local copied_files=$(parse_numeric "$replicate_output" "Copied:")
+    local skipped_files=$(parse_numeric "$replicate_output" "Skipped (unchanged):")
     
     # Check expected values
     expect_value "$total_files" "15" "Total files reported"
@@ -710,10 +735,8 @@ test_verify_replica() {
     local replica_summary
     replica_summary=$($(get_cli_command) summary $replica_dir --yes 2>&1)
     
-    local source_files
-    source_files=$(echo "$source_summary" | grep "Total files:" | grep -o '[0-9]\+')
-    local replica_files
-    replica_files=$(echo "$replica_summary" | grep "Total files:" | grep -o '[0-9]\+')
+    local source_files=$(parse_numeric "$source_summary" "Total files:")
+    local replica_files=$(parse_numeric "$replica_summary" "Total files:")
     
     expect_value "$replica_files" "$source_files" "Replica file count matches source"
 }
@@ -753,9 +776,9 @@ test_database_replicate_second() {
     fi
     
     # Parse the numbers from the second replication output
-    local total_files=$(echo "$second_replication_output" | grep "Total files:" | sed -n 's/.*Total files:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local copied_files=$(echo "$second_replication_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-    local skipped_files=$(echo "$second_replication_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    local total_files=$(parse_numeric "$second_replication_output" "Total files:")
+    local copied_files=$(parse_numeric "$second_replication_output" "Copied:")
+    local skipped_files=$(parse_numeric "$second_replication_output" "Skipped (unchanged):")
     
     # Check expected values
     expect_value "$total_files" "15" "Total files reported (second run)"
