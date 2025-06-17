@@ -437,6 +437,12 @@ test_database_summary() {
     run_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes"
     
     # Capture summary output to verify it contains expected fields
+    log_info "Running: Verify summary output format"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$(get_cli_command) summary $TEST_DB_DIR --yes${NC}"
+    echo ""
+    
     local summary_output
     summary_output=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
     
@@ -484,6 +490,12 @@ test_database_verify() {
     run_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes"
     
     # Capture verify output to check results
+    log_info "Running: Check verification output"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$(get_cli_command) verify $TEST_DB_DIR --yes${NC}"
+    echo ""
+    
     local verify_output
     verify_output=$($(get_cli_command) verify $TEST_DB_DIR --yes 2>&1)
     
@@ -556,6 +568,12 @@ test_database_verify_full() {
     run_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes"
     
     # Capture verify output to check results
+    log_info "Running: Check full verification output"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$(get_cli_command) verify $TEST_DB_DIR --full --yes${NC}"
+    echo ""
+    
     local verify_output
     verify_output=$($(get_cli_command) verify $TEST_DB_DIR --full --yes 2>&1)
     
@@ -631,6 +649,13 @@ test_database_replicate() {
         log_info "Cleaning up existing replica directory"
         rm -rf "$replica_dir"
     fi
+    
+    # Run replicate command
+    log_info "Running: Replicate database"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes${NC}"
+    echo ""
     
     # Capture replication output to verify counts
     local replicate_output
@@ -717,6 +742,13 @@ test_database_replicate_second() {
         log_error "Replica directory not found from previous test"
         exit 1
     fi
+    
+    # Run second replicate command
+    log_info "Running: Second replication (no changes)"
+    echo ""
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes${NC}"
+    echo ""
     
     # Capture second replication output
     local second_replication_output
