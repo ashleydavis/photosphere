@@ -708,11 +708,31 @@ test_database_replicate() {
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+}
+
+test_verify_replica() {
+    echo ""
+    echo "=== TEST 13: VERIFY REPLICA ==="
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Check that replica exists from previous test
+    if [ ! -d "$replica_dir" ]; then
+        log_error "Replica directory not found from previous test"
+        exit 1
+    fi
     
     # Verify replica contents match source
     run_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
     
     # Compare file counts between source and replica
+    log_info "Running: Compare source and replica file counts"
+    echo ""
+    echo -e "${YELLOW}Commands:${NC}"
+    echo -e "${BLUE}$(get_cli_command) summary $TEST_DB_DIR --yes${NC}"
+    echo -e "${BLUE}$(get_cli_command) summary $replica_dir --yes${NC}"
+    echo ""
+    
     local source_summary
     source_summary=$($(get_cli_command) summary $TEST_DB_DIR --yes 2>&1)
     local replica_summary
@@ -733,7 +753,7 @@ test_database_replicate() {
 
 test_database_replicate_second() {
     echo ""
-    echo "=== TEST 13: SECOND DATABASE REPLICATION - NO CHANGES ==="
+    echo "=== TEST 14: SECOND DATABASE REPLICATION - NO CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -800,7 +820,7 @@ test_database_replicate_second() {
 
 test_database_compare() {
     echo ""
-    echo "=== TEST 14: DATABASE COMPARISON ==="
+    echo "=== TEST 15: DATABASE COMPARISON ==="
     echo ""
     log_warning "Database comparison test temporarily disabled - depends on replicate command"
     log_warning "Skipping test 14: DATABASE COMPARISON"
@@ -866,7 +886,7 @@ test_database_compare() {
 
 test_cannot_create_over_existing() {
     echo ""
-    echo "=== TEST 15: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 16: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     run_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
@@ -953,6 +973,7 @@ run_all_tests() {
     test_database_verify
     test_database_verify_full
     test_database_replicate
+    test_verify_replica
     test_database_replicate_second
     test_database_compare
     test_cannot_create_over_existing
@@ -1031,13 +1052,16 @@ run_test() {
         "replicate"|"12")
             test_database_replicate
             ;;
-        "replicate-second"|"13")
+        "verify-replica"|"13")
+            test_verify_replica
+            ;;
+        "replicate-second"|"14")
             test_database_replicate_second
             ;;
-        "compare"|"14")
+        "compare"|"15")
             test_database_compare
             ;;
-        "no-overwrite"|"15")
+        "no-overwrite"|"16")
             test_cannot_create_over_existing
             ;;
         *)
@@ -1090,6 +1114,8 @@ run_multiple_commands() {
                 test_database_verify
                 test_database_verify_full
                 test_database_replicate
+                test_verify_replica
+                test_database_replicate_second
                 test_database_compare
                 test_cannot_create_over_existing
                 ;;
@@ -1138,13 +1164,16 @@ run_multiple_commands() {
             "replicate"|"12")
                 test_database_replicate
                 ;;
-            "replicate-second"|"13")
+            "verify-replica"|"13")
+                test_verify_replica
+                ;;
+            "replicate-second"|"14")
                 test_database_replicate_second
                 ;;
-            "compare"|"14")
+            "compare"|"15")
                 test_database_compare
                 ;;
-            "no-overwrite"|"15")
+            "no-overwrite"|"16")
                 test_cannot_create_over_existing
                 ;;
             *)
@@ -1214,9 +1243,10 @@ show_usage() {
     echo "  verify (10)         - Verify database integrity"
     echo "  verify-full (11)    - Verify database integrity (full mode)"
     echo "  replicate (12)      - Replicate database to new location"
-    echo "  replicate-second (13) - Second replication (no changes)"
-    echo "  compare (14)        - Compare two databases (DISABLED)"
-    echo "  no-overwrite (15)   - Cannot create database over existing"
+    echo "  verify-replica (13) - Verify replica integrity and match with source"
+    echo "  replicate-second (14) - Second replication (no changes)"
+    echo "  compare (15)        - Compare two databases (DISABLED)"
+    echo "  no-overwrite (16)   - Cannot create database over existing"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -1271,8 +1301,8 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 14
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 14 ]; then
+        # Validate that end_test is a number between 1 and 16
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 16 ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -1292,7 +1322,7 @@ main() {
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-14)"
+            log_error "Invalid test number: $end_test (must be 1-16)"
             show_usage
             exit 1
         fi
