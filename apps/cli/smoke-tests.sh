@@ -73,6 +73,21 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Check if a value matches expected value
+expect_value() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    
+    if [ "$actual" = "$expected" ]; then
+        log_success "$description: $actual"
+        return 0
+    else
+        log_error "$description: expected $expected, got $actual"
+        exit 1
+    fi
+}
+
 
 # Run a command and check its exit code
 run_command() {
@@ -349,22 +364,13 @@ test_add_file_parameterized() {
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
-        if [ "$files_already" -eq "1" ] && [ "$files_added" -eq "0" ]; then
-            log_success "File was already in database (as expected)"
-        else
-            log_error "File was already in database but add command reported unexpected results"
-            exit 1
-        fi
+        # File was already in database
+        expect_value "$files_already" "1" "$file_type file already in database"
+        expect_value "$files_added" "0" "$file_type file added (should be 0 since already exists)"
     else
-        if [ "$files_added" -eq "1" ] && [ "$files_failed" -eq "0" ]; then
-            log_success "Exactly 1 $file_type file was added to the database"
-        elif [ "$files_added" -eq "0" ]; then
-            log_error "No files were added to the database"
-            exit 1
-        else
-            log_error "Expected 1 file to be added, but $files_added files were added"
-            exit 1
-        fi
+        # File should be newly added
+        expect_value "$files_added" "1" "$file_type file added"
+        expect_value "$files_failed" "0" "$file_type file failed"
     fi
     
     # Check that the specific file is now in the database
@@ -549,15 +555,9 @@ test_database_verify() {
     local removed_count=$(echo "$clean_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     
     # Check that the database is in a good state (no new, modified, or removed files)
-    if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
-        log_error "Database verification failed - found issues:"
-        log_error "  New files: $new_count"
-        log_error "  Modified files: $modified_count"
-        log_error "  Removed files: $removed_count"
-        exit 1
-    else
-        log_success "Database is in good state - no new, modified, or removed files"
-    fi
+    expect_value "$new_count" "0" "New files in verification"
+    expect_value "$modified_count" "0" "Modified files in verification"
+    expect_value "$removed_count" "0" "Removed files in verification"
 }
 
 test_database_verify_full() {
@@ -627,15 +627,9 @@ test_database_verify_full() {
     local removed_count=$(echo "$clean_output" | sed -n 's/.*Removed:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     
     # Check that the database is in a good state even with full verification
-    if [ "$new_count" != "0" ] || [ "$modified_count" != "0" ] || [ "$removed_count" != "0" ]; then
-        log_error "Full database verification failed - found issues:"
-        log_error "  New files: $new_count"
-        log_error "  Modified files: $modified_count"  
-        log_error "  Removed files: $removed_count"
-        exit 1
-    else
-        log_success "Full verification passed - database is in good state"
-    fi
+    expect_value "$new_count" "0" "New files in full verification"
+    expect_value "$modified_count" "0" "Modified files in full verification"
+    expect_value "$removed_count" "0" "Removed files in full verification"
 }
 
 test_database_replicate() {
@@ -677,32 +671,10 @@ test_database_replicate() {
     local copied_files=$(echo "$replicate_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     local skipped_files=$(echo "$replicate_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     
-    # Check that 15 total files were reported
-    if [ "$total_files" = "15" ]; then
-        log_success "Replication reported 15 total files"
-    else
-        log_error "Replication reported $total_files total files, expected 15"
-        echo "Replication output: $replicate_output"
-        exit 1
-    fi
-    
-    # Check that 15 files were copied
-    if [ "$copied_files" = "15" ]; then
-        log_success "Replication copied 15 files"
-    else
-        log_error "Replication copied $copied_files files, expected 15"
-        echo "Replication output: $replicate_output"
-        exit 1
-    fi
-    
-    # Check that 0 files were skipped
-    if [ "$skipped_files" = "0" ]; then
-        log_success "Replication skipped 0 files (as expected for first run)"
-    else
-        log_error "Replication skipped $skipped_files files, expected 0"
-        echo "Replication output: $replicate_output"
-        exit 1
-    fi
+    # Check expected values
+    expect_value "$total_files" "15" "Total files reported"
+    expect_value "$copied_files" "15" "Files copied"
+    expect_value "$skipped_files" "0" "Files skipped (first run)"
     
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
@@ -743,12 +715,7 @@ test_verify_replica() {
     local replica_files
     replica_files=$(echo "$replica_summary" | grep "Total files:" | grep -o '[0-9]\+')
     
-    if [ "$source_files" = "$replica_files" ]; then
-        log_success "Replica has same file count as source ($source_files files)"
-    else
-        log_error "File count mismatch: source has $source_files files, replica has $replica_files files"
-        exit 1
-    fi
+    expect_value "$replica_files" "$source_files" "Replica file count matches source"
 }
 
 test_database_replicate_second() {
@@ -790,32 +757,10 @@ test_database_replicate_second() {
     local copied_files=$(echo "$second_replication_output" | grep "Copied:" | sed -n 's/.*Copied:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     local skipped_files=$(echo "$second_replication_output" | grep "Skipped (unchanged):" | sed -n 's/.*Skipped (unchanged):[[:space:]]*\([0-9][0-9]*\).*/\1/p')
     
-    # Check that 15 total files were reported
-    if [ "$total_files" = "15" ]; then
-        log_success "Second replication reported 15 total files"
-    else
-        log_error "Second replication reported $total_files total files, expected 15"
-        echo "Second replication output: $second_replication_output"
-        exit 1
-    fi
-    
-    # Check that 0 files were copied
-    if [ "$copied_files" = "0" ]; then
-        log_success "Second replication copied 0 files (all up to date)"
-    else
-        log_error "Second replication copied $copied_files files, expected 0"
-        echo "Second replication output: $second_replication_output"
-        exit 1
-    fi
-    
-    # Check that 15 files were skipped
-    if [ "$skipped_files" = "15" ]; then
-        log_success "Second replication skipped 15 files (already exist)"
-    else
-        log_error "Second replication skipped $skipped_files files, expected 15"
-        echo "Second replication output: $second_replication_output"
-        exit 1
-    fi   
+    # Check expected values
+    expect_value "$total_files" "15" "Total files reported (second run)"
+    expect_value "$copied_files" "0" "Files copied (all up to date)"
+    expect_value "$skipped_files" "15" "Files skipped (already exist)"   
 }
 
 test_database_compare() {
