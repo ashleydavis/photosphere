@@ -430,20 +430,15 @@ test_add_file_parameterized() {
     local add_output
     invoke_command "$test_description" "$(get_cli_command) add $TEST_DB_DIR $file_path --yes" 0 "true" "add_output"
     
-    # Extract from the add command summary how many files were actually added
-    local files_added=$(parse_numeric "$add_output" "files added")
-    local files_failed=$(parse_numeric "$add_output" "files failed")
-    local files_already=$(parse_numeric "$add_output" "files already in the database")
-    
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
         # File was already in database
-        expect_value "$files_already" "1" "$file_type file already in database"
-        expect_value "$files_added" "0" "$file_type file added (should be 0 since already exists)"
+        expect_output_value "$add_output" "files already in the database" "1" "$file_type file already in database"
+        expect_output_value "$add_output" "files added" "0" "$file_type file added (should be 0 since already exists)"
     else
         # File should be newly added
-        expect_value "$files_added" "1" "$file_type file added"
-        expect_value "$files_failed" "0" "$file_type file failed"
+        expect_output_value "$add_output" "files added" "1" "$file_type file added"
+        expect_output_value "$add_output" "files failed" "0" "$file_type file failed"
     fi
     
     # Check that the specific file is now in the database
