@@ -182,9 +182,11 @@ invoke_command() {
     
     if [ "$capture_output" = "true" ]; then
         # Capture output and display it
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
         command_output=$(eval "$command" 2>&1)
         actual_exit_code=$?
         echo "$command_output"
+        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
         # Store output in caller's variable if provided
         if [ -n "$output_var_name" ]; then
@@ -192,8 +194,10 @@ invoke_command() {
         fi
     else
         # Execute without capturing output
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
         eval "$command"
         actual_exit_code=$?
+        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
     fi
     
     # Check exit code and log results
@@ -392,6 +396,7 @@ test_install_tools() {
 
 test_create_database() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 1: CREATE DATABASE ==="
     
     invoke_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
@@ -407,6 +412,7 @@ test_create_database() {
 
 test_view_media_files() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     
     invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
@@ -447,6 +453,7 @@ test_add_file_parameterized() {
 
 test_add_png_file() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 3: ADD PNG FILE ==="
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file"
@@ -454,6 +461,7 @@ test_add_png_file() {
 
 test_add_jpg_file() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 4: ADD JPG FILE ==="
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file"
@@ -461,6 +469,7 @@ test_add_jpg_file() {
 
 test_add_mp4_file() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 5: ADD MP4 FILE ==="
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file"
@@ -468,6 +477,7 @@ test_add_mp4_file() {
 
 test_add_same_file() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 6: ADD SAME FILE (NO DUPLICATION) ==="
     
     # Try to re-add the PNG file (should not add it again)
@@ -478,6 +488,7 @@ test_add_same_file() {
 
 test_add_multiple_files() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 7: ADD MULTIPLE FILES ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
@@ -492,6 +503,7 @@ test_add_multiple_files() {
 
 test_add_same_multiple_files() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 8: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
@@ -506,6 +518,7 @@ test_add_same_multiple_files() {
 
 test_database_summary() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 9: DATABASE SUMMARY ==="
     
     # Run summary command and capture output for verification
@@ -522,6 +535,7 @@ test_database_summary() {
 
 test_database_verify() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 10: DATABASE VERIFICATION ==="
     
     # Run verify command and capture output for checking
@@ -544,6 +558,7 @@ test_database_verify() {
 
 test_database_verify_full() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 11: DATABASE VERIFICATION (FULL MODE) ==="
     
     # Run full verify command and capture output for checking
@@ -566,6 +581,7 @@ test_database_verify_full() {
 
 test_database_replicate() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 12: DATABASE REPLICATION ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
@@ -596,6 +612,7 @@ test_database_replicate() {
 
 test_verify_replica() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 13: VERIFY REPLICA ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
@@ -621,6 +638,7 @@ test_verify_replica() {
 
 test_database_replicate_second() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 14: SECOND DATABASE REPLICATION - NO CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
@@ -643,6 +661,7 @@ test_database_replicate_second() {
 
 test_database_compare() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 15: DATABASE COMPARISON ==="
     echo ""
     log_warning "Database comparison test temporarily disabled - depends on replicate command"
@@ -709,6 +728,7 @@ test_database_compare() {
 
 test_cannot_create_over_existing() {
     echo ""
+    echo "============================================================================"
     echo "=== TEST 16: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
