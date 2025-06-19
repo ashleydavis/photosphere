@@ -134,8 +134,8 @@ parse_numeric() {
     # First strip ANSI color codes if present
     local clean_output=$(echo "$output" | sed $'s/\033\[[0-9;]*m//g')
     
-    # Escape special regex characters in the pattern
-    local escaped_pattern=$(echo "$pattern" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    # Escape special regex characters in the pattern - but keep parentheses as literals
+    local escaped_pattern=$(echo "$pattern" | sed 's/[[\.*^$+?{|]/\\&/g')
     
     # Try to extract numeric value in different positions relative to pattern
     local value=""
