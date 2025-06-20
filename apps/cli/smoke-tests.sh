@@ -860,10 +860,32 @@ test_database_compare() {
     invoke_command "Compare database with itself" "$(get_cli_command) compare $TEST_DB_DIR $TEST_DB_DIR --yes"
 }
 
+test_compare_with_changes() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 19: COMPARE WITH CHANGES ==="
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Check that replica exists from previous tests
+    check_exists "$replica_dir" "Replica directory from previous tests"
+    
+    # Add a new asset to the original database to create a difference
+    local new_test_file="$TEST_FILES_DIR/test.webp"
+    invoke_command "Add new asset to original database" "$(get_cli_command) add $TEST_DB_DIR $new_test_file --yes"
+    
+    # Test comparison between original and replica (should show differences after adding new asset)
+    local compare_output
+    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes" 0 "true" "compare_output"
+    
+    # Check that comparison detects the specific number of differences (new asset creates 8 differences)
+    expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
+}
+
 test_cannot_create_over_existing() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 19: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 20: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
@@ -956,6 +978,7 @@ run_all_tests() {
     test_verify_replica
     test_database_replicate_second
     test_database_compare
+    test_compare_with_changes
     test_cannot_create_over_existing
     
     # If we get here, all tests passed
@@ -1050,7 +1073,10 @@ run_test() {
         "compare"|"18")
             test_database_compare
             ;;
-        "no-overwrite"|"19")
+        "compare-changes"|"19")
+            test_compare_with_changes
+            ;;
+        "no-overwrite"|"20")
             test_cannot_create_over_existing
             ;;
         *)
@@ -1109,6 +1135,7 @@ run_multiple_commands() {
                 test_verify_replica
                 test_database_replicate_second
                 test_database_compare
+                test_compare_with_changes
                 test_cannot_create_over_existing
                 ;;
             "setup")
@@ -1174,7 +1201,10 @@ run_multiple_commands() {
             "compare"|"18")
                 test_database_compare
                 ;;
-            "no-overwrite"|"19")
+            "compare-changes"|"19")
+                test_compare_with_changes
+                ;;
+            "no-overwrite"|"20")
                 test_cannot_create_over_existing
                 ;;
             *)
@@ -1250,7 +1280,8 @@ show_usage() {
     echo "  verify-replica (16) - Verify replica integrity and match with source"
     echo "  replicate-second (17) - Second replication (no changes)"
     echo "  compare (18)        - Compare two databases"
-    echo "  no-overwrite (19)   - Cannot create database over existing"
+    echo "  compare-changes (19) - Compare databases after adding changes"
+    echo "  no-overwrite (20)   - Cannot create database over existing"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
