@@ -579,10 +579,176 @@ test_database_verify_full() {
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
 }
 
+test_detect_new_file() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 12: DETECT NEW FILE WITH VERIFY ==="
+    
+    local test_copy_dir="$TEST_DB_DIR-new-file-test"
+    
+    # Ensure source database exists before copying
+    if [ ! -d "$TEST_DB_DIR" ]; then
+        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
+        exit 1
+    fi
+    
+    if [ ! -d "$TEST_DB_DIR/.db" ]; then
+        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
+        exit 1
+    fi
+    
+    # Create fresh copy of database for testing
+    log_info "Creating fresh copy of database for new file test"
+    
+    # Ensure destination doesn't exist to avoid copying into subdirectory
+    rm -rf "$test_copy_dir"
+    
+    cp -r "$TEST_DB_DIR" "$test_copy_dir"
+    
+    # Verify the copy includes the .db subdirectory
+    if [ ! -d "$test_copy_dir/.db" ]; then
+        log_error "Failed to copy .db subdirectory to $test_copy_dir"
+        exit 1
+    fi
+    
+    # Copy a new file into the database directory using cp command
+    local new_file="$test_copy_dir/new-test-file.txt"
+    echo "This is a new test file" > "$new_file"
+    log_info "Added new file: $new_file"
+    
+    # Run verify and capture output - should detect the new file
+    local verify_output
+    invoke_command "Verify database with new file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    
+    # Check that verify detected the new file
+    expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
+    expect_output_value "$verify_output" "Modified:" "0" "No modified files"
+    expect_output_value "$verify_output" "Removed:" "0" "No removed files"
+    
+    # Clean up test copy
+    rm -rf "$test_copy_dir"
+    log_success "Cleaned up test database copy"
+}
+
+test_detect_deleted_file() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 13: DETECT DELETED FILE WITH VERIFY ==="
+    
+    local test_copy_dir="$TEST_DB_DIR-deleted-file-test"
+    
+    # Ensure source database exists before copying
+    if [ ! -d "$TEST_DB_DIR" ]; then
+        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
+        exit 1
+    fi
+    
+    if [ ! -d "$TEST_DB_DIR/.db" ]; then
+        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
+        exit 1
+    fi
+    
+    # Create fresh copy of database for testing
+    log_info "Creating fresh copy of database for deleted file test"
+    
+    # Ensure destination doesn't exist to avoid copying into subdirectory
+    rm -rf "$test_copy_dir"
+    
+    cp -r "$TEST_DB_DIR" "$test_copy_dir"
+    
+    # Verify the copy includes the .db subdirectory
+    if [ ! -d "$test_copy_dir/.db" ]; then
+        log_error "Failed to copy .db subdirectory to $test_copy_dir"
+        exit 1
+    fi
+    
+    # Find and delete the first file from the assets directory
+    local file_to_delete=$(find "$test_copy_dir/assets" -type f | head -1)
+    if [ -n "$file_to_delete" ]; then
+        local relative_path="${file_to_delete#$test_copy_dir/}"
+        rm "$file_to_delete"
+        log_info "Deleted file: $relative_path"
+    else
+        log_error "No file found in assets directory to delete"
+        exit 1
+    fi
+    
+    # Run verify and capture output - should detect the missing file
+    local verify_output
+    invoke_command "Verify database with deleted file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    
+    # Check that verify detected the removed file
+    expect_output_value "$verify_output" "New:" "0" "No new files"
+    expect_output_value "$verify_output" "Modified:" "0" "No modified files"
+    expect_output_value "$verify_output" "Removed:" "1" "Deleted file detected by verify"
+    
+    # Clean up test copy
+    rm -rf "$test_copy_dir"
+    log_success "Cleaned up test database copy"
+}
+
+test_detect_modified_file() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 14: DETECT MODIFIED FILE WITH VERIFY ==="
+    
+    local test_copy_dir="$TEST_DB_DIR-modified-file-test"
+    
+    # Ensure source database exists before copying
+    if [ ! -d "$TEST_DB_DIR" ]; then
+        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
+        exit 1
+    fi
+    
+    if [ ! -d "$TEST_DB_DIR/.db" ]; then
+        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
+        exit 1
+    fi
+    
+    # Create fresh copy of database for testing
+    log_info "Creating fresh copy of database for modified file test"
+    
+    # Ensure destination doesn't exist to avoid copying into subdirectory
+    rm -rf "$test_copy_dir"
+    
+    cp -r "$TEST_DB_DIR" "$test_copy_dir"
+    
+    # Verify the copy includes the .db subdirectory
+    if [ ! -d "$test_copy_dir/.db" ]; then
+        log_error "Failed to copy .db subdirectory to $test_copy_dir"
+        exit 1
+    fi
+    
+    # Find and modify the first file from the assets directory
+    local file_to_modify=$(find "$test_copy_dir/assets" -type f | head -1)
+    if [ -n "$file_to_modify" ]; then
+        local relative_path="${file_to_modify#$test_copy_dir/}"
+        # Append some data to modify the file
+        echo "Modified content" >> "$file_to_modify"
+        log_info "Modified file: $relative_path"
+    else
+        log_error "No file found in assets directory to modify"
+        exit 1
+    fi
+    
+    # Run verify and capture output - should detect the modified file
+    local verify_output
+    invoke_command "Verify database with modified file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    
+    # Check that verify detected the modified file
+    expect_output_value "$verify_output" "New:" "0" "No new files"
+    expect_output_value "$verify_output" "Modified:" "1" "Modified file detected by verify"
+    expect_output_value "$verify_output" "Removed:" "0" "No removed files"
+    
+    # Clean up test copy
+    rm -rf "$test_copy_dir"
+    log_success "Cleaned up test database copy"
+}
+
 test_database_replicate() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 12: DATABASE REPLICATION ==="
+    echo "=== TEST 15: DATABASE REPLICATION ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -613,7 +779,7 @@ test_database_replicate() {
 test_verify_replica() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 13: VERIFY REPLICA ==="
+    echo "=== TEST 16: VERIFY REPLICA ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -649,7 +815,7 @@ test_verify_replica() {
 test_database_replicate_second() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 14: SECOND DATABASE REPLICATION - NO CHANGES ==="
+    echo "=== TEST 17: SECOND DATABASE REPLICATION - NO CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -672,7 +838,7 @@ test_database_replicate_second() {
 test_database_compare() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 15: DATABASE COMPARISON ==="
+    echo "=== TEST 18: DATABASE COMPARISON ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -694,7 +860,7 @@ test_database_compare() {
 test_cannot_create_over_existing() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 16: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 19: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
 }
@@ -780,6 +946,9 @@ run_all_tests() {
     test_database_summary
     test_database_verify
     test_database_verify_full
+    test_detect_new_file
+    test_detect_deleted_file
+    test_detect_modified_file
     test_database_replicate
     test_verify_replica
     test_database_replicate_second
@@ -857,19 +1026,28 @@ run_test() {
         "verify-full"|"11")
             test_database_verify_full
             ;;
-        "replicate"|"12")
+        "detect-new"|"12")
+            test_detect_new_file
+            ;;
+        "detect-deleted"|"13")
+            test_detect_deleted_file
+            ;;
+        "detect-modified"|"14")
+            test_detect_modified_file
+            ;;
+        "replicate"|"15")
             test_database_replicate
             ;;
-        "verify-replica"|"13")
+        "verify-replica"|"16")
             test_verify_replica
             ;;
-        "replicate-second"|"14")
+        "replicate-second"|"17")
             test_database_replicate_second
             ;;
-        "compare"|"15")
+        "compare"|"18")
             test_database_compare
             ;;
-        "no-overwrite"|"16")
+        "no-overwrite"|"19")
             test_cannot_create_over_existing
             ;;
         *)
@@ -921,6 +1099,9 @@ run_multiple_commands() {
                 test_database_summary
                 test_database_verify
                 test_database_verify_full
+                test_detect_new_file
+                test_detect_deleted_file
+                test_detect_modified_file
                 test_database_replicate
                 test_verify_replica
                 test_database_replicate_second
@@ -969,19 +1150,28 @@ run_multiple_commands() {
             "verify-full"|"11")
                 test_database_verify_full
                 ;;
-            "replicate"|"12")
+            "detect-new"|"12")
+                test_detect_new_file
+                ;;
+            "detect-deleted"|"13")
+                test_detect_deleted_file
+                ;;
+            "detect-modified"|"14")
+                test_detect_modified_file
+                ;;
+            "replicate"|"15")
                 test_database_replicate
                 ;;
-            "verify-replica"|"13")
+            "verify-replica"|"16")
                 test_verify_replica
                 ;;
-            "replicate-second"|"14")
+            "replicate-second"|"17")
                 test_database_replicate_second
                 ;;
-            "compare"|"15")
+            "compare"|"18")
                 test_database_compare
                 ;;
-            "no-overwrite"|"16")
+            "no-overwrite"|"19")
                 test_cannot_create_over_existing
                 ;;
             *)
@@ -1050,11 +1240,14 @@ show_usage() {
     echo "  summary (9)         - Display database summary"
     echo "  verify (10)         - Verify database integrity"
     echo "  verify-full (11)    - Verify database integrity (full mode)"
-    echo "  replicate (12)      - Replicate database to new location"
-    echo "  verify-replica (13) - Verify replica integrity and match with source"
-    echo "  replicate-second (14) - Second replication (no changes)"
-    echo "  compare (15)        - Compare two databases (DISABLED)"
-    echo "  no-overwrite (16)   - Cannot create database over existing"
+    echo "  detect-new (12)     - Detect new file with verify"
+    echo "  detect-deleted (13) - Detect deleted file with verify"
+    echo "  detect-modified (14) - Detect modified file with verify"
+    echo "  replicate (15)      - Replicate database to new location"
+    echo "  verify-replica (16) - Verify replica integrity and match with source"
+    echo "  replicate-second (17) - Second replication (no changes)"
+    echo "  compare (18)        - Compare two databases"
+    echo "  no-overwrite (19)   - Cannot create database over existing"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -1109,8 +1302,8 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 16
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 16 ]; then
+        # Validate that end_test is a number between 1 and 19
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 19 ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -1130,7 +1323,7 @@ main() {
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-16)"
+            log_error "Invalid test number: $end_test (must be 1-19)"
             show_usage
             exit 1
         fi
