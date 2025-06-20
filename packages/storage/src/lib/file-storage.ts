@@ -107,6 +107,10 @@ export class FileStorage implements IStorage {
             return undefined;
         }
         const stat = await fs.stat(filePath);
+        if (!stat.isFile()) {
+            // If it's not a file, return undefined.
+            return undefined;
+        }
         return {
             contentType: undefined, // This is not available in file storage.
             length: stat.size,
