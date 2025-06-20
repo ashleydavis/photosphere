@@ -887,6 +887,16 @@ export class MediaFileDatabase {
                     // The hash matches, so we don't need to copy the file.
                     //
                     result.numExistingFiles++;
+
+                    //
+                    // Add the existing file to the destination merkle tree.
+                    //
+                    newDestTree = addFile(newDestTree, {
+                        fileName,
+                        hash: destHash.hash,
+                        length: destHash.length,
+                    });
+
                     return;                
                 }
             }
