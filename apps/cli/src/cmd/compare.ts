@@ -1,14 +1,11 @@
-import { MediaFileDatabase } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { log } from "utils";
+import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
-import { exit, registerTerminationCallback } from "node-utils";
+import { exit } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
-import { compareTrees } from "adb";
-import fs from "fs";
+import { compareTrees, loadTreeV2 } from "adb";
 
 export interface ICompareCommandOptions { 
     //
@@ -22,16 +19,6 @@ export interface ICompareCommandOptions {
     destMeta?: string;
 
     //
-    // Path to source encryption key file.
-    //
-    srcKey?: string;
-
-    //
-    // Path to destination encryption key file.
-    //
-    destKey?: string;
-
-    //
     // Enables verbose logging.
     //
     verbose?: boolean;
@@ -40,11 +27,6 @@ export interface ICompareCommandOptions {
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
-
-    //
-    // Write comparison results to JSON file.
-    //
-    output?: string;
 }
 
 interface ComparisonResult {
@@ -100,220 +82,119 @@ export async function compareCommand(srcDir: string, destDir: string, options: I
         await exit(1);
     }
 
-    // Load encryption keys
-    const { options: srcStorageOptions } = await loadEncryptionKeys(options.srcKey, false, "source");
-    const { options: destStorageOptions } = await loadEncryptionKeys(options.destKey, false, "destination");
-
-    // Create storage instances
-    const { storage: srcAssetStorage } = createStorage(sourceDatabaseDir, srcStorageOptions);        
     const { storage: srcMetadataStorage } = createStorage(srcMetaPath);
-    const { storage: destAssetStorage } = createStorage(destinationDatabaseDir, destStorageOptions);        
     const { storage: destMetadataStorage } = createStorage(destMetaPath);
 
-    // Load source database
-    const sourceDatabase = new MediaFileDatabase(srcAssetStorage, srcMetadataStorage, process.env.GOOGLE_API_KEY); 
-    const destinationDatabase = new MediaFileDatabase(destAssetStorage, destMetadataStorage, process.env.GOOGLE_API_KEY);
+    //
+    // Load merkle trees.
+    //
+    const srcMerkleTree = await loadTreeV2("tree.dat", srcMetadataStorage);
+    if (!srcMerkleTree) {
+        console.log(pc.red(`Error: Source Merkle tree not found in ${pathJoin(sourceDatabaseDir, 'tree.dat')}`));
+        await exit(1);
+    }
 
-    registerTerminationCallback(async () => {
-        await sourceDatabase.close();
-        await destinationDatabase.close();
-    });    
+    const destMerkleTree = await loadTreeV2("tree.dat", destMetadataStorage);
+    if (!destMerkleTree) {
+        console.log(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destinationDatabaseDir, 'tree.dat')}`));
+        await exit(1);
+    }
 
     console.log(pc.blue(`🔄 Comparing databases`));
     console.log(pc.gray(`Source: ${sourceDatabaseDir}`));
     console.log(pc.gray(`Destination: ${destinationDatabaseDir}`));
+   
+    console.log(pc.gray(`Source tree: ${srcMerkleTree!.metadata.totalFiles} files`));
+    console.log(pc.gray(`Destination tree: ${destMerkleTree!.metadata.totalFiles} files`));
 
-    try {
-        await sourceDatabase.load();
-        await destinationDatabase.load();
-    } catch (error) {
-        console.log(pc.red(`Error loading databases: ${error instanceof Error ? error.message : String(error)}`));
-        await exit(1);
-    }
-
-    // Perform comparison
-    const result = await performComparison(sourceDatabase, destinationDatabase, sourceDatabaseDir, destinationDatabaseDir);
-
-    // Display results
-    displayComparisonResults(result);
-
-    // Write JSON output if requested
-    if (options.output) {
-        await writeJsonResults(result, options.output);
-    }
-
-    // Exit with appropriate code
-    if (result.treesMatch) {
-        console.log();
-        console.log(pc.green(`✅ Databases are identical`));
-        await exit(0);
-    } else {
-        console.log();
-        console.log(pc.yellow(`⚠️  Databases have ${result.metrics.totalDifferences} differences`));
-        await exit(0); // Not an error, just differences found
-    }
-}
-
-async function performComparison(
-    sourceDatabase: MediaFileDatabase,
-    destinationDatabase: MediaFileDatabase,
-    sourcePath: string,
-    destinationPath: string
-): Promise<ComparisonResult> {
-    
-    // Get Merkle trees from both databases
-    const sourceAssetDatabase = sourceDatabase.getAssetDatabase();
-    const sourceMerkleTree = sourceAssetDatabase.getMerkleTree();
-    
-    const destAssetDatabase = destinationDatabase.getAssetDatabase();
-    const destMerkleTree = destAssetDatabase.getMerkleTree();
-    
-    console.log(pc.gray(`Source tree: ${sourceMerkleTree.metadata.totalFiles} files`));
-    console.log(pc.gray(`Destination tree: ${destMerkleTree.metadata.totalFiles} files`));
-
-    // Fast path: Compare root hashes first
-    if (Buffer.compare(sourceMerkleTree.nodes[0].hash, destMerkleTree.nodes[0].hash) === 0) {
-        return {
-            treesMatch: true,
-            message: "Trees are identical (root hashes match)",
-            differences: {
-                filesOnlyInA: [],
-                filesOnlyInB: [],
-                modifiedFiles: [],
-                deletedFiles: []
-            },
-            metrics: {
-                filesInTreeA: sourceMerkleTree.metadata.totalFiles,
-                filesInTreeB: destMerkleTree.metadata.totalFiles,
-                totalDifferences: 0
-            }
-        };
-    }
-
-    // Detailed comparison using existing compareTrees function
-    const treeComparison = compareTrees(sourceMerkleTree, destMerkleTree);
-    
-    const totalDifferences = 
-        treeComparison.onlyInA.length + 
-        treeComparison.onlyInB.length + 
-        treeComparison.modified.length + 
-        treeComparison.deleted.length;
-
-    return {
-        treesMatch: totalDifferences === 0,
-        message: totalDifferences === 0 ? "Trees are identical" : `Found ${totalDifferences} differences`,
-        differences: {
-            filesOnlyInA: treeComparison.onlyInA,
-            filesOnlyInB: treeComparison.onlyInB,
-            modifiedFiles: treeComparison.modified,
-            deletedFiles: treeComparison.deleted
-        },
-        metrics: {
-            filesInTreeA: sourceMerkleTree.metadata.totalFiles,
-            filesInTreeB: destMerkleTree.metadata.totalFiles,
-            totalDifferences
-        }
-    };
-}
-
-function displayComparisonResults(result: ComparisonResult): void {
     console.log();
     console.log(pc.bold(pc.blue(`📊 Comparison Results`)));
     console.log();
-    
-    if (result.treesMatch) {
+
+    // Fast path: Compare root hashes first
+    if (Buffer.compare(srcMerkleTree!.nodes[0].hash, destMerkleTree!.nodes[0].hash) === 0) {
         console.log(pc.green(`No differences detected`));
+        await exit(0);
         return;
     }
 
-    const { differences } = result;
+    const compareResult = compareTrees(srcMerkleTree!, destMerkleTree!);
     
-    // Summary line
+    const totalDifferences = 
+        compareResult.onlyInA.length + 
+        compareResult.onlyInB.length + 
+        compareResult.modified.length + 
+        compareResult.deleted.length;
+
     const summaryParts = [];
-    if (differences.filesOnlyInA.length > 0) {
-        summaryParts.push(`${differences.filesOnlyInA.length} files only in source`);
+    if (compareResult.onlyInA.length > 0) {
+        summaryParts.push(`${compareResult.onlyInA.length} files only in source`);
     }
-    if (differences.filesOnlyInB.length > 0) {
-        summaryParts.push(`${differences.filesOnlyInB.length} files only in destination`);
+    if (compareResult.onlyInB.length > 0) {
+        summaryParts.push(`${compareResult.onlyInB.length} files only in destination`);
     }
-    if (differences.modifiedFiles.length > 0) {
-        summaryParts.push(`${differences.modifiedFiles.length} modified files`);
+    if (compareResult.modified.length > 0) {
+        summaryParts.push(`${compareResult.modified.length} modified files`);
     }
-    if (differences.deletedFiles.length > 0) {
-        summaryParts.push(`${differences.deletedFiles.length} deleted files`);
+    if (compareResult.deleted.length > 0) {
+        summaryParts.push(`${compareResult.deleted.length} deleted files`);
     }
     
     console.log(pc.yellow(`Found differences: ${summaryParts.join(', ')}`));
     console.log();
 
     // Files only in source
-    if (differences.filesOnlyInA.length > 0) {
+    if (compareResult.onlyInA.length > 0) {
         console.log(pc.cyan(`Files only in source:`));
-        const filesToShow = differences.filesOnlyInA.slice(0, 10);
+        const filesToShow = compareResult.onlyInA.slice(0, 10);
         filesToShow.forEach(file => {
             console.log(`  ${pc.cyan('+')} ${file}`);
         });
-        if (differences.filesOnlyInA.length > 10) {
-            console.log(pc.gray(`  ... and ${differences.filesOnlyInA.length - 10} more`));
+        if (compareResult.onlyInA.length > 10) {
+            console.log(pc.gray(`  ... and ${compareResult.onlyInA.length - 10} more`));
         }
         console.log();
     }
 
     // Files only in destination
-    if (differences.filesOnlyInB.length > 0) {
+    if (compareResult.onlyInB.length > 0) {
         console.log(pc.magenta(`Files only in destination:`));
-        const filesToShow = differences.filesOnlyInB.slice(0, 10);
+        const filesToShow = compareResult.onlyInB.slice(0, 10);
         filesToShow.forEach(file => {
             console.log(`  ${pc.magenta('+')} ${file}`);
         });
-        if (differences.filesOnlyInB.length > 10) {
-            console.log(pc.gray(`  ... and ${differences.filesOnlyInB.length - 10} more`));
+        if (compareResult.onlyInB.length > 10) {
+            console.log(pc.gray(`  ... and ${compareResult.onlyInB.length - 10} more`));
         }
         console.log();
     }
 
     // Modified files
-    if (differences.modifiedFiles.length > 0) {
+    if (compareResult.modified.length > 0) {
         console.log(pc.yellow(`Modified files:`));
-        const filesToShow = differences.modifiedFiles.slice(0, 10);
+        const filesToShow = compareResult.modified.slice(0, 10);
         filesToShow.forEach(file => {
             console.log(`  ${pc.yellow('●')} ${file}`);
         });
-        if (differences.modifiedFiles.length > 10) {
-            console.log(pc.gray(`  ... and ${differences.modifiedFiles.length - 10} more`));
+        if (compareResult.modified.length > 10) {
+            console.log(pc.gray(`  ... and ${compareResult.modified.length - 10} more`));
         }
         console.log();
     }
 
     // Deleted files
-    if (differences.deletedFiles.length > 0) {
+    if (compareResult.deleted.length > 0) {
         console.log(pc.red(`Deleted files:`));
-        const filesToShow = differences.deletedFiles.slice(0, 10);
+        const filesToShow = compareResult.deleted.slice(0, 10);
         filesToShow.forEach(file => {
             console.log(`  ${pc.red('-')} ${file}`);
         });
-        if (differences.deletedFiles.length > 10) {
-            console.log(pc.gray(`  ... and ${differences.deletedFiles.length - 10} more`));
+        if (compareResult.deleted.length > 10) {
+            console.log(pc.gray(`  ... and ${compareResult.deleted.length - 10} more`));
         }
         console.log();
     }
 
-    // Metrics
-    console.log(pc.gray(`Source files: ${result.metrics.filesInTreeA}`));
-    console.log(pc.gray(`Destination files: ${result.metrics.filesInTreeB}`));
-    console.log(pc.gray(`Total differences: ${result.metrics.totalDifferences}`));
-}
-
-async function writeJsonResults(result: ComparisonResult, outputPath: string): Promise<void> {
-    try {
-        const jsonOutput = {
-            timestamp: new Date().toISOString(),
-            ...result
-        };
-        
-        await fs.promises.writeFile(outputPath, JSON.stringify(jsonOutput, null, 2));
-        console.log(pc.gray(`Comparison result written to: ${outputPath}`));
-    } catch (error) {
-        log.error(pc.red(`Failed to write results to ${outputPath}: ${error}`));
-    }
+    console.log(pc.yellow(`⚠️  Databases have ${totalDifferences} differences`));
+    await exit(0);
 }

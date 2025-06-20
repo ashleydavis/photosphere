@@ -138,9 +138,6 @@ async function main() {
         .argument("<destination-dir>", "Destination database directory")
         .option("-s, --src-meta <dir>", "Source metadata directory override")
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
-        .option("--sk, --src-key <keyfile>", "Path to source encryption key file")
-        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
-        .option("-o, --output <file>", "Write comparison results to JSON file")
         .option(...verboseOption)
         .option(...yesOption)
         .action(compareCommand);
