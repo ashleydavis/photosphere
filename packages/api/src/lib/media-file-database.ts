@@ -816,8 +816,15 @@ export class MediaFileDatabase {
 
             if (fileHash.length !== fileInfo.length  // File size doesn't match, indicating the file has changed.
                 || fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime()) { // File has been modified.
-                // The file has been modified.
-                result.modified.push(file.fileName);
+                // File metadata has changed - check if content actually changed by computing the hash.
+                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                if (freshHash.hash.toString("hex") !== fileHash.hash.toString("hex")) {
+                    // The file content has actually been modified.
+                    result.modified.push(file.fileName);
+                } else {
+                    // Content is the same, just metadata changed - cache is already updated by computeHash
+                    result.numUnmodified++;
+                }
             }
             else if (options?.full) {
                 // The file doesn't seem to have changed, but the full verification is requested.
@@ -840,7 +847,7 @@ export class MediaFileDatabase {
             result.numNodes++;
 
             if (node.fileName && !node.isDeleted) {
-                if (!this.assetStorage.fileExists(node.fileName)) {
+                if (!await this.assetStorage.fileExists(node.fileName)) {
                     // The file is missing from the storage, but it exists in the merkle tree.
                     result.removed.push(node.fileName);
                 }
