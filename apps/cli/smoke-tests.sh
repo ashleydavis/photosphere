@@ -495,7 +495,11 @@ test_add_multiple_files() {
     echo "=== TEST 7: ADD MULTIPLE FILES ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        invoke_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        local add_output
+        invoke_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
+        
+        # Check that 2 files were added
+        expect_output_value "$add_output" "files added" "2" "Two files added from multiple images directory"
         
         invoke_command "Check multiple files added" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
