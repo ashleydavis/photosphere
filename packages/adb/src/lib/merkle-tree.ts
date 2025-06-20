@@ -1380,6 +1380,16 @@ export function findFileNodeWithDeletionStatus(
     return undefined;
 }
 
+//
+// The result of a comparison between two Merkle trees.
+// 
+export interface ICompareResult {
+    onlyInA: string[];
+    onlyInB: string[];
+    modified: string[];
+    deleted: string[];
+}
+
 /**
  * Compare two Merkle trees and show the differences between them
  * 
@@ -1387,12 +1397,7 @@ export function findFileNodeWithDeletionStatus(
  * @param treeB The second Merkle tree
  * @returns An object containing the differences between the trees
  */
-export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree): {
-    onlyInA: string[];
-    onlyInB: string[];
-    modified: string[];
-    deleted: string[];
-} {
+export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree): ICompareResult {
     // Get all files from both trees (including deleted ones for tree A)
     const filesInA = new Map<string, { hash: string, isDeleted: boolean }>();
     const filesInB = new Map<string, { hash: string, isDeleted: boolean }>();

@@ -621,7 +621,8 @@ test_verify_replica() {
     check_exists "$replica_dir" "Replica directory from previous test"
     
     # Verify replica contents match source
-    invoke_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes"
+    local replica_verify_output
+    invoke_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes" 0 "true" "replica_verify_output"
     
     # Get source and replica summaries to compare file counts
     local source_summary
@@ -630,10 +631,19 @@ test_verify_replica() {
     local replica_summary
     invoke_command "Get replica database summary" "$(get_cli_command) summary $replica_dir --yes" 0 "true" "replica_summary"
     
+    # Extract and compare file counts
     local source_files=$(parse_numeric "$source_summary" "Total files:")
     local replica_files=$(parse_numeric "$replica_summary" "Total files:")
-    
     expect_value "$replica_files" "$source_files" "Replica file count matches source"
+    
+    # Extract and compare node counts
+    local source_nodes=$(parse_numeric "$source_summary" "Total nodes:")
+    local replica_nodes=$(parse_numeric "$replica_summary" "Total nodes:")
+    expect_value "$replica_nodes" "$source_nodes" "Replica node count matches source"
+    
+    # Verify the replica verify command also shows the expected counts
+    expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
+    expect_output_value "$replica_verify_output" "Total nodes:" "$source_nodes" "Replica verify shows correct node count"
 }
 
 test_database_replicate_second() {
@@ -663,67 +673,22 @@ test_database_compare() {
     echo ""
     echo "============================================================================"
     echo "=== TEST 15: DATABASE COMPARISON ==="
-    echo ""
-    log_warning "Database comparison test temporarily disabled - depends on replicate command"
-    log_warning "Skipping test 14: DATABASE COMPARISON"
-    return
     
-    # COMMENTED OUT UNTIL REPLICATE COMMAND IS FIXED
-    # local replica_dir="$TEST_DB_DIR-replica"
-    # 
-    # # Create a replica for comparison testing
-    # if [ -d "$replica_dir" ]; then
-    #     log_info "Cleaning up existing replica directory"
-    #     rm -rf "$replica_dir"
-    # fi
-    # 
-    # run_command "Create replica for comparison" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes"
-    # 
-    # # Test comparison between identical databases (should show no differences)
-    # run_command "Compare identical databases" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes"
-    # 
-    # # Capture compare output to verify results
-    # local compare_output
-    # compare_output=$($(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes 2>&1)
-    # 
-    # # Check that comparison shows no differences for identical databases
-    # if echo "$compare_output" | grep -q "No differences detected\|Databases are identical"; then
-    #     log_success "Compare correctly identified identical databases"
-    # else
-    #     log_error "Compare failed to identify identical databases"
-    #     echo "Compare output: $compare_output"
-    #     exit 1
-    # fi
-    # 
-    # # Test compare with output file
-    # local compare_json="./compare-test-results.json"
-    # run_command "Compare with JSON output" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --output $compare_json --yes"
-    # 
-    # # Check that JSON file was created
-    # if [ -f "$compare_json" ]; then
-    #     log_success "Compare JSON output file created"
-    #     
-    #     # Check JSON content contains expected fields
-    #     if grep -q '"treesMatch"' "$compare_json" && grep -q '"differences"' "$compare_json"; then
-    #         log_success "Compare JSON contains expected structure"
-    #     else
-    #         log_error "Compare JSON missing expected fields"
-    #         exit 1
-    #     fi
-    #     
-    #     # Clean up JSON file
-    #     rm -f "$compare_json"
-    # else
-    #     log_error "Compare JSON output file not created"
-    #     exit 1
-    # fi
-    # 
-    # # Test comparison with self (database vs itself)
-    # run_command "Compare database with itself" "$(get_cli_command) compare $TEST_DB_DIR $TEST_DB_DIR --yes"
-    # 
-    # # Clean up replica
-    # log_info "Cleaning up replica directory"
-    # rm -rf "$replica_dir"
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Check that replica exists from previous tests
+    check_exists "$replica_dir" "Replica directory from previous tests"
+    
+    # Test comparison between original and replica (should show no differences)
+    local compare_output
+    invoke_command "Compare original database with replica" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes" 0 "true" "compare_output"
+    
+    # Check that comparison shows no differences for identical databases
+    expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
+    
+    
+    # Test comparison with self (database vs itself)
+    invoke_command "Compare database with itself" "$(get_cli_command) compare $TEST_DB_DIR $TEST_DB_DIR --yes"
 }
 
 test_cannot_create_over_existing() {
@@ -1207,19 +1172,6 @@ main() {
     echo "======================================"
     
     log_info "Running specific test: $1"
-    
-    # Set cleanup behavior based on test type
-    case "$1" in
-        "view-media"|"2")
-            # view-media doesn't need or create a database, safe to cleanup
-            ;;
-        "create-database"|"1")
-            # Don't cleanup after create-database - other tests might need it
-            ;;
-        *)
-            # Other tests might depend on existing database, don't cleanup unless it's a standalone test
-            ;;
-    esac
     
     run_test "$1"
     
