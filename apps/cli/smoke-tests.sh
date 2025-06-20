@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-TEST_DB_DIR="./test/test-db"
+TEST_DB_DIR="./test/tmp/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 
@@ -294,7 +294,10 @@ test_setup() {
     log_info "Using CLI command: $cli_command"
     
     log_info "Cleaning up previous test run"
-    rm -rf "$TEST_DB_DIR"
+    rm -rf "./test/tmp"
+    
+    # Ensure tmp directory exists
+    mkdir -p "./test/tmp"
     
     log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
@@ -882,12 +885,12 @@ reset_environment() {
     log_info "Cleaning up test artifacts..."
     
     # Remove the specific test database directory
-    if [ -d "$TEST_DB_DIR" ]; then
-        log_info "Removing test database: $TEST_DB_DIR"
-        rm -rf "$TEST_DB_DIR"
-        log_success "Removed $TEST_DB_DIR"
+    if [ -d "./test/tmp" ]; then
+        log_info "Removing all test databases: ./test/tmp"
+        rm -rf "./test/tmp"
+        log_success "Removed ./test/tmp"
     else
-        log_info "Test database directory not found (already clean): $TEST_DB_DIR"
+        log_info "Test tmp directory not found (already clean): ./test/tmp"
     fi
     
     # Remove the replicated database directory
@@ -927,11 +930,11 @@ run_all_tests() {
     
     # Clean up previous test run
     log_info "Resetting testing environment"
-    if [ -d "$TEST_DB_DIR" ]; then
-        rm -rf "$TEST_DB_DIR"
-        log_success "Removed existing test database"
+    if [ -d "./test/tmp" ]; then
+        rm -rf "./test/tmp"
+        log_success "Removed existing test databases"
     else
-        log_info "Test database directory not found (already clean)"
+        log_info "Test tmp directory not found (already clean)"
     fi
     
     # Run all tests in sequence 
@@ -968,9 +971,9 @@ run_all_tests() {
     # Cleanup after all tests complete
     echo ""
     log_info "Cleaning up test artifacts..."
-    if [ -d "$TEST_DB_DIR" ]; then
-        rm -rf "$TEST_DB_DIR"
-        log_info "Removed test database"
+    if [ -d "./test/tmp" ]; then
+        rm -rf "./test/tmp"
+        log_info "Removed all test databases"
     fi
     exit 0
 }
@@ -1314,11 +1317,11 @@ main() {
             PRESERVE_DATABASE=true
             # Reset environment before running tests
             log_info "Resetting testing environment"
-            if [ -d "$TEST_DB_DIR" ]; then
-                rm -rf "$TEST_DB_DIR"
-                log_success "Removed existing test database"
+            if [ -d "./test/tmp" ]; then
+                rm -rf "./test/tmp"
+                log_success "Removed existing test databases"
             else
-                log_info "Test database directory not found (already clean)"
+                log_info "Test tmp directory not found (already clean)"
             fi
             run_multiple_commands "$commands"
             return
