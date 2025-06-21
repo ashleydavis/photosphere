@@ -77,7 +77,7 @@ export async function replicateCommand(srcDir: string, destDir: string, options:
     console.log(pc.bold(pc.blue(`📊 Replication Results`)));
     console.log();
     
-    console.log(`Total files: ${pc.cyan(result.numFiles.toString())}`);
+    console.log(`Total files: ${pc.cyan(result.numAssets.toString())}`);
     console.log(`Copied: ${result.numCopiedFiles > 0 ? pc.green(result.numCopiedFiles.toString()) : pc.gray('0')}`);
     console.log(`Skipped (unchanged): ${result.numExistingFiles > 0 ? pc.yellow(result.numExistingFiles.toString()) : pc.gray('0')}`);
     
