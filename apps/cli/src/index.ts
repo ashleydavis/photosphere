@@ -30,8 +30,17 @@ async function main() {
         .version(version)
         .description(`The Photosphere CLI tool for managing your media file database.`)
         .addHelpText('after', `
+Examples:
+  psi init ./photos                    Create a new database in ./photos directory.
+  psi add ./photos ~/Pictures          Add all media files from ~/Pictures to database.
+  psi summary ./photos                 Show database summary (file count, size, etc.).
+  psi verify ./photos                  Verify database integrity.
+  psi replicate ./photos ./backup      Replicate database to backup location.
+  psi compare ./photos ./backup        Compare two databases for differences.
+
 Resources:
   🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
+  📖 Command Reference: https://github.com/ashleydavis/photosphere/wiki/Command-Reference
   📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
   🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
   ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new`)
@@ -46,6 +55,11 @@ Resources:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi init                             Create database in current directory.
+  psi init ./photos                    Create database in ./photos directory.
+  psi init ./photos -m ./photos-meta   Create with custom metadata directory.`)
         .action(initCommand);
 
     program
@@ -57,6 +71,11 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
+        .addHelpText('after', `
+Examples:
+  psi add ./photos ~/Pictures          Add all files from ~/Pictures to database.
+  psi add ./photos image.jpg video.mp4 Add specific files to database.
+  psi add ./photos ~/Downloads/photos  Add directory recursively.`)
         .action(addCommand);
 
     program
@@ -68,6 +87,11 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
+        .addHelpText('after', `
+Examples:
+  psi check ./photos ~/Pictures        Check which files from ~/Pictures are already in database.
+  psi check ./photos image.jpg         Check if specific file is already in database.
+  psi check ./photos ~/Downloads       Check directory to see what's already been added.`)
         .action(checkCommand);
 
     program
@@ -78,6 +102,11 @@ Resources:
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi ui                               Start UI for database in current directory.
+  psi ui ./photos                      Start UI for database in ./photos directory.
+  psi ui ./photos --no-open            Start UI without opening browser automatically.`)
         .action(uiCommand);
 
     program
@@ -86,6 +115,11 @@ Resources:
         .option("-p, --profile <name>", "The profile name to configure", "default")
         .option("-c, --clear", "Clear all S3 configuration files")
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi configure                        Configure S3 credentials for default profile.
+  psi configure -p mycloud             Configure S3 credentials for 'mycloud' profile.
+  psi configure --clear                Clear all S3 configuration files.`)
         .action(configureCommand);
 
     program
@@ -93,14 +127,21 @@ Resources:
         .description("Display detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
         .option(...yesOption)
-        .option("-r, --raw", "Show raw EXIF/metadata properties", false)
         .argument("<files...>", "The media files to analyze.")
+        .addHelpText('after', `
+Examples:
+  psi info photo.jpg                   Show detailed information about a photo.
+  psi info photo1.jpg photo2.jpg       Analyze multiple specific files.
+  psi info ~/Pictures                  Analyze all media files in a directory.`)
         .action(infoCommand);
 
     program
         .command("tools")
         .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi tools                            Check status of all required tools.`)
         .action(toolsCommand);
 
     program
@@ -111,6 +152,10 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi summary                          Show summary for database in current directory.
+  psi summary ./photos                 Show summary for database in ./photos directory.`)
         .action(summaryCommand);
 
     program
@@ -122,6 +167,11 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .addHelpText('after', `
+Examples:
+  psi verify                           Verify database in current directory.
+  psi verify ./photos                  Verify database in ./photos directory.
+  psi verify ./photos --full           Force full verification of all files.`)
         .action(verifyCommand);
 
     program
@@ -136,6 +186,11 @@ Resources:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi replicate ./photos ./backup      Replicate database to backup location.
+  psi replicate . s3:bucket/photos     Replicate current database to S3.
+  psi replicate ./photos ./remote -d ./remote-meta  Use custom metadata directory.`)
         .action(replicateCommand);
 
     program
@@ -147,6 +202,11 @@ Resources:
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', `
+Examples:
+  psi compare ./photos ./backup        Compare original database with backup.
+  psi compare . s3:bucket/photos       Compare local database with S3 version.
+  psi compare ./photos ./mirror -s ./photos-meta  Use custom metadata directories.`)
         .action(compareCommand);
 
     // Add the debug command with its subcommands
@@ -158,6 +218,10 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option("--no-browser", "Don't open the browser automatically", false)
+        .addHelpText('after', `
+Examples:
+  psi bug-report                       Generate bug report and open in browser.
+  psi bug-report --no-browser          Generate bug report without opening browser.`)
         .action(bugReportCommand);
 
     // Parse the command line arguments

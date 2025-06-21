@@ -34,11 +34,6 @@ export interface IInfoCommandOptions {
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
-
-    //
-    // Show raw EXIF/metadata properties.
-    //
-    raw?: boolean;
 }
 
 interface FileAnalysis {
