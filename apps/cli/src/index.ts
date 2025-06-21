@@ -12,6 +12,7 @@ import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { createDebugCommand } from './cmd/debug';
+import { bugReportCommand } from './cmd/bug-report';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -27,7 +28,13 @@ async function main() {
     program
         .name("psi")
         .version(version)
-        .description("The Photosphere CLI tool for managing your media file database.")
+        .description(`The Photosphere CLI tool for managing your media file database.`)
+        .addHelpText('after', `
+Resources:
+  🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
+  📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
+  🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
+  ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new`)
         .exitOverride();  // Prevent commander from calling process.exit
 
     program
@@ -145,6 +152,14 @@ async function main() {
     // Add the debug command with its subcommands
     program.addCommand(createDebugCommand());
 
+    program
+        .command("bug-report")
+        .description("Generate a bug report for GitHub with system information and logs.")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--no-browser", "Don't open the browser automatically", false)
+        .action(bugReportCommand);
+
     // Parse the command line arguments
     try {
         await program.parseAsync(process.argv);
@@ -163,7 +178,7 @@ async function main() {
 }
 
 main()
-    .catch((error) => {
+    .catch(async (error) => {
         console.error(pc.red('An error occurred:'));
         if (error.message) {
             console.error(pc.red(error.message).toString());
