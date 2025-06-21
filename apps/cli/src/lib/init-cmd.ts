@@ -2,6 +2,7 @@ import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { configureLog } from "./log";
 import { exit, registerTerminationCallback } from "node-utils";
+import { log } from "utils";
 import { configureS3IfNeeded } from './s3-config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
@@ -107,8 +108,12 @@ export async function loadDatabase(
     
     // Configure logging
     configureLog({
-        verbose: options.verbose,
+        verbose: options.verbose
     });
+    
+    // Log the command being executed
+    const command = process.argv.slice(2).join(' ');
+    log.verbose(`Executing command: ${command}`);
 
     // Ensure media processing tools are available (unless skipped)
     if (!skipToolsCheck) {
@@ -185,8 +190,12 @@ export async function createDatabase(
     
     // Configure logging
     configureLog({
-        verbose: options.verbose,
+        verbose: options.verbose
     });
+    
+    // Log the command being executed
+    const command = process.argv.slice(2).join(' ');
+    log.verbose(`Executing command: ${command}`);
 
     // Ensure media processing tools are available (unless skipped)
     if (!skipToolsCheck) {

@@ -1,4 +1,5 @@
 import { ILog, setLog } from "utils";
+import { FileLogger } from "./file-logger";
 
 export interface ILogOptions {
     //
@@ -10,7 +11,17 @@ export interface ILogOptions {
     // Enables debug logging.
     //
     debug?: boolean;
+
+    //
+    // The command being executed (for file logging)
+    //
+    command?: string;
 }
+
+//
+// Global reference to the file logger for access from other modules
+//
+let fileLogger: FileLogger | undefined;
 
 class Log implements ILog {
     constructor(private readonly options: ILogOptions) {
@@ -63,5 +74,15 @@ class Log implements ILog {
 // Configure the log based on input.
 //
 export function configureLog(options: ILogOptions): void {
-    setLog(new Log(options));
+    const consoleLogger = new Log(options);
+    const command = options.command || process.argv.slice(2).join(' ') || 'unknown';
+    fileLogger = new FileLogger(consoleLogger, command);
+    setLog(fileLogger);
+}
+
+//
+// Get the current file logger instance
+//
+export function getFileLogger(): FileLogger | undefined {
+    return fileLogger;
 }
