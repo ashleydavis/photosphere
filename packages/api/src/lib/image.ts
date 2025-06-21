@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { writeStreamToFile } from "node-utils";
+import { execLogged, writeStreamToFile } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange } from "utils";
 import fs from "fs-extra";
 import path from "path";
@@ -8,7 +8,8 @@ import { getFileInfo } from "tools";
 import { Readable } from "stream";
 const exifParser = require("exif-parser");
 import { Image } from "tools";
-import { exec } from 'child_process';
+import mime from 'mime';
+
 //
 // Gets the details of an image.
 //
@@ -17,8 +18,14 @@ export async function getImageDetails(filePath: string, tempDir: string, content
     let imagePath: string;
 
     if (openStream) {
-        // If openStream is provided, we need to extract to a temporary file.
-        imagePath = path.join(tempDir, `temp_video_${crypto.randomUUID()}.jpg`);
+        // Choose extension based on content type.            
+        const ext = mime.getExtension(contentType);
+        if (!ext) {
+            throw new Error(`Unsupported content type: ${contentType}`);
+        }
+
+        // If openStream is provided, we need to extract to a temporary file.        
+        imagePath = path.join(tempDir, `temp_asset_${crypto.randomUUID()}.${ext}`);
         await writeStreamToFile(openStream(), imagePath);        
     }
     else {
@@ -147,7 +154,7 @@ export async function resizeImage(inputPath: string, tempDir: string, resolution
     }
 
     const image = new Image(inputPath);
-    const outputPath = path.join(tempDir, `temp_output_${crypto.randomUUID()}.jpg`);
+    const outputPath = path.join(tempDir, `temp_resize_${crypto.randomUUID()}.jpg`);
     await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg' }, outputPath);
     return outputPath;
 }
@@ -171,8 +178,13 @@ export async function transformImage(inputPath: string, tempDir: string, options
         // Transform to a temporary file and return the path.
         const outputPath = path.join(tempDir, `temp_transform_output_${crypto.randomUUID()}.jpg`);
         const command = `magick convert "${inputPath}" ${transformCommand} "${outputPath}"`;
-        await exec(command);
-        return outputPath
+        await execLogged('magick', command);
+
+        // Check if the output file was created successfully.
+        if (!await fs.pathExists(outputPath)) { 
+            throw new Error(`Image transformation failed, output file not created: ${outputPath}`);
+        }
+        return outputPath;
     }
     else {
         // No transformations needed, just return the original file.

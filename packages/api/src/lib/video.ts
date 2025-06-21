@@ -7,6 +7,7 @@ import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
 import { getFileInfo, Video } from "tools";
 import { resizeImage, transformImage } from "./image";
+import mime from 'mime';
 
 //
 // Gets the details of a video.
@@ -16,8 +17,14 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     let videoPath: string;
 
     if (openStream) {
+        // Choose extension based on content type.            
+        const ext = mime.getExtension(contentType);
+        if (!ext) {
+            throw new Error(`Unsupported content type: ${contentType}`);
+        }
+
         // If openStream is provided, we need to extract to a temporary file.
-        videoPath = path.join(tempDir, `temp_video_${crypto.randomUUID()}.mp4`);
+        videoPath = path.join(tempDir, `temp_video_${crypto.randomUUID()}.${ext}`);
         await writeStreamToFile(openStream(), videoPath);        
     }
     else {

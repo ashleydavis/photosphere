@@ -221,6 +221,11 @@ export class Image {
     }
 
     async resize(options: ResizeOptions, outputPath?: string): Promise<Image> {
+        
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         const { width, height, quality, format, maintainAspectRatio = true } = options;
 
         if (!width && !height) {
