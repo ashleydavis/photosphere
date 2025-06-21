@@ -19,6 +19,10 @@ export function createDebugCommand(): Command {
         .option('-k, --key <keyfile>', 'Path to the private key file for encryption.')
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
+        .addHelpText('after', `
+Examples:
+  psi debug merkle-tree                Show merkle tree for current directory.
+  psi debug merkle-tree ./photos       Show merkle tree for ./photos database.`)
         .action(merkleTreeCommand);
 
     // Add hash-cache subcommand
@@ -31,6 +35,11 @@ export function createDebugCommand(): Command {
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
         .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .addHelpText('after', `
+Examples:
+  psi debug hash-cache                 Show both local and database hash caches.
+  psi debug hash-cache -t local        Show only local hash cache information.
+  psi debug hash-cache ./photos -t database  Show database cache for ./photos.`)
         .action(hashCacheCommand);
 
     return debugCommand;
