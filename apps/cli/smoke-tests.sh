@@ -773,8 +773,8 @@ test_database_replicate() {
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
     
     # Check expected values from replication output
-    expect_output_value "$replicate_output" "Total files:" "15" "Total files reported"
-    expect_output_value "$replicate_output" "Copied:" "15" "Files copied"
+    expect_output_value "$replicate_output" "Total files:" "23" "Total files reported"
+    expect_output_value "$replicate_output" "Copied:" "23" "Files copied"
     expect_output_value "$replicate_output" "Skipped (unchanged):" "0" "Files skipped (first run)"
     
     # Check that replica was created
@@ -837,9 +837,9 @@ test_database_replicate_second() {
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
     
     # Check expected values from second replication output
-    expect_output_value "$second_replication_output" "Total files:" "15" "Total files reported (second run)"
+    expect_output_value "$second_replication_output" "Total files:" "23" "Total files reported (second run)"
     expect_output_value "$second_replication_output" "Copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"   
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "23" "Files skipped (already exist)"   
 }
 
 test_database_compare() {
