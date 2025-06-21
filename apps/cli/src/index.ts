@@ -13,6 +13,8 @@ import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { createDebugCommand } from './cmd/debug';
 import { bugReportCommand } from './cmd/bug-report';
+import { examplesCommand } from './cmd/examples';
+import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -31,12 +33,7 @@ async function main() {
         .description(`The Photosphere CLI tool for managing your media file database.`)
         .addHelpText('after', `
 Examples:
-  psi init ./photos                    Create a new database in ./photos directory.
-  psi add ./photos ~/Pictures          Add all media files from ~/Pictures to database.
-  psi summary ./photos                 Show database summary (file count, size, etc.).
-  psi verify ./photos                  Verify database integrity.
-  psi replicate ./photos ./backup      Replicate database to backup location.
-  psi compare ./photos ./backup        Compare two databases for differences.
+${MAIN_EXAMPLES.map(ex => `  ${ex.command.padEnd(32)} ${ex.description}`).join('\n')}
 
 Resources:
   🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
@@ -55,11 +52,7 @@ Resources:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi init                             Create database in current directory.
-  psi init ./photos                    Create database in ./photos directory.
-  psi init ./photos -m ./photos-meta   Create with custom metadata directory.`)
+        .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initCommand);
 
     program
@@ -71,11 +64,7 @@ Examples:
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
-        .addHelpText('after', `
-Examples:
-  psi add ./photos ~/Pictures          Add all files from ~/Pictures to database.
-  psi add ./photos image.jpg video.mp4 Add specific files to database.
-  psi add ./photos ~/Downloads/photos  Add directory recursively.`)
+        .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
     program
@@ -87,11 +76,7 @@ Examples:
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
-        .addHelpText('after', `
-Examples:
-  psi check ./photos ~/Pictures        Check which files from ~/Pictures are already in database.
-  psi check ./photos image.jpg         Check if specific file is already in database.
-  psi check ./photos ~/Downloads       Check directory to see what's already been added.`)
+        .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
 
     program
@@ -102,11 +87,7 @@ Examples:
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi ui                               Start UI for database in current directory.
-  psi ui ./photos                      Start UI for database in ./photos directory.
-  psi ui ./photos --no-open            Start UI without opening browser automatically.`)
+        .addHelpText('after', getCommandExamplesHelp('ui'))
         .action(uiCommand);
 
     program
@@ -115,11 +96,7 @@ Examples:
         .option("-p, --profile <name>", "The profile name to configure", "default")
         .option("-c, --clear", "Clear all S3 configuration files")
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi configure                        Configure S3 credentials for default profile.
-  psi configure -p mycloud             Configure S3 credentials for 'mycloud' profile.
-  psi configure --clear                Clear all S3 configuration files.`)
+        .addHelpText('after', getCommandExamplesHelp('configure'))
         .action(configureCommand);
 
     program
@@ -128,20 +105,14 @@ Examples:
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files to analyze.")
-        .addHelpText('after', `
-Examples:
-  psi info photo.jpg                   Show detailed information about a photo.
-  psi info photo1.jpg photo2.jpg       Analyze multiple specific files.
-  psi info ~/Pictures                  Analyze all media files in a directory.`)
+        .addHelpText('after', getCommandExamplesHelp('info'))
         .action(infoCommand);
 
     program
         .command("tools")
         .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi tools                            Check status of all required tools.`)
+        .addHelpText('after', getCommandExamplesHelp('tools'))
         .action(toolsCommand);
 
     program
@@ -152,10 +123,7 @@ Examples:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi summary                          Show summary for database in current directory.
-  psi summary ./photos                 Show summary for database in ./photos directory.`)
+        .addHelpText('after', getCommandExamplesHelp('summary'))
         .action(summaryCommand);
 
     program
@@ -167,11 +135,7 @@ Examples:
         .option(...verboseOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
-        .addHelpText('after', `
-Examples:
-  psi verify                           Verify database in current directory.
-  psi verify ./photos                  Verify database in ./photos directory.
-  psi verify ./photos --full           Force full verification of all files.`)
+        .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
 
     program
@@ -186,11 +150,7 @@ Examples:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi replicate ./photos ./backup      Replicate database to backup location.
-  psi replicate . s3:bucket/photos     Replicate current database to S3.
-  psi replicate ./photos ./remote -d ./remote-meta  Use custom metadata directory.`)
+        .addHelpText('after', getCommandExamplesHelp('replicate'))
         .action(replicateCommand);
 
     program
@@ -202,15 +162,18 @@ Examples:
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
         .option(...yesOption)
-        .addHelpText('after', `
-Examples:
-  psi compare ./photos ./backup        Compare original database with backup.
-  psi compare . s3:bucket/photos       Compare local database with S3 version.
-  psi compare ./photos ./mirror -s ./photos-meta  Use custom metadata directories.`)
+        .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
 
     // Add the debug command with its subcommands
     program.addCommand(createDebugCommand());
+
+    program
+        .command("examples")
+        .description("Show usage examples for all CLI commands.")
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('examples'))
+        .action(examplesCommand);
 
     program
         .command("bug-report")
@@ -218,10 +181,7 @@ Examples:
         .option(...verboseOption)
         .option(...yesOption)
         .option("--no-browser", "Don't open the browser automatically", false)
-        .addHelpText('after', `
-Examples:
-  psi bug-report                       Generate bug report and open in browser.
-  psi bug-report --no-browser          Generate bug report without opening browser.`)
+        .addHelpText('after', getCommandExamplesHelp('bug-report'))
         .action(bugReportCommand);
 
     // Parse the command line arguments

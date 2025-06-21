@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { merkleTreeCommand } from './merkle-tree';
 import { hashCacheCommand } from './hash-cache';
+import { getCommandExamplesHelp } from '../examples';
 import pc from "picocolors";
 
 //
@@ -19,10 +20,7 @@ export function createDebugCommand(): Command {
         .option('-k, --key <keyfile>', 'Path to the private key file for encryption.')
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
-        .addHelpText('after', `
-Examples:
-  psi debug merkle-tree                Show merkle tree for current directory.
-  psi debug merkle-tree ./photos       Show merkle tree for ./photos database.`)
+        .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
         .action(merkleTreeCommand);
 
     // Add hash-cache subcommand
@@ -35,11 +33,7 @@ Examples:
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
         .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
-        .addHelpText('after', `
-Examples:
-  psi debug hash-cache                 Show both local and database hash caches.
-  psi debug hash-cache -t local        Show only local hash cache information.
-  psi debug hash-cache ./photos -t database  Show database cache for ./photos.`)
+        .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
     return debugCommand;
