@@ -67,9 +67,9 @@ export const DISPLAY_QUALITY = 95;
 
 export interface IDatabaseSummary {
     //
-    // Total number of files in the database.
+    // Total number of assets in the database.
     //
-    totalFiles: number;
+    totalAssets: number;
 
     //
     // Total size of all files in bytes.
@@ -90,6 +90,21 @@ export interface IDatabaseSummary {
     // Full hash of the tree root.
     //
     fullHash: string;
+}
+
+//
+// Interface for the database metadata stored in metadata.json
+//
+export interface IDatabaseMetadata {
+    //
+    // Number of assets in the database.
+    //
+    assetCount: number;
+
+    //
+    // Version of the metadata format.
+    //
+    version: number;
 }
 
 export interface IAddSummary {
@@ -194,9 +209,9 @@ export interface IVerifyOptions {
 //
 export interface IVerifyResult {
     //
-    // The total number of files in the database.
+    // The total number of assets in the database.
     //
-    numFiles: number;
+    numAssets: number;
 
     //
     // The number of nodes in the merkle tree.
@@ -229,9 +244,9 @@ export interface IVerifyResult {
 //
 export interface IReplicationResult {
     //
-    // The total number of files processed.
+    // The total number of assets processed.
     //
-    numFiles: number;
+    numAssets: number;
 
     //
     // The number of files already existing in the destination storage.
@@ -298,6 +313,14 @@ export class MediaFileDatabase {
         averageSize: 0,
     };
 
+    //
+    // Database metadata tracking asset count.
+    //
+    private databaseMetadata: IDatabaseMetadata = {
+        assetCount: 0,
+        version: 1,
+    };
+
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
@@ -353,6 +376,85 @@ export class MediaFileDatabase {
     }
 
     //
+    // Loads the database metadata from metadata.json or initializes it.
+    //
+    private async loadDatabaseMetadata(): Promise<void> {
+        try {
+            const metadataBuffer = await this.metadataStorage.read("metadata.json");
+            if (metadataBuffer) {
+                const metadataJson = metadataBuffer.toString('utf8');
+                this.databaseMetadata = JSON.parse(metadataJson);
+                
+                log.verbose(`Loaded database metadata: ${this.databaseMetadata.assetCount} assets`);
+            } else {
+                // Initialize metadata by counting assets in the assets directory
+                await this.initializeDatabaseMetadata();
+            }
+        } catch (error: any) {
+            log.warn(`Failed to load database metadata, initializing: ${error.message}`);
+            await this.initializeDatabaseMetadata();
+        }
+    }
+
+    //
+    // Initializes database metadata by counting existing assets.
+    //
+    private async initializeDatabaseMetadata(): Promise<void> {
+        try {
+            let assetCount = 0;
+            
+            // Count files in the assets directory
+            for await (const file of walkDirectory(this.assetStorage, "assets", [])) {
+                assetCount++;
+            }
+            
+            this.databaseMetadata = {
+                assetCount,
+                version: 1,
+            };
+            
+            await this.saveDatabaseMetadata();
+            log.verbose(`Initialized database metadata with ${assetCount} assets`);
+        } catch (error: any) {
+            log.warn(`Failed to initialize database metadata: ${error.message}`);
+            this.databaseMetadata = { assetCount: 0, version: 1 };
+        }
+    }
+
+    //
+    // Saves the database metadata to metadata.json.
+    //
+    private async saveDatabaseMetadata(): Promise<void> {
+        try {
+            const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
+            const metadataPath = "metadata.json";
+            const metadataBuffer = Buffer.from(metadataJson, 'utf8');
+            
+            await this.metadataStorage.write(metadataPath, undefined, metadataBuffer);
+            
+            log.verbose(`Saved database metadata: ${this.databaseMetadata.assetCount} assets`);
+        } catch (error: any) {
+            log.error(`Failed to save database metadata: ${error.message}`);
+        }
+    }
+
+    //
+    // Increments the asset count.
+    //
+    private incrementAssetCount(): void {
+        this.databaseMetadata.assetCount++;
+    }
+
+    //
+    // Decrements the asset count.
+    //
+    private decrementAssetCount(): void {
+        if (this.databaseMetadata.assetCount > 0) {
+            this.databaseMetadata.assetCount--;
+        }
+    }
+
+    //
     // Creates a new media file database.
     //
     async create(): Promise<void> {
@@ -363,6 +465,10 @@ export class MediaFileDatabase {
 
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
+
+        // Initialize database metadata
+        this.databaseMetadata = { assetCount: 0, version: 1 };
+        await this.saveDatabaseMetadata();
 
         log.verbose(`Created new media file database.`);
     }
@@ -377,6 +483,9 @@ export class MediaFileDatabase {
 
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
+
+        // Load database metadata
+        await this.loadDatabaseMetadata();
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
@@ -402,7 +511,7 @@ export class MediaFileDatabase {
         const shortHash = fullHash.substring(0, 8);
 
         return {
-            totalFiles: metadata.totalFiles,
+            totalAssets: this.databaseMetadata.assetCount,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
             shortHash,
@@ -641,6 +750,9 @@ export class MediaFileDatabase {
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
 
+            // Increment asset count in metadata
+            this.incrementAssetCount();
+
             this.addSummary.numFilesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
@@ -716,6 +828,9 @@ export class MediaFileDatabase {
         //          in the hash cache.
         //
         await this.databaseHashCache.save();
+        
+        // Save database metadata
+        await this.saveDatabaseMetadata();
     }
 
     //
@@ -785,7 +900,7 @@ export class MediaFileDatabase {
     async verify(options?: IVerifyOptions) : Promise<IVerifyResult> {
 
         const result: IVerifyResult = {
-            numFiles: 0,
+            numAssets: this.databaseMetadata.assetCount,
             numUnmodified: 0,
             numNodes: 0,
             modified: [],
@@ -806,7 +921,6 @@ export class MediaFileDatabase {
                 continue;
             }
 
-            result.numFiles++;
 
             const fileHash = this.databaseHashCache.getHash(file.fileName);
             if (!fileHash) {
@@ -866,7 +980,7 @@ export class MediaFileDatabase {
     async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage): Promise<IReplicationResult> {
 
         const result: IReplicationResult = {
-            numFiles: 0,
+            numAssets: this.databaseMetadata.assetCount,
             numExistingFiles: 0,
             numCopiedFiles: 0,
         };
@@ -963,9 +1077,7 @@ export class MediaFileDatabase {
             if (srcNode.fileName && !srcNode.isDeleted) {               
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
 
-                ++result.numFiles;
-
-                if (result.numFiles % 100 === 0) {
+                if (result.numCopiedFiles % 100 === 0) {
                     await retry(() => destHashCache.save());
                 }
             }
@@ -977,6 +1089,11 @@ export class MediaFileDatabase {
         await destHashCache.save();
 
         await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
+        
+        const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
+        const metadataBuffer = Buffer.from(metadataJson, 'utf8');
+        await destMetadataStorage.write("metadata.json", undefined, metadataBuffer);
+        log.verbose(`Copied database metadata to destination: ${this.databaseMetadata.assetCount} assets`);
         
         return result;
     }

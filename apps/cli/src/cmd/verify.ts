@@ -34,7 +34,7 @@ function displayResults(result: IVerifyResult): void {
     console.log(pc.bold(pc.blue(`📊 Verification Results`)));
     console.log();
     
-    console.log(`Total files: ${pc.cyan(result.numFiles.toString())}`);
+    console.log(`Total files: ${pc.cyan(result.numAssets.toString())}`);
     console.log(`Total nodes: ${pc.cyan(result.numNodes.toString())}`);
     console.log(`Unmodified: ${pc.green(result.numUnmodified.toString())}`);
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
