@@ -1,4 +1,4 @@
-import { IVerifyResult } from "api";
+import { IVerifyResult, IDatabaseSummary } from "api";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
@@ -22,22 +22,22 @@ export async function verifyCommand(dbDir: string, options: IVerifyCommandOption
     writeProgress(`🔍 Verifying database integrity`);
 
     const result = await database.verify({ full: options.full || false });
-    const summary = await database.getDatabaseSummary();
 
     clearProgressMessage(); // Flush the progress message.
 
-    displayResults(result, summary.totalSize);
+    displayResults(result);
 
     await exit(0);
 }
 
-function displayResults(result: IVerifyResult, totalSize: number): void {
+function displayResults(result: IVerifyResult): void {
     console.log();
     console.log(pc.bold(pc.blue(`📊 Verification Results`)));
     console.log();
     
-    console.log(`Total files: ${pc.cyan(result.numAssets.toString())}`);
-    console.log(`Total size: ${pc.cyan(formatBytes(totalSize))}`);
+    console.log(`Files imported: ${pc.cyan(result.filesImported.toString())}`);
+    console.log(`Total files: ${pc.cyan(result.totalFiles.toString())}`);
+    console.log(`Total size: ${pc.cyan(formatBytes(result.totalSize))}`);
     console.log(`Unmodified: ${pc.green(result.numUnmodified.toString())}`);
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     console.log(`New: ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);

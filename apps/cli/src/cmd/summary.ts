@@ -17,7 +17,8 @@ export async function summaryCommand(dbDir: string, options: ISummaryCommandOpti
 
     console.log(pc.bold(pc.blue(`📊 Database Summary`)));
     console.log();
-    console.log(`Total files: ${pc.green(summary.totalAssets.toString())}`);
+    console.log(`Files imported: ${pc.green(summary.totalAssets.toString())}`);
+    console.log(`Total files: ${pc.green(summary.totalFiles.toString())}`);
     console.log(`Total size: ${pc.green(formatBytes(summary.totalSize))}`);
     console.log(`Tree root hash: ${pc.gray(summary.fullHash)}`);
 

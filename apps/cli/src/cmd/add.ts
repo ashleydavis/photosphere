@@ -17,15 +17,15 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
 
     await database.addPaths(paths, (currentlyScanning) => {
         const addSummary = database.getAddSummary();
-        let progressMessage = `Added: ${pc.green(addSummary.numFilesAdded)}`;
-        if (addSummary.numFilesAlreadyAdded > 0) {
-            progressMessage += ` | Already added: ${pc.blue(addSummary.numFilesAlreadyAdded)}`;
+        let progressMessage = `Added: ${pc.green(addSummary.filesAdded)}`;
+        if (addSummary.filesAlreadyAdded > 0) {
+            progressMessage += ` | Already added: ${pc.blue(addSummary.filesAlreadyAdded)}`;
         }
-        if (addSummary.numFilesIgnored > 0) {
-            progressMessage += ` | Ignored: ${pc.yellow(addSummary.numFilesIgnored)}`;
+        if (addSummary.filesIgnored > 0) {
+            progressMessage += ` | Ignored: ${pc.yellow(addSummary.filesIgnored)}`;
         }
-        if (addSummary.numFilesFailed > 0) {
-            progressMessage += ` | Failed: ${pc.red(addSummary.numFilesFailed)}`;
+        if (addSummary.filesFailed > 0) {
+            progressMessage += ` | Failed: ${pc.red(addSummary.filesFailed)}`;
         }
         if (currentlyScanning) {
             progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
@@ -39,15 +39,15 @@ export async function addCommand(dbDir: string, paths: string[], options: IAddCo
 
     clearProgressMessage(); // Flush the progress message.
 
-    log.info(pc.green(`Added ${addSummary.numFilesAdded} files to the media database.\n`));
+    log.info(pc.green(`Imported ${addSummary.filesAdded} files to the media database.\n`));
     
     log.info(`Summary: `);
-    log.info(`  - ${addSummary.numFilesAdded} files added.`);
-    log.info(`  - ${addSummary.numFilesIgnored} files ignored.`);
-    log.info(`  - ${addSummary.numFilesFailed} files failed to be added.`);
-    log.info(`  - ${addSummary.numFilesAlreadyAdded} files already in the database.`);
-    log.info(`  - ${addSummary.totalSize} bytes added to the database.`);
-    log.info(`  - ${addSummary.averageSize} bytes average size.`);
+    log.info(`  - Files imported: ${addSummary.filesAdded}`);
+    log.info(`  - Files ignored: ${addSummary.filesIgnored}`);
+    log.info(`  - Files failed: ${addSummary.filesFailed}`);
+    log.info(`  - Assets already in database: ${addSummary.filesAlreadyAdded}`);
+    log.info(`  - Total size: ${addSummary.totalSize} bytes`);
+    log.info(`  - Average size: ${addSummary.averageSize} bytes`);
 
     await exit(0);
 }
