@@ -20,6 +20,34 @@ Start the application in development mode with live reload:
 bun run start:dev
 ```
 
+### Run with a single local directory
+
+You can run the backend pointing to a single local directory (similar to the CLI's UI command) using the `--path` argument:
+
+```bash
+bun run start:single /path/to/your/photo/directory
+# or
+bun run start --path /path/to/your/photo/directory
+```
+
+This mode:
+- Uses the specified directory as the asset storage location
+- Creates a `.db` subdirectory for metadata storage
+- Automatically sets `AUTH_TYPE=no-auth` and `APP_MODE=readwrite`
+- Runs on port 3000 (configurable via `PORT` environment variable)
+
+Example:
+```bash
+# Run backend on a local photo directory
+bun run start:single ~/Pictures/MyPhotos
+
+# With a custom port
+PORT=8080 bun run start:single ~/Pictures/MyPhotos
+
+# Or using the --path argument directly
+PORT=3000 bun run start --path ~/Pictures/MyPhotos
+```
+
 ## Test the REST API
 
 Install [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) and you can use the HTTP request scripts in `./test/backend.http` to test the endpoints in the REST API.
