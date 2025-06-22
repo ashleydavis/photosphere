@@ -11,7 +11,7 @@ The mobile phone version of [the Photosphere application](https://rapidfullstack
 
 ## Setup
 
-First, follow the instructions in [the main readme](../README.md).
+First, follow the instructions in [the main readme](../../README.md).
 
 Then open a terminal and change directory to the mobile project:
 

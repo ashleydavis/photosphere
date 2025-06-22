@@ -4,7 +4,7 @@ This is the backend for the Photosphere application. It is a REST API to upload,
 
 ## Setup
 
-First, follow the instructions in [the main readme](../README.md).
+First, follow the instructions in [the main readme](../../README.md).
 
 Then open a terminal and change directory to the backend project:
 

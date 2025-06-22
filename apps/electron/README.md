@@ -8,7 +8,7 @@ To run the Electron version of Photosphere you must first run [the backend](../b
 
 ## Setup
 
-First, follow the instructions in [the main readme](../README.md).
+First, follow the instructions in [the main readme](../../README.md).
 
 Then open a terminal and change directory to the Electron project:
 
