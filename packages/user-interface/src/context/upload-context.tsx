@@ -13,7 +13,7 @@ import mimeTypes from "mime-types";
 import { retry } from "utils";
 import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
-import { uuid } from "utils";
+import { RandomUuidGenerator } from "utils";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
 import { IApiKeysConfig, useApi } from "./api-context";
 
@@ -516,7 +516,8 @@ export function UploadContextProvider({ children }: IProps) {
                 location, photoDate, properties, labels } = 
                 await loadAssetDetails(fileData, nextUpload);
 
-            const assetId = uuid();
+            const uuidGenerator = new RandomUuidGenerator();
+            const assetId = uuidGenerator.generate();
 
             //
             // Uploads the full asset.

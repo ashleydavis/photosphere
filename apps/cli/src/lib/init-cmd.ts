@@ -2,7 +2,8 @@ import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { configureLog } from "./log";
 import { exit, registerTerminationCallback } from "node-utils";
-import { log } from "utils";
+import { log, RandomUuidGenerator } from "utils";
+import { TestUuidGenerator } from "node-utils";
 import { configureS3IfNeeded } from './s3-config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
@@ -141,8 +142,13 @@ export async function loadDatabase(
     const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
+    // Create appropriate UUID generator based on NODE_ENV
+    const uuidGenerator = process.env.NODE_ENV === "testing" 
+        ? new TestUuidGenerator()
+        : new RandomUuidGenerator();
+        
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY, uuidGenerator); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
@@ -223,8 +229,13 @@ export async function createDatabase(
     const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
+    // Create appropriate UUID generator based on NODE_ENV
+    const uuidGenerator = process.env.NODE_ENV === "testing" 
+        ? new TestUuidGenerator()
+        : new RandomUuidGenerator();
+        
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY, uuidGenerator); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
