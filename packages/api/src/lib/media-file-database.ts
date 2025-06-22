@@ -3,7 +3,8 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, uuid } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator } from "utils";
+import { TestUuidGenerator } from "node-utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -312,6 +313,11 @@ export class MediaFileDatabase {
     private readonly localFileScanner: FileScanner;
 
     //
+    // The UUID generator for creating asset IDs.
+    //
+    private readonly uuidGenerator: IUuidGenerator;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -334,7 +340,8 @@ export class MediaFileDatabase {
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
-        private readonly googleApiKey: string | undefined
+        private readonly googleApiKey: string | undefined,
+        uuidGenerator: IUuidGenerator
             ) {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
@@ -355,6 +362,9 @@ export class MediaFileDatabase {
         this.localFileScanner = new FileScanner(new FileStorage("fs:"), {
             ignorePatterns: [/\.db/]
         });
+
+        // Use the provided UUID generator
+        this.uuidGenerator = uuidGenerator;
     }
 
     //
@@ -624,14 +634,14 @@ export class MediaFileDatabase {
             return;
         }
 
-        const assetId = uuid();
+        const assetId = this.uuidGenerator.generate();
 
         let assetDetails: IAssetDetails | undefined = undefined;
         
         //
         // Create a temporary directory for generates files like the thumbnail, display asset, etc.
         //
-        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuid());
+        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, this.uuidGenerator.generate());
         await fs.ensureDir(assetTempDir);
 
         if (contentType?.startsWith("video")) {

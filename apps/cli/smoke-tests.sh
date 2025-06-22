@@ -288,6 +288,8 @@ validate_database_assets() {
     local asset_id=$(echo "$add_output" | grep "Added file.*$source_file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
     if [ -z "$asset_id" ]; then
         log_error "Failed to extract asset ID for $source_file from CLI output"
+        log_error "Full CLI output:"
+        echo "$add_output"
         exit 1
     fi
     
@@ -1191,6 +1193,7 @@ run_all_tests() {
         log_info "Test tmp directory not found (already clean)"
     fi
     
+    
     # Check tools first
     check_tools
     
@@ -1342,6 +1345,7 @@ run_multiple_commands() {
     
     # Check tools first before running any tests
     check_tools
+    
     
     local command_number=1
     local total_commands=${#COMMANDS[@]}
@@ -1601,6 +1605,16 @@ main() {
             else
                 log_info "Test tmp directory not found (already clean)"
             fi
+            
+            # Reset UUID counter for deterministic test results
+            log_info "Resetting test UUID counter"
+            UUID_COUNTER_FILE="/tmp/photosphere-test-uuid-counter"
+            if [ -f "$UUID_COUNTER_FILE" ]; then
+                rm -f "$UUID_COUNTER_FILE"
+                log_success "Removed existing UUID counter file"
+            else
+                log_info "UUID counter file not found (already clean)"
+            fi
             run_multiple_commands "$commands"
             return
         else
@@ -1646,6 +1660,9 @@ main() {
     echo "======================================"
     
     log_info "Running specific test: $1"
+    
+    # Check tools first before running individual test
+    check_tools
     
     run_test "$1"
     
