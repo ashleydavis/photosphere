@@ -187,6 +187,10 @@ export class Video {
         height?: number;
         quality?: number;
     }): Promise<string> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         const { width, height, quality = 85 } = options || {};
         
         let command = `${Video.ffmpegCommand} -i "${this.filePath}" -ss ${timeInSeconds} -vframes 1`;
