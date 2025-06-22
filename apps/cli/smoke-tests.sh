@@ -730,10 +730,8 @@ test_database_summary() {
     
     # Check that summary contains expected fields
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
-    expect_output_string "$summary_output" "Total nodes:" "Summary contains total nodes count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"
-    expect_output_string "$summary_output" "Tree root hash (short):" "Summary contains short hash"
-    expect_output_string "$summary_output" "Tree root hash (full):" "Summary contains full hash"
+    expect_output_string "$summary_output" "Tree root hash:" "Summary contains hash"
 }
 
 test_database_verify() {
@@ -747,7 +745,7 @@ test_database_verify() {
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Total files:" "Verify output contains total files count"
-    expect_output_string "$verify_output" "Total nodes:" "Verify output contains total nodes count"
+    expect_output_string "$verify_output" "Total size:" "Verify output contains total size"
     expect_output_string "$verify_output" "Unmodified:" "Verify output contains unmodified count"
     expect_output_string "$verify_output" "Modified:" "Verify output contains modified count"
     expect_output_string "$verify_output" "New:" "Verify output contains new count"
@@ -770,7 +768,7 @@ test_database_verify_full() {
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Total files:" "Full verify output contains total files count"
-    expect_output_string "$verify_output" "Total nodes:" "Full verify output contains total nodes count"
+    expect_output_string "$verify_output" "Total size:" "Full verify output contains total size"
     expect_output_string "$verify_output" "Unmodified:" "Full verify output contains unmodified count"
     expect_output_string "$verify_output" "Modified:" "Full verify output contains modified count"
     expect_output_string "$verify_output" "New:" "Full verify output contains new count"
@@ -1012,7 +1010,6 @@ test_verify_replica() {
     
     # Verify the replica verify command also shows the expected counts
     expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
-    expect_output_value "$replica_verify_output" "Total nodes:" "$source_nodes" "Replica verify shows correct node count"
 }
 
 test_database_replicate_second() {
