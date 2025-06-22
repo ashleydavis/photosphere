@@ -53,6 +53,9 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
+# Global variable to store which ImageMagick command to use
+IMAGEMAGICK_IDENTIFY_CMD=""
+
 # Helper functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -150,6 +153,176 @@ parse_numeric() {
     
     # Return the value or default if not found
     echo "${value:-$default_value}"
+}
+
+# Validate that a file is a valid image with expected mime type
+expect_image() {
+    local file_path="$1"
+    local expected_mime="$2"
+    local description="$3"
+    
+    if [ ! -f "$file_path" ]; then
+        log_error "$description: File not found: $file_path"
+        exit 1
+    fi
+    
+    # Use ImageMagick to get format and validate the image
+    local format_output
+    local magick_error
+    local full_command="$IMAGEMAGICK_IDENTIFY_CMD -format \"%m\" \"$file_path\""
+    format_output=$(eval "$full_command" 2>&1)
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ] || [ -z "$format_output" ]; then
+        log_error "$description: ImageMagick validation failed - corrupt or invalid image at $file_path"
+        echo "Failed command: $full_command"
+        echo "ImageMagick output:"
+        echo "$format_output"
+        exit 1
+    fi
+    
+    # Convert ImageMagick format to mime type
+    local mime_type=""
+    case "$format_output" in
+        "JPEG") mime_type="image/jpeg" ;;
+        "PNG") mime_type="image/png" ;;
+        "WEBP") mime_type="image/webp" ;;
+        "GIF") mime_type="image/gif" ;;
+        "TIFF") mime_type="image/tiff" ;;
+        "BMP") mime_type="image/bmp" ;;
+        *) mime_type="image/unknown" ;;
+    esac
+    
+    # Check if mime type matches expected
+    if [ "$mime_type" != "$expected_mime" ]; then
+        log_error "$description: Wrong mime type - expected $expected_mime, got $mime_type (format: $format_output) at $file_path"
+        exit 1
+    fi
+    
+    log_success "$description: Valid $mime_type"
+    return 0
+}
+
+# Validate that a file is a valid video with expected mime type
+expect_video() {
+    local file_path="$1"
+    local expected_mime="$2"
+    local description="$3"
+    
+    if [ ! -f "$file_path" ]; then
+        log_error "$description: File not found: $file_path"
+        exit 1
+    fi
+    
+    # Use ffprobe to get format and validate the video
+    local ffprobe_output
+    local format_command="ffprobe -v quiet -show_format -show_entries format=format_name \"$file_path\""
+    ffprobe_output=$(eval "$format_command" 2>&1)
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        log_error "$description: ffprobe validation failed - not a valid video file at $file_path"
+        echo "Failed command: $format_command"
+        echo "ffprobe output:"
+        echo "$ffprobe_output"
+        exit 1
+    fi
+    
+    local format_output=$(echo "$ffprobe_output" | grep "format_name=" | cut -d'=' -f2)
+    if [ -z "$format_output" ]; then
+        log_error "$description: ffprobe validation failed - no format found at $file_path"
+        echo "Failed command: $format_command"
+        echo "ffprobe output:"
+        echo "$ffprobe_output"
+        exit 1
+    fi
+    
+    # Check that it has a video stream
+    local stream_output
+    local stream_command="ffprobe -v error -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 \"$file_path\""
+    stream_output=$(eval "$stream_command" 2>&1)
+    exit_code=$?
+    
+    if [ $exit_code -ne 0 ] || ! echo "$stream_output" | grep -q "video"; then
+        log_error "$description: ffprobe validation failed - no video stream found at $file_path"
+        echo "Failed command: $stream_command"
+        echo "ffprobe stream output:"
+        echo "$stream_output"
+        exit 1
+    fi
+    
+    # Convert ffprobe format to mime type
+    local mime_type=""
+    case "$format_output" in
+        *"mp4"*) mime_type="video/mp4" ;;
+        *"mov"*) mime_type="video/quicktime" ;;
+        *"avi"*) mime_type="video/x-msvideo" ;;
+        *"mkv"*) mime_type="video/x-matroska" ;;
+        *"webm"*) mime_type="video/webm" ;;
+        *"flv"*) mime_type="video/x-flv" ;;
+        *) mime_type="video/unknown" ;;
+    esac
+    
+    # Check if mime type matches expected
+    if [ "$mime_type" != "$expected_mime" ]; then
+        log_error "$description: Wrong mime type - expected $expected_mime, got $mime_type (format: $format_output) at $file_path"
+        exit 1
+    fi
+    
+    log_success "$description: Valid $mime_type"
+    return 0
+}
+
+# Validate assets added to the database
+validate_database_assets() {
+    local db_dir="$1"
+    local source_file="$2"
+    local expected_mime="$3"
+    local asset_type="$4"  # "image" or "video"
+    local add_output="$5"  # CLI output from add command
+    
+    # Extract asset ID from the verbose CLI output
+    local asset_id=$(echo "$add_output" | grep "Added file.*$source_file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
+    if [ -z "$asset_id" ]; then
+        log_error "Failed to extract asset ID for $source_file from CLI output"
+        exit 1
+    fi
+    
+    log_info "Validating $asset_type assets for asset ID: $asset_id..."
+    
+    # Find the asset file using the asset ID
+    local asset_file="$db_dir/assets/$asset_id"
+    if [ ! -f "$asset_file" ]; then
+        log_error "Asset file not found in database for asset ID: $asset_id"
+        exit 1
+    fi
+    
+    # Validate the main asset
+    if [ "$asset_type" = "image" ]; then
+        expect_image "$asset_file" "$expected_mime" "Original $asset_type asset (expected: $expected_mime)"
+        
+        # Check for display version (always JPEG)
+        local display_file="$db_dir/display/$asset_id"
+        if [ -f "$display_file" ]; then
+            expect_image "$display_file" "image/jpeg" "Display version of $asset_type asset (expected: image/jpeg)"
+        fi
+        
+        # Check for thumbnail (always JPEG)
+        local thumb_file="$db_dir/thumb/$asset_id"
+        if [ -f "$thumb_file" ]; then
+            expect_image "$thumb_file" "image/jpeg" "Thumbnail version of $asset_type asset (expected: image/jpeg)"
+        fi
+    elif [ "$asset_type" = "video" ]; then
+        expect_video "$asset_file" "$expected_mime" "Original $asset_type asset (expected: $expected_mime)"
+        
+        # Check for video thumbnail (should be a JPEG image)
+        local thumb_file="$db_dir/thumb/$asset_id"
+        if [ -f "$thumb_file" ]; then
+            expect_image "$thumb_file" "image/jpeg" "Thumbnail of $asset_type asset (expected: image/jpeg)"
+        fi
+    fi
+    
+    log_success "All $asset_type assets validated successfully"
 }
 
 
@@ -323,7 +496,7 @@ test_setup() {
     
 }
 
-test_install_tools() {
+check_tools() {
     echo ""
     echo "=== CHECK TOOLS ==="
     
@@ -345,18 +518,29 @@ test_install_tools() {
     # Check that required tools exist and can print versions
     local tools_verified=true
     
-    # Check ImageMagick
+    # Check ImageMagick - determine which version to use
     if command -v magick &> /dev/null; then
         local magick_output=$(magick --version || echo "")
         if [ -n "$magick_output" ]; then
-            log_success "ImageMagick verified - complete output:"
+            log_success "ImageMagick 7.x verified (using 'magick identify'):"
             echo "$magick_output"
+            IMAGEMAGICK_IDENTIFY_CMD="magick identify"
         else
-            log_error "ImageMagick command exists but cannot get version"
+            log_error "ImageMagick magick command exists but cannot get version"
+            tools_verified=false
+        fi
+    elif command -v identify &> /dev/null; then
+        local identify_output=$(identify -version | head -1 || echo "")
+        if [ -n "$identify_output" ]; then
+            log_success "ImageMagick 6.x verified (using 'identify'):"
+            echo "$identify_output"
+            IMAGEMAGICK_IDENTIFY_CMD="identify"
+        else
+            log_error "ImageMagick identify command exists but cannot get version"
             tools_verified=false
         fi
     else
-        log_error "ImageMagick not found in system PATH"
+        log_error "ImageMagick not found in system PATH (tried both 'magick' and 'identify')"
         tools_verified=false
     fi
     
@@ -435,9 +619,9 @@ test_add_file_parameterized() {
     local before_check=$($(get_cli_command) check $TEST_DB_DIR $file_path --yes 2>&1)
     local already_in_db=$(parse_numeric "$before_check" "files already in database")
     
-    # Add the file and capture output
+    # Add the file and capture output with verbose logging
     local add_output
-    invoke_command "$test_description" "$(get_cli_command) add $TEST_DB_DIR $file_path --yes" 0 "true" "add_output"
+    invoke_command "$test_description" "$(get_cli_command) add $TEST_DB_DIR $file_path --verbose --yes" 0 "true" "add_output"
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -452,6 +636,9 @@ test_add_file_parameterized() {
     
     # Check that the specific file is now in the database
     invoke_command "Check $file_type file added" "$(get_cli_command) check $TEST_DB_DIR $file_path --yes"
+    
+    # Return the add output for use in validation
+    echo "$add_output"
 }
 
 test_add_png_file() {
@@ -459,7 +646,10 @@ test_add_png_file() {
     echo "============================================================================"
     echo "=== TEST 3: ADD PNG FILE ==="
     
-    test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file"
+    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file")
+    
+    # Validate the PNG assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.png" "image/png" "image" "$add_output"
 }
 
 test_add_jpg_file() {
@@ -467,7 +657,10 @@ test_add_jpg_file() {
     echo "============================================================================"
     echo "=== TEST 4: ADD JPG FILE ==="
     
-    test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file"
+    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file")
+    
+    # Validate the JPG assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.jpg" "image/jpeg" "image" "$add_output"
 }
 
 test_add_mp4_file() {
@@ -475,7 +668,10 @@ test_add_mp4_file() {
     echo "============================================================================"
     echo "=== TEST 5: ADD MP4 FILE ==="
     
-    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file"
+    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file")
+    
+    # Validate the MP4 assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.mp4" "video/mp4" "video" "$add_output"
 }
 
 test_add_same_file() {
@@ -876,7 +1072,11 @@ test_compare_with_changes() {
     
     # Add a new asset to the original database to create a difference
     local new_test_file="$TEST_FILES_DIR/test.webp"
-    invoke_command "Add new asset to original database" "$(get_cli_command) add $TEST_DB_DIR $new_test_file --yes"
+    local webp_add_output
+    invoke_command "Add new asset to original database" "$(get_cli_command) add $TEST_DB_DIR $new_test_file --verbose --yes" 0 "true" "webp_add_output"
+    
+    # Validate the WEBP assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
     
     # Test comparison between original and replica (should show differences after adding new asset)
     local compare_output
@@ -988,6 +1188,9 @@ run_all_tests() {
         log_info "Test tmp directory not found (already clean)"
     fi
     
+    # Check tools first
+    check_tools
+    
     # Run all tests in sequence 
     test_create_database
     test_view_media_files
@@ -1046,8 +1249,8 @@ run_test() {
             # This is handled as a command in main(), but keeping here for completeness
             test_setup
             ;;
-        "install-tools")
-            test_install_tools
+        "check-tools")
+            check_tools
             ;;
         "create-database"|"1")
             test_create_database
@@ -1134,6 +1337,9 @@ run_multiple_commands() {
     log_info "Running ${#COMMANDS[@]} commands in sequence: $commands_string"
     echo ""
     
+    # Check tools first before running any tests
+    check_tools
+    
     local command_number=1
     local total_commands=${#COMMANDS[@]}
     
@@ -1175,8 +1381,8 @@ run_multiple_commands() {
             "setup")
                 test_setup
                 ;;
-            "install-tools")
-                test_install_tools
+            "check-tools")
+                check_tools
                 ;;
             "reset")
                 reset_environment
@@ -1294,7 +1500,7 @@ show_usage() {
     echo "  all                 - Run all tests (assumes executable built and tools available)"
     echo "  to <number>         - Run tests 1 through <number> (preserves database for inspection)"
     echo "  setup               - Build executable and frontend"
-    echo "  install-tools       - Install required media processing tools only"
+    echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
     echo ""
@@ -1330,9 +1536,9 @@ show_usage() {
     echo "  $0 to 5                     # Run tests 1-5 and keep database for inspection"
     echo "  $0 -d to 10                 # Run tests 1-10 in debug mode and keep database"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
-    echo "  $0 setup,install-tools,all  # Build, install tools, and run all tests"
+    echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
     echo "  $0 setup                    # Build executable and frontend only"
-    echo "  $0 install-tools            # Install tools only"
+    echo "  $0 check-tools              # Check tools only"
     echo "  $0 reset                    # Clean up test artifacts"
     echo "  $0 create-database          # Run only database creation test"
     echo "  $0 3                        # Run test 3 (add single file)"
@@ -1425,9 +1631,9 @@ main() {
         exit 0
     fi
     
-    # Check if running install-tools command
-    if [ "$1" = "install-tools" ]; then
-        test_install_tools
+    # Check if running check-tools command
+    if [ "$1" = "check-tools" ]; then
+        check_tools
         exit 0
     fi
     
