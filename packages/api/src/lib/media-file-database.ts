@@ -952,6 +952,9 @@ export class MediaFileDatabase {
                     result.modified.push(file.fileName);
                 }
             }
+            else {
+                result.numUnmodified++;
+            }
         }
 
         //
