@@ -102,7 +102,7 @@ The CLI supports multiple storage backends:
 # Initialize a new database in current directory
 photosphere init
 
-# Initialize with custom metadata directory
+# Initialize with a separate metadata directory
 photosphere init ./photos -m ./photos/.metadata
 
 # Initialize with encryption

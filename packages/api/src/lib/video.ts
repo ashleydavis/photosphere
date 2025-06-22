@@ -1,4 +1,4 @@
-import { getVideoTransformation, ILocation, uuid } from "utils";
+import { getVideoTransformation, ILocation, RandomUuidGenerator } from "utils";
 import path from "path";
 import fs from "fs-extra";
 import dayjs from "dayjs";
@@ -39,7 +39,8 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     
     // Extract screenshot at 1 second or middle of video
     const video = new Video(videoPath);
-    const screenshotPath = path.join(tempDir, `thumb_${uuid()}.jpg`);
+    const uuidGenerator = new RandomUuidGenerator();
+    const screenshotPath = path.join(tempDir, `thumb_${uuidGenerator.generate()}.jpg`);
     const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
     await video.extractScreenshot(screenshotPath, screenshotTime);
     

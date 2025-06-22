@@ -12,7 +12,7 @@ import { useOnline } from "../lib/use-online";
 import { useIndexeddb } from "./indexeddb-context";
 import { syncOutgoing } from "../lib/sync/sync-outgoing";
 import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
-import { retry, uuid } from "utils";
+import { retry, RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
 const SYNC_POLL_PERIOD = 1000; // 1 second.
@@ -349,7 +349,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             for (const assetId of assetIds) {
                 const asset = loadedAssets.current[assetId];        
-                const newAssetId = uuid();                
+                const uuidGenerator = new RandomUuidGenerator();
+                const newAssetId = uuidGenerator.generate();                
                 const assetTypes = ["thumb", "display", "asset"];    
                 for (const assetType of assetTypes) {
                     const assetData = await loadAsset(assetId, assetType);

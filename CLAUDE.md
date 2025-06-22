@@ -108,4 +108,7 @@ Frontend:
 - Prefer not to update test code unless needed.
 - Add new tests for new code.
 - Backward compatibility is not required.
+- Use imports instead of requires.
+- All imports should be at the top of the file and not inside any functions.
+- Don't use dynamic imports.
 

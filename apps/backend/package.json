@@ -16,6 +16,7 @@
         "start:dev-no-assets": "bun run clean-uploads && bun run load-bson-fixture && bun run start-watch",
         "start:dev-1-asset": "bun run clean-uploads  && bun run copy-1-asset && bun run load-bson-fixture && bun run start-watch",
         "start-watch": "cross-env AUTH_TYPE=no-auth APP_MODE=readwrite PORT=3000 ASSET_STORAGE_CONNECTION=fs:./files/collections DB_STORAGE_CONNECTION=fs:./files/database bun --hot src/index.ts",
+        "start:single": "cross-env PORT=3000 bun --hot src/index.ts --path",
         "start-for-e2e-tests": "bun run clean-uploads && bun run start:dev-no-assets",
         "build": "bun install --production=false && bun run compile",
         "c": "bun run compile",

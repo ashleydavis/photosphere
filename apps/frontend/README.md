@@ -4,7 +4,7 @@ This is the web frontend for the Photosphere application. Built on [React](https
 
 ## Setup
 
-First, follow the instructions in [the main readme](../README.md).
+First, follow the instructions in [the main readme](../../README.md).
 
 Then open a terminal and change directory to the frontend project:
 

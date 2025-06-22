@@ -3,7 +3,8 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, uuid } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator } from "utils";
+import { TestUuidGenerator } from "node-utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -67,7 +68,12 @@ export const DISPLAY_QUALITY = 95;
 
 export interface IDatabaseSummary {
     //
-    // Total number of files in the database.
+    // Total number of assets in the database.
+    //
+    totalAssets: number;
+
+    //
+    // Total number of files in the database (including thumbnails, display images, BSON files, etc.).
     //
     totalFiles: number;
 
@@ -82,36 +88,46 @@ export interface IDatabaseSummary {
     totalNodes: number;
 
     //
-    // Short hash of the tree root (first 8 characters).
-    //
-    shortHash: string;
-
-    //
     // Full hash of the tree root.
     //
     fullHash: string;
+}
+
+//
+// Interface for the database metadata stored in metadata.json
+//
+export interface IDatabaseMetadata {
+    //
+    // Number of files that have been imported into the database.
+    //
+    filesImported: number;
+
+    //
+    // Version of the metadata format.
+    //
+    version: number;
 }
 
 export interface IAddSummary {
     //
     // The number of files added to the database.
     //
-    numFilesAdded: number;
+    filesAdded: number;
 
     //
     // The number of files already in the database.
     //
-    numFilesAlreadyAdded: number;
+    filesAlreadyAdded: number;
 
     //
     // The number of files ignored (because they are not media files).
     //
-    numFilesIgnored: number;
+    filesIgnored: number;
 
     //
     // The number of files that failed to be added to the database.
     //
-    numFilesFailed: number;
+    filesFailed: number;
 
     //
     // The total size of the files added to the database.
@@ -194,14 +210,19 @@ export interface IVerifyOptions {
 //
 export interface IVerifyResult {
     //
-    // The total number of files in the database.
+    // The total number of files imported into the database.
     //
-    numFiles: number;
+    filesImported: number;
 
     //
-    // The number of nodes in the merkle tree.
+    // The total number of files verified (including thumbnails, display, BSON, etc.).
     //
-    numNodes: 0;
+    totalFiles: number;
+
+    //
+    // The total database size.
+    //
+    totalSize: number;
 
     //
     // The number of files that were unmodified.
@@ -229,19 +250,24 @@ export interface IVerifyResult {
 //
 export interface IReplicationResult {
     //
-    // The total number of files processed.
+    // The total number of files imported.
     //
-    numFiles: number;
+    filesImported: number;
+
+    //
+    // The total number of files considered.
+    //
+    filesConsidered: number;
 
     //
     // The number of files already existing in the destination storage.
     //
-    numExistingFiles: number;
+    existingFiles: number;
 
     //
     // The number of files copied to the destination storage.
     //
-    numCopiedFiles: number;
+    copiedFiles: number;
 }
 
 
@@ -287,21 +313,35 @@ export class MediaFileDatabase {
     private readonly localFileScanner: FileScanner;
 
     //
+    // The UUID generator for creating asset IDs.
+    //
+    private readonly uuidGenerator: IUuidGenerator;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
-        numFilesAdded: 0,
-        numFilesAlreadyAdded: 0,
-        numFilesIgnored: 0,
-        numFilesFailed: 0,
+        filesAdded: 0,
+        filesAlreadyAdded: 0,
+        filesIgnored: 0,
+        filesFailed: 0,
         totalSize: 0,
         averageSize: 0,
+    };
+
+    //
+    // Database metadata tracking asset count.
+    //
+    private databaseMetadata: IDatabaseMetadata = {
+        filesImported: 0,
+        version: 1,
     };
 
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
-        private readonly googleApiKey: string | undefined
+        private readonly googleApiKey: string | undefined,
+        uuidGenerator: IUuidGenerator
             ) {
 
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
@@ -322,6 +362,9 @@ export class MediaFileDatabase {
         this.localFileScanner = new FileScanner(new FileStorage("fs:"), {
             ignorePatterns: [/\.db/]
         });
+
+        // Use the provided UUID generator
+        this.uuidGenerator = uuidGenerator;
     }
 
     //
@@ -353,6 +396,85 @@ export class MediaFileDatabase {
     }
 
     //
+    // Loads the database metadata from metadata.json or initializes it.
+    //
+    private async loadDatabaseMetadata(): Promise<void> {
+        try {
+            const metadataBuffer = await this.metadataStorage.read("metadata.json");
+            if (metadataBuffer) {
+                const metadataJson = metadataBuffer.toString('utf8');
+                this.databaseMetadata = JSON.parse(metadataJson);
+                
+                log.verbose(`Loaded database metadata: ${this.databaseMetadata.filesImported} assets`);
+            } else {
+                // Initialize metadata by counting assets in the assets directory
+                await this.initializeDatabaseMetadata();
+            }
+        } catch (error: any) {
+            log.warn(`Failed to load database metadata, initializing: ${error.message}`);
+            await this.initializeDatabaseMetadata();
+        }
+    }
+
+    //
+    // Initializes database metadata by counting existing assets.
+    //
+    private async initializeDatabaseMetadata(): Promise<void> {
+        try {
+            let filesImported = 0;
+            
+            // Count files in the assets directory
+            for await (const file of walkDirectory(this.assetStorage, "assets", [])) {
+                filesImported++;
+            }
+            
+            this.databaseMetadata = {
+                filesImported,
+                version: 1,
+            };
+            
+            await this.saveDatabaseMetadata();
+            log.verbose(`Initialized database metadata with ${filesImported} assets`);
+        } catch (error: any) {
+            log.warn(`Failed to initialize database metadata: ${error.message}`);
+            this.databaseMetadata = { filesImported: 0, version: 1 };
+        }
+    }
+
+    //
+    // Saves the database metadata to metadata.json.
+    //
+    private async saveDatabaseMetadata(): Promise<void> {
+        try {
+            const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
+            const metadataPath = "metadata.json";
+            const metadataBuffer = Buffer.from(metadataJson, 'utf8');
+            
+            await this.metadataStorage.write(metadataPath, undefined, metadataBuffer);
+            
+            log.verbose(`Saved database metadata: ${this.databaseMetadata.filesImported} assets`);
+        } catch (error: any) {
+            log.error(`Failed to save database metadata: ${error.message}`);
+        }
+    }
+
+    //
+    // Increments the asset count.
+    //
+    private incrementAssetCount(): void {
+        this.databaseMetadata.filesImported++;
+    }
+
+    //
+    // Decrements the asset count.
+    //
+    private decrementAssetCount(): void {
+        if (this.databaseMetadata.filesImported > 0) {
+            this.databaseMetadata.filesImported--;
+        }
+    }
+
+    //
     // Creates a new media file database.
     //
     async create(): Promise<void> {
@@ -363,6 +485,10 @@ export class MediaFileDatabase {
 
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
+
+        // Initialize database metadata
+        this.databaseMetadata = { filesImported: 0, version: 1 };
+        await this.saveDatabaseMetadata();
 
         log.verbose(`Created new media file database.`);
     }
@@ -378,6 +504,9 @@ export class MediaFileDatabase {
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
+        // Load database metadata
+        await this.loadDatabaseMetadata();
+
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
 
@@ -385,7 +514,7 @@ export class MediaFileDatabase {
     // Gets the summary of files added to the database.
     //
     getAddSummary(): IAddSummary {
-        this.addSummary.averageSize = this.addSummary.numFilesAdded > 0 ? Math.floor(this.addSummary.totalSize / this.addSummary.numFilesAdded) : 0;
+        this.addSummary.averageSize = this.addSummary.filesAdded > 0 ? Math.floor(this.addSummary.totalSize / this.addSummary.filesAdded) : 0;
         return this.addSummary;
     }
 
@@ -399,13 +528,12 @@ export class MediaFileDatabase {
         // Get root hash (first node is always the root)
         const rootHash = merkleTree.nodes.length > 0 ? merkleTree.nodes[0].hash : Buffer.alloc(0);
         const fullHash = rootHash.toString('hex');
-        const shortHash = fullHash.substring(0, 8);
 
         return {
+            totalAssets: this.databaseMetadata.filesImported,
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
-            shortHash,
             fullHash
         };
     }
@@ -432,7 +560,7 @@ export class MediaFileDatabase {
             );
 
             // Save hash caches progressively to make the next run faster
-            if (this.addSummary.numFilesAdded % 100 === 0) {
+            if (this.addSummary.filesAdded % 100 === 0) {
                 await this.localHashCache.save();
                 await this.databaseHashCache.save();
                 await this.assetDatabase.save();
@@ -440,7 +568,7 @@ export class MediaFileDatabase {
         }, progressCallback);
 
         // Update the number of ignored files after scanning
-        this.addSummary.numFilesIgnored += this.localFileScanner.getNumFilesIgnored();
+        this.addSummary.filesIgnored += this.localFileScanner.getNumFilesIgnored();
     }
 
     //
@@ -475,7 +603,7 @@ export class MediaFileDatabase {
             //
             if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
                 log.error(`File "${filePath}" has failed validation.`);
-                this.addSummary.numFilesFailed++;
+                this.addSummary.filesFailed++;
                 if (progressCallback) {
                     progressCallback(this.localFileScanner.getCurrentlyScanning());
                 }            
@@ -499,21 +627,21 @@ export class MediaFileDatabase {
             // The file is already in the database.
             //
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            this.addSummary.numFilesAlreadyAdded++;
+            this.addSummary.filesAlreadyAdded++;
             if (progressCallback) {
                 progressCallback(this.localFileScanner.getCurrentlyScanning());
             }
             return;
         }
 
-        const assetId = uuid();
+        const assetId = this.uuidGenerator.generate();
 
         let assetDetails: IAssetDetails | undefined = undefined;
         
         //
         // Create a temporary directory for generates files like the thumbnail, display asset, etc.
         //
-        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuid());
+        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, this.uuidGenerator.generate());
         await fs.ensureDir(assetTempDir);
 
         if (contentType?.startsWith("video")) {
@@ -548,13 +676,13 @@ export class MediaFileDatabase {
                 //
                 // Uploads the thumbnail.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, Readable.from(assetDetails.thumbnailPath)));
+                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
 
                 const thumbInfo = await this.assetStorage.info(thumbPath);
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnailPath), this.databaseHashCache);
+                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
@@ -562,13 +690,13 @@ export class MediaFileDatabase {
                 //
                 // Uploads the display asset.
                 //
-                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, Readable.from(assetDetails.displayPath!)));
+                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
 
                 const displayInfo = await this.assetStorage.info(displayPath);
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => Readable.from(assetDetails.displayPath!), this.databaseHashCache);
+                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
@@ -641,7 +769,10 @@ export class MediaFileDatabase {
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
 
-            this.addSummary.numFilesAdded++;
+            // Increment asset count in metadata
+            this.incrementAssetCount();
+
+            this.addSummary.filesAdded++;
             this.addSummary.totalSize += fileInfo.length;
             if (progressCallback) {
                 progressCallback(this.localFileScanner.getCurrentlyScanning());
@@ -654,7 +785,7 @@ export class MediaFileDatabase {
             await this.assetStorage.deleteFile(thumbPath);
             await this.assetStorage.deleteFile(displayPath);
 
-            this.addSummary.numFilesFailed++;
+            this.addSummary.filesFailed++;
             if (progressCallback) {
                 progressCallback(this.localFileScanner.getCurrentlyScanning());
             }
@@ -688,13 +819,13 @@ export class MediaFileDatabase {
             // The file is already in the database.
             //
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            this.addSummary.numFilesAlreadyAdded++;
+            this.addSummary.filesAlreadyAdded++;
             return;
         }
 
         log.verbose(`File "${filePath}" has not been added to the media file database.`);
 
-        this.addSummary.numFilesAdded++;
+        this.addSummary.filesAdded++;
         this.addSummary.totalSize += fileInfo.length;
         if (progressCallback) {
             progressCallback(this.localFileScanner.getCurrentlyScanning());
@@ -716,6 +847,9 @@ export class MediaFileDatabase {
         //          in the hash cache.
         //
         await this.databaseHashCache.save();
+        
+        // Save database metadata
+        await this.saveDatabaseMetadata();
     }
 
     //
@@ -784,10 +918,12 @@ export class MediaFileDatabase {
     //
     async verify(options?: IVerifyOptions) : Promise<IVerifyResult> {
 
+        const summary = await this.getDatabaseSummary();
         const result: IVerifyResult = {
-            numFiles: 0,
+            filesImported: this.databaseMetadata.filesImported,
+            totalFiles: summary.totalFiles,
+            totalSize: summary.totalSize,
             numUnmodified: 0,
-            numNodes: 0,
             modified: [],
             new: [],
             removed: [],
@@ -806,7 +942,6 @@ export class MediaFileDatabase {
                 continue;
             }
 
-            result.numFiles++;
 
             const fileHash = this.databaseHashCache.getHash(file.fileName);
             if (!fileHash) {
@@ -838,14 +973,15 @@ export class MediaFileDatabase {
                     result.modified.push(file.fileName);
                 }
             }
+            else {
+                result.numUnmodified++;
+            }
         }
 
         //
         // Check the merkle tree to find files that have been removed.
         //
         await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
-            result.numNodes++;
-
             if (node.fileName && !node.isDeleted) {
                 if (!await this.assetStorage.fileExists(node.fileName)) {
                     // The file is missing from the storage, but it exists in the merkle tree.
@@ -866,9 +1002,10 @@ export class MediaFileDatabase {
     async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage): Promise<IReplicationResult> {
 
         const result: IReplicationResult = {
-            numFiles: 0,
-            numExistingFiles: 0,
-            numCopiedFiles: 0,
+            filesImported: this.databaseMetadata.filesImported,
+            filesConsidered: 0,
+            existingFiles: 0,
+            copiedFiles: 0,
         };
 
         const srcStorage = this.assetStorage;
@@ -883,6 +1020,8 @@ export class MediaFileDatabase {
         // But only when necessary.
         //
         async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
+            result.filesConsidered++;
+
             const destHash = destHashCache.getHash(fileName);
             if (destHash) {
                 //
@@ -893,7 +1032,7 @@ export class MediaFileDatabase {
                     //
                     // The hash matches, so we don't need to copy the file.
                     //
-                    result.numExistingFiles++;
+                    result.existingFiles++;
 
                     //
                     // Add the existing file to the destination merkle tree.
@@ -953,7 +1092,7 @@ export class MediaFileDatabase {
                 length: copiedFileInfo.length,
             });
 
-            result.numCopiedFiles++;
+            result.copiedFiles++;
         }
 
         //
@@ -963,9 +1102,7 @@ export class MediaFileDatabase {
             if (srcNode.fileName && !srcNode.isDeleted) {               
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
 
-                ++result.numFiles;
-
-                if (result.numFiles % 100 === 0) {
+                if (result.copiedFiles % 100 === 0) {
                     await retry(() => destHashCache.save());
                 }
             }
@@ -977,6 +1114,11 @@ export class MediaFileDatabase {
         await destHashCache.save();
 
         await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
+        
+        const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
+        const metadataBuffer = Buffer.from(metadataJson, 'utf8');
+        await destMetadataStorage.write("metadata.json", undefined, metadataBuffer);
+        log.verbose(`Copied database metadata to destination: ${this.databaseMetadata.filesImported} assets`);
         
         return result;
     }

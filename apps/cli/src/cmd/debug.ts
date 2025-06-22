@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { merkleTreeCommand } from './merkle-tree';
 import { hashCacheCommand } from './hash-cache';
+import { getCommandExamplesHelp } from '../examples';
 import pc from "picocolors";
 
 //
@@ -19,6 +20,7 @@ export function createDebugCommand(): Command {
         .option('-k, --key <keyfile>', 'Path to the private key file for encryption.')
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
+        .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
         .action(merkleTreeCommand);
 
     // Add hash-cache subcommand
@@ -31,6 +33,7 @@ export function createDebugCommand(): Command {
         .option('-v, --verbose', 'Enables verbose logging.', false)
         .option('-y, --yes', 'Non-interactive mode. Use command line arguments and defaults.', false)
         .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
     return debugCommand;

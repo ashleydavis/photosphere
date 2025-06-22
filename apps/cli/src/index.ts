@@ -12,6 +12,9 @@ import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { createDebugCommand } from './cmd/debug';
+import { bugReportCommand } from './cmd/bug-report';
+import { examplesCommand } from './cmd/examples';
+import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 
@@ -27,7 +30,17 @@ async function main() {
     program
         .name("psi")
         .version(version)
-        .description("The Photosphere CLI tool for managing your media file database.")
+        .description(`The Photosphere CLI tool for managing your media file database.`)
+        .addHelpText('after', `
+Examples:
+${MAIN_EXAMPLES.map(ex => `  ${ex.command.padEnd(32)} ${ex.description}`).join('\n')}
+
+Resources:
+  🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
+  📖 Command Reference: https://github.com/ashleydavis/photosphere/wiki/Command-Reference
+  📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
+  🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
+  ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new`)
         .exitOverride();  // Prevent commander from calling process.exit
 
     program
@@ -39,6 +52,7 @@ async function main() {
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initCommand);
 
     program
@@ -50,6 +64,7 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
+        .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
     program
@@ -61,6 +76,7 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files (or directories) to add to the database.")
+        .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
 
     program
@@ -71,6 +87,7 @@ async function main() {
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('ui'))
         .action(uiCommand);
 
     program
@@ -79,6 +96,7 @@ async function main() {
         .option("-p, --profile <name>", "The profile name to configure", "default")
         .option("-c, --clear", "Clear all S3 configuration files")
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('configure'))
         .action(configureCommand);
 
     program
@@ -86,14 +104,15 @@ async function main() {
         .description("Display detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
         .option(...yesOption)
-        .option("-r, --raw", "Show raw EXIF/metadata properties", false)
         .argument("<files...>", "The media files to analyze.")
+        .addHelpText('after', getCommandExamplesHelp('info'))
         .action(infoCommand);
 
     program
         .command("tools")
         .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('tools'))
         .action(toolsCommand);
 
     program
@@ -104,6 +123,7 @@ async function main() {
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('summary'))
         .action(summaryCommand);
 
     program
@@ -115,6 +135,7 @@ async function main() {
         .option(...verboseOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
 
     program
@@ -129,6 +150,7 @@ async function main() {
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('replicate'))
         .action(replicateCommand);
 
     program
@@ -140,10 +162,27 @@ async function main() {
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
         .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
 
     // Add the debug command with its subcommands
     program.addCommand(createDebugCommand());
+
+    program
+        .command("examples")
+        .description("Show usage examples for all CLI commands.")
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('examples'))
+        .action(examplesCommand);
+
+    program
+        .command("bug-report")
+        .description("Generate a bug report for GitHub with system information and logs.")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--no-browser", "Don't open the browser automatically", false)
+        .addHelpText('after', getCommandExamplesHelp('bug-report'))
+        .action(bugReportCommand);
 
     // Parse the command line arguments
     try {
@@ -163,7 +202,7 @@ async function main() {
 }
 
 main()
-    .catch((error) => {
+    .catch(async (error) => {
         console.error(pc.red('An error occurred:'));
         if (error.message) {
             console.error(pc.red(error.message).toString());
