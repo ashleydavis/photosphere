@@ -4,6 +4,9 @@
 # Based on test plan from photosphere-wiki/Test-plan-from-repo.md
 # This script runs smoke tests to verify basic CLI functionality
 
+# Set NODE_ENV to testing for deterministic UUID generation
+export NODE_ENV=testing
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
