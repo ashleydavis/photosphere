@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { formatBytes } from "../lib/format";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -21,21 +22,22 @@ export async function verifyCommand(dbDir: string, options: IVerifyCommandOption
     writeProgress(`🔍 Verifying database integrity`);
 
     const result = await database.verify({ full: options.full || false });
+    const summary = await database.getDatabaseSummary();
 
     clearProgressMessage(); // Flush the progress message.
 
-    displayResults(result);
+    displayResults(result, summary.totalSize);
 
     await exit(0);
 }
 
-function displayResults(result: IVerifyResult): void {
+function displayResults(result: IVerifyResult, totalSize: number): void {
     console.log();
     console.log(pc.bold(pc.blue(`📊 Verification Results`)));
     console.log();
     
     console.log(`Total files: ${pc.cyan(result.numAssets.toString())}`);
-    console.log(`Total nodes: ${pc.cyan(result.numNodes.toString())}`);
+    console.log(`Total size: ${pc.cyan(formatBytes(totalSize))}`);
     console.log(`Unmodified: ${pc.green(result.numUnmodified.toString())}`);
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     console.log(`New: ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
