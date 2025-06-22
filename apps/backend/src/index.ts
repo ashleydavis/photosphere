@@ -1,10 +1,28 @@
 import { createPrivateKey } from "node:crypto";
 import express from "express";
-import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider } from "rest-api";
-import { createStorage, IStorageOptions, loadPrivateKey } from "storage";
+import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider, SingleMediaFileDatabaseProvider } from "rest-api";
+import { createStorage, IStorageOptions, loadPrivateKey, pathJoin } from "storage";
 import { exit, registerTerminationCallback } from "node-utils";
 
 async function main() {
+
+    //
+    // Check if a --path argument was provided for single directory mode
+    //
+    const pathArgIndex = process.argv.indexOf('--path');
+    const hasPathArg = pathArgIndex !== -1;
+    const singleDirPath = hasPathArg && process.argv[pathArgIndex + 1] ? process.argv[pathArgIndex + 1] : undefined;
+    
+    if (hasPathArg && !singleDirPath) {
+        console.error('Error: Gallery path required when using --path. Usage: bun run start --path /path/to/gallery');
+        await exit(1);
+    }
+    
+    const isSingleDirMode = !!singleDirPath;
+    
+    if (isSingleDirMode) {
+        console.log(`Running in single directory mode with path: ${singleDirPath}`);
+    }
 
     const PORT = process.env.PORT;
     if (!PORT) {
@@ -18,14 +36,30 @@ async function main() {
 
     console.log(`Running in mode: ${process.env.NODE_ENV} on port ${PORT}.`);
 
-    const assetStorageConnection = process.env.ASSET_STORAGE_CONNECTION;
-    if (!assetStorageConnection) {
-        throw new Error(`Set the asset databases storage type and root path through the environment variable ASSET_STORAGE_CONNECTION.`);
+    let assetStorageConnection: string;
+    let databaseStorageConnection: string;
+    
+    if (isSingleDirMode) {
+        //
+        // In single directory mode, use the provided path for assets
+        // and a .db subdirectory for database storage
+        //
+        assetStorageConnection = `fs:${singleDirPath}`;
+        databaseStorageConnection = `fs:${pathJoin(singleDirPath, '.db')}`;
     }
+    else {
+        //
+        // Normal mode - use environment variables
+        //
+        assetStorageConnection = process.env.ASSET_STORAGE_CONNECTION!;
+        if (!assetStorageConnection) {
+            throw new Error(`Set the asset databases storage type and root path through the environment variable ASSET_STORAGE_CONNECTION.`);
+        }
 
-    const databaseStorageConnection = process.env.DB_STORAGE_CONNECTION;
-    if (!databaseStorageConnection) {
-        throw new Error(`Set the generate database storage type and root path through the environment variable DB_STORAGE_CONNECTION.`);
+        databaseStorageConnection = process.env.DB_STORAGE_CONNECTION!;
+        if (!databaseStorageConnection) {
+            throw new Error(`Set the generate database storage type and root path through the environment variable DB_STORAGE_CONNECTION.`);
+        }
     }
 
     let storageOptions: IStorageOptions | undefined = undefined;
@@ -49,17 +83,19 @@ async function main() {
     }
 
     const { storage: assetStorage } = createStorage(assetStorageConnection, storageOptions);    
-    const { storage: metadataStorage } = createStorage(assetStorageConnection);    
+    const { storage: metadataStorage } = createStorage(isSingleDirMode ? databaseStorageConnection : assetStorageConnection);    
     const { storage: dbStorage } = createStorage(databaseStorageConnection);
     
-    const mediaFileDatabaseProvider = new MultipleMediaFileDatabaseProvider(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
+    const mediaFileDatabaseProvider = isSingleDirMode 
+        ? new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY)
+        : new MultipleMediaFileDatabaseProvider(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
 
-    const APP_MODE = process.env.APP_MODE;
+    const APP_MODE = isSingleDirMode ? "readwrite" : process.env.APP_MODE;
     if (!APP_MODE) {
         throw new Error("Expected APP_MODE environment variable set to 'readonly' or 'readwrite'");
     }
 
-    const AUTH_TYPE = process.env.AUTH_TYPE;
+    const AUTH_TYPE = isSingleDirMode ? "no-auth" : process.env.AUTH_TYPE;
     if (!AUTH_TYPE) {
         throw new Error("Expected AUTH_TYPE environment variable set to 'auth0' or 'no-auth'");
     }

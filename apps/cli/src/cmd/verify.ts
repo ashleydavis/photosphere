@@ -1,34 +1,11 @@
-import { IVerifyResult, MediaFileDatabase } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { configureLog } from "../lib/log";
+import { IVerifyResult, IDatabaseSummary } from "api";
 import pc from "picocolors";
-import { exit, registerTerminationCallback } from "node-utils";
-import { configureS3IfNeeded } from '../lib/s3-config';
-import { getDirectoryForCommand } from '../lib/directory-picker';
-import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
+import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { formatBytes } from "../lib/format";
 
-export interface IVerifyCommandOptions { 
-    //
-    // Set the path to the database metadata.
-    //
-    meta?: string;
-
-    //
-    // Sets the path to private key file for encryption.
-    //
-    key?: string;
-
-    //
-    // Enables verbose logging.
-    //
-    verbose?: boolean;
-
-    //
-    // Non-interactive mode - use defaults and command line arguments.
-    //
-    yes?: boolean;
-
+export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
     // Force full verification (bypass cached hash optimization).
     //
@@ -39,42 +16,8 @@ export interface IVerifyCommandOptions {
 // Command that verifies the integrity of the Photosphere media file database.
 //
 export async function verifyCommand(dbDir: string, options: IVerifyCommandOptions): Promise<void> {
-
-    configureLog({
-        verbose: options.verbose,
-    });
-
-    // Ensure media processing tools are available
-    await ensureMediaProcessingTools(options.yes || false);
-
-    // Get the directory for the database (validates it exists and is a media database)
-    const databaseDir = await getDirectoryForCommand('existing', dbDir, options.yes || false);
     
-    const metaPath = options.meta || pathJoin(databaseDir, '.db');
-
-    //
-    // Configure S3 if the path requires it
-    //
-    if (!await configureS3IfNeeded(databaseDir)) {
-        await exit(1);
-    }
-    
-    if (!await configureS3IfNeeded(metaPath)) {
-        await exit(1);
-    }
-
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
-
-    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath);
-
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY); 
-
-    registerTerminationCallback(async () => {
-        await database.close();
-    });    
-
-    await database.load();
+    const database = await loadDatabase(dbDir, options);
 
     writeProgress(`🔍 Verifying database integrity`);
 
@@ -92,8 +35,9 @@ function displayResults(result: IVerifyResult): void {
     console.log(pc.bold(pc.blue(`📊 Verification Results`)));
     console.log();
     
-    console.log(`Total files: ${pc.cyan(result.numFiles.toString())}`);
-    console.log(`Total nodes: ${pc.cyan(result.numNodes.toString())}`);
+    console.log(`Files imported: ${pc.cyan(result.filesImported.toString())}`);
+    console.log(`Total files: ${pc.cyan(result.totalFiles.toString())}`);
+    console.log(`Total size: ${pc.cyan(formatBytes(result.totalSize))}`);
     console.log(`Unmodified: ${pc.green(result.numUnmodified.toString())}`);
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     console.log(`New: ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);

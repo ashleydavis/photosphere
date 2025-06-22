@@ -1,4 +1,4 @@
-import { uuid } from "utils";
+import { RandomUuidGenerator } from "utils";
 
 function getClientId() {
     const existingClientId = localStorage.getItem("clientId");
@@ -6,7 +6,8 @@ function getClientId() {
         return existingClientId;
     }
 
-    const newClientId = uuid();
+    const uuidGenerator = new RandomUuidGenerator();
+    const newClientId = uuidGenerator.generate();
     localStorage.setItem("clientId", newClientId);
     return newClientId;
 }

@@ -4,6 +4,7 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
+import { RandomUuidGenerator } from "utils";
 import { Readable } from "stream";
 
 interface IUser extends IMediaFileDatabases {
@@ -87,7 +88,8 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
             mediaFileDatabase = new MediaFileDatabase(
                 assetStorage,
                 metadataStorage,
-                this.googleApiKey
+                this.googleApiKey,
+                new RandomUuidGenerator()
             );
             await mediaFileDatabase.load();
             this.databaseMap.set(databaseId, mediaFileDatabase);
@@ -163,7 +165,8 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         this.mediaFileDatabase = new MediaFileDatabase(
             this.assetStorage,
             this.metadataStorage,
-            this.googleApiKey
+            this.googleApiKey,
+            new RandomUuidGenerator()
         );
         await this.mediaFileDatabase.load();
 

@@ -200,6 +200,10 @@ export class Image {
      * Get EXIF data from the image
      */
     async getExifData(): Promise<Record<string, string>> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         try {
             const command = `${Image.identifyCommand} -format "%[EXIF:*]" "${this.filePath}"`;
             const { stdout } = await exec(command);
@@ -221,7 +225,6 @@ export class Image {
     }
 
     async resize(options: ResizeOptions, outputPath?: string): Promise<Image> {
-        
         if (!await fs.promises.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
@@ -272,6 +275,10 @@ export class Image {
     }
 
     async saveAs(outputPath: string, options?: { quality?: number; format?: ResizeOptions['format'] }): Promise<Image> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         let command = `${Image.convertCommand} "${this.filePath}"`;
 
         if (options?.quality !== undefined) {
@@ -304,6 +311,10 @@ export class Image {
      * Returns RGB values as [r, g, b] array
      */
     async getDominantColor(): Promise<[number, number, number]> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         try {
             // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
             const command = `${Image.convertCommand} "${this.filePath}" -resize 1x1! -format "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]" info:`;
@@ -328,6 +339,10 @@ export class Image {
      * Returns RGB values as [r, g, b] array
      */
     async getDominantColorHistogram(colorCount: number = 5): Promise<[number, number, number]> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         try {
             // First resize to optimize performance, then use histogram analysis
             let command: string;
@@ -381,6 +396,10 @@ export class Image {
      * Returns array of RGB values as [[r, g, b], [r, g, b], ...]
      */
     async getDominantColors(colorCount: number = 5): Promise<Array<[number, number, number]>> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
         try {
             let command: string;
             
