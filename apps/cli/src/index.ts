@@ -32,6 +32,12 @@ async function main() {
         .version(version)
         .description(`The Photosphere CLI tool for managing your media file database.`)
         .addHelpText('after', `
+The [database-dir] argument specifies the directory that contains the media file database and it defaults to the current directory when omitted.
+
+Getting help:
+  ${pc.bold("psi <command> --help")}    Shows help for a particular command.
+  ${pc.bold("psi --help")}              Shows help for all commands.
+
 Examples:
 ${MAIN_EXAMPLES.map(ex => `  ${ex.command.padEnd(32)} ${ex.description}`).join('\n')}
 
@@ -57,7 +63,7 @@ Resources:
 
     program
         .command("add")
-        .description("Add files and directories to the media file database.")
+        .description("Adds files and directories to the media file database.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
@@ -92,7 +98,7 @@ Resources:
 
     program
         .command("configure")
-        .description("Configure S3 credentials for cloud storage.")
+        .description("Configures S3 credentials for cloud storage.")
         .option("-p, --profile <name>", "The profile name to configure", "default")
         .option("-c, --clear", "Clear all S3 configuration files")
         .option(...yesOption)
@@ -101,7 +107,7 @@ Resources:
 
     program
         .command("info")
-        .description("Display detailed information about media files including EXIF data, metadata, and technical specifications.")
+        .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
         .option(...yesOption)
         .argument("<files...>", "The media files to analyze.")
@@ -110,14 +116,14 @@ Resources:
 
     program
         .command("tools")
-        .description("Check for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
+        .description("Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('tools'))
         .action(toolsCommand);
 
     program
         .command("summary")
-        .description("Display a summary of the media file database including total files, size, and tree hash.")
+        .description("Displays a summary of the media file database including total files, size, and tree hash.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
@@ -128,7 +134,7 @@ Resources:
 
     program
         .command("verify")
-        .description("Verify the integrity of the media file database by checking file hashes.")
+        .description("Verifies the integrity of the media file database by checking file hashes.")
         .argument(...dbArgument)
         .option(...metadataDirOption)
         .option(...keyOption)
@@ -140,7 +146,7 @@ Resources:
 
     program
         .command("replicate")
-        .description("Replicate an asset database from source to destination location.")
+        .description("Replicates an asset database from source to destination location.")
         .argument("[source-dir]", "Source database directory (defaults to current directory)")
         .argument("<destination-dir>", "Destination directory for replicated database")
         .option("-s, --src-meta <dir>", "Source metadata directory override")
@@ -155,7 +161,7 @@ Resources:
 
     program
         .command("compare")
-        .description("Compare two asset databases by analyzing their Merkle trees.")
+        .description("Compares two asset databases by analyzing their Merkle trees.")
         .argument("<source-dir>", "Source database directory")
         .argument("<destination-dir>", "Destination database directory")
         .option("-s, --src-meta <dir>", "Source metadata directory override")
@@ -170,14 +176,14 @@ Resources:
 
     program
         .command("examples")
-        .description("Show usage examples for all CLI commands.")
+        .description("Shows usage examples for all CLI commands.")
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('examples'))
         .action(examplesCommand);
 
     program
         .command("bug-report")
-        .description("Generate a bug report for GitHub with system information and logs.")
+        .description("Generates a bug report for GitHub with system information and logs.")
         .option(...verboseOption)
         .option(...yesOption)
         .option("--no-browser", "Don't open the browser automatically", false)
