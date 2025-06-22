@@ -657,13 +657,13 @@ export class MediaFileDatabase {
                 //
                 // Uploads the thumbnail.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, Readable.from(assetDetails.thumbnailPath)));
+                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
 
                 const thumbInfo = await this.assetStorage.info(thumbPath);
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => Readable.from(assetDetails.thumbnailPath), this.databaseHashCache);
+                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath), this.databaseHashCache);
                 await this.assetDatabase.addFile(thumbPath, hashedThumb);
             }
 
@@ -671,13 +671,13 @@ export class MediaFileDatabase {
                 //
                 // Uploads the display asset.
                 //
-                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, Readable.from(assetDetails.displayPath!)));
+                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
 
                 const displayInfo = await this.assetStorage.info(displayPath);
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => Readable.from(assetDetails.displayPath!), this.databaseHashCache);
+                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!), this.databaseHashCache);
                 await this.assetDatabase.addFile(displayPath, hashedDisplay);
             }
 
