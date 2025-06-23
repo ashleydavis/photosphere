@@ -11,18 +11,27 @@ export interface IInitCommandOptions extends ICreateCommandOptions {
 //
 export async function initCommand(options: IInitCommandOptions): Promise<void> {
 
-    const { database, databaseDir } = await createDatabase(options.db, options, false, true);
+    await createDatabase(options.db, options, false, true);
+
+    const displayPath = (options.db === "." || options.db === "./") ? "current directory" : options.db;
+    const isCurrentDir = options.db === "." || options.db === "./";
 
     log.info('');
-    log.info(pc.green(`✓ Created new media file database in "${databaseDir}"`));
+    log.info(pc.green(`✓ Created new media file database in ${isCurrentDir ? "the " : "\""}${displayPath}${isCurrentDir ? "" : "\""}"`));
     log.info('');
     log.info(pc.dim('Your database is ready to receive photos and videos!'));
     log.info('');
     log.info(pc.dim('To get started:'));
-    log.info(pc.dim(`  1. ${pc.cyan(`cd ${databaseDir}`)} (change to your database directory)`));
-    log.info(pc.dim(`  2. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+    if (isCurrentDir) {
+        log.info(pc.dim(`  1. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+    } else {
+        log.info(pc.dim(`  1. ${pc.cyan(`cd ${options.db}`)} (change to your database directory)`));
+        log.info(pc.dim(`  2. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+    }
     log.info('');
-    log.info(pc.dim(`Or use the full path: ${pc.cyan(`psi add ${databaseDir} <source-media-directory>`)}`));
+    if (!isCurrentDir) {
+        log.info(pc.dim(`Or identify the database using the path: ${pc.cyan(`psi add --db ${options.db} <source-media-directory>`)}`));
+    }
 
     await exit(0);
 }
