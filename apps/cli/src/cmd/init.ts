@@ -3,14 +3,15 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { createDatabase, ICreateCommandOptions } from "../lib/init-cmd";
 
-export interface IInitCommandOptions extends ICreateCommandOptions {}
+export interface IInitCommandOptions extends ICreateCommandOptions {
+}
 
 //
 // Command that initializes a new Photosphere media file database.
 //
-export async function initCommand(dbDir: string, options: IInitCommandOptions): Promise<void> {
+export async function initCommand(options: IInitCommandOptions): Promise<void> {
 
-    const { database, databaseDir } = await createDatabase(dbDir, options, false, true);
+    const { database, databaseDir } = await createDatabase(options.db, options, false, true);
 
     log.info('');
     log.info(pc.green(`✓ Created new media file database in "${databaseDir}"`));

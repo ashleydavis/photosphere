@@ -591,7 +591,7 @@ test_create_database() {
     echo "============================================================================"
     echo "=== TEST 1: CREATE DATABASE ==="
     
-    invoke_command "Initialize new database" "$(get_cli_command) init $TEST_DB_DIR --yes"
+    invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
     
     # Check if required files were created
     check_exists "$TEST_DB_DIR" "Database directory"
@@ -621,12 +621,12 @@ test_add_file_parameterized() {
     
     # Get initial database state - count files in metadata collection
     # Use the info command output to track actual media files added
-    local before_check=$($(get_cli_command) check $TEST_DB_DIR $file_path --yes 2>&1)
+    local before_check=$($(get_cli_command) check --db $TEST_DB_DIR $file_path --yes 2>&1)
     local already_in_db=$(parse_numeric "$before_check" "files already in database")
     
     # Add the file and capture output with verbose logging
     local add_output
-    invoke_command "$test_description" "$(get_cli_command) add $TEST_DB_DIR $file_path --verbose --yes" 0 "true" "add_output"
+    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "true" "add_output"
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -640,7 +640,7 @@ test_add_file_parameterized() {
     fi
     
     # Check that the specific file is now in the database
-    invoke_command "Check $file_type file added" "$(get_cli_command) check $TEST_DB_DIR $file_path --yes"
+    invoke_command "Check $file_type file added" "$(get_cli_command) check --db $TEST_DB_DIR $file_path --yes"
     
     # Return the add output for use in validation
     echo "$add_output"
@@ -685,9 +685,9 @@ test_add_same_file() {
     echo "=== TEST 6: ADD SAME FILE (NO DUPLICATION) ==="
     
     # Try to re-add the PNG file (should not add it again)
-    invoke_command "Re-add same file" "$(get_cli_command) add $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
-    invoke_command "Check file still in database" "$(get_cli_command) check $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 }
 
 test_add_multiple_files() {
@@ -697,12 +697,12 @@ test_add_multiple_files() {
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         local add_output
-        invoke_command "Add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
+        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
         
         # Check that 2 files were imported
         expect_output_value "$add_output" "Files imported: " "2" "Two files imported from multiple images directory"
         
-        invoke_command "Check multiple files added" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -715,9 +715,9 @@ test_add_same_multiple_files() {
     echo "=== TEST 8: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        invoke_command "Re-add multiple files" "$(get_cli_command) add $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
         
-        invoke_command "Check multiple files still in database" "$(get_cli_command) check $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
@@ -731,7 +731,7 @@ test_database_summary() {
     
     # Run summary command and capture output for verification
     local summary_output
-    invoke_command "Display database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes" 0 "true" "summary_output"
+    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "summary_output"
     
     # Check that summary contains expected fields
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
@@ -747,7 +747,7 @@ test_database_verify() {
     
     # Run verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database integrity" "$(get_cli_command) verify $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Verify output contains files imported count"
@@ -769,7 +769,7 @@ test_database_verify_full() {
     
     # Run full verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database (full mode)" "$(get_cli_command) verify $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
+    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Full verify output contains files imported count"
@@ -822,7 +822,7 @@ test_detect_new_file() {
     
     # Run verify and capture output - should detect the new file
     local verify_output
-    invoke_command "Verify database with new file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
     
     # Check that verify detected the new file
     expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
@@ -880,7 +880,7 @@ test_detect_deleted_file() {
     
     # Run verify and capture output - should detect the missing file
     local verify_output
-    invoke_command "Verify database with deleted file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
     
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -939,7 +939,7 @@ test_detect_modified_file() {
     
     # Run verify and capture output - should detect the modified file
     local verify_output
-    invoke_command "Verify database with modified file" "$(get_cli_command) verify $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
     
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -967,7 +967,7 @@ test_database_replicate() {
     
     # Run replicate command and capture output
     local replicate_output
-    invoke_command "Replicate database" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "replicate_output"
+    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replicate_output"
     
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
@@ -996,14 +996,14 @@ test_verify_replica() {
     
     # Verify replica contents match source
     local replica_verify_output
-    invoke_command "Verify replica integrity" "$(get_cli_command) verify $replica_dir --yes" 0 "true" "replica_verify_output"
+    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "true" "replica_verify_output"
     
     # Get source and replica summaries to compare file counts
     local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary $TEST_DB_DIR --yes" 0 "true" "source_summary"
+    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "source_summary"
     
     local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary $replica_dir --yes" 0 "true" "replica_summary"
+    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "true" "replica_summary"
     
     # Extract and compare file counts
     local source_files=$(parse_numeric "$source_summary" "Total files:")
@@ -1031,7 +1031,7 @@ test_database_replicate_second() {
     
     # Run second replicate command and capture output
     local second_replication_output
-    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "second_replication_output"
+    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "second_replication_output"
     
     # Check if replication was successful
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
@@ -1055,14 +1055,14 @@ test_database_compare() {
     
     # Test comparison between original and replica (should show no differences)
     local compare_output
-    invoke_command "Compare original database with replica" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
     
     # Check that comparison shows no differences for identical databases
     expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
     
     
     # Test comparison with self (database vs itself)
-    invoke_command "Compare database with itself" "$(get_cli_command) compare $TEST_DB_DIR $TEST_DB_DIR --yes"
+    invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
 }
 
 test_compare_with_changes() {
@@ -1078,14 +1078,14 @@ test_compare_with_changes() {
     # Add a new asset to the original database to create a difference
     local new_test_file="$TEST_FILES_DIR/test.webp"
     local webp_add_output
-    invoke_command "Add new asset to original database" "$(get_cli_command) add $TEST_DB_DIR $new_test_file --verbose --yes" 0 "true" "webp_add_output"
+    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "true" "webp_add_output"
     
     # Validate the WEBP assets in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
     
     # Test comparison between original and replica (should show differences after adding new asset)
     local compare_output
-    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
     
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
     expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
@@ -1103,14 +1103,14 @@ test_replicate_after_changes() {
     
     # Replicate the changes from original to replica
     local replication_output
-    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate $TEST_DB_DIR $replica_dir --yes" 0 "true" "replication_output"
+    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replication_output"
     
     # Check that the 8 changed files were replicated
     expect_output_value "$replication_output" "Total files copied: " "8" "Files copied (the changes)"
     
     # Run compare command to verify databases are now identical again
     local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare $TEST_DB_DIR $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
     
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
@@ -1121,7 +1121,7 @@ test_cannot_create_over_existing() {
     echo "============================================================================"
     echo "=== TEST 21: CANNOT CREATE DATABASE OVER EXISTING ==="
     
-    invoke_command "Fail to create database over existing" "$(get_cli_command) init $TEST_DB_DIR --yes" 1
+    invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
 }
 
 

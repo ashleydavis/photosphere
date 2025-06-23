@@ -4,14 +4,15 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 
-export interface ICheckCommandOptions extends IBaseCommandOptions {}
+export interface ICheckCommandOptions extends IBaseCommandOptions {
+}
 
 //
 // Command that checks which files and directories have been added to the Photosphere media file database.
 //
-export async function checkCommand(dbDir: string, paths: string[], options: ICheckCommandOptions): Promise<void> {
+export async function checkCommand(paths: string[], options: ICheckCommandOptions): Promise<void> {
     
-    const database = await loadDatabase(dbDir, options);
+    const database = await loadDatabase(options.db, options);
 
     writeProgress(`Searching for files...`);
 

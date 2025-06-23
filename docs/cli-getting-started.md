@@ -2,9 +2,12 @@
 
 ## Overview
 
-The Photosphere CLI (`psi`) is a command-line tool for managing your local photo and video database. It allows you to initialize databases, add media files, check what's already indexed, and launch the web UI for viewing your media.
+The Photosphere CLI (`psi`) is a command-line tool for managing your media file database. 
 
 ## Installation
+
+Get the latest release from GitHub: 
+- https://github.com/ashleydavis/photosphere/releases
 
 ### Using Pre-built Binaries
 
@@ -12,6 +15,8 @@ Download the appropriate binary for your platform:
 - Linux: `psi`
 - Windows: `psi.exe`
 - macOS: `psi`
+
+### Set permissions
 
 **Important**: After downloading, make sure the binary has execute permissions:
 
@@ -58,12 +63,14 @@ bun run build-mac     # For macOS
 Create a new Photosphere database in your desired directory:
 
 ```bash
-psi init ~/my-photos
+mkdir my-photos
+cd my-photos
+psi init
 ```
 
 With encryption:
 ```bash
-psi init ~/my-photos --key ~/my-key.pem --generate-key
+psi init --key ~/my-key --generate-key
 ```
 
 ### 2. Add Media Files
@@ -72,18 +79,18 @@ Add photos and videos to your database:
 
 ```bash
 # Add individual files
-psi add ~/my-photos ~/Pictures/vacation.jpg ~/Videos/birthday.mp4
+psi add ~/Pictures/vacation.jpg ~/Videos/birthday.mp4
 
 # Add entire directories
-psi add ~/my-photos ~/Pictures/2024/
+psi add ~/Pictures/2024/
 ```
 
 ### 3. View Database Summary
 
-Check what's in your database:
+Check a summary of what's in your database:
 
 ```bash
-psi summary ~/my-photos
+psi summary
 ```
 
 This shows total files, size, and database hash for verification.
@@ -93,7 +100,7 @@ This shows total files, size, and database hash for verification.
 Check that your files haven't been corrupted or modified:
 
 ```bash
-psi verify ~/my-photos
+psi verify
 ```
 
 This compares file hashes to detect any changes since they were added.
@@ -103,7 +110,7 @@ This compares file hashes to detect any changes since they were added.
 Replicate your database to create a backup:
 
 ```bash
-psi replicate ~/my-photos ~/backup/my-photos
+psi replicate --dest ~/backup/my-photos
 ```
 
 This creates an exact copy that can be used for backup or migration.
@@ -113,164 +120,25 @@ This creates an exact copy that can be used for backup or migration.
 Verify that your backup matches the original:
 
 ```bash
-psi compare ~/my-photos ~/backup/my-photos
+psi compare --dest ~/backup/my-photos
 ```
 
 This analyzes the Merkle trees to identify any differences between databases.
 
 ### 7. Launch the Web UI
 
-View and manage your media through the web interface:
+View and manage your media through a local version of the web interface:
 
 ```bash
-psi ui ~/my-photos
+psi ui
 ```
 
 The UI will automatically open in your default browser. Use `--no-open` to prevent auto-opening.
 
-## Commands
-
-### `init [database-dir]`
-Initializes a new Photosphere media file database.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory (default: `<database-dir>/.db`)
-- `-k, --key <keyfile>`: Path to encryption key file
-- `-g, --generate-key`: Generate encryption keys if they don't exist
-- `-v, --verbose`: Enable verbose logging
-
-**Example:**
-```bash
-psi init ~/photos --meta ~/photos/.metadata --generate-key
-```
-
-### `add [database-dir] <files...>`
-Add files and directories to the database.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory
-- `-k, --key <keyfile>`: Path to encryption key file
-- `-v, --verbose`: Enable verbose logging
-
-**Example:**
-```bash
-psi add ~/photos ~/Downloads/*.jpg ~/Pictures/
-```
-
-### `check [database-dir] <files...>`
-Check which files have already been added to the database.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory
-- `-k, --key <keyfile>`: Path to encryption key file
-- `-v, --verbose`: Enable verbose logging
-
-**Example:**
-```bash
-psi check ~/photos ~/Pictures/vacation/
-```
-
-### `summary [database-dir]`
-Display a summary of the database including total files, size, and integrity hash.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory
-- `-k, --key <keyfile>`: Path to encryption key file
-- `-v, --verbose`: Enable verbose logging
-
-**Example:**
-```bash
-psi summary ~/photos
-```
-
-### `verify [database-dir] [file-path]`
-Verify the integrity of the database by checking file hashes for corruption or changes.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory
-- `-k, --key <keyfile>`: Path to encryption key file
-- `-v, --verbose`: Enable verbose logging
-- `--full`: Force full verification (bypass cached hash optimization)
-- `-o, --output <file>`: Write verification summary to JSON file
-
-**Examples:**
-```bash
-psi verify ~/photos
-psi verify ~/photos photo.jpg
-psi verify ~/photos --full --output report.json
-```
-
-### `replicate [source-dir] <destination-dir>`
-Replicate an asset database from source to destination with incremental sync.
-
-**Options:**
-- `-s, --src-meta <dir>`: Source metadata directory override
-- `-d, --dest-meta <dir>`: Destination metadata directory override
-- `--sk, --src-key <keyfile>`: Source encryption key file
-- `--dk, --dest-key <keyfile>`: Destination encryption key file
-- `-g, --generate-key`: Generate encryption keys if needed
-- `-v, --verbose`: Enable verbose logging
-
-**Examples:**
-```bash
-psi replicate ~/photos ~/backup/photos
-psi replicate ~/photos s3:backup-bucket/photos
-psi replicate s3:source/photos ~/local-backup
-```
-
-### `compare <source-dir> <destination-dir>`
-Compare two asset databases by analyzing their Merkle trees to identify differences.
-
-**Options:**
-- `-s, --src-meta <dir>`: Source metadata directory override
-- `-d, --dest-meta <dir>`: Destination metadata directory override
-- `--sk, --src-key <keyfile>`: Source encryption key file
-- `--dk, --dest-key <keyfile>`: Destination encryption key file
-- `-o, --output <file>`: Write comparison results to JSON file
-- `-v, --verbose`: Enable verbose logging
-
-**Examples:**
-```bash
-psi compare ~/photos ~/backup/photos
-psi compare ~/photos s3:backup-bucket/photos
-psi compare s3:source/photos ~/local-copy --output report.json
-```
-
-### `ui [database-dir]`
-Start the Photosphere web interface.
-
-**Options:**
-- `-m, --meta <dir>`: Metadata directory
-- `-k, --key <keyfile>`: Path to encryption key file
-- `--no-open`: Don't automatically open browser
-
-**Example:**
-```bash
-psi ui ~/photos --no-open
-```
-
-### `configure`
-Configure S3 credentials for cloud storage.
-
-**Options:**
-- `-p, --profile <name>`: Suggested profile name (default: "default")
-- `-c, --clear`: Clear all S3 configuration files
-
-**Example:**
-```bash
-# Configure with interactive profile name prompt
-psi configure
-
-# Configure with suggested profile name
-psi configure --profile backup
-
-# Clear all configuration
-psi configure --clear
-```
-
 ## Database Structure
 
 Photosphere organizes your media into:
+
 - **Original files**: Full resolution originals
 - **Display versions**: Web-optimized versions
 - **Thumbnails**: Small preview images
@@ -291,13 +159,13 @@ To protect your media with encryption:
 
 1. Generate a key on first init:
    ```bash
-   psi init ~/photos --key ~/my-key.pem --generate-key
+   psi init --key ~/my-key --generate-key
    ```
 
 2. Use the same key for all operations:
    ```bash
-   psi add ~/photos ~/new-photos/ --key ~/my-key.pem
-   psi ui ~/photos --key ~/my-key.pem
+   psi add ~/new-photos/ --key ~/my-key.pem
+   psi ui --key ~/my-key.pem
    ```
 
 ## Cloud Storage (S3)
@@ -332,14 +200,17 @@ Credentials can be saved in two locations:
 Once configured, you can use S3 paths directly in commands:
 
 ```bash
-# Initialize database on S3
-psi init s3:my-bucket/photos
+# Replicate a local database to S3
+psi replicate --db my-photos --dest s3:my-bucket/photos
+
+# Initialize an empty database on S3
+psi init --db s3:my-bucket/photos
 
 # Add files to S3-backed database
-psi add s3:my-bucket/photos ~/Pictures/*.jpg
+psi add --db s3:my-bucket/photos ~/Pictures/*.jpg
 
 # Launch UI for S3 database
-psi ui s3:my-bucket/photos
+psi ui --db s3:my-bucket/photos
 ```
 
 ### Managing Profiles
@@ -356,7 +227,7 @@ psi configure --profile spaces-primary
 
 # Use a specific profile (if not default)
 export S3_PROFILE=aws-backup
-psi ui s3:backup-bucket/photos
+psi ui --db s3:backup-bucket/photos
 ```
 
 **Note**: The `--profile` flag provides a suggested name, but you'll be prompted to confirm or change it during configuration. This allows you to organize multiple S3 configurations for different environments or services.
@@ -384,16 +255,3 @@ This will prompt for confirmation before deleting all credential files.
   export AWS_ENDPOINT=https://custom.endpoint.com  # Optional
   ```
 
-## Tips
-
-- Use `--verbose` flag for detailed progress information
-- Check files before adding to avoid duplicates: `psi check`
-- View database overview anytime: `psi summary`
-- Verify database integrity regularly: `psi verify`
-- Create backups with incremental sync: `psi replicate`
-- Compare databases to verify backups: `psi compare`
-- Use `--full` flag for thorough verification if you suspect corruption
-- Replication is incremental - only changed files are copied on subsequent runs
-- Database comparison uses efficient Merkle tree analysis
-- The CLI automatically processes images and creates optimized versions
-- Supported formats: JPEG, PNG, WebP, HEIC, and common video formats

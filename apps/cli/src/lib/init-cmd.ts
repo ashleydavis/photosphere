@@ -13,6 +13,11 @@ import { ensureMediaProcessingTools } from './ensure-tools';
 //
 export interface IBaseCommandOptions {
     //
+    // Database directory path.
+    //
+    db: string;
+
+    //
     // Set the path to the database metadata.
     //
     meta?: string;

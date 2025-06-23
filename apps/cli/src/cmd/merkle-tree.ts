@@ -2,15 +2,16 @@ import { exit } from "node-utils";
 import pc from "picocolors";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 
-export interface IMerkleTreeCommandOptions extends IBaseCommandOptions {}
+export interface IMerkleTreeCommandOptions extends IBaseCommandOptions {
+}
 
 //
 // Command to visualize the merkle tree structure
 //
-export async function merkleTreeCommand(databaseDir: string | undefined, options: IMerkleTreeCommandOptions): Promise<void> {
+export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Promise<void> {
     
     try {
-        const database = await loadDatabase(databaseDir, options);
+        const database = await loadDatabase(options.db, options);
         
         // Visualize the merkle tree
         console.log(pc.green("\nMerkle Tree Visualization:"));
