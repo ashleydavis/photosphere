@@ -9,6 +9,16 @@ import { compareTrees, loadTreeV2 } from "adb";
 
 export interface ICompareCommandOptions { 
     //
+    // Source database directory.
+    //
+    db: string;
+
+    //
+    // Destination database directory.
+    //
+    dest: string;
+
+    //
     // Source metadata directory override.
     //
     srcMeta?: string;
@@ -29,26 +39,13 @@ export interface ICompareCommandOptions {
     yes?: boolean;
 }
 
-interface ComparisonResult {
-    treesMatch: boolean;
-    message: string;
-    differences: {
-        filesOnlyInA: string[];
-        filesOnlyInB: string[];
-        modifiedFiles: string[];
-        deletedFiles: string[];
-    };
-    metrics: {
-        filesInTreeA: number;
-        filesInTreeB: number;
-        totalDifferences: number;
-    };
-}
-
 //
 // Command that compares two asset databases by analyzing their Merkle trees.
 //
-export async function compareCommand(srcDir: string, destDir: string, options: ICompareCommandOptions): Promise<void> {
+export async function compareCommand(options: ICompareCommandOptions): Promise<void> {
+
+    const srcDir = options.db!;
+    const destDir = options.dest!;
 
     configureLog({
         verbose: options.verbose,

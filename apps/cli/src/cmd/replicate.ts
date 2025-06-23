@@ -7,19 +7,14 @@ import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
-    // Source metadata directory override.
+    // Destination directory for replicated database.
     //
-    srcMeta?: string;
+    dest: string;
 
     //
     // Destination metadata directory override.
     //
     destMeta?: string;
-
-    //
-    // Path to source encryption key file.
-    //
-    srcKey?: string;
 
     //
     // Path to destination encryption key file.
@@ -35,24 +30,24 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
 //
 // Command that replicates an asset database from source to destination.
 //
-export async function replicateCommand(srcDir: string, destDir: string, options: IReplicateCommandOptions): Promise<void> {
+export async function replicateCommand(options: IReplicateCommandOptions): Promise<void> {
 
     // Use initCmd for source database initialization
     const sourceOptions = {
-        meta: options.srcMeta,
-        key: options.srcKey,
+        db: options.db,
+        meta: options.meta,
+        key: options.key,
         verbose: options.verbose,
         yes: options.yes
     };
     
-    const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(srcDir, sourceOptions, 'existing', false, true);
+    const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(options.db, sourceOptions, 'existing', false, true);
     
     // Destination can be new or existing
-    const destinationDatabaseDir = destDir;
-    const destMetaPath = options.destMeta || pathJoin(destinationDatabaseDir, '.db');
+    const destMetaPath = options.destMeta || pathJoin(options.dest, '.db');
 
     // Configure S3 for destination
-    if (!await configureS3IfNeeded(destinationDatabaseDir)) {
+    if (!await configureS3IfNeeded(options.dest)) {
         await exit(1);
     }
     
@@ -64,10 +59,10 @@ export async function replicateCommand(srcDir: string, destDir: string, options:
     const { options: destStorageOptions } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
 
     // Create destination storage instances
-    const { storage: destAssetStorage } = createStorage(destinationDatabaseDir, destStorageOptions);        
+    const { storage: destAssetStorage } = createStorage(options.dest, destStorageOptions);        
     const { storage: destMetadataStorage } = createStorage(destMetaPath);
 
-    console.log(pc.blue(`🔄 Replicating database from ${sourceDatabaseDir} to ${destinationDatabaseDir}`));
+    console.log(pc.blue(`🔄 Replicating database from ${sourceDatabaseDir} to ${options.dest}`));
     console.log(pc.gray(`Source metadata: ${srcMetaPath}`));
     console.log(pc.gray(`Destination metadata: ${destMetaPath}`));
 

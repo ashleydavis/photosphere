@@ -110,7 +110,7 @@ describe('add command', () => {
         const { createStorage } = require('storage');
         const { MediaFileDatabase } = require('api');
 
-        await addCommand('/test/db', ['/path/to/file.jpg'], { meta: '/test/metadata' });
+        await addCommand(['/path/to/file.jpg'], { db: '/test/db', meta: '/test/metadata' });
 
         // Check that createStorage was called
         expect(createStorage).toHaveBeenCalledTimes(2);
@@ -124,7 +124,7 @@ describe('add command', () => {
     test('addCommand uses default metadata path when not specified', async () => {
         const { createStorage } = require('storage');
 
-        await addCommand('/test/db', ['/path/to/file.jpg'], {});
+        await addCommand(['/path/to/file.jpg'], { db: '/test/db' });
 
         // Check that createStorage was called with the default metadata path
         expect(createStorage).toHaveBeenCalledTimes(2);
@@ -135,7 +135,7 @@ describe('add command', () => {
     test('addCommand calls database.load()', async () => {
         const { MediaFileDatabase } = require('api');
 
-        await addCommand('/test/db', ['/path/to/file.jpg'], {});
+        await addCommand(['/path/to/file.jpg'], { db: '/test/db' });
 
         // Check that load was called
         expect(MediaFileDatabase.mock.results[0].value.load).toHaveBeenCalled();
@@ -145,7 +145,7 @@ describe('add command', () => {
         const { MediaFileDatabase } = require('api');
         const filePaths = ['/path/to/file1.jpg', '/path/to/file2.jpg', '/path/to/dir'];
 
-        await addCommand('/test/db', filePaths, {});
+        await addCommand(filePaths, { db: '/test/db' });
 
         // Check that addPaths was called with the file paths
         expect(MediaFileDatabase.mock.results[0].value.addPaths).toHaveBeenCalledWith(filePaths);
@@ -154,7 +154,7 @@ describe('add command', () => {
     test('addCommand closes the database when done', async () => {
         const { MediaFileDatabase } = require('api');
 
-        await addCommand('/test/db', ['/path/to/file.jpg'], {});
+        await addCommand(['/path/to/file.jpg'], { db: '/test/db' });
 
         // Check that the database was closed
         expect(MediaFileDatabase.mock.results[0].value.close).toHaveBeenCalled();
@@ -164,7 +164,7 @@ describe('add command', () => {
         const { MediaFileDatabase } = require('api');
         const { log } = require('utils');
 
-        await addCommand('/test/db', ['/path/to/file.jpg'], {});
+        await addCommand(['/path/to/file.jpg'], { db: '/test/db' });
 
         // Check that getAddSummary was called
         expect(MediaFileDatabase.mock.results[0].value.getAddSummary).toHaveBeenCalled();

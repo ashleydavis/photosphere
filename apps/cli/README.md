@@ -24,8 +24,8 @@ bun run build-fe-mac
 ## Testing the CLI tool locally
 
 ```bash
-bun run start -- <command> [db-path]
-bun run start:dev -- <command> [db-path]
+bun run start -- <command> [options]
+bun run start:dev -- <command> [options]
 ```
 
 Example commands for testing are encoded in this script:

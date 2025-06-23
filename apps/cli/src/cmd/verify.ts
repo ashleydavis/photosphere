@@ -15,9 +15,9 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 // Command that verifies the integrity of the Photosphere media file database.
 //
-export async function verifyCommand(dbDir: string, options: IVerifyCommandOptions): Promise<void> {
+export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
     
-    const database = await loadDatabase(dbDir, options);
+    const database = await loadDatabase(options.db, options);
 
     writeProgress(`🔍 Verifying database integrity`);
 
@@ -42,7 +42,7 @@ function displayResults(result: IVerifyResult): void {
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     console.log(`New: ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
     console.log(`Removed: ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
-    
+        
     // Show details for problematic files
     if (result.modified.length > 0) {
         console.log();

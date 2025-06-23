@@ -14,6 +14,11 @@ import pfe from  "../../pfe.zip" with { type: "file" } ;
 
 export interface IUiCommandOptions {
     //
+    // Database directory path.
+    //
+    db: string;
+
+    //
     // Set the path to the database metadata.
     //
     meta?: string;
@@ -37,18 +42,18 @@ export interface IUiCommandOptions {
 //
 // Command that starts the Photosphere ui.
 //
-export async function uiCommand(dbDir: string, options: IUiCommandOptions): Promise<void> {
+export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
 
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureS3IfNeeded(options.db)) {
         await exit(1);
     }
     
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    const metaPath = options.meta || pathJoin(options.db, '.db');
     if (!await configureS3IfNeeded(metaPath)) {
         await exit(1);
     }
@@ -66,7 +71,7 @@ export async function uiCommand(dbDir: string, options: IUiCommandOptions): Prom
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);
+    const { storage: assetStorage } = createStorage(options.db, storageOptions);
     const { storage: metadataStorage } = createStorage(metaPath);
     const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
 

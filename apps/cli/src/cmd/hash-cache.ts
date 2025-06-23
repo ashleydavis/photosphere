@@ -7,6 +7,7 @@ import pc from "picocolors";
 import { formatBytes } from "../lib/format";
 
 export interface IHashCacheCommandOptions {
+    db?: string;
     meta?: string;
     key?: string;
     verbose?: boolean;
@@ -17,9 +18,9 @@ export interface IHashCacheCommandOptions {
 //
 // Command to display hash cache entries
 //
-export async function hashCacheCommand(databaseDir: string | undefined, options: IHashCacheCommandOptions): Promise<void> {
+export async function hashCacheCommand(options: IHashCacheCommandOptions): Promise<void> {
     
-    databaseDir = databaseDir || process.cwd();
+    const databaseDir = options.db || process.cwd();
     
     // Determine which hash cache to show
     const cacheType = options.type || "both";

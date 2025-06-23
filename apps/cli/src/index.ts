@@ -11,7 +11,8 @@ import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
-import { createDebugCommand } from './cmd/debug';
+import { merkleTreeCommand } from './cmd/merkle-tree';
+import { hashCacheCommand } from './cmd/hash-cache';
 import { bugReportCommand } from './cmd/bug-report';
 import { examplesCommand } from './cmd/examples';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
@@ -20,7 +21,7 @@ import { exit } from 'node-utils';
 
 async function main() {
 
-    const dbArgument: [string, string] = ["[database-dir]", `The directory that contains the media file database. Defaults to the current directory.`];
+    const dbOption: [string, string, string] = ["--db <path>", "The directory that contains the media file database", "."];
     const metadataDirOption: [string, string] = ["-m, --meta <db-metadata-dir>", `The directory in which to store asset database metadata. (default: "<current-dir>/.db")`];
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
@@ -32,7 +33,6 @@ async function main() {
         .version(version)
         .description(`The Photosphere CLI tool for managing your media file database.`)
         .addHelpText('after', `
-The [database-dir] argument specifies the directory that contains the media file database and it defaults to the current directory when omitted.
 
 Getting help:
   ${pc.bold("psi <command> --help")}    Shows help for a particular command.
@@ -52,7 +52,7 @@ Resources:
     program
         .command("init")
         .description("Initializes a new media file database.")
-        .argument(...dbArgument)
+        .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...generateKeyOption)
@@ -64,31 +64,31 @@ Resources:
     program
         .command("add")
         .description("Adds files and directories to the media file database.")
-        .argument(...dbArgument)
+        .argument("<files...>", "The media files (or directories) to add to the database.")
+        .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .argument("<files...>", "The media files (or directories) to add to the database.")
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
     program
         .command("check")
         .description("Checks files and direcotires to see what has already been added to the media file database.")
-        .argument(...dbArgument)
+        .argument("<files...>", "The media files (or directories) to add to the database.")
+        .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .argument("<files...>", "The media files (or directories) to add to the database.")
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
 
     program
         .command("ui")
         .description("Starts the Photosphere user-interface to view, search and edit photos and videos.")
-        .argument(...dbArgument)
+        .option(...dbOption)
         .option(...keyOption)
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
@@ -124,7 +124,7 @@ Resources:
     program
         .command("summary")
         .description("Displays a summary of the media file database including total files, size, and tree hash.")
-        .argument(...dbArgument)
+        .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
@@ -135,7 +135,7 @@ Resources:
     program
         .command("verify")
         .description("Verifies the integrity of the media file database by checking file hashes.")
-        .argument(...dbArgument)
+        .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
@@ -147,11 +147,11 @@ Resources:
     program
         .command("replicate")
         .description("Replicates an asset database from source to destination location.")
-        .argument("[source-dir]", "Source database directory (defaults to current directory)")
-        .argument("<destination-dir>", "Destination directory for replicated database")
-        .option("-s, --src-meta <dir>", "Source metadata directory override")
+        .option(...dbOption)
+        .requiredOption("--dest <path>", "Destination directory for replicated database")
+        .option(...metadataDirOption)
+        .option(...keyOption)
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
-        .option("--sk, --src-key <keyfile>", "Path to source encryption key file")
         .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
         .option(...generateKeyOption)
         .option(...verboseOption)
@@ -162,8 +162,8 @@ Resources:
     program
         .command("compare")
         .description("Compares two asset databases by analyzing their Merkle trees.")
-        .argument("<source-dir>", "Source database directory")
-        .argument("<destination-dir>", "Destination database directory")
+        .requiredOption("--db <path>", "Source database directory")
+        .requiredOption("--dest <path>", "Destination database directory")
         .option("-s, --src-meta <dir>", "Source metadata directory override")
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
@@ -171,8 +171,35 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
 
-    // Add the debug command with its subcommands
-    program.addCommand(createDebugCommand());
+    // Add debug commands with shared options
+    const debugCommand = program
+        .command('debug')
+        .description('Debug utilities for inspecting the media file database internals');
+
+    // Add merkle-tree subcommand
+    debugCommand
+        .command('merkle-tree')
+        .description('Visualize the merkle tree structure of the media file database')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
+        .action(merkleTreeCommand);
+
+    // Add hash-cache subcommand
+    debugCommand
+        .command('hash-cache')
+        .description('Display information about the local and database hash caches')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
+        .action(hashCacheCommand);
 
     program
         .command("examples")

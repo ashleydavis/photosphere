@@ -77,7 +77,7 @@ describe('init command', () => {
     test('initCommand creates database with the correct storage objects', async () => {
         const { createStorage } = require('storage');
 
-        await initCommand('/test/db', { meta: '/test/metadata' });
+        await initCommand({ db: '/test/db', meta: '/test/metadata' });
 
         // Check that createStorage was called
         expect(createStorage).toHaveBeenCalledTimes(2);
@@ -92,7 +92,7 @@ describe('init command', () => {
     test('initCommand uses default metadata path when not specified', async () => {
         const { createStorage } = require('storage');
 
-        await initCommand('/test/db', {});
+        await initCommand({ db: '/test/db' });
 
         // Check that createStorage was called right times
         expect(createStorage).toHaveBeenCalledTimes(2);
@@ -101,7 +101,7 @@ describe('init command', () => {
     test('initCommand logs success message', async () => {
         const { log } = require('utils');
 
-        await initCommand('/test/db', {});
+        await initCommand({ db: '/test/db' });
 
         // Check that success message was logged
         expect(log.success).toHaveBeenCalledWith('Created new media file database in "/test/db".');

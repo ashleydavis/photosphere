@@ -16,16 +16,6 @@ import { log } from "utils";
 
 export interface IInfoCommandOptions { 
     //
-    // Set the path to the database metadata.
-    //
-    meta?: string;
-
-    //
-    // Sets the path to private key file for encryption.
-    //
-    key?: string;
-
-    //
     // Enables verbose logging.
     //
     verbose?: boolean;
