@@ -223,13 +223,21 @@ Resources:
     } catch (err: any) {
         // Commander throws an error when no command is provided
         // Check if this is just a help display situation
-        if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
+        if (err.code === 'commander.help' 
+            || err.code === 'commander.helpDisplayed') {
             await exit(0);
         }
+        
+        if (err.code === 'commander.missingArgument' 
+            || err.code === 'commander.unknownOption') {
+            await exit(1);
+        }
+
         // If no command was provided and we're showing help
         if (process.argv.length <= 2) {
             await exit(0);
         }
+
         throw err;
     }
 }
