@@ -12,7 +12,7 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 export async function checkCommand(paths: string[], options: ICheckCommandOptions): Promise<void> {
     
-    const database = await loadDatabase(options.db, options);
+    const { database } = await loadDatabase(options.db, options);
 
     log.info('');
     log.info(`Checking files against the media file database in ${pc.cyan(options.db)}`);

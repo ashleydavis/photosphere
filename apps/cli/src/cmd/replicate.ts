@@ -43,7 +43,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         yes: options.yes
     };
     
-    const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(options.db, sourceOptions, 'existing', false, true);
+    const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(options.db, sourceOptions);
     
     // Destination can be new or existing
     const destMetaPath = options.destMeta || pathJoin(options.dest, '.db');

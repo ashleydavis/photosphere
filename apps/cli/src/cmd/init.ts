@@ -153,7 +153,7 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
         }
     }
 
-    await createDatabase(options.db, options, false, true);
+    await createDatabase(options.db, options);
 
     const displayPath = (options.db === "." || options.db === "./") ? "current directory" : options.db;
     const isCurrentDir = options.db === "." || options.db === "./";

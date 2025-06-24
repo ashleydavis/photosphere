@@ -101,26 +101,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(
-    dbDir: string | undefined,
-    options: IBaseCommandOptions,
-    directoryType?: 'existing' | 'init',
-    skipToolsCheck?: boolean
-): Promise<MediaFileDatabase>;
-export async function loadDatabase(
-    dbDir: string | undefined,
-    options: IBaseCommandOptions,
-    directoryType: 'existing' | 'init',
-    skipToolsCheck: boolean,
-    returnFullResult: true
-): Promise<IInitResult>;
-export async function loadDatabase(
-    dbDir: string | undefined,
-    options: IBaseCommandOptions,
-    directoryType: 'existing' | 'init' = 'existing',
-    skipToolsCheck: boolean = false,
-    returnFullResult?: boolean
-): Promise<MediaFileDatabase | IInitResult> {
+export async function loadDatabase(dbDir: string, options: IBaseCommandOptions): Promise<IInitResult> {
     
     // Configure logging
     await configureLog({
@@ -131,13 +112,11 @@ export async function loadDatabase(
     const command = process.argv.slice(2).join(' ');
     log.verbose(`Executing command: ${command}`);
 
-    // Ensure media processing tools are available (unless skipped)
-    if (!skipToolsCheck) {
-        await ensureMediaProcessingTools(options.yes || false);
-    }
+    // Ensure media processing tools are available
+    await ensureMediaProcessingTools(options.yes || false);
 
     // Get the directory for the database
-    const databaseDir = await getDirectoryForCommand(directoryType, dbDir, options.yes || false);
+    const databaseDir = await getDirectoryForCommand("init", dbDir, options.yes || false);
     
     const metaPath = options.meta || pathJoin(databaseDir, '.db');
 
@@ -187,17 +166,13 @@ export async function loadDatabase(
     // Load the database
     await database.load();
 
-    if (returnFullResult) {
-        return {
-            database,
-            databaseDir,
-            metaPath,
-            assetStorage,
-            metadataStorage
-        };
-    }
-
-    return database;
+    return {
+        database,
+        databaseDir,
+        metaPath,
+        assetStorage,
+        metadataStorage
+    };
 }
 
 //
@@ -205,23 +180,7 @@ export async function loadDatabase(
 // This handles creating a new database with similar setup to loadDatabase
 // but uses 'init' directory type and calls database.create() instead of load()
 //
-export async function createDatabase(
-    dbDir: string | undefined,
-    options: ICreateCommandOptions,
-    skipToolsCheck?: boolean
-): Promise<MediaFileDatabase>;
-export async function createDatabase(
-    dbDir: string | undefined,
-    options: ICreateCommandOptions,
-    skipToolsCheck: boolean,
-    returnFullResult: true
-): Promise<IInitResult>;
-export async function createDatabase(
-    dbDir: string | undefined,
-    options: ICreateCommandOptions,
-    skipToolsCheck: boolean = false,
-    returnFullResult?: boolean
-): Promise<MediaFileDatabase | IInitResult> {
+export async function createDatabase(dbDir: string, options: ICreateCommandOptions): Promise<IInitResult> {
     
     // Configure logging
     await configureLog({
@@ -232,10 +191,8 @@ export async function createDatabase(
     const command = process.argv.slice(2).join(' ');
     log.verbose(`Executing command: ${command}`);
 
-    // Ensure media processing tools are available (unless skipped)
-    if (!skipToolsCheck) {
-        await ensureMediaProcessingTools(options.yes || false);
-    }
+    // Ensure media processing tools are available
+    await ensureMediaProcessingTools(options.yes || false);
 
     // Get the directory for the database (validates it's empty/non-existent for init)
     const databaseDir = await getDirectoryForCommand('init', dbDir, options.yes || false);
@@ -289,15 +246,11 @@ export async function createDatabase(
         }
     }
 
-    if (returnFullResult) {
-        return {
-            database,
-            databaseDir,
-            metaPath,
-            assetStorage,
-            metadataStorage
-        };
-    }
-
-    return database;
+    return {
+        database,
+        databaseDir,
+        metaPath,
+        assetStorage,
+        metadataStorage
+    };
 }

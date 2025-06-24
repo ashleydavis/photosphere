@@ -17,7 +17,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
     
-    const database = await loadDatabase(options.db, options);
+    const { database } = await loadDatabase(options.db, options);
 
     writeProgress(`🔍 Verifying database integrity`);
 

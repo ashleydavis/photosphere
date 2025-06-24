@@ -11,7 +11,7 @@ export interface IMerkleTreeCommandOptions extends IBaseCommandOptions {
 export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Promise<void> {
     
     try {
-        const database = await loadDatabase(options.db, options);
+        const { database } = await loadDatabase(options.db, options);
         
         // Visualize the merkle tree
         console.log(pc.green("\nMerkle Tree Visualization:"));
