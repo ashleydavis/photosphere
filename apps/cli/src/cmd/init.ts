@@ -167,24 +167,24 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     }
     
     log.info('');
-    log.info(pc.dim('Your database is ready to receive photos and videos!'));
+    log.info(pc.blue('Your database is ready to receive photos and videos!'));
     log.info('');
-    log.info(pc.dim('To get started:'));
+    log.info(pc.blue('To get started:'));
     if (isCurrentDir) {
-        log.info(pc.dim(`  1. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+        log.info(pc.blue(`  1. `) + pc.cyan(`psi add <source-media-directory>`) + pc.blue(` (add your photos and videos)`));
     } else {
-        log.info(pc.dim(`  1. ${pc.cyan(`cd ${options.db}`)} (change to your database directory)`));
-        log.info(pc.dim(`  2. ${pc.cyan(`psi add <source-media-directory>`)} (add your photos and videos)`));
+        log.info(pc.blue(`  1. `) + pc.cyan(`cd ${options.db}`) + pc.blue(` (change to your database directory)`));
+        log.info(pc.blue(`  2. `) + pc.cyan(`psi add <source-media-directory>`) + pc.blue(` (add your photos and videos)`));
     }
     log.info('');
     if (!isCurrentDir) {
-        log.info(pc.dim(`Or identify the database using the path: ${pc.cyan(`psi add --db ${options.db} <source-media-directory>`)}`));
+        log.info(pc.blue(`Or identify the database using the path: `) + pc.cyan(`psi add --db ${options.db} <source-media-directory>`));
     }
 
     if (options.key) {
         log.info('');
-        log.info(pc.dim('When using your encrypted database, specify the key file:'));
-        log.info(pc.dim(`  ${pc.cyan(`psi add --key ${options.key} <source-media-directory>`)}`));
+        log.info(pc.blue('When using your encrypted database, specify the key file:'));
+        log.info(pc.blue(`  `) + pc.cyan(`psi add --key ${options.key} <source-media-directory>`));
     }
 
     await exit(0);
