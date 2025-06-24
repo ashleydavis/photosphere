@@ -108,6 +108,86 @@ export interface ISortResult<RecordT> {
     previousPageId?: string;
 }
 
+export interface ISortIndex<RecordT extends IRecord> {
+    //
+    // Lazily initializes the sort index.
+    //
+    init(): Promise<void>;
+    
+    //
+    // Get a page of records from the collection using the sort index.
+    //
+    getPage(pageId?: string): Promise<ISortResult<RecordT>>;
+    
+    //
+    // Delete the entire index
+    //
+    delete(): Promise<void>;
+    
+    //
+    // Updates a record in the index without rebuilding the entire index
+    // If the indexed field value has changed, the record will be removed and added again
+    //
+    updateRecord(record: RecordT, oldRecord: RecordT | undefined): Promise<void>;
+    
+    //
+    // Deletes a record from the index without rebuilding the entire index
+    // @param recordId The ID of the record to delete
+    // @param value The value of the indexed field, used to help locate the record
+    //
+    deleteRecord(recordId: string, oldRecord: RecordT): Promise<void>;
+    
+    //
+    // Adds a new record to the index without rebuilding the entire index
+    //
+    addRecord(record: RecordT): Promise<void>;
+    
+    //
+    // Find records by exact value using binary search on the sorted index
+    //
+    findByValue(value: any): Promise<RecordT[]>;
+    
+    //
+    // Find records by range query using optimized leaf traversal.
+    //
+    findByRange(options: IRangeOptions): Promise<RecordT[]>;
+    
+    //
+    // Saves all dirty nodes and metadata, then clears the cache
+    // Should be called when shutting down the database
+    //
+    shutdown(): Promise<void>;
+    
+    //
+    // Visualizes the B-tree structure for debugging purposes
+    // Returns a string representation of the tree
+    //
+    visualizeTree(): Promise<string>;
+    
+    //
+    // Analyze the tree structure and return statistics about keys per node
+    //
+    analyzeTreeStructure(): Promise<{
+        totalNodes: number;
+        leafNodes: number;
+        internalNodes: number;
+        minKeysPerNode: number;
+        maxKeysPerNode: number;
+        avgKeysPerNode: number;
+        nodeKeyDistribution: { nodeId: string; keyCount: number; isLeaf: boolean }[];
+        leafStats: {
+            minRecordsPerLeaf: number;
+            maxRecordsPerLeaf: number;
+            avgRecordsPerLeaf: number;
+        };
+        internalStats: {
+            minKeysPerInternal: number;
+            maxKeysPerInternal: number;
+            avgKeysPerInternal: number;
+        };
+    }>;
+}
+
 // B-tree node interface
 interface IBTreeNode {
     keys: any[];  // Values that divide ranges
@@ -118,7 +198,7 @@ interface IBTreeNode {
     // A node is a leaf if children.length === 0, and NOT a leaf if children.length > 0
 }
 
-export class SortIndex<RecordT extends IRecord> {
+export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private storage: IStorage;
     private indexDirectory: string;
     private fieldName: string;

@@ -127,7 +127,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Updates a record.
     //
-    updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean>
+    updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean>;
 
     //
     // Replaces a record with completely new data.
@@ -155,6 +155,11 @@ export interface IBsonCollection<RecordT extends IRecord> {
     findByIndex(fieldName: string, value: any): Promise<RecordT[]>;
     
     //
+    // Find records where the indexed field is within a range
+    //
+    findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<RecordT[]>;
+    
+    //
     // Deletes an index
     //
     deleteIndex(fieldName: string): Promise<boolean>;
@@ -177,7 +182,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Loads the requested shard from cache or from storage.
     //
-    loadShard(shardId: number): Promise<IShard<RecordT>>    
+    loadShard(shardId: number): Promise<IShard<RecordT>>;    
 }
 
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
