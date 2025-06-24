@@ -145,7 +145,7 @@ export async function loadEncryptionKeys(
         return { options: {}, isEncrypted: false };
     }
     
-    console.log(`Using ${description} encryption key: ${keyPath}`);
+    // console.log(`Using ${description} encryption key: ${keyPath}`);
     
     if (generateKey) {
         // Try to load or generate key pair

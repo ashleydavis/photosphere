@@ -71,7 +71,7 @@ export function createStorage(
     // Wrap with encryption if keys are provided
     if (options.privateKey) {
         storage = new EncryptedStorage(rootPath, storage, options.publicKey || options.privateKey, options.privateKey);
-        console.log(`Loading encrypted storage for path: ${rootPath}`);
+        // console.log(`Loading encrypted storage for path: ${rootPath}`);
         type = `encrypted-${type}`;
     }
 

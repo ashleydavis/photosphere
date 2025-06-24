@@ -282,7 +282,7 @@ export async function createDatabase(
         try {
             if (await fs.pathExists(publicKeySource)) {
                 await fs.copy(publicKeySource, publicKeyDest);
-                console.log(`Copied public key to database directory: ${publicKeyDest}`);
+                // console.log(`Copied public key to database directory: ${publicKeyDest}`);
             }
         } catch (error) {
             console.warn(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
