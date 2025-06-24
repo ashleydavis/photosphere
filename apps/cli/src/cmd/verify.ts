@@ -21,7 +21,9 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
 
     writeProgress(`🔍 Verifying database integrity`);
 
-    const result = await database.verify({ full: options.full || false });
+    const result = await database.verify({ full: options.full || false }, (progress) => {
+        writeProgress(`🔍 Verifying database integrity | ${progress}`);
+    });
 
     clearProgressMessage(); // Flush the progress message.
 
