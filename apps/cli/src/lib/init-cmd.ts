@@ -7,6 +7,16 @@ import { TestUuidGenerator } from "node-utils";
 import { configureS3IfNeeded } from './s3-config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
+import * as fs from 'fs-extra';
+import pc from "picocolors";
+
+//
+// Check if a database is encrypted by looking for the public key file
+//
+export async function isDatabaseEncrypted(metaPath: string): Promise<boolean> {
+    const publicKeyPath = pathJoin(metaPath, 'encryption.pub');
+    return await fs.pathExists(publicKeyPath);
+}
 
 //
 // Common options interface that all commands should extend
@@ -140,6 +150,20 @@ export async function loadDatabase(
         await exit(1);
     }
 
+    // Check if database is encrypted and require key
+    if (await isDatabaseEncrypted(metaPath)) {
+        if (!options.key) {
+            log.error('');
+            log.error(pc.red('✗ This database is encrypted and requires a private key to access.'));
+            log.error(pc.red('  Please provide the private key using the --key option.'));
+            log.error('');
+            log.error(pc.dim('Example:'));
+            log.error(pc.dim(`  psi <command> --key /path/to/your/private.key`));
+            log.error('');
+            await exit(1);
+        }
+    }
+
     // Load encryption keys
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
@@ -228,7 +252,7 @@ export async function createDatabase(
     }
 
     // Load encryption keys (with generateKey support for init)
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
+    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
 
     // Create storage instances
     const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
@@ -249,6 +273,21 @@ export async function createDatabase(
 
     // Create the database (instead of loading)
     await database.create();
+
+    // If database is encrypted, copy the public key to the .db directory as a marker
+    if (isEncrypted && options.key) {
+        const publicKeySource = `${options.key}.pub`;
+        const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
+        
+        try {
+            if (await fs.pathExists(publicKeySource)) {
+                await fs.copy(publicKeySource, publicKeyDest);
+                console.log(`Copied public key to database directory: ${publicKeyDest}`);
+            }
+        } catch (error) {
+            console.warn(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
 
     if (returnFullResult) {
         return {
