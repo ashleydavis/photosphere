@@ -14,6 +14,14 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
     
     const database = await loadDatabase(options.db, options);
 
+    log.info('');
+    log.info(`Checking files against the media file database in ${pc.cyan(options.db)}`);
+    log.info(`From paths:`)
+    for (const path of paths) {
+        log.info(`  - ${pc.cyan(path)}`);
+    }
+    log.info('');
+
     writeProgress(`Searching for files...`);
 
     await database.checkPaths(paths, (currentlyScanning) => {
@@ -41,9 +49,10 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
     log.info(pc.green(`Checked ${totalChecked} files.\n`));
     
     log.info(`Summary: `);
-    log.info(`  - ${addSummary.filesAlreadyAdded} files already in database.`);
-    log.info(`  - ${addSummary.filesAdded} files would be added to database.`);
-    log.info(`  - ${addSummary.filesIgnored} files ignored (not media files).`);
+    log.info(`  - Files added:      ${addSummary.filesAdded}`);
+    log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
+    log.info(`  - Files failed:     ${addSummary.filesFailed}`);
+    log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
 
     await exit(0);
 }
