@@ -6,6 +6,7 @@ import { configureS3IfNeeded } from '../lib/s3-config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { compareTrees, loadTreeV2 } from "adb";
+import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface ICompareCommandOptions { 
     //
@@ -85,17 +86,25 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     //
     // Load merkle trees.
     //
+    writeProgress(`Loading source merkle tree...`);
+    
     const srcMerkleTree = await loadTreeV2("tree.dat", srcMetadataStorage);
     if (!srcMerkleTree) {
+        clearProgressMessage();
         console.log(pc.red(`Error: Source Merkle tree not found in ${pathJoin(sourceDatabaseDir, 'tree.dat')}`));
         await exit(1);
     }
 
+    writeProgress(`Loading destination merkle tree...`);
+    
     const destMerkleTree = await loadTreeV2("tree.dat", destMetadataStorage);
     if (!destMerkleTree) {
+        clearProgressMessage();
         console.log(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destinationDatabaseDir, 'tree.dat')}`));
         await exit(1);
     }
+    
+    clearProgressMessage();
 
     console.log(pc.blue(`🔄 Comparing databases`));
     console.log(pc.gray(`Source: ${sourceDatabaseDir}`));
@@ -115,7 +124,13 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
         return;
     }
 
-    const compareResult = compareTrees(srcMerkleTree!, destMerkleTree!);
+    writeProgress(`Comparing trees...`);
+    
+    const compareResult = compareTrees(srcMerkleTree!, destMerkleTree!, (progress) => {
+        writeProgress(`🔍 Comparing | ${progress}`);
+    });
+    
+    clearProgressMessage();
     
     const totalDifferences = 
         compareResult.onlyInA.length + 
