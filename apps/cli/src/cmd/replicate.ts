@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -65,8 +66,16 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     console.log(pc.blue(`🔄 Replicating database from ${sourceDatabaseDir} to ${options.dest}`));
     console.log(pc.gray(`Source metadata: ${srcMetaPath}`));
     console.log(pc.gray(`Destination metadata: ${destMetaPath}`));
+    console.log();
 
-    const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorage);
+    writeProgress(`Initializing replication...`);
+
+    const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorage, (progress) => {
+        const progressMessage = `🔄 Replicating | ${progress}`;
+        writeProgress(progressMessage);
+    });
+
+    clearProgressMessage(); // Flush the progress message.
 
     console.log();
     console.log(pc.bold(pc.blue(`📊 Replication Results`)));

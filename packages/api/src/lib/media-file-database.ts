@@ -927,7 +927,7 @@ export class MediaFileDatabase {
     // Checks for missing files, modified files, and new files.
     // If any files are corrupted, this will pick them up as modified.
     //
-    async verify(options?: IVerifyOptions) : Promise<IVerifyResult> {
+    async verify(options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
         const summary = await this.getDatabaseSummary();
         const result: IVerifyResult = {
@@ -943,7 +943,13 @@ export class MediaFileDatabase {
         //
         // Check all files in the database to find new and modified files.
         //
+        let filesProcessed = 0;
         for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(`Checking file ${filesProcessed}/${summary.totalFiles}: ${file.fileName}`);
+            }
 
             const fileInfo = await this.assetStorage.info(file.fileName);
             if (!fileInfo) {
@@ -992,6 +998,10 @@ export class MediaFileDatabase {
         //
         // Check the merkle tree to find files that have been removed.
         //
+        if (progressCallback) {
+            progressCallback(`Checking for removed files...`);
+        }
+        
         await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
             if (node.fileName && !node.isDeleted) {
                 if (!await this.assetStorage.fileExists(node.fileName)) {
@@ -1010,7 +1020,7 @@ export class MediaFileDatabase {
     //
     // Replicates the media file database to another storage.
     //
-    async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage): Promise<IReplicationResult> {
+    async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
 
         const result: IReplicationResult = {
             filesImported: this.databaseMetadata.filesImported,
@@ -1032,6 +1042,10 @@ export class MediaFileDatabase {
         //
         async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
             result.filesConsidered++;
+            
+            if (progressCallback) {
+                progressCallback(`Processing ${result.filesConsidered}: ${fileName}`);
+            }
 
             const destHash = destHashCache.getHash(fileName);
             if (destHash) {
@@ -1115,6 +1129,9 @@ export class MediaFileDatabase {
 
                 if (result.copiedFiles % 100 === 0) {
                     await retry(() => destHashCache.save());
+                    if (progressCallback) {
+                        progressCallback(`Saved cache after ${result.copiedFiles} files copied`);
+                    }
                 }
             }
             return true; // Continue traversing.
@@ -1122,9 +1139,21 @@ export class MediaFileDatabase {
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
+        if (progressCallback) {
+            progressCallback(`Saving final hash cache...`);
+        }
+        
         await destHashCache.save();
 
+        if (progressCallback) {
+            progressCallback(`Saving merkle tree...`);
+        }
+        
         await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
+        
+        if (progressCallback) {
+            progressCallback(`Saving metadata...`);
+        }
         
         const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
         const metadataBuffer = Buffer.from(metadataJson, 'utf8');
