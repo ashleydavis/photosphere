@@ -15,10 +15,7 @@ export class Image {
     constructor(filePath: string) {
         this.filePath = filePath;
         
-        // Initialize ImageMagick commands on first use
-        if (!Image.isInitialized) {
-            Image.initializeCommands();
-        }
+        Image.initializeCommands();
     }
 
     /**

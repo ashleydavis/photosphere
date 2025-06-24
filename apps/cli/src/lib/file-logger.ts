@@ -2,8 +2,8 @@ import fs from "fs-extra";
 import path from "path";
 import os from "os";
 import { ILog } from "utils";
-import { execSync } from "child_process";
 import { registerTerminationCallback } from "node-utils";
+import { Image, Video } from "tools";
 
 //
 // File logger that writes all logs to files in the Photosphere temp directory
@@ -17,22 +17,11 @@ export class FileLogger implements ILog {
     private isClosed: boolean = false;
     private consoleLogger: ILog;
     
-    constructor(consoleLogger: ILog, command: string) {
+    private constructor(consoleLogger: ILog, command: string, logFile: string, startTime: Date) {
         this.consoleLogger = consoleLogger;
-        this.startTime = new Date();
         this.command = command;
-        
-        // Create logs directory in Photosphere temp
-        const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
-        const logsDir = path.join(photosphereTempDir, 'logs');
-        fs.ensureDirSync(logsDir);
-        
-        // Create log file with timestamp
-        const timestamp = this.startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        this.logFile = path.join(logsDir, `psi-${timestamp}.log`);
-        
-        // Write initial log header synchronously
-        this.writeLogHeaderSync();
+        this.logFile = logFile;
+        this.startTime = startTime;
         
         // Register termination callback to flush logs
         registerTerminationCallback(async () => {
@@ -40,7 +29,28 @@ export class FileLogger implements ILog {
         });
     }
     
-    private writeLogHeaderSync(): void {
+    static async create(consoleLogger: ILog, command: string): Promise<FileLogger> {
+        const startTime = new Date();
+        
+        // Create logs directory in Photosphere temp
+        const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
+        const logsDir = path.join(photosphereTempDir, 'logs');
+        fs.ensureDirSync(logsDir);
+        
+        // Create log file with timestamp
+        const timestamp = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const logFile = path.join(logsDir, `psi-${timestamp}.log`);
+        
+        // Create the logger instance
+        const logger = new FileLogger(consoleLogger, command, logFile, startTime);
+        
+        // Write initial log header
+        await logger.writeLogHeader();
+        
+        return logger;
+    }
+    
+    private async writeLogHeader(): Promise<void> {
         const lines = [
             '='.repeat(80),
             `Photosphere CLI Log`,
@@ -59,15 +69,55 @@ export class FileLogger implements ILog {
             this.getPhotosphereVersion(),
             '',
             '--- Tool Versions ---',
-            this.getImageMagickVersion(),
-            this.getFFmpegVersion(),
+            await this.getImageMagickVersion(),
+            await this.getFFmpegVersion(),
+            await this.getFFprobeVersion(),
             '',
             '--- Log Start ---',
             ''
         ];
         
         const header = lines.join('\n');
-        fs.writeFileSync(this.logFile, header);
+        await fs.writeFile(this.logFile, header);
+    }
+    
+    private async getImageMagickVersion(): Promise<string> {
+        try {
+            const result = await Image.verifyImageMagick();
+            if (result.available) {
+                return `ImageMagick: ${result.version} (${result.type})`;
+            } else {
+                return `ImageMagick: not found`;
+            }
+        } catch (error) {
+            return `ImageMagick: error checking version`;
+        }
+    }
+    
+    private async getFFmpegVersion(): Promise<string> {
+        try {
+            const result = await Video.verifyFfmpeg();
+            if (result.available) {
+                return `FFmpeg: ${result.version}`;
+            } else {
+                return `FFmpeg: not found`;
+            }
+        } catch (error) {
+            return `FFmpeg: error checking version`;
+        }
+    }
+    
+    private async getFFprobeVersion(): Promise<string> {
+        try {
+            const result = await Video.verifyFfprobe();
+            if (result.available) {
+                return `FFprobe: ${result.version}`;
+            } else {
+                return `FFprobe: not found`;
+            }
+        } catch (error) {
+            return `FFprobe: error checking version`;
+        }
     }
     
     private getPhotosphereVersion(): string {
@@ -77,26 +127,6 @@ export class FileLogger implements ILog {
             return `Photosphere CLI: ${packageJson.version}`;
         } catch (error) {
             return `Photosphere CLI: version unknown (${error instanceof Error ? error.message : 'unknown error'})`;
-        }
-    }
-    
-    private getImageMagickVersion(): string {
-        try {
-            const output = execSync('magick -version', { encoding: 'utf8', timeout: 5000 });
-            const firstLine = output.split('\n')[0];
-            return `ImageMagick: ${firstLine}`;
-        } catch (error) {
-            return `ImageMagick: not available (${error instanceof Error ? error.message : 'unknown error'})`;
-        }
-    }
-    
-    private getFFmpegVersion(): string {
-        try {
-            const output = execSync('ffmpeg -version', { encoding: 'utf8', timeout: 5000 });
-            const firstLine = output.split('\n')[0];
-            return `FFmpeg: ${firstLine}`;
-        } catch (error) {
-            return `FFmpeg: not available (${error instanceof Error ? error.message : 'unknown error'})`;
         }
     }
     

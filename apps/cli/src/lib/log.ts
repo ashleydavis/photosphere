@@ -73,10 +73,11 @@ class Log implements ILog {
 //
 // Configure the log based on input.
 //
-export function configureLog(options: ILogOptions): void {
+export async function configureLog(options: ILogOptions): Promise<void> {
     const consoleLogger = new Log(options);
+    setLog(consoleLogger); // Set the console logger before trying to create the file logger, just in case we need the log!
     const command = options.command || process.argv.slice(2).join(' ') || 'unknown';
-    fileLogger = new FileLogger(consoleLogger, command);
+    fileLogger = await FileLogger.create(consoleLogger, command);
     setLog(fileLogger);
 }
 

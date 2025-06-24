@@ -39,7 +39,7 @@ interface FileAnalysis {
 //
 export async function infoCommand(paths: string[], options: IInfoCommandOptions): Promise<void> {
 
-    configureLog({
+    await configureLog({
         verbose: options.verbose,
     });
 

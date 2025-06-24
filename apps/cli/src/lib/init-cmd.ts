@@ -123,7 +123,7 @@ export async function loadDatabase(
 ): Promise<MediaFileDatabase | IInitResult> {
     
     // Configure logging
-    configureLog({
+    await configureLog({
         verbose: options.verbose
     });
     
@@ -224,7 +224,7 @@ export async function createDatabase(
 ): Promise<MediaFileDatabase | IInitResult> {
     
     // Configure logging
-    configureLog({
+    await configureLog({
         verbose: options.verbose
     });
     
