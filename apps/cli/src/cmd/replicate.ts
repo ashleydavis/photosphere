@@ -3,8 +3,9 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit, registerTerminationCallback } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, isDatabaseEncrypted } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
+import * as fs from 'fs-extra';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -57,7 +58,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     }
 
     // Load destination encryption keys
-    const { options: destStorageOptions } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
+    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
 
     // Create destination storage instances
     const { storage: destAssetStorage } = createStorage(options.dest, destStorageOptions);        
@@ -86,6 +87,21 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     console.log(`Total files copied: ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : pc.gray('0')}`);
     console.log(`Skipped (unchanged): ${result.existingFiles > 0 ? pc.yellow(result.existingFiles.toString()) : pc.gray('0')}`);
     
+    // If destination is encrypted, copy the public key to the destination .db directory
+    if (destIsEncrypted && options.destKey) {
+        const publicKeySource = `${options.destKey}.pub`;
+        const publicKeyDest = pathJoin(destMetaPath, 'encryption.pub');
+        
+        try {
+            if (await fs.pathExists(publicKeySource)) {
+                await fs.copy(publicKeySource, publicKeyDest);
+                console.log(pc.green(`✓ Copied public key to destination database directory`));
+            }
+        } catch (error) {
+            console.warn(pc.yellow(`⚠️  Warning: Could not copy public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        }
+    }
+
     console.log();
     console.log(pc.green(`✅ Replication completed successfully`));
 
