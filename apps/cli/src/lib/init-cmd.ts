@@ -136,8 +136,8 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
             log.error(pc.red('✗ This database is encrypted and requires a private key to access.'));
             log.error(pc.red('  Please provide the private key using the --key option.'));
             log.error('');
-            log.error(pc.dim('Example:'));
-            log.error(pc.dim(`  psi <command> --key /path/to/your/private.key`));
+            log.error(pc.blue('Example:'));
+            log.error(pc.blue(`  `) + pc.cyan(`psi <command> --key /path/to/your/private.key`));
             log.error('');
             await exit(1);
         }
