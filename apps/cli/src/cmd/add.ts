@@ -12,7 +12,7 @@ export interface IAddCommandOptions extends IBaseCommandOptions {
 //
 export async function addCommand(paths: string[], options: IAddCommandOptions): Promise<void> {
     
-    const database = await loadDatabase(options.db, options);
+    const { database } = await loadDatabase(options.db, options);
 
     log.info('');
     log.info(`Adding files to the media database in ${pc.cyan(options.db)}`);
