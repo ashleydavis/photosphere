@@ -48,7 +48,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const srcDir = options.db!;
     const destDir = options.dest!;
 
-    configureLog({
+    await configureLog({
         verbose: options.verbose,
     });
 
