@@ -337,6 +337,11 @@ export class MediaFileDatabase {
         version: 1,
     };
 
+    //
+    // Flag to track if database metadata has been modified and needs saving.
+    //
+    private isDirty: boolean = false;
+
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
@@ -453,6 +458,7 @@ export class MediaFileDatabase {
             await this.metadataStorage.write(metadataPath, undefined, metadataBuffer);
             
             log.verbose(`Saved database metadata: ${this.databaseMetadata.filesImported} assets`);
+            this.isDirty = false;
         } catch (error: any) {
             log.error(`Failed to save database metadata: ${error.message}`);
         }
@@ -463,6 +469,7 @@ export class MediaFileDatabase {
     //
     private incrementAssetCount(): void {
         this.databaseMetadata.filesImported++;
+        this.isDirty = true;
     }
 
     //
@@ -471,6 +478,7 @@ export class MediaFileDatabase {
     private decrementAssetCount(): void {
         if (this.databaseMetadata.filesImported > 0) {
             this.databaseMetadata.filesImported--;
+            this.isDirty = true;
         }
     }
 
@@ -488,6 +496,7 @@ export class MediaFileDatabase {
 
         // Initialize database metadata
         this.databaseMetadata = { filesImported: 0, version: 1 };
+        this.isDirty = true;
         await this.saveDatabaseMetadata();
 
         log.verbose(`Created new media file database.`);
@@ -848,8 +857,10 @@ export class MediaFileDatabase {
         //
         await this.databaseHashCache.save();
         
-        // Save database metadata
-        await this.saveDatabaseMetadata();
+        // Save database metadata only if it has been modified
+        if (this.isDirty) {
+            await this.saveDatabaseMetadata();
+        }
     }
 
     //
