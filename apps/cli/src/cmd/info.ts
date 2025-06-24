@@ -45,6 +45,13 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
+
+    log.info('');
+    log.info(`Getting info files from paths:`);
+    for (const path of paths) {
+        log.info(`  - ${pc.cyan(path)}`);
+    }
+    log.info('');
     
     const results: FileAnalysis[] = [];
     let fileCount = 0;
@@ -76,13 +83,15 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
 
     clearProgressMessage();
 
-    // Display detailed information for each file
-    console.log(pc.green(`\nAnalyzed ${fileCount} files:\n`));
+    log.info(`\nInfo for ${fileCount} files:\n`);
 
     for (const result of results) {
         displayFileInfo(result, options);
-        console.log(); // Add spacing between files
+        log.info('');
     }
+
+    log.info(pc.green(`\nDisplayed info for ${fileCount} files.`));
+    log.info('');
 
     await exit(0);
 }

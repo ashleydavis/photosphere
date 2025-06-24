@@ -14,6 +14,14 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     
     const database = await loadDatabase(options.db, options);
 
+    log.info('');
+    log.info(`Adding files to the media database in ${pc.cyan(options.db)}`);
+    log.info(`From paths:`);
+    for (const path of paths) {
+        log.info(`  - ${pc.cyan(path)}`);
+    }
+    log.info('');
+
     writeProgress(`Searching for files...`);
 
     await database.addPaths(paths, (currentlyScanning) => {
@@ -40,15 +48,15 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
 
     clearProgressMessage(); // Flush the progress message.
 
-    log.info(pc.green(`Imported ${addSummary.filesAdded} files to the media database.\n`));
+    log.info(pc.green(`Added ${addSummary.filesAdded} files to the media database.\n`));
     
     log.info(`Summary: `);
-    log.info(`  - Files imported: ${addSummary.filesAdded}`);
-    log.info(`  - Files ignored: ${addSummary.filesIgnored}`);
-    log.info(`  - Files failed: ${addSummary.filesFailed}`);
-    log.info(`  - Assets already in database: ${addSummary.filesAlreadyAdded}`);
-    log.info(`  - Total size: ${addSummary.totalSize} bytes`);
-    log.info(`  - Average size: ${addSummary.averageSize} bytes`);
+    log.info(`  - Files added:      ${addSummary.filesAdded}`);
+    log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
+    log.info(`  - Files failed:     ${addSummary.filesFailed}`);
+    log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
+    log.info(`  - Total size:       ${addSummary.totalSize} bytes`);
+    log.info(`  - Average size:     ${addSummary.averageSize} bytes`);
 
     await exit(0);
 }
