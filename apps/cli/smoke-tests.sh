@@ -287,6 +287,11 @@ validate_database_assets() {
     # Extract asset ID from the verbose CLI output
     local asset_id=$(echo "$add_output" | grep "Added file.*$source_file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
     if [ -z "$asset_id" ]; then
+        # Try to extract from "matches existing records" line for files already in database
+        # The UUID is on the next line after "matches existing records:"
+        asset_id=$(echo "$add_output" | grep -A 1 "matches existing records:" | tail -1 | sed 's/^[[:space:]]*//' | head -1)
+    fi
+    if [ -z "$asset_id" ]; then
         log_error "Failed to extract asset ID for $source_file from CLI output"
         log_error "Full CLI output:"
         echo "$add_output"
@@ -622,7 +627,7 @@ test_add_file_parameterized() {
     # Get initial database state - count files in metadata collection
     # Use the info command output to track actual media files added
     local before_check=$($(get_cli_command) check --db $TEST_DB_DIR $file_path --yes 2>&1)
-    local already_in_db=$(parse_numeric "$before_check" "files already in database")
+    local already_in_db=$(parse_numeric "$before_check" "Already added:")
     
     # Add the file and capture output with verbose logging
     local add_output
@@ -631,12 +636,12 @@ test_add_file_parameterized() {
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
         # File was already in database
-        expect_output_value "$add_output" "files already in the database" "1" "$file_type file already in database"
-        expect_output_value "$add_output" "files imported" "0" "$file_type file imported (should be 0 since already exists)"
+        expect_output_value "$add_output" "Already added:" "1" "$file_type file already in database"
+        expect_output_value "$add_output" "Files added:" "0" "$file_type file imported (should be 0 since already exists)"
     else
         # File should be newly added
-        expect_output_value "$add_output" "files imported" "1" "$file_type file imported"
-        expect_output_value "$add_output" "files failed" "0" "$file_type file failed"
+        expect_output_value "$add_output" "Files added:" "1" "$file_type file imported"
+        expect_output_value "$add_output" "Files failed:" "0" "$file_type file failed"
     fi
     
     # Check that the specific file is now in the database
@@ -700,7 +705,7 @@ test_add_multiple_files() {
         invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
         
         # Check that 2 files were imported
-        expect_output_value "$add_output" "Files imported: " "2" "Two files imported from multiple images directory"
+        expect_output_value "$add_output" "Files added:" "2" "Two files imported from multiple images directory"
         
         invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
@@ -973,8 +978,8 @@ test_database_replicate() {
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
     
     # Check expected values from replication output
-    expect_output_value "$replicate_output" "Total files imported: " "5" "Total files imported"
-    expect_output_value "$replicate_output" "Total files considered: " "23" "Total files considered"
+    expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
+    expect_output_value "$replicate_output" "Total files considered:" "23" "Total files considered"
     expect_output_value "$replicate_output" "Total files copied:" "23" "Files copied"
     expect_output_value "$replicate_output" "Skipped (unchanged):" "0" "Files skipped (first run)"
     
@@ -1037,7 +1042,7 @@ test_database_replicate_second() {
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
     
     # Check expected values from second replication output
-    expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files considered"
+    expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
     expect_output_value "$second_replication_output" "Total files considered:" "23" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
     expect_output_value "$second_replication_output" "Skipped (unchanged):" "23" "Files skipped (already exist)"   
@@ -1106,7 +1111,7 @@ test_replicate_after_changes() {
     invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replication_output"
     
     # Check that the 8 changed files were replicated
-    expect_output_value "$replication_output" "Total files copied: " "8" "Files copied (the changes)"
+    expect_output_value "$replication_output" "Total files copied:" "8" "Files copied (the changes)"
     
     # Run compare command to verify databases are now identical again
     local compare_output
