@@ -1,5 +1,5 @@
 import { IBsonCollection, IGetAllResult, IRecord, IShard } from '../lib/bson-database/collection';
-import { SortDirection } from '../lib/bson-database/sort-index';
+import { SortDirection, SortDataType, IRangeOptions } from '../lib/bson-database/sort-index';
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
@@ -48,8 +48,8 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         throw new Error('Method not implemented.');
     }
 
-    async ensureSortIndex(fieldName: string, direction?: SortDirection): Promise<void> {
-        throw new Error('Method not implemented.');
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        // Mock implementation - no-op for testing
     }
 
     async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
@@ -109,6 +109,52 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
 
     async findByIndex(fieldName: string, value: any): Promise<T[]> {
         return this.records.filter(r => r[fieldName] === value);
+    }
+
+    async findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<T[]> {
+        // Mock implementation for testing - filter records based on range
+        let filteredRecords = this.records.filter(record => {
+            const fieldValue = record[fieldName];
+            if (fieldValue === undefined || fieldValue === null) {
+                return false;
+            }
+
+            // Check min constraint
+            if (options.min !== undefined) {
+                if (options.minInclusive === false) {
+                    if (fieldValue <= options.min) return false;
+                } else {
+                    if (fieldValue < options.min) return false;
+                }
+            }
+
+            // Check max constraint
+            if (options.max !== undefined) {
+                if (options.maxInclusive === false) {
+                    if (fieldValue >= options.max) return false;
+                } else {
+                    if (fieldValue > options.max) return false;
+                }
+            }
+
+            return true;
+        });
+
+        // Sort the results according to direction
+        filteredRecords.sort((a, b) => {
+            const aValue = a[fieldName];
+            const bValue = b[fieldName];
+            
+            if (aValue < bValue) {
+                return direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        return filteredRecords;
     }
 
     async deleteIndex(fieldName: string): Promise<boolean> {
