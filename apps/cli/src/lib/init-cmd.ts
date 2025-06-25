@@ -203,7 +203,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     // Check the directory is empty or non-existent.
     if (!isEmptyOrNonExistent(dbDir)) {
         log.error(pc.red(`Error: Directory "${dbDir}" is not empty.`));
-        log.error(pc.red(`Please specify an empty directory or let me create one for you.`));
+        log.error(pc.red(`Please specify an empty directory or non-existent directory, or specify none so I can walk you through it.`));
         await exit(1);
     }
 
