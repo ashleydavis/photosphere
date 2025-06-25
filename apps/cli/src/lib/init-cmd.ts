@@ -5,7 +5,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
 import { configureS3IfNeeded } from './s3-config';
-import { getDirectoryForCommand } from './directory-picker';
+import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
@@ -198,6 +198,13 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     if (dbDir === undefined) {
         // Get the directory for the database (validates it's empty/non-existent for init)
         dbDir = await getDirectoryForCommand('init', options.yes || false);
+    }
+
+    // Check the directory is empty or non-existent.
+    if (!isEmptyOrNonExistent(dbDir)) {
+        log.error(pc.red(`Error: Directory "${dbDir}" is not empty.`));
+        log.error(pc.red(`Please specify an empty directory or let me create one for you.`));
+        await exit(1);
     }
 
     // Ask about encryption if not already specified
