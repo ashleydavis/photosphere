@@ -1100,7 +1100,11 @@ export class MediaFileDatabase {
             //
             const copiedHash = await computeHash(destAssetStorage.readStream(fileName));
             if (Buffer.compare(copiedHash, sourceHash) !== 0) {
-                throw new Error(`Copied file "${fileName}" hash does not match the source hash.`);
+                throw new Error(
+`Copied file "${fileName}" hash does not match the source hash.
+    Source hash: ${sourceHash.toString("hex")}
+    Copied hash: ${copiedHash.toString("hex")}
+`);
             }
 
             //
