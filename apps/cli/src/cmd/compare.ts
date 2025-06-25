@@ -1,3 +1,4 @@
+import { log } from "utils";
 import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
@@ -86,11 +87,12 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const { storage: srcMetadataStorage } = createStorage(srcMetaPath);
     const { storage: destMetadataStorage } = createStorage(destMetaPath);
 
-    //
-    // Load merkle trees.
-    //
-    writeProgress(`Loading source merkle tree...`);
-    
+    log.info('');
+    log.info(`Comparing two databases:`);
+    log.info(`  Source:         ${pc.cyan(srcDir)}`);
+    log.info(`  Destination:    ${pc.cyan(destDir)}`);
+    log.info('');
+
     const srcMerkleTree = await loadTreeV2("tree.dat", srcMetadataStorage);
     if (!srcMerkleTree) {
         clearProgressMessage();
@@ -98,30 +100,19 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
         await exit(1);
     }
 
-    writeProgress(`Loading destination merkle tree...`);
-    
     const destMerkleTree = await loadTreeV2("tree.dat", destMetadataStorage);
     if (!destMerkleTree) {
         clearProgressMessage();
         console.log(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destDir, 'tree.dat')}`));
         await exit(1);
-    }
-    
-    clearProgressMessage();
-
-    console.log(pc.blue(`🔄 Comparing databases`));
-    console.log(pc.gray(`Source: ${srcDir}`));
-    console.log(pc.gray(`Destination: ${destDir}`));
-   
-    console.log(pc.gray(`Source tree: ${srcMerkleTree!.metadata.totalFiles} files`));
-    console.log(pc.gray(`Destination tree: ${destMerkleTree!.metadata.totalFiles} files`));
-
-    console.log();
-    console.log(pc.bold(pc.blue(`📊 Comparison Results`)));
-    console.log();
+    }   
 
     // Fast path: Compare root hashes first
     if (Buffer.compare(srcMerkleTree!.nodes[0].hash, destMerkleTree!.nodes[0].hash) === 0) {
+        console.log();
+        console.log(pc.bold(pc.blue(`📊 Comparison Results`)));
+        console.log();
+
         console.log(pc.green(`No differences detected`));
         await exit(0);
         return;
@@ -134,6 +125,10 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     });
     
     clearProgressMessage();
+
+    console.log();
+    console.log(pc.bold(pc.blue(`📊 Comparison Results`)));
+    console.log();
     
     const totalDifferences = 
         compareResult.onlyInA.length + 
