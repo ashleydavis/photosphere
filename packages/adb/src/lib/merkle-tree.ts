@@ -1405,15 +1405,11 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
     const totalFiles = treeA.sortedNodeRefs.length + treeB.sortedNodeRefs.length;
     let processedFiles = 0;
     
-    if (progressCallback) {
-        progressCallback(`Loading files from source tree (${treeA.sortedNodeRefs.length} files)`);
-    }
-    
     // Process files in tree A
     for (const nodeRef of treeA.sortedNodeRefs) {
         processedFiles++;
         if (progressCallback && processedFiles % 1000 === 0) {
-            progressCallback(`Loading source tree: ${processedFiles}/${treeA.sortedNodeRefs.length} files`);
+            progressCallback(`Indexing sources files | ${processedFiles} of ${treeA.sortedNodeRefs.length} files`);
         }
         const nodeIndex = getLeafNodeIndex(nodeRef.fileIndex, 0, treeA.nodes);
         const node = treeA.nodes[nodeIndex];
@@ -1423,15 +1419,11 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
         });
     }
     
-    if (progressCallback) {
-        progressCallback(`Loading files from destination tree (${treeB.sortedNodeRefs.length} files)`);
-    }
-    
     // Process files in tree B
     for (const nodeRef of treeB.sortedNodeRefs) {
         processedFiles++;
         if (progressCallback && (processedFiles - treeA.sortedNodeRefs.length) % 1000 === 0) {
-            progressCallback(`Loading destination tree: ${processedFiles - treeA.sortedNodeRefs.length}/${treeB.sortedNodeRefs.length} files`);
+            progressCallback(`Indexing dest files | ${processedFiles - treeA.sortedNodeRefs.length} of ${treeB.sortedNodeRefs.length} files`);
         }
         const nodeIndex = getLeafNodeIndex(nodeRef.fileIndex, 0, treeB.nodes);
         const node = treeB.nodes[nodeIndex];
@@ -1439,10 +1431,6 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
             hash: node.hash.toString('hex'),
             isDeleted: !!nodeRef.isDeleted
         });
-    }
-    
-    if (progressCallback) {
-        progressCallback(`Comparing ${filesInA.size} files from source tree`);
     }
     
     // Find differences
@@ -1457,7 +1445,7 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
     for (const [fileName, fileInfoA] of filesInA) {
         comparedFiles++;
         if (progressCallback && comparedFiles % 1000 === 0) {
-            progressCallback(`Comparing source files: ${comparedFiles}/${filesInA.size}`);
+            progressCallback(`Comparing source files | ${comparedFiles} of ${filesInA.size} files`);
         }
         if (fileInfoA.isDeleted) {
             // Skip files marked as deleted in A for the onlyInA list
@@ -1474,17 +1462,13 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
         }
     }
     
-    if (progressCallback) {
-        progressCallback(`Comparing ${filesInB.size} files from destination tree`);
-    }
-    
     comparedFiles = 0;
     
     // Files only in B
     for (const [fileName, fileInfoB] of filesInB) {
         comparedFiles++;
         if (progressCallback && comparedFiles % 1000 === 0) {
-            progressCallback(`Comparing destination files: ${comparedFiles}/${filesInB.size}`);
+            progressCallback(`Comparing destination files | ${comparedFiles} of ${filesInB.size} files`);
         }
         if (fileInfoB.isDeleted) {
             // Skip files marked as deleted in B
@@ -1499,11 +1483,6 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
             // File is deleted in A but exists in B
             deleted.push(fileName);
         }
-    }
-    
-    if (progressCallback) {
-        const totalDifferences = onlyInA.length + onlyInB.length + modified.length + deleted.length;
-        progressCallback(`Comparison complete: found ${totalDifferences} differences`);
     }
     
     return {

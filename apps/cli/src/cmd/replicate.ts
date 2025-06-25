@@ -1,9 +1,9 @@
-import { MediaFileDatabase } from "api";
+import { log } from "utils";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
-import { exit, registerTerminationCallback } from "node-utils";
+import { exit } from "node-utils";
 import { configureS3IfNeeded } from '../lib/s3-config';
-import { loadDatabase, IBaseCommandOptions, isDatabaseEncrypted } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -35,15 +35,13 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
 //
 export async function replicateCommand(options: IReplicateCommandOptions): Promise<void> {
 
-    const sourceOptions = {
+    const { database: sourceDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         meta: options.meta,
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
-    };
-    
-    const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(options.db, sourceOptions);
+    });
 
     let destDir = options.dest;
     if (destDir === undefined) {
@@ -69,15 +67,16 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const { storage: destAssetStorage } = createStorage(destDir, destStorageOptions);        
     const { storage: destMetadataStorage } = createStorage(destMetaPath);
 
-    console.log(pc.blue(`🔄 Replicating database from ${sourceDatabaseDir} to ${options.dest}`));
-    console.log(pc.gray(`Source metadata: ${srcMetaPath}`));
-    console.log(pc.gray(`Destination metadata: ${destMetaPath}`));
-    console.log();
+    log.info('');
+    log.info(`Replicating database:`);
+    log.info(`  Source:         ${pc.cyan(srcDir)}`);
+    log.info(`  Destination:    ${pc.cyan(destDir)}`);
+    log.info('');
 
-    writeProgress(`Initializing replication...`);
+    writeProgress(`Copying files...`);
 
     const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorage, (progress) => {
-        const progressMessage = `🔄 Replicating | ${progress}`;
+        const progressMessage = `🔄 ${progress}`;
         writeProgress(progressMessage);
     });
 

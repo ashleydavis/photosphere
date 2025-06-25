@@ -1,4 +1,4 @@
-import { IVerifyResult, IDatabaseSummary } from "api";
+import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
@@ -17,24 +17,22 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options);
+    const { database, databaseDir } = await loadDatabase(options.db, options);
+
+    log.info('');
+    log.info(`Verifying integrity for database in ${pc.cyan(databaseDir)}`);
+    log.info('');
 
     writeProgress(`🔍 Verifying database integrity`);
 
-    const result = await database.verify({ full: options.full || false }, (progress) => {
-        writeProgress(`🔍 Verifying database integrity | ${progress}`);
+    const result = await database.verify({ full: options.full }, (progress) => {
+        writeProgress(`🔍 ${progress}`);
     });
 
     clearProgressMessage(); // Flush the progress message.
 
-    displayResults(result);
-
-    await exit(0);
-}
-
-function displayResults(result: IVerifyResult): void {
     console.log();
-    console.log(pc.bold(pc.blue(`📊 Verification Results`)));
+    console.log(pc.bold(pc.blue(`📊 Verified ${result.totalFiles} files.`)));
     console.log();
     
     console.log(`Files imported: ${pc.cyan(result.filesImported.toString())}`);
@@ -85,4 +83,6 @@ function displayResults(result: IVerifyResult): void {
     } else {
         console.log(pc.yellow(`⚠️  Database verification found issues - see details above`));
     }
+
+    await exit(0);
 }

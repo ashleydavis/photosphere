@@ -948,7 +948,7 @@ export class MediaFileDatabase {
             filesProcessed++;
 
             if (progressCallback) {
-                progressCallback(`Checking file ${filesProcessed}/${summary.totalFiles}: ${file.fileName}`);
+                progressCallback(`Verified file ${filesProcessed} of ${summary.totalFiles}`);
             }
 
             const fileInfo = await this.assetStorage.info(file.fileName);
@@ -1001,8 +1001,16 @@ export class MediaFileDatabase {
         if (progressCallback) {
             progressCallback(`Checking for removed files...`);
         }
+
+        let numNodes = 0;
         
         await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
+            numNodes++;
+
+            if (progressCallback) {
+                progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
+            }
+
             if (node.fileName && !node.isDeleted) {
                 if (!await this.assetStorage.fileExists(node.fileName)) {
                     // The file is missing from the storage, but it exists in the merkle tree.
@@ -1043,10 +1051,6 @@ export class MediaFileDatabase {
         async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
             result.filesConsidered++;
             
-            if (progressCallback) {
-                progressCallback(`Processing ${result.filesConsidered}: ${fileName}`);
-            }
-
             const destHash = destHashCache.getHash(fileName);
             if (destHash) {
                 //
@@ -1118,6 +1122,10 @@ export class MediaFileDatabase {
             });
 
             result.copiedFiles++;
+
+            if (progressCallback) {
+                progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
+            }
         }
 
         //
@@ -1129,9 +1137,6 @@ export class MediaFileDatabase {
 
                 if (result.copiedFiles % 100 === 0) {
                     await retry(() => destHashCache.save());
-                    if (progressCallback) {
-                        progressCallback(`Saved cache after ${result.copiedFiles} files copied`);
-                    }
                 }
             }
             return true; // Continue traversing.
@@ -1139,26 +1144,13 @@ export class MediaFileDatabase {
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
-        if (progressCallback) {
-            progressCallback(`Saving final hash cache...`);
-        }
-        
         await destHashCache.save();
 
-        if (progressCallback) {
-            progressCallback(`Saving merkle tree...`);
-        }
-        
         await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
-        
-        if (progressCallback) {
-            progressCallback(`Saving metadata...`);
-        }
         
         const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
         const metadataBuffer = Buffer.from(metadataJson, 'utf8');
         await destMetadataStorage.write("metadata.json", undefined, metadataBuffer);
-        log.verbose(`Copied database metadata to destination: ${this.databaseMetadata.filesImported} assets`);
         
         return result;
     }
