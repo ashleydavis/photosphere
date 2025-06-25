@@ -27,7 +27,7 @@ export class StoragePrefixWrapper implements IStorage {
             return this.prefix + path
         }
         else {
-            return join(this.prefix, path);
+            return pathJoin(this.prefix, path);
         }
     }
 
