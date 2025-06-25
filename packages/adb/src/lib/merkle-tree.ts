@@ -922,7 +922,8 @@ export function visualizeTree(merkleTree: IMerkleTree): string {
     if (merkleTree.sortedNodeRefs.length === 0) {
         result += "  (None)\n";
     } else {
-        merkleTree.sortedNodeRefs.slice(0, 10).forEach((nodeRef, index) => {
+        const maxDisplay = 50;
+        merkleTree.sortedNodeRefs.slice(0, maxDisplay).forEach((nodeRef, index) => {
             const nodeIndex = getLeafNodeIndex(nodeRef.fileIndex, 0, merkleTree.nodes);
             const node = merkleTree.nodes[nodeIndex];
             const hashStr = node.hash.toString('hex');
@@ -930,8 +931,8 @@ export function visualizeTree(merkleTree: IMerkleTree): string {
             const deletedStatus = nodeRef.isDeleted ? " [DELETED]" : "";
             result += `  ${index + 1}. ${nodeRef.fileName}${deletedStatus} -> File[${nodeRef.fileIndex}] Node[${nodeIndex}] (${hashPreview})\n`;
         });
-        if (merkleTree.sortedNodeRefs.length > 10) {
-            result += `  ... and ${merkleTree.sortedNodeRefs.length - 10} more\n`;
+        if (merkleTree.sortedNodeRefs.length > maxDisplay) {
+            result += `  ... and ${merkleTree.sortedNodeRefs.length - maxDisplay} more\n`;
         }
     }
     
