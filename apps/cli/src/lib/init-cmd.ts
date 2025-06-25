@@ -15,14 +15,6 @@ import { join } from "path";
 import { existsSync } from "fs";
 
 //
-// Check if a database is encrypted by looking for the public key file
-//
-export async function isDatabaseEncrypted(metaPath: string): Promise<boolean> {
-    const publicKeyPath = pathJoin(metaPath, 'encryption.pub');
-    return await fs.pathExists(publicKeyPath);
-}
-
-//
 // Common options interface that all commands should extend
 //
 export interface IBaseCommandOptions {
@@ -121,8 +113,22 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
-    // Check if database exists before trying to load it
-    if (!await fs.pathExists(metaPath)) {
+    // Configure S3 if the paths require it
+    if (!await configureS3IfNeeded(dbDir)) {
+        await exit(1);
+    }
+    
+    if (!await configureS3IfNeeded(metaPath)) {
+        await exit(1);
+    }
+
+    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
+
+    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
+    const { storage: metadataStorage } = createStorage(metaPath);
+
+    // Make sure the merkle tree file exists.
+    if (!await metadataStorage.fileExists('tree.dat')) {
         log.error('');
         log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
         log.error(pc.red('  The database directory must contain a ".db" folder with the database metadata.'));
@@ -133,17 +139,8 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         await exit(1);
     }
 
-    // Configure S3 if the paths require it
-    if (!await configureS3IfNeeded(dbDir)) {
-        await exit(1);
-    }
-    
-    if (!await configureS3IfNeeded(metaPath)) {
-        await exit(1);
-    }
-
-    // Check if database is encrypted and require key
-    if (await isDatabaseEncrypted(metaPath)) {
+    // See if the database is encrypted and requires a key.
+    if (await metadataStorage.fileExists('encryption.pub')) {
         if (!options.key) {
             log.error('');
             log.error(pc.red('✗ This database is encrypted and requires a private key to access.'));
@@ -155,13 +152,6 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
             await exit(1);
         }
     }
-
-    // Load encryption keys
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
-
-    // Create storage instances
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath);
 
     // Create appropriate UUID generator based on NODE_ENV
     const uuidGenerator = process.env.NODE_ENV === "testing" 
