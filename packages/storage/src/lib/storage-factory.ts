@@ -10,7 +10,12 @@ import path from 'node:path';
 // Join paths.
 //
 export function pathJoin(...paths: string[]): string {
-    return paths.join('/').replace(/\/+$/, '');
+    let result = paths.join('/').replace(/\/+$/, '');
+
+    // Filter out double forward slashes.
+    result = result.replace(/\/{2,}/g, '/');    
+
+    return result;
 }
 
 /**
