@@ -14,7 +14,7 @@ export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Pro
         const { database } = await loadDatabase(options.db, options);
         
         // Visualize the merkle tree
-        console.log(pc.green("\nMerkle Tree Visualization:"));
+        console.log(pc.blue("\nMerkle Tree Visualization:"));
         console.log(pc.gray("=".repeat(50)));
         
         const visualization = database.visualizeMerkleTree();

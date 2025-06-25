@@ -34,9 +34,9 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
     }
     
     console.log(pc.green(`\nProfile '${result.profileName}' configured successfully!`));
-    console.log(pc.blue('\nYou can now use S3 storage paths like:'));
-    console.log(pc.blue('  ') + pc.cyan('psi ui s3:my-bucket/photos'));
+    console.log('\nYou can now use S3 storage paths like:');
+    console.log('  ' + pc.cyan('psi ui s3:my-bucket/photos'));
     if (result.profileName !== 'default') {
-        console.log(pc.blue('  ') + pc.cyan(`psi ui s3:my-bucket/photos --profile ${result.profileName}`));
+        console.log('  ' + pc.cyan(`psi ui s3:my-bucket/photos --profile ${result.profileName}`));
     }
 }
