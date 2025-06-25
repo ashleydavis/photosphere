@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import * as fs from 'fs-extra';
 
 export interface IAddCommandOptions extends IBaseCommandOptions {
 }
@@ -11,6 +12,17 @@ export interface IAddCommandOptions extends IBaseCommandOptions {
 // Command that adds files and directories to the Photosphere media file database.
 //
 export async function addCommand(paths: string[], options: IAddCommandOptions): Promise<void> {
+    
+    // Validate that all paths exist before processing
+    for (const path of paths) {
+        if (!await fs.pathExists(path)) {
+            log.error('');
+            log.error(pc.red(`✗ Path does not exist: ${pc.cyan(path)}`));
+            log.error(pc.red('  Please verify the path is correct and try again.'));
+            log.error('');
+            await exit(1);
+        }
+    }
     
     const { database } = await loadDatabase(options.db, options);
 
