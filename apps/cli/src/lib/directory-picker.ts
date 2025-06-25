@@ -1,10 +1,8 @@
 import { select, text, confirm, isCancel, outro } from '@clack/prompts';
-import { existsSync, statSync, readdirSync, mkdirSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { existsSync, readdirSync, mkdirSync } from 'fs';
+import { join, resolve } from 'path';
 import pc from 'picocolors';
 import { exit } from 'node-utils';
-import { MediaFileDatabase } from "api";
-import { createStorage } from "storage";
 
 //
 // Checks if a directory is a valid Photosphere media database
@@ -40,190 +38,161 @@ export function isEmptyOrNonExistent(dirPath: string): boolean {
 }
 
 //
-// Prompts user to select a directory with a simple file browser
+// Prompts user to select a directory with simplified options
 //
 export async function pickDirectory(
     message: string,
     currentDir: string = process.cwd(),
     validator?: (path: string) => boolean | string | Promise<boolean | string>
 ): Promise<string | null> {
-    let currentPath = resolve(currentDir);
+    const currentPath = resolve(currentDir);
     
-    while (true) {
-        const items = getDirectoryItems(currentPath);
-        
-        // Check if current directory is valid
-        let canUseCurrentDir = true;
-        let currentDirMessage = '';
-        if (validator) {
-            const result = await validator(currentPath);
-            if (result !== true) {
-                canUseCurrentDir = false;
-                currentDirMessage = typeof result === 'string' ? result : 'Invalid directory';
-            }
+    // Check if current directory is valid
+    let canUseCurrentDir = true;
+    let currentDirMessage = '';
+    if (validator) {
+        const result = await validator(currentPath);
+        if (result !== true) {
+            canUseCurrentDir = false;
+            currentDirMessage = typeof result === 'string' ? result : 'Invalid directory';
         }
-        
-        const options = [];
-        
-        // Add "Use this directory" option, potentially disabled
-        if (canUseCurrentDir) {
-            options.push({ label: '📁 Use this directory', value: 'select' });
-        } else {
-            // Use strikethrough and explain why it can't be used
-            options.push({ 
-                label: `📁 ${pc.strikethrough('Use this directory')} (${currentDirMessage})`, 
-                value: 'select-disabled',
-                hint: 'Cannot use this directory'
-            });
-        }
-        
-        options.push(
-            { label: '⬆️  Parent directory', value: 'parent' },
-            { label: '➕ Create new directory here', value: 'create' },
-            { label: '📝 Enter path manually', value: 'manual' },
-            { label: '❌ Cancel', value: 'cancel' },
-            ...items.map(item => ({
-                label: `${item.isDir ? '📁' : '📄'} ${item.name}`,
-                value: item.path,
-                hint: item.isDir ? 'directory' : 'file'
-            }))
-        );
-        
-        const choice = await select({
-            message: `${message}`,
-            options
+    }
+    
+    const options = [];
+    
+    // Option 1: Use current directory (only if empty/valid)
+    if (canUseCurrentDir) {
+        options.push({ 
+            label: `📁 Use current directory`, 
+            value: 'current' 
         });
+    }
+    
+    // Option 2: Create subdirectory
+    options.push({ 
+        label: '📂 Create subdirectory in current location', 
+        value: 'subdirectory' 
+    });
+    
+    // Option 3: Enter full path
+    options.push({ 
+        label: '📝 Enter full path', 
+        value: 'fullpath' 
+    });
+    
+    // Cancel option
+    options.push({ 
+        label: '❌ Cancel', 
+        value: 'cancel' 
+    });
+    
+    // Note about current directory will be shown in the prompt message if needed
+    
+    const choice = await select({
+        message,
+        options
+    });
 
-        if (isCancel(choice)) {
-            return null;
-        }
+    if (isCancel(choice)) {
+        return null;
+    }
 
-        switch (choice) {
-            case 'select':
-                // This should only be reachable if canUseCurrentDir is true
-                return currentPath;
-                
-            case 'select-disabled':
-                // User clicked on disabled option, show message and continue
-                outro(pc.yellow(`Cannot use this directory: ${currentDirMessage}`));
-                continue;
-                
-            case 'parent':
-                currentPath = dirname(currentPath);
-                break;
-                
-            case 'create':
-                const newDirName = await text({
-                    message: `Enter name for new directory:`,
-                    placeholder: 'my-photos',
-                    validate: (value) => {
-                        if (!value || value.trim().length === 0) {
-                            return 'Directory name is required';
-                        }
-                        // Check for invalid characters
-                        if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
-                            return 'Directory name can only contain letters, numbers, dots, hyphens, and underscores';
-                        }
-                        // Check if directory already exists
-                        const newPath = join(currentPath, value);
-                        if (existsSync(newPath)) {
-                            return 'Directory already exists';
-                        }
-                    },
-                });
-                
-                if (isCancel(newDirName)) {
-                    continue;
-                }
-                
-                const newDirPath = join(currentPath, newDirName as string);
-                try {
-                    mkdirSync(newDirPath, { recursive: true });
-                    outro(pc.green(`Created directory: ${newDirPath}`));
-                    
-                    // Validate the new directory
-                    if (validator) {
-                        const result = await validator(newDirPath);
-                        if (result !== true) {
-                            outro(pc.red(typeof result === 'string' ? result : 'Invalid directory'));
-                            continue;
-                        }
+    switch (choice) {
+        case 'current':
+            return '.';
+            
+        case 'subdirectory':
+            const subdirName = await text({
+                message: 'Enter name for subdirectory:',
+                placeholder: 'my-photos',
+                validate: (value) => {
+                    if (!value || value.trim().length === 0) {
+                        return 'Directory name is required';
                     }
-                    
-                    return newDirPath;
-                } catch (error) {
-                    outro(pc.red(`Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
-                    continue;
-                }
+                    // Check for invalid characters
+                    if (/[\/\\:*?"<>|]/.test(value)) {
+                        return 'Directory name contains invalid characters';
+                    }
+                    // Check if directory already exists
+                    const newPath = join(currentPath, value);
+                    if (existsSync(newPath)) {
+                        return 'Directory already exists';
+                    }
+                    return undefined;
+                },
+            });
+            
+            if (isCancel(subdirName)) {
+                return null;
+            }
+            
+            const subdirPath = join(currentPath, subdirName as string);
+            const relativePath = `./${subdirName}`;
+            try {
+                mkdirSync(subdirPath, { recursive: true });
                 
-            case 'manual':
-                const manualPath = await text({
-                    message: 'Enter directory path:',
-                    placeholder: currentPath,
-                    validate: (value) => {
-                        if (!value || value.trim().length === 0) {
-                            return 'Path is required';
-                        }
-                        // Note: Cannot run async validation in text prompt
-                        // Validation will be done after user submits
-                    },
-                });
-                
-                if (isCancel(manualPath)) {
-                    continue;
-                }
-                
-                const resolvedPath = resolve(manualPath as string);
+                // Validate the new directory
                 if (validator) {
-                    const result = await validator(resolvedPath);
+                    const result = await validator(subdirPath);
                     if (result !== true) {
                         outro(pc.red(typeof result === 'string' ? result : 'Invalid directory'));
-                        continue;
+                        return null;
                     }
                 }
                 
-                return resolvedPath;
-                
-            case 'cancel':
+                return relativePath;
+            } catch (error) {
+                outro(pc.red(`Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
                 return null;
-                
-            default:
-                if (statSync(choice as string).isDirectory()) {
-                    currentPath = choice as string;
+            }
+            
+        case 'fullpath':
+            const fullPath = await text({
+                message: 'Enter full directory path:',
+                placeholder: '/path/to/directory',
+                validate: (value) => {
+                    if (!value || value.trim().length === 0) {
+                        return 'Path is required';
+                    }
+                    return undefined;
+                },
+            });
+            
+            if (isCancel(fullPath)) {
+                return null;
+            }
+            
+            const resolvedPath = resolve(fullPath as string);
+            
+            // Create directory if it doesn't exist
+            if (!existsSync(resolvedPath)) {
+                try {
+                    mkdirSync(resolvedPath, { recursive: true });
+                } catch (error) {
+                    outro(pc.red(`Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                    return null;
                 }
-                break;
-        }
+            }
+            
+            // Validate the directory
+            if (validator) {
+                const result = await validator(resolvedPath);
+                if (result !== true) {
+                    outro(pc.red(typeof result === 'string' ? result : 'Invalid directory'));
+                    return null;
+                }
+            }
+            
+            return resolvedPath;
+            
+        case 'cancel':
+            return null;
+            
+        default:
+            return null;
     }
 }
 
-//
-// Gets directory items for the file browser
-//
-function getDirectoryItems(dirPath: string): Array<{name: string, path: string, isDir: boolean}> {
-    try {
-        const items = readdirSync(dirPath)
-            .map(name => {
-                const fullPath = join(dirPath, name);
-                try {
-                    const isDir = statSync(fullPath).isDirectory();
-                    return { name, path: fullPath, isDir };
-                } catch {
-                    return null;
-                }
-            })
-            .filter(item => item !== null)
-            .sort((a, b) => {
-                // Directories first, then alphabetical
-                if (a!.isDir && !b!.isDir) return -1;
-                if (!a!.isDir && b!.isDir) return 1;
-                return a!.name.localeCompare(b!.name);
-            }) as Array<{name: string, path: string, isDir: boolean}>;
-            
-        return items.slice(0, 20); // Limit to first 20 items
-    } catch (error) {
-        return [];
-    }
-}
 
 //
 // Validates directory for init command (empty or non-existent)
