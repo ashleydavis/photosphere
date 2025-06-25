@@ -2,6 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { createDatabase, ICreateCommandOptions } from "../lib/init-cmd";
+import { intro, outro } from "@clack/prompts";
 
 export interface IInitCommandOptions extends ICreateCommandOptions {
 }
@@ -11,13 +12,14 @@ export interface IInitCommandOptions extends ICreateCommandOptions {
 //
 export async function initCommand(options: IInitCommandOptions): Promise<void> {
 
+    intro(pc.blue(`Creating a new media file database...`));
+
     const { databaseDir } = await createDatabase(options.db, options);
 
     const isCurrentDir = databaseDir === "." || databaseDir === "./";
     const displayPath = isCurrentDir ? "the current directory" : databaseDir;
 
-    log.info('');
-    log.info(pc.green(`✓ Created new media file database in ${displayPath}"`));
+    outro(pc.green(`✓ Created new media file database in "${displayPath}"`));
     
     if (options.generateKey && options.key) {
         log.info(pc.green(`✓ Encryption key saved to: ${options.key}`));
