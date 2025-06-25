@@ -6,12 +6,13 @@ import { configureS3IfNeeded } from '../lib/s3-config';
 import { loadDatabase, IBaseCommandOptions, isDatabaseEncrypted } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
+import { getDirectoryForCommand } from "../lib/directory-picker";
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
     // Destination directory for replicated database.
     //
-    dest: string;
+    dest?: string;
 
     //
     // Destination metadata directory override.
@@ -34,7 +35,6 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
 //
 export async function replicateCommand(options: IReplicateCommandOptions): Promise<void> {
 
-    // Use initCmd for source database initialization
     const sourceOptions = {
         db: options.db,
         meta: options.meta,
@@ -44,12 +44,17 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     };
     
     const { database: sourceDatabase, databaseDir: sourceDatabaseDir, metaPath: srcMetaPath } = await loadDatabase(options.db, sourceOptions);
+
+    let destDir = options.dest;
+    if (destDir === undefined) {
+        destDir = await getDirectoryForCommand('existing', options.yes || false);
+    }
     
     // Destination can be new or existing
-    const destMetaPath = options.destMeta || pathJoin(options.dest, '.db');
+    const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
     // Configure S3 for destination
-    if (!await configureS3IfNeeded(options.dest)) {
+    if (!await configureS3IfNeeded(destDir)) {
         await exit(1);
     }
     
@@ -61,7 +66,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
 
     // Create destination storage instances
-    const { storage: destAssetStorage } = createStorage(options.dest, destStorageOptions);        
+    const { storage: destAssetStorage } = createStorage(destDir, destStorageOptions);        
     const { storage: destMetadataStorage } = createStorage(destMetaPath);
 
     console.log(pc.blue(`🔄 Replicating database from ${sourceDatabaseDir} to ${options.dest}`));

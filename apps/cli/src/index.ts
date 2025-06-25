@@ -21,7 +21,8 @@ import { exit } from 'node-utils';
 
 async function main() {
 
-    const dbOption: [string, string, string] = ["--db <path>", "The directory that contains the media file database", "."];
+    const dbOption: [string, string] = ["--db <path>", "The directory that contains the media file database"];
+    const destDbOption: [string, string] = ["--dest <path>", "The destination directory that specifies the target database"];
     const metadataDirOption: [string, string] = ["-m, --meta <db-metadata-dir>", `The directory in which to store asset database metadata. (default: "<current-dir>/.db")`];
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
@@ -148,7 +149,7 @@ Resources:
         .command("replicate")
         .description("Replicates an asset database from source to destination location.")
         .option(...dbOption)
-        .requiredOption("--dest <path>", "Destination directory for replicated database")
+        .option(...destDbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
@@ -162,8 +163,8 @@ Resources:
     program
         .command("compare")
         .description("Compares two asset databases by analyzing their Merkle trees.")
-        .requiredOption("--db <path>", "Source database directory")
-        .requiredOption("--dest <path>", "Destination database directory")
+        .option(...dbOption)
+        .option(...destDbOption)
         .option("-s, --src-meta <dir>", "Source metadata directory override")
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)

@@ -12,12 +12,12 @@ export interface ICompareCommandOptions {
     //
     // Source database directory.
     //
-    db: string;
+    db?: string;
 
     //
     // Destination database directory.
     //
-    dest: string;
+    dest?: string;
 
     //
     // Source metadata directory override.
@@ -45,9 +45,6 @@ export interface ICompareCommandOptions {
 //
 export async function compareCommand(options: ICompareCommandOptions): Promise<void> {
 
-    const srcDir = options.db!;
-    const destDir = options.dest!;
-
     await configureLog({
         verbose: options.verbose,
     });
@@ -55,15 +52,21 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
 
-    // Validate source and destination directories exist
-    const sourceDatabaseDir = await getDirectoryForCommand('existing', srcDir, options.yes || false);
-    const destinationDatabaseDir = await getDirectoryForCommand('existing', destDir, options.yes || false);
+    let srcDir = options.db;
+    if (srcDir === undefined) {    
+        srcDir = await getDirectoryForCommand('existing', options.yes || false);   
+    }
+
+    let destDir = options.dest;
+    if (destDir === undefined) {
+        destDir = await getDirectoryForCommand('existing', options.yes || false);
+    }
     
-    const srcMetaPath = options.srcMeta || pathJoin(sourceDatabaseDir, '.db');
-    const destMetaPath = options.destMeta || pathJoin(destinationDatabaseDir, '.db');
+    const srcMetaPath = options.srcMeta || pathJoin(srcDir, '.db');
+    const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
     // Configure S3 for source
-    if (!await configureS3IfNeeded(sourceDatabaseDir)) {
+    if (!await configureS3IfNeeded(srcDir)) {
         await exit(1);
     }
     
@@ -72,7 +75,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     }
 
     // Configure S3 for destination
-    if (!await configureS3IfNeeded(destinationDatabaseDir)) {
+    if (!await configureS3IfNeeded(destDir)) {
         await exit(1);
     }
     
@@ -91,7 +94,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const srcMerkleTree = await loadTreeV2("tree.dat", srcMetadataStorage);
     if (!srcMerkleTree) {
         clearProgressMessage();
-        console.log(pc.red(`Error: Source Merkle tree not found in ${pathJoin(sourceDatabaseDir, 'tree.dat')}`));
+        console.log(pc.red(`Error: Source Merkle tree not found in ${pathJoin(srcDir, 'tree.dat')}`));
         await exit(1);
     }
 
@@ -100,15 +103,15 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const destMerkleTree = await loadTreeV2("tree.dat", destMetadataStorage);
     if (!destMerkleTree) {
         clearProgressMessage();
-        console.log(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destinationDatabaseDir, 'tree.dat')}`));
+        console.log(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destDir, 'tree.dat')}`));
         await exit(1);
     }
     
     clearProgressMessage();
 
     console.log(pc.blue(`🔄 Comparing databases`));
-    console.log(pc.gray(`Source: ${sourceDatabaseDir}`));
-    console.log(pc.gray(`Destination: ${destinationDatabaseDir}`));
+    console.log(pc.gray(`Source: ${srcDir}`));
+    console.log(pc.gray(`Destination: ${destDir}`));
    
     console.log(pc.gray(`Source tree: ${srcMerkleTree!.metadata.totalFiles} files`));
     console.log(pc.gray(`Destination tree: ${destMerkleTree!.metadata.totalFiles} files`));
