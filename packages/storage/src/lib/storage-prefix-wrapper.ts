@@ -4,7 +4,6 @@
 
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "./storage";
-import { join } from "path";
 import { pathJoin } from "./storage-factory";
 
 export class StoragePrefixWrapper implements IStorage {
