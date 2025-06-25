@@ -230,7 +230,8 @@ Resources:
         }
         
         if (err.code === 'commander.missingArgument' 
-            || err.code === 'commander.unknownOption') {
+            || err.code === 'commander.unknownOption'
+            || err.code === 'commander.unknownCommand') {
             await exit(1);
         }
 
