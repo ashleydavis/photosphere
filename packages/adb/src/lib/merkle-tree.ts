@@ -515,11 +515,11 @@ export function findInsertionPoint(sortedNodeRefs: MerkleNodeRef[], fileName: st
     let high = sortedNodeRefs.length - 1;
 
     // Quick checks for first and last position
-    if (fileName < sortedNodeRefs[0].fileName) {
+    if (fileName.localeCompare(sortedNodeRefs[0].fileName) < 0) {
         return 0;
     }
     
-    if (fileName > sortedNodeRefs[high].fileName) {
+    if (fileName.localeCompare(sortedNodeRefs[high].fileName) > 0) {
         return sortedNodeRefs.length;
     }
 
