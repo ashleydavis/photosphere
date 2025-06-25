@@ -311,6 +311,24 @@ export function addFile(merkleTree: IMerkleTree, fileHash: FileHash): IMerkleTre
         },
         ...sortedNodeRefs.slice(insertionPoint)
     ];
+
+    //
+    // Debug check to ensure that there are no duplicate file names in the sortedNodeRefs.
+    //
+    if (process.env.NODE_ENV === 'testing') {
+        const fileNames = new Set<string>();
+        for (const nodeRef of sortedNodeRefs) {
+            if (fileNames.has(nodeRef.fileName)) {
+                console.error(`Duplicate file name found in sortedNodeRefs: ${nodeRef.fileName}`);
+                console.log(`Sorted node refs:`);
+                for (const node of sortedNodeRefs) {
+                    console.log(`  ${node.fileName} (index: ${node.fileIndex})`);
+                }
+                process.exit(1);
+            }
+            fileNames.add(nodeRef.fileName);
+        }
+    }
    
     return {
         nodes,
