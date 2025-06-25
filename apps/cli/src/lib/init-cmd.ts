@@ -414,3 +414,4 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         metadataStorage
     };
 }
+
