@@ -90,7 +90,7 @@ export async function pickDirectory(
         );
         
         const choice = await select({
-            message: `${message}\nCurrent: ${currentPath}`,
+            message: `${message}`,
             options
         });
 
@@ -114,7 +114,7 @@ export async function pickDirectory(
                 
             case 'create':
                 const newDirName = await text({
-                    message: `Enter name for new directory:\nWill be created at: ${currentPath}/[name]`,
+                    message: `Enter name for new directory:`,
                     placeholder: 'my-photos',
                     validate: (value) => {
                         if (!value || value.trim().length === 0) {
@@ -255,38 +255,9 @@ export async function validateExistingDatabase(path: string): Promise<boolean | 
 //
 export async function getDirectoryForCommand(
     commandType: 'init' | 'existing',
-    providedDir?: string,
     nonInteractive: boolean = false
 ): Promise<string> {
 
-    if (providedDir && providedDir.startsWith('s3:')) {
-        return providedDir;
-    }
-    
-    // If directory provided as argument, validate and use it
-    if (providedDir) {
-        const resolvedDir = resolve(providedDir);
-        
-        if (commandType === 'init') {
-            if (validateInitDirectory(resolvedDir) === true) {
-                return resolvedDir;
-            } else {
-                console.error(pc.red('Provided directory is not empty. Please specify an empty directory for initialization.'));
-                await exit(1);
-                return ''; // Never reached
-            }
-        } else {
-            const validation = await validateExistingDatabase(resolvedDir);
-            if (validation === true) {
-                return resolvedDir;
-            } else {
-                console.error(pc.red(`Provided directory is not valid: ${validation}`));
-                await exit(1);
-                return ''; // Never reached
-            }
-        }
-    }
-    
     // Check if current directory is suitable
     const currentDir = process.cwd();
     

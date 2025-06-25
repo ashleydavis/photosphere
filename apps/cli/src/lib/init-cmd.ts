@@ -25,7 +25,7 @@ export interface IBaseCommandOptions {
     //
     // Database directory path.
     //
-    db: string;
+    db?: string;
 
     //
     // Set the path to the database metadata.
@@ -101,7 +101,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string, options: IBaseCommandOptions): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions): Promise<IInitResult> {
     
     // Configure logging
     await configureLog({
@@ -111,13 +111,14 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
 
-    // Get the directory for the database
-    const databaseDir = await getDirectoryForCommand("init", dbDir, options.yes || false);
+    if (dbDir === undefined) {
+        dbDir = await getDirectoryForCommand("init", options.yes || false);
+    }
     
-    const metaPath = options.meta || pathJoin(databaseDir, '.db');
+    const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureS3IfNeeded(databaseDir)) {
+    if (!await configureS3IfNeeded(dbDir)) {
         await exit(1);
     }
     
@@ -143,7 +144,7 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
     // Create storage instances
-    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
+    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
     // Create appropriate UUID generator based on NODE_ENV
@@ -164,7 +165,7 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
 
     return {
         database,
-        databaseDir,
+        databaseDir: dbDir,
         metaPath,
         assetStorage,
         metadataStorage
@@ -176,7 +177,7 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
 // This handles creating a new database with similar setup to loadDatabase
 // but uses 'init' directory type and calls database.create() instead of load()
 //
-export async function createDatabase(dbDir: string, options: ICreateCommandOptions): Promise<IInitResult> {
+export async function createDatabase(dbDir: string | undefined, options: ICreateCommandOptions): Promise<IInitResult> {
     
     // Configure logging
     await configureLog({
@@ -190,13 +191,15 @@ export async function createDatabase(dbDir: string, options: ICreateCommandOptio
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
 
-    // Get the directory for the database (validates it's empty/non-existent for init)
-    const databaseDir = await getDirectoryForCommand('init', dbDir, options.yes || false);
+    if (dbDir === undefined) {
+        // Get the directory for the database (validates it's empty/non-existent for init)
+        dbDir = await getDirectoryForCommand('init', options.yes || false);
+    }
     
-    const metaPath = options.meta || pathJoin(databaseDir, '.db');
+    const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureS3IfNeeded(databaseDir)) {
+    if (!await configureS3IfNeeded(dbDir)) {
         await exit(1);
     }
     
@@ -208,7 +211,7 @@ export async function createDatabase(dbDir: string, options: ICreateCommandOptio
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
 
     // Create storage instances
-    const { storage: assetStorage } = createStorage(databaseDir, storageOptions);        
+    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath);
 
     // Create appropriate UUID generator based on NODE_ENV
@@ -244,7 +247,7 @@ export async function createDatabase(dbDir: string, options: ICreateCommandOptio
 
     return {
         database,
-        databaseDir,
+        databaseDir: dbDir,
         metaPath,
         assetStorage,
         metadataStorage
