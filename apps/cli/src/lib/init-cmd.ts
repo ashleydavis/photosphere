@@ -106,11 +106,7 @@ export async function loadDatabase(dbDir: string, options: IBaseCommandOptions):
     // Configure logging
     await configureLog({
         verbose: options.verbose
-    });
-    
-    // Log the command being executed
-    const command = process.argv.slice(2).join(' ');
-    log.verbose(`Executing command: ${command}`);
+    });   
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);

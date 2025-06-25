@@ -73,6 +73,8 @@ export class FileLogger implements ILog {
             await this.getFFmpegVersion(),
             await this.getFFprobeVersion(),
             '',
+            `--- Command ---`,
+            process.argv.join(' '),
             '--- Log Start ---',
             ''
         ];
