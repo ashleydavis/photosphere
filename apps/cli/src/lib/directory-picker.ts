@@ -258,6 +258,10 @@ export async function getDirectoryForCommand(
     providedDir?: string,
     nonInteractive: boolean = false
 ): Promise<string> {
+
+    if (providedDir && providedDir.startsWith('s3:')) {
+        return providedDir;
+    }
     
     // If directory provided as argument, validate and use it
     if (providedDir) {
