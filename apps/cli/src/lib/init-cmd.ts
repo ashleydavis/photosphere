@@ -121,6 +121,18 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
+    // Check if database exists before trying to load it
+    if (!await fs.pathExists(metaPath)) {
+        log.error('');
+        log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
+        log.error(pc.red('  The database directory must contain a ".db" folder with the database metadata.'));
+        log.info('');
+        log.info('To create a new database at this directory, use:');
+        log.info(`  ` + pc.cyan(`psi init --db ${dbDir}`));
+        log.info('');
+        await exit(1);
+    }
+
     // Configure S3 if the paths require it
     if (!await configureS3IfNeeded(dbDir)) {
         await exit(1);
@@ -136,10 +148,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
             log.error('');
             log.error(pc.red('✗ This database is encrypted and requires a private key to access.'));
             log.error(pc.red('  Please provide the private key using the --key option.'));
-            log.error('');
-            log.error(pc.blue('Example:'));
-            log.error(pc.blue(`  `) + pc.cyan(`psi <command> --key /path/to/your/private.key`));
-            log.error('');
+            log.info('');
+            log.info('Example:');
+            log.info(`  ` + pc.cyan(`psi <command> --key /path/to/your/private.key`));
+            log.info('');
             await exit(1);
         }
     }
