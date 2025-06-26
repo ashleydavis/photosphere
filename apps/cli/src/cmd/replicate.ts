@@ -109,5 +109,13 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     console.log();
     console.log(pc.green(`✅ Replication completed successfully`));
 
+    // Show follow-up commands
+    console.log();
+    console.log(pc.bold('Next steps:'));
+    console.log(`  ${pc.cyan('psi verify --db')} ${pc.gray(destDir)}         Verify integrity of the replicated database`);
+    console.log(`  ${pc.cyan('psi compare --dest')} ${pc.gray(destDir)}      Compare source and destination databases`);
+    console.log(`  ${pc.cyan('psi summary --db')} ${pc.gray(destDir)}       View summary of the replicated database`);
+    console.log(`  ${pc.cyan('psi ui --db')} ${pc.gray(destDir)}            Open web interface for the replicated database`);
+
     await exit(0);
 }

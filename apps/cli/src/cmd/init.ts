@@ -49,5 +49,16 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
         log.info(`  ` + pc.cyan(`psi add --key ${options.key} <source-media-directory>`));
     }
 
+    // Show follow-up commands
+    log.info('');
+    log.info(pc.bold('Next steps after adding files:'));
+    const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
+    const keyFlag = options.key ? ` --key ${options.key}` : '';
+    const flags = `${dbFlag}${keyFlag}`;
+    log.info(`  ${pc.cyan(`psi verify${flags}`)}                    Verify the integrity of your database`);
+    log.info(`  ${pc.cyan(`psi summary${flags}`)}                   View database summary and statistics`);
+    log.info(`  ${pc.cyan(`psi replicate${flags} --dest <path>`)}   Create a backup copy of your database`);
+    log.info(`  ${pc.cyan(`psi ui${flags}`)}                        Open the web interface to browse your media`);
+
     await exit(0);
 }
