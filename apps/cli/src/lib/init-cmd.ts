@@ -4,7 +4,7 @@ import { configureLog } from "./log";
 import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
-import { configureS3IfNeeded } from './s3-config';
+import { configureIfNeeded, getGoogleApiKey, promptForGoogleApiKey } from './config';
 import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
@@ -114,11 +114,11 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: dbDir })) {
         await exit(1);
     }
     
-    if (!await configureS3IfNeeded(metaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
         await exit(1);
     }
 
@@ -157,9 +157,12 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
+
+    // Get Google API key from config or environment  
+    const googleApiKey = await getGoogleApiKey() || process.env.GOOGLE_API_KEY;
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY, uuidGenerator); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
@@ -346,15 +349,15 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
             }
         }
     }
-    
+
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureS3IfNeeded(dbDir)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: dbDir })) {
         await exit(1);
     }
     
-    if (!await configureS3IfNeeded(metaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
         await exit(1);
     }
 
@@ -369,9 +372,12 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
+
+    // Get Google API key from config or environment  
+    const googleApiKey = await getGoogleApiKey() || process.env.GOOGLE_API_KEY;
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY, uuidGenerator); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
