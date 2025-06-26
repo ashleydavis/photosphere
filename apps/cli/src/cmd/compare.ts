@@ -3,7 +3,7 @@ import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { configureS3IfNeeded } from '../lib/s3-config';
+import { configureIfNeeded } from '../lib/config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { compareTrees, loadTreeV2 } from "adb";
@@ -67,20 +67,20 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
     // Configure S3 for source
-    if (!await configureS3IfNeeded(srcDir)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: srcDir })) {
         await exit(1);
     }
     
-    if (!await configureS3IfNeeded(srcMetaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: srcMetaPath })) {
         await exit(1);
     }
 
     // Configure S3 for destination
-    if (!await configureS3IfNeeded(destDir)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: destDir })) {
         await exit(1);
     }
     
-    if (!await configureS3IfNeeded(destMetaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: destMetaPath })) {
         await exit(1);
     }
 

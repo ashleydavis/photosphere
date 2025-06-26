@@ -2,7 +2,7 @@ import { log } from "utils";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { configureS3IfNeeded } from '../lib/s3-config';
+import { configureIfNeeded } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
@@ -52,11 +52,11 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
     // Configure S3 for destination
-    if (!await configureS3IfNeeded(destDir)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: destDir })) {
         await exit(1);
     }
     
-    if (!await configureS3IfNeeded(destMetaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: destMetaPath })) {
         await exit(1);
     }
 
@@ -108,6 +108,9 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
 
     console.log();
     console.log(pc.green(`✅ Replication completed successfully`));
+
+    console.log();
+    console.log(pc.blue(`💡 Tip: You can run this command again anytime to update your replica when the source database changes.`));
 
     // Show follow-up commands
     console.log();

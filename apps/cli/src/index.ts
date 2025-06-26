@@ -4,7 +4,7 @@ import { uiCommand } from './cmd/ui';
 import { addCommand } from './cmd/add';
 import { checkCommand } from './cmd/check';
 import { initCommand } from './cmd/init';
-import { configureCommand } from './cmd/configure';
+import { configureCommand } from './cmd/config';
 import { infoCommand } from './cmd/info';
 import { toolsCommand } from './cmd/tools';
 import { summaryCommand } from './cmd/summary';
@@ -98,12 +98,10 @@ Resources:
         .action(uiCommand);
 
     program
-        .command("configure")
-        .description("Configures S3 credentials for cloud storage.")
-        .option("-p, --profile <name>", "The profile name to configure", "default")
-        .option("-c, --clear", "Clear all S3 configuration files")
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('configure'))
+        .command("config")
+        .description("Interactive configuration wizard for S3 credentials and Google API key.")
+        .option("-c, --clear", "Clear all configuration files")
+        .addHelpText('after', getCommandExamplesHelp('config'))
         .action(configureCommand);
 
     program

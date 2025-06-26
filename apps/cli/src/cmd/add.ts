@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { configureIfNeeded } from '../lib/config';
 import * as fs from 'fs-extra';
 
 export interface IAddCommandOptions extends IBaseCommandOptions {
@@ -23,6 +24,9 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
             await exit(1);
         }
     }
+    
+    // Configure Google API key for reverse geocoding on first use
+    await configureIfNeeded(['google']);
     
     const { database } = await loadDatabase(options.db, options);
 

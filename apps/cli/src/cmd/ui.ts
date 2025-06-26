@@ -6,7 +6,7 @@ import open from "open";
 import { log } from "utils";
 import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
-import { configureS3IfNeeded } from '../lib/s3-config';
+import { configureIfNeeded } from '../lib/config';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 // @ts-ignore
@@ -49,12 +49,12 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureS3IfNeeded(options.db)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: options.db })) {
         await exit(1);
     }
     
     const metaPath = options.meta || pathJoin(options.db, '.db');
-    if (!await configureS3IfNeeded(metaPath)) {
+    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
         await exit(1);
     }
     

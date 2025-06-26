@@ -14,7 +14,7 @@ export async function examplesCommand(): Promise<void> {
     const categories = {
         'Database Management': ['init', 'add', 'check', 'summary', 'verify'],
         'Backup and syncrhonization': ['replicate', 'compare'],
-        'Configuration': ['configure', 'tools'],
+        'Configuration': ['config', 'tools'],
         'User Interface': ['ui'],
         'File Analysis': ['info'],
         'Help and Support': ['examples', 'bug'],

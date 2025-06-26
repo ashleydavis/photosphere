@@ -35,10 +35,9 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi ui --db ./photos --no-open", description: "Starts the UI without opening browser automatically." }
     ],
     
-    configure: [
-        { command: "psi configure", description: "Configures S3 credentials for default profile." },
-        { command: "psi configure -p mycloud", description: "Configures S3 credentials for 'mycloud' profile." },
-        { command: "psi configure --clear", description: "Clears all S3 configuration files." }
+    config: [
+        { command: "psi config", description: "Interactive wizard to configure S3 credentials and Google API key." },
+        { command: "psi config --clear", description: "Clears all configuration files." }
     ],
     
     info: [
