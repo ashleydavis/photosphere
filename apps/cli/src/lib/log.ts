@@ -13,9 +13,9 @@ export interface ILogOptions {
     debug?: boolean;
 
     //
-    // The command being executed (for file logging)
+    // Disables file logging (console only)
     //
-    command?: string;
+    disableFileLogging?: boolean;
 }
 
 //
@@ -76,9 +76,12 @@ class Log implements ILog {
 export async function configureLog(options: ILogOptions): Promise<void> {
     const consoleLogger = new Log(options);
     setLog(consoleLogger); // Set the console logger before trying to create the file logger, just in case we need the log!
-    const command = options.command || process.argv.slice(2).join(' ') || 'unknown';
-    fileLogger = await FileLogger.create(consoleLogger, command);
-    setLog(fileLogger);
+    
+    if (!options.disableFileLogging) {
+        const command = process.argv.slice(2).join(' ') || 'unknown';
+        fileLogger = await FileLogger.create(consoleLogger, command);
+        setLog(fileLogger);
+    }
 }
 
 //

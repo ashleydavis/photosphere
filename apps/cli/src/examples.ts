@@ -74,9 +74,9 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi compare --db ./photos --dest ./mirror -s ./photos-meta", description: "Uses custom metadata directories." }
     ],
     
-    "bug-report": [
-        { command: "psi bug-report", description: "Generates a bug report and opens it in the browser." },
-        { command: "psi bug-report --no-browser", description: "Generates a bug report without opening a browser." }
+    "bug": [
+        { command: "psi bug", description: "Generates a bug report and opens it in the browser." },
+        { command: "psi bug --no-browser", description: "Generates a bug report without opening a browser." }
     ],
     
     examples: [
