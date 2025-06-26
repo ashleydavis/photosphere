@@ -84,5 +84,16 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
         console.log(pc.yellow(`⚠️  Database verification found issues - see details above`));
     }
 
+    // Show follow-up commands
+    console.log();
+    console.log(pc.bold('Next steps:'));
+    if (result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0) {
+        console.log(`  ${pc.cyan('psi repair')}                      Fix database issues (command coming soon)`);
+    }
+    console.log(`  ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
+    console.log(`  ${pc.cyan('psi compare --dest <path>')}     Compare this database with another location`);
+    console.log(`  ${pc.cyan('psi summary')}                   View database summary and tree hash`);
+    console.log(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+
     await exit(0);
 }

@@ -38,15 +38,15 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
 
     await database.addPaths(paths, (currentlyScanning) => {
         const addSummary = database.getAddSummary();
-        let progressMessage = `Added: ${pc.green(addSummary.filesAdded)}`;
+        let progressMessage = `Added: ${pc.green(addSummary.filesAdded.toString().padStart(4))}`;
         if (addSummary.filesAlreadyAdded > 0) {
-            progressMessage += ` | Already added: ${pc.blue(addSummary.filesAlreadyAdded)}`;
+            progressMessage += ` | Existing: ${pc.blue(addSummary.filesAlreadyAdded.toString().padStart(4))}`;
         }
         if (addSummary.filesIgnored > 0) {
-            progressMessage += ` | Ignored: ${pc.yellow(addSummary.filesIgnored)}`;
+            progressMessage += ` | Ignored: ${pc.yellow(addSummary.filesIgnored.toString().padStart(4))}`;
         }
         if (addSummary.filesFailed > 0) {
-            progressMessage += ` | Failed: ${pc.red(addSummary.filesFailed)}`;
+            progressMessage += ` | Failed: ${pc.red(addSummary.filesFailed.toString().padStart(4))}`;
         }
         if (currentlyScanning) {
             progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
@@ -69,6 +69,14 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
     log.info(`  - Total size:       ${addSummary.totalSize} bytes`);
     log.info(`  - Average size:     ${addSummary.averageSize} bytes`);
+
+    // Show follow-up commands
+    log.info('');
+    log.info(pc.bold('Next steps:'));
+    log.info(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
+    log.info(`  ${pc.cyan('psi summary')}                   View database summary and tree hash`);
+    log.info(`  ${pc.cyan('psi replicate --dest <path>')}   Replicate the database to another location`);
+    log.info(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

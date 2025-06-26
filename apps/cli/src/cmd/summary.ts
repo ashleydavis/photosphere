@@ -23,6 +23,14 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     console.log(`Total size: ${pc.green(formatBytes(summary.totalSize))}`);
     console.log(`Tree root hash: ${pc.gray(summary.fullHash)}`);
 
+    // Show follow-up commands
+    console.log();
+    console.log(pc.bold('Next steps:'));
+    console.log(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
+    console.log(`  ${pc.cyan('psi add <paths>')}               Add more files to your database`);
+    console.log(`  ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
+    console.log(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+
     await exit(0);
 }
 
