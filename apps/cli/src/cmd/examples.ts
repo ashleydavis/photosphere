@@ -17,7 +17,7 @@ export async function examplesCommand(): Promise<void> {
         'Configuration': ['configure', 'tools'],
         'User Interface': ['ui'],
         'File Analysis': ['info'],
-        'Help and Support': ['examples', 'bug-report'],
+        'Help and Support': ['examples', 'bug'],
         'Debugging': ['debug merkle-tree', 'debug hash-cache']
     };
 

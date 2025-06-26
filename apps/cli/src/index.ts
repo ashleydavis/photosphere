@@ -13,7 +13,7 @@ import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { merkleTreeCommand } from './cmd/merkle-tree';
 import { hashCacheCommand } from './cmd/hash-cache';
-import { bugReportCommand } from './cmd/bug-report';
+import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
@@ -210,12 +210,12 @@ Resources:
         .action(examplesCommand);
 
     program
-        .command("bug-report")
+        .command("bug")
         .description("Generates a bug report for GitHub with system information and logs.")
         .option(...verboseOption)
         .option(...yesOption)
         .option("--no-browser", "Don't open the browser automatically", false)
-        .addHelpText('after', getCommandExamplesHelp('bug-report'))
+        .addHelpText('after', getCommandExamplesHelp('bug'))
         .action(bugReportCommand);
 
     // Parse the command line arguments

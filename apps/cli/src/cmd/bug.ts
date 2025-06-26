@@ -1,5 +1,4 @@
-import { getFileLogger } from "../lib/log";
-import { execSync } from "child_process";
+import { configureLog, getFileLogger } from "../lib/log";
 import fs from "fs-extra";
 import path from "path";
 import os from "os";
@@ -7,6 +6,8 @@ import open from "open";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { text, isCancel, intro, outro } from "@clack/prompts";
+import { Image, Video } from "tools";
+import { version } from "../../package.json";
 
 export interface IBugReportCommandOptions {
     //
@@ -30,24 +31,26 @@ export interface IBugReportCommandOptions {
 //
 export async function bugReportCommand(options: IBugReportCommandOptions): Promise<void> {
     
+    await configureLog({
+        verbose: options.verbose,
+        disableFileLogging: true
+    });
+    
     intro(pc.blue("🐛 Photosphere Bug Report"));
 
     // Get system information
     const systemInfo = getSystemInfo();
-    const toolVersions = getToolVersions();
+    const toolVersions = await getToolVersions();
     const photosphereVersion = getPhotosphereVersion();
     
-    // Get latest log file
+    // Get latest log file and header
     const latestLogFile = getLatestLogFile();
-    const logContent = latestLogFile ? fs.readFileSync(latestLogFile, 'utf8') : 'No log file available';
+    const logHeader = getLogHeader(latestLogFile);
     
     let bugInfo;
     
     if (!options.yes) {
         // Prompt user for bug report details
-        console.log();
-        console.log(pc.dim("Please provide details about the bug you encountered:"));
-        console.log();
         
         const title = await text({
             message: "Bug title (short summary):",
@@ -82,20 +85,44 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
             await exit(0);
         }
         
-        const stepsToReproduce = await text({
-            message: "Steps to reproduce:",
-            placeholder: "1. Run command 'psi add ...' 2. Wait for processing 3. Error occurs",
-            validate: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return "Please provide steps to reproduce the issue";
-                }
-            }
-        });
+        // Steps to reproduce
         
-        if (isCancel(stepsToReproduce)) {
-            outro(pc.gray("Bug report cancelled."));
-            await exit(0);
+        const steps: string[] = [];
+        let stepNumber = 1;
+
+        
+        while (true) {
+            const step = await text({
+                message: `Step ${stepNumber}:`,
+                placeholder: stepNumber === 1 ? "e.g., Run command 'psi add /path/to/photos'" : "Next step, or press Enter to finish",
+                validate: (value) => {
+                    if (stepNumber === 1 && (!value || value.trim().length === 0)) {
+                        return "Please provide at least one step";
+                    }
+                }
+            });
+            
+            if (isCancel(step)) {
+                outro(pc.gray("Bug report cancelled."));
+                await exit(0);
+            }
+
+            if (step === undefined && stepNumber > 1) {
+                break; // User pressed Enter without input
+            }
+            
+            const stepText = (step as string).trim();
+            if (stepText.length === 0 && stepNumber > 1) {
+                break; // User finished entering steps
+            }
+            
+            if (stepText.length > 0) {
+                steps.push(`${stepNumber}. ${stepText}`);
+                stepNumber++;
+            }
         }
+        
+        const stepsToReproduce = steps.join('\n');
         
         const expectedBehavior = await text({
             message: "Expected behavior:",
@@ -145,44 +172,32 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         };
     }
     
-    // Generate bug report template (without log content)
-    const bugReportTemplate = generateBugReportTemplate(systemInfo, toolVersions, photosphereVersion, bugInfo);
+    // Generate bug report template (with log header)
+    const bugReportTemplate = generateBugReportTemplate(systemInfo, toolVersions, photosphereVersion, bugInfo, logHeader);
     
     // Create GitHub issue URL
     const githubUrl = createGitHubIssueUrl(bugInfo.title, bugReportTemplate);
     
-    console.log();
-    console.log(pc.green("✓ Bug report generated successfully!"));
-    console.log();
-    console.log(pc.bold("Bug Report Details:"));
-    console.log(`Title: ${bugInfo.title}`);
-    console.log(`Photosphere Version: ${photosphereVersion}`);
-    console.log(`System: ${systemInfo.platform} ${systemInfo.arch} (${systemInfo.release})`);
-    console.log(`Log File: ${latestLogFile || 'None available'}`);
-    console.log();
+    // Prepare summary information
+    const summaryInfo = [
+        `Title: ${bugInfo.title}`,
+        `Photosphere Version: ${photosphereVersion}`,
+        `System: ${systemInfo.platform} ${systemInfo.arch} (${systemInfo.release})`,
+        `Log File: ${latestLogFile || 'None available'}`
+    ].join('\n');
     
-    if (latestLogFile) {
-        console.log(pc.blue("📎 Log File Information:"));
-        console.log(pc.dim(`The log file path is included in the bug report template.`));
-        console.log(pc.dim(`You can attach it to the GitHub issue by dragging and dropping the file.`));
-        console.log();
-    }
+    const logInfo = latestLogFile 
+        ? `\n\n${pc.blue("📎 Log File Information:")}\n${pc.dim(`The log file path is included in the bug report template.\nYou can attach it to the GitHub issue by dragging and dropping the file.`)}`
+        : '';
     
     if (options.noBrowser) {
-        console.log(pc.yellow("GitHub Issue URL:"));
-        console.log(githubUrl);
-        console.log();
-        console.log(pc.dim("Copy and paste the URL above into your browser to create the issue."));
-        outro(pc.green("Bug report ready to submit!"));
+        outro(`${pc.green("✓ Bug report generated successfully!")}\n\n${summaryInfo}${logInfo}\n\n${pc.yellow("GitHub Issue URL:")}\n${githubUrl}\n\n${pc.dim("Copy and paste the URL above into your browser to create the issue.")}`);
     } else {
-        console.log(pc.green("Opening GitHub issue page in your browser..."));
         try {
             await open(githubUrl);
-            outro(pc.green("Bug report opened in browser!"));
+            outro(`${pc.green("✓ Bug report opened in browser!")}\n\n${summaryInfo}${logInfo}`);
         } catch (error) {
-            console.log(pc.red("Failed to open browser. Here's the URL:"));
-            console.log(githubUrl);
-            outro(pc.yellow("Please copy the URL above to submit the bug report."));
+            outro(`${pc.green("✓ Bug report generated successfully!")}\n\n${summaryInfo}${logInfo}\n\n${pc.red("Failed to open browser. Here's the URL:")}\n${githubUrl}\n\n${pc.yellow("Please copy the URL above to submit the bug report.")}`);
         }
     }
     
@@ -199,37 +214,45 @@ function getSystemInfo() {
     };
 }
 
-function getToolVersions() {
+async function getToolVersions() {
     const versions = {
         imagemagick: 'Not available',
-        ffmpeg: 'Not available'
+        ffmpeg: 'Not available',
+        ffprobe: 'Not available'
     };
     
     try {
-        const imageMagickOutput = execSync('magick -version', { encoding: 'utf8', timeout: 5000 });
-        versions.imagemagick = imageMagickOutput.split('\n')[0];
+        const imageMagickStatus = await Image.verifyImageMagick();
+        if (imageMagickStatus.available && imageMagickStatus.version) {
+            versions.imagemagick = `ImageMagick v${imageMagickStatus.version} (${imageMagickStatus.type || 'unknown'})`;
+        }
     } catch (error) {
         // ImageMagick not available
     }
     
     try {
-        const ffmpegOutput = execSync('ffmpeg -version', { encoding: 'utf8', timeout: 5000 });
-        versions.ffmpeg = ffmpegOutput.split('\n')[0];
+        const ffmpegStatus = await Video.verifyFfmpeg();
+        if (ffmpegStatus.available && ffmpegStatus.version) {
+            versions.ffmpeg = `ffmpeg v${ffmpegStatus.version}`;
+        }
     } catch (error) {
         // FFmpeg not available
+    }
+    
+    try {
+        const ffprobeStatus = await Video.verifyFfprobe();
+        if (ffprobeStatus.available && ffprobeStatus.version) {
+            versions.ffprobe = `ffprobe v${ffprobeStatus.version}`;
+        }
+    } catch (error) {
+        // FFprobe not available
     }
     
     return versions;
 }
 
 function getPhotosphereVersion(): string {
-    try {
-        const packageJsonPath = path.join(__dirname, '../../package.json');
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-        return packageJson.version;
-    } catch (error) {
-        return 'unknown';
-    }
+    return version || 'unknown';
 }
 
 function getLatestLogFile(): string | null {
@@ -254,7 +277,30 @@ function getLatestLogFile(): string | null {
     }
 }
 
-function generateBugReportTemplate(systemInfo: any, toolVersions: any, photosphereVersion: string, bugInfo: any): string {
+function getLogHeader(logFilePath: string | null): string {
+    if (!logFilePath || !fs.existsSync(logFilePath)) {
+        return 'No log file available';
+    }
+    
+    try {
+        const logContent = fs.readFileSync(logFilePath, 'utf8');
+        const logStartIndex = logContent.indexOf('--- Log Start ---');
+        
+        if (logStartIndex === -1) {
+            // If no "--- Log Start ---" marker found, return first 50 lines
+            const lines = logContent.split('\n');
+            return lines.slice(0, 50).join('\n');
+        }
+        
+        // Return everything up to (and including) the "--- Log Start ---" line
+        const headerContent = logContent.substring(0, logStartIndex + '--- Log Start ---'.length);
+        return headerContent;
+    } catch (error) {
+        return `Error reading log file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+}
+
+function generateBugReportTemplate(systemInfo: any, toolVersions: any, photosphereVersion: string, bugInfo: any, logHeader: string): string {
     return `## Bug Description
 ${bugInfo.description}
 
@@ -268,17 +314,23 @@ ${bugInfo.expectedBehavior}
 ${bugInfo.actualBehavior}
 
 ## System Information
-- **Photosphere Version:** ${photosphereVersion}
-- **Platform:** ${systemInfo.platform} ${systemInfo.arch}
-- **OS Release:** ${systemInfo.release}
-- **Node.js Version:** ${systemInfo.nodeVersion}
+- Photosphere Version: ${photosphereVersion}
+- Platform: ${systemInfo.platform} ${systemInfo.arch}
+- OS Release: ${systemInfo.release}
+- Node.js Version: ${systemInfo.nodeVersion}
 
 ## Tool Versions
-- **ImageMagick:** ${toolVersions.imagemagick}
-- **FFmpeg:** ${toolVersions.ffmpeg}
+- ImageMagick: ${toolVersions.imagemagick}
+- FFmpeg: ${toolVersions.ffmpeg}
+- FFprobe: ${toolVersions.ffprobe}
+
+## Log Header
+\`\`\`
+${logHeader}
+\`\`\`
 
 ## Log File
-Please attach the log file located at:
+Please attach the full log file located at:
 \`${getLatestLogFile() || 'No log file available'}\`
 
 You can drag and drop the log file into this issue, or copy and paste its contents into a code block.
