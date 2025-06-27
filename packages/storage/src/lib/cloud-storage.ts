@@ -160,13 +160,20 @@ export class CloudStorage implements IStorage {
         try {
             const response = await this.s3.listObjectsV2(listParams).promise();
     
-            const names = response.CommonPrefixes?.map(item => {
+            let names = response.CommonPrefixes?.map(item => {
                 const nameParts = item.Prefix!
                     .slice(0, item.Prefix!.length-1) // Trims trailing slash.
                     .split("/");
                 return nameParts[nameParts.length - 1]; // The last part is the file name or asset ID.
-            }) || [];
-    
+            });
+
+            if (names === undefined) {
+                names = [];
+            }
+            else {
+                names = names.filter(name => name !== ""); // Remove empty names.
+            }
+
             return {
                 names,
                 next: response.NextContinuationToken,
