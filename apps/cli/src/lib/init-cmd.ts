@@ -4,7 +4,7 @@ import { configureLog } from "./log";
 import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
-import { configureIfNeeded, getGoogleApiKey, promptForGoogleApiKey } from './config';
+import { configureIfNeeded, getGoogleApiKey } from './config';
 import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
@@ -114,11 +114,11 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureIfNeeded(['s3'], { s3Path: dbDir })) {
+    if (!await configureIfNeeded(['s3'], { s3Path: dbDir, yes: options.yes })) {
         await exit(1);
     }
     
-    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
+    if (!await configureIfNeeded(['s3'], { s3Path: metaPath, yes: options.yes })) {
         await exit(1);
     }
 
@@ -353,11 +353,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureIfNeeded(['s3'], { s3Path: dbDir })) {
+    if (!await configureIfNeeded(['s3'], { s3Path: dbDir, yes: options.yes })) {
         await exit(1);
     }
     
-    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
+    if (!await configureIfNeeded(['s3'], { s3Path: metaPath, yes: options.yes })) {
         await exit(1);
     }
 
