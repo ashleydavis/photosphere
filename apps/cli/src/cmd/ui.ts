@@ -6,7 +6,7 @@ import open from "open";
 import { log } from "utils";
 import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
-import { configureIfNeeded } from '../lib/config';
+import { configureIfNeeded, getS3Config } from '../lib/config';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 
 // @ts-ignore
@@ -32,29 +32,25 @@ export interface IUiCommandOptions {
     // When true, the ui will not open in the browser.
     //
     noOpen?: boolean;
-
-    //
-    // Non-interactive mode - use defaults and command line arguments.
-    //
-    yes?: boolean;
 }
 
 //
 // Command that starts the Photosphere ui.
 //
 export async function uiCommand(options: IUiCommandOptions): Promise<void> {
+
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools(options.yes || false);
+    await ensureMediaProcessingTools(false);
 
     //
     // Configure S3 if the path requires it
     //
-    if (!await configureIfNeeded(['s3'], { s3Path: options.db })) {
+    if (options.db.startsWith("s3:") && !await configureIfNeeded(['s3'], false)) {
         await exit(1);
     }
     
     const metaPath = options.meta || pathJoin(options.db, '.db');
-    if (!await configureIfNeeded(['s3'], { s3Path: metaPath })) {
+    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], false)) {
         await exit(1);
     }
     
@@ -71,8 +67,9 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
-    const { storage: assetStorage } = createStorage(options.db, storageOptions);
-    const { storage: metadataStorage } = createStorage(metaPath);
+    const s3Config = await getS3Config();
+    const { storage: assetStorage } = createStorage(options.db, s3Config, storageOptions);
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
     const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
 
     //

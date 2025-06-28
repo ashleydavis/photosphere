@@ -1,7 +1,7 @@
 import { KeyObject } from 'node:crypto';
 import { IStorage } from './storage';
 import { FileStorage } from './file-storage';
-import { CloudStorage } from './cloud-storage';
+import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
 import path from 'node:path';
@@ -41,7 +41,8 @@ export interface IStorageOptions {
  */
 export function createStorage(
     rootPath: string, 
-    options: IStorageOptions = {}
+    s3Config?: IS3Credentials,
+    options?: IStorageOptions
 ): { storage: IStorage, normalizedPath: string, type: string } {
     if (!rootPath) {
         throw new Error('Path is required');
@@ -60,7 +61,7 @@ export function createStorage(
     else if (rootPath.startsWith('s3:')) {
         // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = rootPath.substring('s3:'.length);
-        storage = new CloudStorage(`s3:`, true);
+        storage = new CloudStorage(`s3:`, true, s3Config);
         normalizedPath = s3Path;
         type = 's3';
     } 
@@ -74,7 +75,7 @@ export function createStorage(
     normalizedPath = normalizedPath.replace(/\\/g, '/'); // Convert backslashes to forward slashes for consistency.
 
     // Wrap with encryption if keys are provided
-    if (options.privateKey) {
+    if (options?.privateKey) {
         storage = new EncryptedStorage(rootPath, storage, options.publicKey || options.privateKey, options.privateKey);
         // console.log(`Loading encrypted storage for path: ${rootPath}`);
         type = `encrypted-${type}`;

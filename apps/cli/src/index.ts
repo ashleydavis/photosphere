@@ -93,7 +93,6 @@ Resources:
         .option(...keyOption)
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
-        .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('ui'))
         .action(uiCommand);
 

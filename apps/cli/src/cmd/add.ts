@@ -13,6 +13,8 @@ export interface IAddCommandOptions extends IBaseCommandOptions {
 // Command that adds files and directories to the Photosphere media file database.
 //
 export async function addCommand(paths: string[], options: IAddCommandOptions): Promise<void> {
+
+    const nonInteractive = options.yes || false;
     
     // Validate that all paths exist before processing
     for (const path of paths) {
@@ -26,7 +28,7 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     }
     
     // Configure Google API key for reverse geocoding on first use
-    await configureIfNeeded(['google'], { yes: options.yes });
+    await configureIfNeeded(['google'], nonInteractive);
     
     const { database } = await loadDatabase(options.db, options);
 

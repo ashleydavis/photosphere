@@ -2,7 +2,7 @@ import { log } from "utils";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { configureIfNeeded } from '../lib/config';
+import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
@@ -35,6 +35,8 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
 //
 export async function replicateCommand(options: IReplicateCommandOptions): Promise<void> {
 
+    const nonInteractive = options.yes || false;
+
     const { database: sourceDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         meta: options.meta,
@@ -45,27 +47,24 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', options.yes || false);
+        destDir = await getDirectoryForCommand('existing', nonInteractive);
     }
     
-    // Destination can be new or existing
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
-    // Configure S3 for destination
-    if (!await configureIfNeeded(['s3'], { s3Path: destDir })) {
+    if (destDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
     
-    if (!await configureIfNeeded(['s3'], { s3Path: destMetaPath })) {
+    if (destMetaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
 
-    // Load destination encryption keys
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
 
-    // Create destination storage instances
-    const { storage: destAssetStorage } = createStorage(destDir, destStorageOptions);        
-    const { storage: destMetadataStorage } = createStorage(destMetaPath);
+    const s3Config = await getS3Config();
+    const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
+    const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
 
     log.info('');
     log.info(`Replicating database:`);

@@ -224,7 +224,7 @@ export async function validateExistingDatabase(path: string): Promise<boolean | 
 //
 export async function getDirectoryForCommand(
     commandType: 'init' | 'existing',
-    nonInteractive: boolean = false
+    nonInteractive: boolean
 ): Promise<string> {
 
     // Check if current directory is suitable

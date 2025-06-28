@@ -8,7 +8,7 @@ import { showInstallationInstructions } from "./installation-instructions";
 // Ensures tools are available for commands that need media processing.
 // Shows user-friendly error and exits if tools are missing.
 //
-export async function ensureMediaProcessingTools(nonInteractive: boolean = false): Promise<void> {
+export async function ensureMediaProcessingTools(nonInteractive: boolean): Promise<void> {
     const toolsStatus = await verifyTools();
     
     if (toolsStatus.allAvailable) {
