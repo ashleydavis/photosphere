@@ -332,11 +332,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (!await configureIfNeeded(['s3'], { s3Path: dbDir, yes: options.yes })) {
+    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], { yes: options.yes })) {
         await exit(1);
     }
     
-    if (!await configureIfNeeded(['s3'], { s3Path: metaPath, yes: options.yes })) {
+    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], { yes: options.yes })) {
         await exit(1);
     }
 
