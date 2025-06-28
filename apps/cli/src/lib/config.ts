@@ -3,16 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import pc from 'picocolors';
-
-export interface IS3Config {
-    endpoint?: string;
-    region: string;
-    accessKeyId: string;
-    secretAccessKey: string;
-}
+import { IS3Credentials } from 'storage';
 
 export interface IConfig {
-    s3?: IS3Config;
+    s3?: IS3Credentials;
     googleApiKey?: string;
 }
 
@@ -86,7 +80,7 @@ function parseIniConfig(content: string): IConfig {
         const value = trimmedLine.slice(equalIndex + 1).trim();
         
         if (currentSection === 's3') {
-            if (!config.s3) config.s3 = {} as IS3Config;
+            if (!config.s3) config.s3 = {} as IS3Credentials;
             (config.s3 as any)[key] = value;
         } else if (currentSection === 'google') {
             if (key === 'apiKey') {
@@ -156,7 +150,7 @@ function formatIniConfig(config: IConfig): string {
 //
 // Prompts user for S3 configuration
 //
-export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3Config | null> {
+export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3Credentials | undefined> {
     if (!skipIntro) {
         intro(pc.cyan('S3 Configuration Setup'));
         console.log(pc.dim('Configure credentials to access your S3-hosted media file database.'));
@@ -178,7 +172,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
         if (!skipIntro) {
             outro(pc.red('Setup cancelled'));
         }
-        return null;
+        return undefined;
     }
     
     const region = await text({
@@ -195,7 +189,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
         if (!skipIntro) {
             outro(pc.red('Setup cancelled'));
         }
-        return null;
+        return undefined;
     }
     
     const accessKeyId = await text({
@@ -211,7 +205,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
         if (!skipIntro) {
             outro(pc.red('Setup cancelled'));
         }
-        return null;
+        return undefined;
     }
     
     const secretAccessKey = await password({
@@ -227,11 +221,11 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
         if (!skipIntro) {
             outro(pc.red('Setup cancelled'));
         }
-        return null;
+        return undefined;
     }
     
     
-    const s3Config: IS3Config = {
+    const s3Config: IS3Credentials = {
         region: region.trim(),
         accessKeyId: accessKeyId.trim(),
         secretAccessKey: secretAccessKey.trim()
@@ -258,43 +252,9 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
 //
 // Gets S3 configuration, prompting if necessary
 //
-export async function getS3Config(allowPrompt: boolean = true): Promise<IS3Config | null> {
+export async function getS3Config(): Promise<IS3Credentials | undefined> {
     const config = await loadConfig();
-    
-    if (config?.s3) {
-        return config.s3;
-    }
-    
-    if (!allowPrompt) {
-        return null;
-    }
-    
-    // No config exists, prompt user
-    console.log(pc.yellow(`\nYou are trying to access a media file database hosted in S3.`));
-    console.log(pc.yellow(`No S3 configuration found.`));
-    const shouldConfigure = await confirm({
-        message: 'Would you like to configure S3 credentials now?',
-        initialValue: true
-    });
-    
-    if (isCancel(shouldConfigure) || !shouldConfigure) {
-        return null;
-    }
-    
-    return await promptForS3Config();
-}
-
-//
-// Sets environment variables from S3 config
-//
-export function setS3EnvironmentVariables(s3Config: IS3Config): void {
-    process.env.AWS_ACCESS_KEY_ID = s3Config.accessKeyId;
-    process.env.AWS_SECRET_ACCESS_KEY = s3Config.secretAccessKey;
-    process.env.AWS_DEFAULT_REGION = s3Config.region;
-    
-    if (s3Config.endpoint) {
-        process.env.AWS_ENDPOINT = s3Config.endpoint;
-    }
+    return config?.s3;   
 }
 
 //
@@ -394,24 +354,46 @@ export async function removeGoogleApiKey(): Promise<void> {
 //
 // Configures required services based on tags and context
 //
-export async function configureIfNeeded(tags: string[], options?: { s3Path?: string; yes?: boolean }): Promise<boolean> {
+export async function configureIfNeeded(tags: string[], nonInteractive: boolean): Promise<boolean> {
     for (const tag of tags) {
         switch (tag) {
             case 's3':
                 // Configure connection to S3 cloud storage.
-                const s3Config = await getS3Config(!options?.yes);
+                const s3Config = await getS3Config();
                 if (!s3Config) {
-                    console.error(pc.red('\nS3 configuration is required to access your S3-hosted media file database.'));
-                    console.error(pc.red('Please run "psi config" to set up your S3 credentials.'));
-                    return false;
+                    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+                        // We have environment variables set so don't need to prompt the user.
+                        return true;
+                    }
+
+                    if (nonInteractive) {
+                        // Non-interactive mode, cannot proceed without S3 config.
+                        console.error(pc.red('\nS3 configuration is required to access your S3-hosted media file database.'));
+                        console.error(pc.red('Please set environment variables or run "psi config" to set up your S3 credentials.')); 
+                        return false;
+                    }
+
+                    // No config exists, prompt user
+                    console.log(pc.yellow(`\nYou are trying to access a media file database hosted in S3.`));
+                    console.log(pc.yellow(`No S3 configuration found.`));
+                    const shouldConfigure = await confirm({
+                        message: 'Would you like to configure S3 credentials now?',
+                        initialValue: true
+                    });
+                    
+                    if (isCancel(shouldConfigure) || !shouldConfigure) {
+                        return false;
+                    }
+                    
+                    await promptForS3Config();
+                    return true;
                 }
-                setS3EnvironmentVariables(s3Config);
                 break;
                 
             case 'google':
                 // Check if Google API key is configured, prompt if not (unless --yes is specified)
                 const apiKey = await getGoogleApiKey();
-                if (!apiKey && !options?.yes) {
+                if (!apiKey && !nonInteractive) {
                     console.log(pc.yellow('\nReverse geocoding is available to convert GPS coordinates to location names.'));
                     const result = await promptForGoogleApiKey(false);
                     if (!result) {

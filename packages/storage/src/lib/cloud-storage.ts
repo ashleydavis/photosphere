@@ -3,6 +3,16 @@ import aws from "aws-sdk";
 import { IFileInfo, IListResult, IStorage } from "./storage";
 import { WrappedError } from "utils";
 
+//
+// S3 credentials.
+//
+export interface IS3Credentials {
+    accessKeyId: string;
+    secretAccessKey: string;
+    region?: string;
+    endpoint?: string;
+}
+
 /*
 AWS S3:
 - https://docs.aws.amazon.com/sdkref/latest/guide/environment-variables.html
@@ -24,10 +34,20 @@ export class CloudStorage implements IStorage {
     //
     private s3!: aws.S3;
 
-    constructor(public readonly location: string, private verbose?: boolean) {
-        this.s3 = new aws.S3({
-            endpoint: process.env.AWS_ENDPOINT,
-        });
+    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
+        const s3Config: aws.S3.ClientConfiguration = {
+            endpoint: credentials?.endpoint || process.env.AWS_ENDPOINT,
+        };
+
+        if (credentials) {
+            s3Config.accessKeyId = credentials.accessKeyId;
+            s3Config.secretAccessKey = credentials.secretAccessKey;
+            if (credentials.region) {
+                s3Config.region = credentials.region;
+            }
+        }
+
+        this.s3 = new aws.S3(s3Config);
     }
 
     //

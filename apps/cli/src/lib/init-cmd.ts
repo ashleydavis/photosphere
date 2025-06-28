@@ -4,7 +4,7 @@ import { configureLog } from "./log";
 import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
-import { configureIfNeeded, getGoogleApiKey } from './config';
+import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
 import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
@@ -98,6 +98,8 @@ export interface IInitResult {
 // - Register termination callback
 //
 export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions): Promise<IInitResult> {
+
+    const nonInteractive = options.yes || false;
     
     // Configure logging
     await configureLog({
@@ -105,27 +107,27 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     });   
 
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools(options.yes || false);
+    await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        dbDir = await getDirectoryForCommand("init", options.yes || false);
+        dbDir = await getDirectoryForCommand("init",nonInteractive);
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
-    // Configure S3 if the paths require it
-    if (!await configureIfNeeded(['s3'], { s3Path: dbDir, yes: options.yes })) {
+    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
     
-    if (!await configureIfNeeded(['s3'], { s3Path: metaPath, yes: options.yes })) {
+    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
 
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath);
+    const s3Config = await getS3Config();
+    const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
 
     // Make sure the merkle tree file exists.
     if (!await metadataStorage.fileExists('tree.dat')) {
@@ -175,6 +177,8 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 // but uses 'init' directory type and calls database.create() instead of load()
 //
 export async function createDatabase(dbDir: string | undefined, options: ICreateCommandOptions): Promise<IInitResult> {
+
+    const nonInteractive = options.yes || false;
     
     // Configure logging
     await configureLog({
@@ -186,11 +190,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     log.verbose(`Executing command: ${command}`);
 
     // Ensure media processing tools are available
-    await ensureMediaProcessingTools(options.yes || false);
+    await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
         // Get the directory for the database (validates it's empty/non-existent for init)
-        dbDir = await getDirectoryForCommand('init', options.yes || false);
+        dbDir = await getDirectoryForCommand('init', nonInteractive);
     }
 
     // Check the directory is empty or non-existent.
@@ -200,7 +204,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     }
 
     // Ask about encryption if not already specified
-    if (!options.key && !options.yes) {
+    if (!options.key && !nonInteractive) {
         const wantEncryption = await confirm({
             message: 'Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)',
             initialValue: false,
@@ -332,20 +336,20 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], { yes: options.yes })) {
+    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
     
-    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], { yes: options.yes })) {
+    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
         await exit(1);
     }
 
     // Load encryption keys (with generateKey support for init)
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
 
-    // Create storage instances
-    const { storage: assetStorage } = createStorage(dbDir, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath);
+    const s3Config = await getS3Config();
+    const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
 
     // Create appropriate UUID generator based on NODE_ENV
     const uuidGenerator = process.env.NODE_ENV === "testing" 

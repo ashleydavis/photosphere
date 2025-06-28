@@ -82,7 +82,7 @@ async function main() {
         };
     }
 
-    const { storage: assetStorage } = createStorage(assetStorageConnection, storageOptions);    
+    const { storage: assetStorage } = createStorage(assetStorageConnection, undefined, storageOptions);    
     const { storage: metadataStorage } = createStorage(isSingleDirMode ? databaseStorageConnection : assetStorageConnection);    
     const { storage: dbStorage } = createStorage(databaseStorageConnection);
     
