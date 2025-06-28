@@ -31,7 +31,7 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     log.info('');
     log.info(pc.yellow('⚠️  Important: Never modify database files manually - always use the psi tool!'));
     log.info('');
-    log.info('To get started:');
+    log.info(pc.bold('To get started:'));
     if (isCurrentDir) {
         log.info(`  1. ` + pc.cyan(`psi add <source-media-directory>`) + pc.blue(` (add your photos and videos)`));
     } else {
@@ -51,7 +51,7 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
 
     // Show follow-up commands
     log.info('');
-    log.info(pc.bold('Next steps after adding files:'));
+    log.info(pc.bold('Next steps:'));
     const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
     const keyFlag = options.key ? ` --key ${options.key}` : '';
     const flags = `${dbFlag}${keyFlag}`;

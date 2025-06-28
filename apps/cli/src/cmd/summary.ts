@@ -2,6 +2,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { formatBytes } from "../lib/format";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { log } from "utils";
 
 export interface ISummaryCommandOptions extends IBaseCommandOptions {
 }
@@ -16,7 +17,7 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     // Get database summary information
     const summary = await database.getDatabaseSummary();
 
-    console.log(pc.bold(pc.blue(`📊 Database Summary`)));
+    log.info(pc.bold(pc.blue(`📊 Database Summary`)));
     console.log();
     console.log(`Files imported: ${pc.green(summary.totalAssets.toString())}`);
     console.log(`Total files: ${pc.green(summary.totalFiles.toString())}`);
@@ -25,7 +26,7 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
 
     // Show follow-up commands
     console.log();
-    console.log(pc.bold('Next steps:'));
+    log.info(pc.bold('Next steps:'));
     console.log(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
     console.log(`  ${pc.cyan('psi add <paths>')}               Add more files to your database`);
     console.log(`  ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);

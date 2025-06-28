@@ -32,7 +32,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     clearProgressMessage(); // Flush the progress message.
 
     console.log();
-    console.log(pc.bold(pc.blue(`📊 Verified ${result.totalFiles} files.`)));
+    log.info(pc.bold(pc.blue(`📊 Verified ${result.totalFiles} files.`)));
     console.log();
     
     console.log(`Files imported: ${pc.cyan(result.filesImported.toString())}`);
@@ -86,7 +86,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
 
     // Show follow-up commands
     console.log();
-    console.log(pc.bold('Next steps:'));
+    log.info(pc.bold('Next steps:'));
     if (result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0) {
         console.log(`  ${pc.cyan('psi repair')}                      Fix database issues (command coming soon)`);
     }
