@@ -66,7 +66,7 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
 
     log.info(pc.green(`Added ${addSummary.filesAdded} files to the media database.\n`));
     
-    log.info(`Summary: `);
+    log.info(pc.bold('Summary:'));
     log.info(`  - Files added:      ${addSummary.filesAdded}`);
     log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
     log.info(`  - Files failed:     ${addSummary.filesFailed}`);

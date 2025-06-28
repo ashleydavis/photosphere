@@ -83,7 +83,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     clearProgressMessage(); // Flush the progress message.
 
     console.log();
-    console.log(pc.bold(pc.blue(`📊 Replication Results`)));
+    log.info(pc.bold(pc.blue(`📊 Replication Results`)));
     console.log();
     
     console.log(`Total files imported: ${pc.cyan(result.filesImported.toString())}`);
@@ -114,7 +114,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
 
     // Show follow-up commands
     console.log();
-    console.log(pc.bold('Next steps:'));
+    log.info(pc.bold('Next steps:'));
     console.log(`  ${pc.cyan('psi verify --db')} ${pc.gray(destDir)}         Verify integrity of the replicated database`);
     console.log(`  ${pc.cyan('psi compare --dest')} ${pc.gray(destDir)}      Compare source and destination databases`);
     console.log(`  ${pc.cyan('psi summary --db')} ${pc.gray(destDir)}       View summary of the replicated database`);

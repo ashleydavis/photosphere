@@ -48,7 +48,7 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
     const totalChecked = addSummary.filesAdded + addSummary.filesAlreadyAdded + addSummary.filesIgnored;
     log.info(pc.green(`Checked ${totalChecked} files.\n`));
     
-    log.info(`Summary: `);
+    log.info(pc.bold('Summary:'));
     log.info(`  - Files added:      ${addSummary.filesAdded}`);
     log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
     log.info(`  - Files failed:     ${addSummary.filesFailed}`);
