@@ -9,7 +9,7 @@ import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
-import { confirm, text, isCancel, outro, select } from '@clack/prompts';
+import { confirm, text, isCancel, outro, select, note } from '@clack/prompts';
 import { pickDirectory } from "../lib/directory-picker";
 import { join } from "path";
 import { existsSync } from "fs";
@@ -129,26 +129,14 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 
     // Make sure the merkle tree file exists.
     if (!await metadataStorage.fileExists('tree.dat')) {
-        log.error('');
-        log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
-        log.error(pc.red('  The database directory must contain a ".db" folder with the database metadata.'));
-        log.info('');
-        log.info('To create a new database at this directory, use:');
-        log.info(`  ` + pc.cyan(`psi init --db ${dbDir}`));
-        log.info('');
+        outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
     }
 
     // See if the database is encrypted and requires a key.
     if (await metadataStorage.fileExists('encryption.pub')) {
         if (!options.key) {
-            log.error('');
-            log.error(pc.red('✗ This database is encrypted and requires a private key to access.'));
-            log.error(pc.red('  Please provide the private key using the --key option.'));
-            log.info('');
-            log.info('Example:');
-            log.info(`  ` + pc.cyan(`psi <command> --key /path/to/your/private.key`));
-            log.info('');
+            outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n  ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}`));
             await exit(1);
         }
     }
@@ -207,8 +195,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
 
     // Check the directory is empty or non-existent.
     if (!isEmptyOrNonExistent(dbDir)) {
-        log.error(pc.red(`Error: Directory "${dbDir}" is not empty.`));
-        log.error(pc.red(`Please specify an empty directory or non-existent directory, or specify none so I can walk you through it.`));
+        outro(pc.red(`Error: Directory "${dbDir}" is not empty.\nPlease specify an empty directory or non-existent directory, or specify none so I can walk you through it.`));
         await exit(1);
     }
 
@@ -224,10 +211,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         }
 
         if (wantEncryption) {
-            log.info('');
-            log.info(pc.yellow('⚠️  To encrypt your database you need a private key that you will have to keep safe and not lose'));
-            log.info(pc.yellow('   (otherwise you\'ll lose access to your encrypted database)'));
-            log.info('');
+            note(pc.yellow('⚠️  To encrypt your database you need a private key that you will have to keep safe and not lose\n   (otherwise you\'ll lose access to your encrypted database)'), 'Encryption Warning');
             
             // Ask how they want to handle the key
             const keyChoice = await select({
@@ -290,9 +274,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 options.key = join(keyDir!, keyFilename as string);
                 options.generateKey = false;
 
-                log.info('');
-                log.info(pc.green(`✓ Using existing encryption key: ${options.key}`));
-                log.info('');
+                note(pc.green(`✓ Using existing encryption key: ${options.key}`), 'Encryption Key');
             } else if (keyChoice === 'generate') {
                 // Generate new key
                 // Ask for directory
@@ -342,10 +324,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 options.key = join(keyDir!, keyFilename as string);
                 options.generateKey = true;
 
-                log.info('');
-                log.info(pc.green(`✓ Encryption key will be generated and saved to: ${options.key}`));
-                log.info(pc.yellow(`⚠️  Keep this key file safe! You will need it to access your encrypted database.`));
-                log.info('');
+                note(pc.green(`✓ Encryption key will be generated and saved to: ${options.key}\n`) + pc.yellow(`⚠️  Keep this key file safe! You will need it to access your encrypted database.`), 'Encryption Key Generation');
             }
         }
     }
