@@ -394,26 +394,24 @@ export async function removeGoogleApiKey(): Promise<void> {
 //
 // Configures required services based on tags and context
 //
-export async function configureIfNeeded(tags: string[], context?: { s3Path?: string; yes?: boolean }): Promise<boolean> {
+export async function configureIfNeeded(tags: string[], options?: { s3Path?: string; yes?: boolean }): Promise<boolean> {
     for (const tag of tags) {
         switch (tag) {
             case 's3':
-                // Only configure S3 if we have an S3 path
-                if (context?.s3Path && context.s3Path.startsWith('s3:')) {
-                    const s3Config = await getS3Config(!context?.yes);
-                    if (!s3Config) {
-                        console.error(pc.red('\nS3 configuration is required to access your S3-hosted media file database.'));
-                        console.error(pc.red('Please run "psi config" to set up your S3 credentials.'));
-                        return false;
-                    }
-                    setS3EnvironmentVariables(s3Config);
+                // Configure connection to S3 cloud storage.
+                const s3Config = await getS3Config(!options?.yes);
+                if (!s3Config) {
+                    console.error(pc.red('\nS3 configuration is required to access your S3-hosted media file database.'));
+                    console.error(pc.red('Please run "psi config" to set up your S3 credentials.'));
+                    return false;
                 }
+                setS3EnvironmentVariables(s3Config);
                 break;
                 
             case 'google':
                 // Check if Google API key is configured, prompt if not (unless --yes is specified)
                 const apiKey = await getGoogleApiKey();
-                if (!apiKey && !context?.yes) {
+                if (!apiKey && !options?.yes) {
                     console.log(pc.yellow('\nReverse geocoding is available to convert GPS coordinates to location names.'));
                     const result = await promptForGoogleApiKey(false);
                     if (!result) {
