@@ -8,9 +8,28 @@ import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { createServer as createHttpServer } from 'http';
+import { AddressInfo } from 'net';
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
+
+//
+// Find an available port by creating a temporary server on port 0
+//
+async function findAvailablePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const server = createHttpServer();
+        server.listen(0, () => {
+            const addressInfo = server.address() as AddressInfo;
+            const port = addressInfo.port;
+            server.close(() => {
+                resolve(port);
+            });
+        });
+        server.on('error', reject);
+    });
+}
 
 export interface IUiCommandOptions {
     //
@@ -89,12 +108,18 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
         await mediaFileDatabaseProvider.close();
     });
 
-    app.listen(3000, () => {
-        log.info(`Photosphere UI running on ${pc.green("http://localhost:3000")}`);
+    //
+    // Find an available port and start the server
+    //
+    const port = await findAvailablePort();
+    const url = `http://localhost:${port}`;
+    
+    app.listen(port, () => {
+        log.info(`Photosphere UI running on ${pc.green(url)}`);
         log.info(pc.cyan("Press Ctrl+C in this terminal to stop the server."));
 
         if (!options.noOpen) {
-            open("http://localhost:3000").catch((err) => {
+            open(url).catch((err) => {
                 console.error("Failed to open browser:", err);
             });
         }
