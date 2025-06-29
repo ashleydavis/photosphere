@@ -1,12 +1,43 @@
 //
 // Formats a value in bytes into a human-readable string.
 //
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, options?: {
+    binary?: boolean;
+    decimals?: number;
+    locale?: string;
+}): string {
+    const { binary = true, decimals = 2, locale = 'en-US' } = options || {};
+    
     if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    
+    const k = binary ? 1024 : 1000;
+    const sizes = binary 
+        ? ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+        : ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    const value = bytes / Math.pow(k, i);
+    
+    // Intelligent decimal handling
+    let formatted: string;
+    if (value >= 100 || value % 1 === 0) {
+        // No decimals for whole numbers or values >= 100
+        formatted = Math.round(value).toLocaleString(locale);
+    } else if (value >= 10) {
+        // 1 decimal for values 10-99
+        formatted = value.toLocaleString(locale, { 
+            minimumFractionDigits: 0, 
+            maximumFractionDigits: 1 
+        });
+    } else {
+        // Up to specified decimals for small values
+        formatted = value.toLocaleString(locale, { 
+            minimumFractionDigits: 0, 
+            maximumFractionDigits: decimals 
+        });
+    }
+    
+    return `${formatted} ${sizes[i]}`;
 }
 
 //

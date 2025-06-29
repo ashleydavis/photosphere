@@ -242,6 +242,11 @@ export interface IVerifyResult {
     // The list of files that were removed from the database.
     //
     removed: string[];
+
+    //
+    // The number of nodes processed in the merkle tree.
+    //
+    nodesProcessed: number;
 }
 
 //
@@ -945,6 +950,7 @@ export class MediaFileDatabase {
             modified: [],
             new: [],
             removed: [],
+            nodesProcessed: 0,
         };
 
         //
@@ -1028,6 +1034,7 @@ export class MediaFileDatabase {
             return true;
         });
        
+        result.nodesProcessed = numNodes;
 
         return result;
     }

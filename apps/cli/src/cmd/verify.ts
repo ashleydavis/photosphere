@@ -38,6 +38,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     console.log(`Files imported: ${pc.cyan(result.filesImported.toString())}`);
     console.log(`Total files: ${pc.cyan(result.totalFiles.toString())}`);
     console.log(`Total size: ${pc.cyan(formatBytes(result.totalSize))}`);
+    console.log(`Nodes processed: ${pc.cyan(result.nodesProcessed.toString())}`);
     console.log(`Unmodified: ${pc.green(result.numUnmodified.toString())}`);
     console.log(`Modified: ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     console.log(`New: ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
