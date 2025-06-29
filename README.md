@@ -1,10 +1,18 @@
 # Photosphere
 
-This is the official ongoing monorepo for Photosphere, a cross-platform application for managing your photos and videos.
+Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary assets like photos and videos that have editable metadata.
 
-Photosphere is designed to be self-hosted and requires the following resources:
-- Host the Docker container
-- Provide S3 compatible storage (I used Digital Ocean Spaces, but also works with AWS S3)
+Important features:
+- Build a corruption resistant database of your digital media files.
+- Backup your database and keep your backup updated.
+- Detect and repair corrupt files.
+- Securely encrypt files that you store in the cloud.
+- Use the UI to search, view and edit your photos and videos.
+
+Photosphere can be run locally or self-hosted as a server:
+- Run it locally using the CLI tool (build and view databases on your desktop computer).
+- Host the Docker container and make your files available over the internet.
+- Provide S3 compatible storage (I used Digital Ocean Spaces, but also works with AWS S3).
 - For authentication, use an API key or provide an Auth0 account for authentication.
 
 Contained herein are the code for Photosphere's:
@@ -26,7 +34,7 @@ Alternatively, use the CLI tool `psi add` to scan a directory and do bulk upload
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
-- Then use the upload script on the directory containing the zip files (it can unpack the zip file for you).
+- Then use `psi add` on the directory containing the zip files (it can unpack zip files for you).
 
 ## Running Photosphere locally for development
 
@@ -61,13 +69,15 @@ bun install
 
 THIS STEP IS OPTIONAL
 
-You don't have to compile the project before doing a build. You only should do this step if you change the code and want to make sure the TypeScript code still compiles after you change.
+You don't have to compile the project before doing a build. You only should do this step if you change the code and want to make sure the TypeScript code still compiles after your change.
 
 ```bash
 bun run compile
 ```
 
 ### Start the components that you need
+
+To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cli/README.md).
 
 To start the backend, follow the instructions in [./apps/backend/README.md](./apps/backend/README.md).
 
