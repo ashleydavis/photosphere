@@ -16,6 +16,8 @@ Contained herein are the code for Photosphere's:
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://www.manning.com/books/the-feedback-driven-developer).
 
+See the [wiki](https://github.com/ashleydavis/photosphere/wiki) for installation and getting started.
+
 ## Ingesting assets
 
 Photos, videos and folders can be uploaded via the Upload page in the Web frontend.
