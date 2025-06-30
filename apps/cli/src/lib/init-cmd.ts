@@ -5,7 +5,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
 import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
-import { getDirectoryForCommand, isEmptyOrNonExistent } from './directory-picker';
+import { getDirectoryForCommand, isEmptyOrNonExistent, isMediaDatabase } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
@@ -110,7 +110,13 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        dbDir = await getDirectoryForCommand("existing",nonInteractive);
+        if (await isMediaDatabase(process.cwd())) {
+            // If the current directory looks like a media file database, use it.
+            dbDir = ".";
+        }
+        else {           
+            dbDir = await getDirectoryForCommand("existing",nonInteractive);
+        }
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
