@@ -110,7 +110,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        dbDir = await getDirectoryForCommand("init",nonInteractive);
+        dbDir = await getDirectoryForCommand("existing",nonInteractive);
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
