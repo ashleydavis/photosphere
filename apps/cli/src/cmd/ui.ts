@@ -13,6 +13,7 @@ import { AddressInfo } from 'net';
 
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
+import { getDirectoryForCommand, isMediaDatabase } from '../lib/directory-picker';
 
 //
 // Find an available port by creating a temporary server on port 0
@@ -60,6 +61,16 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(false);
+
+    if (options.db === undefined) {
+        if (await isMediaDatabase(process.cwd())) {
+            // If the current directory looks like a media file database, use it.
+            options.db = ".";
+        }
+        else {           
+            options.db = await getDirectoryForCommand("existing", false); 
+        }
+    }
 
     //
     // Configure S3 if the path requires it

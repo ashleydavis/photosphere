@@ -115,7 +115,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
             dbDir = ".";
         }
         else {           
-            dbDir = await getDirectoryForCommand("existing",nonInteractive);
+            dbDir = await getDirectoryForCommand("existing", nonInteractive);
         }
     }
     
