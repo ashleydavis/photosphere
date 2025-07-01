@@ -24,9 +24,6 @@ export async function* walkDirectory(
         const fileBatch = await storage.listFiles(dirPath, 1000, next);
         for (const fileName of fileBatch.names) {
             let fullPath = pathJoin(dirPath, fileName);
-            if (fullPath.startsWith('/')) {
-                fullPath = fullPath.substring(1);
-            }                
 
             // Check if path matches any ignore patterns
             const shouldIgnore = ignorePatterns.some(pattern => pattern.test(fullPath));
@@ -49,9 +46,6 @@ export async function* walkDirectory(
         const dirBatch = await storage.listDirs(dirPath, 1000, next);
         for (const dirName of dirBatch.names) {
             let fullPath = pathJoin(dirPath, dirName);
-            if (fullPath.startsWith('/')) {
-                fullPath = fullPath.substring(1);
-            }
 
             // Check if path matches any ignore patterns
             const shouldIgnore = ignorePatterns.some(pattern => pattern.test(fullPath));
