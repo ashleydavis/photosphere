@@ -199,8 +199,15 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        // Get the directory for the database (validates it's empty/non-existent for init)
-        dbDir = await getDirectoryForCommand('init', nonInteractive);
+        // Is the current directory empty?
+        if (await isEmptyOrNonExistent(process.cwd())) {
+            // If the current directory is empty, use it.
+            dbDir = ".";
+        }
+        else {
+            // Get the directory for the database (validates it's empty/non-existent for init)
+            dbDir = await getDirectoryForCommand('init', nonInteractive);
+        }
     }
 
     // Check the directory is empty or non-existent.
@@ -241,8 +248,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 const keyDir = await pickDirectory(
                     'Select directory containing your encryption key:',
                     process.cwd(),
-                    (path) => {
-                        if (!existsSync(path)) {
+                    async (path) => {
+                        if (!await fs.exists(path)) {
                             return 'Directory does not exist';
                         }
                         return true;
@@ -291,8 +298,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 const keyDir = await pickDirectory(
                     'Select directory to save encryption key:',
                     process.cwd(),
-                    (path) => {
-                        if (!existsSync(path)) {
+                    async (path) => {
+                        if (!await fs.exists(path)) {
                             return 'Directory does not exist';
                         }
                         return true;
