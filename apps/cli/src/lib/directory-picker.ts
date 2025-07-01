@@ -115,7 +115,7 @@ export async function pickDirectory(
                     }
                     // Check if directory already exists
                     const newPath = join(currentPath, value);
-                    if (existsSync(newPath)) {
+                    if (fs.existsSync(newPath)) {
                         return 'Directory already exists';
                     }
                     return undefined;
@@ -129,7 +129,7 @@ export async function pickDirectory(
             const subdirPath = join(currentPath, subdirName as string);
             const relativePath = `./${subdirName}`;
             try {
-                mkdirSync(subdirPath, { recursive: true });
+                await fs.mkdir(subdirPath, { recursive: true });
                 
                 // Validate the new directory
                 if (validator) {
@@ -165,9 +165,9 @@ export async function pickDirectory(
             const resolvedPath = resolve(fullPath as string);
             
             // Create directory if it doesn't exist
-            if (!existsSync(resolvedPath)) {
+            if (!await fs.exists(resolvedPath)) {
                 try {
-                    mkdirSync(resolvedPath, { recursive: true });
+                    await fs.mkdir(resolvedPath, { recursive: true });
                 } catch (error) {
                     outro(pc.red(`Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
                     return null;
@@ -232,7 +232,7 @@ export async function getDirectoryForCommand(
     const currentDir = process.cwd();
     
     if (commandType === 'init') {
-        if (validateInitDirectory(currentDir) === true) {
+        if (await validateInitDirectory(currentDir) === true) {
             if (nonInteractive) {
                 return currentDir;
             }
