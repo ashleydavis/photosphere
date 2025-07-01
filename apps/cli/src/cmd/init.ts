@@ -31,16 +31,17 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     log.info('');
     log.info(pc.yellow('⚠️  Important: Never modify database files manually - always use the psi tool!'));
     log.info('');
-    log.info(pc.bold('To get started:'));
+    log.info(pc.bold('Add media files to your database:'));
     if (isCurrentDir) {
-        log.info(`  1. ` + pc.cyan(`psi add <source-media-directory>`) + pc.blue(` (add your photos and videos)`));
+        log.info(`  ` + pc.cyan(`psi add <file or directory>`));
     } else {
-        log.info(`  1. ` + pc.cyan(`cd ${databaseDir}`) + pc.blue(` (change to your database directory)`));
-        log.info(`  2. ` + pc.cyan(`psi add <source-media-directory>`) + pc.blue(` (add your photos and videos)`));
+        log.info(`  ` + pc.cyan(`cd ${databaseDir}`));
+        log.info(`  ` + pc.cyan(`psi add <file or directory>`));
     }
     log.info('');
     if (!isCurrentDir) {
-        log.info(`Or identify the database using the path: ` + pc.cyan(`psi add --db ${databaseDir} <source-media-directory>`));
+        log.info(`Or specify the path:`);
+        log.info(`  ` + pc.cyan(`psi add --db ${databaseDir} <file or directory>`));
     }
 
     if (options.key) {
@@ -51,14 +52,13 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
 
     // Show follow-up commands
     log.info('');
-    log.info(pc.bold('Next steps:'));
+    log.info(pc.bold('Examples:'));
     const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
     const keyFlag = options.key ? ` --key ${options.key}` : '';
     const flags = `${dbFlag}${keyFlag}`;
-    log.info(`  ${pc.cyan(`psi verify${flags}`)}                    Verify the integrity of your database`);
-    log.info(`  ${pc.cyan(`psi summary${flags}`)}                   View database summary and statistics`);
-    log.info(`  ${pc.cyan(`psi replicate${flags} --dest <path>`)}   Create a backup copy of your database`);
-    log.info(`  ${pc.cyan(`psi ui${flags}`)}                        Open the web interface to browse your media`);
+    log.info(`  ${pc.cyan(`psi add${flags} a-photo.jpg`)}   - Adds a single photo to the database`);
+    log.info(`  ${pc.cyan(`psi add${flags} a-photo.mp4`)}   - Adds a single video to the database`);
+    log.info(`  ${pc.cyan(`psi add${flags} a-directory/`)}  - Adds all media files in a directory`);
 
     await exit(0);
 }
