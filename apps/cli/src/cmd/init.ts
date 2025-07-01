@@ -19,7 +19,7 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     const isCurrentDir = databaseDir === "." || databaseDir === "./";
     const displayPath = isCurrentDir ? "the current directory" : databaseDir;
 
-    outro(pc.green(`✓ Created new media file database in "${displayPath}"`));
+    outro(pc.green(`✓ Created new media file database in ${displayPath}`));
     
     if (options.generateKey && options.key) {
         log.info(pc.green(`✓ Encryption key saved to: ${options.key}`));
@@ -27,11 +27,7 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     }
     
     log.info('');
-    log.info('Your database is ready to receive photos and videos!');
-    log.info('');
-    log.info(pc.yellow('⚠️  Important: Never modify database files manually - always use the psi tool!'));
-    log.info('');
-    log.info(pc.bold('Add media files to your database:'));
+    log.info(pc.bold('Add media files:'));
     if (isCurrentDir) {
         log.info(`  ` + pc.cyan(`psi add <file or directory>`));
     } else {
@@ -56,9 +52,12 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
     const keyFlag = options.key ? ` --key ${options.key}` : '';
     const flags = `${dbFlag}${keyFlag}`;
-    log.info(`  ${pc.cyan(`psi add${flags} a-photo.jpg`)}   - Adds a single photo to the database`);
-    log.info(`  ${pc.cyan(`psi add${flags} a-photo.mp4`)}   - Adds a single video to the database`);
-    log.info(`  ${pc.cyan(`psi add${flags} a-directory/`)}  - Adds all media files in a directory`);
+    log.info(`  ${pc.cyan(`psi add${flags} photo.jpg`)}   - Adds a single photo to the database`);
+    log.info(`  ${pc.cyan(`psi add${flags} video.mp4`)}   - Adds a single video to the database`);
+    log.info(`  ${pc.cyan(`psi add${flags} directory/`)}  - Adds all media files in a directory`);
+
+    log.info('');
+    log.info(pc.yellow('⚠️  Important: Never modify database files manually - always use the psi tool!'));
 
     await exit(0);
 }
