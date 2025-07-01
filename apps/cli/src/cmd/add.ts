@@ -31,15 +31,7 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     // Configure Google API key for reverse geocoding on first use
     await configureIfNeeded(['google'], nonInteractive);
     
-    const { database } = await loadDatabase(options.db, options);
-
-    log.info('');
-    log.info(`Adding files to the media database in ${pc.cyan(options.db)}`);
-    log.info(`From paths:`);
-    for (const path of paths) {
-        log.info(`  - ${pc.cyan(path)}`);
-    }
-    log.info('');
+    const { database, databaseDir } = await loadDatabase(options.db, options);
 
     writeProgress(`Searching for files...`);
 
