@@ -233,6 +233,13 @@ export class HashCache {
             return undefined;
         }
 
+        //
+        // Remove leading slash.
+        //
+        if (filePath.startsWith('/')) {
+            filePath = filePath.slice(1);
+        }
+
         const entryOffset = this.findEntryOffset(filePath);
 
         if (entryOffset < 0) {
@@ -261,6 +268,13 @@ export class HashCache {
     addHash(filePath: string, hashedFile: { hash: Buffer, length: number, lastModified: Date }): void {
         if (!this.initialized) {
             throw new Error("Hash cache not initialized");
+        }
+
+        //
+        // Remove leading slash.
+        //
+        if (filePath.startsWith('/')) {
+            filePath = filePath.slice(1);
         }
 
         const { hash, length, lastModified } = hashedFile;
@@ -360,6 +374,13 @@ export class HashCache {
     removeHash(filePath: string): boolean {
         if (!this.initialized || !this.buffer) {
             return false;
+        }
+
+        //
+        // Remove leading slash.
+        //
+        if (filePath.startsWith('/')) {
+            filePath = filePath.slice(1);
         }
 
         const entryOffset = this.findEntryOffset(filePath);
