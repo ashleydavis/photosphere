@@ -5,6 +5,7 @@ import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { configureIfNeeded } from '../lib/config';
 import * as fs from 'fs-extra';
+import { formatBytes } from "../lib/format";
 
 export interface IAddCommandOptions extends IBaseCommandOptions {
 }
@@ -73,8 +74,8 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
     log.info(`  - Files failed:     ${addSummary.filesFailed}`);
     log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
-    log.info(`  - Total size:       ${addSummary.totalSize} bytes`);
-    log.info(`  - Average size:     ${addSummary.averageSize} bytes`);
+    log.info(`  - Total size:       ${formatBytes(addSummary.totalSize)}`);
+    log.info(`  - Average size:     ${formatBytes(addSummary.averageSize)}`);
 
     // Show follow-up commands
     log.info('');
