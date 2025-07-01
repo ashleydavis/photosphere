@@ -1,5 +1,5 @@
 import { select, text, confirm, isCancel, outro } from '@clack/prompts';
-import { existsSync, readdirSync, mkdirSync } from 'fs';
+import fs from 'fs-extra';
 import { join, resolve } from 'path';
 import pc from 'picocolors';
 import { exit } from 'node-utils';
@@ -10,12 +10,12 @@ import { exit } from 'node-utils';
 export async function isMediaDatabase(dirPath: string): Promise<boolean> {
     try {
         const dbDir = join(dirPath, '.db');
-        if (!existsSync(dbDir)) {
+        if (!await fs.exists(dbDir)) {
             return false;
         }
 
         const treePath = join(dbDir, 'tree.dat');
-        return existsSync(treePath);
+        return await fs.exists(treePath);
     } catch (error) {
         return false;
     }
@@ -24,13 +24,13 @@ export async function isMediaDatabase(dirPath: string): Promise<boolean> {
 //
 // Checks if a directory is empty or doesn't exist (suitable for init)
 //
-export function isEmptyOrNonExistent(dirPath: string): boolean {
-    if (!existsSync(dirPath)) {
+export async function isEmptyOrNonExistent(dirPath: string): Promise<boolean> {
+    if (!await fs.exists(dirPath)) {
         return true;
     }
     
     try {
-        const contents = readdirSync(dirPath);
+        const contents = await fs.readdir(dirPath);
         return contents.length === 0;
     } catch (error) {
         return false;
@@ -43,7 +43,7 @@ export function isEmptyOrNonExistent(dirPath: string): boolean {
 export async function pickDirectory(
     message: string,
     currentDir: string = process.cwd(),
-    validator?: (path: string) => boolean | string | Promise<boolean | string>
+    validator?: (path: string) => Promise<boolean | string>
 ): Promise<string | null> {
     const currentPath = resolve(currentDir);
     
@@ -197,10 +197,11 @@ export async function pickDirectory(
 //
 // Validates directory for init command (empty or non-existent)
 //
-export function validateInitDirectory(path: string): boolean | string {
-    if (isEmptyOrNonExistent(path)) {
+export async function validateInitDirectory(path: string): Promise<boolean | string> {
+    if (await isEmptyOrNonExistent(path)) {
         return true;
     }
+    
     return "can't use this directory because it's not empty";
 }
 
@@ -208,7 +209,7 @@ export function validateInitDirectory(path: string): boolean | string {
 // Validates directory for other commands (existing media database)
 //
 export async function validateExistingDatabase(path: string): Promise<boolean | string> {
-    if (!existsSync(path)) {
+    if (!await fs.exists(path)) {
         return 'Directory does not exist';
     }
     
