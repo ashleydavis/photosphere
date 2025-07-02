@@ -8,6 +8,7 @@ import { IS3Credentials } from 'storage';
 export interface IConfig {
     s3?: IS3Credentials;
     googleApiKey?: string;
+    googleApiKeyDeclined?: boolean;
 }
 
 //
@@ -85,6 +86,8 @@ function parseIniConfig(content: string): IConfig {
         } else if (currentSection === 'google') {
             if (key === 'apiKey') {
                 config.googleApiKey = value;
+            } else if (key === 'declined') {
+                config.googleApiKeyDeclined = value.toLowerCase() === 'true';
             }
         }
     }
@@ -138,9 +141,14 @@ function formatIniConfig(config: IConfig): string {
     }
     
     // Google API configuration section
-    if (config.googleApiKey) {
+    if (config.googleApiKey || config.googleApiKeyDeclined) {
         lines.push('[google]');
-        lines.push(`apiKey=${config.googleApiKey}`);
+        if (config.googleApiKey) {
+            lines.push(`apiKey=${config.googleApiKey}`);
+        }
+        if (config.googleApiKeyDeclined) {
+            lines.push(`declined=true`);
+        }
         lines.push('');
     }
     
@@ -260,38 +268,48 @@ export async function getS3Config(): Promise<IS3Credentials | undefined> {
 //
 // Gets the current Google API key from configuration
 //
-export async function getGoogleApiKey(): Promise<string | null> {
+export async function getGoogleApiKey(): Promise<string | undefined> {
+    if (process.env.GOOGLE_API_KEY) {
+        // If the environment variable is set, use it directly.
+        return process.env.GOOGLE_API_KEY.trim();
+    }
+
     const config = await loadConfig();
-    return config?.googleApiKey || null;
+    return config?.googleApiKey;
 }
 
 //
 // Prompts user to configure Google API key for reverse geocoding
 //
-export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise<string | null> {
+export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise<void> {
     if (!skipIntro) {
         intro(pc.cyan('Google API Key Setup'));
     }
     
-    note(
-        'Configure your Google API key for reverse geocoding (converting GPS coordinates to location names).\n\n' +
-        pc.blue('📖 Setup Guide: https://github.com/ashleydavis/photosphere/wiki/Google-Cloud-Setup'),
-        skipIntro ? 'Google API Key Setup' : undefined
-    );
-    
     const setupNow = await confirm({
-        message: 'Would you like to configure reverse geocoding now?',
+        message: 'Would you like to configure reverse geocoding? (This converts GPS coordinates to location names) (You can say no now and configure it later with "psi config")',
         initialValue: false
     });
     
     if (isCancel(setupNow) || !setupNow) {
-        note(
-            pc.yellow('⚠️  Reverse geocoding will be disabled.\n') +
-            pc.dim('You can enable it later using: psi config'),
-            'Skipping Google API Key'
-        );
-        return null;
+        // User declined to set up Google API key, remember this choice
+        const existingConfig = await loadConfig() || {};
+        existingConfig.googleApiKeyDeclined = true;
+        await saveConfig(existingConfig);
+        
+        if (!skipIntro) {
+            outro(pc.yellow('Skipping Google API Key setup'));
+        }
+
+        return;
     }
+
+    note(
+        'Creat a Google API key for reverse geocoding:\n' +
+        'https://github.com/ashleydavis/photosphere/wiki/Google-Cloud-Setup\r\n' +
+        'You can use set the environment variable `GOOGLE_API_KEY` to skip this setup.\n' +
+        skipIntro ? 'Google API Key Setup' : undefined
+    );
     
     const apiKey = await text({
         message: 'Enter your Google API key:',
@@ -313,7 +331,7 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
         if (!skipIntro) {
             outro(pc.red('Setup cancelled'));
         }
-        return null;
+        return;
     }
     
     // Load existing config or create new one
@@ -327,8 +345,6 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
         outro(pc.green('Google API key configured successfully!'));
         note(pc.dim('Your photos and videos will now be reverse geocoded to determine location names.'));
     }
-    
-    return apiKey.trim();
 }
 
 //
@@ -347,6 +363,17 @@ export async function removeGoogleApiKey(): Promise<void> {
     const existingConfig = await loadConfig();
     if (existingConfig) {
         delete existingConfig.googleApiKey;
+        await saveConfig(existingConfig);
+    }
+}
+
+//
+// Resets the Google API key declined state, allowing prompts to appear again
+//
+export async function resetGoogleApiKeyDeclined(): Promise<void> {
+    const existingConfig = await loadConfig();
+    if (existingConfig) {
+        delete existingConfig.googleApiKeyDeclined;
         await saveConfig(existingConfig);
     }
 }
@@ -391,14 +418,14 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                 break;
                 
             case 'google':
-                // Check if Google API key is configured, prompt if not (unless --yes is specified)
+                // Check if Google API key is configured, prompt if not (unless --yes is specified or user previously declined)
                 const apiKey = await getGoogleApiKey();
-                if (!apiKey && !nonInteractive) {
+                const config = await loadConfig();
+                const hasDeclined = config?.googleApiKeyDeclined;
+                
+                if (!apiKey && !nonInteractive && !hasDeclined) {
                     console.log(pc.yellow('\nReverse geocoding is available to convert GPS coordinates to location names.'));
-                    const result = await promptForGoogleApiKey(false);
-                    if (!result) {
-                        console.log(pc.dim('Continuing without reverse geocoding...'));
-                    }
+                    await promptForGoogleApiKey(false);
                 }
                 break;
                 
