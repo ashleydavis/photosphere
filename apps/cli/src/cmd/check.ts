@@ -14,14 +14,6 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
     
     const { database } = await loadDatabase(options.db, options);
 
-    log.info('');
-    log.info(`Checking files against the media file database in ${pc.cyan(options.db)}`);
-    log.info(`From paths:`)
-    for (const path of paths) {
-        log.info(`  - ${pc.cyan(path)}`);
-    }
-    log.info('');
-
     writeProgress(`Searching for files...`);
 
     await database.checkPaths(paths, (currentlyScanning) => {
