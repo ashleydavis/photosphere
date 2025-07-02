@@ -155,7 +155,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         : new RandomUuidGenerator();
 
     // Get Google API key from config or environment  
-    const googleApiKey = await getGoogleApiKey() || process.env.GOOGLE_API_KEY;
+    const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
     const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 
@@ -370,7 +370,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         : new RandomUuidGenerator();
 
     // Get Google API key from config or environment  
-    const googleApiKey = await getGoogleApiKey() || process.env.GOOGLE_API_KEY;
+    const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
     const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 

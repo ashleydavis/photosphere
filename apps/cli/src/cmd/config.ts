@@ -89,11 +89,8 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
         
         // Configure Google API Key if requested
         if (configChoice === 'google') {        
-            const googleResult = await promptForGoogleApiKey(true); // Skip intro since we're already in a flow
+            await promptForGoogleApiKey(true); // Skip intro since we're already in a flow            
             
-            if (googleResult) {
-                note(pc.green('✓ Google API key configured successfully!'));
-            }
             // Continue loop to show updated status
             continue;
         }
