@@ -45,13 +45,6 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
-
-    log.info('');
-    log.info(`Getting info files from paths:`);
-    for (const path of paths) {
-        log.info(`  - ${pc.cyan(path)}`);
-    }
-    log.info('');
     
     const results: FileAnalysis[] = [];
     let fileCount = 0;
