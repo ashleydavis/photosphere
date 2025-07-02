@@ -324,6 +324,65 @@ jobs:
           cd ./artifacts/macos-x64 && chmod +x psi && tar -czf ../psi-macos-x64.tar.gz psi && cd ../..
           cd ./artifacts/macos-arm64 && chmod +x psi && tar -czf ../psi-macos-arm64.tar.gz psi && cd ../..
 
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # Get the latest non-nightly tag (excluding current tag if this is a tagged build)
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            # For tagged releases, get commits since the previous tag (excluding current and nightly tags)
+            PREVIOUS_TAG=$(git tag --list --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | grep -v "^nightly$" | head -1)
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "Generating release notes for tagged release since previous tag: $PREVIOUS_TAG"
+              COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
+            else
+              echo "No previous tag found, using all commits for tagged release"
+              COMMIT_RANGE=""
+            fi
+          else
+            # For nightly builds, get commits since the last non-nightly tag
+            LAST_TAG=$(git tag --list --sort=-version:refname | grep -v "^nightly$" | head -1)
+            if [ -n "$LAST_TAG" ]; then
+              echo "Generating release notes for nightly build since last tag: $LAST_TAG"
+              COMMIT_RANGE="${LAST_TAG}..HEAD"
+            else
+              echo "No previous tag found, using all commits for nightly build"
+              COMMIT_RANGE=""
+            fi
+          fi
+          
+          # Get commits that start with "cli:" and process them
+          if [ -n "$COMMIT_RANGE" ]; then
+            RAW_COMMITS=$(git log --oneline --no-merges "$COMMIT_RANGE" --format="%s" --grep="^cli:" --regexp-ignore-case=false)
+          else
+            RAW_COMMITS=$(git log --oneline --no-merges --format="%s" --grep="^cli:" --regexp-ignore-case=false)
+          fi
+          
+          # Process commits: filter for "cli:" prefix, remove prefix, trim whitespace, and format as bullet points
+          RELEASE_NOTES=""
+          if [ -n "$RAW_COMMITS" ]; then
+            RELEASE_NOTES=$(echo "$RAW_COMMITS" | while IFS= read -r commit; do
+              if [[ $commit == cli:* ]]; then
+                # Remove "cli:" prefix and trim leading/trailing whitespace
+                cleaned=$(echo "${commit#cli:}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                if [ -n "$cleaned" ]; then
+                  echo "- $cleaned"
+                fi
+              fi
+            done)
+          fi
+          
+          if [ -z "$RELEASE_NOTES" ]; then
+            RELEASE_NOTES="- No CLI-related commits found"
+          fi
+          
+          # Save release notes to output and file
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Generated release notes:"
+          echo "$RELEASE_NOTES"
+
       - name: Delete existing nightly release
         if: github.ref_type != 'tag'
         env:
@@ -349,6 +408,9 @@ jobs:
             
             ${{ github.ref_type != 'tag' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
             ${{ github.ref_type != 'tag' && format('Built from commit: {0}', github.sha) || '' }}
+            
+            ## What's Changed
+            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
             
             ## Download
             - **Linux**: `psi-linux-x64.tar.gz`
