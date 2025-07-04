@@ -9,7 +9,7 @@ import { getDirectoryForCommand, isEmptyOrNonExistent, isMediaDatabase } from '.
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
-import { confirm, text, isCancel, outro, select, note } from '@clack/prompts';
+import { confirm, text, isCancel, outro, select, note } from './clack/prompts';
 import { pickDirectory } from "../lib/directory-picker";
 import { join } from "path";
 import { existsSync } from "fs";

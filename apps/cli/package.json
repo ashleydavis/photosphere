@@ -39,18 +39,19 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@clack/prompts": "^0.7.0",
     "adm-zip": "^0.5.16",
     "api": "workspace:*",
     "commander": "^13.1.0",
     "exif-parser": "^0.1.12",
+    "is-unicode-supported": "^2.1.0",
     "jszip": "^3.10.1",
     "mime": "^4.0.7",
+    "node-utils": "workspace:*",
     "open": "^10.1.2",
     "picocolors": "^1.1.1",
     "rest-api": "workspace:*",
     "storage": "workspace:*",
-    "node-utils": "workspace:*",
-    "tools": "workspace:*"
+    "tools": "workspace:*",
+    "wrap-ansi": "^9.0.0"
   }
 }

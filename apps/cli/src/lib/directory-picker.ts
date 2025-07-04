@@ -1,4 +1,4 @@
-import { select, text, confirm, isCancel, outro } from '@clack/prompts';
+import { select, text, confirm, isCancel, outro } from './clack/prompts';
 import fs from 'fs-extra';
 import { join, resolve } from 'path';
 import pc from 'picocolors';
@@ -126,8 +126,8 @@ export async function pickDirectory(
                 return null;
             }
             
-            const subdirPath = join(currentPath, subdirName as string);
-            const relativePath = `./${subdirName}`;
+            const subdirPath = join(currentPath, String(subdirName));
+            const relativePath = `./${String(subdirName)}`;
             try {
                 await fs.mkdir(subdirPath, { recursive: true });
                 
@@ -162,7 +162,7 @@ export async function pickDirectory(
                 return null;
             }
             
-            const resolvedPath = resolve(fullPath as string);
+            const resolvedPath = resolve(String(fullPath));
             
             // Create directory if it doesn't exist
             if (!await fs.exists(resolvedPath)) {
