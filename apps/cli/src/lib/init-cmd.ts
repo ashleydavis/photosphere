@@ -9,10 +9,9 @@ import { getDirectoryForCommand, isEmptyOrNonExistent, isMediaDatabase } from '.
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
-import { confirm, text, isCancel, outro, select, note } from './clack/prompts';
+import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { pickDirectory } from "../lib/directory-picker";
 import { join } from "path";
-import { existsSync } from "fs";
 
 //
 // Common options interface that all commands should extend
@@ -144,7 +143,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // See if the database is encrypted and requires a key.
     if (await metadataStorage.fileExists('encryption.pub')) {
         if (!options.key) {
-            outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n  ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}`));
+            outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}`));
             await exit(1);
         }
     }
@@ -228,7 +227,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         }
 
         if (wantEncryption) {
-            note(pc.yellow('⚠️  To encrypt your database you need a private key that you will have to keep safe and not lose\n   (otherwise you\'ll lose access to your encrypted database)'), 'Encryption Warning');
+            log.info(pc.yellow('\n⚠️ To encrypt your database you need a private key that you will have to keep safe and not lose\n   (otherwise you\'ll lose access to your encrypted database)'));
             
             // Ask how they want to handle the key
             const keyChoice = await select({
@@ -265,18 +264,19 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 const keyFilename = await text({
                     message: 'Enter the encryption key filename:',
                     placeholder: 'photosphere.key',
+                    initialValue: 'photosphere.key',
                     validate: (value) => {
                         if (!value || value.trim().length === 0) {
                             return 'Filename is required';
                         }
                         // Check if file exists
                         const keyPath = join(keyDir!, value);
-                        if (!existsSync(keyPath)) {
+                        if (!fs.existsSync(keyPath)) {
                             return 'File does not exist';
                         }
                         // Check if public key exists
                         const publicKeyPath = `${keyPath}.pub`;
-                        if (!existsSync(publicKeyPath)) {
+                        if (!fs.existsSync(publicKeyPath)) {
                             return 'Public key file (.pub) not found alongside private key';
                         }
                         return undefined;
@@ -290,8 +290,6 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 // Set the key path (no generation needed)
                 options.key = join(keyDir!, keyFilename as string);
                 options.generateKey = false;
-
-                note(pc.green(`✓ Using existing encryption key: ${options.key}`), 'Encryption Key');
             } else if (keyChoice === 'generate') {
                 // Generate new key
                 // Ask for directory
@@ -307,6 +305,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 );
 
                 if (!keyDir) {
+                    log.info('');
                     outro(pc.red('No directory selected for encryption key'));
                     await exit(1);
                 }
@@ -326,7 +325,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                         }
                         // Check if file already exists
                         const keyPath = join(keyDir!, value);
-                        if (existsSync(keyPath)) {
+                        if (fs.existsSync(keyPath)) {
                             return 'File already exists';
                         }
                         return undefined;
@@ -340,8 +339,6 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 // Set the key path and enable generation
                 options.key = join(keyDir!, keyFilename as string);
                 options.generateKey = true;
-
-                note(pc.green(`✓ Encryption key will be generated and saved to: ${options.key}\n`) + pc.yellow(`⚠️  Keep this key file safe! You will need it to access your encrypted database.`), 'Encryption Key Generation');
             }
         }
     }

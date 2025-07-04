@@ -85,10 +85,10 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     log.info(pc.bold(pc.blue(`📊 Replication Results`)));
     console.log();
     
-    console.log(`Total files imported: ${pc.cyan(result.filesImported.toString())}`);
-    console.log(`Total files considered: ${pc.cyan(result.filesConsidered.toString())}`);
-    console.log(`Total files copied: ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : pc.gray('0')}`);
-    console.log(`Skipped (unchanged): ${result.existingFiles > 0 ? pc.yellow(result.existingFiles.toString()) : pc.gray('0')}`);
+    console.log(`Total files imported:      ${pc.cyan(result.filesImported.toString())}`);
+    console.log(`Total files considered:    ${pc.cyan(result.filesConsidered.toString())}`);
+    console.log(`Total files copied:        ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : pc.gray('0')}`);
+    console.log(`Skipped (unchanged):       ${result.existingFiles > 0 ? pc.yellow(result.existingFiles.toString()) : pc.gray('0')}`);
     
     // If destination is encrypted, copy the public key to the destination .db directory
     if (destIsEncrypted && options.destKey) {
@@ -101,7 +101,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
                 console.log(pc.green(`✓ Copied public key to destination database directory`));
             }
         } catch (error) {
-            console.warn(pc.yellow(`⚠️  Warning: Could not copy public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            console.warn(pc.yellow(`⚠️ Warning: Could not copy public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
     }
 
@@ -114,10 +114,10 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     // Show follow-up commands
     console.log();
     log.info(pc.bold('Next steps:'));
-    console.log(`  ${pc.cyan('psi verify --db')} ${pc.gray(destDir)}         Verify integrity of the replicated database`);
-    console.log(`  ${pc.cyan('psi compare --dest')} ${pc.gray(destDir)}      Compare source and destination databases`);
-    console.log(`  ${pc.cyan('psi summary --db')} ${pc.gray(destDir)}       View summary of the replicated database`);
-    console.log(`  ${pc.cyan('psi ui --db')} ${pc.gray(destDir)}            Open web interface for the replicated database`);
+    console.log(`    ${pc.cyan('psi verify --db')} ${pc.gray(destDir)}         Verify integrity of the replicated database`);
+    console.log(`    ${pc.cyan('psi compare --dest')} ${pc.gray(destDir)}      Compare source and destination databases`);
+    console.log(`    ${pc.cyan('psi summary --db')} ${pc.gray(destDir)}       View summary of the replicated database`);
+    console.log(`    ${pc.cyan('psi ui --db')} ${pc.gray(destDir)}            Open web interface for the replicated database`);
 
     await exit(0);
 }

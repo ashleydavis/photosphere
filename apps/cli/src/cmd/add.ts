@@ -62,20 +62,20 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     log.info(pc.green(`Added ${addSummary.filesAdded} files to the media database.\n`));
     
     log.info(pc.bold('Summary:'));
-    log.info(`  - Files added:      ${addSummary.filesAdded}`);
-    log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
-    log.info(`  - Files failed:     ${addSummary.filesFailed}`);
-    log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
-    log.info(`  - Total size:       ${formatBytes(addSummary.totalSize)}`);
-    log.info(`  - Average size:     ${formatBytes(addSummary.averageSize)}`);
+    log.info(`Files added:      ${addSummary.filesAdded}`);
+    log.info(`Files ignored:    ${addSummary.filesIgnored}`);
+    log.info(`Files failed:     ${addSummary.filesFailed}`);
+    log.info(`Already added:    ${addSummary.filesAlreadyAdded}`);
+    log.info(`Total size:       ${formatBytes(addSummary.totalSize)}`);
+    log.info(`Average size:     ${formatBytes(addSummary.averageSize)}`);
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    log.info(`  ${pc.cyan('psi summary')}                   View database summary and tree hash`);
-    log.info(`  ${pc.cyan('psi replicate --dest <path>')}   Replicate the database to another location`);
-    log.info(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
+    log.info(`    ${pc.cyan('psi summary')}                   View database summary and tree hash`);
+    log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Replicate the database to another location`);
+    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

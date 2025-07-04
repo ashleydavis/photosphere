@@ -212,6 +212,6 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
         log.info('');
     }
 
-    log.info(pc.yellow(`⚠️  Databases have ${totalDifferences} differences`));
+    log.info(pc.yellow(`⚠️ Databases have ${totalDifferences} differences`));
     await exit(0);
 }

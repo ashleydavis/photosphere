@@ -17,20 +17,21 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     // Get database summary information
     const summary = await database.getDatabaseSummary();
 
+    log.info('');
     log.info(pc.bold(pc.blue(`📊 Database Summary`)));
-    console.log();
-    console.log(`Files imported: ${pc.green(summary.totalAssets.toString())}`);
-    console.log(`Total files: ${pc.green(summary.totalFiles.toString())}`);
-    console.log(`Total size: ${pc.green(formatBytes(summary.totalSize))}`);
-    console.log(`Tree root hash: ${pc.gray(summary.fullHash)}`);
+    log.info('');
+    log.info(`Files imported:   ${pc.green(summary.totalAssets.toString())}`);
+    log.info(`Total files:      ${pc.green(summary.totalFiles.toString())}`);
+    log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);
+    log.info(`Tree root hash:   ${pc.gray(summary.fullHash)}`);
 
     // Show follow-up commands
-    console.log();
+    log.info('');
     log.info(pc.bold('Next steps:'));
-    console.log(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    console.log(`  ${pc.cyan('psi add <paths>')}               Add more files to your database`);
-    console.log(`  ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
-    console.log(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
+    log.info(`    ${pc.cyan('psi add <paths>')}               Add more files to your database`);
+    log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
+    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

@@ -20,7 +20,7 @@ export const text = (opts: TextOptions) => {
 		signal: opts.signal,
 		input: opts.input,
 		render() {
-			const title = `${color.gray(S_BAR)}\n${symbol(this.state)}  ${opts.message}\n`;
+			const title = `${symbol(this.state)}  ${opts.message}\n`;
 			const placeholder = opts.placeholder
 				? color.inverse(opts.placeholder[0]) + color.dim(opts.placeholder.slice(1))
 				: color.inverse(color.hidden('_'));
