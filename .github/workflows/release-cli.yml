@@ -292,6 +292,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
@@ -352,9 +354,9 @@ jobs:
           
           # Get commits that start with "cli:" and process them
           if [ -n "$COMMIT_RANGE" ]; then
-            RAW_COMMITS=$(git log --oneline --no-merges "$COMMIT_RANGE" --format="%s" --grep="^cli:" --regexp-ignore-case=false)
+            RAW_COMMITS=$(git log --oneline --no-merges "$COMMIT_RANGE" --format="%s" --grep="^cli:")
           else
-            RAW_COMMITS=$(git log --oneline --no-merges --format="%s" --grep="^cli:" --regexp-ignore-case=false)
+            RAW_COMMITS=$(git log --oneline --no-merges --format="%s" --grep="^cli:")
           fi
           
           # Process commits: filter for "cli:" prefix, remove prefix, trim whitespace, and format as bullet points
