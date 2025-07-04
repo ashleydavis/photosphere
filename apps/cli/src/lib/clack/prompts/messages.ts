@@ -14,5 +14,5 @@ export const intro = (title = '', opts?: CommonOptions) => {
 
 export const outro = (message = '', opts?: CommonOptions) => {
 	const output: Writable = opts?.output ?? process.stdout;
-	output.write(`\n${message}\n\n`);
+	output.write(`\n${message}\n`);
 };

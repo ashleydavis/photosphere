@@ -1,4 +1,4 @@
-import { intro, outro, text, password, confirm, select, isCancel, note } from './clack/prompts';
+import { intro, outro, text, password, confirm, isCancel, note } from './clack/prompts';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -281,10 +281,7 @@ export async function getGoogleApiKey(): Promise<string | undefined> {
 //
 // Prompts user to configure Google API key for reverse geocoding
 //
-export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise<void> {
-    if (!skipIntro) {
-        intro(pc.cyan('Google API Key Setup'));
-    }
+export async function promptForGoogleApiKey(): Promise<void> {
     
     const setupNow = await confirm({
         message: 'Would you like to configure reverse geocoding? (This converts GPS coordinates to location names) (You can say no now and configure it later with "psi config")',
@@ -297,18 +294,21 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
         existingConfig.googleApiKeyDeclined = true;
         await saveConfig(existingConfig);
         
-        if (!skipIntro) {
-            outro(pc.yellow('Skipping Google API Key setup'));
-        }
+        outro(pc.yellow('Skipping Google API Key setup'));
 
         return;
     }
 
+    await configureGoogleApiKey();
+}
+
+//
+// Configures Google API key for reverse geocoding.
+//
+export async function configureGoogleApiKey(): Promise<void> {
     note(
-        'Creat a Google API key for reverse geocoding:\n' +
-        'https://github.com/ashleydavis/photosphere/wiki/Google-Cloud-Setup\r\n' +
-        'You can use set the environment variable `GOOGLE_API_KEY` to skip this setup.\n',
-        skipIntro ? 'Google API Key Setup' : undefined
+        'Create a Google API key for reverse geocoding: https://github.com/ashleydavis/photosphere/wiki/Google-Cloud-Setup\n' +
+        'You can use the environment variable `GOOGLE_API_KEY` to skip this setup.'
     );
     
     const apiKey = await text({
@@ -328,9 +328,7 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
     });
     
     if (isCancel(apiKey)) {
-        if (!skipIntro) {
-            outro(pc.red('Setup cancelled'));
-        }
+        outro(pc.red('Setup cancelled'));
         return;
     }
     
@@ -341,10 +339,8 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
     // Save to global config (Google API key is typically global, not project-specific)
     await saveConfig(existingConfig);
     
-    if (!skipIntro) {
-        outro(pc.green('Google API key configured successfully!'));
-        note(pc.dim('Your photos and videos will now be reverse geocoded to determine location names.'));
-    }
+    outro(pc.green('✓ Google API key configured successfully!'));
+    note(pc.dim('Your photos and videos will now be reverse geocoded to determine location names.'));
 }
 
 //
@@ -424,8 +420,7 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                 const hasDeclined = config?.googleApiKeyDeclined;
                 
                 if (!apiKey && !nonInteractive && !hasDeclined) {
-                    console.log(pc.yellow('\nReverse geocoding is available to convert GPS coordinates to location names.'));
-                    await promptForGoogleApiKey(false);
+                    await promptForGoogleApiKey();
                 }
                 break;
                 
@@ -457,7 +452,7 @@ export async function clearConfig(): Promise<boolean> {
     console.log(pc.yellow(`\nThe following configuration file will be deleted:`));
     console.log(pc.dim(`  - ${configPath}`));
     
-    console.log(pc.red('\n⚠️  Warning: This action cannot be undone!'));
+    console.log(pc.red('\n⚠️ Warning: This action cannot be undone!'));
     console.log(pc.red('All your configuration (S3 credentials, Google API key, etc.) will be permanently deleted.'));
     
     const confirmText = await text({

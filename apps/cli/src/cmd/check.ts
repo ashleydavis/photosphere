@@ -41,20 +41,20 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
     log.info(pc.green(`Checked ${totalChecked} files.\n`));
     
     log.info(pc.bold('Summary:'));
-    log.info(`  - Files added:      ${addSummary.filesAdded}`);
-    log.info(`  - Files ignored:    ${addSummary.filesIgnored}`);
-    log.info(`  - Files failed:     ${addSummary.filesFailed}`);
-    log.info(`  - Already added:    ${addSummary.filesAlreadyAdded}`);
+    log.info(`Files added:      ${addSummary.filesAdded}`);
+    log.info(`Files ignored:    ${addSummary.filesIgnored}`);
+    log.info(`Files failed:     ${addSummary.filesFailed}`);
+    log.info(`Already added:    ${addSummary.filesAlreadyAdded}`);
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
     if (addSummary.filesAdded > 0) {
-        log.info(`  ${pc.cyan('psi add <paths>')}               Add the new files found to your database`);
+        log.info(`    ${pc.cyan('psi add <paths>')}               Add the new files found to your database`);
     }
-    log.info(`  ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    log.info(`  ${pc.cyan('psi summary')}                   View database summary and statistics`);
-    log.info(`  ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
+    log.info(`    ${pc.cyan('psi summary')}                   View database summary and statistics`);
+    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

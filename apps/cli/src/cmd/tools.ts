@@ -89,7 +89,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
     if (allAvailable) {
         console.log(pc.green('🎉 All tools are available and ready to use!'));
     } else {
-        console.log(pc.yellow(`⚠️  ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
+        console.log(pc.yellow(`⚠️ ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
         console.log();
         
         // Ask if user wants to see installation instructions (or show them automatically in --yes mode)

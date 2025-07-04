@@ -1,5 +1,5 @@
 import { exit } from 'node-utils';
-import { promptForS3Config, clearConfig, promptForGoogleApiKey, getGoogleApiKey, loadConfig } from '../lib/config';
+import { promptForS3Config, clearConfig, getGoogleApiKey, loadConfig, configureGoogleApiKey } from '../lib/config';
 import pc from 'picocolors';
 import { intro, outro, select, isCancel, note, confirm } from '../lib/clack/prompts';
 import { log } from "utils";
@@ -89,7 +89,7 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
         
         // Configure Google API Key if requested
         if (configChoice === 'google') {        
-            await promptForGoogleApiKey(true); // Skip intro since we're already in a flow            
+            await configureGoogleApiKey();
             
             // Continue loop to show updated status
             continue;
