@@ -1,7 +1,7 @@
-import { ensureToolsAvailable, verifyTools } from 'tools';
+import { verifyTools } from 'tools';
 import pc from "picocolors";
 import { exit } from 'node-utils';
-import { confirm, isCancel } from "@clack/prompts";
+import { confirm, isCancel } from './clack/prompts';
 import { showInstallationInstructions } from "./installation-instructions";
 
 //

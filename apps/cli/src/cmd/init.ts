@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { createDatabase, ICreateCommandOptions } from "../lib/init-cmd";
-import { intro, outro } from "@clack/prompts";
+import { intro, outro } from '../lib/clack/prompts';
 
 export interface IInitCommandOptions extends ICreateCommandOptions {
 }

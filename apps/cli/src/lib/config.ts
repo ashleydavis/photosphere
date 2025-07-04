@@ -1,4 +1,4 @@
-import { intro, outro, text, password, confirm, select, isCancel, note } from '@clack/prompts';
+import { intro, outro, text, password, confirm, select, isCancel, note } from './clack/prompts';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -234,12 +234,12 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     
     
     const s3Config: IS3Credentials = {
-        region: region.trim(),
-        accessKeyId: accessKeyId.trim(),
-        secretAccessKey: secretAccessKey.trim()
+        region: typeof region === 'string' ? region.trim() : '',
+        accessKeyId: typeof accessKeyId === 'string' ? accessKeyId.trim() : '',
+        secretAccessKey: typeof secretAccessKey === 'string' ? secretAccessKey.trim() : ''
     };
     
-    if (endpoint && endpoint.trim() !== '') {
+    if (endpoint && typeof endpoint === 'string' && endpoint.trim() !== '') {
         s3Config.endpoint = endpoint.trim();
     }
     
@@ -307,7 +307,7 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
     note(
         'Creat a Google API key for reverse geocoding:\n' +
         'https://github.com/ashleydavis/photosphere/wiki/Google-Cloud-Setup\r\n' +
-        'You can use set the environment variable `GOOGLE_API_KEY` to skip this setup.\n' +
+        'You can use set the environment variable `GOOGLE_API_KEY` to skip this setup.\n',
         skipIntro ? 'Google API Key Setup' : undefined
     );
     
@@ -336,7 +336,7 @@ export async function promptForGoogleApiKey(skipIntro: boolean = false): Promise
     
     // Load existing config or create new one
     const existingConfig = await loadConfig() || {};
-    existingConfig.googleApiKey = apiKey.trim();
+    existingConfig.googleApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
     
     // Save to global config (Google API key is typically global, not project-specific)
     await saveConfig(existingConfig);

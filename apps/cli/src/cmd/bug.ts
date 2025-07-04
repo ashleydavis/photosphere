@@ -1,11 +1,11 @@
-import { configureLog, getFileLogger } from "../lib/log";
+import { configureLog } from "../lib/log";
 import fs from "fs-extra";
 import path from "path";
 import os from "os";
 import open from "open";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { text, isCancel, intro, outro } from "@clack/prompts";
+import { text, isCancel, intro, outro } from '../lib/clack/prompts';
 import { Image, Video } from "tools";
 import { version } from "../../package.json";
 

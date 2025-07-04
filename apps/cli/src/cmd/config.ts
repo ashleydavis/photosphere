@@ -1,7 +1,7 @@
 import { exit } from 'node-utils';
 import { promptForS3Config, clearConfig, promptForGoogleApiKey, getGoogleApiKey, loadConfig } from '../lib/config';
 import pc from 'picocolors';
-import { intro, outro, select, isCancel, note, confirm } from '@clack/prompts';
+import { intro, outro, select, isCancel, note, confirm } from '../lib/clack/prompts';
 import { log } from "utils";
 
 export interface IConfigureCommandOptions {
