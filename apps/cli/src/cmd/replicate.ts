@@ -52,12 +52,12 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
-    if (destDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (destDir.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    if (destMetaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (destMetaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive)
     }
 
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");

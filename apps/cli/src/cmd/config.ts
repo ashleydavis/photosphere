@@ -1,5 +1,5 @@
 import { exit } from 'node-utils';
-import { promptForS3Config, clearConfig, getGoogleApiKey, loadConfig, configureGoogleApiKey } from '../lib/config';
+import { configureS3, clearConfig, getGoogleApiKey, loadConfig, configureGoogleApiKey } from '../lib/config';
 import pc from 'picocolors';
 import { intro, outro, select, isCancel, note, confirm } from '../lib/clack/prompts';
 import { log } from "utils";
@@ -78,7 +78,7 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
         
         // Configure S3 if requested
         if (configChoice === 's3') {
-            const s3Result = await promptForS3Config(true); // Skip intro
+            const s3Result = await configureS3();
             
             if (s3Result) {
                 note(pc.green('✓ S3 credentials configured successfully!'));

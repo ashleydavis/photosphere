@@ -75,13 +75,13 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     // Configure S3 if the path requires it
     //
-    if (options.db.startsWith("s3:") && !await configureIfNeeded(['s3'], false)) {
-        await exit(1);
+    if (options.db.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], false);
     }
     
     const metaPath = options.meta || pathJoin(options.db, '.db');
-    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], false)) {
-        await exit(1);
+    if (metaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], false);
     }
     
     //

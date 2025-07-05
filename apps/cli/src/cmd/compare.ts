@@ -74,20 +74,20 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const srcMetaPath = options.srcMeta || pathJoin(srcDir, '.db');
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
 
-    if (srcDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (srcDir.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    if (srcMetaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (srcMetaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    if (destDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (destDir.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    if (destMetaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (destMetaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
 
     const s3Config = await getS3Config();

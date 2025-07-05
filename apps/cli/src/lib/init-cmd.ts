@@ -120,12 +120,12 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
-    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (dbDir.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (metaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
 
     const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
@@ -346,12 +346,12 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const metaPath = options.meta || pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
-    if (dbDir.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (dbDir.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    if (metaPath.startsWith("s3:") && !await configureIfNeeded(['s3'], nonInteractive)) {
-        await exit(1);
+    if (metaPath.startsWith("s3:")) {
+        await configureIfNeeded(['s3'], nonInteractive);
     }
 
     // Load encryption keys (with generateKey support for init)
