@@ -20,7 +20,7 @@ export let log: ILog = {
         console.log(message);
     },
     verbose(message: string): void {
-        console.log(message);
+        // You have to override this method if you want to use it.
     },
     error(message: string): void {
         console.error(message);

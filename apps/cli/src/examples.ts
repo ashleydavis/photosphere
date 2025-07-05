@@ -82,6 +82,10 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi examples", description: "Shows all usage examples categorized by command." }
     ],
     
+    version: [
+        { command: "psi version", description: "Shows version information for psi and its dependencies." }
+    ],
+    
     "debug merkle-tree": [
         { command: "psi debug merkle-tree --db .", description: "Shows the merkle tree for current directory." },
         { command: "psi debug merkle-tree --db ./photos", description: "Shows the merkle tree for ./photos database." }

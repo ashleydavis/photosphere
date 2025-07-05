@@ -15,6 +15,7 @@ import { merkleTreeCommand } from './cmd/merkle-tree';
 import { hashCacheCommand } from './cmd/hash-cache';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
+import { versionCommand } from './cmd/version';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -215,6 +216,12 @@ Resources:
         .option("--no-browser", "Don't open the browser automatically", false)
         .addHelpText('after', getCommandExamplesHelp('bug'))
         .action(bugReportCommand);
+
+    program
+        .command("version")
+        .description("Displays version information for psi and its dependencies.")
+        .addHelpText('after', getCommandExamplesHelp('version'))
+        .action(versionCommand);
 
     // Parse the command line arguments
     try {
