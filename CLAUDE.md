@@ -30,6 +30,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ### CLI tool (in apps/cli/):
 - `bun run start -- <command> [db-path]` - Run CLI commands locally
 - `bun run build-linux/win/mac` - Build standalone executables
+- `bun run test` (alias: `bun run t`) - Run CLI tests
 
 ### Running a single test:
 - Backend: `cd apps/backend && bun test path/to/test.test.ts`
