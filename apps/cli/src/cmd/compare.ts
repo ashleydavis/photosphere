@@ -4,7 +4,7 @@ import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
-import { getDirectoryForCommand, isMediaDatabase } from '../lib/directory-picker';
+import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { compareTrees, loadTreeV2 } from "adb";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
@@ -56,14 +56,8 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     await ensureMediaProcessingTools(nonInteractive);
 
     let srcDir = options.db;
-    if (srcDir === undefined) {    
-        if (await isMediaDatabase(process.cwd())) {
-            // If the current directory looks like a media file database, use it.
-            srcDir = ".";
-        }
-        else {           
-            srcDir = await getDirectoryForCommand("existing", nonInteractive);
-        }
+    if (srcDir === undefined) {
+        srcDir = await getDirectoryForCommand("existing", nonInteractive);
     }
 
     let destDir = options.dest;

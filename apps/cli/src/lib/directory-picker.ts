@@ -7,7 +7,7 @@ import { exit } from 'node-utils';
 //
 // Checks if a directory is a valid Photosphere media database
 //
-export async function isMediaDatabase(dirPath: string): Promise<boolean> {
+async function isMediaDatabase(dirPath: string): Promise<boolean> {
     try {
         const dbDir = join(dirPath, '.db');
         if (!await fs.exists(dbDir)) {
@@ -21,10 +21,11 @@ export async function isMediaDatabase(dirPath: string): Promise<boolean> {
     }
 }
 
+
 //
 // Checks if a directory is empty or doesn't exist (suitable for init)
 //
-export async function isEmptyOrNonExistent(dirPath: string): Promise<boolean> {
+async function isEmptyOrNonExistent(dirPath: string): Promise<boolean> {
     if (!await fs.exists(dirPath)) {
         return true;
     }
@@ -193,11 +194,10 @@ export async function pickDirectory(
     }
 }
 
-
 //
 // Validates directory for init command (empty or non-existent)
 //
-export async function validateInitDirectory(path: string): Promise<boolean | string> {
+async function validateInitDirectory(path: string): Promise<boolean | string> {
     if (await isEmptyOrNonExistent(path)) {
         return true;
     }
@@ -205,10 +205,11 @@ export async function validateInitDirectory(path: string): Promise<boolean | str
     return "can't use this directory because it's not empty";
 }
 
+
 //
 // Validates directory for other commands (existing media database)
 //
-export async function validateExistingDatabase(path: string): Promise<boolean | string> {
+async function validateExistingDatabase(path: string): Promise<boolean | string> {
     if (!await fs.exists(path)) {
         return 'Directory does not exist';
     }
@@ -219,6 +220,7 @@ export async function validateExistingDatabase(path: string): Promise<boolean | 
     
     return 'Directory is not a valid Photosphere media database';
 }
+
 
 //
 // Auto-detects and prompts for directory based on command type
