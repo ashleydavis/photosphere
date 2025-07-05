@@ -31,7 +31,7 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     // Configure Google API key for reverse geocoding on first use
     await configureIfNeeded(['google'], nonInteractive);
     
-    const { database, databaseDir } = await loadDatabase(options.db, options);
+    const { database } = await loadDatabase(options.db, options);
 
     writeProgress(`Searching for files...`);
 
