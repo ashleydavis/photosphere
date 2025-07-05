@@ -3,6 +3,5 @@ export default {
     modulePathIgnorePatterns: [
         "dist",
         "build",
-        "src/test/e2e",
     ],
 };
