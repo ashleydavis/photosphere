@@ -5,7 +5,7 @@ import { exit, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator } from "utils";
 import { TestUuidGenerator } from "node-utils";
 import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
-import { getDirectoryForCommand, isEmptyOrNonExistent, isMediaDatabase } from './directory-picker';
+import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
 import pc from "picocolors";
@@ -109,13 +109,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        if (await isMediaDatabase(process.cwd())) {
-            // If the current directory looks like a media file database, use it.
-            dbDir = ".";
-        }
-        else {           
-            dbDir = await getDirectoryForCommand("existing", nonInteractive);
-        }
+        dbDir = await getDirectoryForCommand("existing", nonInteractive);
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
@@ -198,21 +192,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        // Is the current directory empty?
-        if (await isEmptyOrNonExistent(process.cwd())) {
-            // If the current directory is empty, use it.
-            dbDir = ".";
-        }
-        else {
-            // Get the directory for the database (validates it's empty/non-existent for init)
-            dbDir = await getDirectoryForCommand('init', nonInteractive);
-        }
-    }
-
-    // Check the directory is empty or non-existent.
-    if (!isEmptyOrNonExistent(dbDir)) {
-        outro(pc.red(`Error: Directory "${dbDir}" is not empty.\nPlease specify an empty directory or non-existent directory, or specify none so I can walk you through it.`));
-        await exit(1);
+        // Get the directory for the database (validates it's empty/non-existent for init)
+        dbDir = await getDirectoryForCommand('init', nonInteractive);
     }
 
     // Ask about encryption if not already specified
@@ -360,6 +341,17 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
     const { storage: metadataStorage } = createStorage(metaPath, s3Config);
+
+    // Check the requested directory is empty or non-existent using the storage interface. 
+    if (!await assetStorage.isEmpty("/")) {
+        outro(pc.red(`✗ The directory ${pc.cyan(dbDir)} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.`));
+        await exit(1);
+    }
+
+    if (!await metadataStorage.isEmpty("/")) {
+        outro(pc.red(`✗ The metadata directory ${pc.cyan(metaPath)} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.`));
+        await exit(1);
+    }
 
     // Create appropriate UUID generator based on NODE_ENV
     const uuidGenerator = process.env.NODE_ENV === "testing" 
