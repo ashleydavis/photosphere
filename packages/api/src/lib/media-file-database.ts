@@ -16,6 +16,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 import { Image } from "tools";
+import _ from "lodash";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -1054,7 +1055,7 @@ export class MediaFileDatabase {
         const srcStorage = this.assetStorage;
 
         const destHashCache = new HashCache(destMetadataStorage, "");
-        await destHashCache.load();
+        await retry(() => destHashCache.load());
 
         let newDestTree = createTree();
 
@@ -1090,7 +1091,7 @@ export class MediaFileDatabase {
                 }
             }
 
-            const srcFileInfo = await srcStorage.info(fileName);
+            const srcFileInfo = await retry(() => srcStorage.info(fileName));
             if (!srcFileInfo) {
                 throw new Error(`Source file "${fileName}" does not exist in the source database.`);
             }
@@ -1098,13 +1099,15 @@ export class MediaFileDatabase {
             //
             // Copy the file from source to dest.
             //
-            const readStream = srcStorage.readStream(fileName);
-            await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
+            await retry(async  () => {
+                const readStream = srcStorage.readStream(fileName);
+                await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
+            });
 
             //
             // Compute hash for the copied file.
             //
-            const copiedHash = await computeHash(destAssetStorage.readStream(fileName));
+            const copiedHash = await retry(() => computeHash(destAssetStorage.readStream(fileName)));
             if (Buffer.compare(copiedHash, sourceHash) !== 0) {
                 throw new Error(
 `Copied file "${fileName}" hash does not match the source hash.
@@ -1116,7 +1119,7 @@ export class MediaFileDatabase {
             //
             // Get the info for the copied file.
             //
-            const copiedFileInfo = await destAssetStorage.info(fileName);
+            const copiedFileInfo = await retry(() => destAssetStorage.info(fileName));
             if (!copiedFileInfo) {
                 throw new Error(`Failed to read dest info for file: ${fileName}`);
             }
@@ -1162,13 +1165,13 @@ export class MediaFileDatabase {
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
-        await destHashCache.save();
+        await retry(() => destHashCache.save());
 
-        await saveTreeV2("tree.dat", newDestTree, destMetadataStorage);   
+        await retry(() => saveTreeV2("tree.dat", newDestTree, destMetadataStorage));
         
         const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
         const metadataBuffer = Buffer.from(metadataJson, 'utf8');
-        await destMetadataStorage.write("metadata.json", undefined, metadataBuffer);
+        await retry(() => destMetadataStorage.write("metadata.json", undefined, metadataBuffer));
         
         return result;
     }
