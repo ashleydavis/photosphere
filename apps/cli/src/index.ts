@@ -228,7 +228,8 @@ Resources:
         
         if (err.code === 'commander.missingArgument' 
             || err.code === 'commander.unknownOption'
-            || err.code === 'commander.unknownCommand') {
+            || err.code === 'commander.unknownCommand' 
+            || err.code === 'commander.excessArguments') {
             await exit(1);
         }
 
