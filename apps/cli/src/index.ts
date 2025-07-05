@@ -18,6 +18,7 @@ import { examplesCommand } from './cmd/examples';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
+import { log } from 'utils';
 
 async function main() {
 
@@ -242,18 +243,40 @@ Resources:
     }
 }
 
+//
+// Handles errors in a consistent way.
+//
+function handleError(error: any) {
+    log.error(pc.red('An error occurred:'));
+    if (error.message) {
+        log.error(pc.red(error.message).toString());
+    }
+    if (error.stack) {
+        log.error((pc.red(error.stack).toString()));
+    }
+    else {
+        log.error(pc.red(error.toString()).toString());
+    }
+
+    console.log('');
+    console.log('If you believe this behaviour is a bug, please report it with the following command:');
+    console.log(pc.yellow('   psi bug'));
+}
+
+// Handle unhandled errors
+process.on('uncaughtException', (error) => {
+    handleError(error);
+    process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    handleError(reason);
+    process.exit(1);
+});
+
 main()
     .catch(async (error) => {
-        console.error(pc.red('An error occurred:'));
-        if (error.message) {
-            console.error(pc.red(error.message).toString());
-        }
-        if (error.stack) {
-            console.error((pc.red(error.stack).toString()));
-        }
-        else {
-            console.error(pc.red(error.toString()).toString());
-        }
-
+        handleError(error);
         return exit(1);
     });

@@ -36,7 +36,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         disableFileLogging: true
     });
     
-    intro(pc.blue("🐛 Photosphere Bug Report"));
+    intro(pc.blue("🐛 Photosphere Bug Report\n"));
 
     // Get system information
     const systemInfo = getSystemInfo();

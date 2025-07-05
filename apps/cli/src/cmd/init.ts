@@ -29,7 +29,6 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
         log.info(pc.yellow(`⚠️ Keep this key file safe! You will need it to access your encrypted database.`));
     }
 
-    
     log.info('');
     log.info('');
     log.info(pc.bold('Add media files:'));
