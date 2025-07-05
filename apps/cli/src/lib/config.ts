@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import pc from 'picocolors';
 import { IS3Credentials } from 'storage';
+import { exit } from 'node-utils';
 
 export interface IConfig {
     s3?: IS3Credentials;
@@ -156,15 +157,10 @@ function formatIniConfig(config: IConfig): string {
 }
 
 //
-// Prompts user for S3 configuration
+// Prompts the user to configure S3.
 //
-export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3Credentials | undefined> {
-    if (!skipIntro) {
-        intro(pc.cyan('S3 Configuration Setup'));
-        console.log(pc.dim('Configure credentials to access your S3-hosted media file database.'));
-    } else {
-        note('Configure credentials to access your S3-hosted media file database.', 'S3 Configuration Setup');
-    }
+export async function configureS3(): Promise<IS3Credentials | undefined> {
+    note('Configure credentials to access your S3-hosted media file database.');
     
     const endpoint = await text({
         message: 'S3 Endpoint URL (leave empty for AWS S3, supply the endpoint URL for Digital Ocean Spaces):',
@@ -177,15 +173,14 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     });
     
     if (isCancel(endpoint)) {
-        if (!skipIntro) {
-            outro(pc.red('Setup cancelled'));
-        }
+        outro(pc.red('Setup cancelled'));
         return undefined;
     }
     
     const region = await text({
         message: 'Region (this should be us-east-1 for Digital Ocean Spaces or the actual region name for AWS S3):',
         placeholder: 'us-east-1',
+        initialValue: 'us-east-1',
         validate: (value) => {
             if (!value || value.trim() === '') {
                 return 'Region is required';
@@ -194,9 +189,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     });
     
     if (isCancel(region)) {
-        if (!skipIntro) {
-            outro(pc.red('Setup cancelled'));
-        }
+        outro(pc.red('Setup cancelled'));
         return undefined;
     }
     
@@ -210,9 +203,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     });
     
     if (isCancel(accessKeyId)) {
-        if (!skipIntro) {
-            outro(pc.red('Setup cancelled'));
-        }
+        outro(pc.red('Setup cancelled'));
         return undefined;
     }
     
@@ -226,12 +217,10 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     });
     
     if (isCancel(secretAccessKey)) {
-        if (!skipIntro) {
-            outro(pc.red('Setup cancelled'));
-        }
+        outro(pc.red('Setup cancelled'));
         return undefined;
     }
-    
+   
     
     const s3Config: IS3Credentials = {
         region: typeof region === 'string' ? region.trim() : '',
@@ -250,9 +239,7 @@ export async function promptForS3Config(skipIntro: boolean = false): Promise<IS3
     // Save config
     await saveConfig(existingConfig);
     
-    if (!skipIntro) {
-        outro(pc.green(`Credentials saved to ${getConfigPath()}`));
-    }
+    outro(pc.green(`Credentials saved to ${getConfigPath()}`));
     
     return s3Config;
 }
@@ -276,30 +263,6 @@ export async function getGoogleApiKey(): Promise<string | undefined> {
 
     const config = await loadConfig();
     return config?.googleApiKey;
-}
-
-//
-// Prompts user to configure Google API key for reverse geocoding
-//
-export async function promptForGoogleApiKey(): Promise<void> {
-    
-    const setupNow = await confirm({
-        message: 'Would you like to configure reverse geocoding? (This converts GPS coordinates to location names) (You can say no now and configure it later with "psi config")',
-        initialValue: false
-    });
-    
-    if (isCancel(setupNow) || !setupNow) {
-        // User declined to set up Google API key, remember this choice
-        const existingConfig = await loadConfig() || {};
-        existingConfig.googleApiKeyDeclined = true;
-        await saveConfig(existingConfig);
-        
-        outro(pc.yellow('Skipping Google API Key setup'));
-
-        return;
-    }
-
-    await configureGoogleApiKey();
 }
 
 //
@@ -377,7 +340,7 @@ export async function resetGoogleApiKeyDeclined(): Promise<void> {
 //
 // Configures required services based on tags and context
 //
-export async function configureIfNeeded(tags: string[], nonInteractive: boolean): Promise<boolean> {
+export async function configureIfNeeded(tags: string[], nonInteractive: boolean): Promise<void> {
     for (const tag of tags) {
         switch (tag) {
             case 's3':
@@ -386,14 +349,14 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                 if (!s3Config) {
                     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
                         // We have environment variables set so don't need to prompt the user.
-                        return true;
+                        return;
                     }
 
                     if (nonInteractive) {
                         // Non-interactive mode, cannot proceed without S3 config.
                         console.error(pc.red('\nS3 configuration is required to access your S3-hosted media file database.'));
                         console.error(pc.red('Please set environment variables or run "psi config" to set up your S3 credentials.')); 
-                        return false;
+                        await exit(1);
                     }
 
                     // No config exists, prompt user
@@ -405,11 +368,12 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                     });
                     
                     if (isCancel(shouldConfigure) || !shouldConfigure) {
-                        return false;
+                        // S3 is required but user declined to configure it.
+                        console.error(pc.red('S3 configuration is required to access your S3-hosted media.'));
+                        await exit(1);
                     }
                     
-                    await promptForS3Config();
-                    return true;
+                    await configureS3();
                 }
                 break;
                 
@@ -420,7 +384,23 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                 const hasDeclined = config?.googleApiKeyDeclined;
                 
                 if (!apiKey && !nonInteractive && !hasDeclined) {
-                    await promptForGoogleApiKey();
+                    const setupNow = await confirm({
+                        message: 'Would you like to configure reverse geocoding? (This converts GPS coordinates to location names) (You can say no now and configure it later with "psi config")',
+                        initialValue: false
+                    });
+                    
+                    if (isCancel(setupNow) || !setupNow) {
+                        // User declined to set up Google API key, remember this choice
+                        const existingConfig = await loadConfig() || {};
+                        existingConfig.googleApiKeyDeclined = true;
+                        await saveConfig(existingConfig);
+                        
+                        outro(pc.yellow('Skipping Google API Key setup'));
+
+                        return;
+                    }
+
+                    await configureGoogleApiKey();
                 }
                 break;
                 
@@ -429,8 +409,6 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                 break;
         }
     }
-    
-    return true;
 }
 
 //
