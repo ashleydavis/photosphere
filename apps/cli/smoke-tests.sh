@@ -745,10 +745,119 @@ test_database_summary() {
     expect_output_string "$summary_output" "Tree root hash:" "Summary contains hash"
 }
 
+test_database_list() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 10: DATABASE LIST ==="
+    
+    # Run list command and capture output for verification
+    local list_output
+    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "true" "list_output"
+    
+    # Check that list contains expected fields and patterns
+    expect_output_string "$list_output" "Database Files" "List output contains header"
+    expect_output_string "$list_output" "sorted by date" "List output contains sorting information"
+    expect_output_string "$list_output" "Page 1" "List output contains page header"
+    expect_output_string "$list_output" "Date:" "List output contains date information"
+    expect_output_string "$list_output" "Size:" "List output contains size information"
+    expect_output_string "$list_output" "Type:" "List output contains type information"
+    
+    # Check that it shows the expected number of files
+    expect_output_string "$list_output" "End of results" "List shows end of results message"
+    expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"
+}
+
+test_export_assets() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 11: EXPORT ASSETS ==="
+    
+    # Create export test directory
+    local export_dir="./test/tmp/exports"
+    mkdir -p "$export_dir"
+    
+    # Try to find assets in the database directory directly first
+    local assets_dir="$TEST_DB_DIR/assets"
+    local test_asset_id=""
+    
+    if [ -d "$assets_dir" ]; then
+        test_asset_id=$(ls "$assets_dir" | head -1)
+        log_info "Found asset files in assets directory"
+    fi
+    
+    if [ -z "$test_asset_id" ]; then
+        # Fallback: try to get a list of assets using the list command
+        local list_output
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+            # Extract the first asset ID from the list output
+            # The list output should contain lines with asset IDs
+            test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
+        fi
+    fi
+    
+    if [ -z "$test_asset_id" ]; then
+        log_error "Could not find any asset ID to test export with"
+        log_info "List output:"
+        echo "$list_output"
+        log_info "Assets directory contents:"
+        ls -la "$TEST_DB_DIR/assets" || echo "Assets directory not found"
+        exit 1
+    fi
+    
+    log_info "Using asset ID for export tests: $test_asset_id"
+    
+    # Test 1: Export original asset to specific file
+    local export_output
+    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "true" "export_output"
+    
+    # Verify the exported file exists
+    check_exists "$export_dir/exported-original.png" "Exported original file"
+    
+    # Check export output for success message
+    expect_output_string "$export_output" "Successfully exported" "Export success message"
+    
+    # Test 2: Export display version to directory (if it exists)
+    local display_file="$TEST_DB_DIR/display/$test_asset_id"
+    if [ -f "$display_file" ]; then
+        invoke_command "Export display version to directory" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/ --type display --verbose --yes"
+        
+        # Check if the display file was exported (name will depend on original filename)
+        local exported_display_count=$(find "$export_dir" -name "*_display.*" | wc -l)
+        if [ "$exported_display_count" -eq 0 ]; then
+            log_warning "Display version export didn't create expected _display file"
+        else
+            log_success "Display version exported successfully"
+        fi
+    else
+        log_info "Display version not available for asset $test_asset_id, skipping display export test"
+    fi
+    
+    # Test 3: Export thumbnail version (if it exists)
+    local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
+    if [ -f "$thumb_file" ]; then
+        invoke_command "Export thumbnail version" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
+        
+        check_exists "$export_dir/thumb.jpg" "Exported thumbnail file"
+    else
+        log_info "Thumbnail version not available for asset $test_asset_id, skipping thumbnail export test"
+    fi
+    
+    # Test 4: Try to export non-existent asset (should fail)
+    local invalid_asset_id="00000000-0000-0000-0000-000000000000"
+    invoke_command "Export non-existent asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $invalid_asset_id $export_dir/should-not-exist.png --yes" 1
+    
+    # Test 5: Export the same asset explicitly as original type
+    invoke_command "Export asset as original explicitly" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/explicit-original.png --type original --verbose --yes"
+    
+    check_exists "$export_dir/explicit-original.png" "Explicitly exported original file"
+    
+    log_success "All export tests completed successfully"
+}
+
 test_database_verify() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 10: DATABASE VERIFICATION ==="
+    echo "=== TEST 12: DATABASE VERIFICATION ==="
     
     # Run verify command and capture output for checking
     local verify_output
@@ -770,7 +879,7 @@ test_database_verify() {
 test_database_verify_full() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 11: DATABASE VERIFICATION (FULL MODE) ==="
+    echo "=== TEST 13: DATABASE VERIFICATION (FULL MODE) ==="
     
     # Run full verify command and capture output for checking
     local verify_output
@@ -791,7 +900,7 @@ test_database_verify_full() {
 test_detect_new_file() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 12: DETECT NEW FILE WITH VERIFY ==="
+    echo "=== TEST 14: DETECT NEW FILE WITH VERIFY ==="
     
     local test_copy_dir="$TEST_DB_DIR-new-file-test"
     
@@ -843,7 +952,7 @@ test_detect_new_file() {
 test_detect_deleted_file() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 13: DETECT DELETED FILE WITH VERIFY ==="
+    echo "=== TEST 15: DETECT DELETED FILE WITH VERIFY ==="
     
     local test_copy_dir="$TEST_DB_DIR-deleted-file-test"
     
@@ -901,7 +1010,7 @@ test_detect_deleted_file() {
 test_detect_modified_file() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 14: DETECT MODIFIED FILE WITH VERIFY ==="
+    echo "=== TEST 16: DETECT MODIFIED FILE WITH VERIFY ==="
     
     local test_copy_dir="$TEST_DB_DIR-modified-file-test"
     
@@ -960,7 +1069,7 @@ test_detect_modified_file() {
 test_database_replicate() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 15: DATABASE REPLICATION ==="
+    echo "=== TEST 17: DATABASE REPLICATION ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -992,7 +1101,7 @@ test_database_replicate() {
 test_verify_replica() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 16: VERIFY REPLICA ==="
+    echo "=== TEST 18: VERIFY REPLICA ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1027,7 +1136,7 @@ test_verify_replica() {
 test_database_replicate_second() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 17: SECOND DATABASE REPLICATION - NO CHANGES ==="
+    echo "=== TEST 19: SECOND DATABASE REPLICATION - NO CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1051,7 +1160,7 @@ test_database_replicate_second() {
 test_database_compare() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 18: DATABASE COMPARISON ==="
+    echo "=== TEST 20: DATABASE COMPARISON ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1073,7 +1182,7 @@ test_database_compare() {
 test_compare_with_changes() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 19: COMPARE WITH CHANGES ==="
+    echo "=== TEST 21: COMPARE WITH CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1099,7 +1208,7 @@ test_compare_with_changes() {
 test_replicate_after_changes() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 20: REPLICATE AFTER CHANGES ==="
+    echo "=== TEST 22: REPLICATE AFTER CHANGES ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1124,7 +1233,7 @@ test_replicate_after_changes() {
 test_cannot_create_over_existing() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 21: CANNOT CREATE DATABASE OVER EXISTING ==="
+    echo "=== TEST 23: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
 }
@@ -1212,6 +1321,8 @@ run_all_tests() {
     test_add_multiple_files
     test_add_same_multiple_files
     test_database_summary
+    test_database_list
+    test_export_assets
     test_database_verify
     test_database_verify_full
     test_detect_new_file
@@ -1290,40 +1401,46 @@ run_test() {
         "summary"|"9")
             test_database_summary
             ;;
-        "verify"|"10")
+        "list"|"10")
+            test_database_list
+            ;;
+        "export"|"11")
+            test_export_assets
+            ;;
+        "verify"|"12")
             test_database_verify
             ;;
-        "verify-full"|"11")
+        "verify-full"|"13")
             test_database_verify_full
             ;;
-        "detect-new"|"12")
+        "detect-new"|"14")
             test_detect_new_file
             ;;
-        "detect-deleted"|"13")
+        "detect-deleted"|"15")
             test_detect_deleted_file
             ;;
-        "detect-modified"|"14")
+        "detect-modified"|"16")
             test_detect_modified_file
             ;;
-        "replicate"|"15")
+        "replicate"|"17")
             test_database_replicate
             ;;
-        "verify-replica"|"16")
+        "verify-replica"|"18")
             test_verify_replica
             ;;
-        "replicate-second"|"17")
+        "replicate-second"|"19")
             test_database_replicate_second
             ;;
-        "compare"|"18")
+        "compare"|"20")
             test_database_compare
             ;;
-        "compare-changes"|"19")
+        "compare-changes"|"21")
             test_compare_with_changes
             ;;
-        "replicate-changes"|"20")
+        "replicate-changes"|"22")
             test_replicate_after_changes
             ;;
-        "no-overwrite"|"21")
+        "no-overwrite"|"23")
             test_cannot_create_over_existing
             ;;
         *)
@@ -1377,6 +1494,8 @@ run_multiple_commands() {
                 test_add_multiple_files
                 test_add_same_multiple_files
                 test_database_summary
+                test_database_list
+                test_export_assets
                 test_database_verify
                 test_database_verify_full
                 test_detect_new_file
@@ -1426,40 +1545,46 @@ run_multiple_commands() {
             "summary"|"9")
                 test_database_summary
                 ;;
-            "verify"|"10")
+            "list"|"10")
+                test_database_list
+                ;;
+            "export"|"11")
+                test_export_assets
+                ;;
+            "verify"|"12")
                 test_database_verify
                 ;;
-            "verify-full"|"11")
+            "verify-full"|"13")
                 test_database_verify_full
                 ;;
-            "detect-new"|"12")
+            "detect-new"|"14")
                 test_detect_new_file
                 ;;
-            "detect-deleted"|"13")
+            "detect-deleted"|"15")
                 test_detect_deleted_file
                 ;;
-            "detect-modified"|"14")
+            "detect-modified"|"16")
                 test_detect_modified_file
                 ;;
-            "replicate"|"15")
+            "replicate"|"17")
                 test_database_replicate
                 ;;
-            "verify-replica"|"16")
+            "verify-replica"|"18")
                 test_verify_replica
                 ;;
-            "replicate-second"|"17")
+            "replicate-second"|"19")
                 test_database_replicate_second
                 ;;
-            "compare"|"18")
+            "compare"|"20")
                 test_database_compare
                 ;;
-            "compare-changes"|"19")
+            "compare-changes"|"21")
                 test_compare_with_changes
                 ;;
-            "replicate-changes"|"20")
+            "replicate-changes"|"22")
                 test_replicate_after_changes
                 ;;
-            "no-overwrite"|"21")
+            "no-overwrite"|"23")
                 test_cannot_create_over_existing
                 ;;
             *)
@@ -1526,18 +1651,20 @@ show_usage() {
     echo "  add-multiple (7)    - Add multiple files"
     echo "  add-same-multiple (8) - Add same multiple files again"
     echo "  summary (9)         - Display database summary"
-    echo "  verify (10)         - Verify database integrity"
-    echo "  verify-full (11)    - Verify database integrity (full mode)"
-    echo "  detect-new (12)     - Detect new file with verify"
-    echo "  detect-deleted (13) - Detect deleted file with verify"
-    echo "  detect-modified (14) - Detect modified file with verify"
-    echo "  replicate (15)      - Replicate database to new location"
-    echo "  verify-replica (16) - Verify replica integrity and match with source"
-    echo "  replicate-second (17) - Second replication (no changes)"
-    echo "  compare (18)        - Compare two databases"
-    echo "  compare-changes (19) - Compare databases after adding changes"
-    echo "  replicate-changes (20) - Replicate changes and verify sync"
-    echo "  no-overwrite (21)   - Cannot create database over existing"
+    echo "  list (10)           - List files in database"
+    echo "  export (11)         - Export assets by ID"
+    echo "  verify (12)         - Verify database integrity"
+    echo "  verify-full (13)    - Verify database integrity (full mode)"
+    echo "  detect-new (14)     - Detect new file with verify"
+    echo "  detect-deleted (15) - Detect deleted file with verify"
+    echo "  detect-modified (16) - Detect modified file with verify"
+    echo "  replicate (17)      - Replicate database to new location"
+    echo "  verify-replica (18) - Verify replica integrity and match with source"
+    echo "  replicate-second (19) - Second replication (no changes)"
+    echo "  compare (20)        - Compare two databases"
+    echo "  compare-changes (21) - Compare databases after adding changes"
+    echo "  replicate-changes (22) - Replicate changes and verify sync"
+    echo "  no-overwrite (23)   - Cannot create database over existing"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -1592,8 +1719,8 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 19
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 19 ]; then
+        # Validate that end_test is a number between 1 and 23
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 23 ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -1623,7 +1750,7 @@ main() {
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-19)"
+            log_error "Invalid test number: $end_test (must be 1-23)"
             show_usage
             exit 1
         fi
