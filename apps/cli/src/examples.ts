@@ -86,6 +86,13 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi version", description: "Shows version information for psi and its dependencies." }
     ],
     
+    export: [
+        { command: "psi export --db ./photos abc123 ./exported-photo.jpg", description: "Exports original asset with ID abc123 to a specific file." },
+        { command: "psi export --db ./photos def456 ./exports/", description: "Exports original asset with ID def456 to a directory (keeps original name)." },
+        { command: "psi export --db . xyz789 ~/Downloads/my-photo.jpg --type display", description: "Exports display version of asset xyz789." },
+        { command: "psi export --db ./photos abc123 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
+    ],
+    
     "debug merkle-tree": [
         { command: "psi debug merkle-tree --db .", description: "Shows the merkle tree for current directory." },
         { command: "psi debug merkle-tree --db ./photos", description: "Shows the merkle tree for ./photos database." }
