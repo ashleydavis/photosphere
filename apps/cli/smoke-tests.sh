@@ -612,7 +612,18 @@ test_view_media_files() {
     echo "============================================================================"
     echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
     
-    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes"
+    # Capture the output to validate it
+    local info_output
+    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "true" "info_output"
+    
+    # Check that info output doesn't contain "Type: undefined" which indicates a bug
+    expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"
+    
+    # Check that each test file has the correct MIME type
+    expect_output_string "$info_output" "Type: image/jpeg" "Info output should contain JPEG MIME type for test.jpg"
+    expect_output_string "$info_output" "Type: image/png" "Info output should contain PNG MIME type for test.png"
+    expect_output_string "$info_output" "Type: video/mp4" "Info output should contain MP4 MIME type for test.mp4"
+    expect_output_string "$info_output" "Type: image/webp" "Info output should contain WebP MIME type for test.webp"
 }
 
 # Parameterized function to test adding a single file
