@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { confirm, isCancel } from '../lib/clack/prompts';
 import { showInstallationInstructions } from "../lib/installation-instructions";
+import { log } from "utils";
 
 export interface IToolsCommandOptions {
     //
@@ -20,7 +21,8 @@ export async function toolsCommand(options: IToolsCommandOptions = {}): Promise<
 }
 
 async function listTools(options: IToolsCommandOptions): Promise<void> {
-    console.log(pc.bold('📦 Media Processing Tools Status\n'));
+    log.info('');
+    log.info(pc.bold('📦 Media Processing Tools Status\n'));
     
     const toolsStatus = await verifyTools();
     
@@ -62,8 +64,8 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
     let allAvailable = true;
     const missingTools: string[] = [];
     
-    console.log(pc.bold('Tool Status:'));
-    console.log();
+    log.info(pc.bold('Tool Status:'));
+    log.info('');
     
     for (const tool of tools) {
         const status = toolsStatus[tool.key] as any;
@@ -72,8 +74,8 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
             ? pc.green(`Available${status.version ? ` (v${status.version})` : ''}`)
             : pc.red('Not found');
             
-        console.log(`${icon} ${pc.bold(tool.name)}: ${statusText}`);
-        console.log(`   ${pc.gray(tool.description)}`);
+        log.info(`${icon} ${pc.bold(tool.name)}: ${statusText}`);
+        log.info(`   ${pc.gray(tool.description)}`);
         
         if (!status.available) {
             allAvailable = false;
@@ -83,14 +85,14 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
                 missingTools.push(tool.name);
             }
         }
-        console.log();
+        log.info('');
     }
     
     if (allAvailable) {
-        console.log(pc.green('🎉 All tools are available and ready to use!'));
+        log.info(pc.green('🎉 All tools are available and ready to use!'));
     } else {
-        console.log(pc.yellow(`⚠️ ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
-        console.log();
+        log.info(pc.yellow(`⚠️ ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
+        log.info('');
         
         // Ask if user wants to see installation instructions (or show them automatically in --yes mode)
         let showInstructions = true;
@@ -101,16 +103,16 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
             });
             
             if (isCancel(userChoice)) {
-                console.log();
-                console.log(pc.dim('Please install the missing tools and try again.'));
+                log.info('');
+                log.info(pc.dim('Please install the missing tools and try again.'));
                 await exit(1);
             }
             showInstructions = userChoice as boolean;
         }
         
         if (!showInstructions) {
-            console.log();
-            console.log(pc.dim('Please install the missing tools and try again.'));
+            log.info('');
+            log.info(pc.dim('Please install the missing tools and try again.'));
             await exit(1);
         }
         
