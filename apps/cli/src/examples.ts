@@ -108,6 +108,12 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
         { command: "psi list --db ./photos --page-size 10", description: "Lists files with 10 files per page." }
+    ],
+    
+    upgrade: [
+        { command: "psi upgrade --db .", description: "Upgrades the database in current directory to latest format." },
+        { command: "psi upgrade --db ./photos", description: "Upgrades the database in ./photos directory." },
+        { command: "psi upgrade --db ./photos -v", description: "Upgrades with verbose output showing all actions." }
     ]
 };
 
