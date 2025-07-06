@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, FileStorage, IBsonCollection, IFileInfo, IStorage, StoragePrefixWrapper, walkDirectory } from "storage";
+import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IFileInfo, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator } from "utils";
 import dayjs from "dayjs";
@@ -243,6 +243,86 @@ export interface IVerifyResult {
     // The list of files that were removed from the database.
     //
     removed: string[];
+
+    //
+    // The number of nodes processed in the merkle tree.
+    //
+    nodesProcessed: number;
+}
+
+//
+// Options for repairing the media file database.
+//
+export interface IRepairOptions {
+    //
+    // The source database path to repair from.
+    //
+    source: string;
+    
+    //
+    // The source metadata directory.
+    //
+    sourceMeta?: string;
+    
+    //
+    // The source key file.
+    //
+    sourceKey?: string;
+    
+    //
+    // Enables full verification where all files are re-hashed.
+    //
+    full?: boolean;    
+}
+
+//
+// Result of the repair process.
+//
+export interface IRepairResult {
+    //
+    // The total number of files imported into the database.
+    //
+    filesImported: number;
+
+    //
+    // The total number of files verified (including thumbnails, display, BSON, etc.).
+    //
+    totalFiles: number;
+
+    //
+    // The total database size.
+    //
+    totalSize: number;
+
+    //
+    // The number of files that were unmodified.
+    //
+    numUnmodified: number;
+
+    //
+    // The list of files that were modified.
+    //
+    modified: string[];
+
+    //
+    // The list of new files that were added to the database.
+    //
+    new: string[];
+
+    //
+    // The list of files that were removed from the database.
+    //
+    removed: string[];
+
+    //
+    // The list of files that were successfully repaired.
+    //
+    repaired: string[];
+
+    //
+    // The list of files that could not be repaired.
+    //
+    unrepaired: string[];
 
     //
     // The number of nodes processed in the merkle tree.
@@ -1035,6 +1115,182 @@ export class MediaFileDatabase {
             return true;
         });
        
+        result.nodesProcessed = numNodes;
+
+        return result;
+    }
+
+    //
+    // Repairs the media file database by restoring corrupted or missing files from a source database.
+    //
+    async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {
+        
+        const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false, "source");
+        const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
+        const { storage: sourceMetadataStorage } = createStorage(options.sourceMeta || pathJoin(options.source, '.db'));
+
+        // Load source hash cache
+        const sourceHashCache = new HashCache(sourceMetadataStorage, "");
+        await retry(() => sourceHashCache.load());
+
+        const summary = await this.getDatabaseSummary();
+        const result: IRepairResult = {
+            filesImported: this.databaseMetadata.filesImported,
+            totalFiles: summary.totalFiles,
+            totalSize: summary.totalSize,
+            numUnmodified: 0,
+            modified: [],
+            new: [],
+            removed: [],
+            repaired: [],
+            unrepaired: [],
+            nodesProcessed: 0,
+        };
+
+        //
+        // Function to repair a single file
+        //
+        const repairFile = async (fileName: string, expectedHash: Buffer): Promise<boolean> => {
+            try {
+                // Check if file exists in source
+                if (!await sourceAssetStorage.fileExists(fileName)) {
+                    log.warn(`Source file not found for repair: ${fileName}`);
+                    return false;
+                }
+
+                // Get source file info
+                const sourceFileInfo = await sourceAssetStorage.info(fileName);
+                if (!sourceFileInfo) {
+                    log.warn(`Source file info not available: ${fileName}`);
+                    return false;
+                }
+
+                // Verify source file hash matches expected
+                const sourceHash = await computeHash(sourceAssetStorage.readStream(fileName));
+                if (Buffer.compare(sourceHash, expectedHash) !== 0) {
+                    log.warn(`Source file hash mismatch for: ${fileName}`);
+                    return false;
+                }
+
+                // Copy file from source to target
+                const readStream = sourceAssetStorage.readStream(fileName);
+                await this.assetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
+
+                // Verify copied file
+                const copiedFileInfo = await this.assetStorage.info(fileName);
+                if (!copiedFileInfo) {
+                    log.warn(`Failed to get info for repaired file: ${fileName}`);
+                    return false;
+                }
+
+                const copiedHash = await this.computeHash(fileName, copiedFileInfo, () => this.assetStorage.readStream(fileName), this.databaseHashCache);
+                if (Buffer.compare(copiedHash.hash, expectedHash) !== 0) {
+                    log.warn(`Repaired file hash mismatch: ${fileName}`);
+                    return false;
+                }
+
+                return true;
+            } catch (error: any) {
+                log.error(`Error repairing file ${fileName}: ${error.message}`);
+                return false;
+            }
+        };
+
+        //
+        // Check all files in the database to find corrupted/missing files
+        //
+        let filesProcessed = 0;
+        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(`Checking file ${filesProcessed} of ${summary.totalFiles}`);
+            }
+
+            const fileInfo = await this.assetStorage.info(file.fileName);
+            const fileHash = this.databaseHashCache.getHash(file.fileName);
+            
+            if (!fileHash) {
+                result.new.push(file.fileName);
+                continue;
+            }
+
+            if (!fileInfo) {
+                // File is missing - try to repair
+                if (progressCallback) {
+                    progressCallback(`Repairing missing file: ${file.fileName}`);
+                }
+
+                const repaired = await repairFile(file.fileName, fileHash.hash);
+                if (repaired) {
+                    result.repaired.push(file.fileName);
+                } else {
+                    result.removed.push(file.fileName);
+                    result.unrepaired.push(file.fileName);
+                }
+                continue;
+            }
+
+            // Check if file is corrupted
+            if (fileHash.length !== fileInfo.length 
+                || fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime()
+                || options.full) {
+                
+                // Verify the actual hash
+                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                
+                if (freshHash.hash.toString("hex") !== fileHash.hash.toString("hex")) {
+                    // File is corrupted - try to repair
+                    if (progressCallback) {
+                        progressCallback(`Repairing corrupted file: ${file.fileName}`);
+                    }
+
+                    const repaired = await repairFile(file.fileName, fileHash.hash);
+                    if (repaired) {
+                        result.repaired.push(file.fileName);
+                    } else {
+                        result.modified.push(file.fileName);
+                        result.unrepaired.push(file.fileName);
+                    }
+                } else {
+                    result.numUnmodified++;
+                }
+            } else {
+                result.numUnmodified++;
+            }
+        }
+
+        //
+        // Check the merkle tree to find files that should exist but don't
+        //
+        if (progressCallback) {
+            progressCallback(`Checking for missing files in merkle tree...`);
+        }
+
+        let numNodes = 0;
+        await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
+            numNodes++;
+
+            if (progressCallback) {
+                progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
+            }
+
+            if (node.fileName && !node.isDeleted) {
+                if (!await this.assetStorage.fileExists(node.fileName)) {
+                    // File is missing from storage but exists in tree
+                    const repaired = await repairFile(node.fileName, node.hash);
+                    if (repaired) {
+                        result.repaired.push(node.fileName);
+                    } else {
+                        result.removed.push(node.fileName);
+                        result.unrepaired.push(node.fileName);
+                    }
+                }
+            }
+
+            return true;
+        });
+
         result.nodesProcessed = numNodes;
 
         return result;

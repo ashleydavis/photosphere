@@ -85,7 +85,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     log.info('');
     log.info(pc.bold('Next steps:'));
     if (result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0) {
-        log.info(`    ${pc.cyan('psi repair')}                      Fix database issues (command coming soon)`);
+        log.info(`    ${pc.cyan('psi repair --source <path>')}   Fix database issues by restoring from source`);
     }
     log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
     log.info(`    ${pc.cyan('psi compare --dest <path>')}     Compare this database with another location`);

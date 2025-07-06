@@ -19,6 +19,7 @@ import { versionCommand } from './cmd/version';
 import { listCommand } from './cmd/list';
 import { exportCommand } from './cmd/export';
 import { upgradeCommand } from './cmd/upgrade';
+import { repairCommand } from './cmd/repair';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -28,6 +29,7 @@ async function main() {
 
     const dbOption: [string, string] = ["--db <path>", "The directory that contains the media file database"];
     const destDbOption: [string, string] = ["--dest <path>", "The destination directory that specifies the target database"];
+    const sourceDbOption: [string, string] = ["--source <path>", "The source directory that contains the database to repair from"];
     const metadataDirOption: [string, string] = ["-m, --meta <db-metadata-dir>", `The directory in which to store asset database metadata. (default: "<current-dir>/.db")`];
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
@@ -158,6 +160,21 @@ Resources:
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
+
+    program
+        .command("repair")
+        .description("Repairs the integrity of the media file database by restoring files from a source database.")
+        .option(...dbOption)
+        .option(...sourceDbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option("-s, --source-meta <dir>", "Source metadata directory override")
+        .option("--sk, --source-key <keyfile>", "Path to source encryption key file")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .addHelpText('after', getCommandExamplesHelp('repair'))
+        .action(repairCommand);
 
     program
         .command("replicate")
