@@ -16,6 +16,7 @@ import { hashCacheCommand } from './cmd/hash-cache';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
 import { versionCommand } from './cmd/version';
+import { listCommand } from './cmd/list';
 import { exportCommand } from './cmd/export';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
@@ -132,6 +133,18 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('summary'))
         .action(summaryCommand);
+
+    program
+        .command("list")
+        .description("Lists all files in the database sorted by date (newest first) with pagination.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
+        .addHelpText('after', getCommandExamplesHelp('list'))
+        .action(listCommand);
 
     program
         .command("verify")
