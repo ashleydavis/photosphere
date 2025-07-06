@@ -16,6 +16,7 @@ import { hashCacheCommand } from './cmd/hash-cache';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
 import { versionCommand } from './cmd/version';
+import { exportCommand } from './cmd/export';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -222,6 +223,20 @@ Resources:
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
+
+    program
+        .command("export")
+        .description("Exports an asset by ID to a specified path.")
+        .argument("<asset-id>", "The ID of the asset to export.")
+        .argument("<output-path>", "The path where the asset should be exported.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option("-t, --type <type>", "Type of asset to export: original, display, or thumb (default: original)", "original")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('export'))
+        .action(exportCommand);
 
     // Parse the command line arguments
     try {
