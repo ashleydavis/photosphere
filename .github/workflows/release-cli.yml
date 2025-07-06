@@ -12,32 +12,35 @@ on:
 jobs:
   validate-version:
     runs-on: ubuntu-latest
-    if: github.ref_type == 'tag'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Validate version matches tag
         run: |
-          # Extract version from tag (remove 'v' prefix if present)
-          TAG_VERSION="${{ github.ref_name }}"
-          TAG_VERSION="${TAG_VERSION#v}"
-          
-          # Extract version from package.json
-          PACKAGE_VERSION=$(grep '"version"' apps/cli/package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
-          
-          echo "Tag version: $TAG_VERSION"
-          echo "Package version: $PACKAGE_VERSION"
-          
-          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "❌ Version mismatch!"
-            echo "Git tag version: $TAG_VERSION"
-            echo "package.json version: $PACKAGE_VERSION"
-            echo "Please update package.json version to match the tag version."
-            exit 1
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            # Extract version from tag (remove 'v' prefix if present)
+            TAG_VERSION="${{ github.ref_name }}"
+            TAG_VERSION="${TAG_VERSION#v}"
+            
+            # Extract version from package.json
+            PACKAGE_VERSION=$(grep '"version"' apps/cli/package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+            
+            echo "Tag version: $TAG_VERSION"
+            echo "Package version: $PACKAGE_VERSION"
+            
+            if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+              echo "❌ Version mismatch!"
+              echo "Git tag version: $TAG_VERSION"
+              echo "package.json version: $PACKAGE_VERSION"
+              echo "Please update package.json version to match the tag version."
+              exit 1
+            fi
+            
+            echo "✅ Version validation passed: $TAG_VERSION"
+          else
+            echo "✅ No tag detected, skipping version validation"
           fi
-          
-          echo "✅ Version validation passed: $TAG_VERSION"
 
   build-linux:
     runs-on: ubuntu-24.04
