@@ -102,6 +102,12 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi debug hash-cache --db .", description: "Shows both the local and database hash caches." },
         { command: "psi debug hash-cache --db . -t local", description: "Shows only the local hash cache information." },
         { command: "psi debug hash-cache --db ./photos -t database", description: "Shows the database cache for ./photos." }
+    ],
+    
+    list: [
+        { command: "psi list --db .", description: "Lists all files in the current directory database." },
+        { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
+        { command: "psi list --db ./photos --page-size 10", description: "Lists files with 10 files per page." }
     ]
 };
 
