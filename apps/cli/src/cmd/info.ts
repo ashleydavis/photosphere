@@ -13,6 +13,7 @@ import { Readable } from "stream";
 import { IFileInfo } from "storage";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
+import mime from "mime";
 
 export interface IInfoCommandOptions { 
     //
@@ -131,7 +132,9 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
         return;
     }
 
-    console.log(`   Type: ${fileInfo.contentType}`);
+    // Get MIME type from fileInfo.contentType or infer from file extension
+    const mimeType = fileInfo.contentType || mime.getType(path) || 'application/octet-stream';
+    console.log(`   Type: ${mimeType}`);
     
     if (hash) {
         console.log(`   Hash: ${pc.gray(hash)}`);
