@@ -61,6 +61,11 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi verify --db ./photos --full", description: "Forces full verification of all files." }
     ],
     
+    repair: [
+        { command: "psi repair --db ./photos --source ./backup", description: "Repairs corrupted files from a backup database." },
+        { command: "psi repair --db . --source ./backup --full", description: "Forces full repair verification of all files." },
+    ],
+    
     replicate: [
         { command: "psi replicate --db ./photos --dest ./backup", description: "Replicates a database to a backup location." },
         { command: "psi replicate --db . --dest s3:bucket/photos", description: "Replicates the current database to S3." },

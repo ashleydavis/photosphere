@@ -1249,6 +1249,102 @@ test_cannot_create_over_existing() {
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
 }
 
+test_repair_ok_database() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 24: REPAIR OK DATABASE (NO CHANGES) ==="
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    
+    # Check that replica exists from previous tests
+    check_exists "$replica_dir" "Replica directory from previous tests"
+    
+    # Run repair on the intact database using replica as source
+    local repair_output
+    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "true" "repair_output"
+    
+    # Check that repair reports no issues found
+    expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
+    expect_output_value "$repair_output" "Repaired:" "0" "No files repaired"
+    expect_output_value "$repair_output" "Unrepaired:" "0" "No files unrepaired"
+    expect_output_value "$repair_output" "Modified:" "0" "No files modified"
+    expect_output_value "$repair_output" "Removed:" "0" "No files removed"
+}
+
+test_repair_damaged_database() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 25: REPAIR DAMAGED DATABASE ==="
+    
+    local replica_dir="$TEST_DB_DIR-replica"
+    local damaged_dir="$TEST_DB_DIR-damaged"
+    
+    # Check that replica exists from previous tests
+    check_exists "$replica_dir" "Replica directory from previous tests"
+    
+    # Create a copy of the database to damage
+    log_info "Creating copy of database to damage"
+    rm -rf "$damaged_dir"
+    cp -r "$TEST_DB_DIR" "$damaged_dir"
+    
+    # Damage the database by:
+    # 1. Deleting one file
+    local file_to_delete=$(find "$damaged_dir/assets" -type f | head -1)
+    if [ -n "$file_to_delete" ]; then
+        local relative_path="${file_to_delete#$damaged_dir/}"
+        rm "$file_to_delete"
+        log_info "Deleted file to simulate damage: $relative_path"
+    else
+        log_error "No file found in assets directory to delete"
+        exit 1
+    fi
+    
+    # 2. Corrupting another file (if available)
+    local file_to_corrupt=$(find "$damaged_dir/assets" -type f | head -1)
+    if [ -n "$file_to_corrupt" ]; then
+        local relative_path="${file_to_corrupt#$damaged_dir/}"
+        echo "CORRUPTED FILE CONTENT - THIS IS NOT THE ORIGINAL DATA" > "$file_to_corrupt"
+        log_info "Corrupted file to simulate damage: $relative_path"
+    fi
+    
+    # Run verify to detect the damage
+    log_info "Running verify to detect damage..."
+    local verify_output
+    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "true" "verify_output"
+    
+    # Verify should detect issues
+    expect_output_string "$verify_output" "Database verification found issues" "Verify detects damage"
+    
+    # Run repair to fix the issues
+    log_info "Running repair to fix issues..."
+    local repair_output
+    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "true" "repair_output"
+    
+    # Repair should fix the issues
+    expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"
+    
+    # Should have repaired at least one file
+    local repaired_count=$(parse_numeric "$repair_output" "Repaired:")
+    if [ "$repaired_count" -gt 0 ]; then
+        log_success "Repair fixed $repaired_count files"
+    else
+        log_error "Repair should have fixed at least one file but repaired count is $repaired_count"
+        exit 1
+    fi
+    
+    # Verify the repair was successful
+    log_info "Verifying repair was successful..."
+    local final_verify_output
+    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "true" "final_verify_output"
+    
+    expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
+    
+    # Clean up damaged database copy
+    rm -rf "$damaged_dir"
+    log_success "Cleaned up damaged database copy"
+}
+
+
 
 # Reset function to clean up test artifacts
 reset_environment() {
@@ -1346,6 +1442,8 @@ run_all_tests() {
     test_compare_with_changes
     test_replicate_after_changes
     test_cannot_create_over_existing
+    test_repair_ok_database
+    test_repair_damaged_database
     
     # If we get here, all tests passed
     echo ""
@@ -1454,6 +1552,15 @@ run_test() {
         "no-overwrite"|"23")
             test_cannot_create_over_existing
             ;;
+        "repair-ok"|"24")
+            test_repair_ok_database
+            ;;
+        "repair-damaged"|"25")
+            test_repair_damaged_database
+            ;;
+        "repair-specific"|"26")
+            test_repair_specific_file
+            ;;
         *)
             log_error "Unknown test: $test_name"
             echo ""
@@ -1519,6 +1626,9 @@ run_multiple_commands() {
                 test_compare_with_changes
                 test_replicate_after_changes
                 test_cannot_create_over_existing
+                test_repair_ok_database
+                test_repair_damaged_database
+                test_repair_specific_file
                 ;;
             "setup")
                 test_setup
@@ -1598,6 +1708,15 @@ run_multiple_commands() {
             "no-overwrite"|"23")
                 test_cannot_create_over_existing
                 ;;
+            "repair-ok"|"24")
+                test_repair_ok_database
+                ;;
+            "repair-damaged"|"25")
+                test_repair_damaged_database
+                ;;
+            "repair-specific"|"26")
+                test_repair_specific_file
+                ;;
             *)
                 log_error "Unknown command in sequence: $command"
                 echo ""
@@ -1646,7 +1765,7 @@ show_usage() {
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
-    echo "  to <number>         - Run tests 1 through <number> (preserves database for inspection)"
+    echo "  to <number>         - Run tests 1 through <number> (1-26, preserves database for inspection)"
     echo "  setup               - Build executable and frontend"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
@@ -1676,6 +1795,9 @@ show_usage() {
     echo "  compare-changes (21) - Compare databases after adding changes"
     echo "  replicate-changes (22) - Replicate changes and verify sync"
     echo "  no-overwrite (23)   - Cannot create database over existing"
+    echo "  repair-ok (24)      - Repair OK database (no changes)"
+    echo "  repair-damaged (25) - Repair damaged database from replica"
+    echo "  repair-specific (26) - Repair specific file from replica"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -1730,8 +1852,8 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 23
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 23 ]; then
+        # Validate that end_test is a number between 1 and 26
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 26 ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -1761,7 +1883,7 @@ main() {
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-23)"
+            log_error "Invalid test number: $end_test (must be 1-26)"
             show_usage
             exit 1
         fi
