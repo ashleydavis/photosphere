@@ -18,6 +18,7 @@ import { examplesCommand } from './cmd/examples';
 import { versionCommand } from './cmd/version';
 import { listCommand } from './cmd/list';
 import { exportCommand } from './cmd/export';
+import { upgradeCommand } from './cmd/upgrade';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -250,6 +251,16 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('export'))
         .action(exportCommand);
+
+    program
+        .command("upgrade")
+        .description("Upgrades a media file database to the latest format by adding missing metadata files.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('upgrade'))
+        .action(upgradeCommand);
 
     // Parse the command line arguments
     try {
