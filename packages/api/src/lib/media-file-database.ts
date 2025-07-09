@@ -355,6 +355,9 @@ export interface IReplicationResult {
     copiedFiles: number;
 }
 
+//
+// Result of removing an asset from the database.
+
 
 //
 // Implements the Photosphere media file database.
@@ -1430,6 +1433,22 @@ export class MediaFileDatabase {
         await retry(() => destMetadataStorage.write("metadata.json", undefined, metadataBuffer));
         
         return result;
+    }
+
+    //
+    // Removes an asset by ID, including all associated files and metadata.
+    // This is the comprehensive removal method that handles storage cleanup.
+    //
+    async remove(assetId: string): Promise<void> {
+        await this.assetStorage.deleteFile(pathJoin("assets", assetId));
+        await this.assetStorage.deleteFile(pathJoin("display", assetId));
+        await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
+
+        // Remove the asset from the metadata collection and decrement the count.
+        const removed = await this.metadataCollection.deleteOne(assetId);
+        if (removed) {
+            this.decrementAssetCount();
+        }
     }
 }
 

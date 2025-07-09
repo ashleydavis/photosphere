@@ -1271,10 +1271,183 @@ test_repair_ok_database() {
     expect_output_value "$repair_output" "Removed:" "0" "No files removed"
 }
 
+test_remove_asset() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 25: REMOVE ASSET BY ID ==="
+    
+    # Find an asset ID to remove by listing the assets directory
+    local assets_dir="$TEST_DB_DIR/assets"
+    local test_asset_id=""
+    
+    if [ -d "$assets_dir" ]; then
+        test_asset_id=$(ls "$assets_dir" | head -1)
+        log_info "Found asset files in assets directory"
+    fi
+    
+    if [ -z "$test_asset_id" ]; then
+        # Fallback: try to get a list of assets using the list command
+        local list_output
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+            # Extract the first asset ID from the list output
+            test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
+        fi
+    fi
+    
+    if [ -z "$test_asset_id" ]; then
+        log_error "Could not find any asset ID to test removal with"
+        exit 1
+    fi
+    
+    log_info "Using asset ID for removal test: $test_asset_id"
+    
+    # Get initial database summary before removal
+    local before_summary
+    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "before_summary"
+    local files_before=$(parse_numeric "$before_summary" "Files imported:")
+    
+    # Remove the asset
+    local remove_output
+    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "true" "remove_output"
+    
+    # Check that removal was successful
+    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
+    
+    # Get database summary after removal
+    local after_summary
+    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "after_summary"
+    local files_after=$(parse_numeric "$after_summary" "Files imported:")
+    
+    # Verify one less asset in the database
+    local expected_files=$((files_before - 1))
+    expect_value "$files_after" "$expected_files" "Asset count decreased by 1 after removal"
+    
+    # Try to export the removed asset (should fail)
+    invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id ./test/tmp/should-fail.png --yes" 1
+    
+    # Verify the asset files no longer exist in storage
+    local original_file="$TEST_DB_DIR/assets/$test_asset_id"
+    local display_file="$TEST_DB_DIR/display/$test_asset_id"
+    local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
+    
+    log_info "Checking that all asset files have been deleted from storage..."
+    
+    # Check original asset file
+    if [ -f "$original_file" ]; then
+        log_error "Original asset file still exists after removal: $original_file"
+        log_error "File size: $(stat -c%s "$original_file" 2>/dev/null || echo "unknown")"
+        log_error "File permissions: $(stat -c%A "$original_file" 2>/dev/null || echo "unknown")"
+        exit 1
+    else
+        log_success "Original asset file removed from storage: $original_file"
+    fi
+    
+    # Check display version file
+    if [ -f "$display_file" ]; then
+        log_error "Display asset file still exists after removal: $display_file"
+        log_error "File size: $(stat -c%s "$display_file" 2>/dev/null || echo "unknown")"
+        log_error "File permissions: $(stat -c%A "$display_file" 2>/dev/null || echo "unknown")"
+        exit 1
+    else
+        log_success "Display asset file removed from storage: $display_file"
+    fi
+    
+    # Check thumbnail file
+    if [ -f "$thumb_file" ]; then
+        log_error "Thumbnail asset file still exists after removal: $thumb_file"
+        log_error "File size: $(stat -c%s "$thumb_file" 2>/dev/null || echo "unknown")"
+        log_error "File permissions: $(stat -c%A "$thumb_file" 2>/dev/null || echo "unknown")"
+        exit 1
+    else
+        log_success "Thumbnail asset file removed from storage: $thumb_file"
+    fi
+    
+    
+    # Additional comprehensive check: scan all directories for any files containing the asset ID
+    log_info "Performing comprehensive scan for any remaining files with asset ID..."
+    local remaining_files=""
+    
+    # Check assets directory
+    if [ -d "$TEST_DB_DIR/assets" ]; then
+        remaining_files=$(find "$TEST_DB_DIR/assets" -name "*$test_asset_id*" 2>/dev/null || true)
+        if [ -n "$remaining_files" ]; then
+            log_error "Found remaining files in assets directory:"
+            echo "$remaining_files"
+            exit 1
+        fi
+    fi
+    
+    # Check display directory
+    if [ -d "$TEST_DB_DIR/display" ]; then
+        remaining_files=$(find "$TEST_DB_DIR/display" -name "*$test_asset_id*" 2>/dev/null || true)
+        if [ -n "$remaining_files" ]; then
+            log_error "Found remaining files in display directory:"
+            echo "$remaining_files"
+            exit 1
+        fi
+    fi
+    
+    # Check thumb directory
+    if [ -d "$TEST_DB_DIR/thumb" ]; then
+        remaining_files=$(find "$TEST_DB_DIR/thumb" -name "*$test_asset_id*" 2>/dev/null || true)
+        if [ -n "$remaining_files" ]; then
+            log_error "Found remaining files in thumb directory:"
+            echo "$remaining_files"
+            exit 1
+        fi
+    fi
+    
+    # Check metadata directory
+    if [ -d "$TEST_DB_DIR/metadata" ]; then
+        remaining_files=$(find "$TEST_DB_DIR/metadata" -name "*$test_asset_id*" 2>/dev/null || true)
+        if [ -n "$remaining_files" ]; then
+            log_error "Found remaining files in metadata directory:"
+            echo "$remaining_files"
+            exit 1
+        fi
+    fi
+    
+    # Check the entire database directory recursively for any missed files
+    local all_remaining_files=$(find "$TEST_DB_DIR" -name "*$test_asset_id*" -not -path "*/.db/*" 2>/dev/null || true)
+    if [ -n "$all_remaining_files" ]; then
+        log_error "Found remaining files containing asset ID in database directory:"
+        echo "$all_remaining_files"
+        log_error "These files should have been removed during asset deletion"
+        exit 1
+    fi
+    
+    log_success "Comprehensive file deletion check passed - no remaining files found for asset $test_asset_id"
+    
+    # Verify that the asset ID is no longer in the database listing
+    log_info "Verifying asset ID is no longer in database listing..."
+    local ls_output
+    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "true" "ls_output"
+    
+    # Check that the removed asset ID is not in the output
+    if echo "$ls_output" | grep -q "$test_asset_id"; then
+        log_error "Asset ID $test_asset_id still appears in database listing after removal"
+        log_error "Database listing output:"
+        echo "$ls_output"
+        exit 1
+    else
+        log_success "Asset ID $test_asset_id no longer appears in database listing"
+    fi
+    
+    # Run verify to make sure the database is still in a good state
+    local verify_output
+    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    
+    # The database should still be consistent
+    expect_output_value "$verify_output" "New:" "0" "No new files after removal"
+    expect_output_value "$verify_output" "Modified:" "0" "No modified files after removal"
+    
+    log_success "Asset removal test completed successfully"
+}
+
 test_repair_damaged_database() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 25: REPAIR DAMAGED DATABASE ==="
+    echo "=== TEST 26: REPAIR DAMAGED DATABASE ==="
     
     local replica_dir="$TEST_DB_DIR-replica"
     local damaged_dir="$TEST_DB_DIR-damaged"
@@ -1443,6 +1616,7 @@ run_all_tests() {
     test_replicate_after_changes
     test_cannot_create_over_existing
     test_repair_ok_database
+    test_remove_asset
     test_repair_damaged_database
     
     # If we get here, all tests passed
@@ -1555,11 +1729,11 @@ run_test() {
         "repair-ok"|"24")
             test_repair_ok_database
             ;;
-        "repair-damaged"|"25")
-            test_repair_damaged_database
+        "remove"|"25")
+            test_remove_asset
             ;;
-        "repair-specific"|"26")
-            test_repair_specific_file
+        "repair-damaged"|"26")
+            test_repair_damaged_database
             ;;
         *)
             log_error "Unknown test: $test_name"
@@ -1627,8 +1801,8 @@ run_multiple_commands() {
                 test_replicate_after_changes
                 test_cannot_create_over_existing
                 test_repair_ok_database
+                test_remove_asset
                 test_repair_damaged_database
-                test_repair_specific_file
                 ;;
             "setup")
                 test_setup
@@ -1711,11 +1885,11 @@ run_multiple_commands() {
             "repair-ok"|"24")
                 test_repair_ok_database
                 ;;
-            "repair-damaged"|"25")
-                test_repair_damaged_database
+            "remove"|"25")
+                test_remove_asset
                 ;;
-            "repair-specific"|"26")
-                test_repair_specific_file
+            "repair-damaged"|"26")
+                test_repair_damaged_database
                 ;;
             *)
                 log_error "Unknown command in sequence: $command"
@@ -1796,8 +1970,8 @@ show_usage() {
     echo "  replicate-changes (22) - Replicate changes and verify sync"
     echo "  no-overwrite (23)   - Cannot create database over existing"
     echo "  repair-ok (24)      - Repair OK database (no changes)"
-    echo "  repair-damaged (25) - Repair damaged database from replica"
-    echo "  repair-specific (26) - Repair specific file from replica"
+    echo "  remove (25)         - Remove asset by ID from database"
+    echo "  repair-damaged (26) - Repair damaged database from replica"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"

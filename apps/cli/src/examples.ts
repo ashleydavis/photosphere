@@ -92,10 +92,10 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     ],
     
     export: [
-        { command: "psi export --db ./photos abc123 ./exported-photo.jpg", description: "Exports original asset with ID abc123 to a specific file." },
-        { command: "psi export --db ./photos def456 ./exports/", description: "Exports original asset with ID def456 to a directory (keeps original name)." },
-        { command: "psi export --db . xyz789 ~/Downloads/my-photo.jpg --type display", description: "Exports display version of asset xyz789." },
-        { command: "psi export --db ./photos abc123 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
+        { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./exported-photo.jpg", description: "Exports original asset with ID to a specific file." },
+        { command: "psi export --db ./photos f1e2d3c4-b5a6-7890-cdef-ab1234567890 ./exports/", description: "Exports original asset to a directory (keeps original name)." },
+        { command: "psi export --db . 12345678-9abc-def0-1234-567890abcdef ~/Downloads/my-photo.jpg --type display", description: "Exports display version of asset." },
+        { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
     ],
     
     "debug merkle-tree": [
@@ -119,6 +119,12 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi upgrade --db .", description: "Upgrades the database in current directory to latest format." },
         { command: "psi upgrade --db ./photos", description: "Upgrades the database in ./photos directory." },
         { command: "psi upgrade --db ./photos -v", description: "Upgrades with verbose output showing all actions." }
+    ],
+    
+    remove: [
+        { command: "psi remove --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890", description: "Removes asset with ID from the database." },
+        { command: "psi remove --db . f1e2d3c4-b5a6-7890-cdef-ab1234567890", description: "Removes asset from current directory database." },
+        { command: "psi remove --db ./photos 12345678-9abc-def0-1234-567890abcdef -v", description: "Removes asset with verbose output showing all actions." }
     ]
 };
 
