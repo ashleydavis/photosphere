@@ -59,19 +59,6 @@ Resources:
         .exitOverride();  // Prevent commander from calling process.exit
 
     program
-        .command("init")
-        .alias("i")
-        .description("Initializes a new media file database.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...generateKeyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('init'))
-        .action(initCommand);
-
-    program
         .command("add")
         .alias("a")
         .description("Adds files and directories to the media file database.")
@@ -83,6 +70,15 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
+
+    program
+        .command("bug")
+        .description("Generates a bug report for GitHub with system information and logs.")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--no-browser", "Don't open the browser automatically", false)
+        .addHelpText('after', getCommandExamplesHelp('bug'))
+        .action(bugReportCommand);
 
     program
         .command("check")
@@ -98,110 +94,6 @@ Resources:
         .action(checkCommand);
 
     program
-        .command("ui")
-        .description("Starts the Photosphere user-interface to view, search and edit photos and videos.")
-        .option(...dbOption)
-        .option(...keyOption)
-        .option(...metadataDirOption)
-        .option("--no-open", "Disables opening the UI in the default browser.", false)
-        .addHelpText('after', getCommandExamplesHelp('ui'))
-        .action(uiCommand);
-
-    program
-        .command("config")
-        .alias("cfg")
-        .description("Interactive configuration wizard for S3 credentials and Google API key.")
-        .option("-c, --clear", "Clear all configuration files")
-        .addHelpText('after', getCommandExamplesHelp('config'))
-        .action(configureCommand);
-
-    program
-        .command("info")
-        .alias("inf")
-        .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
-        .option(...verboseOption)
-        .option(...yesOption)
-        .argument("<files...>", "The media files to analyze.")
-        .addHelpText('after', getCommandExamplesHelp('info'))
-        .action(infoCommand);
-
-    program
-        .command("tools")
-        .description("Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('tools'))
-        .action(toolsCommand);
-
-    program
-        .command("summary")
-        .alias("sum")
-        .description("Displays a summary of the media file database including total files, size, and tree hash.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('summary'))
-        .action(summaryCommand);
-
-    program
-        .command("list")
-        .alias("ls")
-        .description("Lists all files in the database sorted by date (newest first) with pagination.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
-        .addHelpText('after', getCommandExamplesHelp('list'))
-        .action(listCommand);
-
-    program
-        .command("verify")
-        .alias("ver")
-        .description("Verifies the integrity of the media file database by checking file hashes.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option("--full", "Force full verification (bypass cached hash optimization)", false)
-        .addHelpText('after', getCommandExamplesHelp('verify'))
-        .action(verifyCommand);
-
-    program
-        .command("repair")
-        .description("Repairs the integrity of the media file database by restoring files from a source database.")
-        .option(...dbOption)
-        .option(...sourceDbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option("-s, --source-meta <dir>", "Source metadata directory override")
-        .option("--sk, --source-key <keyfile>", "Path to source encryption key file")
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option("--full", "Force full verification (bypass cached hash optimization)", false)
-        .addHelpText('after', getCommandExamplesHelp('repair'))
-        .action(repairCommand);
-
-    program
-        .command("replicate")
-        .alias("rep")
-        .description("Replicates an asset database from source to destination location.")
-        .option(...dbOption)
-        .option(...destDbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
-        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
-        .option(...generateKeyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('replicate'))
-        .action(replicateCommand);
-
-    program
         .command("compare")
         .alias("cmp")
         .description("Compares two asset databases by analyzing their Merkle trees.")
@@ -213,6 +105,14 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
+
+    program
+        .command("config")
+        .alias("cfg")
+        .description("Interactive configuration wizard for S3 credentials and Google API key.")
+        .option("-c, --clear", "Clear all configuration files")
+        .addHelpText('after', getCommandExamplesHelp('config'))
+        .action(configureCommand);
 
     // Add debug commands with shared options
     const debugCommand = program
@@ -252,21 +152,6 @@ Resources:
         .action(examplesCommand);
 
     program
-        .command("bug")
-        .description("Generates a bug report for GitHub with system information and logs.")
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option("--no-browser", "Don't open the browser automatically", false)
-        .addHelpText('after', getCommandExamplesHelp('bug'))
-        .action(bugReportCommand);
-
-    program
-        .command("version")
-        .description("Displays version information for psi and its dependencies.")
-        .addHelpText('after', getCommandExamplesHelp('version'))
-        .action(versionCommand);
-
-    program
         .command("export")
         .alias("exp")
         .description("Exports an asset by ID to a specified path.")
@@ -282,14 +167,40 @@ Resources:
         .action(exportCommand);
 
     program
-        .command("upgrade")
-        .description("Upgrades a media file database to the latest format by adding missing metadata files.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
+        .command("info")
+        .alias("inf")
+        .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
         .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('upgrade'))
-        .action(upgradeCommand);
+        .argument("<files...>", "The media files to analyze.")
+        .addHelpText('after', getCommandExamplesHelp('info'))
+        .action(infoCommand);
+
+    program
+        .command("init")
+        .alias("i")
+        .description("Initializes a new media file database.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...generateKeyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('init'))
+        .action(initCommand);
+
+    program
+        .command("list")
+        .alias("ls")
+        .description("Lists all files in the database sorted by date (newest first) with pagination.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
+        .addHelpText('after', getCommandExamplesHelp('list'))
+        .action(listCommand);
 
     program
         .command("remove")
@@ -303,6 +214,95 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('remove'))
         .action(removeCommand);
+
+    program
+        .command("repair")
+        .description("Repairs the integrity of the media file database by restoring files from a source database.")
+        .option(...dbOption)
+        .option(...sourceDbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option("-s, --source-meta <dir>", "Source metadata directory override")
+        .option("--sk, --source-key <keyfile>", "Path to source encryption key file")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .addHelpText('after', getCommandExamplesHelp('repair'))
+        .action(repairCommand);
+
+    program
+        .command("replicate")
+        .alias("rep")
+        .description("Replicates an asset database from source to destination location.")
+        .option(...dbOption)
+        .option(...destDbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
+        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
+        .option(...generateKeyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('replicate'))
+        .action(replicateCommand);
+
+    program
+        .command("summary")
+        .alias("sum")
+        .description("Displays a summary of the media file database including total files, size, and tree hash.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('summary'))
+        .action(summaryCommand);
+
+    program
+        .command("tools")
+        .description("Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).")
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('tools'))
+        .action(toolsCommand);
+
+    program
+        .command("ui")
+        .description("Starts the Photosphere user-interface to view, search and edit photos and videos.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...metadataDirOption)
+        .option("--no-open", "Disables opening the UI in the default browser.", false)
+        .addHelpText('after', getCommandExamplesHelp('ui'))
+        .action(uiCommand);
+
+    program
+        .command("upgrade")
+        .description("Upgrades a media file database to the latest format by adding missing metadata files.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('upgrade'))
+        .action(upgradeCommand);
+
+    program
+        .command("verify")
+        .alias("ver")
+        .description("Verifies the integrity of the media file database by checking file hashes.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .addHelpText('after', getCommandExamplesHelp('verify'))
+        .action(verifyCommand);
+
+    program
+        .command("version")
+        .description("Displays version information for psi and its dependencies.")
+        .addHelpText('after', getCommandExamplesHelp('version'))
+        .action(versionCommand);
 
     // Parse the command line arguments
     try {
