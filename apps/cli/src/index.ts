@@ -48,7 +48,7 @@ Getting help:
   ${pc.bold("psi --help")}              Shows help for all commands.
 
 Examples:
-${MAIN_EXAMPLES.map(ex => `  ${ex.command.padEnd(32)} ${ex.description}`).join('\n')}
+${MAIN_EXAMPLES.map(ex => `  ${ex.command.padEnd(46)} ${ex.description}`).join('\n')}
 
 Resources:
   🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
