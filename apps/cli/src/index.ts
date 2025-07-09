@@ -60,6 +60,7 @@ Resources:
 
     program
         .command("init")
+        .alias("i")
         .description("Initializes a new media file database.")
         .option(...dbOption)
         .option(...metadataDirOption)
@@ -72,6 +73,7 @@ Resources:
 
     program
         .command("add")
+        .alias("a")
         .description("Adds files and directories to the media file database.")
         .argument("<files...>", "The media files (or directories) to add to the database.")
         .option(...dbOption)
@@ -84,6 +86,7 @@ Resources:
 
     program
         .command("check")
+        .alias("chk")
         .description("Checks files and direcotires to see what has already been added to the media file database.")
         .argument("<files...>", "The media files (or directories) to add to the database.")
         .option(...dbOption)
@@ -106,6 +109,7 @@ Resources:
 
     program
         .command("config")
+        .alias("cfg")
         .description("Interactive configuration wizard for S3 credentials and Google API key.")
         .option("-c, --clear", "Clear all configuration files")
         .addHelpText('after', getCommandExamplesHelp('config'))
@@ -113,6 +117,7 @@ Resources:
 
     program
         .command("info")
+        .alias("inf")
         .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
         .option(...yesOption)
@@ -129,6 +134,7 @@ Resources:
 
     program
         .command("summary")
+        .alias("sum")
         .description("Displays a summary of the media file database including total files, size, and tree hash.")
         .option(...dbOption)
         .option(...metadataDirOption)
@@ -140,6 +146,7 @@ Resources:
 
     program
         .command("list")
+        .alias("ls")
         .description("Lists all files in the database sorted by date (newest first) with pagination.")
         .option(...dbOption)
         .option(...metadataDirOption)
@@ -152,6 +159,7 @@ Resources:
 
     program
         .command("verify")
+        .alias("ver")
         .description("Verifies the integrity of the media file database by checking file hashes.")
         .option(...dbOption)
         .option(...metadataDirOption)
@@ -179,6 +187,7 @@ Resources:
 
     program
         .command("replicate")
+        .alias("rep")
         .description("Replicates an asset database from source to destination location.")
         .option(...dbOption)
         .option(...destDbOption)
@@ -194,6 +203,7 @@ Resources:
 
     program
         .command("compare")
+        .alias("cmp")
         .description("Compares two asset databases by analyzing their Merkle trees.")
         .option(...dbOption)
         .option(...destDbOption)
@@ -258,6 +268,7 @@ Resources:
 
     program
         .command("export")
+        .alias("exp")
         .description("Exports an asset by ID to a specified path.")
         .argument("<asset-id>", "The ID of the asset to export.")
         .argument("<output-path>", "The path where the asset should be exported.")
@@ -282,6 +293,7 @@ Resources:
 
     program
         .command("remove")
+        .alias("rm")
         .description("Removes an asset from the database by ID, marking it as deleted in the merkle tree.")
         .argument("<asset-id>", "The ID of the asset to remove.")
         .option(...dbOption)
