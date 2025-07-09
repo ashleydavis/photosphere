@@ -356,10 +356,6 @@ export interface IReplicationResult {
 }
 
 //
-// Result of removing an asset from the database.
-
-
-//
 // Implements the Photosphere media file database.
 //
 export class MediaFileDatabase {
