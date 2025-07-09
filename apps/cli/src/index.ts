@@ -20,6 +20,7 @@ import { listCommand } from './cmd/list';
 import { exportCommand } from './cmd/export';
 import { upgradeCommand } from './cmd/upgrade';
 import { repairCommand } from './cmd/repair';
+import { removeCommand } from './cmd/remove';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -278,6 +279,18 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('upgrade'))
         .action(upgradeCommand);
+
+    program
+        .command("remove")
+        .description("Removes an asset from the database by ID, marking it as deleted in the merkle tree.")
+        .argument("<asset-id>", "The ID of the asset to remove.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('remove'))
+        .action(removeCommand);
 
     // Parse the command line arguments
     try {
