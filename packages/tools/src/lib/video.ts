@@ -66,7 +66,7 @@ export class Video {
         try {
             const { stdout } = await exec('ffprobe -version');
             
-            const versionMatch = stdout.match(/ffprobe version ([\d.-]+)/);
+            const versionMatch = stdout.match(/ffprobe version (\S+)/);
             return {
                 available: true,
                 version: versionMatch ? versionMatch[1] : 'unknown'
@@ -86,7 +86,7 @@ export class Video {
         try {
             const { stdout } = await exec('ffmpeg -version');
             
-            const versionMatch = stdout.match(/ffmpeg version ([\d.-]+)/);
+            const versionMatch = stdout.match(/ffmpeg version (\S+)/);
             return {
                 available: true,
                 version: versionMatch ? versionMatch[1] : 'unknown'
