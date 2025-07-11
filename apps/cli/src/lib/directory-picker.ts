@@ -235,48 +235,17 @@ export async function getDirectoryForCommand(
     
     if (commandType === 'init') {
         if (await validateInitDirectory(currentDir) === true) {
-            if (nonInteractive) {
-                return currentDir;
-            }
-            
-            const useCurrentDir = await confirm({
-                message: `Use current directory (${currentDir}) for new database?`,
-                initialValue: true,
-            });
-            
-            if (isCancel(useCurrentDir)) {
-                await exit(1);
-            }
-            
-            if (useCurrentDir) {
-                return currentDir;
-            }
+            return currentDir;
         } else {
             // Current directory is not empty, skip asking and go straight to picker in interactive mode
             if (nonInteractive) {
                 console.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
                 await exit(1);
-                return ''; // Never reached but helps TypeScript
             }
         }
     } else {
         if (await isMediaDatabase(currentDir)) {
-            if (nonInteractive) {
-                return currentDir;
-            }
-            
-            const useCurrentDir = await confirm({
-                message: `Use current directory (${currentDir}) as media database?`,
-                initialValue: true,
-            });
-            
-            if (isCancel(useCurrentDir)) {
-                await exit(1);
-            }
-            
-            if (useCurrentDir) {
-                return currentDir;
-            }
+            return currentDir;
         }
     }
     
