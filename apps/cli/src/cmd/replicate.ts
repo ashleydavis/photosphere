@@ -47,7 +47,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', nonInteractive);
+        destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
     
     const destMetaPath = options.destMeta || pathJoin(destDir, '.db');

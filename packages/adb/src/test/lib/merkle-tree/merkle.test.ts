@@ -1,6 +1,10 @@
 import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
+import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree', () => {
+    const timestampProvider = new TestTimestampProvider();
+    const uuidGenerator = new TestUuidGenerator();
+
     /**
      * Helper function to create a file hash with a given name and length
      */
@@ -16,11 +20,11 @@ describe('Merkle Tree', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree {
-        let merkleTree = createTree();
+        let merkleTree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
+            merkleTree = addFile(merkleTree, fileHash, timestampProvider, uuidGenerator);
         }
 
         if (!merkleTree) {
@@ -115,7 +119,7 @@ describe('Merkle Tree', () => {
         // Tree after: A (single node)
         test('creates a new tree with a single file', () => {
             const fileHash = createFileHash('A');
-            const tree = addFile(createTree(), fileHash);
+            const tree = addFile(createTree(timestampProvider, uuidGenerator), fileHash, timestampProvider, uuidGenerator);
 
             verifyLeafNode(0, tree.nodes, 'A');
 
@@ -137,10 +141,10 @@ describe('Merkle Tree', () => {
         //   A    B
         test('adds a second file to an existing tree', () => {
             const fileHashA = createFileHash('A');            
-            const treeA = addFile(createTree(), fileHashA);
+            const treeA = addFile(createTree(timestampProvider, uuidGenerator), fileHashA, timestampProvider, uuidGenerator);
 
             const fileHashB = createFileHash('B');
-            const treeAB = addFile(treeA, fileHashB);
+            const treeAB = addFile(treeA, fileHashB, timestampProvider, uuidGenerator);
 
             verifyTree(treeAB, {
                 tag: 'AB',
@@ -182,7 +186,7 @@ describe('Merkle Tree', () => {
             
             // Add C to the tree.
             const fileHashC = createFileHash('C');
-            const treeABC = addFile(tree, fileHashC);
+            const treeABC = addFile(tree, fileHashC, timestampProvider, uuidGenerator);
 
             verifyTree(treeABC, {
                 tag: 'ABC',
@@ -235,7 +239,7 @@ describe('Merkle Tree', () => {
             
             // Add D to the tree.
             const fileHashD = createFileHash('D');
-            const treeABCD = addFile(tree, fileHashD);
+            const treeABCD = addFile(tree, fileHashD, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCD, {
                 tag: 'ABCD',
@@ -300,7 +304,7 @@ describe('Merkle Tree', () => {
             
             // Add E to the tree.
             const fileHashE = createFileHash('E');
-            const treeABCDE = addFile(tree, fileHashE);
+            const treeABCDE = addFile(tree, fileHashE, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDE, {
                 tag: 'ABCDE',
@@ -376,7 +380,7 @@ describe('Merkle Tree', () => {
 
             // Add F to the tree.
             const fileHashF = createFileHash('F');
-            const treeABCDEF = addFile(tree, fileHashF);
+            const treeABCDEF = addFile(tree, fileHashF, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDEF, {
                 tag: 'ABCDEF',
@@ -462,7 +466,7 @@ describe('Merkle Tree', () => {
             
             // Add G to the tree.
             const fileHashG = createFileHash('G');
-            const treeABCDEFG = addFile(tree, fileHashG);
+            const treeABCDEFG = addFile(tree, fileHashG, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDEFG, {
                 tag: 'ABCDEFG',
@@ -561,7 +565,7 @@ describe('Merkle Tree', () => {
 
             // Add H to the tree.
             const fileHashH = createFileHash('H');
-            const treeABCDEFGH = addFile(tree, fileHashH);
+            const treeABCDEFGH = addFile(tree, fileHashH, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDEFGH, {
                 tag: 'ABCDEFGH',
@@ -668,7 +672,7 @@ describe('Merkle Tree', () => {
 
             // Add I to the tree.
             const fileHashI = createFileHash('I');
-            const rootABCDEFGHI = addFile(tree, fileHashI);
+            const rootABCDEFGHI = addFile(tree, fileHashI, timestampProvider, uuidGenerator);
 
             verifyTree(rootABCDEFGHI, {
                 tag: 'ABCDEFGHI',
@@ -785,7 +789,7 @@ describe('Merkle Tree', () => {
 
             // Add J to the tree.
             const fileHashJ = createFileHash('J');
-            const treeABCDEFGHIJ = addFile(tree, fileHashJ);
+            const treeABCDEFGHIJ = addFile(tree, fileHashJ, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDEFGHIJ, {
                 tag: 'ABCDEFGHIJ',
@@ -913,7 +917,7 @@ describe('Merkle Tree', () => {
 
             // Add K to the tree.
             const fileHashK = createFileHash('K');
-            const treeABCDEFGHIJK = addFile(tree, fileHashK);
+            const treeABCDEFGHIJK = addFile(tree, fileHashK, timestampProvider, uuidGenerator);
 
             verifyTree(treeABCDEFGHIJK, {
                 tag: 'ABCDEFGHIJK',
@@ -1034,11 +1038,11 @@ describe('Merkle Tree', () => {
     //  C    A   D   B
     //
     test('adding files out of order still yields a sorted list', () => {
-        let tree = createTree();
-        tree = addFile(tree, createFileHash('C'));
-        tree = addFile(tree, createFileHash('A'));
-        tree = addFile(tree, createFileHash('D'));
-        tree = addFile(tree, createFileHash('B'));
+        let tree = createTree(timestampProvider, uuidGenerator);
+        tree = addFile(tree, createFileHash('C'), timestampProvider, uuidGenerator);
+        tree = addFile(tree, createFileHash('A'), timestampProvider, uuidGenerator);
+        tree = addFile(tree, createFileHash('D'), timestampProvider, uuidGenerator);
+        tree = addFile(tree, createFileHash('B'), timestampProvider, uuidGenerator);
 
         expect(tree.sortedNodeRefs).toEqual([
             {
@@ -1150,7 +1154,7 @@ describe('Merkle Tree', () => {
             const modifiedB = createModifiedFileHash('B', 'B_modified');
             
             // Update file B in the tree
-            const updated = updateFile(tree, modifiedB);
+            const updated = updateFile(tree, modifiedB, timestampProvider);
             expect(updated).toBe(true); // Ensure the update was successful.
 
             const nodeB = findFileNode(tree, 'B'); // Verify B is still in the tree.
@@ -1199,7 +1203,7 @@ describe('Merkle Tree', () => {
             const modifiedE = createModifiedFileHash('E', 'E_modified');
             
             // Update file E in the tree
-            const updated = updateFile(tree, modifiedE);
+            const updated = updateFile(tree, modifiedE, timestampProvider);
             expect(updated).toBe(true); // Ensure the update was successful.
 
             const nodeE = findFileNode(tree, 'E'); // Verify E is still in the tree.
@@ -1257,7 +1261,7 @@ describe('Merkle Tree', () => {
             const nonExistentFile = createFileHash('Z');
             
             // Attempt to update the non-existent file should throw an error.
-            const updated = updateFile(tree, nonExistentFile);
+            const updated = updateFile(tree, nonExistentFile, timestampProvider);
 
             expect(updated).toBe(false); // Ensure no update was made.
         });
@@ -1297,7 +1301,7 @@ describe('Merkle Tree', () => {
             const modifiedD = createModifiedFileHash('D', 'D_modified');
             
             // Update file D in the tree
-            const updated = updateFile(originalTree, modifiedD);
+            const updated = updateFile(originalTree, modifiedD, timestampProvider);
             expect(updated).toBe(true); // Ensure the update was successful.
 
             const nodeD = findFileNode(originalTree, 'D'); // Verify D is still in the tree.

@@ -1,6 +1,8 @@
 import dayjs from "dayjs";
 import { execLogged, writeStreamToFile } from "node-utils";
-import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange } from "utils";
+import { tmpdir } from "os";
+import { join } from "path";
+import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
 import fs from "fs-extra";
 import path from "path";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
@@ -13,7 +15,7 @@ import mime from 'mime';
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, tempDir: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<IAssetDetails> {
 
     let imagePath: string;
 
@@ -25,7 +27,7 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         }
 
         // If openStream is provided, we need to extract to a temporary file.        
-        imagePath = path.join(tempDir, `temp_asset_${crypto.randomUUID()}.${ext}`);
+        imagePath = join(tmpdir(), `temp_asset_${uuidGenerator.generate()}.${ext}`);
         await writeStreamToFile(openStream(), imagePath);        
     }
     else {
@@ -44,7 +46,7 @@ export async function getImageDetails(filePath: string, tempDir: string, content
     
     if (imageTransformation) {
         // Flips orientation depending on exif data.
-        imagePath = await transformImage(imagePath, tempDir, imageTransformation);
+        imagePath = await transformImage(imagePath, tempDir, imageTransformation, uuidGenerator);
         if (imageTransformation.changeOrientation) {
             resolution = {
                 width: resolution.height,
@@ -53,9 +55,9 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         }
     }
 
-    const microPath = await resizeImage(imagePath, tempDir, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
-    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY);
-    const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, DISPLAY_QUALITY);
+    const microPath = await resizeImage(imagePath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
 
     return { 
         resolution, 
@@ -139,7 +141,7 @@ export interface IResolution {
 //
 // Resize an image.
 //
-export async function resizeImage(inputPath: string, tempDir: string, resolution: { width: number, height: number }, minSize: number, quality: number = 90): Promise<string> {
+export async function resizeImage(inputPath: string, tempDir: string, resolution: { width: number, height: number }, minSize: number, uuidGenerator: IUuidGenerator, quality: number = 90): Promise<string> {
 
     let width: number;
     let height: number;
@@ -154,7 +156,7 @@ export async function resizeImage(inputPath: string, tempDir: string, resolution
     }
 
     const image = new Image(inputPath);
-    const outputPath = path.join(tempDir, `temp_resize_${crypto.randomUUID()}.jpg`);
+    const outputPath = join(tmpdir(), `temp_resize_${uuidGenerator.generate()}.jpg`);
     await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg' }, outputPath);
     return outputPath;
 }
@@ -162,7 +164,7 @@ export async function resizeImage(inputPath: string, tempDir: string, resolution
 //
 // Transforms an image.
 //
-export async function transformImage(inputPath: string, tempDir: string, options: IImageTransformation): Promise<string> {
+export async function transformImage(inputPath: string, tempDir: string, options: IImageTransformation, uuidGenerator: IUuidGenerator): Promise<string> {
 
     let transformCommand = '';
 
@@ -176,7 +178,7 @@ export async function transformImage(inputPath: string, tempDir: string, options
 
     if (transformCommand) {
         // Transform to a temporary file and return the path.
-        const outputPath = path.join(tempDir, `temp_transform_output_${crypto.randomUUID()}.jpg`);
+        const outputPath = join(tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
         const command = `magick convert "${inputPath}" ${transformCommand} "${outputPath}"`;
         await execLogged('magick', command);
 

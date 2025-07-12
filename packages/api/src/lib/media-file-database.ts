@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IFileInfo, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -430,10 +430,11 @@ export class MediaFileDatabase {
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
-        uuidGenerator: IUuidGenerator
+        uuidGenerator: IUuidGenerator,
+        private readonly timestampProvider: ITimestampProvider
             ) {
 
-        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
+        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, this.timestampProvider, uuidGenerator);
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
@@ -746,10 +747,10 @@ export class MediaFileDatabase {
         await fs.ensureDir(assetTempDir);
 
         if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, openStream);
+            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
         }
         else if (contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, openStream);
+            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
         }
 
         const assetPath = `assets/${assetId}`;
@@ -960,7 +961,7 @@ export class MediaFileDatabase {
     //
     async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: (() => Readable) | undefined): Promise<boolean> {
         try {
-            return await validateFile(filePath, fileInfo, contentType, openStream);
+            return await validateFile(filePath, fileInfo, contentType, this.uuidGenerator, openStream);
         }
         catch (error: any) {
             log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);                
@@ -1312,13 +1313,13 @@ export class MediaFileDatabase {
         const destHashCache = new HashCache(destMetadataStorage, "");
         await retry(() => destHashCache.load());
 
-        let newDestTree = createTree();
+        let newDestTree = createTree(this.timestampProvider, this.uuidGenerator);
 
         //
         // Copies an asset from the source storage to the destination storage.
         // But only when necessary.
         //
-        async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
+        const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
             result.filesConsidered++;
             
             const destHash = destHashCache.getHash(fileName);
@@ -1340,7 +1341,7 @@ export class MediaFileDatabase {
                         fileName,
                         hash: destHash.hash,
                         length: destHash.length,
-                    });
+                    }, this.timestampProvider, this.uuidGenerator);
 
                     return;                
                 }
@@ -1395,19 +1396,19 @@ export class MediaFileDatabase {
                 fileName,
                 hash: copiedHash,
                 length: copiedFileInfo.length,
-            });
+            }, this.timestampProvider, this.uuidGenerator);
 
             result.copiedFiles++;
 
             if (progressCallback) {
                 progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
             }
-        }
+        };
 
         //
         // Process a node in the soure merkle tree.
         //
-        async function processSrcNode(srcNode: MerkleNode): Promise<boolean> {
+        const processSrcNode = async (srcNode: MerkleNode): Promise<boolean> => {
             if (srcNode.fileName && !srcNode.isDeleted) {               
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
 
@@ -1416,7 +1417,7 @@ export class MediaFileDatabase {
                 }
             }
             return true; // Continue traversing.
-        }
+        };
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
