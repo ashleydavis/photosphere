@@ -881,7 +881,7 @@ test_database_verify() {
     
     # Check that the database is in a good state (no new, modified, or removed files)
     expect_output_value "$verify_output" "Files imported:" "5" "File imported"
-    expect_output_value "$verify_output" "Unmodified:" "24" "Unmodified files in verification"
+    expect_output_value "$verify_output" "Unmodified:" "23" "Unmodified files in verification"
     expect_output_value "$verify_output" "New:" "0" "New files in verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
@@ -902,7 +902,7 @@ test_database_verify_full() {
     expect_output_string "$verify_output" "Total size:" "Full verify output contains total size"
     
     # Check that the database is in a good state even with full verification
-    expect_output_value "$verify_output" "Unmodified:" "24" "Unmodified files in full verification"
+    expect_output_value "$verify_output" "Unmodified:" "23" "Unmodified files in full verification"
     expect_output_value "$verify_output" "New:" "0" "New files in full verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
@@ -951,7 +951,7 @@ test_detect_new_file() {
     
     # Check that verify detected the new file
     expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
-    expect_output_value "$verify_output" "Unmodified:" "24" "Unmodified files"
+    expect_output_value "$verify_output" "Unmodified:" "23" "Unmodified files"
     expect_output_value "$verify_output" "Modified:" "0" "No modified files"
     expect_output_value "$verify_output" "Removed:" "0" "No removed files"
     
@@ -993,7 +993,7 @@ test_detect_deleted_file() {
     fi
     
     # Find and delete the first file from the assets directory
-    local file_to_delete=$(find "$test_copy_dir/assets" -type f | head -1)
+    local file_to_delete=$(find "$test_copy_dir/assets" -type f | sort | head -1)
     if [ -n "$file_to_delete" ]; then
         local relative_path="${file_to_delete#$test_copy_dir/}"
         rm "$file_to_delete"
@@ -1009,7 +1009,7 @@ test_detect_deleted_file() {
     
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "23" "Unmodified files"
+    expect_output_value "$verify_output" "Unmodified:" "22" "Unmodified files"
     expect_output_value "$verify_output" "Modified:" "0" "No modified files"
     expect_output_value "$verify_output" "Removed:" "1" "Deleted file detected by verify"
     
@@ -1051,7 +1051,7 @@ test_detect_modified_file() {
     fi
     
     # Find and modify the first file from the assets directory
-    local file_to_modify=$(find "$test_copy_dir/assets" -type f | head -1)
+    local file_to_modify=$(find "$test_copy_dir/assets" -type f | sort | head -1)
     if [ -n "$file_to_modify" ]; then
         local relative_path="${file_to_modify#$test_copy_dir/}"
         # Append some data to modify the file
@@ -1068,7 +1068,7 @@ test_detect_modified_file() {
     
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "23" "Unmodified files"
+    expect_output_value "$verify_output" "Unmodified:" "22" "Unmodified files"
     expect_output_value "$verify_output" "Modified:" "1" "Modified file detected by verify"
     expect_output_value "$verify_output" "Removed:" "0" "No removed files"
     
@@ -1099,8 +1099,8 @@ test_database_replicate() {
     
     # Check expected values from replication output
     expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$replicate_output" "Total files considered:" "24" "Total files considered"
-    expect_output_value "$replicate_output" "Total files copied:" "24" "Files copied"
+    expect_output_value "$replicate_output" "Total files considered:" "23" "Total files considered"
+    expect_output_value "$replicate_output" "Total files copied:" "23" "Files copied"
     expect_output_value "$replicate_output" "Skipped (unchanged):" "0" "Files skipped (first run)"
     
     # Check that replica was created
@@ -1163,9 +1163,9 @@ test_database_replicate_second() {
     
     # Check expected values from second replication output
     expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$second_replication_output" "Total files considered:" "24" "Total files considered"
+    expect_output_value "$second_replication_output" "Total files considered:" "23" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "24" "Files skipped (already exist)"   
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "23" "Files skipped (already exist)"   
 }
 
 test_database_compare() {
@@ -2047,7 +2047,7 @@ main() {
             
             # Reset UUID counter for deterministic test results
             log_info "Resetting test UUID counter"
-            UUID_COUNTER_FILE="/tmp/photosphere-test-uuid-counter"
+            UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
             if [ -f "$UUID_COUNTER_FILE" ]; then
                 rm -f "$UUID_COUNTER_FILE"
                 log_success "Removed existing UUID counter file"

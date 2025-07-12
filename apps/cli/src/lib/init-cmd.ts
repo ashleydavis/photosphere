@@ -1,9 +1,8 @@
 import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { configureLog } from "./log";
-import { exit, registerTerminationCallback } from "node-utils";
-import { log, RandomUuidGenerator } from "utils";
-import { TestUuidGenerator } from "node-utils";
+import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider } from "node-utils";
+import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
@@ -41,6 +40,11 @@ export interface IBaseCommandOptions {
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
+
+    //
+    // Set the current working directory for directory selection prompts.
+    //
+    cwd?: string;
 }
 
 //
@@ -109,7 +113,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     await ensureMediaProcessingTools(nonInteractive);
 
     if (dbDir === undefined) {
-        dbDir = await getDirectoryForCommand("existing", nonInteractive);
+        dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
     
     const metaPath = options.meta || pathJoin(dbDir, '.db');
@@ -142,16 +146,21 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         }
     }
 
-    // Create appropriate UUID generator based on NODE_ENV
+    // Create appropriate providers based on NODE_ENV
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
+    const timestampProvider = process.env.NODE_ENV === "testing"
+        ? new TestTimestampProvider()
+        : new TimestampProvider();
+    
+    // Test providers are automatically configured when NODE_ENV === "testing"
 
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
@@ -193,7 +202,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
 
     if (dbDir === undefined) {
         // Get the directory for the database (validates it's empty/non-existent for init)
-        dbDir = await getDirectoryForCommand('init', nonInteractive);
+        dbDir = await getDirectoryForCommand('init', nonInteractive, options.cwd || process.cwd());
     }
 
     // Ask about encryption if not already specified
@@ -227,7 +236,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 // Ask for existing key file
                 const keyDir = await pickDirectory(
                     'Select directory containing your encryption key:',
-                    process.cwd(),
+                    options.cwd || process.cwd(),
                     async (path) => {
                         if (!await fs.exists(path)) {
                             return 'Directory does not exist';
@@ -276,7 +285,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 // Ask for directory
                 const keyDir = await pickDirectory(
                     'Select directory to save encryption key:',
-                    process.cwd(),
+                    options.cwd || process.cwd(),
                     async (path) => {
                         if (!await fs.exists(path)) {
                             return 'Directory does not exist';
@@ -353,16 +362,21 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         await exit(1);
     }
 
-    // Create appropriate UUID generator based on NODE_ENV
+    // Create appropriate providers based on NODE_ENV
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
+    const timestampProvider = process.env.NODE_ENV === "testing"
+        ? new TestTimestampProvider()
+        : new TimestampProvider();
+    
+    // Test providers are automatically configured when NODE_ENV === "testing"
 
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {

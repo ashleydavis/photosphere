@@ -39,6 +39,11 @@ export interface ICompareCommandOptions {
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
+
+    //
+    // Set the current working directory for directory selection prompts.
+    //
+    cwd?: string;
 }
 
 //
@@ -57,12 +62,12 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
 
     let srcDir = options.db;
     if (srcDir === undefined) {
-        srcDir = await getDirectoryForCommand("existing", nonInteractive);
+        srcDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', nonInteractive);
+        destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
     
     const srcMetaPath = options.srcMeta || pathJoin(srcDir, '.db');

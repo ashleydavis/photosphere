@@ -4,11 +4,12 @@ import { getFileInfo } from "tools";
 import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { IUuidGenerator } from "utils";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream?: () => Readable): Promise<boolean> {
+export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -16,10 +17,10 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
     }
 
     if (contentType.startsWith("image")) {
-        return await validateImage(filePath, contentType, openStream);
+        return await validateImage(filePath, contentType, uuidGenerator, openStream);
     }
     else if (contentType.startsWith("video")) {
-        return await validateVideo(filePath, contentType, openStream);
+        return await validateVideo(filePath, contentType, uuidGenerator, openStream);
     }
 
     return true;
@@ -28,14 +29,14 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
 //
 // Validates an image file by checking if it has valid dimensions
 //
-async function validateImage(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
+async function validateImage(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, 'temp_image');
+            tempFilePath = await extractToTempFile(openStream, 'temp_image', uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -70,14 +71,14 @@ async function validateImage(filePath: string, contentType: string, openStream?:
 //
 // Validates a video file by checking if it has valid dimensions
 //
-async function validateVideo(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
+async function validateVideo(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, 'temp_video');
+            tempFilePath = await extractToTempFile(openStream, 'temp_video', uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -112,8 +113,8 @@ async function validateVideo(filePath: string, contentType: string, openStream?:
 //
 // Extracts stream data to a temporary file and returns the file path
 //
-async function extractToTempFile(openStream: () => Readable, prefix: string): Promise<string> {
-    const tempPath = join(tmpdir(), `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2)}`);
+async function extractToTempFile(openStream: () => Readable, prefix: string, uuidGenerator: IUuidGenerator): Promise<string> {
+    const tempPath = join(tmpdir(), `${prefix}_${uuidGenerator.generate()}`);
     
     const inputStream = openStream();
     const chunks: Buffer[] = [];

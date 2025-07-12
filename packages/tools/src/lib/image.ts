@@ -256,9 +256,10 @@ export class Image {
         // Determine output path
         const output = outputPath || this.generateOutputPath(format);
         
-        // Add format conversion if needed
+        // Add format specification and output file
         if (format) {
-            command += ` "${output}"`;
+            // For explicit format conversion, specify the format before the output path
+            command += ` ${format}:"${output}"`;
         } else {
             command += ` "${output}"`;
         }

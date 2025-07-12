@@ -1,8 +1,11 @@
-import { getVideoTransformation, ILocation, RandomUuidGenerator } from "utils";
+import { getVideoTransformation, ILocation } from "utils";
 import path from "path";
 import fs from "fs-extra";
 import dayjs from "dayjs";
 import { writeStreamToFile } from "node-utils";
+import { tmpdir } from "os";
+import { join } from "path";
+import { IUuidGenerator } from "utils";
 import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
 import { getFileInfo, Video } from "tools";
@@ -12,7 +15,7 @@ import mime from 'mime';
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<IAssetDetails> {
 
     let videoPath: string;
 
@@ -24,7 +27,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         }
 
         // If openStream is provided, we need to extract to a temporary file.
-        videoPath = path.join(tempDir, `temp_video_${crypto.randomUUID()}.${ext}`);
+        videoPath = join(tmpdir(), `temp_video_${uuidGenerator.generate()}.${ext}`);
         await writeStreamToFile(openStream(), videoPath);        
     }
     else {
@@ -39,18 +42,17 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     
     // Extract screenshot at 1 second or middle of video
     const video = new Video(videoPath);
-    const uuidGenerator = new RandomUuidGenerator();
-    const screenshotPath = path.join(tempDir, `thumb_${uuidGenerator.generate()}.jpg`);
+    const screenshotPath = join(tmpdir(), `thumb_${uuidGenerator.generate()}.jpg`);
     const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
     await video.extractScreenshot(screenshotPath, screenshotTime);
     
     let resolution = assetInfo.dimensions;
-    let thumbnailPath = await resizeImage(screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE);
+    let thumbnailPath = await resizeImage(screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator);
 
     const imageTransformation = await getVideoTransformation(assetInfo.metadata);
     if (imageTransformation) {
         // Flips orientation depending on exif data.
-        thumbnailPath = await transformImage(thumbnailPath, tempDir, imageTransformation);
+        thumbnailPath = await transformImage(thumbnailPath, tempDir, imageTransformation, uuidGenerator);
         if (imageTransformation.changeOrientation) {
             resolution = {
                 width: resolution.height,
@@ -59,7 +61,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         }
     }
 
-    const microPath = await resizeImage(thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, MICRO_QUALITY);
+    const microPath = await resizeImage(thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
 
     let photoDate = assetInfo.createdAt?.toISOString();
     

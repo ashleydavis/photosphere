@@ -36,6 +36,7 @@ async function main() {
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
     const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verbose logging.", false];
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
+    const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts."];
 
     program
         .name("psi")
@@ -103,6 +104,7 @@ Resources:
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
 
@@ -186,6 +188,7 @@ Resources:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initCommand);
 
@@ -243,6 +246,7 @@ Resources:
         .option(...generateKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('replicate'))
         .action(replicateCommand);
 
@@ -272,6 +276,7 @@ Resources:
         .option(...keyOption)
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('ui'))
         .action(uiCommand);
 

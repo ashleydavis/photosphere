@@ -4,7 +4,8 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
-import { RandomUuidGenerator } from "utils";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { Readable } from "stream";
 
 interface IUser extends IMediaFileDatabases {
@@ -85,11 +86,20 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
             const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `${databaseId}/.db`);
+            // Create appropriate providers based on NODE_ENV
+            const uuidGenerator = process.env.NODE_ENV === "testing" 
+                ? new TestUuidGenerator()
+                : new RandomUuidGenerator();
+            const timestampProvider = process.env.NODE_ENV === "testing"
+                ? new TestTimestampProvider()
+                : new TimestampProvider();
+                
             mediaFileDatabase = new MediaFileDatabase(
                 assetStorage,
                 metadataStorage,
                 this.googleApiKey,
-                new RandomUuidGenerator()
+                uuidGenerator,
+                timestampProvider
             );
             await mediaFileDatabase.load();
             this.databaseMap.set(databaseId, mediaFileDatabase);
@@ -162,11 +172,20 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             return this.mediaFileDatabase;
         }
 
+        // Create appropriate providers based on NODE_ENV
+        const uuidGenerator = process.env.NODE_ENV === "testing" 
+            ? new TestUuidGenerator()
+            : new RandomUuidGenerator();
+        const timestampProvider = process.env.NODE_ENV === "testing"
+            ? new TestTimestampProvider()
+            : new TimestampProvider();
+            
         this.mediaFileDatabase = new MediaFileDatabase(
             this.assetStorage,
             this.metadataStorage,
             this.googleApiKey,
-            new RandomUuidGenerator()
+            uuidGenerator,
+            timestampProvider
         );
         await this.mediaFileDatabase.load();
 

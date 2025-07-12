@@ -7,8 +7,12 @@ import {
     generateTreeDiffReport,
     createTree
 } from '../../../lib/merkle-tree';
+import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Tree Comparison', () => {
+    const timestampProvider = new TestTimestampProvider();
+    const uuidGenerator = new TestUuidGenerator();
+
     // Helper function to create a file hash
     function createFileHash(fileName: string, content: string = fileName) {
         const hash = crypto.createHash('sha256')
@@ -25,22 +29,22 @@ describe('Tree Comparison', () => {
     function buildTestTrees() {
         // Create first tree
         let treeA = buildTree(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt']);
-        markFileAsDeleted(treeA, 'file3.txt');
+        markFileAsDeleted(treeA, 'file3.txt', timestampProvider);
 
         // Create second tree with differences
         let treeB = buildTree(['file1.txt']);
-        treeB = addFile(treeB, createFileHash('file4.txt', 'Modified content')); // Modified
-        treeB = addFile(treeB, createFileHash('file5.txt'));
-        treeB = addFile(treeB, createFileHash('file6.txt')); // New file
+        treeB = addFile(treeB, createFileHash('file4.txt', 'Modified content'), timestampProvider, uuidGenerator); // Modified
+        treeB = addFile(treeB, createFileHash('file5.txt'), timestampProvider, uuidGenerator);
+        treeB = addFile(treeB, createFileHash('file6.txt'), timestampProvider, uuidGenerator); // New file
 
         return { treeA, treeB };
     }
 
     function buildTree(fileNames: string[]): IMerkleTree {
-        let tree = createTree();
+        let tree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName));
+            tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
         }
         
         if (!tree) {
@@ -95,7 +99,7 @@ describe('Tree Comparison', () => {
         expect(diff.deleted).toEqual([]);
         
         // Let's add file3 to B to test this properly
-        const treeB2 = addFile(treeB, createFileHash('file3.txt'));
+        const treeB2 = addFile(treeB, createFileHash('file3.txt'), timestampProvider, uuidGenerator);
         const diff2 = compareTrees(treeA, treeB2);
         
         // Now file3 should be in the deleted category
