@@ -27,6 +27,8 @@ import { exit } from 'node-utils';
 import { log } from 'utils';
 
 async function main() {
+    // Log NODE_ENV for debugging UUID generation mode
+    console.error(`[#######] NODE_ENV is: ${process.env.NODE_ENV || '(not set)'}`);
 
     const dbOption: [string, string] = ["--db <path>", "The directory that contains the media file database"];
     const destDbOption: [string, string] = ["--dest <path>", "The destination directory that specifies the target database"];

@@ -354,6 +354,7 @@ invoke_command() {
     
     log_info "Running: $description"
     echo ""
+    echo -e "${YELLOW}NODE_ENV:${NC} ${NODE_ENV:-'(not set)'}"
     echo -e "${YELLOW}Command:${NC}"
     echo -e "${BLUE}$command${NC}"
     echo ""
@@ -371,12 +372,19 @@ invoke_command() {
     local command_output=""
     local actual_exit_code=0
     
+    # Ensure NODE_ENV is passed to the command
+    local env_prefix=""
+    if [ -n "$NODE_ENV" ]; then
+        env_prefix="NODE_ENV=$NODE_ENV "
+    fi
+    local full_command="$env_prefix$command"
+    
     if [ "$capture_output" = "true" ]; then
-        # Capture output and display it
+        # Capture output and display it, ensuring all output is visible
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        command_output=$(eval "$command" 2>&1)
+        # Use tee to both capture output and display it immediately
+        command_output=$(eval "$full_command" 2>&1 | tee /dev/stderr)
         actual_exit_code=$?
-        echo "$command_output"
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
         # Store output in caller's variable if provided
@@ -386,7 +394,7 @@ invoke_command() {
     else
         # Execute without capturing output
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        eval "$command"
+        eval "$full_command"
         actual_exit_code=$?
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
     fi
@@ -527,8 +535,21 @@ check_tools() {
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
     
+    # Verify NODE_ENV is set for deterministic UUID generation
+    log_info "NODE_ENV is set to: ${NODE_ENV:-'(not set)'}"
+    if [ "$NODE_ENV" = "testing" ]; then
+        log_success "NODE_ENV=testing is set for deterministic UUID generation"
+    else
+        log_warning "NODE_ENV is not set to 'testing' - UUIDs may not be deterministic"
+    fi
+    
     log_info "Checking for required tools in system PATH"
     invoke_command "Check tools" "$(get_cli_command) tools --yes"
+    echo ""
+    
+    # Test UUID generation visibility by running a simple command that should generate UUIDs
+    log_info "Testing UUID generation visibility..."
+    log_info "The following command should generate UUIDs visible as [@@@@@@] lines:"
     echo ""
     
     log_info "Verifying tools are installed and working..."
@@ -604,6 +625,9 @@ test_create_database() {
     echo ""
     echo "============================================================================"
     echo "=== TEST 1: CREATE DATABASE ==="
+    
+    log_info "This test should generate UUIDs - watch for [@@@@@@] lines:"
+    echo ""
     
     invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
     
@@ -889,6 +913,9 @@ test_database_verify() {
     echo ""
     echo "============================================================================"
     echo "=== TEST 12: DATABASE VERIFICATION ==="
+    
+    # Show database structure with tree command
+    invoke_command "Show database structure" "tree $TEST_DB_DIR"
     
     # Run verify command and capture output for checking
     local verify_output
@@ -1568,6 +1595,16 @@ reset_environment() {
     
     log_info "Current directory: $(pwd)"
     log_info "Cleaning up test artifacts..."
+    
+    # Reset UUID counter for deterministic test results
+    local UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
+    if [ -f "$UUID_COUNTER_FILE" ]; then
+        log_info "Resetting test UUID counter"
+        rm -f "$UUID_COUNTER_FILE"
+        log_success "Removed UUID counter file"
+    else
+        log_info "UUID counter file not found (already clean)"
+    fi
     
     # Remove the specific test database directory
     if [ -d "./test/tmp" ]; then
