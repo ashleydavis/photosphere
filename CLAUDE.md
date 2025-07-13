@@ -85,6 +85,7 @@ Frontend:
 - `VITE_AUTH0_REDIRECT_URL` - Auth0 callback URL
 
 ### Testing Infrastructure
+- The most important tests are the smoke tests in `./apps/cli/smoke-tests.sh`.
 - Jest for unit tests (configured per package)
 - Playwright for E2E tests (frontend)
 - Test fixtures in `/test/fixtures/` with various asset configurations
