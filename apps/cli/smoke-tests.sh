@@ -66,13 +66,21 @@ log_info() {
 
 log_success() {
     echo -e "${GREEN}[PASS]${NC} $1"
-    ((TESTS_PASSED++))
 }
 
 log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
+}
+
+# Test counting functions - only increment once per test function
+test_passed() {
+    ((TESTS_PASSED++))
+}
+
+test_failed() {
+    local test_name="$1"
     ((TESTS_FAILED++))
-    FAILED_TESTS+=("$1")
+    FAILED_TESTS+=("$test_name")
 }
 
 log_warning() {
@@ -503,7 +511,7 @@ test_setup() {
     invoke_command "Build frontend" "bun run build-fe-$platform" || {
         log_warning "Frontend build failed, continuing anyway..."
     }
-    
+    test_passed
 }
 
 check_tools() {
@@ -589,6 +597,7 @@ check_tools() {
     fi
     
     log_success "All tools verified and working correctly"
+    test_passed
 }
 
 test_create_database() {
@@ -605,6 +614,7 @@ test_create_database() {
     check_exists "$TEST_DB_DIR/metadata" "Asset metadata directory"
     
     # Test initial state - database creation is verified by file existence checks above
+    test_passed
 }
 
 test_view_media_files() {
@@ -624,6 +634,7 @@ test_view_media_files() {
     expect_output_string "$info_output" "Type: image/png" "Info output should contain PNG MIME type for test.png"
     expect_output_string "$info_output" "Type: video/mp4" "Info output should contain MP4 MIME type for test.mp4"
     expect_output_string "$info_output" "Type: image/webp" "Info output should contain WebP MIME type for test.webp"
+    test_passed
 }
 
 # Parameterized function to test adding a single file
@@ -671,6 +682,7 @@ test_add_png_file() {
     
     # Validate the PNG assets in the database
     validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.png" "image/png" "image" "$add_output"
+    test_passed
 }
 
 test_add_jpg_file() {
@@ -682,6 +694,7 @@ test_add_jpg_file() {
     
     # Validate the JPG assets in the database
     validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.jpg" "image/jpeg" "image" "$add_output"
+    test_passed
 }
 
 test_add_mp4_file() {
@@ -693,6 +706,7 @@ test_add_mp4_file() {
     
     # Validate the MP4 assets in the database
     validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.mp4" "video/mp4" "video" "$add_output"
+    test_passed
 }
 
 test_add_same_file() {
@@ -704,6 +718,7 @@ test_add_same_file() {
     invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
     invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    test_passed
 }
 
 test_add_multiple_files() {
@@ -723,6 +738,7 @@ test_add_multiple_files() {
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
     fi
+    test_passed
 }
 
 test_add_same_multiple_files() {
@@ -738,6 +754,7 @@ test_add_same_multiple_files() {
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
     fi
+    test_passed
 }
 
 test_database_summary() {
@@ -754,6 +771,7 @@ test_database_summary() {
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"
     expect_output_string "$summary_output" "Tree root hash:" "Summary contains hash"
+    test_passed
 }
 
 test_database_list() {
@@ -776,6 +794,7 @@ test_database_list() {
     # Check that it shows the expected number of files
     expect_output_string "$list_output" "End of results" "List shows end of results message"
     expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"
+    test_passed
 }
 
 test_export_assets() {
@@ -863,6 +882,7 @@ test_export_assets() {
     check_exists "$export_dir/explicit-original.png" "Explicitly exported original file"
     
     log_success "All export tests completed successfully"
+    test_passed
 }
 
 test_database_verify() {
@@ -885,6 +905,7 @@ test_database_verify() {
     expect_output_value "$verify_output" "New:" "0" "New files in verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
+    test_passed
 }
 
 test_database_verify_full() {
@@ -906,6 +927,7 @@ test_database_verify_full() {
     expect_output_value "$verify_output" "New:" "0" "New files in full verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
+    test_passed
 }
 
 test_detect_new_file() {
@@ -958,6 +980,7 @@ test_detect_new_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_detect_deleted_file() {
@@ -1016,6 +1039,7 @@ test_detect_deleted_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_detect_modified_file() {
@@ -1075,6 +1099,7 @@ test_detect_modified_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_database_replicate() {
@@ -1107,6 +1132,7 @@ test_database_replicate() {
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    test_passed
 }
 
 test_verify_replica() {
@@ -1142,6 +1168,7 @@ test_verify_replica() {
     
     # Verify the replica verify command also shows the expected counts
     expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
+    test_passed
 }
 
 test_database_replicate_second() {
@@ -1165,7 +1192,8 @@ test_database_replicate_second() {
     expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
     expect_output_value "$second_replication_output" "Total files considered:" "23" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "23" "Files skipped (already exist)"   
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "23" "Files skipped (already exist)"
+    test_passed
 }
 
 test_database_compare() {
@@ -1188,6 +1216,7 @@ test_database_compare() {
     
     # Test comparison with self (database vs itself)
     invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
+    test_passed
 }
 
 test_compare_with_changes() {
@@ -1214,6 +1243,7 @@ test_compare_with_changes() {
     
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
     expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
+    test_passed
 }
 
 test_replicate_after_changes() {
@@ -1239,6 +1269,7 @@ test_replicate_after_changes() {
     
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
+    test_passed
 }
 
 test_cannot_create_over_existing() {
@@ -1247,6 +1278,7 @@ test_cannot_create_over_existing() {
     echo "=== TEST 23: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
+    test_passed
 }
 
 test_repair_ok_database() {
@@ -1269,6 +1301,7 @@ test_repair_ok_database() {
     expect_output_value "$repair_output" "Unrepaired:" "0" "No files unrepaired"
     expect_output_value "$repair_output" "Modified:" "0" "No files modified"
     expect_output_value "$repair_output" "Removed:" "0" "No files removed"
+    test_passed
 }
 
 test_remove_asset() {
@@ -1442,6 +1475,7 @@ test_remove_asset() {
     expect_output_value "$verify_output" "Modified:" "0" "No modified files after removal"
     
     log_success "Asset removal test completed successfully"
+    test_passed
 }
 
 test_repair_damaged_database() {
@@ -1515,6 +1549,7 @@ test_repair_damaged_database() {
     # Clean up damaged database copy
     rm -rf "$damaged_dir"
     log_success "Cleaned up damaged database copy"
+    test_passed
 }
 
 
