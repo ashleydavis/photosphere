@@ -354,6 +354,7 @@ invoke_command() {
     
     log_info "Running: $description"
     echo ""
+    echo -e "${YELLOW}NODE_ENV:${NC} ${NODE_ENV:-'(not set)'}"
     echo -e "${YELLOW}Command:${NC}"
     echo -e "${BLUE}$command${NC}"
     echo ""
@@ -526,6 +527,14 @@ check_tools() {
     
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
+    
+    # Verify NODE_ENV is set for deterministic UUID generation
+    log_info "NODE_ENV is set to: ${NODE_ENV:-'(not set)'}"
+    if [ "$NODE_ENV" = "testing" ]; then
+        log_success "NODE_ENV=testing is set for deterministic UUID generation"
+    else
+        log_warning "NODE_ENV is not set to 'testing' - UUIDs may not be deterministic"
+    fi
     
     log_info "Checking for required tools in system PATH"
     invoke_command "Check tools" "$(get_cli_command) tools --yes"
@@ -1568,6 +1577,16 @@ reset_environment() {
     
     log_info "Current directory: $(pwd)"
     log_info "Cleaning up test artifacts..."
+    
+    # Reset UUID counter for deterministic test results
+    local UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
+    if [ -f "$UUID_COUNTER_FILE" ]; then
+        log_info "Resetting test UUID counter"
+        rm -f "$UUID_COUNTER_FILE"
+        log_success "Removed UUID counter file"
+    else
+        log_info "UUID counter file not found (already clean)"
+    fi
     
     # Remove the specific test database directory
     if [ -d "./test/tmp" ]; then
