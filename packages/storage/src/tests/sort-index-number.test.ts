@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -88,7 +89,8 @@ describe('SortIndex with number type', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 3,
-            type: 'number' // Specify number type for proper comparison
+            type: 'number', // Specify number type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Create descending index on price field
@@ -99,7 +101,8 @@ describe('SortIndex with number type', () => {
             fieldName: 'price',
             direction: 'desc',
             pageSize: 3,
-            type: 'number' // Specify number type for proper comparison
+            type: 'number', // Specify number type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
     });
     
@@ -385,7 +388,8 @@ describe('SortIndex with number type', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 3,
-            type: 'number'
+            type: 'number',
+            uuidGenerator: new RandomUuidGenerator()
         }, stringNumericCollection);
         
         await stringNumericSortIndex.build();
@@ -426,7 +430,8 @@ describe('SortIndex with number type', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 3,
-            type: 'number'
+            type: 'number',
+            uuidGenerator: new RandomUuidGenerator()
         }, nanCollection);
         
         await nanSortIndex.build();
@@ -468,7 +473,8 @@ describe('SortIndex with number type', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 3,
-            type: 'number'
+            type: 'number',
+            uuidGenerator: new RandomUuidGenerator()
         }, zeroNegativeCollection);
         
         await zeroNegativeSortIndex.build();
