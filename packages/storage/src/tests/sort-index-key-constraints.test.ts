@@ -3,6 +3,7 @@ import { IRecord } from '../lib/bson-database/collection';
 import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
 import { MockCollection } from './mock-collection';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -164,7 +165,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 5,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -207,7 +209,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 6,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build empty index
@@ -252,7 +255,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 4,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -293,7 +297,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 8,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -332,7 +337,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 7,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -387,7 +393,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 6,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -423,7 +430,8 @@ describe('SortIndex Key Constraints', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 15,
-            keySize
+            keySize,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -475,7 +483,8 @@ describe('SortIndex Key Constraints', () => {
                 fieldName: 'value',
                 direction: 'asc',
                 pageSize: 8,
-                keySize
+                keySize,
+            uuidGenerator: new RandomUuidGenerator()
             }, collection);
             
             // Build the index

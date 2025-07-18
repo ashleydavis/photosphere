@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from '../storage';
-import { retry } from 'utils';
+import { retry, IUuidGenerator } from 'utils';
 import { SortManager } from './sort-manager';
 import { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
 
@@ -22,6 +22,11 @@ export interface IBsonCollectionOptions {
     // The directory where the collection is stored.
     //
     directory: string;
+
+    //
+    // UUID generator for creating unique identifiers.
+    //
+    uuidGenerator: IUuidGenerator;
 
     //
     // The number of shards to use for the collection.
@@ -195,6 +200,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private sortManager: SortManager<RecordT>;
 
     //
+    // UUID generator for creating unique identifiers.
+    //
+    private readonly uuidGenerator: IUuidGenerator;
+
+    //
     // The last time the collection was saved.
     //
     private lastSaveTime: number | undefined = undefined;
@@ -204,10 +214,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
         this.maxCachedShards = options.maxCachedShards || 10;
+        this.uuidGenerator = options.uuidGenerator;
 
         this.sortManager = new SortManager({
             storage: this.storage,
-            baseDirectory: this.directory.split('/').slice(0, -1).join('/') // Parent directory
+            baseDirectory: this.directory.split('/').slice(0, -1).join('/'), // Parent directory
+            uuidGenerator: this.uuidGenerator
         }, this, this.name);
         
         this.keepWorkerAlive();
@@ -661,7 +673,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async insertOne(record: RecordT): Promise<void> {
         if (!record._id) {
-            record._id = crypto.randomUUID();
+            record._id = this.uuidGenerator.generate();
         }
 
         const shardId = this.generateShardId(record._id);
