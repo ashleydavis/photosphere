@@ -271,7 +271,7 @@ export interface IServerOptions {
 //
 export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
 
-    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage }) : undefined;
+    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator() }) : undefined;
     
     const app = express();
     app.use(cors());

@@ -3,6 +3,7 @@ import { IBsonCollection, IRecord, IShard } from '../lib/bson-database/collectio
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
 import { MockCollection } from './mock-collection';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -38,7 +39,8 @@ describe('SortIndex type inference', () => {
                 collectionName: 'products',
                 fieldName: 'name',
                 direction: 'asc',
-                pageSize: 10
+                pageSize: 10,
+                uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
             },
             collection
@@ -74,7 +76,8 @@ describe('SortIndex type inference', () => {
                 collectionName: 'scores',
                 fieldName: 'score',
                 direction: 'asc',
-                pageSize: 10
+                pageSize: 10,
+                uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
             },
             collection
@@ -114,7 +117,8 @@ describe('SortIndex type inference', () => {
                 collectionName: 'events',
                 fieldName: 'eventDate',
                 direction: 'asc',
-                pageSize: 10
+                pageSize: 10,
+                uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
             },
             collection
@@ -150,7 +154,8 @@ describe('SortIndex type inference', () => {
                 collectionName: 'mixed',
                 fieldName: 'value',
                 direction: 'asc',
-                pageSize: 1  // Small page size to force comparison
+                pageSize: 1,  // Small page size to force comparison
+                uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
             },
             collection
@@ -177,7 +182,8 @@ describe('SortIndex type inference', () => {
                 collectionName: 'consistent',
                 fieldName: 'value',
                 direction: 'asc',
-                pageSize: 10
+                pageSize: 10,
+                uuidGenerator: new RandomUuidGenerator()
             },
             collection
         );

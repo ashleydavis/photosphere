@@ -4,6 +4,7 @@
 
 import { IStorage } from "../storage";
 import { BsonCollection, IRecord, type IBsonCollection } from "./collection";
+import { IUuidGenerator } from "utils";
 
 export interface IBsonDatabase {
 
@@ -31,6 +32,11 @@ export interface IBsonDatabaseOptions {
     // Interface to the file storage system.
     //
     storage: IStorage;
+
+    //
+    // UUID generator for creating unique identifiers.
+    //
+    uuidGenerator: IUuidGenerator;
 
     //
     // The maximum number of shards to keep in memory.
@@ -80,6 +86,7 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
             collection = new BsonCollection<IRecord>(name, {
                 storage: this.options.storage,
                 directory: name,
+                uuidGenerator: this.options.uuidGenerator,
                 maxCachedShards: this.options.maxCachedShards,
             });
             this._collections.set(name, collection);

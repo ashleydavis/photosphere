@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
-import { retry } from 'utils';
+import { retry, IUuidGenerator } from 'utils';
 
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';
@@ -30,21 +30,7 @@ const leafSplitThreshold = 1.5;
 
 // let id = 0;
 
-function makeId() {
-    return crypto.randomUUID();
-
-    //
-    // Compact id for readability.
-    //
-    // const id = crypto.randomUUID();
-    // return id.slice(0, 2) + "-" + id.slice(-2);
-
-    //
-    // Simple id for testing.
-    //
-    // ++id;
-    // return `id-${id}`;
-}
+// Removed makeId function - now using injected UUID generator
 
 // Constants for save debouncing
 const maxSaveDelayMs = 10_000;
@@ -75,6 +61,9 @@ export interface ISortIndexOptions {
 
     // Sort direction: 'asc' or 'desc'
     direction: SortDirection;
+
+    // UUID generator for creating unique identifiers
+    uuidGenerator: IUuidGenerator;
 
     // Number of records per page
     pageSize?: number;
@@ -232,6 +221,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     
     private lastSaveTime: number | undefined = undefined;
     
+    // UUID generator for creating unique identifiers
+    private readonly uuidGenerator: IUuidGenerator;
+    
     constructor(options: ISortIndexOptions, private readonly collection: IBsonCollection<RecordT>) {
         this.storage = options.storage;
         this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
@@ -241,6 +233,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         this.keySize = options.keySize || 100;
         this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
+        this.uuidGenerator = options.uuidGenerator;
     }
 
     //
@@ -695,7 +688,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             parentId: undefined,
         };
 
-        this.rootPageId = makeId(); // Generate a new UUID for the root page ID.
+        this.rootPageId = this.uuidGenerator.generate(); // Generate a new UUID for the root page ID.
         
         // Store in the tree nodes map
         this.treeNodes.set(this.rootPageId, emptyRoot);
@@ -1844,7 +1837,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Create new leaf node with the second half
         const newEntries = records.splice(splitIndex);
-        const newNodeId = makeId();
+        const newNodeId = this.uuidGenerator.generate();
 
         
         const newNode: IBTreeNode = {
@@ -1871,7 +1864,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         // Create or update parent node to maintain the B-tree structure
         if (nodeId === this.rootPageId && node.children.length === 0) {
             // If we're splitting the root, we need to create a new root
-            const newRootId = makeId();
+            const newRootId = this.uuidGenerator.generate();
             const newRoot: IBTreeNode = {
                 // Internal node (has children)
                 keys: [newEntries[0].value],
@@ -2169,7 +2162,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         const middleKey = node.keys[middleIndex];
         
         // Create a new internal node for the right half
-        const newNodeId = makeId();
+        const newNodeId = this.uuidGenerator.generate();
         const newNode: IBTreeNode = {
             // Internal node (has children)
             keys: node.keys.splice(middleIndex + 1), // Take keys after the middle
@@ -2191,7 +2184,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // If this is the root node, create a new root
         if (nodeId === this.rootPageId) {
-            const newRootId = makeId();
+            const newRootId = this.uuidGenerator.generate();
             const newRoot: IBTreeNode = {
                 // Internal node (has children)
                 keys: [middleKey],

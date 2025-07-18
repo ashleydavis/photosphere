@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -75,7 +76,8 @@ describe('SortIndex with date type', () => {
             fieldName: 'createdAt',
             direction: 'asc',
             pageSize: 2,
-            type: 'date' // Specify date type for proper comparison
+            type: 'date', // Specify date type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Create descending index on updatedAt field
@@ -86,7 +88,8 @@ describe('SortIndex with date type', () => {
             fieldName: 'updatedAt',
             direction: 'desc',
             pageSize: 2,
-            type: 'date' // Specify date type for proper comparison
+            type: 'date', // Specify date type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
     });
     

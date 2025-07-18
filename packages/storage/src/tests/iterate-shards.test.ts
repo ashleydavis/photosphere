@@ -1,6 +1,8 @@
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
 import { BsonCollection, IRecord } from '../lib/bson-database/collection';
+import { RandomUuidGenerator } from 'utils';
+import crypto from 'crypto';
 
 // Test interfaces
 interface TestUser extends IRecord {
@@ -20,6 +22,7 @@ describe('BsonCollection.iterateShards', () => {
         collection = new BsonCollection<TestUser>('users', {
             storage,
             directory: 'users',
+            uuidGenerator: new RandomUuidGenerator(),
             numShards: 10, 
             maxCachedShards: 5
         });

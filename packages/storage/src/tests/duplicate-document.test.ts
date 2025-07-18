@@ -4,6 +4,7 @@ import path from 'path';
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { BsonDatabase } from '../lib/bson-database/database';
 import { IBsonCollection } from '../lib/bson-database/collection';
+import { RandomUuidGenerator } from 'utils';
 
 describe('Collection duplicate document tests', () => {
     let db: BsonDatabase;
@@ -19,6 +20,7 @@ describe('Collection duplicate document tests', () => {
         const storage = new MockStorage();
         db = new BsonDatabase({ 
             storage,
+            uuidGenerator: new RandomUuidGenerator(),
         });
         
         // Create a test collection
