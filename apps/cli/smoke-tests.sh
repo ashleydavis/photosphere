@@ -349,8 +349,7 @@ invoke_command() {
     local description="$1"
     local command="$2"
     local expected_exit_code="${3:-0}"
-    local capture_output="${4:-false}"
-    local output_var_name="${5:-}"
+    local output_var_name="${4:-}"
     
     log_info "Running: $description"
     echo ""
@@ -372,22 +371,24 @@ invoke_command() {
     local command_output=""
     local actual_exit_code=0
     
-    if [ "$capture_output" = "true" ]; then
-        # Capture output and display it
+    # Ensure NODE_ENV is passed to the command - force it to testing for deterministic UUIDs
+    local env_prefix="NODE_ENV=testing "
+    local full_command="$env_prefix$command"
+    
+    if [ -n "$output_var_name" ]; then
+        # Capture output and display it, ensuring all output is visible
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        command_output=$(eval "$command" 2>&1)
+        # Use tee to both capture output and display it immediately
+        command_output=$(eval "$full_command" 2>&1 | tee /dev/stderr)
         actual_exit_code=$?
-        echo "$command_output"
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
-        # Store output in caller's variable if provided
-        if [ -n "$output_var_name" ]; then
-            eval "$output_var_name=\"\$command_output\""
-        fi
+        # Store output in caller's variable
+        eval "$output_var_name=\"\$command_output\""
     else
         # Execute without capturing output
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        eval "$command"
+        eval "$full_command"
         actual_exit_code=$?
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
     fi
@@ -633,7 +634,7 @@ test_view_media_files() {
     
     # Capture the output to validate it
     local info_output
-    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "true" "info_output"
+    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
     
     # Check that info output doesn't contain "Type: undefined" which indicates a bug
     expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"
@@ -651,6 +652,8 @@ test_add_file_parameterized() {
     local file_path="$1"
     local file_type="$2"
     local test_description="$3"
+    local expected_mime="$4"
+    local asset_type="$5"
     
     # Check if file exists
     check_exists "$file_path" "$file_type test file"
@@ -662,7 +665,7 @@ test_add_file_parameterized() {
     
     # Add the file and capture output with verbose logging
     local add_output
-    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "true" "add_output"
+    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -678,8 +681,8 @@ test_add_file_parameterized() {
     # Check that the specific file is now in the database
     invoke_command "Check $file_type file added" "$(get_cli_command) check --db $TEST_DB_DIR $file_path --yes"
     
-    # Return the add output for use in validation
-    echo "$add_output"
+    # Validate the assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$file_path" "$expected_mime" "$asset_type" "$add_output"
 }
 
 test_add_png_file() {
@@ -687,10 +690,8 @@ test_add_png_file() {
     echo "============================================================================"
     echo "=== TEST 3: ADD PNG FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file" "image/png" "image"
     
-    # Validate the PNG assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.png" "image/png" "image" "$add_output"
     test_passed
 }
 
@@ -699,10 +700,8 @@ test_add_jpg_file() {
     echo "============================================================================"
     echo "=== TEST 4: ADD JPG FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file" "image/jpeg" "image"
     
-    # Validate the JPG assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.jpg" "image/jpeg" "image" "$add_output"
     test_passed
 }
 
@@ -711,10 +710,8 @@ test_add_mp4_file() {
     echo "============================================================================"
     echo "=== TEST 5: ADD MP4 FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
     
-    # Validate the MP4 assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.mp4" "video/mp4" "video" "$add_output"
     test_passed
 }
 
@@ -737,7 +734,7 @@ test_add_multiple_files() {
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         local add_output
-        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
+        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
         
         # Check that 2 files were imported
         expect_output_value "$add_output" "Files added:" "2" "Two files imported from multiple images directory"
@@ -773,7 +770,7 @@ test_database_summary() {
     
     # Run summary command and capture output for verification
     local summary_output
-    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "summary_output"
+    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
     
     # Check that summary contains expected fields
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
@@ -790,7 +787,7 @@ test_database_list() {
     
     # Run list command and capture output for verification
     local list_output
-    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "true" "list_output"
+    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "list_output"
     
     # Check that list contains expected fields and patterns
     expect_output_string "$list_output" "Database Files" "List output contains header"
@@ -827,7 +824,7 @@ test_export_assets() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             # The list output should contain lines with asset IDs
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
@@ -847,7 +844,7 @@ test_export_assets() {
     
     # Test 1: Export original asset to specific file
     local export_output
-    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "true" "export_output"
+    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "export_output"
     
     # Verify the exported file exists
     check_exists "$export_dir/exported-original.png" "Exported original file"
@@ -901,7 +898,7 @@ test_database_verify() {
     
     # Run verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Verify output contains files imported count"
@@ -924,7 +921,7 @@ test_database_verify_full() {
     
     # Run full verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
+    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Full verify output contains files imported count"
@@ -978,7 +975,7 @@ test_detect_new_file() {
     
     # Run verify and capture output - should detect the new file
     local verify_output
-    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the new file
     expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
@@ -1037,7 +1034,7 @@ test_detect_deleted_file() {
     
     # Run verify and capture output - should detect the missing file
     local verify_output
-    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -1097,7 +1094,7 @@ test_detect_modified_file() {
     
     # Run verify and capture output - should detect the modified file
     local verify_output
-    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -1126,7 +1123,7 @@ test_database_replicate() {
     
     # Run replicate command and capture output
     local replicate_output
-    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replicate_output"
+    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replicate_output"
     
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
@@ -1156,14 +1153,14 @@ test_verify_replica() {
     
     # Verify replica contents match source
     local replica_verify_output
-    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "true" "replica_verify_output"
+    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "replica_verify_output"
     
     # Get source and replica summaries to compare file counts
     local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "source_summary"
+    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
     
     local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "true" "replica_summary"
+    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
     
     # Extract and compare file counts
     local source_files=$(parse_numeric "$source_summary" "Total files:")
@@ -1192,7 +1189,7 @@ test_database_replicate_second() {
     
     # Run second replicate command and capture output
     local second_replication_output
-    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "second_replication_output"
+    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "second_replication_output"
     
     # Check if replication was successful
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
@@ -1217,7 +1214,7 @@ test_database_compare() {
     
     # Test comparison between original and replica (should show no differences)
     local compare_output
-    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences for identical databases
     expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
@@ -1241,14 +1238,14 @@ test_compare_with_changes() {
     # Add a new asset to the original database to create a difference
     local new_test_file="$TEST_FILES_DIR/test.webp"
     local webp_add_output
-    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "true" "webp_add_output"
+    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
     
     # Validate the WEBP assets in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
     
     # Test comparison between original and replica (should show differences after adding new asset)
     local compare_output
-    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
     expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
@@ -1267,14 +1264,14 @@ test_replicate_after_changes() {
     
     # Replicate the changes from original to replica
     local replication_output
-    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replication_output"
+    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replication_output"
     
     # Check that the 8 changed files were replicated
     expect_output_value "$replication_output" "Total files copied:" "8" "Files copied (the changes)"
     
     # Run compare command to verify databases are now identical again
     local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
@@ -1302,7 +1299,7 @@ test_repair_ok_database() {
     
     # Run repair on the intact database using replica as source
     local repair_output
-    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "true" "repair_output"
+    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
     
     # Check that repair reports no issues found
     expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
@@ -1330,7 +1327,7 @@ test_remove_asset() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
         fi
@@ -1345,19 +1342,19 @@ test_remove_asset() {
     
     # Get initial database summary before removal
     local before_summary
-    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "before_summary"
+    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "before_summary"
     local files_before=$(parse_numeric "$before_summary" "Files imported:")
     
     # Remove the asset
     local remove_output
-    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "true" "remove_output"
+    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
     
     # Get database summary after removal
     local after_summary
-    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "after_summary"
+    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "after_summary"
     local files_after=$(parse_numeric "$after_summary" "Files imported:")
     
     # Verify one less asset in the database
@@ -1463,7 +1460,7 @@ test_remove_asset() {
     # Verify that the asset ID is no longer in the database listing
     log_info "Verifying asset ID is no longer in database listing..."
     local ls_output
-    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "true" "ls_output"
+    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "ls_output"
     
     # Check that the removed asset ID is not in the output
     if echo "$ls_output" | grep -q "$test_asset_id"; then
@@ -1477,7 +1474,7 @@ test_remove_asset() {
     
     # Run verify to make sure the database is still in a good state
     local verify_output
-    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
     
     # The database should still be consistent
     expect_output_value "$verify_output" "New:" "0" "No new files after removal"
@@ -1526,7 +1523,7 @@ test_repair_damaged_database() {
     # Run verify to detect the damage
     log_info "Running verify to detect damage..."
     local verify_output
-    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "true" "verify_output"
+    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "verify_output"
     
     # Verify should detect issues
     expect_output_string "$verify_output" "Database verification found issues" "Verify detects damage"
@@ -1534,7 +1531,7 @@ test_repair_damaged_database() {
     # Run repair to fix the issues
     log_info "Running repair to fix issues..."
     local repair_output
-    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "true" "repair_output"
+    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
     
     # Repair should fix the issues
     expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"
@@ -1551,7 +1548,7 @@ test_repair_damaged_database() {
     # Verify the repair was successful
     log_info "Verifying repair was successful..."
     local final_verify_output
-    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "true" "final_verify_output"
+    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "final_verify_output"
     
     expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
     
