@@ -20,6 +20,8 @@ export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Pro
         const visualization = database.visualizeMerkleTree();
         console.log(visualization);
         
+        await exit(0);
+        
     } catch (err: any) {
         console.error(pc.red(`Error visualizing merkle tree: ${err.message}`));
         if (options.verbose && err.stack) {
