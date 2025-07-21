@@ -535,7 +535,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         let totalNodesSize = 0;
         
         // First pass: calculate the total size needed
-        for (const [pageId, node] of this.treeNodes.entries()) {
+        // Sort entries by pageId for deterministic ordering
+        const sortedEntries = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
+        for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
             // Estimate node size without actually serializing
@@ -635,7 +637,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         offset += 4;
         
         // Second pass: write the nodes
-        for (const [pageId, node] of this.treeNodes.entries()) {
+        for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
             // Write pageId length and data
@@ -2377,8 +2379,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         let internalMinKeys = Number.MAX_SAFE_INTEGER;
         let internalMaxKeys = 0;
         
-        // Traverse all nodes
-        for (const [nodeId, node] of this.treeNodes.entries()) {
+        // Traverse all nodes in deterministic order
+        const sortedNodes = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
+        for (const [nodeId, node] of sortedNodes) {
             const isLeaf = node.children.length === 0;
             let keyCount = node.keys.length;
             
