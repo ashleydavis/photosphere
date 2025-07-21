@@ -197,7 +197,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private totalEntries: number = 0;
     private totalPages: number = 0; // Tracks only leaf nodes (user-facing pages)
     private loaded: boolean = false;
-    private lastUpdatedAt: Date | undefined;
     private saving: boolean = false; // Flag to prevent concurrent saves.
     private dirty: boolean = false; // Set to true when the tree is modified and needs saving.
     private rootPageId: string | undefined;
@@ -315,11 +314,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 } else {
                     this.type = undefined;
                 }
-                               
-                // Read lastUpdatedAt timestamp (8 bytes for Date)
-                const lastUpdatedTimestamp = dataWithoutChecksum.readBigUInt64LE(offset);
-                offset += 8;
-                this.lastUpdatedAt = new Date(Number(lastUpdatedTimestamp));
+                             
+                // Skip what used to be the lastUpdatedAt timestamp. This field is no longer serialized. Can be removed in future versions.
+                offset += 8; 
                 
                 // Read number of nodes
                 const nodeCount = dataWithoutChecksum.readUInt32LE(offset);
@@ -627,9 +624,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         buffer.writeUInt8(typeValue, offset);
         offset += 1;
                
-        // Write lastUpdatedAt timestamp (8 bytes for Date)
-        const timestamp = this.lastUpdatedAt ? BigInt(this.lastUpdatedAt.getTime()) : BigInt(0);
-        buffer.writeBigUInt64LE(timestamp, offset);
+        buffer.writeBigUInt64LE(0n, offset); // Used to be lastUpdatedAt, now set to 0n for compatibility. Remove in future versions.
         offset += 8;
         
         // Write number of nodes
@@ -1197,7 +1192,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     // Marks the tree as dirty and schedules a save.
     //
     private async markDirty(): Promise<void> {
-        this.lastUpdatedAt = new Date();
         this.dirty = true;
         
         // Schedule save
