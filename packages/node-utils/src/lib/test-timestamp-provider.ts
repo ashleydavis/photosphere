@@ -8,7 +8,7 @@ export class TestTimestampProvider implements ITimestampProvider {
         return TestTimestampProvider.FIXED_TIMESTAMP + this.counter++;
     }
 
-    date(): Date {
+    dateNow(): Date {
         return new Date(this.now());
     }
 
