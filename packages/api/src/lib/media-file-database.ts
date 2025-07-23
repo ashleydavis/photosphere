@@ -862,7 +862,7 @@ export class MediaFileDatabase {
                 duration: assetDetails?.duration,
                 fileDate: dayjs(fileInfo.lastModified).toISOString(),
                 photoDate: assetDetails?.photoDate || dayjs(fileInfo.lastModified).toISOString(),
-                uploadDate: dayjs().toISOString(),
+                uploadDate: dayjs(this.timestampProvider.dateNow()).toISOString(),
                 properties,
                 labels,
                 description,

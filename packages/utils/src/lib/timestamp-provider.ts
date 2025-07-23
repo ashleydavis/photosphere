@@ -1,6 +1,6 @@
 export interface ITimestampProvider {
     now(): number;
-    date(): Date;
+    dateNow(): Date;
 }
 
 export class TimestampProvider implements ITimestampProvider {
@@ -8,7 +8,7 @@ export class TimestampProvider implements ITimestampProvider {
         return Date.now();
     }
 
-    date(): Date {
+    dateNow(): Date {
         return new Date();
     }
 }
