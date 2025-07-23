@@ -42,10 +42,56 @@ jobs:
             echo "✅ No tag detected, skipping version validation"
           fi
 
-  build-linux:
-    runs-on: ubuntu-24.04
+  test:
+    runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    env:
+      DEBUG_MODE: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.4
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install media processing tools
+        run: |
+          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+          sudo apt update
+          sudo apt install -y imagemagick ffmpeg tree
+
+      - name: Compile TypeScript
+        run: bun run compile
+
+      - name: Run smoke tests
+        working-directory: ./apps/cli
+        run: |
+          ./smoke-tests.sh all
+          SMOKE_TEST_EXIT_CODE=$?
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          exit $SMOKE_TEST_EXIT_CODE
+
+  build-linux:
+    runs-on: ubuntu-24.04
+    needs: [test]
+    if: needs.test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -117,8 +163,8 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: [validate-version]
-    if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    needs: [test]
+    if: needs.test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -183,8 +229,8 @@ jobs:
 
   build-macos-x64:
     runs-on: macos-13 # x64 architecture
-    needs: [validate-version]
-    if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    needs: [test]
+    if: needs.test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -255,8 +301,8 @@ jobs:
 
   build-macos-arm64:
     runs-on: macos-latest # ARM64 architecture
-    needs: [validate-version]
-    if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    needs: [test]
+    if: needs.test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
