@@ -72,12 +72,10 @@ jobs:
       - name: Compile TypeScript
         run: bun run compile
 
-  smoke-test:
+  smoke_test:
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
-    env:
-      DEBUG_MODE: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -121,9 +119,8 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-24.04
-    needs: [compile, smoke-test]
-    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
-    env:
+    needs: [compile, smoke_test]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -195,9 +192,8 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: [compile, smoke-test]
-    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
-    env:
+    needs: [compile, smoke_test]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -262,9 +258,8 @@ jobs:
 
   build-macos-x64:
     runs-on: macos-13 # x64 architecture
-    needs: [compile, smoke-test]
-    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
-    env:
+    needs: [compile, smoke_test]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -335,9 +330,8 @@ jobs:
 
   build-macos-arm64:
     runs-on: macos-latest # ARM64 architecture
-    needs: [compile, smoke-test]
-    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
-    env:
+    needs: [compile, smoke_test]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
