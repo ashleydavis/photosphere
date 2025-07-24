@@ -107,6 +107,10 @@ jobs:
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
 
+      - name: Build frontend
+        working-directory: ./apps/frontend
+        run: bun run build
+
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |
