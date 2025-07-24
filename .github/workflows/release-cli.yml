@@ -42,7 +42,37 @@ jobs:
             echo "✅ No tag detected, skipping version validation"
           fi
 
-  test:
+  compile:
+    runs-on: ubuntu-latest
+    needs: [validate-version]
+    if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.4
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Compile TypeScript
+        run: bun run compile
+
+  smoke-test:
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
@@ -77,9 +107,6 @@ jobs:
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
 
-      - name: Compile TypeScript
-        run: bun run compile
-
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |
@@ -90,8 +117,9 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-24.04
-    needs: [test]
-    if: needs.test.result == 'success'
+    needs: [compile, smoke-test]
+    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
+    env:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -163,8 +191,9 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: [test]
-    if: needs.test.result == 'success'
+    needs: [compile, smoke-test]
+    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
+    env:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -229,8 +258,9 @@ jobs:
 
   build-macos-x64:
     runs-on: macos-13 # x64 architecture
-    needs: [test]
-    if: needs.test.result == 'success'
+    needs: [compile, smoke-test]
+    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
+    env:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -301,8 +331,9 @@ jobs:
 
   build-macos-arm64:
     runs-on: macos-latest # ARM64 architecture
-    needs: [test]
-    if: needs.test.result == 'success'
+    needs: [compile, smoke-test]
+    if: needs.compile.result == 'success' && needs.smoke-test.result == 'success'
+    env:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
