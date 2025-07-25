@@ -76,6 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    env:
+      DEBUG_MODE: true # Always run the smoke tests from code without using the built executable.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
