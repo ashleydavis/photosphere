@@ -108,8 +108,8 @@ jobs:
           sudo apt install -y imagemagick ffmpeg tree
 
       - name: Build frontend
-        working-directory: ./apps/frontend
-        run: bun run build
+        working-directory: ./apps/cli
+        run: bun run build-fe-linux
 
       - name: Run smoke tests
         working-directory: ./apps/cli
