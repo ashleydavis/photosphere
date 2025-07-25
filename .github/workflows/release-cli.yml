@@ -155,9 +155,9 @@ jobs:
 
       - name: Install media processing tools
         run: |
-          echo "Installing ImageMagick and ffmpeg via apt..."
+          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
           sudo apt update
-          sudo apt install -y imagemagick ffmpeg
+          sudo apt install -y imagemagick ffmpeg tree
           
       - name: Verify media tool versions
         run: |
@@ -222,8 +222,8 @@ jobs:
 
       - name: Install media processing tools
         run: |
-          echo "Installing ImageMagick and ffmpeg via Chocolatey..."
-          choco install imagemagick ffmpeg -y
+          echo "Installing ImageMagick, ffmpeg, and tree via Chocolatey..."
+          choco install imagemagick ffmpeg tree -y
 
       - name: Verify media tool versions
         run: |
@@ -294,8 +294,8 @@ jobs:
 
       - name: Install media processing tools
         run: |
-          echo "Installing ImageMagick and ffmpeg via Homebrew..."
-          brew install imagemagick ffmpeg
+          echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+          brew install imagemagick ffmpeg tree
 
       - name: Verify media tool versions
         run: |
@@ -365,8 +365,8 @@ jobs:
 
       - name: Install media processing tools
         run: |
-          echo "Installing ImageMagick and ffmpeg via Homebrew..."
-          brew install imagemagick ffmpeg
+          echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+          brew install imagemagick ffmpeg tree
 
       - name: Verify media tool versions
         run: |
