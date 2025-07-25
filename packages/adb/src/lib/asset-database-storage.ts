@@ -29,7 +29,13 @@ export class AssetDatabaseStorage implements IStorage {
         this.hashCache.addHash(filePath, hashedFile);
         this.assetDatabase.addFile(filePath, hashedFile);
 
-        // console.log(`Updated the merkle tree for file "${filePath}"`);
+        const fileContent = await this.storage.read(filePath)
+
+        const cnt = fileContent ? fileContent.toString('hex') : 'undefined';
+        const sliced = fileContent ? `${cnt.slice(0, 5)}-${cnt.slice(-5)}` : 'undefined';
+        console.log(`[$$$$$$$$$$$$$$$$$] File: ${filePath}`);
+        console.log(`                    Hash: ${hash.toString('hex')}`);
+        console.log(`                    Cnt:  ${sliced}`);
     }
 
     get location(): string {

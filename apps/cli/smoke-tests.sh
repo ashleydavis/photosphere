@@ -397,6 +397,26 @@ invoke_command() {
     if [ $actual_exit_code -eq $expected_exit_code ]; then
         if [ $expected_exit_code -eq 0 ]; then
             log_success "$description"
+            
+            # Print root hash after successful psi commands that might affect the database
+            if [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; then
+                # Extract database path from command
+                local db_path=""
+                if [[ "$command" == *"--db "* ]]; then
+                    db_path=$(echo "$command" | sed -n 's/.*--db \([^ ]*\).*/\1/p')
+                elif [ -n "$TEST_DB_DIR" ]; then
+                    db_path="$TEST_DB_DIR"
+                fi
+                
+                # Check if database exists and print root hash
+                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) debug root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
+                    $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
+                fi
+            fi
         else
             log_success "$description (expected failure with exit code $actual_exit_code)"
         fi
@@ -470,6 +490,49 @@ detect_architecture() {
     esac
 }
 
+# Cross-platform tree command
+show_tree() {
+    local directory="$1"
+    local platform=$(detect_platform)
+    
+    log_info "Attempting to show directory structure for: $directory"
+    
+    # Try different tree command approaches
+    if command -v tree &> /dev/null; then
+        case "$platform" in
+            "win")
+                # Windows tree command syntax: tree [path] [options]
+                # Try different Windows tree syntaxes
+                if tree /f /a "$directory" 2>/dev/null; then
+                    log_info "Used Windows tree command: tree /f /a $directory"
+                elif cmd //c tree "$directory" //f //a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory //f //a"
+                elif cmd //c tree "$directory" /f /a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory /f /a"
+                else
+                    # Fall back to Unix-style tree (if installed via chocolatey)
+                    log_info "Windows tree failed, trying Unix-style tree"
+                    tree "$directory" 2>/dev/null || {
+                        log_warning "tree command failed, using ls -la instead"
+                        ls -la "$directory"
+                    }
+                fi
+                ;;
+            *)
+                # Linux/macOS tree command
+                log_info "Using Unix-style tree command"
+                tree "$directory" 2>/dev/null || {
+                    log_warning "tree command failed, using ls -la instead"
+                    ls -la "$directory"
+                }
+                ;;
+        esac
+    else
+        log_warning "tree command not available, using ls -la instead"
+        ls -la "$directory"
+    fi
+}
+
 # Individual test functions
 test_setup() {
     local platform=$(detect_platform)
@@ -539,6 +602,11 @@ check_tools() {
     
     log_info "Checking for required tools in system PATH"
     invoke_command "Check tools" "$(get_cli_command) tools --yes"
+    echo ""
+    
+    # Test UUID generation visibility by running a simple command that should generate UUIDs
+    log_info "Testing UUID generation visibility..."
+    log_info "The following command should generate UUIDs visible as [@@@@@@] lines:"
     echo ""
     
     log_info "Verifying tools are installed and working..."
@@ -895,6 +963,10 @@ test_database_verify() {
     echo ""
     echo "============================================================================"
     echo "=== TEST 12: DATABASE VERIFICATION ==="
+    
+    # Show database structure with tree command
+    log_info "Showing database structure..."
+    show_tree "$TEST_DB_DIR"
     
     # Run verify command and capture output for checking
     local verify_output
@@ -1638,6 +1710,13 @@ run_all_tests() {
         log_info "Test tmp directory not found (already clean)"
     fi
     
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
     
     # Check tools first
     check_tools
@@ -1807,6 +1886,14 @@ run_multiple_commands() {
     echo "======================================"
     log_info "Running ${#COMMANDS[@]} commands in sequence: $commands_string"
     echo ""
+    
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
     
     # Check tools first before running any tests
     check_tools
@@ -2150,6 +2237,14 @@ main() {
     echo "======================================"
     
     log_info "Running specific test: $1"
+    
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
     
     # Check tools first before running individual test
     check_tools

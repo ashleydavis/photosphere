@@ -111,6 +111,8 @@ export class FileStorage implements IStorage {
             // If it's not a file, return undefined.
             return undefined;
         }
+        console.log(`[@@@@@@]: Stat: ${JSON.stringify(stat, null, 2)}\nmtime: ${stat.mtime}\\niso date: ${stat.mtime.toISOString()}`);
+
         return {
             contentType: undefined, // This is not available in file storage.
             length: stat.size,

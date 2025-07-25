@@ -5,6 +5,8 @@ import { IUuidGenerator } from './uuid-generator';
 //
 export class RandomUuidGenerator implements IUuidGenerator {
     generate(): string {
-        return crypto.randomUUID();
+        const uuid = crypto.randomUUID();
+        console.log(`[!!!!!!!] ${uuid}`);
+        return uuid;
     }
 }

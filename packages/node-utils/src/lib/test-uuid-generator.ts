@@ -13,6 +13,8 @@ export class TestUuidGenerator implements IUuidGenerator {
     constructor() {
         // Store counter in test directory
         this.counterFilePath = path.join('./test/tmp', 'photosphere-test-uuid-counter');
+        // Log that we're using the test UUID generator
+        process.stdout.write('[@@@@@@] TestUuidGenerator instantiated for deterministic UUIDs\n');
     }
 
     generate(): string {
@@ -20,7 +22,10 @@ export class TestUuidGenerator implements IUuidGenerator {
         this.counter++;
         this.saveCounter();
         
-        return this.generateDeterministicUuid(this.counter);
+        const uuid = this.generateDeterministicUuid(this.counter);
+        // Write to stdout to ensure it's visible in all scenarios
+        process.stdout.write(`[@@@@@@] ${uuid}\n`);
+        return uuid;
     }
 
     private initializeCounter(): void {
