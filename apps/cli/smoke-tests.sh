@@ -397,6 +397,26 @@ invoke_command() {
     if [ $actual_exit_code -eq $expected_exit_code ]; then
         if [ $expected_exit_code -eq 0 ]; then
             log_success "$description"
+            
+            # Print root hash after successful psi commands that might affect the database
+            if [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; then
+                # Extract database path from command
+                local db_path=""
+                if [[ "$command" == *"--db "* ]]; then
+                    db_path=$(echo "$command" | sed -n 's/.*--db \([^ ]*\).*/\1/p')
+                elif [ -n "$TEST_DB_DIR" ]; then
+                    db_path="$TEST_DB_DIR"
+                fi
+                
+                # Check if database exists and print root hash
+                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) debug root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
+                    $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
+                fi
+            fi
         else
             log_success "$description (expected failure with exit code $actual_exit_code)"
         fi
