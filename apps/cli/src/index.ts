@@ -22,6 +22,7 @@ import { upgradeCommand } from './cmd/upgrade';
 import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
 import { rootHashCommand } from './cmd/root-hash';
+import { clearCacheCommand } from './cmd/clear-cache';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -157,6 +158,19 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .action(rootHashCommand);
+
+    // Add clear-cache subcommand
+    debugCommand
+        .command('clear-cache')
+        .description('Clear the local and/or database hash caches')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
+        .action(clearCacheCommand);
 
     program
         .command("examples")

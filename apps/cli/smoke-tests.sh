@@ -1638,6 +1638,13 @@ run_all_tests() {
         log_info "Test tmp directory not found (already clean)"
     fi
     
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
     log_info "Normalizing test file timestamps"
     if ! ../../test/normalize-timestamps.sh; then
         log_error "Failed to normalize test file timestamps"
@@ -1814,6 +1821,13 @@ run_multiple_commands() {
     log_info "Running ${#COMMANDS[@]} commands in sequence: $commands_string"
     echo ""
     
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
     log_info "Normalizing test file timestamps"
     if ! ../../test/normalize-timestamps.sh; then
         log_error "Failed to normalize test file timestamps"
@@ -2118,6 +2132,13 @@ main() {
             else
                 log_info "UUID counter file not found (already clean)"
             fi
+            
+            # Clear local cache before running tests
+            log_info "Clearing local cache before running tests"
+            invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+                log_warning "Failed to clear cache, continuing anyway..."
+            }
+            
             run_multiple_commands "$commands"
             return
         else
@@ -2164,6 +2185,13 @@ main() {
     
     log_info "Running specific test: $1"
     
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
     log_info "Normalizing test file timestamps"
     if ! ../../test/normalize-timestamps.sh; then
         log_error "Failed to normalize test file timestamps"
