@@ -109,6 +109,12 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi debug hash-cache --db ./photos -t database", description: "Shows the database cache for ./photos." }
     ],
     
+    "debug clear-cache": [
+        { command: "psi debug clear-cache --db .", description: "Clears both the local and database hash caches." },
+        { command: "psi debug clear-cache --db . -t local", description: "Clears only the local hash cache." },
+        { command: "psi debug clear-cache --db ./photos -t database", description: "Clears the database cache for ./photos." }
+    ],
+    
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
