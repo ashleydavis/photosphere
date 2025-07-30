@@ -490,6 +490,49 @@ detect_architecture() {
     esac
 }
 
+# Cross-platform tree command
+show_tree() {
+    local directory="$1"
+    local platform=$(detect_platform)
+    
+    log_info "Attempting to show directory structure for: $directory"
+    
+    # Try different tree command approaches
+    if command -v tree &> /dev/null; then
+        case "$platform" in
+            "win")
+                # Windows tree command syntax: tree [path] [options]
+                # Try different Windows tree syntaxes
+                if tree /f /a "$directory" 2>/dev/null; then
+                    log_info "Used Windows tree command: tree /f /a $directory"
+                elif cmd //c tree "$directory" //f //a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory //f //a"
+                elif cmd //c tree "$directory" /f /a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory /f /a"
+                else
+                    # Fall back to Unix-style tree (if installed via chocolatey)
+                    log_info "Windows tree failed, trying Unix-style tree"
+                    tree "$directory" 2>/dev/null || {
+                        log_warning "tree command failed, using ls -la instead"
+                        ls -la "$directory"
+                    }
+                fi
+                ;;
+            *)
+                # Linux/macOS tree command
+                log_info "Using Unix-style tree command"
+                tree "$directory" 2>/dev/null || {
+                    log_warning "tree command failed, using ls -la instead"
+                    ls -la "$directory"
+                }
+                ;;
+        esac
+    else
+        log_warning "tree command not available, using ls -la instead"
+        ls -la "$directory"
+    fi
+}
+
 # Individual test functions
 test_setup() {
     local platform=$(detect_platform)
@@ -915,6 +958,10 @@ test_database_verify() {
     echo ""
     echo "============================================================================"
     echo "=== TEST 12: DATABASE VERIFICATION ==="
+    
+    # Show database structure with tree command
+    log_info "Showing database structure..."
+    show_tree "$TEST_DB_DIR"
     
     # Run verify command and capture output for checking
     local verify_output
