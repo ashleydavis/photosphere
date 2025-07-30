@@ -508,7 +508,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         header.writeUInt32LE(shard.records.size, 4); // Record count
         buffers.push(header);
 
-        for (const record of shard.records.values()) {
+        // Sort records by ID to ensure deterministic output
+        const sortedRecords = Array.from(shard.records.values()).sort((a, b) => a._id.localeCompare(b._id));
+        
+        for (const record of sortedRecords) {
             const recordIdBuffer = Buffer.from(record._id.replace(/-/g, ''), 'hex');
             if (recordIdBuffer.length !== 16) {
                 throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
