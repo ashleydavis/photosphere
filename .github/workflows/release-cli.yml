@@ -117,10 +117,20 @@ jobs:
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |
-          ./smoke-tests.sh all
-          SMOKE_TEST_EXIT_CODE=$?
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-debug
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
   build-linux:
     runs-on: ubuntu-24.04
@@ -187,7 +197,21 @@ jobs:
 
       - name: Run smoke tests
         working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-linux
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -253,7 +277,21 @@ jobs:
       - name: Run smoke tests
         working-directory: ./apps/cli
         shell: bash
-        run: ./smoke-tests.sh all
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-windows
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -325,7 +363,21 @@ jobs:
 
       - name: Run smoke tests
         working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-macos-x64
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
@@ -396,7 +448,21 @@ jobs:
 
       - name: Run smoke tests
         working-directory: ./apps/cli
-        run: ./smoke-tests.sh all
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-macos-arm64
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
       - name: Upload macOS ARM64 artifact
         uses: actions/upload-artifact@v4
