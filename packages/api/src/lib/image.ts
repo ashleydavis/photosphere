@@ -1,4 +1,7 @@
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 import { execLogged, writeStreamToFile } from "node-utils";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -96,7 +99,7 @@ export async function getImageMetadata(filePath: string, contentType: string): P
                 const dateStr = exif.tags[dateField];
                 if (dateStr) {
                     try {
-                        photoDate = dayjs(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
+                        photoDate = dayjs.utc(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
                     }
                     catch (err) {
                         console.error(`Failed to parse date from ${dateStr}`);
