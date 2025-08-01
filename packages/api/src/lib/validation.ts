@@ -1,15 +1,16 @@
 import { Readable } from "node:stream";
 import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
-import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IUuidGenerator } from "utils";
+import { writeStreamToFile } from "node-utils";
+import fs from "fs-extra";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
+export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -29,7 +30,7 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
 //
 // Validates an image file by checking if it has valid dimensions
 //
-async function validateImage(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
+async function validateImage(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
@@ -60,7 +61,7 @@ async function validateImage(filePath: string, contentType: string, uuidGenerato
         // Clean up temporary file if created
         if (tempFilePath) {
             try {
-                unlinkSync(tempFilePath);
+                await fs.unlink(tempFilePath);
             } catch (err) {
                 // Ignore cleanup errors
             }
@@ -71,7 +72,7 @@ async function validateImage(filePath: string, contentType: string, uuidGenerato
 //
 // Validates a video file by checking if it has valid dimensions
 //
-async function validateVideo(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<boolean> {
+async function validateVideo(filePath: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
@@ -102,7 +103,7 @@ async function validateVideo(filePath: string, contentType: string, uuidGenerato
         // Clean up temporary file if created
         if (tempFilePath) {
             try {
-                unlinkSync(tempFilePath);
+                await fs.unlink(tempFilePath);
             } catch (err) {
                 // Ignore cleanup errors
             }
@@ -113,19 +114,10 @@ async function validateVideo(filePath: string, contentType: string, uuidGenerato
 //
 // Extracts stream data to a temporary file and returns the file path
 //
-async function extractToTempFile(openStream: () => Readable, prefix: string, uuidGenerator: IUuidGenerator): Promise<string> {
+async function extractToTempFile(openStream: () => NodeJS.ReadableStream, prefix: string, uuidGenerator: IUuidGenerator): Promise<string> {
     const tempPath = join(tmpdir(), `${prefix}_${uuidGenerator.generate()}`);
-    
     const inputStream = openStream();
-    const chunks: Buffer[] = [];
-    
-    for await (const chunk of inputStream) {
-        chunks.push(chunk);
-    }
-    
-    const fileBuffer = Buffer.concat(chunks);
-    writeFileSync(tempPath, fileBuffer);
-    
+    await writeStreamToFile(inputStream, tempPath);    
     return tempPath;
 }
 

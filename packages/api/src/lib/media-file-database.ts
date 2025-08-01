@@ -692,7 +692,7 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
         if (localHashedFile) {
@@ -904,7 +904,7 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
         if (!localHashedFile) {            
@@ -960,7 +960,7 @@ export class MediaFileDatabase {
     //
     // Validates the local file.
     //
-    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: (() => Readable) | undefined): Promise<boolean> {
+    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
         try {
             return await validateFile(filePath, fileInfo, contentType, this.uuidGenerator, openStream);
         }
@@ -997,7 +997,7 @@ export class MediaFileDatabase {
     //
     // Computes the has h of a file and stores it in the hash cache.
     //
-    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile> {
+    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
         //
         // Compute the hash of the file.
         //
