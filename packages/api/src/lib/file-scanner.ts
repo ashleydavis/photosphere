@@ -87,8 +87,7 @@ export class FileScanner {
     // Scans a single file or directory
     //
     async scanPath(filePath: string, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
-        const fileInfo = await this.storage.info(filePath);
-        
+        const fileInfo = await this.storage.info(filePath);        
         if (fileInfo) {
             // It's a file
             const contentType = mime.getType(filePath) || undefined;
@@ -99,13 +98,19 @@ export class FileScanner {
             }
             
             if (this.shouldIncludeFile(contentType)) {
-                await visitFile({
-                    filePath,
-                    fileInfo,
-                    contentType,
-                    labels: [],
-                    openStream: () => this.storage.readStream(filePath)
-                });
+                if (contentType === "application/zip") {
+                    // If it's a zip file, we need to scan its contents.
+                    await this.scanZipFile(filePath, fileInfo, fileInfo.lastModified, () => this.storage.readStream(filePath), visitFile, progressCallback);
+                } else {
+                    // Otherwise, process the file directly.
+                    await visitFile({
+                        filePath,
+                        fileInfo,
+                        contentType,
+                        labels: [],
+                        openStream: () => this.storage.readStream(filePath)
+                    });
+                }
             } else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
                 this.numFilesIgnored++;
@@ -149,8 +154,10 @@ export class FileScanner {
                 }
 
                 if (contentType === "application/zip") {
+                    // If it's a zip file, we need to scan its contents.
                     await this.scanZipFile(filePath, fileInfo, fileInfo.lastModified, () => this.storage.readStream(filePath), visitFile, progressCallback);
                 } else {
+                    // Otherwise, process the file directly.
                     await visitFile({
                         filePath,
                         fileInfo,
