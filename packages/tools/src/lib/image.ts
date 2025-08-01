@@ -1,6 +1,6 @@
 import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
-import { exec } from 'node-utils';
+import { exec, execLogged } from 'node-utils';
 import { log } from 'utils';
 
 
@@ -145,7 +145,7 @@ export class Image {
         try {           
             // Get format, dimensions
             const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             const parts = stdout.trim().split(' ');
             const width = parseInt(parts[0]);
@@ -203,7 +203,7 @@ export class Image {
 
         try {
             const command = `${Image.identifyCommand} -format "%[EXIF:*]" "${this.filePath}"`;
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             const exifData: Record<string, string> = {};
             const lines = stdout.trim().split('\n');
@@ -265,7 +265,7 @@ export class Image {
         }
 
         try {
-            await exec(command);
+            await execLogged(`magick`, command);
             return new Image(output);
         } catch (error) {
             throw new Error(`Failed to resize image: ${error}`);
@@ -289,7 +289,7 @@ export class Image {
         command += ` "${outputPath}"`;
 
         try {
-            await exec(command);
+            await execLogged(`magick`, command);
             return new Image(outputPath);
         } catch (error) {
             throw new Error(`Failed to save image: ${error}`);
@@ -316,7 +316,7 @@ export class Image {
         try {
             // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
             const command = `${Image.convertCommand} "${this.filePath}" -resize 1x1! -format "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]" info:`;
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             const rgbString = stdout.trim();
             const rgbValues = rgbString.split(',').map(val => parseInt(val.trim()));
@@ -353,7 +353,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             // Parse histogram output to find the most frequent color
             const lines = stdout.trim().split('\n');
@@ -409,7 +409,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             const lines = stdout.trim().split('\n');
             const colors: Array<{ rgb: [number, number, number], count: number }> = [];
             
