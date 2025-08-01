@@ -132,6 +132,14 @@ jobs:
           path: ./apps/cli/smoke-test-logs/
           retention-days: 7
 
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-debug
+          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          retention-days: 7
+
   build-linux:
     runs-on: ubuntu-24.04
     needs: [compile, smoke_test]
@@ -213,6 +221,14 @@ jobs:
           path: ./apps/cli/smoke-test-logs/
           retention-days: 7
 
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-linux
+          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          retention-days: 7
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
@@ -291,6 +307,14 @@ jobs:
         with:
           name: smoke-test-logs-windows
           path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
+
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-windows
+          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
           retention-days: 7
 
       - name: Upload Windows artifact
@@ -379,6 +403,14 @@ jobs:
           path: ./apps/cli/smoke-test-logs/
           retention-days: 7
 
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-macos-x64
+          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          retention-days: 7
+
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
         with:
@@ -462,6 +494,14 @@ jobs:
         with:
           name: smoke-test-logs-macos-arm64
           path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
+
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-macos-arm64
+          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
           retention-days: 7
 
       - name: Upload macOS ARM64 artifact
