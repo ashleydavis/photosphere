@@ -229,6 +229,12 @@ export class FileScanner {
     // Determines if a file should be included based on its content type
     //
     private shouldIncludeFile(contentType: string): boolean {
+        if (contentType === "video/mp2t") {
+            // TypeScript files get detected as video/mp2t, but we don't want to include them.
+            // So we don't support .ts video files. If someone wants to add support for .ts files, they can change this later.
+            return false;
+        }
+
         if (contentType === "application/zip") {
             return true;
         }
