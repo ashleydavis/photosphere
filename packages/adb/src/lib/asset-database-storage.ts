@@ -1,4 +1,3 @@
-import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "storage";
 import { IAssetDatabase } from "./asset-database";
 import { computeHash } from "./hash";
@@ -97,14 +96,14 @@ export class AssetDatabaseStorage implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(filePath: string): Readable {
+    readStream(filePath: string): NodeJS.ReadableStream {
         return this.storage.readStream(filePath);
     }
 
     //
     // Writes an input stream to storage.
     //
-    async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {        
+    async writeStream(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength?: number): Promise<void> {
         await this.storage.writeStream(filePath, contentType, inputStream, contentLength);
         await this.updateMerkleTree(filePath);
     }

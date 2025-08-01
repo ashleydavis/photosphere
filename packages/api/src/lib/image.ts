@@ -18,7 +18,7 @@ import mime from 'mime';
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<IAssetDetails> {
 
     let imagePath: string;
 

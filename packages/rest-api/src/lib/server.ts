@@ -6,7 +6,6 @@ import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { Readable } from "stream";
 
 interface IUser extends IMediaFileDatabases {
     _id: string;
@@ -52,7 +51,7 @@ export interface IMediaFileDatabaseProvider {
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable;
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream;
 
     //
     // Writes an asset to the storage provider.
@@ -130,7 +129,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream {
         const assetPath = `${databaseId}/${assetType}/${assetId}`;
         return this.assetStorage.readStream(assetPath);
     }
@@ -206,7 +205,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream {
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }

@@ -15,7 +15,7 @@ import mime from 'mime';
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => Readable): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<IAssetDetails> {
 
     let videoPath: string;
 

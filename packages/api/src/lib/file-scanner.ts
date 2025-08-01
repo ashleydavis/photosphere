@@ -24,7 +24,7 @@ export interface FileScannedResult {
     fileInfo: IFileInfo;
     contentType: string;
     labels: string[];
-    openStream?: () => Readable;
+    openStream?: () => NodeJS.ReadableStream;
 }
 
 //
@@ -178,7 +178,7 @@ export class FileScanner {
     //
     // Scans files from a zip file
     //
-    private async scanZipFile(filePath: string, fileInfo: IFileInfo, fileDate: Date, openStream: () => Readable, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
+    private async scanZipFile(filePath: string, /*fio: */ fileInfo: IFileInfo, fileDate: Date, openStream: () => NodeJS.ReadableStream, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
         if (progressCallback) {
@@ -209,12 +209,7 @@ export class FileScanner {
                         labels: [],
                         // Provide openStream for zip files since they need to be extracted
                         openStream: () => {
-                            const stream = new Readable();
-                            zipObject.async('nodebuffer').then(data => {
-                                stream.push(data);
-                                stream.push(null);
-                            }).catch(err => stream.emit('error', err));
-                            return stream;
+                            return zipObject.nodeStream();
                         }
                     });
                 } else {
