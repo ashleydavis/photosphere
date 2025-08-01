@@ -221,7 +221,7 @@ export class Image {
         }
     }
 
-    async resize(options: ResizeOptions, outputPath?: string): Promise<Image> {
+    async resize(options: ResizeOptions, outputPath: string): Promise<Image> {
         if (!await fs.promises.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
@@ -252,21 +252,18 @@ export class Image {
             }
             command += ` -quality ${quality}`;
         }
-
-        // Determine output path
-        const output = outputPath || this.generateOutputPath(format);
-        
+       
         // Add format specification and output file
         if (format) {
             // For explicit format conversion, specify the format before the output path
-            command += ` ${format}:"${output}"`;
+            command += ` ${format}:"${outputPath}"`;
         } else {
-            command += ` "${output}"`;
+            command += ` "${outputPath}"`;
         }
 
         try {
             await execLogged(`magick`, command);
-            return new Image(output);
+            return new Image(outputPath);
         } catch (error) {
             throw new Error(`Failed to resize image: ${error}`);
         }
