@@ -1906,7 +1906,8 @@ run_all_tests() {
     
     # Generate comprehensive test report before cleanup
     echo ""
-    local report_file="./test/tmp/smoke-test-report-all-tests-$(date +%Y%m%d-%H%M%S).txt"
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-all-tests-$(date +%Y%m%d-%H%M%S).txt"
     generate_test_report "$report_file" "all"
     
     # Cleanup after all tests complete
@@ -2212,7 +2213,8 @@ run_multiple_commands() {
     
     # Generate comprehensive test report
     echo ""
-    local report_file="./test/tmp/smoke-test-report-multiple-commands-$(date +%Y%m%d-%H%M%S).txt"
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-multiple-commands-$(date +%Y%m%d-%H%M%S).txt"
     generate_test_report "$report_file" "multiple"
     
     # Check if database should be preserved
@@ -2437,7 +2439,8 @@ main() {
     
     # Generate comprehensive test report
     echo ""
-    local report_file="./test/tmp/smoke-test-report-individual-test-$(date +%Y%m%d-%H%M%S).txt"
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-individual-test-$(date +%Y%m%d-%H%M%S).txt"
     generate_test_report "$report_file" "individual"
     
     exit 0

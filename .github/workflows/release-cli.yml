@@ -137,7 +137,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-reports-debug
-          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          path: ./apps/cli/tmp/reports/
 
   build-linux:
     runs-on: ubuntu-24.04
@@ -225,7 +225,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-reports-linux
-          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          path: ./apps/cli/tmp/reports/
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -312,7 +312,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-reports-windows
-          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          path: ./apps/cli/tmp/reports/
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -405,7 +405,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-reports-macos-x64
-          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          path: ./apps/cli/tmp/reports/
 
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
@@ -497,7 +497,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-reports-macos-arm64
-          path: ./apps/cli/test/tmp/smoke-test-report-*.txt
+          path: ./apps/cli/tmp/reports/
 
       - name: Upload macOS ARM64 artifact
         uses: actions/upload-artifact@v4
