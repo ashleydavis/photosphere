@@ -714,7 +714,7 @@ export class MediaFileDatabase {
                 //
                 // We might not have seen this file before, so we need to validate it.
                 //
-                if (!await this.validateFile(filePath, fileInfo, contentType, assetTempDir, openStream)) {
+                if (!await this.validateFile(filePath, contentType, assetTempDir, openStream)) {
                     log.error(`File "${filePath}" has failed validation.`);
                     this.addSummary.filesFailed++;
                     if (progressCallback) {
@@ -964,9 +964,9 @@ export class MediaFileDatabase {
     //
     // Validates the local file.
     //
-    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, tempDir: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
+    async validateFile(filePath: string, contentType: string, tempDir: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
         try {
-            return await validateFile(filePath, fileInfo, contentType, tempDir, this.uuidGenerator, openStream);
+            return await validateFile(filePath, contentType, tempDir, this.uuidGenerator, openStream);
         }
         catch (error: any) {
             log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);                
