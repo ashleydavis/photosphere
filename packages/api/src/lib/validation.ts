@@ -39,6 +39,14 @@ async function validateImage(filePath: string, contentType: string, tempDir: str
             actualFilePath = tempFilePath;
         }
 
+        // We now have a file in the file system.
+        // Check that it's not a zero-byte file.
+        const stats = await fs.stat(actualFilePath);
+        if (stats.size === 0) {
+            console.error(`Invalid image ${filePath} - zero-byte file`);
+            return false;
+        }
+
         const fileInfo = await getFileInfo(actualFilePath, contentType);
         if (!fileInfo) {
             console.error(`Invalid image ${filePath} - failed to get file info`);
@@ -79,6 +87,14 @@ async function validateVideo(filePath: string, contentType: string, tempDir: str
         if (openStream) {
             tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
+        }
+
+        // We now have a file in the file system.
+        // Check that it's not a zero-byte file.
+        const stats = await fs.stat(actualFilePath);
+        if (stats.size === 0) {
+            console.error(`Invalid video ${filePath} - zero-byte file.`);
+            return false;
         }
 
         const fileInfo = await getFileInfo(actualFilePath, contentType);
