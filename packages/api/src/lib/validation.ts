@@ -118,7 +118,10 @@ async function extractToTempFile(openStream: () => NodeJS.ReadableStream, tempDi
     }
     const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}${ext}`);
     const inputStream = openStream();
-    await writeStreamToFile(inputStream, tempPath);    
+    await writeStreamToFile(inputStream, tempPath);
+    if (!await fs.exists(tempPath)) {
+        throw new Error(`Failed to create temporary file at ${tempPath}`);
+    }
     return tempPath;
 }
 
