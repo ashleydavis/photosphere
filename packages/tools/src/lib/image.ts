@@ -142,46 +142,42 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
-        try {           
-            // Get format, dimensions
-            const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
-            const { stdout } = await execLogged(`magick`, command);
-            
-            const parts = stdout.trim().split(' ');
-            const width = parseInt(parts[0]);
-            const height = parseInt(parts[1]);
+        // Get format, dimensions
+        const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
+        const { stdout } = await execLogged(`magick`, command);
+        
+        const parts = stdout.trim().split(' ');
+        const width = parseInt(parts[0]);
+        const height = parseInt(parts[1]);
 
-            // Get EXIF data for created date
-            let createdAt: Date | undefined;
-            try {
-                const exifData = await this.getExifData();
-                if (exifData.DateTimeOriginal) {
-                    // Parse EXIF date format: "2023:12:25 14:30:00"
-                    const dateStr = exifData.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
-                    createdAt = new Date(dateStr);
-                }
-            } catch {
-                // Ignore EXIF errors
+        // Get EXIF data for created date
+        let createdAt: Date | undefined;
+        try {
+            const exifData = await this.getExifData();
+            if (exifData.DateTimeOriginal) {
+                // Parse EXIF date format: "2023:12:25 14:30:00"
+                const dateStr = exifData.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+                createdAt = new Date(dateStr);
             }
-
-            this._info = {
-                filePath: this.filePath,
-                
-                dimensions: { width, height },
-                
-                createdAt,
-                
-                // Images don't have these properties
-                duration: undefined,
-                fps: undefined,
-                bitrate: undefined,
-                hasAudio: false
-            };
-
-            return this._info;
-        } catch (error) {
-            throw new Error(`Failed to get image info: ${error}`);
+        } catch {
+            // Ignore EXIF errors
         }
+
+        this._info = {
+            filePath: this.filePath,
+            
+            dimensions: { width, height },
+            
+            createdAt,
+            
+            // Images don't have these properties
+            duration: undefined,
+            fps: undefined,
+            bitrate: undefined,
+            hasAudio: false
+        };
+
+        return this._info;
     }
 
     async getDimensions(): Promise<Dimensions> {
