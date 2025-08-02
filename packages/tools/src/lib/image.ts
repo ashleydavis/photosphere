@@ -1,8 +1,9 @@
 import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
 import { exec, execLogged } from 'node-utils';
-import { log } from 'utils';
-
+import { IUuidGenerator, log } from 'utils';
+import path from "path";
+import os from "os";
 
 export class Image {
     private filePath: string;
@@ -221,19 +222,22 @@ export class Image {
         }
     }
 
-    async resize(options: ResizeOptions, outputPath: string): Promise<Image> {
+    async resize(options: ResizeOptions, uuidGenerator: IUuidGenerator): Promise<string> {
         if (!await fs.promises.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
-        if (await fs.promises.exists(outputPath)) {
-            throw new Error(`Output file already exists: ${outputPath}`);
+        const { width, height, quality, format, ext, maintainAspectRatio = true } = options;
+        const baseOutputPath = path.join(os.tmpdir(), `temp_resize_${uuidGenerator.generate()}`);
+        const outputPath1 = baseOutputPath + '.' + options.ext;
+        const outputPath2 = baseOutputPath + '-0.' + options.ext;
+
+        if (await fs.promises.exists(outputPath1)) {
+            throw new Error(`Output file already exists: ${outputPath1}`);
         }
 
-        const { width, height, quality, format, maintainAspectRatio = true } = options;
-
-        if (!width && !height) {
-            throw new Error('Either width or height must be specified');
+        if (await fs.promises.exists(outputPath2)) {
+            throw new Error(`Output file already exists: ${outputPath2}`);
         }
 
         // Build the resize geometry string
@@ -260,18 +264,24 @@ export class Image {
         // Add format specification and output file
         if (format) {
             // For explicit format conversion, specify the format before the output path
-            command += ` ${format}:"${outputPath}"`;
+            command += ` ${format}:"${outputPath1}"`;
         } else {
-            command += ` "${outputPath}"`;
+            command += ` "${outputPath1}"`;
         }
+
+        let actualOutputPath = outputPath1;
 
         await execLogged(`magick`, command, async () => {
             // Validate output file exists
-            if (!await fs.promises.exists(outputPath)) {
-                return `Resize failed, output file not created: ${outputPath}`;
+            if (!await fs.promises.exists(actualOutputPath)) {
+                actualOutputPath = outputPath2;
+                if (!await fs.promises.exists(actualOutputPath)) {
+                    return `Resize failed, expect to create ${outputPath1} or ${outputPath2}`;
+                }
             }
         });
-        return new Image(outputPath);
+        
+        return actualOutputPath;
     }
 
     async saveAs(outputPath: string, options?: { quality?: number; format?: ResizeOptions['format'] }): Promise<Image> {
