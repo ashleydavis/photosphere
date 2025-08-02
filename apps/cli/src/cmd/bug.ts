@@ -16,6 +16,11 @@ export interface IBugReportCommandOptions {
     verbose?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
@@ -33,6 +38,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
     
     await configureLog({
         verbose: options.verbose,
+        tools: options.tools,
         disableFileLogging: true
     });
     

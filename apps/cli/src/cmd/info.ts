@@ -21,6 +21,11 @@ export interface IInfoCommandOptions {
     verbose?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
@@ -41,6 +46,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
 
     await configureLog({
         verbose: options.verbose,
+        tools: options.tools
     });
 
     // Ensure media processing tools are available
