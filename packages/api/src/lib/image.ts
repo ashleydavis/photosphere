@@ -3,17 +3,15 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 import { execLogged, writeStreamToFile } from "node-utils";
-import { tmpdir } from "os";
-import { join } from "path";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
 import fs from "fs-extra";
-import path from "path";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { getFileInfo } from "tools";
-import { Readable } from "stream";
 const exifParser = require("exif-parser");
 import { Image } from "tools";
 import mime from 'mime';
+import os from "os";
+import path from "path";
 
 //
 // Gets the details of an image.
@@ -30,7 +28,7 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         }
 
         // If openStream is provided, we need to extract to a temporary file.        
-        imagePath = join(tmpdir(), `temp_asset_${uuidGenerator.generate()}.${ext}`);
+        imagePath = path.join(os.tmpdir(), `temp_asset_${uuidGenerator.generate()}.${ext}`);
         await writeStreamToFile(openStream(), imagePath);        
     }
     else {
@@ -159,9 +157,7 @@ export async function resizeImage(inputPath: string, tempDir: string, resolution
     }
 
     const image = new Image(inputPath);
-    const outputPath = join(tmpdir(), `temp_resize_${uuidGenerator.generate()}.jpg`);
-    await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg' }, outputPath);
-    return outputPath;
+    return await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg', ext: 'jpg' }, uuidGenerator);
 }
 
 //
@@ -181,7 +177,7 @@ export async function transformImage(inputPath: string, tempDir: string, options
 
     if (transformCommand) {
         // Transform to a temporary file and return the path.
-        const outputPath = join(tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
+        const outputPath = path.join(os.tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
         const command = `magick convert "${inputPath}" ${transformCommand} "${outputPath}"`;
         await execLogged('magick', command);
 
