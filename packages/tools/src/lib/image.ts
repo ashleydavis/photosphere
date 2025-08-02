@@ -3,7 +3,6 @@ import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './
 import { exec, execLogged } from 'node-utils';
 import { IUuidGenerator, log, IImageTransformation } from 'utils';
 import path from "path";
-import os from "os";
 
 export class Image {
     private filePath: string;
@@ -461,7 +460,7 @@ export class Image {
 
         if (transformCommand) {
             // Transform to a temporary file and return the path.
-            const outputPath = path.join(os.tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
+            const outputPath = path.join(tempDir, `temp_transform_output_${uuidGenerator.generate()}.jpg`);
             const command = `${Image.convertCommand} "${this.filePath}" ${transformCommand} "${outputPath}"`;
             await execLogged('magick', command);
 
