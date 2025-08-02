@@ -35,7 +35,7 @@ async function validateImage(filePath: string, contentType: string, tempDir: str
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_image', uuidGenerator);
+            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_image', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -77,7 +77,7 @@ async function validateVideo(filePath: string, contentType: string, tempDir: str
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_video', uuidGenerator);
+            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -112,8 +112,11 @@ async function validateVideo(filePath: string, contentType: string, tempDir: str
 //
 // Extracts stream data to a temporary file and returns the file path
 //
-async function extractToTempFile(openStream: () => NodeJS.ReadableStream, tempDir: string, prefix: string, uuidGenerator: IUuidGenerator): Promise<string> {
-    const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}`);
+async function extractToTempFile(openStream: () => NodeJS.ReadableStream, tempDir: string, prefix: string, ext: string, uuidGenerator: IUuidGenerator): Promise<string> {
+    if (!ext.startsWith('.')) {
+        ext = `.${ext}`;
+    }
+    const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}${ext}`);
     const inputStream = openStream();
     await writeStreamToFile(inputStream, tempPath);    
     return tempPath;
