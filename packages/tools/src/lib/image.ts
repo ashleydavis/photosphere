@@ -1,8 +1,9 @@
 import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
 import { exec, execLogged } from 'node-utils';
-import { IUuidGenerator, log } from 'utils';
+import { IUuidGenerator, log, IImageTransformation } from 'utils';
 import path from "path";
+import os from "os";
 
 export class Image {
     private filePath: string;
@@ -439,4 +440,41 @@ export class Image {
     getPath(): string {
         return this.filePath;
     }
+
+    /**
+     * Transform an image with rotation and flip operations
+     */
+    async transform(options: IImageTransformation, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
+        let transformCommand = '';
+
+        if (options.flipX) {
+            transformCommand += ' -flop';
+        }
+
+        if (options.rotate) {
+            transformCommand += ` -rotate ${options.rotate}`;
+        }
+
+        if (transformCommand) {
+            // Transform to a temporary file and return the path.
+            const outputPath = path.join(os.tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
+            const command = `${Image.convertCommand} "${this.filePath}" ${transformCommand} "${outputPath}"`;
+            await execLogged('magick', command);
+
+            // Check if the output file was created successfully.
+            if (!await fs.promises.exists(outputPath)) { 
+                throw new Error(`Image transformation failed, output file not created: ${outputPath}`);
+            }
+            return outputPath;
+        }
+        else {
+            // No transformations needed, just return the original file.
+            return this.filePath;
+        }
+    }
+
 }
