@@ -3,7 +3,6 @@ import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './
 import { exec, execLogged } from 'node-utils';
 import { IUuidGenerator, log } from 'utils';
 import path from "path";
-import os from "os";
 
 export class Image {
     private filePath: string;
@@ -222,13 +221,13 @@ export class Image {
         }
     }
 
-    async resize(options: ResizeOptions, uuidGenerator: IUuidGenerator): Promise<string> {
+    async resize(options: ResizeOptions, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
         if (!await fs.promises.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
         const { width, height, quality, format, ext, maintainAspectRatio = true } = options;
-        const baseOutputPath = path.join(os.tmpdir(), `temp_resize_${uuidGenerator.generate()}`);
+        const baseOutputPath = path.join(tempDir, `temp_resize_${uuidGenerator.generate()}`);
         const outputPath1 = baseOutputPath + '.' + options.ext;
         const outputPath2 = baseOutputPath + '-0.' + options.ext;
 
