@@ -226,6 +226,10 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
+        if (await fs.promises.exists(outputPath)) {
+            throw new Error(`Output file already exists: ${outputPath}`);
+        }
+
         const { width, height, quality, format, maintainAspectRatio = true } = options;
 
         if (!width && !height) {
@@ -261,12 +265,13 @@ export class Image {
             command += ` "${outputPath}"`;
         }
 
-        try {
-            await execLogged(`magick`, command);
-            return new Image(outputPath);
-        } catch (error) {
-            throw new Error(`Failed to resize image: ${error}`);
-        }
+        await execLogged(`magick`, command, async () => {
+            // Validate output file exists
+            if (!await fs.promises.exists(outputPath)) {
+                return `Resize failed, output file not created: ${outputPath}`;
+            }
+        });
+        return new Image(outputPath);
     }
 
     async saveAs(outputPath: string, options?: { quality?: number; format?: ResizeOptions['format'] }): Promise<Image> {
@@ -285,20 +290,8 @@ export class Image {
 
         command += ` "${outputPath}"`;
 
-        try {
-            await execLogged(`magick`, command);
-            return new Image(outputPath);
-        } catch (error) {
-            throw new Error(`Failed to save image: ${error}`);
-        }
-    }
-
-    private generateOutputPath(format?: string): string {
-        const pathParts = this.filePath.split('.');
-        const extension = pathParts.pop();
-        const basePath = pathParts.join('.');
-        const newExtension = format || extension;
-        return `${basePath}_resized.${newExtension}`;
+        await execLogged(`magick`, command);
+        return new Image(outputPath);
     }
 
     /**
