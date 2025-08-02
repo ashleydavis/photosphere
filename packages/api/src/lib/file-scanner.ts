@@ -230,6 +230,11 @@ export class FileScanner {
             return false;
         }
 
+        if (contentType === "image/vnd.fastbidsheet") {
+            // .fbs files are not supported.
+            return false;
+        }
+
         if (contentType ===  "image/svg+xml") {
             // SVG files are not supported yet, so we ignore them.
             return false;
