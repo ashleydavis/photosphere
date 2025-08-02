@@ -6,9 +6,8 @@ import { execLogged, writeStreamToFile } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
 import fs from "fs-extra";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
-import { getFileInfo } from "tools";
+import { getFileInfo, Image } from "tools";
 const exifParser = require("exif-parser");
-import { Image } from "tools";
 import mime from 'mime';
 import os from "os";
 import path from "path";
@@ -157,38 +156,13 @@ export async function resizeImage(inputPath: string, tempDir: string, resolution
     }
 
     const image = new Image(inputPath);
-    return await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg', ext: 'jpg' }, uuidGenerator);
+    return await image.resize({ width, height, quality: Math.round(quality), format: 'jpeg', ext: 'jpg' }, tempDir, uuidGenerator);
 }
 
 //
 // Transforms an image.
 //
 export async function transformImage(inputPath: string, tempDir: string, options: IImageTransformation, uuidGenerator: IUuidGenerator): Promise<string> {
-
-    let transformCommand = '';
-
-    if (options.flipX) {
-        transformCommand += ' -flop';
-    }
-
-    if (options.rotate) {
-        transformCommand += ` -rotate ${options.rotate}`;
-    }
-
-    if (transformCommand) {
-        // Transform to a temporary file and return the path.
-        const outputPath = path.join(os.tmpdir(), `temp_transform_output_${uuidGenerator.generate()}.jpg`);
-        const command = `magick convert "${inputPath}" ${transformCommand} "${outputPath}"`;
-        await execLogged('magick', command);
-
-        // Check if the output file was created successfully.
-        if (!await fs.pathExists(outputPath)) { 
-            throw new Error(`Image transformation failed, output file not created: ${outputPath}`);
-        }
-        return outputPath;
-    }
-    else {
-        // No transformations needed, just return the original file.
-        return inputPath;
-    }
+    const image = new Image(inputPath);
+    return await image.transform(options, tempDir, uuidGenerator);
 }
