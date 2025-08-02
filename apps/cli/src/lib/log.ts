@@ -13,6 +13,11 @@ export interface ILogOptions {
     debug?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Disables file logging (console only)
     //
     disableFileLogging?: boolean;
@@ -61,11 +66,15 @@ class Log implements ILog {
     }
 
     tool(tool: string, data: { stdout?: string; stderr?: string }): void {
+        if (!this.options.tools) {
+            return;
+        }
+        
         if (data.stdout) {
-            this.verbose(`== ${tool} stdout ==\n${data.stdout}`);
+            console.log(`== ${tool} stdout ==\n${data.stdout}`);
         }
         if (data.stderr) {
-            this.verbose(`== ${tool} stderr ==\n${data.stderr}`);
+            console.log(`== ${tool} stderr ==\n${data.stderr}`);
         }
     }
 }

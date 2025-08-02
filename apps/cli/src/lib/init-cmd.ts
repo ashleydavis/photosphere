@@ -37,6 +37,11 @@ export interface IBaseCommandOptions {
     verbose?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
@@ -106,7 +111,8 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     // Configure logging
     await configureLog({
-        verbose: options.verbose
+        verbose: options.verbose,
+        tools: options.tools
     });   
 
     // Ensure media processing tools are available
@@ -190,7 +196,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     
     // Configure logging
     await configureLog({
-        verbose: options.verbose
+        verbose: options.verbose,
+        tools: options.tools
     });
     
     // Log the command being executed

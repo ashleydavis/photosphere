@@ -36,6 +36,11 @@ export interface ICompareCommandOptions {
     verbose?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
@@ -53,6 +58,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
 
     await configureLog({
         verbose: options.verbose,
+        tools: options.tools
     });
 
     const nonInteractive = options.yes || false;
