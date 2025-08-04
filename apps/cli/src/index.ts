@@ -1,5 +1,4 @@
 import { program } from 'commander';
-import { version } from '../package.json';
 import { uiCommand } from './cmd/ui';
 import { addCommand } from './cmd/add';
 import { checkCommand } from './cmd/check';
@@ -27,6 +26,7 @@ import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log } from 'utils';
+import { version } from './lib/version';
 
 async function main() {
 

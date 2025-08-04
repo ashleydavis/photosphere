@@ -1,9 +1,8 @@
 import { verifyTools } from "tools";
 import { Image } from "tools";
 import pc from "picocolors";
-import { version as packageVersion } from '../../package.json';
 import { log } from "utils";
-import { configureLog } from "../lib/log";
+import { version } from "../lib/version";
 
 //
 // Command that displays version information for psi and its dependencies.
@@ -14,7 +13,7 @@ export async function versionCommand(): Promise<void> {
     log.info(pc.bold('📋 Version Information\n'));
     
     // Show psi version
-    log.info(`${pc.bold('psi')}: ${pc.green(packageVersion)}`);
+    log.info(`${pc.bold('psi')}: ${pc.green(version)}`);
     
     // Get tool versions
     const toolsStatus = await verifyTools();
