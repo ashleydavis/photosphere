@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IFileInfo, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
+import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
@@ -10,7 +10,7 @@ import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
 import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, MerkleNode, saveTreeV2, traverseTree, visualizeTree } from "adb";
-import { FileScanner } from "./file-scanner";
+import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
@@ -29,7 +29,7 @@ async function extractDominantColorFromThumbnail(inputPath: string): Promise<[nu
 //
 // A function that validates a file.
 //
-export type FileValidator = (filePath: string, fileInfo: IFileInfo, contentType: string, openStream?: () => Readable) => Promise<boolean>;
+export type FileValidator = (filePath: string, fileStat: IFileStat, contentType: string, openStream?: () => Readable) => Promise<boolean>;
 
 //
 // Progress callback for the add operation.
@@ -450,7 +450,7 @@ export class MediaFileDatabase {
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");
-        this.localFileScanner = new FileScanner(new FileStorage("fs:"), {
+        this.localFileScanner = new FileScanner({
             ignorePatterns: [/\.db/]
         });
 
@@ -655,7 +655,7 @@ export class MediaFileDatabase {
         await this.localFileScanner.scanPaths(paths, async (result) => {
             await this.addFile(
                 result.filePath,
-                result.fileInfo,
+                result.fileStat,
                 result.contentType,
                 result.labels,
                 result.openStream,
@@ -681,7 +681,7 @@ export class MediaFileDatabase {
         await this.localFileScanner.scanPaths(paths, async (result) => {
             await this.checkFile(
                 result.filePath,
-                result.fileInfo,
+                result.fileStat,
                 result.openStream,
                 progressCallback
             );
@@ -692,7 +692,7 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private addFile = async (filePath: string, fileStat: IFileStat, contentType: string, labels: string[], openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         const assetId = this.uuidGenerator.generate();
 
@@ -703,7 +703,7 @@ export class MediaFileDatabase {
         await fs.ensureDir(assetTempDir);
        
         try {
-            let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
+            let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
             if (localHashedFile) {
                 //
                 // Already hashed, which means the file is valid.
@@ -726,7 +726,7 @@ export class MediaFileDatabase {
                 //
                 // Compute (and cache) the hash of the file.
                 //
-                localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
+                localHashedFile = await this.computeHash(filePath, fileStat, openStream, this.localHashCache);
             }
     
             const metadataCollection = this.bsonDatabase.collection("metadata");
@@ -765,7 +765,7 @@ export class MediaFileDatabase {
                 //
                 // Uploads the full asset.
                 //
-                await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileInfo.length));
+                await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
 
                 const assetInfo = await this.assetStorage.info(assetPath);
                 if (!assetInfo) {
@@ -863,8 +863,8 @@ export class MediaFileDatabase {
                     coordinates,
                     location,
                     duration: assetDetails?.duration,
-                    fileDate: dayjs(fileInfo.lastModified).toISOString(),
-                    photoDate: assetDetails?.photoDate || dayjs(fileInfo.lastModified).toISOString(),
+                    fileDate: dayjs(fileStat.lastModified).toISOString(),
+                    photoDate: assetDetails?.photoDate || dayjs(fileStat.lastModified).toISOString(),
                     uploadDate: dayjs(this.timestampProvider.dateNow()).toISOString(),
                     properties,
                     labels,
@@ -879,7 +879,7 @@ export class MediaFileDatabase {
                 this.incrementAssetCount();
 
                 this.addSummary.filesAdded++;
-                this.addSummary.totalSize += fileInfo.length;
+                this.addSummary.totalSize += fileStat.length;
                 if (progressCallback) {
                     progressCallback(this.localFileScanner.getCurrentlyScanning());
                 }
@@ -908,11 +908,11 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
-        let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
+        let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
         if (!localHashedFile) {            
-            localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
+            localHashedFile = await this.computeHash(filePath, fileStat, openStream, this.localHashCache);
         }
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
@@ -933,7 +933,7 @@ export class MediaFileDatabase {
         log.verbose(`File "${filePath}" has not been added to the media file database.`);
 
         this.addSummary.filesAdded++;
-        this.addSummary.totalSize += fileInfo.length;
+        this.addSummary.totalSize += fileStat.length;
         if (progressCallback) {
             progressCallback(this.localFileScanner.getCurrentlyScanning());
         }
@@ -974,23 +974,19 @@ export class MediaFileDatabase {
         }
     }
 
-    // async getHash(filePath: string): Promise<IHashedFile | undefined> {
-
-    // }
-
     //
     // Gets the hash of a file from the hash cache or returns undefined if the file is not in the cache.
     //
-    async getHash(filePath: string, fileInfo: IFileInfo, hashCache: HashCache): Promise<IHashedFile | undefined> {
+    async getHash(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedFile | undefined> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
-            if (cacheEntry.length === fileInfo.length && cacheEntry.lastModified.getTime() === fileInfo.lastModified.getTime()) {
+            if (cacheEntry.length === fileStat.length && cacheEntry.lastModified.getTime() === fileStat.lastModified.getTime()) {
                 // The hash cache entry is valid, so return it.
                 // If a hash is commited to the hash cache, the file is assumed to be valid.
                 return {
                     hash: cacheEntry.hash,
-                    lastModified: fileInfo.lastModified,
-                    length: fileInfo.length,
+                    lastModified: fileStat.lastModified,
+                    length: fileStat.length,
                 }
             }
         }
@@ -1001,15 +997,15 @@ export class MediaFileDatabase {
     //
     // Computes the has h of a file and stores it in the hash cache.
     //
-    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
+    async computeHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
         //
         // Compute the hash of the file.
         //
         const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
         const hashedFile: IHashedFile = {
             hash,
-            lastModified: fileInfo.lastModified,
-            length: fileInfo.length,
+            lastModified: fileStat.lastModified,
+            length: fileStat.length,
         };
 
         //
