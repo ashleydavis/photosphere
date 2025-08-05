@@ -53,7 +53,7 @@ export async function saveKeyPair(keyPair: IKeyPair, keyFilePath: string): Promi
         format: 'pem'
     });
 
-    const dirname = path.dirname(keyFilePath);
+    const dirname = path.dirname(path.resolve(keyFilePath));
     await fs.ensureDir(dirname);
 
     // Save private key
