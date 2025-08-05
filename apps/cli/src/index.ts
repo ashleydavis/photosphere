@@ -43,8 +43,11 @@ async function main() {
 
     program
         .name("psi")
-        .version(version)
         .description(`The Photosphere CLI tool for managing your media file database.`)
+        .option('--version', 'output the version number', () => {
+            console.log(version);
+            process.exit(0);
+        })
         .addHelpText('after', `
 
 Getting help:
