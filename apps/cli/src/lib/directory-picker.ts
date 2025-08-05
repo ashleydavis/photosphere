@@ -228,7 +228,7 @@ async function validateExistingDatabase(path: string): Promise<boolean | string>
 export async function getDirectoryForCommand(
     commandType: 'init' | 'existing',
     nonInteractive: boolean,
-    cwd: string = process.cwd()
+    cwd: string
 ): Promise<string> {
 
     // Check if current directory is suitable
