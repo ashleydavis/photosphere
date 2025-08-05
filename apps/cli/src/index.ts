@@ -39,7 +39,7 @@ async function main() {
     const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verbose logging.", false];
     const toolsOption: [string, string, boolean] = ["--tools", "Enables output from media processing tools (ImageMagick, ffmpeg, etc.).", false];
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
-    const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts."];
+    const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts. Defaults to the current directory from your shell/terminal. This is mostly for testing/debugging."];
 
     program
         .name("psi")
@@ -73,6 +73,7 @@ Resources:
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
@@ -96,6 +97,7 @@ Resources:
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
 
