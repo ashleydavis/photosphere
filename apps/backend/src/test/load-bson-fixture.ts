@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { BsonDatabase, createStorage, FileStorage } from 'storage';
+import { RandomUuidGenerator } from 'utils';
 
 async function main(): Promise<void> {
     const rootPath = './files';
@@ -54,7 +55,7 @@ async function loadFixtures(fixturesPath: string, databasePath: string): Promise
     
     const files = fs.readdirSync(fixturesPath);
     const { storage } = await createStorage(databasePath);
-    const bsonDatabase = new BsonDatabase({ storage });
+    const bsonDatabase = new BsonDatabase({ storage, uuidGenerator: new RandomUuidGenerator() });
 
     try {
         for (const file of files) {

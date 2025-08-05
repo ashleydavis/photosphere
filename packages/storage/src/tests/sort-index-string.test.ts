@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -88,7 +89,8 @@ describe('SortIndex with string type', () => {
             fieldName: 'name',
             direction: 'asc',
             pageSize: 3,
-            type: 'string' // Specify string type for proper comparison
+            type: 'string', // Specify string type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Create descending index on status field
@@ -99,7 +101,8 @@ describe('SortIndex with string type', () => {
             fieldName: 'status',
             direction: 'desc',
             pageSize: 3,
-            type: 'string' // Specify string type for proper comparison
+            type: 'string', // Specify string type for proper comparison
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
     });
     
@@ -412,7 +415,8 @@ describe('SortIndex with string type', () => {
             fieldName: 'name',
             direction: 'asc',
             pageSize: 3,
-            type: 'string'
+            type: 'string',
+            uuidGenerator: new RandomUuidGenerator()
         }, numericCollection);
         
         await numericSortIndex.build();

@@ -52,6 +52,11 @@ export interface IUiCommandOptions {
     // When true, the ui will not open in the browser.
     //
     noOpen?: boolean;
+
+    //
+    // Set the current working directory for directory selection prompts.
+    //
+    cwd?: string;
 }
 
 //
@@ -63,7 +68,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     await ensureMediaProcessingTools(false);
 
     if (options.db === undefined) {
-        options.db = await getDirectoryForCommand("existing", false);
+        options.db = await getDirectoryForCommand("existing", false, options.cwd || process.cwd());
     }
 
     //

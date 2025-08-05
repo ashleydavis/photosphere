@@ -1,8 +1,8 @@
 import fs from 'fs';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
-import { exec } from 'node-utils';
-import { log } from 'utils';
-
+import { exec, execLogged } from 'node-utils';
+import { IUuidGenerator, log, IImageTransformation } from 'utils';
+import path from "path";
 
 export class Image {
     private filePath: string;
@@ -142,46 +142,42 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
-        try {           
-            // Get format, dimensions
-            const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
-            const { stdout } = await exec(command);
-            
-            const parts = stdout.trim().split(' ');
-            const width = parseInt(parts[0]);
-            const height = parseInt(parts[1]);
+        // Get format, dimensions
+        const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
+        const { stdout } = await execLogged(`magick`, command);
+        
+        const parts = stdout.trim().split(' ');
+        const width = parseInt(parts[0]);
+        const height = parseInt(parts[1]);
 
-            // Get EXIF data for created date
-            let createdAt: Date | undefined;
-            try {
-                const exifData = await this.getExifData();
-                if (exifData.DateTimeOriginal) {
-                    // Parse EXIF date format: "2023:12:25 14:30:00"
-                    const dateStr = exifData.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
-                    createdAt = new Date(dateStr);
-                }
-            } catch {
-                // Ignore EXIF errors
+        // Get EXIF data for created date
+        let createdAt: Date | undefined;
+        try {
+            const exifData = await this.getExifData();
+            if (exifData.DateTimeOriginal) {
+                // Parse EXIF date format: "2023:12:25 14:30:00"
+                const dateStr = exifData.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+                createdAt = new Date(dateStr);
             }
-
-            this._info = {
-                filePath: this.filePath,
-                
-                dimensions: { width, height },
-                
-                createdAt,
-                
-                // Images don't have these properties
-                duration: undefined,
-                fps: undefined,
-                bitrate: undefined,
-                hasAudio: false
-            };
-
-            return this._info;
-        } catch (error) {
-            throw new Error(`Failed to get image info: ${error}`);
+        } catch {
+            // Ignore EXIF errors
         }
+
+        this._info = {
+            filePath: this.filePath,
+            
+            dimensions: { width, height },
+            
+            createdAt,
+            
+            // Images don't have these properties
+            duration: undefined,
+            fps: undefined,
+            bitrate: undefined,
+            hasAudio: false
+        };
+
+        return this._info;
     }
 
     async getDimensions(): Promise<Dimensions> {
@@ -203,7 +199,7 @@ export class Image {
 
         try {
             const command = `${Image.identifyCommand} -format "%[EXIF:*]" "${this.filePath}"`;
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             const exifData: Record<string, string> = {};
             const lines = stdout.trim().split('\n');
@@ -221,15 +217,22 @@ export class Image {
         }
     }
 
-    async resize(options: ResizeOptions, outputPath?: string): Promise<Image> {
+    async resize(options: ResizeOptions, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
         if (!await fs.promises.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
-        const { width, height, quality, format, maintainAspectRatio = true } = options;
+        const { width, height, quality, format, ext, maintainAspectRatio = true } = options;
+        const baseOutputPath = path.join(tempDir, `temp_resize_${uuidGenerator.generate()}`);
+        const outputPath1 = baseOutputPath + '.' + options.ext;
+        const outputPath2 = baseOutputPath + '-0.' + options.ext;
 
-        if (!width && !height) {
-            throw new Error('Either width or height must be specified');
+        if (await fs.promises.exists(outputPath1)) {
+            throw new Error(`Output file already exists: ${outputPath1}`);
+        }
+
+        if (await fs.promises.exists(outputPath2)) {
+            throw new Error(`Output file already exists: ${outputPath2}`);
         }
 
         // Build the resize geometry string
@@ -252,23 +255,28 @@ export class Image {
             }
             command += ` -quality ${quality}`;
         }
-
-        // Determine output path
-        const output = outputPath || this.generateOutputPath(format);
-        
-        // Add format conversion if needed
+       
+        // Add format specification and output file
         if (format) {
-            command += ` "${output}"`;
+            // For explicit format conversion, specify the format before the output path
+            command += ` ${format}:"${outputPath1}"`;
         } else {
-            command += ` "${output}"`;
+            command += ` "${outputPath1}"`;
         }
 
-        try {
-            await exec(command);
-            return new Image(output);
-        } catch (error) {
-            throw new Error(`Failed to resize image: ${error}`);
-        }
+        let actualOutputPath = outputPath1;
+
+        await execLogged(`magick`, command, async () => {
+            // Validate output file exists
+            if (!await fs.promises.exists(actualOutputPath)) {
+                actualOutputPath = outputPath2;
+                if (!await fs.promises.exists(actualOutputPath)) {
+                    return `Resize failed, expect to create ${outputPath1} or ${outputPath2}`;
+                }
+            }
+        });
+        
+        return actualOutputPath;
     }
 
     async saveAs(outputPath: string, options?: { quality?: number; format?: ResizeOptions['format'] }): Promise<Image> {
@@ -287,20 +295,8 @@ export class Image {
 
         command += ` "${outputPath}"`;
 
-        try {
-            await exec(command);
-            return new Image(outputPath);
-        } catch (error) {
-            throw new Error(`Failed to save image: ${error}`);
-        }
-    }
-
-    private generateOutputPath(format?: string): string {
-        const pathParts = this.filePath.split('.');
-        const extension = pathParts.pop();
-        const basePath = pathParts.join('.');
-        const newExtension = format || extension;
-        return `${basePath}_resized.${newExtension}`;
+        await execLogged(`magick`, command);
+        return new Image(outputPath);
     }
 
     /**
@@ -315,7 +311,7 @@ export class Image {
         try {
             // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
             const command = `${Image.convertCommand} "${this.filePath}" -resize 1x1! -format "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]" info:`;
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             const rgbString = stdout.trim();
             const rgbValues = rgbString.split(',').map(val => parseInt(val.trim()));
@@ -352,7 +348,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             
             // Parse histogram output to find the most frequent color
             const lines = stdout.trim().split('\n');
@@ -408,7 +404,7 @@ export class Image {
                 command = `${Image.convertCommand} "${this.filePath}" -resize 500x500 +dither -colors ${colorCount} -format "%c" histogram:info:`;
             }
             
-            const { stdout } = await exec(command);
+            const { stdout } = await execLogged(`magick`, command);
             const lines = stdout.trim().split('\n');
             const colors: Array<{ rgb: [number, number, number], count: number }> = [];
             
@@ -443,4 +439,41 @@ export class Image {
     getPath(): string {
         return this.filePath;
     }
+
+    /**
+     * Transform an image with rotation and flip operations
+     */
+    async transform(options: IImageTransformation, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
+        if (!await fs.promises.exists(this.filePath)) {
+            throw new Error(`File not found: ${this.filePath}`);
+        }
+
+        let transformCommand = '';
+
+        if (options.flipX) {
+            transformCommand += ' -flop';
+        }
+
+        if (options.rotate) {
+            transformCommand += ` -rotate ${options.rotate}`;
+        }
+
+        if (transformCommand) {
+            // Transform to a temporary file and return the path.
+            const outputPath = path.join(tempDir, `temp_transform_output_${uuidGenerator.generate()}.jpg`);
+            const command = `${Image.convertCommand} "${this.filePath}" ${transformCommand} "${outputPath}"`;
+            await execLogged('magick', command);
+
+            // Check if the output file was created successfully.
+            if (!await fs.promises.exists(outputPath)) { 
+                throw new Error(`Image transformation failed, output file not created: ${outputPath}`);
+            }
+            return outputPath;
+        }
+        else {
+            // No transformations needed, just return the original file.
+            return this.filePath;
+        }
+    }
+
 }

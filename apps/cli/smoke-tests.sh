@@ -66,18 +66,168 @@ log_info() {
 
 log_success() {
     echo -e "${GREEN}[PASS]${NC} $1"
-    ((TESTS_PASSED++))
 }
 
 log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
+}
+
+# Test counting functions - only increment once per test function
+test_passed() {
+    ((TESTS_PASSED++))
+}
+
+test_failed() {
+    local test_name="$1"
     ((TESTS_FAILED++))
-    FAILED_TESTS+=("$1")
+    FAILED_TESTS+=("$test_name")
 }
 
 log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
+
+generate_test_report() {
+    local report_file="$1"
+    local test_mode="${2:-all}"
+    
+    log_info "Generating comprehensive test report: $report_file"
+    
+    # Create report header
+    cat > "$report_file" << EOF
+================================================================================
+PHOTOSPHERE CLI SMOKE TEST REPORT
+================================================================================
+Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+Test Mode: $test_mode
+Platform: $(detect_platform) $(detect_architecture)
+Working Directory: $(pwd)
+NODE_ENV: ${NODE_ENV:-'(not set)'}
+
+================================================================================
+TEST RESULTS SUMMARY
+================================================================================
+Tests Passed: $TESTS_PASSED
+Tests Failed: $TESTS_FAILED
+EOF
+
+    # Add failed tests if any
+    if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+        echo "" >> "$report_file"
+        echo "Failed Tests:" >> "$report_file"
+        for failed_test in "${FAILED_TESTS[@]}"; do
+            echo "  - $failed_test" >> "$report_file"
+        done
+    fi
+
+    # Add database information if database exists
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+        echo "" >> "$report_file"
+        echo "=================================================================================" >> "$report_file"
+        echo "DATABASE INFORMATION" >> "$report_file"
+        echo "=================================================================================" >> "$report_file"
+        echo "Database Directory: $TEST_DB_DIR" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Get root hash
+        echo "ROOT HASH:" >> "$report_file"
+        echo "----------" >> "$report_file"
+        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Get merkle tree
+        echo "MERKLE TREE STRUCTURE:" >> "$report_file"
+        echo "---------------------" >> "$report_file"
+        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Get database summary
+        echo "DATABASE SUMMARY:" >> "$report_file"
+        echo "-----------------" >> "$report_file"
+        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Get database file listing
+        echo "DATABASE FILE LISTING:" >> "$report_file"
+        echo "----------------------" >> "$report_file"
+        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Get database verification
+        echo "DATABASE VERIFICATION:" >> "$report_file"
+        echo "----------------------" >> "$report_file"
+        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to verify database" >> "$report_file"
+        echo "" >> "$report_file"
+        
+        # Show database directory structure
+        echo "DATABASE DIRECTORY STRUCTURE:" >> "$report_file"
+        echo "-----------------------------" >> "$report_file"
+        if command -v tree &> /dev/null; then
+            tree "$TEST_DB_DIR" 2>/dev/null >> "$report_file" || ls -la "$TEST_DB_DIR" >> "$report_file"
+        else
+            find "$TEST_DB_DIR" -type f | sort >> "$report_file" 2>/dev/null || echo "Failed to list database files" >> "$report_file"
+        fi
+        echo "" >> "$report_file"
+    else
+        echo "" >> "$report_file"
+        echo "=================================================================================" >> "$report_file"
+        echo "DATABASE INFORMATION" >> "$report_file"
+        echo "=================================================================================" >> "$report_file"
+        echo "No database found at: $TEST_DB_DIR" >> "$report_file"
+        echo "" >> "$report_file"
+    fi
+    
+    # Get hash cache information
+    echo "=================================================================================" >> "$report_file"
+    echo "HASH CACHE INFORMATION" >> "$report_file"
+    echo "=================================================================================" >> "$report_file"
+    
+    # Get local and database hash cache info
+    if [ -d "$TEST_DB_DIR" ]; then
+        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+    else
+        $(get_cli_command) debug hash-cache --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+    fi
+    echo "" >> "$report_file"
+    
+    # Add system information
+    echo "=================================================================================" >> "$report_file"
+    echo "SYSTEM INFORMATION" >> "$report_file"
+    echo "=================================================================================" >> "$report_file"
+    echo "Operating System: $(uname -a)" >> "$report_file"
+    echo "Current User: $(whoami)" >> "$report_file"
+    echo "Current Directory: $(pwd)" >> "$report_file"
+    echo "Disk Usage:" >> "$report_file"
+    df -h . 2>/dev/null >> "$report_file" || echo "Failed to get disk usage" >> "$report_file"
+    echo "" >> "$report_file"
+    
+    # Add CLI version information
+    echo "CLI VERSION INFORMATION:" >> "$report_file"
+    echo "------------------------" >> "$report_file"
+    $(get_cli_command) version 2>/dev/null >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
+    echo "" >> "$report_file"
+    
+    # Add tool information
+    echo "TOOL INFORMATION:" >> "$report_file"
+    echo "-----------------" >> "$report_file"
+    $(get_cli_command) tools --yes 2>/dev/null >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
+    echo "" >> "$report_file"
+    
+    # Add report footer
+    echo "=================================================================================" >> "$report_file"
+    echo "END OF REPORT" >> "$report_file"
+    echo "=================================================================================" >> "$report_file"
+    echo "Report generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$report_file"
+    
+    log_success "Test report generated: $report_file"
+    
+    # Show report size
+    if [ -f "$report_file" ]; then
+        local file_size=$(stat -c%s "$report_file" 2>/dev/null || echo "unknown")
+        log_info "Report size: $file_size bytes"
+    fi
+}
+
 
 # Check if a value matches expected value
 expect_value() {
@@ -341,11 +491,11 @@ invoke_command() {
     local description="$1"
     local command="$2"
     local expected_exit_code="${3:-0}"
-    local capture_output="${4:-false}"
-    local output_var_name="${5:-}"
+    local output_var_name="${4:-}"
     
     log_info "Running: $description"
     echo ""
+    echo -e "${YELLOW}NODE_ENV:${NC} ${NODE_ENV:-'(not set)'}"
     echo -e "${YELLOW}Command:${NC}"
     echo -e "${BLUE}$command${NC}"
     echo ""
@@ -363,22 +513,24 @@ invoke_command() {
     local command_output=""
     local actual_exit_code=0
     
-    if [ "$capture_output" = "true" ]; then
-        # Capture output and display it
+    # Ensure NODE_ENV is passed to the command - force it to testing for deterministic UUIDs
+    local env_prefix="NODE_ENV=testing "
+    local full_command="$env_prefix$command"
+    
+    if [ -n "$output_var_name" ]; then
+        # Capture output and display it, ensuring all output is visible
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        command_output=$(eval "$command" 2>&1)
+        # Use tee to both capture output and display it immediately
+        command_output=$(eval "$full_command" 2>&1 | tee /dev/stderr)
         actual_exit_code=$?
-        echo "$command_output"
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
-        # Store output in caller's variable if provided
-        if [ -n "$output_var_name" ]; then
-            eval "$output_var_name=\"\$command_output\""
-        fi
+        # Store output in caller's variable
+        eval "$output_var_name=\"\$command_output\""
     else
         # Execute without capturing output
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        eval "$command"
+        eval "$full_command"
         actual_exit_code=$?
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
     fi
@@ -387,6 +539,26 @@ invoke_command() {
     if [ $actual_exit_code -eq $expected_exit_code ]; then
         if [ $expected_exit_code -eq 0 ]; then
             log_success "$description"
+            
+            # Print root hash after successful psi commands that might affect the database
+            if [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; then
+                # Extract database path from command
+                local db_path=""
+                if [[ "$command" == *"--db "* ]]; then
+                    db_path=$(echo "$command" | sed -n 's/.*--db \([^ ]*\).*/\1/p')
+                elif [ -n "$TEST_DB_DIR" ]; then
+                    db_path="$TEST_DB_DIR"
+                fi
+                
+                # Check if database exists and print root hash
+                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) debug root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
+                    echo ""
+                    echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
+                    $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
+                fi
+            fi
         else
             log_success "$description (expected failure with exit code $actual_exit_code)"
         fi
@@ -460,6 +632,49 @@ detect_architecture() {
     esac
 }
 
+# Cross-platform tree command
+show_tree() {
+    local directory="$1"
+    local platform=$(detect_platform)
+    
+    log_info "Attempting to show directory structure for: $directory"
+    
+    # Try different tree command approaches
+    if command -v tree &> /dev/null; then
+        case "$platform" in
+            "win")
+                # Windows tree command syntax: tree [path] [options]
+                # Try different Windows tree syntaxes
+                if tree /f /a "$directory" 2>/dev/null; then
+                    log_info "Used Windows tree command: tree /f /a $directory"
+                elif cmd //c tree "$directory" //f //a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory //f //a"
+                elif cmd //c tree "$directory" /f /a 2>/dev/null; then
+                    log_info "Used Windows tree via cmd: tree $directory /f /a"
+                else
+                    # Fall back to Unix-style tree (if installed via chocolatey)
+                    log_info "Windows tree failed, trying Unix-style tree"
+                    tree "$directory" 2>/dev/null || {
+                        log_warning "tree command failed, using ls -la instead"
+                        ls -la "$directory"
+                    }
+                fi
+                ;;
+            *)
+                # Linux/macOS tree command
+                log_info "Using Unix-style tree command"
+                tree "$directory" 2>/dev/null || {
+                    log_warning "tree command failed, using ls -la instead"
+                    ls -la "$directory"
+                }
+                ;;
+        esac
+    else
+        log_warning "tree command not available, using ls -la instead"
+        ls -la "$directory"
+    fi
+}
+
 # Individual test functions
 test_setup() {
     local platform=$(detect_platform)
@@ -503,7 +718,7 @@ test_setup() {
     invoke_command "Build frontend" "bun run build-fe-$platform" || {
         log_warning "Frontend build failed, continuing anyway..."
     }
-    
+    test_passed
 }
 
 check_tools() {
@@ -518,6 +733,14 @@ check_tools() {
     
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
+    
+    # Verify NODE_ENV is set for deterministic UUID generation
+    log_info "NODE_ENV is set to: ${NODE_ENV:-'(not set)'}"
+    if [ "$NODE_ENV" = "testing" ]; then
+        log_success "NODE_ENV=testing is set for deterministic UUID generation"
+    else
+        log_warning "NODE_ENV is not set to 'testing' - UUIDs may not be deterministic"
+    fi
     
     log_info "Checking for required tools in system PATH"
     invoke_command "Check tools" "$(get_cli_command) tools --yes"
@@ -589,6 +812,7 @@ check_tools() {
     fi
     
     log_success "All tools verified and working correctly"
+    test_passed
 }
 
 test_create_database() {
@@ -605,6 +829,7 @@ test_create_database() {
     check_exists "$TEST_DB_DIR/metadata" "Asset metadata directory"
     
     # Test initial state - database creation is verified by file existence checks above
+    test_passed
 }
 
 test_view_media_files() {
@@ -614,7 +839,7 @@ test_view_media_files() {
     
     # Capture the output to validate it
     local info_output
-    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "true" "info_output"
+    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
     
     # Check that info output doesn't contain "Type: undefined" which indicates a bug
     expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"
@@ -624,6 +849,7 @@ test_view_media_files() {
     expect_output_string "$info_output" "Type: image/png" "Info output should contain PNG MIME type for test.png"
     expect_output_string "$info_output" "Type: video/mp4" "Info output should contain MP4 MIME type for test.mp4"
     expect_output_string "$info_output" "Type: image/webp" "Info output should contain WebP MIME type for test.webp"
+    test_passed
 }
 
 # Parameterized function to test adding a single file
@@ -631,6 +857,8 @@ test_add_file_parameterized() {
     local file_path="$1"
     local file_type="$2"
     local test_description="$3"
+    local expected_mime="$4"
+    local asset_type="$5"
     
     # Check if file exists
     check_exists "$file_path" "$file_type test file"
@@ -642,7 +870,7 @@ test_add_file_parameterized() {
     
     # Add the file and capture output with verbose logging
     local add_output
-    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "true" "add_output"
+    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
     
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -658,8 +886,8 @@ test_add_file_parameterized() {
     # Check that the specific file is now in the database
     invoke_command "Check $file_type file added" "$(get_cli_command) check --db $TEST_DB_DIR $file_path --yes"
     
-    # Return the add output for use in validation
-    echo "$add_output"
+    # Validate the assets in the database
+    validate_database_assets "$TEST_DB_DIR" "$file_path" "$expected_mime" "$asset_type" "$add_output"
 }
 
 test_add_png_file() {
@@ -667,10 +895,9 @@ test_add_png_file() {
     echo "============================================================================"
     echo "=== TEST 3: ADD PNG FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file" "image/png" "image"
     
-    # Validate the PNG assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.png" "image/png" "image" "$add_output"
+    test_passed
 }
 
 test_add_jpg_file() {
@@ -678,10 +905,9 @@ test_add_jpg_file() {
     echo "============================================================================"
     echo "=== TEST 4: ADD JPG FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file" "image/jpeg" "image"
     
-    # Validate the JPG assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.jpg" "image/jpeg" "image" "$add_output"
+    test_passed
 }
 
 test_add_mp4_file() {
@@ -689,10 +915,9 @@ test_add_mp4_file() {
     echo "============================================================================"
     echo "=== TEST 5: ADD MP4 FILE ==="
     
-    local add_output=$(test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file")
+    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
     
-    # Validate the MP4 assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$TEST_FILES_DIR/test.mp4" "video/mp4" "video" "$add_output"
+    test_passed
 }
 
 test_add_same_file() {
@@ -704,6 +929,7 @@ test_add_same_file() {
     invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     
     invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    test_passed
 }
 
 test_add_multiple_files() {
@@ -713,7 +939,7 @@ test_add_multiple_files() {
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         local add_output
-        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "true" "add_output"
+        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
         
         # Check that 2 files were imported
         expect_output_value "$add_output" "Files added:" "2" "Two files imported from multiple images directory"
@@ -723,6 +949,7 @@ test_add_multiple_files() {
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
     fi
+    test_passed
 }
 
 test_add_same_multiple_files() {
@@ -738,6 +965,7 @@ test_add_same_multiple_files() {
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
     fi
+    test_passed
 }
 
 test_database_summary() {
@@ -747,13 +975,14 @@ test_database_summary() {
     
     # Run summary command and capture output for verification
     local summary_output
-    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "summary_output"
+    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
     
     # Check that summary contains expected fields
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"
     expect_output_string "$summary_output" "Tree root hash:" "Summary contains hash"
+    test_passed
 }
 
 test_database_list() {
@@ -763,7 +992,7 @@ test_database_list() {
     
     # Run list command and capture output for verification
     local list_output
-    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "true" "list_output"
+    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "list_output"
     
     # Check that list contains expected fields and patterns
     expect_output_string "$list_output" "Database Files" "List output contains header"
@@ -776,6 +1005,7 @@ test_database_list() {
     # Check that it shows the expected number of files
     expect_output_string "$list_output" "End of results" "List shows end of results message"
     expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"
+    test_passed
 }
 
 test_export_assets() {
@@ -799,7 +1029,7 @@ test_export_assets() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             # The list output should contain lines with asset IDs
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
@@ -819,7 +1049,7 @@ test_export_assets() {
     
     # Test 1: Export original asset to specific file
     local export_output
-    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "true" "export_output"
+    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "export_output"
     
     # Verify the exported file exists
     check_exists "$export_dir/exported-original.png" "Exported original file"
@@ -863,6 +1093,7 @@ test_export_assets() {
     check_exists "$export_dir/explicit-original.png" "Explicitly exported original file"
     
     log_success "All export tests completed successfully"
+    test_passed
 }
 
 test_database_verify() {
@@ -870,9 +1101,13 @@ test_database_verify() {
     echo "============================================================================"
     echo "=== TEST 12: DATABASE VERIFICATION ==="
     
+    # Show database structure with tree command
+    log_info "Showing database structure..."
+    show_tree "$TEST_DB_DIR"
+    
     # Run verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Verify output contains files imported count"
@@ -885,6 +1120,7 @@ test_database_verify() {
     expect_output_value "$verify_output" "New:" "0" "New files in verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
+    test_passed
 }
 
 test_database_verify_full() {
@@ -892,9 +1128,11 @@ test_database_verify_full() {
     echo "============================================================================"
     echo "=== TEST 13: DATABASE VERIFICATION (FULL MODE) ==="
     
+    print_test_name "13" "DATABASE VERIFICATION (FULL MODE)"
+    
     # Run full verify command and capture output for checking
     local verify_output
-    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "true" "verify_output"
+    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "verify_output"
     
     # Check that verification contains expected fields
     expect_output_string "$verify_output" "Files imported:" "Full verify output contains files imported count"
@@ -906,6 +1144,7 @@ test_database_verify_full() {
     expect_output_value "$verify_output" "New:" "0" "New files in full verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
+    test_passed
 }
 
 test_detect_new_file() {
@@ -947,7 +1186,7 @@ test_detect_new_file() {
     
     # Run verify and capture output - should detect the new file
     local verify_output
-    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the new file
     expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
@@ -958,6 +1197,7 @@ test_detect_new_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_detect_deleted_file() {
@@ -993,7 +1233,7 @@ test_detect_deleted_file() {
     fi
     
     # Find and delete the first file from the assets directory
-    local file_to_delete=$(find "$test_copy_dir/assets" -type f | head -1)
+    local file_to_delete=$(find "$test_copy_dir/assets" -type f | sort | head -1)
     if [ -n "$file_to_delete" ]; then
         local relative_path="${file_to_delete#$test_copy_dir/}"
         rm "$file_to_delete"
@@ -1005,7 +1245,7 @@ test_detect_deleted_file() {
     
     # Run verify and capture output - should detect the missing file
     local verify_output
-    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -1016,6 +1256,7 @@ test_detect_deleted_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_detect_modified_file() {
@@ -1051,7 +1292,7 @@ test_detect_modified_file() {
     fi
     
     # Find and modify the first file from the assets directory
-    local file_to_modify=$(find "$test_copy_dir/assets" -type f | head -1)
+    local file_to_modify=$(find "$test_copy_dir/assets" -type f | sort | head -1)
     if [ -n "$file_to_modify" ]; then
         local relative_path="${file_to_modify#$test_copy_dir/}"
         # Append some data to modify the file
@@ -1064,7 +1305,7 @@ test_detect_modified_file() {
     
     # Run verify and capture output - should detect the modified file
     local verify_output
-    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "true" "verify_output"
+    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
     
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -1075,6 +1316,7 @@ test_detect_modified_file() {
     # Clean up test copy
     rm -rf "$test_copy_dir"
     log_success "Cleaned up test database copy"
+    test_passed
 }
 
 test_database_replicate() {
@@ -1092,7 +1334,7 @@ test_database_replicate() {
     
     # Run replicate command and capture output
     local replicate_output
-    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replicate_output"
+    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replicate_output"
     
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
@@ -1107,6 +1349,7 @@ test_database_replicate() {
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    test_passed
 }
 
 test_verify_replica() {
@@ -1121,14 +1364,14 @@ test_verify_replica() {
     
     # Verify replica contents match source
     local replica_verify_output
-    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "true" "replica_verify_output"
+    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "replica_verify_output"
     
     # Get source and replica summaries to compare file counts
     local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "source_summary"
+    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
     
     local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "true" "replica_summary"
+    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
     
     # Extract and compare file counts
     local source_files=$(parse_numeric "$source_summary" "Total files:")
@@ -1142,6 +1385,7 @@ test_verify_replica() {
     
     # Verify the replica verify command also shows the expected counts
     expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
+    test_passed
 }
 
 test_database_replicate_second() {
@@ -1156,7 +1400,7 @@ test_database_replicate_second() {
     
     # Run second replicate command and capture output
     local second_replication_output
-    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "second_replication_output"
+    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "second_replication_output"
     
     # Check if replication was successful
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
@@ -1165,7 +1409,8 @@ test_database_replicate_second() {
     expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
     expect_output_value "$second_replication_output" "Total files considered:" "24" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "24" "Files skipped (already exist)"   
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "24" "Files skipped (already exist)"
+    test_passed
 }
 
 test_database_compare() {
@@ -1180,7 +1425,7 @@ test_database_compare() {
     
     # Test comparison between original and replica (should show no differences)
     local compare_output
-    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences for identical databases
     expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
@@ -1188,6 +1433,7 @@ test_database_compare() {
     
     # Test comparison with self (database vs itself)
     invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
+    test_passed
 }
 
 test_compare_with_changes() {
@@ -1203,17 +1449,18 @@ test_compare_with_changes() {
     # Add a new asset to the original database to create a difference
     local new_test_file="$TEST_FILES_DIR/test.webp"
     local webp_add_output
-    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "true" "webp_add_output"
+    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
     
     # Validate the WEBP assets in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
     
     # Test comparison between original and replica (should show differences after adding new asset)
     local compare_output
-    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
     expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
+    test_passed
 }
 
 test_replicate_after_changes() {
@@ -1228,17 +1475,18 @@ test_replicate_after_changes() {
     
     # Replicate the changes from original to replica
     local replication_output
-    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "replication_output"
+    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replication_output"
     
     # Check that the 8 changed files were replicated
     expect_output_value "$replication_output" "Total files copied:" "8" "Files copied (the changes)"
     
     # Run compare command to verify databases are now identical again
     local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "true" "compare_output"
+    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
+    test_passed
 }
 
 test_cannot_create_over_existing() {
@@ -1247,6 +1495,7 @@ test_cannot_create_over_existing() {
     echo "=== TEST 23: CANNOT CREATE DATABASE OVER EXISTING ==="
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
+    test_passed
 }
 
 test_repair_ok_database() {
@@ -1261,7 +1510,7 @@ test_repair_ok_database() {
     
     # Run repair on the intact database using replica as source
     local repair_output
-    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "true" "repair_output"
+    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
     
     # Check that repair reports no issues found
     expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
@@ -1269,6 +1518,7 @@ test_repair_ok_database() {
     expect_output_value "$repair_output" "Unrepaired:" "0" "No files unrepaired"
     expect_output_value "$repair_output" "Modified:" "0" "No files modified"
     expect_output_value "$repair_output" "Removed:" "0" "No files removed"
+    test_passed
 }
 
 test_remove_asset() {
@@ -1288,7 +1538,7 @@ test_remove_asset() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "true" "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
         fi
@@ -1303,19 +1553,19 @@ test_remove_asset() {
     
     # Get initial database summary before removal
     local before_summary
-    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "before_summary"
+    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "before_summary"
     local files_before=$(parse_numeric "$before_summary" "Files imported:")
     
     # Remove the asset
     local remove_output
-    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "true" "remove_output"
+    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
     
     # Get database summary after removal
     local after_summary
-    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "true" "after_summary"
+    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "after_summary"
     local files_after=$(parse_numeric "$after_summary" "Files imported:")
     
     # Verify one less asset in the database
@@ -1421,7 +1671,7 @@ test_remove_asset() {
     # Verify that the asset ID is no longer in the database listing
     log_info "Verifying asset ID is no longer in database listing..."
     local ls_output
-    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "true" "ls_output"
+    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "ls_output"
     
     # Check that the removed asset ID is not in the output
     if echo "$ls_output" | grep -q "$test_asset_id"; then
@@ -1435,13 +1685,14 @@ test_remove_asset() {
     
     # Run verify to make sure the database is still in a good state
     local verify_output
-    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "true" "verify_output"
+    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
     
     # The database should still be consistent
     expect_output_value "$verify_output" "New:" "0" "No new files after removal"
     expect_output_value "$verify_output" "Modified:" "0" "No modified files after removal"
     
     log_success "Asset removal test completed successfully"
+    test_passed
 }
 
 test_repair_damaged_database() {
@@ -1483,7 +1734,7 @@ test_repair_damaged_database() {
     # Run verify to detect the damage
     log_info "Running verify to detect damage..."
     local verify_output
-    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "true" "verify_output"
+    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "verify_output"
     
     # Verify should detect issues
     expect_output_string "$verify_output" "Database verification found issues" "Verify detects damage"
@@ -1491,7 +1742,7 @@ test_repair_damaged_database() {
     # Run repair to fix the issues
     log_info "Running repair to fix issues..."
     local repair_output
-    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "true" "repair_output"
+    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
     
     # Repair should fix the issues
     expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"
@@ -1508,13 +1759,14 @@ test_repair_damaged_database() {
     # Verify the repair was successful
     log_info "Verifying repair was successful..."
     local final_verify_output
-    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "true" "final_verify_output"
+    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "final_verify_output"
     
     expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
     
     # Clean up damaged database copy
     rm -rf "$damaged_dir"
     log_success "Cleaned up damaged database copy"
+    test_passed
 }
 
 
@@ -1533,6 +1785,16 @@ reset_environment() {
     
     log_info "Current directory: $(pwd)"
     log_info "Cleaning up test artifacts..."
+    
+    # Reset UUID counter for deterministic test results
+    local UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
+    if [ -f "$UUID_COUNTER_FILE" ]; then
+        log_info "Resetting test UUID counter"
+        rm -f "$UUID_COUNTER_FILE"
+        log_success "Removed UUID counter file"
+    else
+        log_info "UUID counter file not found (already clean)"
+    fi
     
     # Remove the specific test database directory
     if [ -d "./test/tmp" ]; then
@@ -1587,6 +1849,19 @@ run_all_tests() {
         log_info "Test tmp directory not found (already clean)"
     fi
     
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
     
     # Check tools first
     check_tools
@@ -1628,6 +1903,12 @@ run_all_tests() {
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
     echo ""
     echo -e "${GREEN}ALL SMOKE TESTS PASSED${NC}"
+    
+    # Generate comprehensive test report before cleanup
+    echo ""
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-all-tests-$(date +%Y%m%d-%H%M%S).txt"
+    generate_test_report "$report_file" "all"
     
     # Cleanup after all tests complete
     echo ""
@@ -1756,6 +2037,20 @@ run_multiple_commands() {
     echo "======================================"
     log_info "Running ${#COMMANDS[@]} commands in sequence: $commands_string"
     echo ""
+    
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
     
     # Check tools first before running any tests
     check_tools
@@ -1916,6 +2211,12 @@ run_multiple_commands() {
     echo ""
     echo -e "${GREEN}ALL COMMANDS COMPLETED SUCCESSFULLY${NC}"
     
+    # Generate comprehensive test report
+    echo ""
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-multiple-commands-$(date +%Y%m%d-%H%M%S).txt"
+    generate_test_report "$report_file" "multiple"
+    
     # Check if database should be preserved
     if [ "${PRESERVE_DATABASE:-false}" = "true" ]; then
         echo ""
@@ -2047,13 +2348,20 @@ main() {
             
             # Reset UUID counter for deterministic test results
             log_info "Resetting test UUID counter"
-            UUID_COUNTER_FILE="/tmp/photosphere-test-uuid-counter"
+            UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
             if [ -f "$UUID_COUNTER_FILE" ]; then
                 rm -f "$UUID_COUNTER_FILE"
                 log_success "Removed existing UUID counter file"
             else
                 log_info "UUID counter file not found (already clean)"
             fi
+            
+            # Clear local cache before running tests
+            log_info "Clearing local cache before running tests"
+            invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+                log_warning "Failed to clear cache, continuing anyway..."
+            }
+            
             run_multiple_commands "$commands"
             return
         else
@@ -2100,6 +2408,20 @@ main() {
     
     log_info "Running specific test: $1"
     
+    # Clear local cache before running tests
+    log_info "Clearing local cache before running tests"
+    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+        log_warning "Failed to clear cache, continuing anyway..."
+    }
+    
+    # Normalize test file timestamps for deterministic results
+    log_info "Normalizing test file timestamps"
+    if ! ../../test/normalize-timestamps.sh; then
+        log_error "Failed to normalize test file timestamps"
+        exit 1
+    fi
+    log_success "Test file timestamps normalized"
+    
     # Check tools first before running individual test
     check_tools
     
@@ -2114,6 +2436,13 @@ main() {
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
     echo ""
     echo -e "${GREEN}TEST PASSED${NC}"
+    
+    # Generate comprehensive test report
+    echo ""
+    mkdir -p ./tmp/reports
+    local report_file="./tmp/reports/smoke-test-report-individual-test-$(date +%Y%m%d-%H%M%S).txt"
+    generate_test_report "$report_file" "individual"
+    
     exit 0
 }
 

@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
-import { retry } from 'utils';
+import { retry, IUuidGenerator } from 'utils';
 
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';
@@ -30,21 +30,7 @@ const leafSplitThreshold = 1.5;
 
 // let id = 0;
 
-function makeId() {
-    return crypto.randomUUID();
-
-    //
-    // Compact id for readability.
-    //
-    // const id = crypto.randomUUID();
-    // return id.slice(0, 2) + "-" + id.slice(-2);
-
-    //
-    // Simple id for testing.
-    //
-    // ++id;
-    // return `id-${id}`;
-}
+// Removed makeId function - now using injected UUID generator
 
 // Constants for save debouncing
 const maxSaveDelayMs = 10_000;
@@ -75,6 +61,9 @@ export interface ISortIndexOptions {
 
     // Sort direction: 'asc' or 'desc'
     direction: SortDirection;
+
+    // UUID generator for creating unique identifiers
+    uuidGenerator: IUuidGenerator;
 
     // Number of records per page
     pageSize?: number;
@@ -208,7 +197,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private totalEntries: number = 0;
     private totalPages: number = 0; // Tracks only leaf nodes (user-facing pages)
     private loaded: boolean = false;
-    private lastUpdatedAt: Date | undefined;
     private saving: boolean = false; // Flag to prevent concurrent saves.
     private dirty: boolean = false; // Set to true when the tree is modified and needs saving.
     private rootPageId: string | undefined;
@@ -232,6 +220,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     
     private lastSaveTime: number | undefined = undefined;
     
+    // UUID generator for creating unique identifiers
+    private readonly uuidGenerator: IUuidGenerator;
+    
     constructor(options: ISortIndexOptions, private readonly collection: IBsonCollection<RecordT>) {
         this.storage = options.storage;
         this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
@@ -241,6 +232,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         this.keySize = options.keySize || 100;
         this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
+        this.uuidGenerator = options.uuidGenerator;
     }
 
     //
@@ -322,11 +314,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 } else {
                     this.type = undefined;
                 }
-                               
-                // Read lastUpdatedAt timestamp (8 bytes for Date)
-                const lastUpdatedTimestamp = dataWithoutChecksum.readBigUInt64LE(offset);
-                offset += 8;
-                this.lastUpdatedAt = new Date(Number(lastUpdatedTimestamp));
+                             
+                // Skip what used to be the lastUpdatedAt timestamp. This field is no longer serialized. Can be removed in future versions.
+                offset += 8; 
                 
                 // Read number of nodes
                 const nodeCount = dataWithoutChecksum.readUInt32LE(offset);
@@ -542,7 +532,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         let totalNodesSize = 0;
         
         // First pass: calculate the total size needed
-        for (const [pageId, node] of this.treeNodes.entries()) {
+        // Sort entries by pageId for deterministic ordering
+        const sortedEntries = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
+        for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
             // Estimate node size without actually serializing
@@ -632,9 +624,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         buffer.writeUInt8(typeValue, offset);
         offset += 1;
                
-        // Write lastUpdatedAt timestamp (8 bytes for Date)
-        const timestamp = this.lastUpdatedAt ? BigInt(this.lastUpdatedAt.getTime()) : BigInt(0);
-        buffer.writeBigUInt64LE(timestamp, offset);
+        buffer.writeBigUInt64LE(0n, offset); // Used to be lastUpdatedAt, now set to 0n for compatibility. Remove in future versions.
         offset += 8;
         
         // Write number of nodes
@@ -642,7 +632,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         offset += 4;
         
         // Second pass: write the nodes
-        for (const [pageId, node] of this.treeNodes.entries()) {
+        for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
             // Write pageId length and data
@@ -695,7 +685,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             parentId: undefined,
         };
 
-        this.rootPageId = makeId(); // Generate a new UUID for the root page ID.
+        this.rootPageId = this.uuidGenerator.generate(); // Generate a new UUID for the root page ID.
         
         // Store in the tree nodes map
         this.treeNodes.set(this.rootPageId, emptyRoot);
@@ -1202,7 +1192,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     // Marks the tree as dirty and schedules a save.
     //
     private async markDirty(): Promise<void> {
-        this.lastUpdatedAt = new Date();
         this.dirty = true;
         
         // Schedule save
@@ -1844,7 +1833,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Create new leaf node with the second half
         const newEntries = records.splice(splitIndex);
-        const newNodeId = makeId();
+        const newNodeId = this.uuidGenerator.generate();
 
         
         const newNode: IBTreeNode = {
@@ -1871,7 +1860,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         // Create or update parent node to maintain the B-tree structure
         if (nodeId === this.rootPageId && node.children.length === 0) {
             // If we're splitting the root, we need to create a new root
-            const newRootId = makeId();
+            const newRootId = this.uuidGenerator.generate();
             const newRoot: IBTreeNode = {
                 // Internal node (has children)
                 keys: [newEntries[0].value],
@@ -2169,7 +2158,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         const middleKey = node.keys[middleIndex];
         
         // Create a new internal node for the right half
-        const newNodeId = makeId();
+        const newNodeId = this.uuidGenerator.generate();
         const newNode: IBTreeNode = {
             // Internal node (has children)
             keys: node.keys.splice(middleIndex + 1), // Take keys after the middle
@@ -2191,7 +2180,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // If this is the root node, create a new root
         if (nodeId === this.rootPageId) {
-            const newRootId = makeId();
+            const newRootId = this.uuidGenerator.generate();
             const newRoot: IBTreeNode = {
                 // Internal node (has children)
                 keys: [middleKey],
@@ -2384,8 +2373,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         let internalMinKeys = Number.MAX_SAFE_INTEGER;
         let internalMaxKeys = 0;
         
-        // Traverse all nodes
-        for (const [nodeId, node] of this.treeNodes.entries()) {
+        // Traverse all nodes in deterministic order
+        const sortedNodes = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
+        for (const [nodeId, node] of sortedNodes) {
             const isLeaf = node.children.length === 0;
             let keyCount = node.keys.length;
             

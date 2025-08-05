@@ -1,14 +1,14 @@
-import { Readable } from "node:stream";
 import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
-import { writeFileSync, unlinkSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { IUuidGenerator } from "utils";
+import { writeStreamToFile } from "node-utils";
+import fs from "fs-extra";
+import path from "path";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream?: () => Readable): Promise<boolean> {
+export async function validateFile(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -16,10 +16,10 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
     }
 
     if (contentType.startsWith("image")) {
-        return await validateImage(filePath, contentType, openStream);
+        return await validateImage(filePath, contentType, tempDir, uuidGenerator, openStream);
     }
     else if (contentType.startsWith("video")) {
-        return await validateVideo(filePath, contentType, openStream);
+        return await validateVideo(filePath, contentType, tempDir, uuidGenerator, openStream);
     }
 
     return true;
@@ -28,15 +28,23 @@ export async function validateFile(filePath: string, fileInfo: IFileInfo, conten
 //
 // Validates an image file by checking if it has valid dimensions
 //
-async function validateImage(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
+async function validateImage(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, 'temp_image');
+            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_image', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
+        }
+
+        // We now have a file in the file system.
+        // Check that it's not a zero-byte file.
+        const stats = await fs.stat(actualFilePath);
+        if (stats.size === 0) {
+            console.error(`Invalid image ${filePath} - zero-byte file`);
+            return false;
         }
 
         const fileInfo = await getFileInfo(actualFilePath, contentType);
@@ -59,7 +67,7 @@ async function validateImage(filePath: string, contentType: string, openStream?:
         // Clean up temporary file if created
         if (tempFilePath) {
             try {
-                unlinkSync(tempFilePath);
+                await fs.unlink(tempFilePath);
             } catch (err) {
                 // Ignore cleanup errors
             }
@@ -70,15 +78,23 @@ async function validateImage(filePath: string, contentType: string, openStream?:
 //
 // Validates a video file by checking if it has valid dimensions
 //
-async function validateVideo(filePath: string, contentType: string, openStream?: () => Readable): Promise<boolean> {
+async function validateVideo(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
         // If openStream is provided, we need to extract to a temporary file
         if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, 'temp_video');
+            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
+        }
+
+        // We now have a file in the file system.
+        // Check that it's not a zero-byte file.
+        const stats = await fs.stat(actualFilePath);
+        if (stats.size === 0) {
+            console.error(`Invalid video ${filePath} - zero-byte file.`);
+            return false;
         }
 
         const fileInfo = await getFileInfo(actualFilePath, contentType);
@@ -101,7 +117,7 @@ async function validateVideo(filePath: string, contentType: string, openStream?:
         // Clean up temporary file if created
         if (tempFilePath) {
             try {
-                unlinkSync(tempFilePath);
+                await fs.unlink(tempFilePath);
             } catch (err) {
                 // Ignore cleanup errors
             }
@@ -112,19 +128,16 @@ async function validateVideo(filePath: string, contentType: string, openStream?:
 //
 // Extracts stream data to a temporary file and returns the file path
 //
-async function extractToTempFile(openStream: () => Readable, prefix: string): Promise<string> {
-    const tempPath = join(tmpdir(), `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2)}`);
-    
-    const inputStream = openStream();
-    const chunks: Buffer[] = [];
-    
-    for await (const chunk of inputStream) {
-        chunks.push(chunk);
+async function extractToTempFile(openStream: () => NodeJS.ReadableStream, tempDir: string, prefix: string, ext: string, uuidGenerator: IUuidGenerator): Promise<string> {
+    if (!ext.startsWith('.')) {
+        ext = `.${ext}`;
     }
-    
-    const fileBuffer = Buffer.concat(chunks);
-    writeFileSync(tempPath, fileBuffer);
-    
+    const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}${ext}`);
+    const inputStream = openStream();
+    await writeStreamToFile(inputStream, tempPath);
+    if (!await fs.exists(tempPath)) {
+        throw new Error(`Failed to create temporary file at ${tempPath}`);
+    }
     return tempPath;
 }
 

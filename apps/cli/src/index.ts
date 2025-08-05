@@ -21,6 +21,8 @@ import { exportCommand } from './cmd/export';
 import { upgradeCommand } from './cmd/upgrade';
 import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
+import { rootHashCommand } from './cmd/root-hash';
+import { clearCacheCommand } from './cmd/clear-cache';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -35,7 +37,9 @@ async function main() {
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
     const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verbose logging.", false];
+    const toolsOption: [string, string, boolean] = ["--tools", "Enables output from media processing tools (ImageMagick, ffmpeg, etc.).", false];
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
+    const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts."];
 
     program
         .name("psi")
@@ -67,6 +71,7 @@ Resources:
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
@@ -89,6 +94,7 @@ Resources:
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
@@ -103,6 +109,7 @@ Resources:
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(compareCommand);
 
@@ -144,6 +151,30 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
+    // Add root-hash subcommand
+    debugCommand
+        .command('root-hash')
+        .description('Print the root hash of the media file database')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .action(rootHashCommand);
+
+    // Add clear-cache subcommand
+    debugCommand
+        .command('clear-cache')
+        .description('Clear the local and/or database hash caches')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
+        .action(clearCacheCommand);
+
     program
         .command("examples")
         .description("Shows usage examples for all CLI commands.")
@@ -171,6 +202,7 @@ Resources:
         .alias("inf")
         .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
         .argument("<files...>", "The media files to analyze.")
         .addHelpText('after', getCommandExamplesHelp('info'))
@@ -185,7 +217,9 @@ Resources:
         .option(...keyOption)
         .option(...generateKeyOption)
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initCommand);
 
@@ -242,7 +276,9 @@ Resources:
         .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
         .option(...generateKeyOption)
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('replicate'))
         .action(replicateCommand);
 
@@ -272,6 +308,7 @@ Resources:
         .option(...keyOption)
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('ui'))
         .action(uiCommand);
 
@@ -293,6 +330,7 @@ Resources:
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
+        .option(...toolsOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .addHelpText('after', getCommandExamplesHelp('verify'))

@@ -5,6 +5,7 @@
 import { IStorage } from 'storage';
 import { IBsonCollection, IRecord } from './collection';
 import { SortIndex, ISortResult, SortDataType, SortDirection } from './sort-index';
+import { IUuidGenerator } from 'utils';
 
 export interface ISortManagerOptions {
     // Interface to the file storage system
@@ -12,6 +13,9 @@ export interface ISortManagerOptions {
 
     // The base directory where all sort indexes are stored
     baseDirectory: string;
+
+    // UUID generator for creating unique identifiers
+    uuidGenerator: IUuidGenerator;
 
     // Default page size for paginated results
     defaultPageSize?: number;
@@ -22,11 +26,13 @@ export class SortManager<RecordT extends IRecord> {
     private baseDirectory: string;
     private sortIndexes: Map<string, any> = new Map();
     private defaultPageSize: number;
+    private readonly uuidGenerator: IUuidGenerator;
     
     constructor(options: ISortManagerOptions, private readonly collection: IBsonCollection<RecordT>, private readonly collectionName: string) {
         this.storage = options.storage;
         this.baseDirectory = options.baseDirectory;
         this.defaultPageSize = options.defaultPageSize || 1000;
+        this.uuidGenerator = options.uuidGenerator;
     }
     
     //
@@ -81,6 +87,7 @@ export class SortManager<RecordT extends IRecord> {
             collectionName: this.collectionName,
             fieldName,
             direction,
+            uuidGenerator: this.uuidGenerator,
             pageSize: pageSize || this.defaultPageSize,
             type
         },  this.collection);

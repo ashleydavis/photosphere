@@ -4,8 +4,8 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { BsonDatabase, IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
-import { RandomUuidGenerator } from "utils";
-import { Readable } from "stream";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 
 interface IUser extends IMediaFileDatabases {
     _id: string;
@@ -51,7 +51,7 @@ export interface IMediaFileDatabaseProvider {
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable;
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream;
 
     //
     // Writes an asset to the storage provider.
@@ -85,11 +85,20 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
             const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `${databaseId}/.db`);
+            // Create appropriate providers based on NODE_ENV
+            const uuidGenerator = process.env.NODE_ENV === "testing" 
+                ? new TestUuidGenerator()
+                : new RandomUuidGenerator();
+            const timestampProvider = process.env.NODE_ENV === "testing"
+                ? new TestTimestampProvider()
+                : new TimestampProvider();
+                
             mediaFileDatabase = new MediaFileDatabase(
                 assetStorage,
                 metadataStorage,
                 this.googleApiKey,
-                new RandomUuidGenerator()
+                uuidGenerator,
+                timestampProvider
             );
             await mediaFileDatabase.load();
             this.databaseMap.set(databaseId, mediaFileDatabase);
@@ -120,7 +129,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream {
         const assetPath = `${databaseId}/${assetType}/${assetId}`;
         return this.assetStorage.readStream(assetPath);
     }
@@ -162,11 +171,20 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             return this.mediaFileDatabase;
         }
 
+        // Create appropriate providers based on NODE_ENV
+        const uuidGenerator = process.env.NODE_ENV === "testing" 
+            ? new TestUuidGenerator()
+            : new RandomUuidGenerator();
+        const timestampProvider = process.env.NODE_ENV === "testing"
+            ? new TestTimestampProvider()
+            : new TimestampProvider();
+            
         this.mediaFileDatabase = new MediaFileDatabase(
             this.assetStorage,
             this.metadataStorage,
             this.googleApiKey,
-            new RandomUuidGenerator()
+            uuidGenerator,
+            timestampProvider
         );
         await this.mediaFileDatabase.load();
 
@@ -187,7 +205,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
     //
     // Reads a streaming asset from the storage provider.
     //
-    readStream(databaseId: string, assetType: string, assetId: string): Readable {
+    readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream {
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
@@ -252,7 +270,7 @@ export interface IServerOptions {
 //
 export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
 
-    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage }) : undefined;
+    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator() }) : undefined;
     
     const app = express();
     app.use(cors());

@@ -1,5 +1,6 @@
 import { IStorage, pathJoin } from "storage";
 import { markFileAsDeleted, createTree, IMerkleTree, loadTreeV2, saveTreeV2, upsertFile } from "./merkle-tree";
+import { ITimestampProvider, IUuidGenerator } from "utils";
 
 //
 // The hash and other information about a file.
@@ -68,7 +69,12 @@ export class AssetDatabase implements IAssetDatabase {
     //
     private merkleTree: IMerkleTree | undefined = undefined;
 
-    constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage) {
+    constructor(
+        private readonly assetStorage: IStorage, 
+        private readonly metadataStorage: IStorage,
+        private readonly timestampProvider: ITimestampProvider,
+        private readonly uuidGenerator: IUuidGenerator
+    ) {
     }
 
     //
@@ -80,7 +86,7 @@ export class AssetDatabase implements IAssetDatabase {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        this.merkleTree = createTree();
+        this.merkleTree = createTree(this.timestampProvider, this.uuidGenerator);
         await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
@@ -136,7 +142,7 @@ export class AssetDatabase implements IAssetDatabase {
             fileName: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
-        });
+        }, this.timestampProvider, this.uuidGenerator);
     }
 
     //
@@ -146,7 +152,7 @@ export class AssetDatabase implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
-        markFileAsDeleted(this.merkleTree, filePath);
+        markFileAsDeleted(this.merkleTree, filePath, this.timestampProvider);
     }
 
     //

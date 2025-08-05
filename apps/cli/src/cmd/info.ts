@@ -9,7 +9,6 @@ import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { computeHash } from "adb";
 import fs from "fs";
-import { Readable } from "stream";
 import { IFileInfo } from "storage";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
@@ -20,6 +19,11 @@ export interface IInfoCommandOptions {
     // Enables verbose logging.
     //
     verbose?: boolean;
+
+    //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
 
     //
     // Non-interactive mode - use defaults and command line arguments.
@@ -42,6 +46,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
 
     await configureLog({
         verbose: options.verbose,
+        tools: options.tools
     });
 
     // Ensure media processing tools are available
@@ -90,7 +95,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileInfo, openStream?: () => Readable): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileInfo, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
     let fileAnalysis: FileAnalysis = {

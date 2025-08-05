@@ -1,5 +1,3 @@
-import { Readable } from "stream";
-
 //
 // Partial result of the list operation.
 //
@@ -87,12 +85,12 @@ export interface IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(filePath: string): Readable;
+    readStream(filePath: string): NodeJS.ReadableStream;
 
     //
     // Writes an input stream to storage.
     //
-    writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void>;
+    writeStream(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength?: number): Promise<void>;
 
     //
     // Deletes a file from storage.

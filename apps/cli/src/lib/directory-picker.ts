@@ -227,11 +227,12 @@ async function validateExistingDatabase(path: string): Promise<boolean | string>
 //
 export async function getDirectoryForCommand(
     commandType: 'init' | 'existing',
-    nonInteractive: boolean
+    nonInteractive: boolean,
+    cwd: string = process.cwd()
 ): Promise<string> {
 
     // Check if current directory is suitable
-    const currentDir = process.cwd();
+    const currentDir = cwd;
     
     if (commandType === 'init') {
         if (await validateInitDirectory(currentDir) === true) {

@@ -13,9 +13,12 @@ import {
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
+import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree Metadata', () => {
     const TEST_FILE_PATH = './test-tree-metadata.bin';
+    const timestampProvider = new TestTimestampProvider();
+    const uuidGenerator = new TestUuidGenerator();
     
     beforeEach(() => {
         jest.useFakeTimers();
@@ -38,11 +41,11 @@ describe('Merkle Tree Metadata', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree {
-        let merkleTree = createTree();
+        let merkleTree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
+            merkleTree = addFile(merkleTree, fileHash, timestampProvider, uuidGenerator);
         }
 
         if (!merkleTree) {
@@ -96,7 +99,7 @@ describe('Merkle Tree Metadata', () => {
         
         // Add a new file
         const fileHashC = createFileHash('C');
-        tree = addFile(tree, fileHashC);
+        tree = addFile(tree, fileHashC, timestampProvider, uuidGenerator);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -127,7 +130,7 @@ describe('Merkle Tree Metadata', () => {
         
         // Update file A
         const updatedFileHashA = createFileHash('A', 'modified content');
-        updateFile(tree, updatedFileHashA);
+        updateFile(tree, updatedFileHashA, timestampProvider);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -157,7 +160,7 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Delete file B
-        markFileAsDeleted(tree, 'B');
+        markFileAsDeleted(tree, 'B', timestampProvider);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -203,7 +206,7 @@ describe('Merkle Tree Metadata', () => {
     });
     
     test('createDefaultMetadata should generate valid metadata', () => {
-        const metadata = createDefaultMetadata();
+        const metadata = createDefaultMetadata(timestampProvider, uuidGenerator);
         
         // UUID should be properly formatted
         expect(metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -221,13 +224,13 @@ describe('Merkle Tree Metadata', () => {
     });
     
     test('updateMetadata should update counts and modified time', () => {
-        const original = createDefaultMetadata();
+        const original = createDefaultMetadata(timestampProvider, uuidGenerator);
         
         // Let time pass
         jest.advanceTimersByTime(1000);
         
         // Update metadata
-        const updated = updateMetadata(original, 10, 5, 3);
+        const updated = updateMetadata(original, 10, 5, 3, timestampProvider);
         
         // UUID should remain the same
         expect(updated.id).toEqual(original.id);
