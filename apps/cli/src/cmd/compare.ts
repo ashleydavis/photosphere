@@ -36,9 +36,19 @@ export interface ICompareCommandOptions {
     verbose?: boolean;
 
     //
+    // Enables tool output logging.
+    //
+    tools?: boolean;
+
+    //
     // Non-interactive mode - use defaults and command line arguments.
     //
     yes?: boolean;
+
+    //
+    // Set the current working directory for directory selection prompts.
+    //
+    cwd?: string;
 }
 
 //
@@ -48,6 +58,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
 
     await configureLog({
         verbose: options.verbose,
+        tools: options.tools
     });
 
     const nonInteractive = options.yes || false;
@@ -57,12 +68,12 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
 
     let srcDir = options.db;
     if (srcDir === undefined) {
-        srcDir = await getDirectoryForCommand("existing", nonInteractive);
+        srcDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', nonInteractive);
+        destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
     
     const srcMetaPath = options.srcMeta || pathJoin(srcDir, '.db');

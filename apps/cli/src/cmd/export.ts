@@ -1,56 +1,23 @@
-import { MediaFileDatabase } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import path from "path";
 import fs from "fs-extra";
-import { log, RandomUuidGenerator } from "utils";
-import { getS3Config } from "../lib/config";
+import { log } from "utils";
+import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 
 export type AssetType = "original" | "display" | "thumb";
 
-export interface IExportCommandOptions {
-    //
-    // The directory that contains the media file database.
-    //
-    db?: string;
-
-    //
-    // The directory in which to store asset database metadata.
-    //
-    meta?: string;
-
-    //
-    // Path to the private key file for encryption.
-    //
-    key?: string;
-
+export interface IExportCommandOptions extends IBaseCommandOptions {
     //
     // Type of asset to export (original, display, thumb).
     //
     type?: AssetType;
-
-    //
-    // Enables verbose logging.
-    //
-    verbose?: boolean;
-
-    //
-    // Non-interactive mode - use defaults and command line arguments.
-    //
-    yes?: boolean;
 }
 
 //
 // Command that exports a particular asset by ID to a specified path.
 //
 export async function exportCommand(assetId: string, outputPath: string, options: IExportCommandOptions): Promise<void> {
-    
-    await configureLog({
-        verbose: options.verbose,
-    });
-
     try {
         // Validate inputs
         if (!assetId) {
@@ -61,31 +28,13 @@ export async function exportCommand(assetId: string, outputPath: string, options
             throw new Error("Output path is required");
         }
 
-        // Setup database paths
-        const dbPath = options.db || process.cwd();
-        const metadataPath = options.meta || path.join(dbPath, ".db");
-        const keyPath = options.key;
         const assetType = options.type || "original";
+        const dbPath = options.db || process.cwd();
 
         log.info(`Looking for asset ${pc.cyan(assetId)} (${pc.magenta(assetType)}) in database at ${pc.yellow(dbPath)}`);
-        log.info(`Using metadata directory: ${pc.yellow(metadataPath)}`);
 
-        // Load encryption keys if needed
-        const { options: storageOptions } = await loadEncryptionKeys(keyPath, false, "source");
-        const s3Config = await getS3Config();
-
-        // Create storage instances
-        const { storage: assetStorage } = createStorage(dbPath, s3Config, storageOptions);
-        const { storage: metadataStorage } = createStorage(metadataPath, s3Config, storageOptions);
-
-        // Initialize database
-        const database = new MediaFileDatabase(assetStorage, metadataStorage, undefined, new RandomUuidGenerator());
-
-        try {
-            await database.load();
-        } catch (error) {
-            throw new Error(`Failed to load database: ${error instanceof Error ? error.message : String(error)}`);
-        }
+        // Load the database using shared function
+        const { database, assetStorage } = await loadDatabase(dbPath, options);
 
         // Find the asset by ID
         log.info(`Searching for asset with ID: ${pc.cyan(assetId)}`);

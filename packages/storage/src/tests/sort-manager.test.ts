@@ -3,6 +3,7 @@ import { MockStorage } from './mock-storage';
 import { IRecord } from '../lib/bson-database/collection';
 import { SortManager } from '../lib/bson-database/sort-manager';
 import { MockCollection } from './mock-collection';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestProduct extends IRecord {
@@ -32,7 +33,8 @@ describe('SortManager', () => {
         sortManager = new SortManager<TestProduct>({
             storage,
             baseDirectory: 'db',
-            defaultPageSize: 2
+            defaultPageSize: 2,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection, 'products');
     });
     

@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import { IStorage } from 'storage';
 import { v4 as uuidv4, parse as parseUuid, stringify as stringifyUuid } from 'uuid';
+import { ITimestampProvider, IUuidGenerator } from 'utils';
 
 //
 // Represents a node in the Merkle tree.
@@ -240,10 +241,11 @@ function _addFile(nodeIndex: number, nodes: MerkleNode[], fileHash: FileHash): M
 /**
  * Create default metadata for a new tree
  */
-export function createDefaultMetadata(): TreeMetadata {
-    const now = Date.now();
+export function createDefaultMetadata(timestampProvider: ITimestampProvider, uuidGenerator: IUuidGenerator): TreeMetadata {
+    const now = timestampProvider.now();
+    const id = uuidGenerator.generate();
     return {
-        id: uuidv4(),
+        id,
         totalNodes: 0,
         totalFiles: 0,
         totalSize: 0,
@@ -255,24 +257,30 @@ export function createDefaultMetadata(): TreeMetadata {
 /**
  * Update metadata when tree is modified
  */
-export function updateMetadata(metadata: TreeMetadata, totalNodes: number, totalFiles: number, totalSize: number): TreeMetadata {
+export function updateMetadata(
+    metadata: TreeMetadata, 
+    totalNodes: number, 
+    totalFiles: number, 
+    totalSize: number,
+    timestampProvider: ITimestampProvider
+): TreeMetadata {
     return {
         ...metadata,
         totalNodes,
         totalFiles,
         totalSize,
-        modifiedAt: Date.now()
+        modifiedAt: timestampProvider.now(),
     };
 }
 
 //
 // Create a new empty Merkle tree.
 //
-export function createTree(): IMerkleTree {
+export function createTree(timestampProvider: ITimestampProvider,uuidGenerator: IUuidGenerator): IMerkleTree {
     return {
         nodes: [],
         sortedNodeRefs: [],
-        metadata: createDefaultMetadata(),
+        metadata: createDefaultMetadata(timestampProvider, uuidGenerator),
     };
 }
 
@@ -280,10 +288,15 @@ export function createTree(): IMerkleTree {
  * Add a file to the Merkle tree, efficiently creating a balanced structure
  * without rebuilding the entire tree
  */
-export function addFile(merkleTree: IMerkleTree, fileHash: FileHash): IMerkleTree {
+export function addFile(
+    merkleTree: IMerkleTree, 
+    fileHash: FileHash,
+    timestampProvider: ITimestampProvider,
+    uuidGenerator: IUuidGenerator
+): IMerkleTree {
 
     let nodes: MerkleNode[];
-    let metadata = merkleTree?.metadata || createDefaultMetadata();
+    let metadata = merkleTree?.metadata || createDefaultMetadata(timestampProvider, uuidGenerator);
     
     //
     // Adds the new leaf node to the merkle tree.
@@ -333,7 +346,7 @@ export function addFile(merkleTree: IMerkleTree, fileHash: FileHash): IMerkleTre
     return {
         nodes,
         sortedNodeRefs,
-        metadata: updateMetadata(metadata, nodes.length, numFiles + 1, nodes[0].size),
+        metadata: updateMetadata(metadata, nodes.length, numFiles + 1, nodes[0].size, timestampProvider),
     };
 }
 
@@ -463,21 +476,30 @@ function calculatePathToRoot(nodeIndex: number, nodes: MerkleNode[]): number[] {
 // Upsert a file in the Merkle tree, either adding it or updating it if it already exists.
 // Updates the tree in place.
 //
-export function upsertFile(merkleTree: IMerkleTree, fileHash: FileHash): IMerkleTree {
+export function upsertFile(
+    merkleTree: IMerkleTree, 
+    fileHash: FileHash,
+    timestampProvider: ITimestampProvider,
+    uuidGenerator: IUuidGenerator
+): IMerkleTree {
     if (merkleTree && merkleTree.sortedNodeRefs.length > 0) {
-        if (updateFile(merkleTree, fileHash)) {
+        if (updateFile(merkleTree, fileHash, timestampProvider)) {
             // File updated successfully in place.
             return merkleTree;
         }
     }
 
-    return addFile(merkleTree, fileHash);    
+    return addFile(merkleTree, fileHash, timestampProvider, uuidGenerator);
 }
 
 /**
  * Update a file in the Merkle tree with new content, maintaining the same tree structure.
  */
-export function updateFile(merkleTree: IMerkleTree | undefined, fileHash: FileHash): boolean {
+export function updateFile(
+    merkleTree: IMerkleTree | undefined, 
+    fileHash: FileHash, 
+    timestampProvider: ITimestampProvider
+): boolean {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         throw new Error(`Tree is empty, cannot update file '${fileHash.fileName}'`);
     }
@@ -516,6 +538,7 @@ export function updateFile(merkleTree: IMerkleTree | undefined, fileHash: FileHa
         merkleTree.nodes.length, 
         merkleTree.metadata.totalFiles,
         merkleTree.nodes[0].size,
+        timestampProvider
     );
     
     return true;
@@ -601,7 +624,12 @@ export function findFileNode(merkleTree: IMerkleTree | undefined, fileName: stri
 //
 // Load a Merkle tree from a file.
 //
-export async function loadTree(filePath: string, storage: IStorage): Promise<IMerkleTree | undefined> {
+export async function loadTree(
+    filePath: string, 
+    storage: IStorage,
+    timestampProvider?: ITimestampProvider,
+    uuidGenerator?: IUuidGenerator
+): Promise<IMerkleTree | undefined> {
     const treeData = await storage.read(filePath);
     if (!treeData) {
         return undefined;
@@ -738,13 +766,15 @@ export async function loadTree(filePath: string, storage: IStorage): Promise<IMe
     //
     // Create metadata for the tree.
     //
+    const now = timestampProvider ? timestampProvider.now() : Date.now();
+    const id = uuidGenerator ? uuidGenerator.generate() : uuidv4();
     const metadata: TreeMetadata = {
-        id: uuidv4(),
+        id,
         totalNodes: nodes.length,
         totalFiles: numFiles,
         totalSize: nodes[0].size,
-        createdAt: Date.now(),
-        modifiedAt: Date.now(),
+        createdAt: now,
+        modifiedAt: now,
     };
 
     return {
@@ -1284,7 +1314,11 @@ function createTombstoneHash(fileName: string): Buffer {
  * @param fileName The name of the file to mark as deleted
  * @returns true if the file was found and marked as deleted, false otherwise
  */
-export function markFileAsDeleted(merkleTree: IMerkleTree, fileName: string): boolean {
+export function markFileAsDeleted(
+    merkleTree: IMerkleTree, 
+    fileName: string, 
+    timestampProvider: ITimestampProvider
+): boolean {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         return false;
     }
@@ -1327,6 +1361,7 @@ export function markFileAsDeleted(merkleTree: IMerkleTree, fileName: string): bo
             merkleTree.nodes.length, 
             merkleTree.metadata.totalFiles,
             merkleTree.nodes[0].size,
+            timestampProvider
         );
     }
     

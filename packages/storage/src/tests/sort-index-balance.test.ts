@@ -3,6 +3,7 @@ import { IRecord } from '../lib/bson-database/collection';
 import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
 import { MockCollection } from './mock-collection';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -100,7 +101,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 10,
-            keySize: 5
+            keySize: 5,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -144,7 +146,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 8,
-            keySize: 4
+            keySize: 4,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -173,7 +176,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 5,
-            keySize: 3
+            keySize: 3,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build empty index
@@ -216,7 +220,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 6,
-            keySize: 4
+            keySize: 4,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -251,7 +256,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 8,
-            keySize: 4
+            keySize: 4,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -293,7 +299,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 6,
-            keySize: 3
+            keySize: 3,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index
@@ -346,7 +353,8 @@ describe('SortIndex Tree Balance', () => {
             fieldName: 'value',
             direction: 'asc',
             pageSize: 20,
-            keySize: 10
+            keySize: 10,
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
         
         // Build the index

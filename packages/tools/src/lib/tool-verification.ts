@@ -19,11 +19,10 @@ export interface ToolsStatus {
  * Check the availability of all required tools
  */
 export async function verifyTools(): Promise<ToolsStatus> {
-    const [magickStatus, ffprobeStatus, ffmpegStatus] = await Promise.all([
-        Image.verifyImageMagick(),
-        Video.verifyFfprobe(),
-        Video.verifyFfmpeg()
-    ]);
+    // Serialize tool verification to avoid race conditions
+    const magickStatus = await Image.verifyImageMagick();
+    const ffprobeStatus = await Video.verifyFfprobe();
+    const ffmpegStatus = await Video.verifyFfmpeg();
 
     const missingTools: string[] = [];
     

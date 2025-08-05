@@ -21,7 +21,8 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     
     // Configure logging
     await configureLog({
-        verbose: options.verbose
+        verbose: options.verbose,
+        tools: options.tools
     });
 
     // Use provided db directory or current directory

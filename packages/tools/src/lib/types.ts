@@ -24,10 +24,11 @@ export interface AssetInfo {
 }
 
 export interface ResizeOptions {
-    width?: number;
-    height?: number;
-    quality?: number;
-    format?: 'jpeg' | 'jpg' | 'png' | 'webp' | 'gif' | 'bmp' | 'tiff';
+    width: number;
+    height: number;
+    quality: number;
+    format: 'jpeg' | 'jpg' | 'png' | 'webp' | 'gif' | 'bmp' | 'tiff';
+    ext: string;
     maintainAspectRatio?: boolean;
 }
 

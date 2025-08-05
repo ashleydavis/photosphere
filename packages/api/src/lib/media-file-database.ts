@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IFileInfo, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -430,10 +430,11 @@ export class MediaFileDatabase {
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
-        uuidGenerator: IUuidGenerator
+        uuidGenerator: IUuidGenerator,
+        private readonly timestampProvider: ITimestampProvider
             ) {
 
-        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage);
+        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, this.timestampProvider, uuidGenerator);
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
@@ -444,6 +445,7 @@ export class MediaFileDatabase {
 
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
+            uuidGenerator: uuidGenerator,
             maxCachedShards: 100,
         });
 
@@ -690,205 +692,209 @@ export class MediaFileDatabase {
     //
     // Adds a file to the media file database.
     //
-    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
-
-        let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
-        if (localHashedFile) {
-            //
-            // Already hashed, which means the file is valid.
-            //
-        }
-        else {
-            //
-            // We might not have seen this file before, so we need to validate it.
-            //
-            if (!await this.validateFile(filePath, fileInfo, contentType, openStream)) {
-                log.error(`File "${filePath}" has failed validation.`);
-                this.addSummary.filesFailed++;
-                if (progressCallback) {
-                    progressCallback(this.localFileScanner.getCurrentlyScanning());
-                }            
-                return;
-            }
-
-            //
-            // Compute (and cache) the hash of the file.
-            //
-            localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
-        }
-
-        const metadataCollection = this.bsonDatabase.collection("metadata");
-
-        log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
-
-        const localHashStr = localHashedFile.hash.toString("hex");
-        const records = await metadataCollection.findByIndex("hash", localHashStr);
-        if (records.length > 0) {
-            //
-            // The file is already in the database.
-            //
-            log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            this.addSummary.filesAlreadyAdded++;
-            if (progressCallback) {
-                progressCallback(this.localFileScanner.getCurrentlyScanning());
-            }
-            return;
-        }
+    private addFile = async (filePath: string, fileInfo: IFileInfo, contentType: string, labels: string[], openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         const assetId = this.uuidGenerator.generate();
 
-        let assetDetails: IAssetDetails | undefined = undefined;
-        
         //
         // Create a temporary directory for generates files like the thumbnail, display asset, etc.
         //
         const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, this.uuidGenerator.generate());
         await fs.ensureDir(assetTempDir);
-
-        if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, openStream);
-        }
-        else if (contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, openStream);
-        }
-
-        const assetPath = `assets/${assetId}`;
-        const thumbPath = `thumb/${assetId}`;
-        const displayPath = `display/${assetId}`;
-
+       
         try {
-            //
-            // Uploads the full asset.
-            //
-            await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileInfo.length));
-
-            const assetInfo = await this.assetStorage.info(assetPath);
-            if (!assetInfo) {
-                throw new Error(`Failed to get info for file "${assetPath}"`);
+            let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
+            if (localHashedFile) {
+                //
+                // Already hashed, which means the file is valid.
+                //
+                //todo: this means the file isn't validated in local smoke tests which changes the order of things. //fio:
+            }
+            else {
+                //
+                // We might not have seen this file before, so we need to validate it.
+                //
+                if (!await this.validateFile(filePath, contentType, assetTempDir, openStream)) {
+                    log.error(`File "${filePath}" has failed validation.`);
+                    this.addSummary.filesFailed++;
+                    if (progressCallback) {
+                        progressCallback(this.localFileScanner.getCurrentlyScanning());
+                    }            
+                    return;
+                }
+    
+                //
+                // Compute (and cache) the hash of the file.
+                //
+                localHashedFile = await this.computeHash(filePath, fileInfo, openStream, this.localHashCache);
+            }
+    
+            const metadataCollection = this.bsonDatabase.collection("metadata");
+    
+            log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
+    
+            const localHashStr = localHashedFile.hash.toString("hex");
+            const records = await metadataCollection.findByIndex("hash", localHashStr);
+            if (records.length > 0) {
+                //
+                // The file is already in the database.
+                //
+                log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
+                this.addSummary.filesAlreadyAdded++;
+                if (progressCallback) {
+                    progressCallback(this.localFileScanner.getCurrentlyScanning());
+                }
+                return;
             }
             
-            const hashedAsset = await this.computeHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
-            if (hashedAsset.hash.toString("hex") !== localHashStr) {
-                throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
+            let assetDetails: IAssetDetails | undefined = undefined;
+            
+    
+            if (contentType?.startsWith("video")) {
+                assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
             }
-            await this.assetDatabase.addFile(assetPath, hashedAsset);
+            else if (contentType?.startsWith("image")) {
+                assetDetails = await getImageDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
+            }
+    
+            const assetPath = `assets/${assetId}`;
+            const thumbPath = `thumb/${assetId}`;
+            const displayPath = `display/${assetId}`;
 
-            if (assetDetails?.thumbnailPath) {
+            try {
                 //
-                // Uploads the thumbnail.
+                // Uploads the full asset.
                 //
-                await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
+                await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileInfo.length));
 
-                const thumbInfo = await this.assetStorage.info(thumbPath);
-                if (!thumbInfo) {
-                    throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
+                const assetInfo = await this.assetStorage.info(assetPath);
+                if (!assetInfo) {
+                    throw new Error(`Failed to get info for file "${assetPath}"`);
                 }
-                const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath), this.databaseHashCache);
-                await this.assetDatabase.addFile(thumbPath, hashedThumb);
-            }
-
-            if (assetDetails?.displayPath) {
-                //
-                // Uploads the display asset.
-                //
-                await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
-
-                const displayInfo = await this.assetStorage.info(displayPath);
-                if (!displayInfo) {
-                    throw new Error(`Failed to get info for display "${displayPath}"`);
+                
+                const hashedAsset = await this.computeHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
+                if (hashedAsset.hash.toString("hex") !== localHashStr) {
+                    throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
-                const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!), this.databaseHashCache);
-                await this.assetDatabase.addFile(displayPath, hashedDisplay);
-            }
+                await this.assetDatabase.addFile(assetPath, hashedAsset);
 
-            const properties: any = {};
+                if (assetDetails?.thumbnailPath) {
+                    //
+                    // Uploads the thumbnail.
+                    //
+                    await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
 
-            if (assetDetails?.metadata) {
-                properties.metadata = assetDetails.metadata;
-            }
+                    const thumbInfo = await this.assetStorage.info(thumbPath);
+                    if (!thumbInfo) {
+                        throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
+                    }
+                    const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath), this.databaseHashCache);
+                    await this.assetDatabase.addFile(thumbPath, hashedThumb);
+                }
 
-            let coordinates: ILocation | undefined = undefined;
-            let location: string | undefined = undefined;
-            if (assetDetails?.coordinates) {
-                coordinates = assetDetails.coordinates;
-                const googleApiKey = this.googleApiKey;
-                if (googleApiKey) {
-                    const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
-                    if (reverseGeocodingResult) {
-                        location = reverseGeocodingResult.location;
-                        properties.reverseGeocoding = {
-                            type: reverseGeocodingResult.type,
-                            fullResult: reverseGeocodingResult.fullResult,
-                        };
+                if (assetDetails?.displayPath) {
+                    //
+                    // Uploads the display asset.
+                    //
+                    await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
+
+                    const displayInfo = await this.assetStorage.info(displayPath);
+                    if (!displayInfo) {
+                        throw new Error(`Failed to get info for display "${displayPath}"`);
+                    }
+                    const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!), this.databaseHashCache);
+                    await this.assetDatabase.addFile(displayPath, hashedDisplay);
+                }
+
+                const properties: any = {};
+
+                if (assetDetails?.metadata) {
+                    properties.metadata = assetDetails.metadata;
+                }
+
+                let coordinates: ILocation | undefined = undefined;
+                let location: string | undefined = undefined;
+                if (assetDetails?.coordinates) {
+                    coordinates = assetDetails.coordinates;
+                    const googleApiKey = this.googleApiKey;
+                    if (googleApiKey) {
+                        const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
+                        if (reverseGeocodingResult) {
+                            location = reverseGeocodingResult.location;
+                            properties.reverseGeocoding = {
+                                type: reverseGeocodingResult.type,
+                                fullResult: reverseGeocodingResult.fullResult,
+                            };
+                        }
                     }
                 }
+
+                //
+                // Read the date of the file.
+                //
+                const fileDir = path.dirname(filePath);
+                labels = labels.concat(
+                    fileDir.replace(/\\/g, "/")
+                        .split("/")
+                        .filter(label => label)
+                );
+
+                const description = "";
+
+                const micro = assetDetails?.microPath
+                    ? (await fs.promises.readFile(assetDetails.microPath)).toString("base64")
+                    : undefined;
+
+                const color = assetDetails 
+                    ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
+                    : undefined;
+
+                //
+                // Add the asset's metadata to the database.
+                //
+                await this.bsonDatabase.collection("metadata").insertOne({
+                    _id: assetId,
+                    width: assetDetails?.resolution.width,
+                    height: assetDetails?.resolution.height,
+                    origFileName: path.basename(filePath),
+                    origPath: fileDir,
+                    contentType,
+                    hash: localHashStr,
+                    coordinates,
+                    location,
+                    duration: assetDetails?.duration,
+                    fileDate: dayjs(fileInfo.lastModified).toISOString(),
+                    photoDate: assetDetails?.photoDate || dayjs(fileInfo.lastModified).toISOString(),
+                    uploadDate: dayjs(this.timestampProvider.dateNow()).toISOString(),
+                    properties,
+                    labels,
+                    description,
+                    micro,
+                    color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) : undefined,
+                });
+
+                log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
+
+                // Increment asset count in metadata
+                this.incrementAssetCount();
+
+                this.addSummary.filesAdded++;
+                this.addSummary.totalSize += fileInfo.length;
+                if (progressCallback) {
+                    progressCallback(this.localFileScanner.getCurrentlyScanning());
+                }
             }
+            catch (err: any) {
+                log.exception(`Failed to upload asset data for file "${filePath}"`, err);
 
-            //
-            // Read the date of the file.
-            //
-            const fileDir = path.dirname(filePath);
-            labels = labels.concat(
-                fileDir.replace(/\\/g, "/")
-                    .split("/")
-                    .filter(label => label)
-            );
+                await this.assetStorage.deleteFile(assetPath);
+                await this.assetStorage.deleteFile(thumbPath);
+                await this.assetStorage.deleteFile(displayPath);
 
-            const description = "";
-
-            const micro = assetDetails?.microPath
-                ? (await fs.promises.readFile(assetDetails.microPath)).toString("base64")
-                : undefined;
-
-            const color = assetDetails 
-                ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
-                : undefined;
-
-            //
-            // Add the asset's metadata to the database.
-            //
-            await this.bsonDatabase.collection("metadata").insertOne({
-                _id: assetId,
-                width: assetDetails?.resolution.width,
-                height: assetDetails?.resolution.height,
-                origFileName: path.basename(filePath),
-                origPath: fileDir,
-                contentType,
-                hash: localHashStr,
-                coordinates,
-                location,
-                duration: assetDetails?.duration,
-                fileDate: dayjs(fileInfo.lastModified).toISOString(),
-                photoDate: assetDetails?.photoDate || dayjs(fileInfo.lastModified).toISOString(),
-                uploadDate: dayjs().toISOString(),
-                properties,
-                labels,
-                description,
-                micro,
-                color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) : undefined,
-            });
-
-            log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
-
-            // Increment asset count in metadata
-            this.incrementAssetCount();
-
-            this.addSummary.filesAdded++;
-            this.addSummary.totalSize += fileInfo.length;
-            if (progressCallback) {
-                progressCallback(this.localFileScanner.getCurrentlyScanning());
-            }
-        }
-        catch (err: any) {
-            log.exception(`Failed to upload asset data for file "${filePath}"`, err);
-
-            await this.assetStorage.deleteFile(assetPath);
-            await this.assetStorage.deleteFile(thumbPath);
-            await this.assetStorage.deleteFile(displayPath);
-
-            this.addSummary.filesFailed++;
-            if (progressCallback) {
-                progressCallback(this.localFileScanner.getCurrentlyScanning());
+                this.addSummary.filesFailed++;
+                if (progressCallback) {
+                    progressCallback(this.localFileScanner.getCurrentlyScanning());
+                }
             }
         }
         finally {
@@ -902,7 +908,7 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileInfo, this.localHashCache);
         if (!localHashedFile) {            
@@ -958,9 +964,9 @@ export class MediaFileDatabase {
     //
     // Validates the local file.
     //
-    async validateFile(filePath: string, fileInfo: IFileInfo, contentType: string, openStream: (() => Readable) | undefined): Promise<boolean> {
+    async validateFile(filePath: string, contentType: string, tempDir: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
         try {
-            return await validateFile(filePath, fileInfo, contentType, openStream);
+            return await validateFile(filePath, contentType, tempDir, this.uuidGenerator, openStream);
         }
         catch (error: any) {
             log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);                
@@ -995,7 +1001,7 @@ export class MediaFileDatabase {
     //
     // Computes the has h of a file and stores it in the hash cache.
     //
-    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => Readable) | undefined, hashCache: HashCache): Promise<IHashedFile> {
+    async computeHash(filePath: string, fileInfo: IFileInfo, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
         //
         // Compute the hash of the file.
         //
@@ -1312,13 +1318,13 @@ export class MediaFileDatabase {
         const destHashCache = new HashCache(destMetadataStorage, "");
         await retry(() => destHashCache.load());
 
-        let newDestTree = createTree();
+        let newDestTree = createTree(this.timestampProvider, this.uuidGenerator);
 
         //
         // Copies an asset from the source storage to the destination storage.
         // But only when necessary.
         //
-        async function copyAsset(fileName: string, sourceHash: Buffer): Promise<void> {
+        const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
             result.filesConsidered++;
             
             const destHash = destHashCache.getHash(fileName);
@@ -1340,7 +1346,7 @@ export class MediaFileDatabase {
                         fileName,
                         hash: destHash.hash,
                         length: destHash.length,
-                    });
+                    }, this.timestampProvider, this.uuidGenerator);
 
                     return;                
                 }
@@ -1395,19 +1401,19 @@ export class MediaFileDatabase {
                 fileName,
                 hash: copiedHash,
                 length: copiedFileInfo.length,
-            });
+            }, this.timestampProvider, this.uuidGenerator);
 
             result.copiedFiles++;
 
             if (progressCallback) {
                 progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
             }
-        }
+        };
 
         //
         // Process a node in the soure merkle tree.
         //
-        async function processSrcNode(srcNode: MerkleNode): Promise<boolean> {
+        const processSrcNode = async (srcNode: MerkleNode): Promise<boolean> => {
             if (srcNode.fileName && !srcNode.isDeleted) {               
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
 
@@ -1416,7 +1422,7 @@ export class MediaFileDatabase {
                 }
             }
             return true; // Continue traversing.
-        }
+        };
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 

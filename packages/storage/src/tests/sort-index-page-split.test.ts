@@ -3,6 +3,7 @@ import { MockStorage } from './mock-storage';
 import { IRecord} from '../lib/bson-database/collection';
 import { SortIndex } from '../lib/bson-database/sort-index';
 import { MockCollection } from './mock-collection';
+import { RandomUuidGenerator } from 'utils';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -38,7 +39,8 @@ describe('SortIndex Page Split', () => {
             collectionName: 'test_collection',
             fieldName: 'score',
             direction: 'asc',
-            pageSize: 2 // Small page size to trigger splits easily
+            pageSize: 2, // Small page size to trigger splits easily
+            uuidGenerator: new RandomUuidGenerator()
         }, collection);
     });
     

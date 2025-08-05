@@ -10,9 +10,12 @@ import {
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
+import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree Save/Load V2', () => {
     const TEST_FILE_PATH = './test-tree-v2.bin';
+    const timestampProvider = new TestTimestampProvider();
+    const uuidGenerator = new TestUuidGenerator();
     
     /**
      * Helper function to create a file hash with a given name and content
@@ -31,11 +34,11 @@ describe('Merkle Tree Save/Load V2', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree {
-        let merkleTree = createTree();
+        let merkleTree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
+            merkleTree = addFile(merkleTree, fileHash, timestampProvider, uuidGenerator);
         }
 
         if (!merkleTree) {

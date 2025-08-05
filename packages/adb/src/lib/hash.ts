@@ -4,7 +4,7 @@ import { type Readable } from "node:stream";
 //
 // Computes a hash from a stream.
 //
-export function computeHash(inputStream: Readable): Promise<Buffer> {
+export function computeHash(inputStream: NodeJS.ReadableStream): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
         const hash = createHash("sha256");
 

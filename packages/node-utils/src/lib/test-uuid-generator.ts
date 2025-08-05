@@ -43,8 +43,19 @@ export class TestUuidGenerator implements IUuidGenerator {
     }
 
     private saveCounter(): void {
+        // Ensure the directory exists before writing the file
+        const dir = path.dirname(this.counterFilePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        
         const counterValue = this.counter.toString();
         fs.writeFileSync(this.counterFilePath, counterValue, 'utf8');
+    }
+
+    reset(): void {
+        this.counter = 0;
+        this.initialized = false;
     }
 
     private generateDeterministicUuid(counter: number): string {

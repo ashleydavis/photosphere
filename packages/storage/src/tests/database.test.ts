@@ -1,6 +1,7 @@
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from './mock-storage';
 import { BsonDatabase } from '../lib/bson-database/database';
+import { RandomUuidGenerator } from 'utils';
 
 describe('BsonDatabase', () => {
     let storage: MockStorage;
@@ -10,6 +11,7 @@ describe('BsonDatabase', () => {
         storage = new MockStorage();
         database = new BsonDatabase({
             storage,
+            uuidGenerator: new RandomUuidGenerator(),
             maxCachedShards: 5
         });
     });
