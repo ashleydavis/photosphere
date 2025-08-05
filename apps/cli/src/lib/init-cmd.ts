@@ -132,7 +132,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
+    const { options: storageOptions } = await loadEncryptionKeys(options.key, false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
@@ -352,7 +352,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     }
 
     // Load encryption keys (with generateKey support for init)
-    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false, "source");
+    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);

@@ -1130,7 +1130,7 @@ export class MediaFileDatabase {
     //
     async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {
         
-        const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false, "source");
+        const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
         const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
         const { storage: sourceMetadataStorage } = createStorage(options.sourceMeta || pathJoin(options.source, '.db'));
 
