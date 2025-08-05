@@ -133,13 +133,11 @@ export async function loadOrGenerateKeyPair(keyFilePath: string, generate = fals
  * 
  * @param keyPath Path to the key file
  * @param generateKey Whether to generate a key if it doesn't exist
- * @param description Description for logging
  * @returns Storage options with encryption keys, or empty object if no key provided
  */
 export async function loadEncryptionKeys(
     keyPath: string | undefined, 
-    generateKey: boolean,
-    description: string
+    generateKey: boolean
 ): Promise<{ options: IStorageOptions, isEncrypted: boolean }> {
     if (!keyPath) {
         return { options: {}, isEncrypted: false };

@@ -94,7 +94,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     const staticMiddleware = createZipStaticMiddleware(zipBuffer, 'dist');
 
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false, "source");
+    const { options: storageOptions } = await loadEncryptionKeys(options.key, false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(options.db, s3Config, storageOptions);

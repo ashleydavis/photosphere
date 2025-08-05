@@ -60,7 +60,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         await configureIfNeeded(['s3'], nonInteractive)
     }
 
-    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false, "destination");
+    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false);
 
     const s3Config = await getS3Config();
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
