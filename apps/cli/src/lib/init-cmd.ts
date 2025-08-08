@@ -17,6 +17,53 @@ import { join } from "path";
 // Helper function to resolve encryption key path
 // If the key path doesn't contain path separators, check ~/.config/photosphere/keys/ first, then current directory
 //
+//
+// Helper function to get available encryption keys from the keys directory
+//
+async function getAvailableKeys(): Promise<string[]> {
+    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+    
+    if (!await fs.pathExists(keysDir)) {
+        return [];
+    }
+    
+    const allFiles = await fs.readdir(keysDir);
+    // Filter for .key files that have corresponding .pub files
+    return allFiles
+        .filter(file => file.endsWith('.key'))
+        .filter(file => {
+            const publicKeyPath = join(keysDir, `${file}.pub`);
+            return fs.existsSync(publicKeyPath);
+        });
+}
+
+//
+// Helper function to show key selection menu
+//
+async function selectEncryptionKey(message: string): Promise<string> {
+    const keyFiles = await getAvailableKeys();
+    
+    if (keyFiles.length === 0) {
+        outro(pc.red('✗ No encryption keys found in ~/.config/photosphere/keys/\n  Please provide the private key using the --key option or place your key files in the keys directory.'));
+        await exit(1);
+    }
+
+    // Show menu of available keys
+    const selectedKey = await select({
+        message,
+        options: keyFiles.map(file => ({
+            value: file,
+            label: file
+        })),
+    });
+
+    if (isCancel(selectedKey)) {
+        await exit(1);
+    }
+
+    return selectedKey as string;
+}
+
 export async function resolveKeyPath(keyPath: string | undefined): Promise<string | undefined> {
     if (!keyPath) {
         return undefined;
@@ -159,11 +206,11 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    const resolvedKeyPath = await resolveKeyPath(options.key);
-    const { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+    let resolvedKeyPath = await resolveKeyPath(options.key);
+    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
     const s3Config = await getS3Config();
-    const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+    let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath, s3Config);
 
     // Make sure the merkle tree file exists.
@@ -175,8 +222,26 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // See if the database is encrypted and requires a key.
     if (await metadataStorage.fileExists('encryption.pub')) {
         if (!resolvedKeyPath) {
-            outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}\n    ${pc.cyan(`psi <command> --key your-key-filename.key`)}`));
-            await exit(1);
+            if (nonInteractive) {
+                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}\n    ${pc.cyan(`psi <command> --key your-key-filename.key`)}`));
+                await exit(1);
+            } else {
+                // Interactive mode - show key selection menu
+                log.info(pc.yellow('This database is encrypted and requires a private key to access.'));
+                
+                // Show menu of available keys
+                const selectedKey = await selectEncryptionKey('Select the encryption key for this database:');
+                
+                // Resolve the selected key path and reload encryption keys
+                options.key = selectedKey;
+                resolvedKeyPath = await resolveKeyPath(options.key);
+                const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+                storageOptions = newStorageOptions;
+                
+                // Recreate storage with the new encryption options
+                const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+                assetStorage = newAssetStorage;
+            }
         }
     }
 
@@ -268,41 +333,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
             }
 
             if (keyChoice === 'existing') {
-                // Look for existing keys in ~/.config/photosphere/keys
-                const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-                
-                let keyFiles: string[] = [];
-                if (await fs.pathExists(keysDir)) {
-                    const allFiles = await fs.readdir(keysDir);
-                    // Filter for .key files that have corresponding .pub files
-                    keyFiles = allFiles
-                        .filter(file => file.endsWith('.key'))
-                        .filter(file => {
-                            const publicKeyPath = join(keysDir, `${file}.pub`);
-                            return fs.existsSync(publicKeyPath);
-                        });
-                }
-
-                if (keyFiles.length === 0) {
-                    outro(pc.red('No encryption keys found in ~/.config/photosphere/keys/\n  Please generate a new key or place your existing key files in this directory.'));
-                    await exit(1);
-                }
-
                 // Show menu of available keys
-                const selectedKey = await select({
-                    message: 'Select an encryption key:',
-                    options: keyFiles.map(file => ({
-                        value: file,
-                        label: file
-                    })),
-                });
-
-                if (isCancel(selectedKey)) {
-                    await exit(1);
-                }
-
+                const selectedKey = await selectEncryptionKey('Select an encryption key:');
+                
                 // Set the key path (no generation needed)
-                options.key = selectedKey as string;
+                options.key = selectedKey;
                 options.generateKey = false;
             } else if (keyChoice === 'generate') {
                 // Generate new key - save in ~/.config/photosphere/keys directory
