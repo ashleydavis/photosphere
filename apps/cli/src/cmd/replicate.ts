@@ -3,7 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPath } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -60,7 +60,8 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         await configureIfNeeded(['s3'], nonInteractive)
     }
 
-    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(options.destKey, options.generateKey || false);
+    const resolvedDestKeyPath = await resolveKeyPath(options.destKey);
+    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPath, options.generateKey || false);
 
     const s3Config = await getS3Config();
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
@@ -90,8 +91,8 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     log.info(`Skipped (unchanged):       ${result.existingFiles > 0 ? pc.yellow(result.existingFiles.toString()) : pc.gray('0')}`);
     
     // If destination is encrypted, copy the public key to the destination .db directory
-    if (destIsEncrypted && options.destKey) {
-        const publicKeySource = `${options.destKey}.pub`;
+    if (destIsEncrypted && resolvedDestKeyPath) {
+        const publicKeySource = `${resolvedDestKeyPath}.pub`;
         const publicKeyDest = pathJoin(destMetaPath, 'encryption.pub');
         
         try {
