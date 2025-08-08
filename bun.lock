@@ -35,7 +35,7 @@
     },
     "apps/cli": {
       "name": "cli",
-      "version": "0.0.1",
+      "version": "0.0.4",
       "dependencies": {
         "adm-zip": "^0.5.16",
         "api": "workspace:*",
@@ -318,6 +318,7 @@
         "aws-sdk": "=2.1311.0",
         "bson": "^6.10.3",
         "fs-extra": "^11.1.0",
+        "node-utils": "workspace:*",
         "utils": "workspace:*",
       },
       "devDependencies": {

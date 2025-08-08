@@ -1,7 +1,7 @@
 import { generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
 import * as fs from 'fs-extra';
-import * as path from 'path';
 import { IStorageOptions } from './storage-factory';
+import { ensureParentDirectoryExists } from 'node-utils';
 
 /**
  * Interface for key pair
@@ -53,8 +53,7 @@ export async function saveKeyPair(keyPair: IKeyPair, keyFilePath: string): Promi
         format: 'pem'
     });
 
-    const dirname = path.dirname(path.resolve(keyFilePath));
-    await fs.ensureDir(dirname);
+    await ensureParentDirectoryExists(keyFilePath);
 
     // Save private key
     await fs.writeFile(keyFilePath, privateKeyPem);

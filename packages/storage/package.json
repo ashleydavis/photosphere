@@ -27,6 +27,7 @@
     "aws-sdk": "=2.1311.0",
     "bson": "^6.10.3",
     "fs-extra": "^11.1.0",
-    "utils": "workspace:*"
+    "utils": "workspace:*",
+    "node-utils": "workspace:*"
   }
 }
