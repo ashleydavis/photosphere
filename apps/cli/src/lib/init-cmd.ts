@@ -268,52 +268,41 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
             }
 
             if (keyChoice === 'existing') {
-                // Ask for existing key file
-                const keyDir = await pickDirectory(
-                    'Select directory containing your encryption key:',
-                    options.cwd || process.cwd(),
-                    async (path) => {
-                        if (!await fs.exists(path)) {
-                            return 'Directory does not exist';
-                        }
-                        return true;
-                    }
-                );
+                // Look for existing keys in ~/.config/photosphere/keys
+                const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+                
+                let keyFiles: string[] = [];
+                if (await fs.pathExists(keysDir)) {
+                    const allFiles = await fs.readdir(keysDir);
+                    // Filter for .key files that have corresponding .pub files
+                    keyFiles = allFiles
+                        .filter(file => file.endsWith('.key'))
+                        .filter(file => {
+                            const publicKeyPath = join(keysDir, `${file}.pub`);
+                            return fs.existsSync(publicKeyPath);
+                        });
+                }
 
-                if (!keyDir) {
-                    outro(pc.red('No directory selected for encryption key'));
+                if (keyFiles.length === 0) {
+                    outro(pc.red('No encryption keys found in ~/.config/photosphere/keys/\n  Please generate a new key or place your existing key files in this directory.'));
                     await exit(1);
                 }
 
-                // Ask for filename
-                const keyFilename = await text({
-                    message: 'Enter the encryption key filename:',
-                    placeholder: 'my-photos.key',
-                    initialValue: 'my-photos.key',
-                    validate: (value) => {
-                        if (!value || value.trim().length === 0) {
-                            return 'Filename is required';
-                        }
-                        // Check if file exists
-                        const keyPath = join(keyDir!, value);
-                        if (!fs.existsSync(keyPath)) {
-                            return 'File does not exist';
-                        }
-                        // Check if public key exists
-                        const publicKeyPath = `${keyPath}.pub`;
-                        if (!fs.existsSync(publicKeyPath)) {
-                            return 'Public key file (.pub) not found alongside private key';
-                        }
-                        return undefined;
-                    },
+                // Show menu of available keys
+                const selectedKey = await select({
+                    message: 'Select an encryption key:',
+                    options: keyFiles.map(file => ({
+                        value: file,
+                        label: file
+                    })),
                 });
 
-                if (isCancel(keyFilename)) {
+                if (isCancel(selectedKey)) {
                     await exit(1);
                 }
 
                 // Set the key path (no generation needed)
-                options.key = join(keyDir!, keyFilename as string);
+                options.key = selectedKey as string;
                 options.generateKey = false;
             } else if (keyChoice === 'generate') {
                 // Generate new key - save in ~/.config/photosphere/keys directory
