@@ -3,6 +3,7 @@ import { Image } from "tools";
 import pc from "picocolors";
 import { log } from "utils";
 import { version } from "../lib/version";
+import { buildMetadata } from "../lib/build-metadata";
 
 //
 // Command that displays version information for psi and its dependencies.
@@ -14,6 +15,17 @@ export async function versionCommand(): Promise<void> {
     
     // Show psi version
     log.info(`${pc.bold('psi')}: ${pc.green(version)}`);
+    
+    // Show build information if available
+    if (buildMetadata.commitHash !== "dev") {
+        log.info(`${pc.bold('Commit')}: ${pc.cyan(buildMetadata.commitHash.substring(0, 8))}`);
+        if (buildMetadata.buildDate !== "development") {
+            log.info(`${pc.bold('Built')}: ${pc.dim(buildMetadata.buildDate)}`);
+        }
+        if (buildMetadata.isNightly) {
+            log.info(`${pc.bold('Type')}: ${pc.yellow('Nightly Build')}`);
+        }
+    }
     
     // Get tool versions
     const toolsStatus = await verifyTools();
