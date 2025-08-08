@@ -166,6 +166,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
+
       - name: Verify runner architecture
         run: |
           echo "Architecture: $(uname -m)"
@@ -276,6 +312,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        shell: bash
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -379,6 +453,42 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -488,6 +598,42 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
