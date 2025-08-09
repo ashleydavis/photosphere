@@ -6,6 +6,7 @@ export interface ILog {
     warn(message: string): void;
     debug(message: string): void;
     tool(tool: string, data: { stdout?: string; stderr?: string }): void;
+    verboseEnabled: boolean;
 }
 
 //
@@ -43,7 +44,9 @@ export let log: ILog = {
         if (data.stderr) {
             console.error(`== ${tool} stderr ==\n${data.stderr}`);
         }
-    }
+    },
+
+    verboseEnabled: false
 };
 
 
