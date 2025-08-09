@@ -20,7 +20,7 @@ import { join } from "path";
 //
 // Helper function to get available encryption keys from the keys directory
 //
-async function getAvailableKeys(): Promise<string[]> {
+export async function getAvailableKeys(): Promise<string[]> {
     const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
     
     if (!await fs.pathExists(keysDir)) {
@@ -28,19 +28,15 @@ async function getAvailableKeys(): Promise<string[]> {
     }
     
     const allFiles = await fs.readdir(keysDir);
-    // Filter for .key files that have corresponding .pub files
+    // Filter for .key files (private keys are all we need)
     return allFiles
-        .filter(file => file.endsWith('.key'))
-        .filter(file => {
-            const publicKeyPath = join(keysDir, `${file}.pub`);
-            return fs.existsSync(publicKeyPath);
-        });
+        .filter(file => file.endsWith('.key'));
 }
 
 //
 // Helper function to show key selection menu
 //
-async function selectEncryptionKey(message: string): Promise<string> {
+export async function selectEncryptionKey(message: string): Promise<string> {
     const keyFiles = await getAvailableKeys();
     
     if (keyFiles.length === 0) {
@@ -62,6 +58,97 @@ async function selectEncryptionKey(message: string): Promise<string> {
     }
 
     return selectedKey as string;
+}
+
+//
+// Result of encryption prompting
+//
+export interface IEncryptionPromptResult {
+    keyPath?: string;
+    generateKey?: boolean;
+}
+
+//
+// Shared function to prompt for encryption settings
+// Returns the key path and whether to generate a new key
+//
+export async function promptForEncryption(message: string = 'Would you like to encrypt your database?'): Promise<IEncryptionPromptResult> {
+    const wantEncryption = await confirm({
+        message,
+        initialValue: false,
+    });
+
+    if (isCancel(wantEncryption)) {
+        await exit(1);
+    }
+
+    if (!wantEncryption) {
+        return {};
+    }
+
+    log.info(pc.yellow('\n⚠️ To encrypt your database you need a private key that you will have to keep safe and not lose\n   (otherwise you\'ll lose access to your encrypted database)'));
+    
+    // Ask how they want to handle the key
+    const keyChoice = await select({
+        message: 'How would you like to handle the encryption key?',
+        options: [
+            { value: 'existing', label: 'Use an existing private key' },
+            { value: 'generate', label: 'Generate a new key and save it to a file' },
+        ],
+    });
+
+    if (isCancel(keyChoice)) {
+        await exit(1);
+    }
+
+    if (keyChoice === 'existing') {
+        // Show menu of available keys
+        const selectedKey = await selectEncryptionKey('Select an encryption key:');
+        
+        return {
+            keyPath: selectedKey,
+            generateKey: false
+        };
+    } else if (keyChoice === 'generate') {
+        // Generate new key - save in ~/.config/photosphere/keys directory
+        const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+        
+        // Ensure the ~/.config/photosphere/keys directory exists
+        await fs.ensureDir(keysDir);
+
+        // Ask for filename
+        const keyFilename = await text({
+            message: 'Enter filename for encryption key:',
+            placeholder: 'my-photos.key',
+            initialValue: 'my-photos.key',
+            validate: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return 'Filename is required';
+                }
+                // Check for invalid characters
+                if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+                    return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
+                }
+                // Check if file already exists
+                const keyPath = join(keysDir, value);
+                if (fs.existsSync(keyPath)) {
+                    return 'File already exists';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(keyFilename)) {
+            await exit(1);
+        }
+
+        return {
+            keyPath: join(keysDir, keyFilename as string),
+            generateKey: true
+        };
+    }
+
+    return {};
 }
 
 export async function resolveKeyPath(keyPath: string | undefined): Promise<string | undefined> {
@@ -307,75 +394,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
 
     // Ask about encryption if not already specified
     if (!options.key && !nonInteractive) {
-        const wantEncryption = await confirm({
-            message: 'Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)',
-            initialValue: false,
-        });
-
-        if (isCancel(wantEncryption)) {
-            await exit(1);
-        }
-
-        if (wantEncryption) {
-            log.info(pc.yellow('\n⚠️ To encrypt your database you need a private key that you will have to keep safe and not lose\n   (otherwise you\'ll lose access to your encrypted database)'));
-            
-            // Ask how they want to handle the key
-            const keyChoice = await select({
-                message: 'How would you like to handle the encryption key?',
-                options: [
-                    { value: 'existing', label: 'Use an existing private key' },
-                    { value: 'generate', label: 'Generate a new key and save it to a file' },
-                ],
-            });
-
-            if (isCancel(keyChoice)) {
-                await exit(1);
-            }
-
-            if (keyChoice === 'existing') {
-                // Show menu of available keys
-                const selectedKey = await selectEncryptionKey('Select an encryption key:');
-                
-                // Set the key path (no generation needed)
-                options.key = selectedKey;
-                options.generateKey = false;
-            } else if (keyChoice === 'generate') {
-                // Generate new key - save in ~/.config/photosphere/keys directory
-                const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-                
-                // Ensure the ~/.config/photosphere/keys directory exists
-                await fs.ensureDir(keysDir);
-
-                // Ask for filename
-                const keyFilename = await text({
-                    message: 'Enter filename for encryption key:',
-                    placeholder: 'my-photos.key',
-                    initialValue: 'my-photos.key',
-                    validate: (value) => {
-                        if (!value || value.trim().length === 0) {
-                            return 'Filename is required';
-                        }
-                        // Check for invalid characters
-                        if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
-                            return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
-                        }
-                        // Check if file already exists
-                        const keyPath = join(keysDir, value);
-                        if (fs.existsSync(keyPath)) {
-                            return 'File already exists';
-                        }
-                        return undefined;
-                    },
-                });
-
-                if (isCancel(keyFilename)) {
-                    await exit(1);
-                }
-
-                // Set the key path and enable generation
-                options.key = join(keysDir, keyFilename as string);
-                options.generateKey = true;
-            }
+        const encryptionResult = await promptForEncryption('Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)');
+        
+        if (encryptionResult.keyPath) {
+            options.key = encryptionResult.keyPath;
+            options.generateKey = encryptionResult.generateKey || false;
         }
     }
 
