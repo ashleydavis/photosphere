@@ -1,5 +1,4 @@
-import { FileScanner } from "api";
-import { FileStorage } from "storage";
+import { FileScanner, IFileStat } from "api";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
@@ -9,7 +8,6 @@ import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { computeHash } from "adb";
 import fs from "fs";
-import { IFileInfo } from "storage";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
 import mime from "mime";
@@ -33,7 +31,7 @@ export interface IInfoCommandOptions {
 
 interface FileAnalysis {
     path: string;
-    fileInfo: IFileInfo;
+    fileStat: IFileStat;
     assetInfo?: AssetInfo;
     hash?: string;
     error?: string;
@@ -57,16 +55,16 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     
     writeProgress(`Searching for files...`);
     
-    const fileScanner = new FileScanner(new FileStorage("fs:"));
+    const fileScanner = new FileScanner();
     await fileScanner.scanPaths(paths, async (fileResult) => {
         try {
-            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileInfo, fileResult.openStream);
+            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.openStream);
             results.push(analysis);
             fileCount++;
         } catch (error) {
             results.push({
                 path: fileResult.filePath,
-                fileInfo: fileResult.fileInfo,
+                fileStat: fileResult.fileStat,
                 error: error instanceof Error ? error.message : String(error)
             });
             fileCount++;
@@ -95,12 +93,12 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileInfo, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
+async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileStat, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
     const absolutePath = path.resolve(filePath);
     
     let fileAnalysis: FileAnalysis = {
         path: filePath,
-        fileInfo,        
+        fileStat: fileInfo,        
     };
     
     // Calculate file hash
@@ -128,7 +126,7 @@ async function analyzeFile(filePath: string, contentType: string, fileInfo: IFil
 }
 
 function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
-    const { path, fileInfo, assetInfo, hash, error } = analysis;
+    const { path, fileStat: fileInfo, assetInfo, hash, error } = analysis;
     
     console.log(pc.bold(pc.blue(`📁 ${path}`)));
     

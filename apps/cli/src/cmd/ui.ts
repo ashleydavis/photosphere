@@ -8,6 +8,7 @@ import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
+import { resolveKeyPath } from '../lib/init-cmd';
 import { createServer as createHttpServer } from 'http';
 import { AddressInfo } from 'net';
 
@@ -94,7 +95,8 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     const staticMiddleware = createZipStaticMiddleware(zipBuffer, 'dist');
 
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false);
+    const resolvedKeyPath = await resolveKeyPath(options.key);
+    const { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(options.db, s3Config, storageOptions);

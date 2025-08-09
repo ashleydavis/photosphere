@@ -1,9 +1,11 @@
 import { verifyTools } from "tools";
 import { Image } from "tools";
 import pc from "picocolors";
-import { version as packageVersion } from '../../package.json';
 import { log } from "utils";
-import { configureLog } from "../lib/log";
+import { version } from "../lib/version";
+import { buildMetadata } from "../lib/build-metadata";
+import { join } from "path";
+import * as os from "os";
 
 //
 // Command that displays version information for psi and its dependencies.
@@ -14,7 +16,18 @@ export async function versionCommand(): Promise<void> {
     log.info(pc.bold('📋 Version Information\n'));
     
     // Show psi version
-    log.info(`${pc.bold('psi')}: ${pc.green(packageVersion)}`);
+    log.info(`${pc.bold('psi')}: ${pc.green(version)}`);
+    
+    // Show build information if available
+    if (buildMetadata.commitHash !== "dev") {
+        log.info(`${pc.bold('Commit')}: ${pc.cyan(buildMetadata.commitHash.substring(0, 8))}`);
+        if (buildMetadata.buildDate !== "development") {
+            log.info(`${pc.bold('Built')}: ${pc.dim(buildMetadata.buildDate)}`);
+        }
+        if (buildMetadata.isNightly) {
+            log.info(`${pc.bold('Type')}: ${pc.yellow('Nightly Build')}`);
+        }
+    }
     
     // Get tool versions
     const toolsStatus = await verifyTools();
@@ -55,6 +68,15 @@ export async function versionCommand(): Promise<void> {
     } else {
         log.info(`  ${pc.bold('ffprobe')}: ${pc.red('Not found')}`);
     }
+    
+    log.info('');
+    
+    // Show configuration directory
+    log.info(pc.bold('Configuration:'));
+    const configDir = join(os.homedir(), '.config', 'photosphere');
+    const keysDir = join(configDir, 'keys');
+    log.info(`  ${pc.bold('Config directory')}: ${pc.cyan(configDir)}`);
+    log.info(`  ${pc.bold('Keys directory')}: ${pc.cyan(keysDir)}`);
     
     log.info('');
     

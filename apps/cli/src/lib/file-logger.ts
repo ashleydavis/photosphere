@@ -4,6 +4,7 @@ import os from "os";
 import { ILog } from "utils";
 import { registerTerminationCallback } from "node-utils";
 import { Image, Video } from "tools";
+import { version } from "./version";
 
 //
 // File logger that writes all logs to files in the Photosphere temp directory
@@ -66,7 +67,7 @@ export class FileLogger implements ILog {
             `Node Version: ${process.version}`,
             '',
             '--- Photosphere Version ---',
-            this.getPhotosphereVersion(),
+            version,
             '',
             '--- Tool Versions ---',
             await this.getImageMagickVersion(),
@@ -121,17 +122,7 @@ export class FileLogger implements ILog {
             return `FFprobe: error checking version`;
         }
     }
-    
-    private getPhotosphereVersion(): string {
-        try {
-            const packageJsonPath = path.join(__dirname, '../../package.json');
-            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-            return `Photosphere CLI: ${packageJson.version}`;
-        } catch (error) {
-            return `Photosphere CLI: version unknown (${error instanceof Error ? error.message : 'unknown error'})`;
-        }
-    }
-    
+        
     private writeToFile(level: string, message: string): void {
         if (this.isClosed) {
             return;
