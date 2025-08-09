@@ -5,6 +5,7 @@ import { ILog } from "utils";
 import { registerTerminationCallback } from "node-utils";
 import { Image, Video } from "tools";
 import { version } from "./version";
+import { buildMetadata } from "./build-metadata";
 
 //
 // File logger that writes all logs to files in the Photosphere temp directory
@@ -68,6 +69,9 @@ export class FileLogger implements ILog {
             '',
             '--- Photosphere Version ---',
             version,
+            `Build Commit: ${buildMetadata.commitHash}`,
+            `Build Date: ${buildMetadata.buildDate}`,
+            `Nightly Build: ${buildMetadata.isNightly}`,
             '',
             '--- Tool Versions ---',
             await this.getImageMagickVersion(),
