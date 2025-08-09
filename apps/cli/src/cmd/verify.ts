@@ -10,6 +10,11 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
     // Force full verification (bypass cached hash optimization).
     //
     full?: boolean;
+
+    //
+    // Path to a specific file or directory to verify (instead of entire database).
+    //
+    path?: string;
 }
 
 //
@@ -19,16 +24,23 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     
     const { database } = await loadDatabase(options.db, options);
 
-    writeProgress(`🔍 Verifying database integrity`);
+    writeProgress(options.path 
+        ? `🔍 Verifying files matching: ${options.path}` 
+        : `🔍 Verifying database integrity`);
 
-    const result = await database.verify({ full: options.full }, (progress) => {
+    const result = await database.verify({ 
+        full: options.full,
+        pathFilter: options.path
+    }, (progress) => {
         writeProgress(`🔍 ${progress}`);
     });
 
     clearProgressMessage(); // Flush the progress message.
 
     log.info('');
-    log.info(pc.bold(pc.blue(`📊 Verified ${result.totalFiles} files.`)));
+    log.info(pc.bold(pc.blue(options.path 
+        ? `📊 Verified files matching: ${options.path}` 
+        : `📊 Verified ${result.totalFiles} files.`)));
     log.info('');
     
     log.info(`Files imported:   ${pc.cyan(result.filesImported.toString())}`);

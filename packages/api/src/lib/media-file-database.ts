@@ -203,6 +203,11 @@ export interface IVerifyOptions {
     // Enables full verification where all files are re-hashed.
     //
     full?: boolean;
+
+    //
+    // Path filter to only verify files matching this path (file or directory).
+    //
+    pathFilter?: string;
 }
 
 //
@@ -1052,6 +1057,17 @@ export class MediaFileDatabase {
         //
         let filesProcessed = 0;
         for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+            // Skip files that don't match the path filter
+            if (options?.pathFilter) {
+                const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
+                const fileName = file.fileName.replace(/\\/g, '/');
+                
+                // Check if the file matches the filter (exact match or starts with filter + '/')
+                if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
+                    continue;
+                }
+            }
+
             filesProcessed++;
 
             if (progressCallback) {
@@ -1150,6 +1166,17 @@ export class MediaFileDatabase {
             }
 
             if (node.fileName && !node.isDeleted) {
+                // Skip files that don't match the path filter
+                if (options?.pathFilter) {
+                    const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
+                    const fileName = node.fileName.replace(/\\/g, '/');
+                    
+                    // Check if the file matches the filter (exact match or starts with filter + '/')
+                    if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
+                        return true; // Continue traversal
+                    }
+                }
+
                 if (!await this.assetStorage.fileExists(node.fileName)) {
                     // The file is missing from the storage, but it exists in the merkle tree.
                     result.removed.push(node.fileName);
