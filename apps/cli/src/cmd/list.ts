@@ -27,7 +27,7 @@ export async function listCommand(options: IListCommandOptions): Promise<void> {
         log.info('');
         log.info(pc.bold(pc.blue(`📁 Database Files`)));
         log.info('');
-        log.info(pc.gray(`Files are sorted by date (newest first). Press ${pc.bold('Enter')} for next page, ${pc.bold('Escape')} to exit.`));
+        log.info(pc.gray(`Files are sorted by date (newest first).`));
         log.info('');
 
         let nextPageId: string | undefined;
@@ -64,6 +64,7 @@ export async function listCommand(options: IListCommandOptions): Promise<void> {
             }
 
             // Wait for user input
+            log.info(pc.dim('Press Enter for next page, Escape to exit...'));
             const shouldContinue = await waitForUserInput();
             if (!shouldContinue) {
                 log.info(pc.cyan(`\nDisplayed ${totalDisplayed} files. Exiting.`));
