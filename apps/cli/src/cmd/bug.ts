@@ -7,7 +7,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { text, isCancel, intro, outro } from '../lib/clack/prompts';
 import { Image, Video } from "tools";
-import { version } from "../../package.json";
+import { version } from "../lib/version";
 
 export interface IBugReportCommandOptions {
     //
@@ -47,7 +47,6 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
     // Get system information
     const systemInfo = getSystemInfo();
     const toolVersions = await getToolVersions();
-    const photosphereVersion = getPhotosphereVersion();
     
     // Get latest log file and header
     const latestLogFile = getLatestLogFile();
@@ -179,7 +178,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
     }
     
     // Generate bug report template (with log header)
-    const bugReportTemplate = generateBugReportTemplate(systemInfo, toolVersions, photosphereVersion, bugInfo, logHeader);
+    const bugReportTemplate = generateBugReportTemplate(systemInfo, toolVersions, version, bugInfo, logHeader);
     
     // Create GitHub issue URL
     const githubUrl = createGitHubIssueUrl(bugInfo.title, bugReportTemplate);
@@ -187,7 +186,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
     // Prepare summary information
     const summaryInfo = [
         `Title: ${bugInfo.title}`,
-        `Photosphere Version: ${photosphereVersion}`,
+        `Photosphere Version: ${version}`,
         `System: ${systemInfo.platform} ${systemInfo.arch} (${systemInfo.release})`,
         `Log File: ${latestLogFile || 'None available'}`
     ].join('\n');
@@ -255,10 +254,6 @@ async function getToolVersions() {
     }
     
     return versions;
-}
-
-function getPhotosphereVersion(): string {
-    return version || 'unknown';
 }
 
 function getLatestLogFile(): string | null {

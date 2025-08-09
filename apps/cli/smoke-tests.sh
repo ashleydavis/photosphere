@@ -87,6 +87,11 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Helper function to strip ANSI color codes from text
+strip_ansi_codes() {
+    sed 's/\x1b\[[0-9;]*m//g'
+}
+
 generate_test_report() {
     local report_file="$1"
     local test_mode="${2:-all}"
@@ -132,31 +137,31 @@ EOF
         # Get root hash
         echo "ROOT HASH:" >> "$report_file"
         echo "----------" >> "$report_file"
-        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
+        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get merkle tree
         echo "MERKLE TREE STRUCTURE:" >> "$report_file"
         echo "---------------------" >> "$report_file"
-        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
+        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database summary
         echo "DATABASE SUMMARY:" >> "$report_file"
         echo "-----------------" >> "$report_file"
-        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
+        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database file listing
         echo "DATABASE FILE LISTING:" >> "$report_file"
         echo "----------------------" >> "$report_file"
-        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
+        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database verification
         echo "DATABASE VERIFICATION:" >> "$report_file"
         echo "----------------------" >> "$report_file"
-        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to verify database" >> "$report_file"
+        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to verify database" >> "$report_file"
         echo "" >> "$report_file"
         
         # Show database directory structure
@@ -184,9 +189,9 @@ EOF
     
     # Get local and database hash cache info
     if [ -d "$TEST_DB_DIR" ]; then
-        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
     else
-        $(get_cli_command) debug hash-cache --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+        $(get_cli_command) debug hash-cache --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
     fi
     echo "" >> "$report_file"
     
@@ -204,13 +209,13 @@ EOF
     # Add CLI version information
     echo "CLI VERSION INFORMATION:" >> "$report_file"
     echo "------------------------" >> "$report_file"
-    $(get_cli_command) version 2>/dev/null >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
+    $(get_cli_command) version 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
     echo "" >> "$report_file"
     
     # Add tool information
     echo "TOOL INFORMATION:" >> "$report_file"
     echo "-----------------" >> "$report_file"
-    $(get_cli_command) tools --yes 2>/dev/null >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
+    $(get_cli_command) tools --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
     echo "" >> "$report_file"
     
     # Add report footer
@@ -1907,16 +1912,13 @@ run_all_tests() {
     # Generate comprehensive test report before cleanup
     echo ""
     mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report-all-tests-$(date +%Y%m%d-%H%M%S).txt"
+    local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "all"
     
-    # Cleanup after all tests complete
+    # Preserve test database for further inspection or hash capture
     echo ""
-    log_info "Cleaning up test artifacts..."
-    if [ -d "./test/tmp" ]; then
-        rm -rf "./test/tmp"
-        log_info "Removed all test databases"
-    fi
+    log_info "Preserving test database for inspection"
+    log_info "Test database available at: ./test/tmp/test-db"
     exit 0
 }
 
@@ -2214,7 +2216,7 @@ run_multiple_commands() {
     # Generate comprehensive test report
     echo ""
     mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report-multiple-commands-$(date +%Y%m%d-%H%M%S).txt"
+    local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "multiple"
     
     # Check if database should be preserved
@@ -2440,7 +2442,7 @@ main() {
     # Generate comprehensive test report
     echo ""
     mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report-individual-test-$(date +%Y%m%d-%H%M%S).txt"
+    local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "individual"
     
     exit 0

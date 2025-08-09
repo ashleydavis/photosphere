@@ -7,10 +7,84 @@ import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
+import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { pickDirectory } from "../lib/directory-picker";
 import { join } from "path";
+
+//
+// Helper function to resolve encryption key path
+// If the key path doesn't contain path separators, check ~/.config/photosphere/keys/ first, then current directory
+//
+//
+// Helper function to get available encryption keys from the keys directory
+//
+async function getAvailableKeys(): Promise<string[]> {
+    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+    
+    if (!await fs.pathExists(keysDir)) {
+        return [];
+    }
+    
+    const allFiles = await fs.readdir(keysDir);
+    // Filter for .key files that have corresponding .pub files
+    return allFiles
+        .filter(file => file.endsWith('.key'))
+        .filter(file => {
+            const publicKeyPath = join(keysDir, `${file}.pub`);
+            return fs.existsSync(publicKeyPath);
+        });
+}
+
+//
+// Helper function to show key selection menu
+//
+async function selectEncryptionKey(message: string): Promise<string> {
+    const keyFiles = await getAvailableKeys();
+    
+    if (keyFiles.length === 0) {
+        outro(pc.red('✗ No encryption keys found in ~/.config/photosphere/keys/\n  Please provide the private key using the --key option or place your key files in the keys directory.'));
+        await exit(1);
+    }
+
+    // Show menu of available keys
+    const selectedKey = await select({
+        message,
+        options: keyFiles.map(file => ({
+            value: file,
+            label: file
+        })),
+    });
+
+    if (isCancel(selectedKey)) {
+        await exit(1);
+    }
+
+    return selectedKey as string;
+}
+
+export async function resolveKeyPath(keyPath: string | undefined): Promise<string | undefined> {
+    if (!keyPath) {
+        return undefined;
+    }
+    
+    // If the path contains separators, use it as-is (absolute or relative path)
+    if (keyPath.includes('/') || keyPath.includes('\\')) {
+        return keyPath;
+    }
+    
+    // For filenames only, check ~/.config/photosphere/keys/ first
+    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+    const keysPath = join(keysDir, keyPath);
+    
+    if (await fs.pathExists(keysPath)) {
+        return keysPath;
+    }
+    
+    // If not found in keys directory, use current directory
+    return keyPath;
+}
 
 //
 // Common options interface that all commands should extend
@@ -132,10 +206,11 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    const { options: storageOptions } = await loadEncryptionKeys(options.key, false);
+    let resolvedKeyPath = await resolveKeyPath(options.key);
+    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
     const s3Config = await getS3Config();
-    const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+    let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath, s3Config);
 
     // Make sure the merkle tree file exists.
@@ -146,9 +221,27 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 
     // See if the database is encrypted and requires a key.
     if (await metadataStorage.fileExists('encryption.pub')) {
-        if (!options.key) {
-            outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}`));
-            await exit(1);
+        if (!resolvedKeyPath) {
+            if (nonInteractive) {
+                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
+                await exit(1);
+            } else {
+                // Interactive mode - show key selection menu
+                log.info(pc.yellow('This database is encrypted and requires a private key to access.'));
+                
+                // Show menu of available keys
+                const selectedKey = await selectEncryptionKey('Select the encryption key for this database:');
+                
+                // Resolve the selected key path and reload encryption keys
+                options.key = selectedKey;
+                resolvedKeyPath = await resolveKeyPath(options.key);
+                const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+                storageOptions = newStorageOptions;
+                
+                // Recreate storage with the new encryption options
+                const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+                assetStorage = newAssetStorage;
+            }
         }
     }
 
@@ -240,78 +333,24 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
             }
 
             if (keyChoice === 'existing') {
-                // Ask for existing key file
-                const keyDir = await pickDirectory(
-                    'Select directory containing your encryption key:',
-                    options.cwd || process.cwd(),
-                    async (path) => {
-                        if (!await fs.exists(path)) {
-                            return 'Directory does not exist';
-                        }
-                        return true;
-                    }
-                );
-
-                if (!keyDir) {
-                    outro(pc.red('No directory selected for encryption key'));
-                    await exit(1);
-                }
-
-                // Ask for filename
-                const keyFilename = await text({
-                    message: 'Enter the encryption key filename:',
-                    placeholder: 'photosphere.key',
-                    initialValue: 'photosphere.key',
-                    validate: (value) => {
-                        if (!value || value.trim().length === 0) {
-                            return 'Filename is required';
-                        }
-                        // Check if file exists
-                        const keyPath = join(keyDir!, value);
-                        if (!fs.existsSync(keyPath)) {
-                            return 'File does not exist';
-                        }
-                        // Check if public key exists
-                        const publicKeyPath = `${keyPath}.pub`;
-                        if (!fs.existsSync(publicKeyPath)) {
-                            return 'Public key file (.pub) not found alongside private key';
-                        }
-                        return undefined;
-                    },
-                });
-
-                if (isCancel(keyFilename)) {
-                    await exit(1);
-                }
-
+                // Show menu of available keys
+                const selectedKey = await selectEncryptionKey('Select an encryption key:');
+                
                 // Set the key path (no generation needed)
-                options.key = join(keyDir!, keyFilename as string);
+                options.key = selectedKey;
                 options.generateKey = false;
             } else if (keyChoice === 'generate') {
-                // Generate new key
-                // Ask for directory
-                const keyDir = await pickDirectory(
-                    'Select directory to save encryption key:',
-                    options.cwd || process.cwd(),
-                    async (path) => {
-                        if (!await fs.exists(path)) {
-                            return 'Directory does not exist';
-                        }
-                        return true;
-                    }
-                );
-
-                if (!keyDir) {
-                    log.info('');
-                    outro(pc.red('No directory selected for encryption key'));
-                    await exit(1);
-                }
+                // Generate new key - save in ~/.config/photosphere/keys directory
+                const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+                
+                // Ensure the ~/.config/photosphere/keys directory exists
+                await fs.ensureDir(keysDir);
 
                 // Ask for filename
                 const keyFilename = await text({
                     message: 'Enter filename for encryption key:',
-                    placeholder: 'photosphere.key',
-                    initialValue: 'photosphere.key',
+                    placeholder: 'my-photos.key',
+                    initialValue: 'my-photos.key',
                     validate: (value) => {
                         if (!value || value.trim().length === 0) {
                             return 'Filename is required';
@@ -321,7 +360,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                             return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
                         }
                         // Check if file already exists
-                        const keyPath = join(keyDir!, value);
+                        const keyPath = join(keysDir, value);
                         if (fs.existsSync(keyPath)) {
                             return 'File already exists';
                         }
@@ -334,7 +373,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
                 }
 
                 // Set the key path and enable generation
-                options.key = join(keyDir!, keyFilename as string);
+                options.key = join(keysDir, keyFilename as string);
                 options.generateKey = true;
             }
         }
@@ -352,7 +391,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     }
 
     // Load encryption keys (with generateKey support for init)
-    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(options.key, options.generateKey || false);
+    const resolvedKeyPath = await resolveKeyPath(options.key);
+    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(resolvedKeyPath, options.generateKey || false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
@@ -394,8 +434,8 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     await database.create();
 
     // If database is encrypted, copy the public key to the .db directory as a marker
-    if (isEncrypted && options.key) {
-        const publicKeySource = `${options.key}.pub`;
+    if (isEncrypted && resolvedKeyPath) {
+        const publicKeySource = `${resolvedKeyPath}.pub`;
         const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
         
         try {

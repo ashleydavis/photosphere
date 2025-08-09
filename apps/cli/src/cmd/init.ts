@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { createDatabase, ICreateCommandOptions } from "../lib/init-cmd";
 import { intro, outro } from '../lib/clack/prompts';
+import { basename } from "path";
 
 export interface IInitCommandOptions extends ICreateCommandOptions {
 }
@@ -45,16 +46,17 @@ export async function initCommand(options: IInitCommandOptions): Promise<void> {
     }
 
     if (options.key) {
+        const keyFilename = basename(options.key);
         log.info('');
         log.info('When using your encrypted database, specify the key file:');
-        log.info(`    ` + pc.cyan(`psi add --key ${options.key} <source-media-directory>`));
+        log.info(`    ` + pc.cyan(`psi add --key ${keyFilename} <file or directory>`));
     }
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Examples:'));
     const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
-    const keyFlag = options.key ? ` --key ${options.key}` : '';
+    const keyFlag = options.key ? ` --key ${basename(options.key)}` : '';
     const flags = `${dbFlag}${keyFlag}`;
     log.info(`    ${pc.cyan(`psi add${flags} photo.jpg`)}   - Adds a single photo to the database`);
     log.info(`    ${pc.cyan(`psi add${flags} video.mp4`)}   - Adds a single video to the database`);

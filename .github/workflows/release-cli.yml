@@ -11,7 +11,7 @@ on:
 
 jobs:
   validate-version:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -44,7 +44,7 @@ jobs:
           fi
 
   compile:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
@@ -75,7 +75,7 @@ jobs:
         run: bun run compile
 
   smoke_test:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
@@ -157,14 +157,75 @@ jobs:
           name: smoke-test-reports-debug
           path: ./apps/cli/tmp/reports/
 
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database (debug mode uses bun run start)
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(bun run start -- debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "debug:$DB_HASH" > hash-validation/database-hash-debug.txt
+            echo "Debug mode database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "debug:NO_DATABASE" > hash-validation/database-hash-debug.txt
+          fi
+
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-debug
+          path: ./apps/cli/hash-validation/database-hash-debug.txt
+
   build-linux:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: ubuntu-24.04
     needs: [compile, smoke_test]
     if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Verify runner architecture
         run: |
@@ -261,6 +322,31 @@ jobs:
           name: smoke-test-reports-linux
           path: ./apps/cli/tmp/reports/
 
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(./bin/x64/linux/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "linux:$DB_HASH" > hash-validation/database-hash-linux.txt
+            echo "Linux database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "linux:NO_DATABASE" > hash-validation/database-hash-linux.txt
+          fi
+
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-linux
+          path: ./apps/cli/hash-validation/database-hash-linux.txt
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
@@ -268,13 +354,51 @@ jobs:
           path: ./apps/cli/bin/x64/linux/psi
 
   build-windows:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: windows-latest
     needs: [compile, smoke_test]
     if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        shell: bash
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -365,6 +489,32 @@ jobs:
           name: smoke-test-reports-windows
           path: ./apps/cli/tmp/reports/
 
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        shell: bash
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(./bin/x64/win/psi.exe debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "windows:$DB_HASH" > hash-validation/database-hash-windows.txt
+            echo "Windows database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "windows:NO_DATABASE" > hash-validation/database-hash-windows.txt
+          fi
+
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-windows
+          path: ./apps/cli/hash-validation/database-hash-windows.txt
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -372,13 +522,49 @@ jobs:
           path: ./apps/cli/bin/x64/win/psi.exe
 
   build-macos-x64:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: macos-13 # x64 architecture
     needs: [compile, smoke_test]
     if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -474,6 +660,31 @@ jobs:
           name: smoke-test-reports-macos-x64
           path: ./apps/cli/tmp/reports/
 
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(./bin/x64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "macos-x64:$DB_HASH" > hash-validation/database-hash-macos-x64.txt
+            echo "macOS x64 database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "macos-x64:NO_DATABASE" > hash-validation/database-hash-macos-x64.txt
+          fi
+
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-macos-x64
+          path: ./apps/cli/hash-validation/database-hash-macos-x64.txt
+
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
         with:
@@ -481,13 +692,49 @@ jobs:
           path: ./apps/cli/bin/x64/mac/psi
 
   build-macos-arm64:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: macos-latest # ARM64 architecture
     needs: [compile, smoke_test]
     if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
+
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -582,14 +829,133 @@ jobs:
           name: smoke-test-reports-macos-arm64
           path: ./apps/cli/tmp/reports/
 
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(./bin/arm64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "macos-arm64:$DB_HASH" > hash-validation/database-hash-macos-arm64.txt
+            echo "macOS ARM64 database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "macos-arm64:NO_DATABASE" > hash-validation/database-hash-macos-arm64.txt
+          fi
+
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-macos-arm64
+          path: ./apps/cli/hash-validation/database-hash-macos-arm64.txt
+
       - name: Upload macOS ARM64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: psi-macos-arm64
           path: ./apps/cli/bin/arm64/mac/psi
 
-  create-release:
+  validate-database-hashes:
     timeout-minutes: 10
+    needs: [smoke_test, build-linux, build-windows, build-macos-x64, build-macos-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all database hashes
+        uses: actions/download-artifact@v4
+        with:
+          pattern: database-hash-*
+          path: ./hash-validation
+          merge-multiple: true
+
+      - name: Validate database hashes match across platforms
+        run: |
+          cd hash-validation
+          
+          echo "=== Database Hash Validation ==="
+          echo "Checking that all platforms (including debug mode) produce identical database hashes..."
+          echo ""
+          
+          # Read all hash files
+          declare -A platform_hashes
+          hash_files=(database-hash-*.txt)
+          
+          if [ ${#hash_files[@]} -eq 0 ]; then
+            echo "❌ ERROR: No hash files found!"
+            exit 1
+          fi
+          
+          echo "Found hash files:"
+          for file in "${hash_files[@]}"; do
+            if [ -f "$file" ]; then
+              content=$(cat "$file")
+              platform=$(echo "$content" | cut -d: -f1)
+              hash=$(echo "$content" | cut -d: -f2-)
+              platform_hashes["$platform"]="$hash"
+              echo "  📁 $file: $platform -> $hash"
+            fi
+          done
+          
+          echo ""
+          echo "Platform database hashes:"
+          
+          # Get unique hashes and check if they're all the same
+          unique_hashes=()
+          for platform in "${!platform_hashes[@]}"; do
+            hash="${platform_hashes[$platform]}"
+            echo "  🖥️  $platform: $hash"
+            
+            # Add to unique hashes if not already present
+            if [[ ! " ${unique_hashes[@]} " =~ " $hash " ]]; then
+              unique_hashes+=("$hash")
+            fi
+          done
+          
+          echo ""
+          echo "Validation result:"
+          
+          # Check if all hashes are identical
+          if [ ${#unique_hashes[@]} -eq 1 ]; then
+            if [ "${unique_hashes[0]}" = "NO_DATABASE" ]; then
+              echo "⚠️  WARNING: All platforms failed to create databases"
+              echo "This might indicate a test setup issue, but hashes are 'consistent'"
+              exit 1
+            else
+              echo "✅ SUCCESS: All platforms (debug + 4 compiled builds) produced identical database hashes!"
+              echo "   Common hash: ${unique_hashes[0]}"
+            fi
+          else
+            echo "❌ FAILURE: Database hashes differ between platforms!"
+            echo ""
+            echo "This indicates the CLI produces different results on different platforms,"
+            echo "which could be due to:"
+            echo "  - Platform-specific file handling differences"
+            echo "  - Timestamp or metadata variations"
+            echo "  - Different media processing tool versions"
+            echo "  - Platform-specific bugs in the CLI"
+            echo ""
+            echo "All detected hashes:"
+            for i in "${!unique_hashes[@]}"; do
+              hash="${unique_hashes[$i]}"
+              platforms=()
+              for platform in "${!platform_hashes[@]}"; do
+                if [ "${platform_hashes[$platform]}" = "$hash" ]; then
+                  platforms+=("$platform")
+                fi
+              done
+              echo "  Hash $((i+1)): $hash"
+              echo "    Platforms: ${platforms[*]}"
+            done
+            
+            exit 1
+          fi
+
+  create-release:
+    timeout-minutes: 20
     needs: [build-linux, build-windows, build-macos-x64, build-macos-arm64]
     runs-on: ubuntu-latest
     permissions:

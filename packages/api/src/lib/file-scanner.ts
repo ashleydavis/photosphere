@@ -1,10 +1,19 @@
 import path from "path";
-import { IFileInfo, IStorage, walkDirectory } from "storage";
 import mime from "mime";
 import { log } from "utils";
 import { Readable } from "stream";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
+import fs from "fs-extra";
+
+//
+// File statistics interface
+//
+export interface IFileStat {
+    contentType?: string;
+    length: number;
+    lastModified: Date;
+}
 
 //
 // Progress callback for scanning operations.
@@ -14,14 +23,14 @@ export type ScanProgressCallback = (currentlyScanning: string | undefined) => vo
 //
 // Callback for visiting a file when scanning a directory or zip file.
 //
-export type VisitFileCallback = (filePath: string, fileInfo: IFileInfo, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ScanProgressCallback) => Promise<void>;
+export type VisitFileCallback = (filePath: string, fileInfo: IFileStat, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ScanProgressCallback) => Promise<void>;
 
 //
 // Result of scanning a single file
 //
 export interface FileScannedResult {
     filePath: string;
-    fileInfo: IFileInfo;
+    fileStat: IFileStat;
     contentType: string;
     labels: string[];
     openStream?: () => NodeJS.ReadableStream;
@@ -43,13 +52,20 @@ export interface ScannerOptions {
 }
 
 //
+// Interface for ordered file results from directory walking
+//
+interface IOrderedFile {
+    fileName: string;
+}
+
+//
 // File scanner class that can scan files and directories without requiring a database
 //
 export class FileScanner {
     private currentlyScanning: string | undefined;
     private numFilesIgnored: number = 0;
 
-    constructor(private readonly storage: IStorage, private readonly options?: ScannerOptions) {
+    constructor(private readonly options?: ScannerOptions) {
     }
 
     //
@@ -87,8 +103,13 @@ export class FileScanner {
     // Scans a single file or directory
     //
     async scanPath(filePath: string, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
-        const fileInfo = await this.storage.info(filePath);        
-        if (fileInfo) {
+        const stats = await fs.stat(filePath).catch(() => null);
+        if (!stats) {
+            log.verbose(`Path "${filePath}" does not exist.`);
+            return;
+        }
+
+        if (stats.isFile()) {
             // It's a file
             const contentType = mime.getType(filePath) || undefined;
             if (!contentType) {
@@ -97,25 +118,39 @@ export class FileScanner {
                 return;
             }
             
+            const fileInfo: IFileStat = {
+                contentType,
+                length: stats.size,
+                lastModified: stats.mtime,
+            };
+
             if (this.shouldIncludeFile(contentType)) {
                 if (contentType === "application/zip") {
                     // If it's a zip file, we need to scan its contents.
-                    await this.scanZipFile(filePath, fileInfo, fileInfo.lastModified, () => this.storage.readStream(filePath), visitFile, progressCallback);
-                } else {
+                    await this.scanZipFile(
+                        filePath, 
+                        fileInfo, 
+                        undefined, // Indication to use the file directly.
+                        visitFile, 
+                        progressCallback
+                    );
+                } 
+                else {
                     // Otherwise, process the file directly.
                     await visitFile({
                         filePath,
-                        fileInfo,
+                        fileStat: fileInfo,
                         contentType,
                         labels: [],
-                        openStream: () => this.storage.readStream(filePath)
+                        openStream: undefined, // Indication to use the file directly.
                     });
                 }
-            } else {
+            } 
+            else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
                 this.numFilesIgnored++;
             }
-        } else {
+        } else if (stats.isDirectory()) {
             await this.scanDirectory(filePath, visitFile, progressCallback);
         }
     }
@@ -131,7 +166,7 @@ export class FileScanner {
             progressCallback(this.currentlyScanning);
         }
 
-        for await (const orderedFile of walkDirectory(this.storage, directoryPath, this.options?.ignorePatterns)) {
+        for await (const orderedFile of this.walkDirectory(directoryPath, this.options?.ignorePatterns)) {
             if (progressCallback) {
                 this.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
                 progressCallback(this.currentlyScanning);
@@ -146,27 +181,35 @@ export class FileScanner {
             }
 
             if (this.shouldIncludeFile(contentType)) {
-                const fileInfo = await this.storage.info(filePath);
-                if (!fileInfo) {
+                const stats = await fs.stat(filePath).catch(() => null);
+                if (!stats || !stats.isFile()) {
                     log.verbose(`Could not get file info for "${filePath}", skipping.`);
                     this.numFilesIgnored++;
                     continue;
                 }
 
+                const fileInfo: IFileStat = {
+                    contentType,
+                    length: stats.size,
+                    lastModified: stats.mtime,
+                };
+
                 if (contentType === "application/zip") {
                     // If it's a zip file, we need to scan its contents.
-                    await this.scanZipFile(filePath, fileInfo, fileInfo.lastModified, () => this.storage.readStream(filePath), visitFile, progressCallback);
-                } else {
+                    await this.scanZipFile(filePath, fileInfo, undefined, visitFile, progressCallback);
+                } 
+                else {
                     // Otherwise, process the file directly.
                     await visitFile({
                         filePath,
-                        fileInfo,
+                        fileStat: fileInfo,
                         contentType,
                         labels: [],
-                        openStream: () => this.storage.readStream(filePath)
+                        openStream: undefined // Indication to use the file directly.
                     });
                 }
-            } else {
+            } 
+            else {
                 log.verbose(`Ignoring file "${filePath}" with content type "${contentType}".`);
                 this.numFilesIgnored++;
             }
@@ -176,9 +219,45 @@ export class FileScanner {
     }
 
     //
+    // Walks a directory recursively and yields files in alphanumeric order
+    //
+    private async* walkDirectory(dirPath: string, ignorePatterns: RegExp[] = [/node_modules/, /\.git/, /\.DS_Store/]): AsyncGenerator<IOrderedFile> {
+        if (!await fs.pathExists(dirPath)) {
+            return;
+        }
+
+        const isIgnored = (name: string): boolean => {
+            return ignorePatterns.some(pattern => pattern.test(name));
+        };
+
+        // Phase 1: List and yield all files in the current directory
+        let entries = await fs.readdir(dirPath, { withFileTypes: true });
+        let files = entries.filter(entry => entry.isFile() && !isIgnored(entry.name));
+        
+        // Alphanumeric sort to simulate the order of file listing from S3
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        for (const file of files) {
+            const fileName = path.join(dirPath, file.name);
+            yield { fileName };
+        }
+
+        // Phase 2: List all subdirectories and recursively walk each one
+        let dirs = entries.filter(entry => entry.isDirectory() && !isIgnored(entry.name));
+        
+        // Alphanumeric sort for consistent ordering
+        dirs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        for (const dir of dirs) {
+            const subDirPath = path.join(dirPath, dir.name);
+            yield* this.walkDirectory(subDirPath, ignorePatterns);
+        }
+    }
+
+    //
     // Scans files from a zip file
     //
-    private async scanZipFile(filePath: string, /*fio: */ fileInfo: IFileInfo, fileDate: Date, openStream: () => NodeJS.ReadableStream, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
+    private async scanZipFile(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
         log.verbose(`Scanning zip file "${filePath}" for media files.`);
 
         if (progressCallback) {
@@ -187,7 +266,7 @@ export class FileScanner {
         }
 
         const zip = new JSZip();
-        const unpacked = await zip.loadAsync(await buffer(openStream()));
+        const unpacked = await zip.loadAsync(await buffer(openStream ? openStream() : fs.createReadStream(filePath)));
         
         for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
             if (!zipObject.dir) {
@@ -196,23 +275,34 @@ export class FileScanner {
                     log.verbose(`Ignoring file "${fileName}" in zip with unknown content type.`);
                     this.numFilesIgnored++;
                 } else if (this.shouldIncludeFile(contentType)) {
-                    const zipFileInfo: IFileInfo = {
+                    const zipFileInfo: IFileStat = {
                         contentType,
-                        length: 0, // We can't reliably get the uncompressed size from JSZip
-                        lastModified: zipObject.date || fileDate,
+                        length: 0, // We can't reliably get the uncompressed size from JSZip.
+                        lastModified: zipObject.date || fileStat.lastModified,
                     };
 
-                    await visitFile({
-                        filePath: path.join(filePath, fileName),
-                        fileInfo: zipFileInfo,
-                        contentType,
-                        labels: [],
-                        // Provide openStream for zip files since they need to be extracted
-                        openStream: () => {
-                            return zipObject.nodeStream();
-                        }
-                    });
-                } else {
+                    if (contentType === "application/zip") {
+                        // If it's a zip file, we need to scan its contents recursively.
+                        await this.scanZipFile(
+                            path.join(filePath, fileName), 
+                            zipFileInfo, 
+                            () => zipObject.nodeStream(), // Provide stream to extract the file from the zip.
+                            visitFile, 
+                            progressCallback
+                        );
+                    }
+                    else {
+                        await visitFile({
+                            filePath: path.join(filePath, fileName),
+                            fileStat: zipFileInfo,
+                            contentType,
+                            labels: [],                            
+                            openStream: () => zipObject.nodeStream() // Provide stream to extract the file from the zip.
+                        });
+                    }
+
+                } 
+                else {
                     log.verbose(`Ignoring file "${fileName}" in zip with content type "${contentType}".`);
                     this.numFilesIgnored++;
                 }
@@ -265,13 +355,12 @@ export class FileScanner {
 // Convenience function to scan paths with a simple callback
 //
 export async function scanPaths(
-    storage: IStorage,
     paths: string[], 
     visitFile: SimpleFileCallback, 
     progressCallback?: ScanProgressCallback,
     options?: ScannerOptions
 ): Promise<void> {
-    const scanner = new FileScanner(storage, options);
+    const scanner = new FileScanner(options);
     await scanner.scanPaths(paths, visitFile, progressCallback);
 }
 
@@ -279,12 +368,11 @@ export async function scanPaths(
 // Convenience function to scan a single path
 //
 export async function scanPath(
-    storage: IStorage,
     filePath: string, 
     visitFile: SimpleFileCallback, 
     progressCallback?: ScanProgressCallback,
     options?: ScannerOptions
 ): Promise<void> {
-    const scanner = new FileScanner(storage, options);
+    const scanner = new FileScanner(options);
     await scanner.scanPath(filePath, visitFile, progressCallback);
 }
