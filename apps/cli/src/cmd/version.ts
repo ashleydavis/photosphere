@@ -4,6 +4,8 @@ import pc from "picocolors";
 import { log } from "utils";
 import { version } from "../lib/version";
 import { buildMetadata } from "../lib/build-metadata";
+import { join } from "path";
+import * as os from "os";
 
 //
 // Command that displays version information for psi and its dependencies.
@@ -66,6 +68,15 @@ export async function versionCommand(): Promise<void> {
     } else {
         log.info(`  ${pc.bold('ffprobe')}: ${pc.red('Not found')}`);
     }
+    
+    log.info('');
+    
+    // Show configuration directory
+    log.info(pc.bold('Configuration:'));
+    const configDir = join(os.homedir(), '.config', 'photosphere');
+    const keysDir = join(configDir, 'keys');
+    log.info(`  ${pc.bold('Config directory')}: ${pc.cyan(configDir)}`);
+    log.info(`  ${pc.bold('Keys directory')}: ${pc.cyan(keysDir)}`);
     
     log.info('');
     
