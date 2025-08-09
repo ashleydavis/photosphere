@@ -338,6 +338,7 @@ Resources:
         .option(...toolsOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
 
