@@ -995,6 +995,18 @@ export class MediaFileDatabase {
     }
 
     //
+    // Formats file size in bytes to human readable string.
+    //
+    private formatFileSize(bytes: number): string {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const value = bytes / Math.pow(k, i);
+        return `${Math.round(value * 100) / 100} ${sizes[i]}`;
+    }
+
+    //
     // Computes the has h of a file and stores it in the hash cache.
     //
     async computeHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
@@ -1061,14 +1073,38 @@ export class MediaFileDatabase {
                 continue;
             }
 
-            if (fileHash.length !== fileInfo.length  // File size doesn't match, indicating the file has changed.
-                || fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime()) { // File has been modified.
+            const sizeChanged = fileHash.length !== fileInfo.length;
+            const timestampChanged = fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime();
+            
+            if (sizeChanged || timestampChanged) {
                 // File metadata has changed - check if content actually changed by computing the hash.
                 const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
-                if (freshHash.hash.toString("hex") !== fileHash.hash.toString("hex")) {
+                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
+                
+                if (contentChanged) {
                     // The file content has actually been modified.
                     result.modified.push(file.fileName);
-                } else {
+                    
+                    // Log detailed reasons for modification only if verbose logging is enabled
+                    if (log.verboseEnabled) {
+                        const reasons: string[] = [];
+                        if (sizeChanged) {
+                            const oldSize = this.formatFileSize(fileHash.length);
+                            const newSize = this.formatFileSize(fileInfo.length);
+                            reasons.push(`size changed (${oldSize} → ${newSize})`);
+                        }
+                        if (timestampChanged) {
+                            const oldTime = fileHash.lastModified.toLocaleString();
+                            const newTime = fileInfo.lastModified.toLocaleString();
+                            reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
+                        }
+                        if (contentChanged) {
+                            reasons.push('content hash changed');
+                        }
+                        log.verbose(`Modified file: ${file.fileName} - ${reasons.join(', ')}`);
+                    }
+                } 
+                else {
                     // Content is the same, just metadata changed - cache is already updated by computeHash
                     result.numUnmodified++;
                 }
@@ -1076,13 +1112,20 @@ export class MediaFileDatabase {
             else if (options?.full) {
                 // The file doesn't seem to have changed, but the full verification is requested.
                 const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
-                if (freshHash.hash.toString("hex") === fileHash.hash.toString("hex")) {
+                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
+                
+                if (!contentChanged) {
                     // The file is unmodified.
                     result.numUnmodified++;
-                }
+                } 
                 else {
-                    // The file has been modified.
+                    // The file has been modified (content only, since metadata matched).
                     result.modified.push(file.fileName);
+                    
+                    // Log detailed reason for modification only if verbose logging is enabled
+                    if (log.verboseEnabled) {
+                        log.verbose(`Modified file: ${file.fileName} - content hash changed`);
+                    }
                 }
             }
             else {

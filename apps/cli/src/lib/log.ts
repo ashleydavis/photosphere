@@ -32,6 +32,10 @@ class Log implements ILog {
     constructor(private readonly options: ILogOptions) {
     }
 
+    get verboseEnabled(): boolean {
+        return this.options.verbose || false;
+    }
+
     info(message: string): void {
         console.log(message);
     }

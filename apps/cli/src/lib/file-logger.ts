@@ -162,6 +162,10 @@ export class FileLogger implements ILog {
         }
     }
     
+    get verboseEnabled(): boolean {
+        return this.consoleLogger.verboseEnabled;
+    }
+
     info(message: string): void {
         this.writeToFile('info', message);
         this.consoleLogger.info(message);
