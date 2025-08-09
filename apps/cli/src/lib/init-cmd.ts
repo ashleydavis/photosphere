@@ -223,7 +223,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     if (await metadataStorage.fileExists('encryption.pub')) {
         if (!resolvedKeyPath) {
             if (nonInteractive) {
-                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key /path/to/your/private.key`)}\n    ${pc.cyan(`psi <command> --key your-key-filename.key`)}`));
+                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
                 await exit(1);
             } else {
                 // Interactive mode - show key selection menu
