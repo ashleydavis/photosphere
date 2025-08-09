@@ -1915,13 +1915,10 @@ run_all_tests() {
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "all"
     
-    # Cleanup after all tests complete
+    # Preserve test database for further inspection or hash capture
     echo ""
-    log_info "Cleaning up test artifacts..."
-    if [ -d "./test/tmp" ]; then
-        rm -rf "./test/tmp"
-        log_info "Removed all test databases"
-    fi
+    log_info "Preserving test database for inspection"
+    log_info "Test database available at: ./test/tmp/test-db"
     exit 0
 }
 
