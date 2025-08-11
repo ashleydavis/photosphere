@@ -280,6 +280,7 @@ Resources:
         .option("-d, --dest-meta <dir>", "Destination metadata directory override")
         .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
         .option(...generateKeyOption)
+        .option("-p, --path <path>", "Replicate only files matching this path (file or directory)")
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
