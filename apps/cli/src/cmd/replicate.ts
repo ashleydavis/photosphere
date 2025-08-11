@@ -28,6 +28,11 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
     // Generate encryption keys if they don't exist.
     //
     generateKey?: boolean;
+
+    //
+    // Path to a specific file or directory to replicate (instead of entire database).
+    //
+    path?: string;
 }
 
 //
@@ -133,16 +138,22 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     log.info(`  Destination:    ${pc.cyan(destDir)}`);
     log.info('');
 
-    writeProgress(`Copying files...`);
+    writeProgress(options.path 
+        ? `Copying files matching: ${options.path}...` 
+        : `Copying files...`);
 
-    const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorageFinal, (progress) => {
+    const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorageFinal, { 
+        pathFilter: options.path 
+    }, (progress) => {
         const progressMessage = `🔄 ${progress}`;
         writeProgress(progressMessage);
     });
 
     clearProgressMessage(); // Flush the progress message.
 
-    log.info(pc.bold(pc.blue(`📊 Replication Results`)));
+    log.info(pc.bold(pc.blue(options.path 
+        ? `📊 Replication Results (filtered: ${options.path})` 
+        : `📊 Replication Results`)));
     log.info('');
     
     log.info(`Total files imported:      ${pc.cyan(result.filesImported.toString())}`);

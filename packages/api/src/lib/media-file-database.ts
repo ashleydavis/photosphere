@@ -361,6 +361,16 @@ export interface IReplicationResult {
 }
 
 //
+// Options for the replication process.
+//
+export interface IReplicateOptions {
+    //
+    // Path filter to only replicate files matching this path (file or directory).
+    //
+    pathFilter?: string;
+}
+
+//
 // Implements the Photosphere media file database.
 //
 export class MediaFileDatabase {
@@ -1370,7 +1380,7 @@ export class MediaFileDatabase {
     //
     // Replicates the media file database to another storage.
     //
-    async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
+    async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
 
         const result: IReplicationResult = {
             filesImported: this.databaseMetadata.filesImported,
@@ -1480,7 +1490,18 @@ export class MediaFileDatabase {
         // Process a node in the soure merkle tree.
         //
         const processSrcNode = async (srcNode: MerkleNode): Promise<boolean> => {
-            if (srcNode.fileName && !srcNode.isDeleted) {               
+            if (srcNode.fileName && !srcNode.isDeleted) {
+                // Skip files that don't match the path filter
+                if (options?.pathFilter) {
+                    const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
+                    const fileName = srcNode.fileName.replace(/\\/g, '/');
+                    
+                    // Check if the file matches the filter (exact match or starts with filter + '/')
+                    if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
+                        return true; // Continue traversal
+                    }
+                }
+                               
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
 
                 if (result.copiedFiles % 100 === 0) {
