@@ -115,6 +115,13 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi debug clear-cache --db ./photos -t database", description: "Clears the database cache for ./photos." }
     ],
     
+    "debug hash": [
+        { command: "psi debug hash /path/to/file.jpg", description: "Hashes a local file using SHA-256." },
+        { command: "psi debug hash fs:/path/to/file.jpg", description: "Hashes a file using filesystem storage prefix." },
+        { command: "psi debug hash s3:bucket/path/to/file.jpg", description: "Hashes a file stored in S3." },
+        { command: "psi debug hash /encrypted/file.jpg --key ./my-key.pem", description: "Hashes an encrypted file using a private key." }
+    ],
+    
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
