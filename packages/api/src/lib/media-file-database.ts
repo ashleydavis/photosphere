@@ -250,6 +250,11 @@ export interface IVerifyResult {
     removed: string[];
 
     //
+    // The number of files that were processed from the file system.
+    // 
+    filesProcessed: number;
+
+    //
     // The number of nodes processed in the merkle tree.
     //
     nodesProcessed: number;
@@ -1050,6 +1055,10 @@ export class MediaFileDatabase {
     //
     async verify(options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
+        let pathFilter = options?.pathFilter 
+            ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
+            : undefined;
+
         const summary = await this.getDatabaseSummary();
         const result: IVerifyResult = {
             filesImported: this.databaseMetadata.filesImported,
@@ -1059,6 +1068,7 @@ export class MediaFileDatabase {
             modified: [],
             new: [],
             removed: [],
+            filesProcessed: 0,
             nodesProcessed: 0,
         };
 
@@ -1067,14 +1077,10 @@ export class MediaFileDatabase {
         //
         let filesProcessed = 0;
         for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
-            // Skip files that don't match the path filter
-            if (options?.pathFilter) {
-                const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
-                const fileName = file.fileName.replace(/\\/g, '/');
-                
-                // Check if the file matches the filter (exact match or starts with filter + '/')
-                if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
-                    continue;
+            
+            if (pathFilter) {
+                if (!file.fileName.startsWith(pathFilter)) {
+                    continue; // Skips files that don't match the path filter.
                 }
             }
 
@@ -1092,7 +1098,6 @@ export class MediaFileDatabase {
                 continue;
             }
 
-
             const fileHash = this.databaseHashCache.getHash(file.fileName);
             if (!fileHash) {
                 result.new.push(file.fileName);
@@ -1100,13 +1105,11 @@ export class MediaFileDatabase {
             }
 
             const sizeChanged = fileHash.length !== fileInfo.length;
-            const timestampChanged = fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime();
-            
+            const timestampChanged = fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime();            
             if (sizeChanged || timestampChanged) {
                 // File metadata has changed - check if content actually changed by computing the hash.
                 const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
-                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
-                
+                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");                
                 if (contentChanged) {
                     // The file content has actually been modified.
                     result.modified.push(file.fileName);
@@ -1175,15 +1178,10 @@ export class MediaFileDatabase {
                 progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
             }
 
-            if (node.fileName && !node.isDeleted) {
-                // Skip files that don't match the path filter
-                if (options?.pathFilter) {
-                    const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
-                    const fileName = node.fileName.replace(/\\/g, '/');
-                    
-                    // Check if the file matches the filter (exact match or starts with filter + '/')
-                    if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
-                        return true; // Continue traversal
+            if (node.fileName && !node.isDeleted) {                
+                if (pathFilter) {
+                    if (!node.fileName.startsWith(pathFilter)) {
+                        return true; // Skips files that don't match the path filter.
                     }
                 }
 
@@ -1191,11 +1189,27 @@ export class MediaFileDatabase {
                     // The file is missing from the storage, but it exists in the merkle tree.
                     result.removed.push(node.fileName);
                 }
+                else {
+                    // Check that the hash in the node is the same as the hash in the database.
+                    const fileHash = this.databaseHashCache.getHash(node.fileName);
+                    if (!fileHash) {
+                        //todo: what does it mean if there's no hash?!
+                        console.log(`File "${node.fileName}" is in the merkle tree but has no hash in the hash cache.`);
+                    }
+                    else {
+                        if (fileHash.hash.compare(node.hash) !== 0) {
+                            // The hash in the node doesn't match the hash in the database.
+                            log.warn(`File "${node.fileName}" has a hash mismatch: ${fileHash.hash.toString("hex")} != ${node.hash.toString("hex")}`);
+                            result.modified.push(node.fileName);
+                        }
+                    }                   
+                }
             }
 
             return true;
         });
        
+        result.filesProcessed = filesProcessed;
         result.nodesProcessed = numNodes;
 
         return result;
