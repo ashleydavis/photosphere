@@ -22,6 +22,7 @@ import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
 import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
+import { debugHashCommand } from './cmd/debug-hash';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -179,6 +180,17 @@ Resources:
         .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
         .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
+
+    // Add hash subcommand
+    debugCommand
+        .command('hash')
+        .description('Hash a file through the storage abstraction')
+        .argument('<file-path>', 'The file path to hash (supports fs:, s3:, and encrypted storage)')
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('debug hash'))
+        .action(debugHashCommand);
 
     program
         .command("examples")
