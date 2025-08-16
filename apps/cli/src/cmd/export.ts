@@ -34,7 +34,7 @@ export async function exportCommand(assetId: string, outputPath: string, options
         log.info(`Looking for asset ${pc.cyan(assetId)} (${pc.magenta(assetType)}) in database at ${pc.yellow(dbPath)}`);
 
         // Load the database using shared function
-        const { database, assetStorage } = await loadDatabase(dbPath, options);
+        const { database, assetStorage } = await loadDatabase(dbPath, options, false, true);
 
         // Find the asset by ID
         log.info(`Searching for asset with ID: ${pc.cyan(assetId)}`);

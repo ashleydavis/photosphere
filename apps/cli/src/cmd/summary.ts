@@ -12,9 +12,8 @@ export interface ISummaryCommandOptions extends IBaseCommandOptions {
 //
 export async function summaryCommand(options: ISummaryCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true);
+    const { database } = await loadDatabase(options.db, options, true, true);
 
-    // Get database summary information
     const summary = await database.getDatabaseSummary();
 
     log.info('');

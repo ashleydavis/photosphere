@@ -440,15 +440,23 @@ export class MediaFileDatabase {
     //
     private isDirty: boolean = false;
 
+    //
+    // Flag to indicate if the database is in readonly mode.
+    //
+    private readonly isReadonly: boolean;
+
     constructor(
         assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
-        private readonly timestampProvider: ITimestampProvider
+        private readonly timestampProvider: ITimestampProvider,
+        isReadonly: boolean = false
             ) {
 
-        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, this.timestampProvider, uuidGenerator);
+        this.isReadonly = isReadonly;
+        
+        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, this.timestampProvider, uuidGenerator, isReadonly);
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
@@ -461,6 +469,7 @@ export class MediaFileDatabase {
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
             uuidGenerator: uuidGenerator,
             maxCachedShards: 100,
+            readonly: isReadonly,
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");
@@ -470,6 +479,15 @@ export class MediaFileDatabase {
 
         // Use the provided UUID generator
         this.uuidGenerator = uuidGenerator;
+    }
+
+    //
+    // Checks if the database is in readonly mode and throws an error if write operations are attempted.
+    //
+    private checkReadonly(operation: string): void {
+        if (this.isReadonly) {
+            throw new Error(`Cannot perform ${operation} operation: database is in readonly mode`);
+        }
     }
 
     //
@@ -585,6 +603,7 @@ export class MediaFileDatabase {
     // Creates a new media file database.
     //
     async create(): Promise<void> {
+        this.checkReadonly('create database');
         await this.localHashCache.load();
         await this.databaseHashCache.load();
 
@@ -666,6 +685,7 @@ export class MediaFileDatabase {
     // Adds a list of files or directories to the media file database.
     //
     async addPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
+        this.checkReadonly('add files');
         await this.localFileScanner.scanPaths(paths, async (result) => {
             await this.addFile(
                 result.filePath,
@@ -961,17 +981,19 @@ export class MediaFileDatabase {
         await this.bsonDatabase.close();
         await this.assetDatabase.close();
 
-        //
-        // NOTE:    We save the database hash cache last 
-        //          because closing the database can flush 
-        //          changes to files that should be updated 
-        //          in the hash cache.
-        //
-        await this.databaseHashCache.save();
-        
-        // Save database metadata only if it has been modified
-        if (this.isDirty) {
-            await this.saveDatabaseMetadata();
+        if (!this.isReadonly) {
+            //
+            // NOTE:    We save the database hash cache last 
+            //          because closing the database can flush 
+            //          changes to files that should be updated 
+            //          in the hash cache.
+            //
+            await this.databaseHashCache.save();
+            
+            // Save database metadata only if it has been modified
+            if (this.isDirty) {
+                await this.saveDatabaseMetadata();
+            }
         }
     }
 
@@ -1204,6 +1226,7 @@ export class MediaFileDatabase {
     // Repairs the media file database by restoring corrupted or missing files from a source database.
     //
     async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {
+        this.checkReadonly('repair database');
         
         const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
         const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
@@ -1528,6 +1551,7 @@ export class MediaFileDatabase {
     // This is the comprehensive removal method that handles storage cleanup.
     //
     async remove(assetId: string): Promise<void> {
+        this.checkReadonly('remove asset');
         await this.assetStorage.deleteFile(pathJoin("assets", assetId));
         await this.assetStorage.deleteFile(pathJoin("display", assetId));
         await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
