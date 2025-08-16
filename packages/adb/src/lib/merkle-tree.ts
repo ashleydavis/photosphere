@@ -4,6 +4,11 @@ import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { ITimestampProvider, IUuidGenerator } from 'utils';
 
 //
+// Current database version
+//
+export const CURRENT_DATABASE_VERSION = 3;
+
+//
 // Represents a node in the Merkle tree.
 //
 export interface MerkleNode {
@@ -286,7 +291,7 @@ export function createTree(timestampProvider: ITimestampProvider,uuidGenerator: 
         nodes: [],
         sortedNodeRefs: [],
         metadata: createDefaultMetadata(timestampProvider, uuidGenerator),
-        version: 2,
+        version: CURRENT_DATABASE_VERSION,
     };
 }
 
@@ -353,7 +358,7 @@ export function addFile(
         nodes,
         sortedNodeRefs,
         metadata: updateMetadata(metadata, nodes.length, numFiles + 1, nodes[0].size, timestampProvider),
-        version: merkleTree?.version || 2,
+        version: merkleTree?.version || CURRENT_DATABASE_VERSION,
     };
 }
 
@@ -794,8 +799,8 @@ export async function saveTree(filePath: string, tree: IMerkleTree, storage: ISt
     const buffer = Buffer.alloc(totalSize);
     let offset = 0;
     
-    // Write format version (2)
-    buffer.writeUInt32LE(2, offset);
+    // Write format version (always use current version when saving)
+    buffer.writeUInt32LE(CURRENT_DATABASE_VERSION, offset);
     offset += 4;
         
     // Write metadata.
