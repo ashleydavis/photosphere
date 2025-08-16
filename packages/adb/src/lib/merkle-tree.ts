@@ -73,7 +73,7 @@ export interface IMerkleTree {
     sortedNodeRefs: MerkleNodeRef[]; 
     
     //
-    // Metadata for the tree (V2 only)
+    // Metadata for the tree
     //
     metadata: TreeMetadata;
 
@@ -735,7 +735,7 @@ function combineBigNum(input: { low: number, high: number }): bigint {
 }
 
 /**
- * Save a Merkle tree to a file using V2 format (non-recursive, direct array serialization)
+ * Merkle tree file format.
  * 
  * This format has the following structure:
  * - 4 bytes: Format version (uint32, value = 2)
@@ -761,7 +761,7 @@ function combineBigNum(input: { low: number, high: number }): bigint {
  *   - 4 bytes: fileIndex (uint32)
  *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  */
-export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: IStorage): Promise<void> {
+export async function saveTree(filePath: string, tree: IMerkleTree, storage: IStorage): Promise<void> {
     // Calculate total buffer size needed
     let totalSize = 4; // 4 bytes version
 
@@ -901,12 +901,9 @@ export async function saveTreeV2(filePath: string, tree: IMerkleTree, storage: I
 }
 
 /**
- * Load a Merkle tree from a file using V2 format
- * 
- * This loads both V1 and V2 format files, with V2 providing direct array loading
- * without recursion or complex parsing.
+ * Load a Merkle tree from a file.
  */
-export async function loadTreeV2(filePath: string, storage: IStorage): Promise<IMerkleTree | undefined> {
+export async function loadTree(filePath: string, storage: IStorage): Promise<IMerkleTree | undefined> {
     const treeData = await storage.read(filePath);
     if (!treeData) {
         return undefined;

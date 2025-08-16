@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, MerkleNode, saveTreeV2, traverseTree, visualizeTree } from "adb";
+import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, MerkleNode, saveTree, traverseTree, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -1514,7 +1514,7 @@ export class MediaFileDatabase {
 
         await retry(() => destHashCache.save());
 
-        await retry(() => saveTreeV2("tree.dat", newDestTree, destMetadataStorage));
+        await retry(() => saveTree("tree.dat", newDestTree, destMetadataStorage));
         
         const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
         const metadataBuffer = Buffer.from(metadataJson, 'utf8');

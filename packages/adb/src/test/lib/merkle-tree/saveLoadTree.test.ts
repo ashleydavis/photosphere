@@ -4,14 +4,14 @@ import {
     IMerkleTree,
     FileHash,
     addFile,
-    saveTreeV2,
-    loadTreeV2,
+    saveTree,
+    loadTree,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
 import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
-describe('Merkle Tree Save/Load V2', () => {
+describe('Merkle Tree Save/Load', () => {
     const TEST_FILE_PATH = './test-tree-v2.bin';
     const timestampProvider = new TestTimestampProvider();
     const uuidGenerator = new TestUuidGenerator();
@@ -57,15 +57,15 @@ describe('Merkle Tree Save/Load V2', () => {
         }
     });
     
-    test('should save and load a small tree correctly with V2 format', async () => {
+    test('should save and load a small tree correctly', async () => {
         // Create a simple tree with two files
         const originalTree = buildTree(['A', 'B']);
         
         // Save the tree to a file using V2 format
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree from the file using V2 format
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
@@ -95,16 +95,16 @@ describe('Merkle Tree Save/Load V2', () => {
         }
     });
     
-    test('should save and load a complex tree correctly with V2 format', async () => {
+    test('should save and load a complex tree correctly', async () => {
         // Create a larger tree with multiple levels
         const fileNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
         const originalTree = buildTree(fileNames);
         
         // Save the tree to a file
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree from the file
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(fileNames.length);
@@ -127,7 +127,7 @@ describe('Merkle Tree Save/Load V2', () => {
         expect(loadedTree.nodes[0].hash.toString('hex')).toBe(originalTree.nodes[0].hash.toString('hex'));
     });
     
-    test('should save and load all nodeRefs correctly in V2 format', async () => {
+    test('should save and load all nodeRefs correctly', async () => {
         // Create a tree with files in a non-alphabetical order
         const originalTree = buildTree(['C', 'A', 'B']);
         
@@ -135,9 +135,9 @@ describe('Merkle Tree Save/Load V2', () => {
         expect(originalTree.sortedNodeRefs.length).toBe(3);
         expect(originalTree.sortedNodeRefs.map(ref => ref.fileName)).toEqual(['A', 'B', 'C']);
         
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify the loaded tree has the sortedNodeRefs
         expect(loadedTree.sortedNodeRefs.length).toBe(3);
@@ -156,15 +156,15 @@ describe('Merkle Tree Save/Load V2', () => {
         }
     });
     
-    test('should handle trees with special characters in file names in V2 format', async () => {
+    test('should handle trees with special characters in file names', async () => {
         const specialChars = 'file-with-special-chars-!@#$%^&*()_+.txt';
         const tree = buildTree([specialChars]);
         
-        await saveTreeV2(TEST_FILE_PATH, tree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, tree, new FileStorage(""));
 
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
-        // In V2 format the tree structure should be exactly the same
+        // the tree structure should be exactly the same
         expect(loadedTree.nodes.length).toBe(tree.nodes.length);
         expect(loadedTree.nodes[0].fileName).toBe(specialChars);
         expect(loadedTree.nodes[0].hash.toString('hex')).toBe(tree.nodes[0].hash.toString('hex'));
@@ -175,16 +175,16 @@ describe('Merkle Tree Save/Load V2', () => {
         expect(loadedTree.sortedNodeRefs[0].fileIndex).toBe(0);
     });
     
-    test('should handle large trees efficiently with V2 format', async () => {
+    test('should handle large trees efficiently', async () => {
         // Create a large tree with 100 files
         const fileNames = Array.from({ length: 100 }, (_, i) => `file-${i}.txt`);
         const originalTree = buildTree(fileNames);
         
         // Save the tree
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify tree properties
         expect(loadedTree.metadata.totalFiles).toBe(100);
