@@ -101,11 +101,6 @@ export interface IDatabaseMetadata {
     // Number of files that have been imported into the database.
     //
     filesImported: number;
-
-    //
-    // Version of the metadata format.
-    //
-    version: number;
 }
 
 export interface IAddSummary {
@@ -433,7 +428,6 @@ export class MediaFileDatabase {
     //
     private databaseMetadata: IDatabaseMetadata = {
         filesImported: 0,
-        version: 1,
     };
 
     //
@@ -536,14 +530,13 @@ export class MediaFileDatabase {
             
             this.databaseMetadata = {
                 filesImported,
-                version: 1,
             };
             
             await this.saveDatabaseMetadata();
             log.verbose(`Initialized database metadata with ${filesImported} assets`);
         } catch (error: any) {
             log.warn(`Failed to initialize database metadata: ${error.message}`);
-            this.databaseMetadata = { filesImported: 0, version: 1 };
+            this.databaseMetadata = { filesImported: 0 };
         }
     }
 
@@ -596,7 +589,7 @@ export class MediaFileDatabase {
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
         // Initialize database metadata
-        this.databaseMetadata = { filesImported: 0, version: 1 };
+        this.databaseMetadata = { filesImported: 0 };
         this.isDirty = true;
         await this.saveDatabaseMetadata();
 
