@@ -37,6 +37,11 @@ export interface IBsonCollectionOptions {
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
+
+    //
+    // Whether the collection is in readonly mode.
+    //
+    readonly?: boolean;
 }
 
 export interface IRecord {

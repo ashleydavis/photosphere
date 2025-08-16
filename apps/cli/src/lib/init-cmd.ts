@@ -292,7 +292,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean = false): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean = false, readonly: boolean = false): Promise<IInitResult> {
 
     const nonInteractive = options.yes || false;
     
@@ -372,7 +372,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, readonly); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {
