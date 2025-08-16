@@ -460,7 +460,7 @@ export class MediaFileDatabase {
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
-        this.databaseHashCache = new HashCache(metadataStorage, ``);
+        this.databaseHashCache = new HashCache(metadataStorage, ``, isReadonly);
 
         // Anything that goes through this.assetStorage automatically updates the merkle tree.
         this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase, this.databaseHashCache); 

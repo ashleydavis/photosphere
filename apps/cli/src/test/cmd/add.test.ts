@@ -33,6 +33,7 @@ const mockGetAddSummary = jest.fn().mockReturnValue({
 // Create mock storage objects before using them in the mocks
 const mockAssetStorage: jest.Mocked<IStorage> = {
     location: '/test/db',
+    isReadonly: false,
     isEmpty: jest.fn(),
     listFiles: jest.fn(),
     listDirs: jest.fn(),
@@ -50,6 +51,7 @@ const mockAssetStorage: jest.Mocked<IStorage> = {
 
 const mockMetadataStorage: jest.Mocked<IStorage> = {
     location: '/test/db/.db',
+    isReadonly: false,
     isEmpty: jest.fn(),
     listFiles: jest.fn(),
     listDirs: jest.fn(),

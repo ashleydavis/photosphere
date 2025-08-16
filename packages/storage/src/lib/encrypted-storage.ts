@@ -12,6 +12,10 @@ export class EncryptedStorage implements IStorage {
     constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {        
     }
 
+    get isReadonly(): boolean {
+        return this.storage.isReadonly;
+    }
+
     //
     // Returns true if the specified directory is empty.
     //

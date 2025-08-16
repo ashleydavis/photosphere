@@ -210,6 +210,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private readonly uuidGenerator: IUuidGenerator;
 
     //
+    // Whether the collection is in readonly mode.
+    //
+    private readonly isReadonly: boolean;
+
+    //
     // The last time the collection was saved.
     //
     private lastSaveTime: number | undefined = undefined;
@@ -220,6 +225,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.numShards = options.numShards || 100;
         this.maxCachedShards = options.maxCachedShards || 10;
         this.uuidGenerator = options.uuidGenerator;
+        this.isReadonly = options.readonly || false;
 
         this.sortManager = new SortManager({
             storage: this.storage,
@@ -457,10 +463,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.clearSchedule(); // Clear any pending saves.
         this.isAlive = false; // Causes the worker to exit after saving.
         this.wakeWorker(); // Wake the worker so it can exit.
-        await this.saveDirtyShards(); // Save any remaining dirty shards.
         
-        // Shut down the sort manager to save any dirty sort index pages
-        await this.sortManager.shutdown();
+        if (!this.isReadonly) {
+            await this.saveDirtyShards(); // Save any remaining dirty shards.
+            
+            // Shut down the sort manager to save any dirty sort index pages
+            await this.sortManager.shutdown();
+        }
     }
 
     //
