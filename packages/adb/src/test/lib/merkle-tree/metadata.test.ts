@@ -6,8 +6,8 @@ import {
     addFile,
     updateFile,
     markFileAsDeleted,
-    saveTreeV2,
-    loadTreeV2,
+    saveTree,
+    loadTree,
     createDefaultMetadata,
     updateMetadata,
     createTree
@@ -187,10 +187,10 @@ describe('Merkle Tree Metadata', () => {
         expect(originalTree.metadata).toBeDefined();
         
         // Save the tree to a file
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree from the file
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Check that metadata was preserved
         expect(loadedTree.metadata).toBeDefined();

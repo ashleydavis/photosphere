@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { markFileAsDeleted, createTree, IMerkleTree, loadTreeV2, saveTreeV2, upsertFile } from "./merkle-tree";
+import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
 import { ITimestampProvider, IUuidGenerator } from "utils";
 
 //
@@ -87,14 +87,14 @@ export class AssetDatabase implements IAssetDatabase {
         }
 
         this.merkleTree = createTree(this.timestampProvider, this.uuidGenerator);
-        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
+        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //
     // Loads an existing asset database.
     //
     async load(): Promise<void> {
-        this.merkleTree = await loadTreeV2("tree.dat", this.metadataStorage);
+        this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
         if (!this.merkleTree) {
             throw new Error(`Failed to load asset database. No tree found at ${this.metadataStorage.location}/tree.dat.`);
         }
@@ -117,7 +117,7 @@ export class AssetDatabase implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
         }
-        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
+        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //
@@ -127,7 +127,7 @@ export class AssetDatabase implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot close database. No database loaded.");
         }
-        await saveTreeV2("tree.dat", this.merkleTree, this.metadataStorage);
+        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //

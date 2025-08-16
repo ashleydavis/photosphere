@@ -9,8 +9,8 @@ import {
     markFileAsDeleted,
     isFileDeleted,
     getActiveFiles,
-    saveTreeV2,
-    loadTreeV2,
+    saveTree,
+    loadTree,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
@@ -108,10 +108,10 @@ describe('File Deletion', () => {
         
         // Save the tree to a temporary file
         const tempFile = '/tmp/merkle-tree-delete-test.bin';
-        await saveTreeV2(tempFile, tree, new FileStorage(""));
+        await saveTree(tempFile, tree, new FileStorage(""));
         
         // Load the tree back
-        const loadedTree = (await loadTreeV2(tempFile, new FileStorage("")))!;
+        const loadedTree = (await loadTree(tempFile, new FileStorage("")))!;
         
         // Verify the deletion status was preserved
         expect(isFileDeleted(loadedTree, fileToDelete)).toBe(true);
