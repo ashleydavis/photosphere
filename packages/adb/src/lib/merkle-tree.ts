@@ -76,6 +76,11 @@ export interface IMerkleTree {
     // Metadata for the tree (V2 only)
     //
     metadata: TreeMetadata;
+
+    //
+    // Version of the merkle tree file format
+    //
+    version: number;
 }
 
 //
@@ -281,6 +286,7 @@ export function createTree(timestampProvider: ITimestampProvider,uuidGenerator: 
         nodes: [],
         sortedNodeRefs: [],
         metadata: createDefaultMetadata(timestampProvider, uuidGenerator),
+        version: 2,
     };
 }
 
@@ -347,6 +353,7 @@ export function addFile(
         nodes,
         sortedNodeRefs,
         metadata: updateMetadata(metadata, nodes.length, numFiles + 1, nodes[0].size, timestampProvider),
+        version: merkleTree?.version || 2,
     };
 }
 
@@ -781,6 +788,7 @@ export async function loadTree(
         nodes,
         sortedNodeRefs,
         metadata,
+        version: 2,
     };
 }
 
@@ -1169,6 +1177,7 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
     
     // Check if this is a V2 format file by looking at the first 4 bytes
     if (treeData.length >= 4 && treeData.readUInt32LE(0) === 2) {
+        const version = treeData.readUInt32LE(0); // Read the version number
         let offset = 4; // Start after version.
         
         // Read all metadata fields
@@ -1289,6 +1298,7 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
             nodes,
             sortedNodeRefs,
             metadata,
+            version,
         };
     } else {
         // V1 format - fall back to original loadTree implementation

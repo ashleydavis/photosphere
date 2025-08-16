@@ -91,6 +91,11 @@ export interface IDatabaseSummary {
     // Full hash of the tree root.
     //
     fullHash: string;
+
+    //
+    // Database version from merkle tree.
+    //
+    databaseVersion: number;
 }
 
 //
@@ -645,7 +650,8 @@ export class MediaFileDatabase {
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
-            fullHash
+            fullHash,
+            databaseVersion: merkleTree.version
         };
     }
 
