@@ -15,6 +15,11 @@ export class AssetDatabaseStorage implements IStorage {
     // Updates the merkle tree when a file is added or removed.
     //    
     private async updateMerkleTree(filePath: string): Promise<void> {
+        if (this.storage.isReadonly) {
+            // Skip merkle tree updates in readonly mode
+            return;
+        }
+        
         const info = await this.storage.info(filePath);
         if (!info) {
             throw new Error(`Failed to get info for file "${filePath}"`);
@@ -33,6 +38,10 @@ export class AssetDatabaseStorage implements IStorage {
 
     get location(): string {
         return this.storage.location;
+    }
+
+    get isReadonly(): boolean {
+        return this.storage.isReadonly;
     }
 
     //
@@ -88,7 +97,7 @@ export class AssetDatabaseStorage implements IStorage {
     //
     // Writes a file to storage.
     //
-    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {               
+    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {           
         await this.storage.write(filePath, contentType, data);
         await this.updateMerkleTree(filePath);
     }

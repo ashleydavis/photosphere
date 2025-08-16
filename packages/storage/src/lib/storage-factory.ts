@@ -31,6 +31,11 @@ export interface IStorageOptions {
      * Private key for decryption (if using encryption)
      */
     privateKey?: KeyObject;
+
+    /**
+     * Whether the storage should be in readonly mode
+     */
+    readonly?: boolean;
 }
 
 /**
@@ -54,20 +59,20 @@ export function createStorage(
 
     // Check for storage prefix
     if (rootPath.startsWith('fs:')) {
-        storage = new FileStorage(`fs:`);
+        storage = new FileStorage(`fs:`, options?.readonly || false);
         normalizedPath = path.resolve(rootPath.substring('fs:'.length));
         type = 'fs';
     } 
     else if (rootPath.startsWith('s3:')) {
         // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = rootPath.substring('s3:'.length);
-        storage = new CloudStorage(`s3:`, true, s3Config);
+        storage = new CloudStorage(`s3:`, true, s3Config, options?.readonly || false);
         normalizedPath = s3Path;
         type = 's3';
     } 
     else {
         // Assume local file system for backward compatibility
-        storage = new FileStorage(`fs:`);
+        storage = new FileStorage(`fs:`, options?.readonly || false);
         normalizedPath = path.resolve(rootPath);
         type = 'fs';
     }

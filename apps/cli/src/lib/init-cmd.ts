@@ -322,9 +322,16 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     let resolvedKeyPath = await resolveKeyPath(options.key);
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
+    // Add readonly flag to storage options
+    if (storageOptions) {
+        storageOptions.readonly = readonly;
+    } else {
+        storageOptions = { readonly };
+    }
+
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config, { readonly });
 
     // Make sure the merkle tree file exists.
     if (!await metadataStorage.fileExists('tree.dat')) {
@@ -350,6 +357,13 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
                 resolvedKeyPath = await resolveKeyPath(options.key);
                 const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
                 storageOptions = newStorageOptions;
+                
+                // Add readonly flag to storage options
+                if (storageOptions) {
+                    storageOptions.readonly = readonly;
+                } else {
+                    storageOptions = { readonly };
+                }
                 
                 // Recreate storage with the new encryption options
                 const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
