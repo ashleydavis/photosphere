@@ -1,5 +1,6 @@
 import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import { CURRENT_DATABASE_VERSION, IMerkleTree } from "adb";
 import { configureLog } from "./log";
 import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -31,6 +32,31 @@ export async function getAvailableKeys(): Promise<string[]> {
     // Filter for .key files (private keys are all we need)
     return allFiles
         .filter(file => file.endsWith('.key'));
+}
+
+//
+// Checks if a tree version is compatible with the current version
+//
+function checkVersionCompatibility(tree: IMerkleTree, allowOlderVersions: boolean = false): { isCompatible: boolean, message?: string } {
+    if (tree.version === CURRENT_DATABASE_VERSION) {
+        return { isCompatible: true };
+    }
+    
+    if (allowOlderVersions) {
+        return { isCompatible: true };
+    }
+    
+    if (tree.version < CURRENT_DATABASE_VERSION) {
+        return { 
+            isCompatible: false, 
+            message: `Database version ${tree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`
+        };
+    } else {
+        return { 
+            isCompatible: false, 
+            message: `Database version ${tree.version} is newer than the current supported version ${CURRENT_DATABASE_VERSION}. Please update your Photosphere CLI tool.`
+        };
+    }
 }
 
 //
@@ -266,7 +292,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean = false): Promise<IInitResult> {
 
     const nonInteractive = options.yes || false;
     
@@ -355,6 +381,15 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 
     // Load the database
     await database.load();
+
+    // Check database version compatibility
+    const merkleTree = database.getAssetDatabase().getMerkleTree();
+    const versionCheck = checkVersionCompatibility(merkleTree, allowOlderVersions);
+    
+    if (!versionCheck.isCompatible) {
+        outro(pc.red(`✗ ${versionCheck.message}`));
+        await exit(1);
+    }
 
     return {
         database,
