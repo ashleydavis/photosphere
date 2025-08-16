@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { IStorage } from 'storage';
-import { v4 as uuidv4, parse as parseUuid, stringify as stringifyUuid } from 'uuid';
+import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { ITimestampProvider, IUuidGenerator } from 'utils';
 
 //
@@ -628,269 +628,6 @@ export function findFileNode(merkleTree: IMerkleTree | undefined, fileName: stri
     return findFileNodeWithDeletionStatus(merkleTree, fileName, false);
 }
 
-//
-// Load a Merkle tree from a file.
-//
-export async function loadTree(
-    filePath: string, 
-    storage: IStorage,
-    timestampProvider?: ITimestampProvider,
-    uuidGenerator?: IUuidGenerator
-): Promise<IMerkleTree | undefined> {
-    const treeData = await storage.read(filePath);
-    if (!treeData) {
-        return undefined;
-    }
-
-    const nodes : MerkleNode[] = [];
-    let numFiles = 0;
-
-    // Recursive function to read nodes
-    const readNode = (offset: number): { node: MerkleNode, offset: number } => {
-        // Read hash
-        const hash = treeData.slice(offset, offset + 32);
-        offset += 32;
-
-        // Read file path.
-        const filePathLength = treeData.readUInt16LE(offset);
-        offset += 2;
-
-        let filePath: string | undefined;
-        if (filePathLength > 0) {
-            filePath = treeData.slice(offset, offset + filePathLength).toString('utf8');
-            offset += filePathLength;
-        }
-
-        let leftNode: MerkleNode | undefined;
-        let rightNode: MerkleNode | undefined;
-
-        // Create node.
-        const node: MerkleNode = {
-            hash,
-            fileName: filePath,
-            nodeCount: 0,
-            leafCount: 0,
-            size: 0,
-        };
-        nodes.push(node);
-
-        // If this is not a leaf node (filePathLength == 0), read its children
-        if (filePathLength === 0) {
-            // Read left child node
-            const { node: left, offset: offsetAfterLeft } = readNode(offset);
-            leftNode = left;
-            offset = offsetAfterLeft;
-
-            // Read right child node
-            const { node: right, offset: offsetAfterRight } = readNode(offset);
-            offset = offsetAfterRight;
-            rightNode = right;
-
-            node.nodeCount = 1 + leftNode.nodeCount + rightNode.nodeCount;
-            node.leafCount = leftNode.leafCount + rightNode.leafCount;
-        }
-        else {
-            node.nodeCount = 1;
-            node.leafCount = 1;
-            numFiles += 1;
-        }
-
-
-        return {
-            node,
-            offset,
-        };
-    };
-
-    // Start reading nodes from the beginning (root node first).
-    const { node, offset: nodesEndOffset } = readNode(0);
-    
-    // Initialize as empty - will stay empty if no sortedNodeRefs data is present
-    let sortedNodeRefs: MerkleNodeRef[] = [];
-    
-    // Check if there's more data in the buffer for sortedNodeRefs
-    if (nodesEndOffset < treeData.length) {
-        try {
-            // Try to read the count of sortedNodeRefs
-            if (nodesEndOffset + 4 <= treeData.length) {
-                const refCount = treeData.readUInt32LE(nodesEndOffset);
-                let currentOffset = nodesEndOffset + 4;
-                
-                // Read each nodeRef
-                for (let i = 0; i < refCount; i++) {
-                    // Read fileName length
-                    const fileNameLength = treeData.readUInt16LE(currentOffset);
-                    currentOffset += 2;
-                    
-                    // Read fileName
-                    const fileName = treeData.slice(currentOffset, currentOffset + fileNameLength).toString('utf8');
-                    currentOffset += fileNameLength;
-                    
-                    // Read fileIndex
-                    const fileIndex = treeData.readUInt32LE(currentOffset);
-                    currentOffset += 4;
-                    
-                    // Add to sortedNodeRefs
-                    sortedNodeRefs.push({
-                        fileName,
-                        fileIndex
-                    });
-                    
-                    // If we've reached the end of the buffer, break
-                    if (currentOffset >= treeData.length) {
-                        break;
-                    }
-                }
-            }
-        } catch (error) {
-            // If we encounter an error reading the sortedNodeRefs,
-            // log it and fall back to generating them from the nodes
-            console.warn("Error reading sortedNodeRefs from file, will regenerate them:", error);
-            sortedNodeRefs = [];
-        }
-    }
-    
-    // If we couldn't read sortedNodeRefs from the file, generate them from the nodes
-    if (sortedNodeRefs.length === 0 && numFiles > 0) {
-        // Generate sortedNodeRefs from the leaf nodes
-        const leafNodes = nodes.filter(node => node.fileName !== undefined);
-        
-        // Sort them by fileName
-        const sortedLeafNodes = [...leafNodes].sort((a, b) => {
-            return a.fileName!.localeCompare(b.fileName!);
-        });
-        
-        // Create nodeRefs with fileIndex (we don't have direct fileIndex info, 
-        // but we can determine the relative order)
-        sortedNodeRefs = sortedLeafNodes.map((node, idx) => {
-            return {
-                fileName: node.fileName!,
-                fileIndex: idx, // This is a best effort - in a real implementation, we'd need to map this properly
-            };
-        });
-    }
-
-    //
-    // Create metadata for the tree.
-    //
-    const now = timestampProvider ? timestampProvider.now() : Date.now();
-    const id = uuidGenerator ? uuidGenerator.generate() : uuidv4();
-    const metadata: TreeMetadata = {
-        id,
-        totalNodes: nodes.length,
-        totalFiles: numFiles,
-        totalSize: nodes[0].size,
-        createdAt: now,
-        modifiedAt: now,
-    };
-
-    return {
-        nodes,
-        sortedNodeRefs,
-        metadata,
-        version: 2,
-    };
-}
-
-//
-// Save a Merkle tree to a file.
-//
-export async function saveTree(filePath: string, tree: IMerkleTree, storage: IStorage): Promise<void> {
-    const chunks: Buffer[] = [];
-    let totalSize = 0;
-
-    function serializeNode(nodeIndex: number): void {
-
-        const node = tree.nodes[nodeIndex];
-        if (node.hash.length !== 32) {
-            throw new Error(`Invalid hash length: ${node.hash.length}`);
-        }
-
-        const fullFilePath = node.fileName;
-        const filePathLength = fullFilePath ? Buffer.byteLength(fullFilePath, 'utf8') : 0;
-
-        const nodeBufferSize = node.hash.length + 2 + filePathLength;
-
-        // Create node buffer with fixed size:
-        // - 32 bytes for hash
-        // - 2 bytes for file path length (0 = internal node, >0 = leaf node with path)
-        // - X bytes for file path (if present)
-        const nodeBuffer = Buffer.alloc(nodeBufferSize);
-
-        let offset = 0;
-
-        // Write hash
-        node.hash.copy(nodeBuffer, offset);
-        offset += 32;
-
-        //
-        // Write file path if present.
-        //
-        nodeBuffer.writeUInt16LE(filePathLength, offset);
-        offset += 2;
-
-        if (fullFilePath) {
-            // Write file path
-            nodeBuffer.write(fullFilePath, offset, 'utf8');
-            offset += filePathLength;
-        }
-
-        // Add node to chunks
-        chunks.push(nodeBuffer);
-        totalSize += nodeBuffer.length;
-
-        if (node.nodeCount === 1) {
-            // Leaf node, no children
-            return;
-        }
-
-        const { leftIndex, rightIndex } = getChildren(nodeIndex, tree.nodes);
-        serializeNode(leftIndex);
-        serializeNode(rightIndex);
-    };
-
-    // Start serialization from root node.
-    serializeNode(0);
-
-    // Serialize the sorted node refs
-    if (tree.sortedNodeRefs && tree.sortedNodeRefs.length > 0) {
-        // Write count of sortedNodeRefs as a marker
-        const countBuffer = Buffer.alloc(4);
-        countBuffer.writeUInt32LE(tree.sortedNodeRefs.length, 0);
-        chunks.push(countBuffer);
-        totalSize += countBuffer.length;
-
-        // Serialize each node ref
-        for (const nodeRef of tree.sortedNodeRefs) {
-            // Calculate buffer size: fileName length + 2 (for length field) + fileName bytes + 4 (for fileIndex)
-            const fileNameLength = Buffer.byteLength(nodeRef.fileName, 'utf8');
-            const nodeRefBufferSize = 2 + fileNameLength + 4;
-            const nodeRefBuffer = Buffer.alloc(nodeRefBufferSize);
-            
-            let offset = 0;
-            
-            // Write fileName length
-            nodeRefBuffer.writeUInt16LE(fileNameLength, offset);
-            offset += 2;
-            
-            // Write fileName
-            nodeRefBuffer.write(nodeRef.fileName, offset, 'utf8');
-            offset += fileNameLength;
-            
-            // Write fileIndex
-            nodeRefBuffer.writeUInt32LE(nodeRef.fileIndex, offset);
-            
-            // Add to chunks
-            chunks.push(nodeRefBuffer);
-            totalSize += nodeRefBuffer.length;
-        }
-    }
-
-    // Create a final buffer with all nodes and sorted node refs, and save it.
-    const finalBuffer = Buffer.concat(chunks, totalSize);
-    await storage.write(filePath, undefined, finalBuffer);
-}
-
 /**
  * Visualize a Merkle tree in ASCII format and display sorted node references
  * 
@@ -1175,136 +912,129 @@ export async function loadTreeV2(filePath: string, storage: IStorage): Promise<I
         return undefined;
     }
     
-    // Check if this is a V2 format file by looking at the first 4 bytes
-    if (treeData.length >= 4 && treeData.readUInt32LE(0) === 2) {
-        const version = treeData.readUInt32LE(0); // Read the version number
-        let offset = 4; // Start after version.
+    const version = treeData.readUInt32LE(0); // Read the version number
+    let offset = 4; // Start after version.
+    
+    // Read all metadata fields
+    const uuid = stringifyUuid(treeData.slice(offset, offset + 16));
+    offset += 16;
+    
+    const totalNodes = treeData.readUInt32LE(offset);
+    offset += 4;
+    
+    const totalFiles = treeData.readUInt32LE(offset);
+    offset += 4;
+    
+    const low = treeData.readUInt32LE(offset);
+    const high = treeData.readUInt32LE(offset + 4);
+    const totalSize = Number(combineBigNum({ low, high }));
+    offset += 8;
+    
+    // Read created timestamp (64-bit value split into two 32-bit values)
+    const createdLow = treeData.readUInt32LE(offset);
+    const createdHigh = treeData.readUInt32LE(offset + 4);
+    const createdAt = Number(combineBigNum({ low: createdLow, high: createdHigh }));
+    offset += 8;
+    
+    // Read modified timestamp (64-bit value split into two 32-bit values)
+    const modifiedLow = treeData.readUInt32LE(offset);
+    const modifiedHigh = treeData.readUInt32LE(offset + 4);
+    const modifiedAt = Number(combineBigNum({ low: modifiedLow, high: modifiedHigh }));
+    offset += 8;
+    
+    // Create metadata object
+    const metadata: TreeMetadata = {
+        id: uuid,
+        totalNodes,
+        totalFiles,
+        totalSize,
+        createdAt,
+        modifiedAt
+    };
+    
+    // Read all nodes
+    const nodes: MerkleNode[] = [];
+    
+    for (let i = 0; i < totalNodes; i++) {
+        // Read hash
+        const hash = Buffer.from(treeData.slice(offset, offset + 32));
+        offset += 32;
         
-        // Read all metadata fields
-        const uuid = stringifyUuid(treeData.slice(offset, offset + 16));
-        offset += 16;
-        
-        const totalNodes = treeData.readUInt32LE(offset);
+        // Read nodeCount
+        const nodeCount = treeData.readUInt32LE(offset);
         offset += 4;
         
-        const totalFiles = treeData.readUInt32LE(offset);
+        // Read leafCount
+        const leafCount = treeData.readUInt32LE(offset);
         offset += 4;
-        
+
+        // Read tree size.
         const low = treeData.readUInt32LE(offset);
         const high = treeData.readUInt32LE(offset + 4);
-        const totalSize = Number(combineBigNum({ low, high }));
+        const size = Number(combineBigNum({ low, high }));
         offset += 8;
-        
-        // Read created timestamp (64-bit value split into two 32-bit values)
-        const createdLow = treeData.readUInt32LE(offset);
-        const createdHigh = treeData.readUInt32LE(offset + 4);
-        const createdAt = Number(combineBigNum({ low: createdLow, high: createdHigh }));
-        offset += 8;
-        
-        // Read modified timestamp (64-bit value split into two 32-bit values)
-        const modifiedLow = treeData.readUInt32LE(offset);
-        const modifiedHigh = treeData.readUInt32LE(offset + 4);
-        const modifiedAt = Number(combineBigNum({ low: modifiedLow, high: modifiedHigh }));
-        offset += 8;
-        
-        // Create metadata object
-        const metadata: TreeMetadata = {
-            id: uuid,
-            totalNodes,
-            totalFiles,
-            totalSize,
-            createdAt,
-            modifiedAt
-        };
-        
-        // Read all nodes
-        const nodes: MerkleNode[] = [];
-        
-        for (let i = 0; i < totalNodes; i++) {
-            // Read hash
-            const hash = Buffer.from(treeData.slice(offset, offset + 32));
-            offset += 32;
-            
-            // Read nodeCount
-            const nodeCount = treeData.readUInt32LE(offset);
-            offset += 4;
-            
-            // Read leafCount
-            const leafCount = treeData.readUInt32LE(offset);
-            offset += 4;
 
-            // Read tree size.
-            const low = treeData.readUInt32LE(offset);
-            const high = treeData.readUInt32LE(offset + 4);
-            const size = Number(combineBigNum({ low, high }));
-            offset += 8;
-
-            // Read fileName if present
-            const fileNameLength = treeData.readUInt32LE(offset);
-            offset += 4;
-            
-            let fileName: string | undefined;
-            if (fileNameLength > 0) {
-                fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
-                offset += fileNameLength;
-            }
-            
-            // Read isDeleted flag (if exists in format)
-            const isDeleted = treeData.readUInt8(offset) === 1;
-            offset += 1;
-            
-            // Create node
-            nodes.push({
-                hash,
-                fileName,
-                nodeCount,
-                leafCount,
-                size,
-                isDeleted
-            });
-        }
-        
-        // Read all nodeRefs
-        const nodeRefCount = treeData.readUInt32LE(offset);
+        // Read fileName if present
+        const fileNameLength = treeData.readUInt32LE(offset);
         offset += 4;
         
-        const sortedNodeRefs: MerkleNodeRef[] = [];
-        
-        for (let i = 0; i < nodeRefCount; i++) {
-            // Read fileName
-            const fileNameLength = treeData.readUInt32LE(offset);
-            offset += 4;
-            
-            const fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
+        let fileName: string | undefined;
+        if (fileNameLength > 0) {
+            fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
             offset += fileNameLength;
-            
-            // Read fileIndex
-            const fileIndex = treeData.readUInt32LE(offset);
-            offset += 4;
-            
-            // Read isDeleted flag (if exists in format)
-            const isDeleted = treeData.readUInt8(offset) === 1;
-            offset += 1;
-            
-            // Create nodeRef
-            sortedNodeRefs.push({
-                fileName,
-                fileIndex,
-                isDeleted
-            });
         }
         
-        return {
-            nodes,
-            sortedNodeRefs,
-            metadata,
-            version,
-        };
-    } else {
-        // V1 format - fall back to original loadTree implementation
-        console.log(`Fallback to V1 format loading for file: ${filePath}`);
-        return loadTree(filePath, storage);
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = treeData.readUInt8(offset) === 1;
+        offset += 1;
+        
+        // Create node
+        nodes.push({
+            hash,
+            fileName,
+            nodeCount,
+            leafCount,
+            size,
+            isDeleted
+        });
     }
+    
+    // Read all nodeRefs
+    const nodeRefCount = treeData.readUInt32LE(offset);
+    offset += 4;
+    
+    const sortedNodeRefs: MerkleNodeRef[] = [];
+    
+    for (let i = 0; i < nodeRefCount; i++) {
+        // Read fileName
+        const fileNameLength = treeData.readUInt32LE(offset);
+        offset += 4;
+        
+        const fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
+        offset += fileNameLength;
+        
+        // Read fileIndex
+        const fileIndex = treeData.readUInt32LE(offset);
+        offset += 4;
+        
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = treeData.readUInt8(offset) === 1;
+        offset += 1;
+        
+        // Create nodeRef
+        sortedNodeRefs.push({
+            fileName,
+            fileIndex,
+            isDeleted
+        });
+    }
+    
+    return {
+        nodes,
+        sortedNodeRefs,
+        metadata,
+        version,
+    };
 }
 
 /**

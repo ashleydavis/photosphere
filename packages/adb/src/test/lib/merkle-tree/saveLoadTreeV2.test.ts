@@ -6,7 +6,6 @@ import {
     addFile,
     saveTreeV2,
     loadTreeV2,
-    saveTree,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
@@ -204,26 +203,5 @@ describe('Merkle Tree Save/Load V2', () => {
             expect(loadedNode.leafCount).toBe(originalNode.leafCount);
             expect(loadedNode.fileName).toBe(originalNode.fileName);
         }
-    });
-    
-    test('should handle loadTreeV2 with V1 format file by falling back to loadTree', async () => {
-        // Create a simple tree
-        const originalTree = buildTree(['A', 'B']);
-        
-        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
-        
-        // Now try to load it with loadTreeV2
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
-        
-        // Verify it loaded correctly by falling back to V1
-        expect(loadedTree.metadata.totalFiles).toBe(2);
-        expect(loadedTree.nodes.length).toBeGreaterThan(0);
-        
-        // Find leaf nodes
-        const leafNodes = loadedTree.nodes.filter(node => node.fileName !== undefined);
-        expect(leafNodes.length).toBe(2);
-        
-        const fileNames = leafNodes.map(node => node.fileName).sort();
-        expect(fileNames).toEqual(['A', 'B']);
     });
 });
