@@ -1776,6 +1776,131 @@ test_repair_damaged_database() {
 
 
 
+test_v2_database_summary() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 27: V2 DATABASE SUMMARY ACCESS ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    check_exists "$v2_db_dir/metadata" "V2 database metadata directory"
+    
+    # Test that summary command can read v2 database
+    local summary_output
+    invoke_command "Run summary on v2 database" "$(get_cli_command) summary --db $v2_db_dir --yes" 0 "summary_output"
+    
+    # Check that summary contains database version
+    expect_output_string "$summary_output" "Database version: 2" "Summary shows v2 database version"
+    
+    log_success "Summary command successfully accessed v2 database"
+    test_passed
+}
+
+test_v2_database_incompatible_commands() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 28: V2 DATABASE INCOMPATIBLE COMMANDS ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    
+    # Test that verify command fails on v2 database with version error
+    local verify_output
+    invoke_command "Run verify on v2 database (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1 "verify_output"
+    
+    # Check that error message mentions upgrade
+    expect_output_string "$verify_output" "upgrade" "Error message suggests running upgrade command"
+    
+    log_success "Verify command correctly rejected v2 database"
+    test_passed
+}
+
+test_v2_database_upgrade() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 29: V2 DATABASE UPGRADE TO V3 ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    local temp_v2_dir="./test/tmp/test-v2-upgrade"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    
+    # Create a copy of v2 database for upgrade testing
+    log_info "Creating copy of v2 database for upgrade testing"
+    rm -rf "$temp_v2_dir"
+    cp -r "$v2_db_dir" "$temp_v2_dir"
+    
+    # Test upgrade command on v2 database
+    local upgrade_output
+    invoke_command "Upgrade v2 database to v3" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade was successful
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 3" "Upgrade completed successfully"
+    
+    # Verify the upgraded database is now version 3
+    local summary_output
+    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v2_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 3" "Upgraded database is now version 3"
+    
+    # Test that verify command now works on upgraded database
+    local verify_output
+    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v2_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v2_dir"
+    log_success "Cleaned up temporary v2 upgrade database"
+    test_passed
+}
+
+test_v3_database_upgrade_no_effect() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 30: V3 DATABASE UPGRADE HAS NO EFFECT ==="
+    
+    local v3_db_dir="../../test/dbs/v3"
+    local temp_v3_dir="./test/tmp/test-v3-upgrade"
+    
+    # Check that v3 database exists
+    check_exists "$v3_db_dir" "V3 test database directory"
+    
+    # Create a copy of v3 database for upgrade testing
+    log_info "Creating copy of v3 database for upgrade testing"
+    rm -rf "$temp_v3_dir"
+    cp -r "$v3_db_dir" "$temp_v3_dir"
+    
+    # Test upgrade command on v3 database (should have no effect)
+    local upgrade_output
+    invoke_command "Upgrade v3 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade reports database is already current
+    expect_output_string "$upgrade_output" "Database is already at the latest version (3)" "Upgrade reports database is already current"
+    
+    # Verify the database is still version 3
+    local summary_output
+    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 3" "Database is still version 3"
+    
+    # Test that verify command still works
+    local verify_output
+    invoke_command "Verify v3 database after upgrade" "$(get_cli_command) verify --db $temp_v3_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "V3 database verifies successfully after upgrade"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v3_dir"
+    log_success "Cleaned up temporary v3 upgrade database"
+    test_passed
+}
+
 # Reset function to clean up test artifacts
 reset_environment() {
     echo "======================================"
@@ -1898,6 +2023,10 @@ run_all_tests() {
     test_repair_ok_database
     test_remove_asset
     test_repair_damaged_database
+    test_v2_database_summary
+    test_v2_database_incompatible_commands
+    test_v2_database_upgrade
+    test_v3_database_upgrade_no_effect
     
     # If we get here, all tests passed
     echo ""
@@ -2017,6 +2146,18 @@ run_test() {
             ;;
         "repair-damaged"|"26")
             test_repair_damaged_database
+            ;;
+        "v2-summary"|"27")
+            test_v2_database_summary
+            ;;
+        "v2-incompatible"|"28")
+            test_v2_database_incompatible_commands
+            ;;
+        "v2-upgrade"|"29")
+            test_v2_database_upgrade
+            ;;
+        "v3-upgrade-no-effect"|"30")
+            test_v3_database_upgrade_no_effect
             ;;
         *)
             log_error "Unknown test: $test_name"
@@ -2275,6 +2416,10 @@ show_usage() {
     echo "  repair-ok (24)      - Repair OK database (no changes)"
     echo "  remove (25)         - Remove asset by ID from database"
     echo "  repair-damaged (26) - Repair damaged database from replica"
+    echo "  v2-summary (27)     - Run summary command on v2 database"
+    echo "  v2-incompatible (28) - Test v2 database compatibility errors"
+    echo "  v2-upgrade (29)     - Upgrade v2 database to v3"
+    echo "  v3-upgrade-no-effect (30) - Test v3 upgrade has no effect"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
