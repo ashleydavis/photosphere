@@ -524,10 +524,12 @@ invoke_command() {
     
     if [ -n "$output_var_name" ]; then
         # Capture output and display it, ensuring all output is visible
-        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        # Use tee to both capture output and display it immediately
-        command_output=$(eval "$full_command" 2>&1 | tee /dev/stderr)
+        # Execute command and capture both output and exit code properly
+        command_output=$(eval "$full_command" 2>&1)
         actual_exit_code=$?
+        # Display the output after capturing it
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        echo "$command_output"
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
         # Store output in caller's variable
