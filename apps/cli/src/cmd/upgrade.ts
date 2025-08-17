@@ -15,8 +15,8 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     
     intro(pc.blue(`Upgrading media file database...`));
 
-    // Load the database (allowing older versions for upgrade)
-    const { database } = await loadDatabase(options.db, options, true);
+    // Load the database in readonly mode to check version without modifications
+    const { database } = await loadDatabase(options.db, options, true, true); // allowOlderVersions: true, readonly: true
 
     // Get the current tree version
     const merkleTree = database.getAssetDatabase().getMerkleTree();
@@ -28,7 +28,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         log.info(pc.green(`✓ Database is already at the latest version (${CURRENT_DATABASE_VERSION})`));
         await database.close();
     } else if (currentVersion < CURRENT_DATABASE_VERSION) {
-        // Close database before prompting for backup
+        // Close readonly database before prompting for backup
         await database.close();
         
         log.warn(pc.yellow(`⚠️  IMPORTANT: Database upgrade will modify your database files.`));
