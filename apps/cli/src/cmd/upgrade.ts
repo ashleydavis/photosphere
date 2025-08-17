@@ -16,7 +16,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     intro(pc.blue(`Upgrading media file database...`));
 
     // Load the database in readonly mode to check version without modifications
-    const { database } = await loadDatabase(options.db, options, true, true); // allowOlderVersions: true, readonly: true
+    const { database } = await loadDatabase(options.db, options, true, true);
 
     // Get the current tree version
     const merkleTree = database.getAssetDatabase().getMerkleTree();
@@ -26,11 +26,8 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
 
     if (currentVersion === CURRENT_DATABASE_VERSION) {
         log.info(pc.green(`✓ Database is already at the latest version (${CURRENT_DATABASE_VERSION})`));
-        await database.close();
-    } else if (currentVersion < CURRENT_DATABASE_VERSION) {
-        // Close readonly database before prompting for backup
-        await database.close();
-        
+    } 
+    else if (currentVersion < CURRENT_DATABASE_VERSION) {        
         log.warn(pc.yellow(`⚠️  IMPORTANT: Database upgrade will modify your database files.`));
         log.warn(pc.yellow(`   It is strongly recommended to backup your database before proceeding.`));
         log.warn(pc.yellow(`   You can backup your database by copying the entire directory:`));
@@ -38,7 +35,8 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // Provide platform-specific backup commands
         if (process.platform === 'win32') {
             log.warn(pc.yellow(`   xcopy "${options.db}" "${options.db}-backup" /E /I`));
-        } else {
+        } 
+        else {
             log.warn(pc.yellow(`   cp -r "${options.db}" "${options.db}-backup"`));
         }
         console.log("");
@@ -51,6 +49,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         if (!shouldProceed) {
             outro(pc.gray("Database upgrade cancelled."));
             await exit(0);
+            return;
         }
         
         // Reload the database for upgrade
@@ -61,14 +60,12 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // Save the tree - this will write it in the latest format
         await upgradeDatabase.getAssetDatabase().save();
         
-        log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
-        
-        // Close the upgraded database
-        await upgradeDatabase.close();
-    } else {
+        log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));        
+    } 
+    else {
         outro(pc.red(`✗ Database version ${currentVersion} is newer than the current supported version ${CURRENT_DATABASE_VERSION}.\n  Please update your Photosphere CLI tool.`));
-        await database.close();
         await exit(1);
+        return;
     }
 
     await exit(0);
