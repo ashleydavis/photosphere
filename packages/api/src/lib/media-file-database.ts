@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, MerkleNode, saveTree, traverseTree, visualizeTree } from "adb";
+import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, IMerkleTree, MerkleNode, saveTree, traverseTree, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -99,14 +99,16 @@ export interface IDatabaseSummary {
 }
 
 //
-// Interface for the database metadata stored in metadata.json
+// Database metadata that gets embedded in the merkle tree
 //
 export interface IDatabaseMetadata {
-    //
-    // Number of files that have been imported into the database.
-    //
+    // Number of files imported into the database
     filesImported: number;
+    
+    // Additional metadata can be added here in the future
+    [key: string]: any;
 }
+
 
 export interface IAddSummary {
     //
@@ -383,7 +385,7 @@ export class MediaFileDatabase {
     //
     // For interacting with the asset database.
     //
-    private readonly assetDatabase: AssetDatabase;
+    private readonly assetDatabase: AssetDatabase<IDatabaseMetadata>;
 
     //
     // For interacting with the bson database.
@@ -428,17 +430,7 @@ export class MediaFileDatabase {
         averageSize: 0,
     };
 
-    //
-    // Database metadata tracking asset count.
-    //
-    private databaseMetadata: IDatabaseMetadata = {
-        filesImported: 0,
-    };
 
-    //
-    // Flag to track if database metadata has been modified and needs saving.
-    //
-    private isDirty: boolean = false;
 
     //
     // Flag to indicate if the database is in readonly mode.
@@ -507,7 +499,7 @@ export class MediaFileDatabase {
     //
     // Gets the asset database for accessing the merkle tree.
     //
-    getAssetDatabase(): AssetDatabase {
+    getAssetDatabase(): AssetDatabase<IDatabaseMetadata> {
         return this.assetDatabase;
     }
 
@@ -518,84 +510,28 @@ export class MediaFileDatabase {
         return this.databaseHashCache;
     }
 
-    //
-    // Loads the database metadata from metadata.json or initializes it.
-    //
-    private async loadDatabaseMetadata(): Promise<void> {
-        try {
-            const metadataBuffer = await this.metadataStorage.read("metadata.json");
-            if (metadataBuffer) {
-                const metadataJson = metadataBuffer.toString('utf8');
-                this.databaseMetadata = JSON.parse(metadataJson);
-                
-                log.verbose(`Loaded database metadata: ${this.databaseMetadata.filesImported} assets`);
-            } else {
-                // Initialize metadata by counting assets in the assets directory
-                await this.initializeDatabaseMetadata();
-            }
-        } catch (error: any) {
-            log.warn(`Failed to load database metadata, initializing: ${error.message}`);
-            await this.initializeDatabaseMetadata();
-        }
-    }
-
-    //
-    // Initializes database metadata by counting existing assets.
-    //
-    private async initializeDatabaseMetadata(): Promise<void> {
-        try {
-            let filesImported = 0;
-            
-            // Count files in the assets directory
-            for await (const file of walkDirectory(this.assetStorage, "assets", [])) {
-                filesImported++;
-            }
-            
-            this.databaseMetadata = {
-                filesImported,
-            };
-            
-            await this.saveDatabaseMetadata();
-            log.verbose(`Initialized database metadata with ${filesImported} assets`);
-        } catch (error: any) {
-            log.warn(`Failed to initialize database metadata: ${error.message}`);
-            this.databaseMetadata = { filesImported: 0 };
-        }
-    }
-
-    //
-    // Saves the database metadata to metadata.json.
-    //
-    private async saveDatabaseMetadata(): Promise<void> {
-        try {
-            const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
-            const metadataPath = "metadata.json";
-            const metadataBuffer = Buffer.from(metadataJson, 'utf8');
-            
-            await this.metadataStorage.write(metadataPath, undefined, metadataBuffer);
-            
-            log.verbose(`Saved database metadata: ${this.databaseMetadata.filesImported} assets`);
-            this.isDirty = false;
-        } catch (error: any) {
-            log.error(`Failed to save database metadata: ${error.message}`);
-        }
-    }
 
     //
     // Increments the asset count.
     //
     private incrementAssetCount(): void {
-        this.databaseMetadata.filesImported++;
-        this.isDirty = true;
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        if (!merkleTree.databaseMetadata) {
+            merkleTree.databaseMetadata = { filesImported: 0 };
+        }
+        merkleTree.databaseMetadata.filesImported++;
     }
 
     //
     // Decrements the asset count.
     //
     private decrementAssetCount(): void {
-        if (this.databaseMetadata.filesImported > 0) {
-            this.databaseMetadata.filesImported--;
-            this.isDirty = true;
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        if (!merkleTree.databaseMetadata) {
+            merkleTree.databaseMetadata = { filesImported: 0 };
+        }
+        if (merkleTree.databaseMetadata.filesImported > 0) {
+            merkleTree.databaseMetadata.filesImported--;
         }
     }
 
@@ -613,9 +549,10 @@ export class MediaFileDatabase {
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
         // Initialize database metadata
-        this.databaseMetadata = { filesImported: 0 };
-        this.isDirty = true;
-        await this.saveDatabaseMetadata();
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        if (!merkleTree.databaseMetadata) {
+            merkleTree.databaseMetadata = { filesImported: 0 };
+        }
 
         // Create README.md file with warning about manual modifications
         try {
@@ -639,8 +576,6 @@ export class MediaFileDatabase {
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
 
-        // Load database metadata
-        await this.loadDatabaseMetadata();
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
@@ -659,13 +594,14 @@ export class MediaFileDatabase {
     async getDatabaseSummary(): Promise<IDatabaseSummary> {
         const merkleTree = this.assetDatabase.getMerkleTree();
         const metadata = merkleTree.metadata;
+        const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
         
         // Get root hash (first node is always the root)
         const rootHash = merkleTree.nodes.length > 0 ? merkleTree.nodes[0].hash : Buffer.alloc(0);
         const fullHash = rootHash.toString('hex');
-
+        
         return {
-            totalAssets: this.databaseMetadata.filesImported,
+            totalAssets: filesImported,
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
@@ -989,11 +925,7 @@ export class MediaFileDatabase {
             //          in the hash cache.
             //
             await this.databaseHashCache.save();
-            
-            // Save database metadata only if it has been modified
-            if (this.isDirty) {
-                await this.saveDatabaseMetadata();
-            }
+            await this.assetDatabase.save();
         }
     }
 
@@ -1073,7 +1005,7 @@ export class MediaFileDatabase {
 
         const summary = await this.getDatabaseSummary();
         const result: IVerifyResult = {
-            filesImported: this.databaseMetadata.filesImported,
+            filesImported: summary.totalAssets,
             totalFiles: summary.totalFiles,
             totalSize: summary.totalSize,
             numUnmodified: 0,
@@ -1238,7 +1170,7 @@ export class MediaFileDatabase {
 
         const summary = await this.getDatabaseSummary();
         const result: IRepairResult = {
-            filesImported: this.databaseMetadata.filesImported,
+            filesImported: summary.totalAssets,
             totalFiles: summary.totalFiles,
             totalSize: summary.totalSize,
             numUnmodified: 0,
@@ -1404,8 +1336,11 @@ export class MediaFileDatabase {
     //
     async replicate(destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
 
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+        
         const result: IReplicationResult = {
-            filesImported: this.databaseMetadata.filesImported,
+            filesImported,
             filesConsidered: 0,
             existingFiles: 0,
             copiedFiles: 0,
@@ -1538,10 +1473,6 @@ export class MediaFileDatabase {
         await retry(() => destHashCache.save());
 
         await retry(() => saveTree("tree.dat", newDestTree, destMetadataStorage));
-        
-        const metadataJson = JSON.stringify(this.databaseMetadata, null, 2);
-        const metadataBuffer = Buffer.from(metadataJson, 'utf8');
-        await retry(() => destMetadataStorage.write("metadata.json", undefined, metadataBuffer));
         
         return result;
     }

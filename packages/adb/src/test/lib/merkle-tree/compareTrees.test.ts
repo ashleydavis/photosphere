@@ -40,8 +40,8 @@ describe('Tree Comparison', () => {
         return { treeA, treeB };
     }
 
-    function buildTree(fileNames: string[]): IMerkleTree {
-        let tree = createTree(timestampProvider, uuidGenerator);
+    function buildTree(fileNames: string[]): IMerkleTree<any> {
+        let tree = createTree<any>(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
             tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);

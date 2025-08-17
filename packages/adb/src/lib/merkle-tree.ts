@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { BSON } from 'bson';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { ITimestampProvider, IUuidGenerator } from 'utils';
@@ -61,10 +62,11 @@ export interface TreeMetadata {
     modifiedAt: number;
 }
 
+
 //
 // Represents the merkle tree itself.
 //
-export interface IMerkleTree {
+export interface IMerkleTree<DatabaseMetadata> {
     // 
     // The flattend array of nodes in the tree.
     // The root node is always the first node in the array.
@@ -81,6 +83,12 @@ export interface IMerkleTree {
     // Metadata for the tree
     //
     metadata: TreeMetadata;
+
+    //
+    // Database metadata (only in version 3+)
+    // This replaces the separate metadata.json file
+    //
+    databaseMetadata?: DatabaseMetadata;
 
     //
     // Version of the merkle tree file format
@@ -286,7 +294,7 @@ export function updateMetadata(
 //
 // Create a new empty Merkle tree.
 //
-export function createTree(timestampProvider: ITimestampProvider,uuidGenerator: IUuidGenerator): IMerkleTree {
+export function createTree<DatabaseMetadata>(timestampProvider: ITimestampProvider,uuidGenerator: IUuidGenerator): IMerkleTree<DatabaseMetadata> {
     return {
         nodes: [],
         sortedNodeRefs: [],
@@ -299,12 +307,12 @@ export function createTree(timestampProvider: ITimestampProvider,uuidGenerator: 
  * Add a file to the Merkle tree, efficiently creating a balanced structure
  * without rebuilding the entire tree
  */
-export function addFile(
-    merkleTree: IMerkleTree, 
+export function addFile<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileHash: FileHash,
     timestampProvider: ITimestampProvider,
     uuidGenerator: IUuidGenerator
-): IMerkleTree {
+): IMerkleTree<DatabaseMetadata> {
 
     let nodes: MerkleNode[];
     let metadata = merkleTree?.metadata || createDefaultMetadata(timestampProvider, uuidGenerator);
@@ -488,12 +496,12 @@ function calculatePathToRoot(nodeIndex: number, nodes: MerkleNode[]): number[] {
 // Upsert a file in the Merkle tree, either adding it or updating it if it already exists.
 // Updates the tree in place.
 //
-export function upsertFile(
-    merkleTree: IMerkleTree, 
+export function upsertFile<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileHash: FileHash,
     timestampProvider: ITimestampProvider,
     uuidGenerator: IUuidGenerator
-): IMerkleTree {
+): IMerkleTree<DatabaseMetadata> {
     if (merkleTree && merkleTree.sortedNodeRefs.length > 0) {
         if (updateFile(merkleTree, fileHash, timestampProvider)) {
             // File updated successfully in place.
@@ -507,8 +515,8 @@ export function upsertFile(
 /**
  * Update a file in the Merkle tree with new content, maintaining the same tree structure.
  */
-export function updateFile(
-    merkleTree: IMerkleTree | undefined, 
+export function updateFile<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
     fileHash: FileHash, 
     timestampProvider: ITimestampProvider
 ): boolean {
@@ -596,7 +604,7 @@ export function findInsertionPoint(sortedNodeRefs: MerkleNodeRef[], fileName: st
 //
 // Binary search to find a file node reference by file name
 //
-export function findNodeRef(merkleTree: IMerkleTree, fileName: string): MerkleNodeRef | undefined {
+export function findNodeRef<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): MerkleNodeRef | undefined {
     if (!merkleTree || !merkleTree.sortedNodeRefs || merkleTree.sortedNodeRefs.length === 0) {
         return undefined;
     }
@@ -627,7 +635,7 @@ export function findNodeRef(merkleTree: IMerkleTree, fileName: string): MerkleNo
  * This function uses binary search on the sorted node refs to quickly find a node by file name.
  * Returns the node if found, or undefined if not found.
  */
-export function findFileNode(merkleTree: IMerkleTree | undefined, fileName: string): MerkleNode | undefined {
+export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata> | undefined, fileName: string): MerkleNode | undefined {
     // Use the enhanced version that respects deletion status
     // This ensures backward compatibility while making sure deleted files are not returned
     return findFileNodeWithDeletionStatus(merkleTree, fileName, false);
@@ -639,7 +647,7 @@ export function findFileNode(merkleTree: IMerkleTree | undefined, fileName: stri
  * @param merkleTree The Merkle tree to visualize
  * @returns A string representation of the tree and sorted node references
  */
-export function visualizeTree(merkleTree: IMerkleTree): string {
+export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>): string {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         return "Empty tree";
     }
@@ -742,35 +750,47 @@ function combineBigNum(input: { low: number, high: number }): bigint {
 /**
  * Merkle tree file format.
  * 
- * This format has the following structure:
+ * Version 2 format:
  * - 4 bytes: Format version (uint32, value = 2)
- * - 4 bytes: Number of nodes (uint32)
- * - 4 bytes: Number of files (uint32)
- * - Metadata:
+ * - Tree metadata and nodes (as in version 1)
+ * 
+ * Version 3 format (new):
+ * - 4 bytes: Format version (uint32, value = 3)
+ * - 4 bytes: Database metadata BSON length (uint32)
+ * - X bytes: Database metadata as BSON (replaces metadata.json)
+ * - Tree metadata:
  *   - 16 bytes: UUID bytes
  *   - 4 bytes: Total nodes (uint32)
  *   - 4 bytes: Total files (uint32)
+ *   - 8 bytes: Total size (uint64)
  *   - 8 bytes: Creation timestamp (uint64)
  *   - 8 bytes: Last modified timestamp (uint64)
  * - For each node:
  *   - 32 bytes: Hash
  *   - 4 bytes: nodeCount (uint32)
  *   - 4 bytes: leafCount (uint32)
- *   - 2 bytes: fileNameLength (uint16)
+ *   - 8 bytes: size (uint64)
+ *   - 4 bytes: fileNameLength (uint32)
  *   - X bytes: fileName (if fileNameLength > 0)
  *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  * - 4 bytes: Number of nodeRefs (uint32)
  * - For each nodeRef:
- *   - 2 bytes: fileNameLength (uint16)
+ *   - 4 bytes: fileNameLength (uint32)
  *   - X bytes: fileName
  *   - 4 bytes: fileIndex (uint32)
  *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  */
-export async function saveTree(filePath: string, tree: IMerkleTree, storage: IStorage): Promise<void> {
+export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
     // Calculate total buffer size needed
     let totalSize = 4; // 4 bytes version
 
-    // Add metadata size.
+    // Add database metadata BSON size (always present in version 3+)
+    const databaseMetadata = tree.databaseMetadata || { filesImported: 0 };
+    const databaseMetadataBson = Buffer.from(BSON.serialize(databaseMetadata as any));
+    totalSize += 4; // 4 bytes for BSON length
+    totalSize += databaseMetadataBson.length; // BSON data
+
+    // Add tree metadata size.
     // 16 bytes UUID + 4 bytes totalNodes + 4 bytes totalFiles + 8 bytes totalSize + 8 bytes createdAt + 8 bytes modifiedAt
     totalSize += 16 + 4 + 4 + 8 + 8 + 8;
     
@@ -802,8 +822,14 @@ export async function saveTree(filePath: string, tree: IMerkleTree, storage: ISt
     // Write format version (always use current version when saving)
     buffer.writeUInt32LE(CURRENT_DATABASE_VERSION, offset);
     offset += 4;
+
+    // Write database metadata BSON (always present in version 3+)
+    buffer.writeUInt32LE(databaseMetadataBson.length, offset);
+    offset += 4;
+    databaseMetadataBson.copy(buffer, offset);
+    offset += databaseMetadataBson.length;
         
-    // Write metadata.
+    // Write tree metadata.
     // Write UUID
     const idBuffer = Buffer.from(parseUuid(tree.metadata.id));
     if (idBuffer.length !== 16) {
@@ -908,7 +934,7 @@ export async function saveTree(filePath: string, tree: IMerkleTree, storage: ISt
 /**
  * Load a Merkle tree from a file.
  */
-export async function loadTree(filePath: string, storage: IStorage): Promise<IMerkleTree | undefined> {
+export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
     const treeData = await storage.read(filePath);
     if (!treeData) {
         return undefined;
@@ -917,7 +943,17 @@ export async function loadTree(filePath: string, storage: IStorage): Promise<IMe
     const version = treeData.readUInt32LE(0); // Read the version number
     let offset = 4; // Start after version.
     
-    // Read all metadata fields
+    // Read database metadata BSON for version 3+
+    let databaseMetadata: DatabaseMetadata | undefined;
+    if (version >= 3) {
+        const bsonLength = treeData.readUInt32LE(offset);
+        offset += 4;
+        const bsonData = treeData.slice(offset, offset + bsonLength);
+        databaseMetadata = BSON.deserialize(bsonData) as DatabaseMetadata;
+        offset += bsonLength;
+    }
+    
+    // Read tree metadata fields
     const uuid = stringifyUuid(treeData.slice(offset, offset + 16));
     offset += 16;
     
@@ -1035,6 +1071,7 @@ export async function loadTree(filePath: string, storage: IStorage): Promise<IMe
         nodes,
         sortedNodeRefs,
         metadata,
+        databaseMetadata,
         version,
     };
 }
@@ -1056,8 +1093,8 @@ function createTombstoneHash(fileName: string): Buffer {
  * @param fileName The name of the file to mark as deleted
  * @returns true if the file was found and marked as deleted, false otherwise
  */
-export function markFileAsDeleted(
-    merkleTree: IMerkleTree, 
+export function markFileAsDeleted<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileName: string, 
     timestampProvider: ITimestampProvider
 ): boolean {
@@ -1117,7 +1154,7 @@ export function markFileAsDeleted(
  * @param fileName The name of the file to check
  * @returns true if the file exists and is marked as deleted, false otherwise
  */
-export function isFileDeleted(merkleTree: IMerkleTree, fileName: string): boolean {
+export function isFileDeleted<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): boolean {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         return false;
     }
@@ -1132,7 +1169,7 @@ export function isFileDeleted(merkleTree: IMerkleTree, fileName: string): boolea
  * @param merkleTree The Merkle tree to get active files from
  * @returns An array of file names that are not marked as deleted
  */
-export function getActiveFiles(merkleTree: IMerkleTree): string[] {
+export function getActiveFiles<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>): string[] {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         return [];
     }
@@ -1150,8 +1187,8 @@ export function getActiveFiles(merkleTree: IMerkleTree): string[] {
  * @param includeDeleted Whether to include deleted files in the search (defaults to false)
  * @returns The node if found and matching the deletion criteria, undefined otherwise
  */
-export function findFileNodeWithDeletionStatus(
-    merkleTree: IMerkleTree | undefined, 
+export function findFileNodeWithDeletionStatus<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
     fileName: string,
     includeDeleted: boolean = false
 ): MerkleNode | undefined {
@@ -1193,7 +1230,7 @@ export interface ICompareResult {
  * @param treeB The second Merkle tree
  * @returns An object containing the differences between the trees
  */
-export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCallback?: (progress: string) => void): ICompareResult {
+export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetadata>, treeB: IMerkleTree<DatabaseMetadata>, progressCallback?: (progress: string) => void): ICompareResult {
     // Get all files from both trees (including deleted ones for tree A)
     const filesInA = new Map<string, { hash: string, isDeleted: boolean }>();
     const filesInB = new Map<string, { hash: string, isDeleted: boolean }>();
@@ -1296,7 +1333,7 @@ export function compareTrees(treeA: IMerkleTree, treeB: IMerkleTree, progressCal
  * @param treeB The second Merkle tree
  * @returns A string containing a formatted report of the differences
  */
-export function generateTreeDiffReport(treeA: IMerkleTree, treeB: IMerkleTree): string {
+export function generateTreeDiffReport<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetadata>, treeB: IMerkleTree<DatabaseMetadata>): string {
     const diff = compareTrees(treeA, treeB);
     
     let report = "Merkle Tree Comparison Report\n";
@@ -1373,7 +1410,7 @@ export async function traverseNode(nodeIndex: number, nodes: MerkleNode[], callb
 // Traverse the tree and call the callback function for each node.
 // If the callback returns false, the traversal stops.
 //
-export async function traverseTree(tree: IMerkleTree, callback: (node: MerkleNode) => Promise<boolean>): Promise<void>  {
+export async function traverseTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, callback: (node: MerkleNode) => Promise<boolean>): Promise<void>  {
     if (!tree || tree.nodes.length === 0) {
         return;
     }

@@ -57,7 +57,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         
         log.info(`Upgrading database from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}...`);
         
-        // Save the tree - this will write it in the latest format
+        // Simply save the database - this will automatically write in the latest format
         await upgradeDatabase.getAssetDatabase().save();
         
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));        

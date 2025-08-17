@@ -62,12 +62,12 @@ export interface IAssetDatabase {
 //
 // Manages a generic database of files and the hash tree that protects against corruption.
 //
-export class AssetDatabase implements IAssetDatabase {
+export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
 
     //
     // The merkle tree that helps protect against corruption.
     //
-    private merkleTree: IMerkleTree | undefined = undefined;
+    private merkleTree: IMerkleTree<DatabaseMetadata> | undefined = undefined;
 
     constructor(
         private readonly assetStorage: IStorage, 
@@ -114,7 +114,7 @@ export class AssetDatabase implements IAssetDatabase {
     //
     // Gets the merkle tree.
     //
-    getMerkleTree(): IMerkleTree {
+    getMerkleTree(): IMerkleTree<DatabaseMetadata> {
         if (!this.merkleTree) {
             throw new Error("Cannot access merkle tree. No database loaded.");
         }

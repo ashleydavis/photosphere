@@ -33,7 +33,7 @@ describe('File Deletion', () => {
     }
 
     // Helper function to build a small test tree
-    function buildTestTree(): IMerkleTree {
+    function buildTestTree(): IMerkleTree<any>{
         let tree = createTree(timestampProvider, uuidGenerator);
         const fileNames = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
