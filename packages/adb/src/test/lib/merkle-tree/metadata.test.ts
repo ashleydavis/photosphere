@@ -40,7 +40,7 @@ describe('Merkle Tree Metadata', () => {
     /**
      * Helper function to build a tree with the given file names
      */
-    function buildTree(fileNames: string[]): IMerkleTree {
+    function buildTree(fileNames: string[]): IMerkleTree<any>{
         let merkleTree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {

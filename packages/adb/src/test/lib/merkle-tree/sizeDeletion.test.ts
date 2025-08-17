@@ -26,7 +26,7 @@ describe('Size calculation with file deletion', () => {
   }
 
   // Helper to build a test tree with files of specific sizes
-  function buildTestTree(): IMerkleTree {
+  function buildTestTree(): IMerkleTree<any>{
     let tree = createTree(timestampProvider, uuidGenerator);
     const files = [
       { name: 'file1.txt', content: 'content 1', size: 1000 },

@@ -22,7 +22,7 @@ describe('Merkle Tree NodeRefs', () => {
     /**
      * Helper function to build a tree with the given file names
      */
-    function buildTree(fileNames: string[]): IMerkleTree {
+    function buildTree(fileNames: string[]): IMerkleTree<any>{
         let merkleTree = createTree(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
@@ -253,7 +253,7 @@ describe('Merkle Tree NodeRefs', () => {
         const tree = buildTree(fileNames);
         
         // Create a linear search function for testing
-        function linearSearch(tree: IMerkleTree, fileName: string): MerkleNode | undefined {
+        function linearSearch(tree: IMerkleTree<any>, fileName: string): MerkleNode | undefined {
             for (let i = 0; i < tree.nodes.length; i++) {
                 const node = tree.nodes[i];
                 if (node.hash.toString() === Buffer.from(fileName).toString()) {

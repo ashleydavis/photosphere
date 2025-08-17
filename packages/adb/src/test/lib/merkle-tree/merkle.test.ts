@@ -19,8 +19,8 @@ describe('Merkle Tree', () => {
     /**
      * Helper function to build a tree with the given file names
      */
-    function buildTree(fileNames: string[]): IMerkleTree {
-        let merkleTree = createTree(timestampProvider, uuidGenerator);
+    function buildTree(fileNames: string[]): IMerkleTree<any> {
+        let merkleTree = createTree<any>(timestampProvider, uuidGenerator);
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
@@ -46,7 +46,7 @@ describe('Merkle Tree', () => {
     //
     // Verify that a node matches the expected structure.
     //
-    function verifyNode(nodeIndex: number, tree: IMerkleTree, expectedStructure: any) {
+    function verifyNode(nodeIndex: number, tree: IMerkleTree<any>, expectedStructure: any) {
         const node = tree.nodes[nodeIndex];
         
         expect(Buffer.isBuffer(node?.hash)).toBe(true);
@@ -108,7 +108,7 @@ describe('Merkle Tree', () => {
     //
     // Verify the entire tree structure matches the expected structure.
     //
-    function verifyTree(tree: IMerkleTree, expectedStructure: any) {
+    function verifyTree(tree: IMerkleTree<any>, expectedStructure: any) {
         verifyNode(0, tree, expectedStructure);
     }
     

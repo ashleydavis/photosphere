@@ -1,4 +1,4 @@
-import { MediaFileDatabase } from "api";
+import { IDatabaseMetadata, MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { CURRENT_DATABASE_VERSION, IMerkleTree } from "adb";
 import { configureLog } from "./log";
@@ -37,7 +37,7 @@ export async function getAvailableKeys(): Promise<string[]> {
 //
 // Checks if a tree version is compatible with the current version
 //
-function checkVersionCompatibility(tree: IMerkleTree, allowOlderVersions: boolean = false): { isCompatible: boolean, message?: string } {
+function checkVersionCompatibility(tree: IMerkleTree<IDatabaseMetadata>, allowOlderVersions: boolean = false): { isCompatible: boolean, message?: string } {
     if (tree.version === CURRENT_DATABASE_VERSION) {
         return { isCompatible: true };
     }
