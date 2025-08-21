@@ -1370,7 +1370,7 @@ export class MediaFileDatabase {
         const srcStorage = this.assetStorage;
 
         // Try to load existing destination merkle tree, otherwise create a new one
-        let destTree = await loadTree("tree.dat", destMetadataStorage);
+        let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
         if (!destTree) {
             destTree = createTree(this.timestampProvider, this.uuidGenerator);
             if (progressCallback) {
