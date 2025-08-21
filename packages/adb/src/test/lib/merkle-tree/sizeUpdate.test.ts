@@ -6,10 +6,9 @@ import {
   findFileNode,
   createTree
 } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
+import { TestUuidGenerator } from 'node-utils';
 
 describe('Size calculation with file updates', () => {
-  const timestampProvider = new TestTimestampProvider();
   const uuidGenerator = new TestUuidGenerator();
 
   // Helper function to create a file hash with specific size
@@ -28,8 +27,8 @@ describe('Size calculation with file updates', () => {
   test('updating file size updates node size', () => {
     // Create a tree with one file
     const initialSize = 1000;
-    let tree = createTree(timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('test.txt', 'initial content', initialSize), timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
+    tree = addFile(tree, createFileHash('test.txt', 'initial content', initialSize), uuidGenerator);
     
     // Verify initial size
     expect(tree.nodes[0].size).toBe(initialSize);
@@ -37,7 +36,7 @@ describe('Size calculation with file updates', () => {
     
     // Update the file with a different size
     const updatedSize = 2000;
-    const updated = updateFile(tree, createFileHash('test.txt', 'updated content', updatedSize), timestampProvider);
+    const updated = updateFile(tree, createFileHash('test.txt', 'updated content', updatedSize));
     expect(updated).toBe(true);
     
     // Verify the node size was updated
@@ -51,14 +50,14 @@ describe('Size calculation with file updates', () => {
 
   test('updating file propagates size changes up the tree', () => {
     // Create a tree with multiple files
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     const file1Size = 1000;
     const file2Size = 2000;
     const file3Size = 3000;
     
-    tree = addFile(tree, createFileHash('file1.txt', 'content 1', file1Size), timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size), timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('file3.txt', 'content 3', file3Size), timestampProvider, uuidGenerator);
+    tree = addFile(tree, createFileHash('file1.txt', 'content 1', file1Size), uuidGenerator);
+    tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size), uuidGenerator);
+    tree = addFile(tree, createFileHash('file3.txt', 'content 3', file3Size), uuidGenerator);
     
     // Initial total size
     const initialTotalSize = file1Size + file2Size + file3Size;
@@ -68,7 +67,7 @@ describe('Size calculation with file updates', () => {
     // Update the second file with a larger size
     const newFile2Size = 5000;
     const sizeDifference = newFile2Size - file2Size;
-    updateFile(tree, createFileHash('file2.txt', 'updated content 2', newFile2Size), timestampProvider);
+    updateFile(tree, createFileHash('file2.txt', 'updated content 2', newFile2Size));
     
     // Verify leaf node size was updated
     const node = findFileNode(tree, 'file2.txt');
@@ -83,16 +82,16 @@ describe('Size calculation with file updates', () => {
 
   test('updating file to smaller size properly reduces tree size', () => {
     // Build tree with files of known sizes
-    let tree = createTree(timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('file1.txt', 'content 1', 1000), timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('file2.txt', 'content 2', 2000), timestampProvider, uuidGenerator);
-    tree = addFile(tree, createFileHash('file3.txt', 'content 3', 3000), timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
+    tree = addFile(tree, createFileHash('file1.txt', 'content 1', 1000), uuidGenerator);
+    tree = addFile(tree, createFileHash('file2.txt', 'content 2', 2000), uuidGenerator);
+    tree = addFile(tree, createFileHash('file3.txt', 'content 3', 3000), uuidGenerator);
     
     // Initial size is 6000
     expect(tree.nodes[0].size).toBe(6000);
     
     // Update file3 to a smaller size
-    updateFile(tree, createFileHash('file3.txt', 'smaller content', 1500), timestampProvider);
+    updateFile(tree, createFileHash('file3.txt', 'smaller content', 1500));
     
     // Expected new total size: 1000 + 2000 + 1500 = 4500
     expect(tree.nodes[0].size).toBe(4500);
@@ -101,13 +100,13 @@ describe('Size calculation with file updates', () => {
 
   test('size is correctly maintained in a complex tree with multiple updates', () => {
     // Create a more complex tree with 7 files
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     const initialSizes = [100, 200, 300, 400, 500, 600, 700];
     const totalInitialSize = initialSizes.reduce((sum, size) => sum + size, 0);
     
     // Add files
     for (let i = 0; i < initialSizes.length; i++) {
-      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, initialSizes[i]), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, initialSizes[i]), uuidGenerator);
     }
     
     // Verify initial total size
@@ -115,9 +114,9 @@ describe('Size calculation with file updates', () => {
     expect(tree.metadata.totalSize).toBe(totalInitialSize);
     
     // Update multiple files
-    updateFile(tree, createFileHash('file1.txt', 'updated content 1', 250), timestampProvider); // +50
-    updateFile(tree, createFileHash('file3.txt', 'updated content 3', 350), timestampProvider); // -50
-    updateFile(tree, createFileHash('file5.txt', 'updated content 5', 800), timestampProvider); // +200
+    updateFile(tree, createFileHash('file1.txt', 'updated content 1', 250)); // +50
+    updateFile(tree, createFileHash('file3.txt', 'updated content 3', 350)); // -50
+    updateFile(tree, createFileHash('file5.txt', 'updated content 5', 800)); // +200
     
     // Calculate expected new total
     const expectedNewTotal = totalInitialSize + 50 + (-50) + 200;
