@@ -7,6 +7,7 @@ import { CURRENT_DATABASE_VERSION, HashCache } from "adb";
 import { pathJoin } from "storage";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
+    yes?: boolean;
 }
 
 //
@@ -42,10 +43,20 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         }
         console.log("");
         
-        const shouldProceed = await confirm({
-            message: `Do you want to proceed with upgrading from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}?`,
-            initialValue: false,
-        });
+        let shouldProceed: boolean;
+        
+        if (options.yes) {
+            // Non-interactive mode: proceed automatically
+            log.info(pc.blue(`✓ Non-interactive mode: proceeding with database upgrade`));
+            shouldProceed = true;
+        } else {
+            // Interactive mode: ask for confirmation
+            const confirmResult = await confirm({
+                message: `Do you want to proceed with upgrading from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}?`,
+                initialValue: false,
+            });
+            shouldProceed = confirmResult === true;
+        }
         
         if (!shouldProceed) {
             outro(pc.gray("Database upgrade cancelled."));
