@@ -29,6 +29,7 @@ describe('File Deletion', () => {
             fileName,
             hash,
             length: content.length,
+            lastModified: new Date(),
         };
     }
 

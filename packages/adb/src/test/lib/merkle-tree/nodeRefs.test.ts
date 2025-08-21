@@ -15,7 +15,8 @@ describe('Merkle Tree NodeRefs', () => {
         return {
             fileName,
             hash,
-            length: content.length
+            length: content.length,
+            lastModified: new Date(),
         };
     }
 

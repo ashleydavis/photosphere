@@ -13,6 +13,7 @@ describe('Merkle Tree', () => {
             fileName,
             hash: Buffer.from(fileName),
             length: 1,
+            lastModified: new Date(),
         };
     }
 
@@ -1079,7 +1080,8 @@ describe('Merkle Tree', () => {
             return {
                 fileName,
                 hash: Buffer.from(content),
-                length: 200 * fileName.charCodeAt(0) // Different size than original
+                length: 200 * fileName.charCodeAt(0), // Different size than original
+                lastModified: new Date(),
             };
         }
         

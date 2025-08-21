@@ -25,7 +25,8 @@ describe('Merkle Tree Save/Load', () => {
         return {
             fileName,
             hash,
-            length: content.length
+            length: content.length,
+            lastModified: new Date(),
         };
     }
 

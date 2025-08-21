@@ -22,6 +22,7 @@ describe('Tree Comparison', () => {
             fileName,
             hash,
             length: content.length,
+            lastModified: new Date(),
         };
     }
 

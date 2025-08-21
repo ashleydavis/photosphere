@@ -19,6 +19,7 @@ describe('Size calculation with file addition', () => {
       fileName,
       hash,
       length: size,
+      lastModified: new Date(),
     };
   }
 

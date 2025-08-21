@@ -22,6 +22,7 @@ describe('Size calculation with file deletion', () => {
       fileName,
       hash,
       length: size,
+      lastModified: new Date(),
     };
   }
 

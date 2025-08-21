@@ -21,6 +21,7 @@ describe('Size calculation with file updates', () => {
       fileName,
       hash,
       length: size,
+      lastModified: new Date(),
     };
   }
 

@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, HashCache, IHashedFile, IMerkleTree, MerkleNode, saveTree, traverseTree, visualizeTree } from "adb";
+import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, getFileInfo, HashCache, IHashedFile, IMerkleTree, loadTree, MerkleNode, saveTree, traverseTree, upsertFile, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -17,6 +17,7 @@ dayjs.extend(customParseFormat);
 
 import { Image } from "tools";
 import _ from "lodash";
+import { contentType } from "mime-types";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -403,10 +404,6 @@ export class MediaFileDatabase {
     //
     private readonly localHashCache: HashCache;
 
-    //
-    // The hash cache contained within the database (possibly remote).
-    //
-    private readonly databaseHashCache: HashCache;
 
     //
     // The file scanner for scanning directories and files.
@@ -452,10 +449,9 @@ export class MediaFileDatabase {
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
-        this.databaseHashCache = new HashCache(metadataStorage, ``, isReadonly);
 
         // Anything that goes through this.assetStorage automatically updates the merkle tree.
-        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase, this.databaseHashCache); 
+        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase); 
 
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
@@ -504,14 +500,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Gets the database's hash cache.
-    //
-    getHashCache(): HashCache {
-        return this.databaseHashCache;
-    }
-
-
-    //
     // Increments the asset count.
     //
     private incrementAssetCount(): void {
@@ -541,7 +529,6 @@ export class MediaFileDatabase {
     async create(): Promise<void> {
         this.checkReadonly('create database');
         await this.localHashCache.load();
-        await this.databaseHashCache.load();
 
         await this.assetDatabase.create();
 
@@ -570,7 +557,6 @@ export class MediaFileDatabase {
     //
     async load(): Promise<void> {
         await this.localHashCache.load();
-        await this.databaseHashCache.load();
         await this.assetDatabase.load();
 
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
@@ -635,7 +621,6 @@ export class MediaFileDatabase {
             // Save hash caches progressively to make the next run faster
             if (this.addSummary.filesAdded % 100 === 0) {
                 await this.localHashCache.save();
-                await this.databaseHashCache.save();
                 await this.assetDatabase.save();
             }
         }, progressCallback);
@@ -652,12 +637,12 @@ export class MediaFileDatabase {
             await this.checkFile(
                 result.filePath,
                 result.fileStat,
+                result.contentType,
                 result.openStream,
                 progressCallback
             );
         }, progressCallback);
     }
-
 
     //
     // Adds a file to the media file database.
@@ -667,36 +652,22 @@ export class MediaFileDatabase {
         const assetId = this.uuidGenerator.generate();
 
         //
-        // Create a temporary directory for generates files like the thumbnail, display asset, etc.
+        // Create a temporary directory for generating files like the thumbnail, display asset, etc.
         //
         const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, this.uuidGenerator.generate());
         await fs.ensureDir(assetTempDir);
        
         try {
             let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
-            if (localHashedFile) {
+            if (!localHashedFile) {
                 //
-                // Already hashed, which means the file is valid.
+                // Validate, compute and cache the hash of the file.
                 //
-                //todo: this means the file isn't validated in local smoke tests which changes the order of things. //fio:
-            }
-            else {
-                //
-                // We might not have seen this file before, so we need to validate it.
-                //
-                if (!await this.validateFile(filePath, contentType, assetTempDir, openStream)) {
-                    log.error(`File "${filePath}" has failed validation.`);
-                    this.addSummary.filesFailed++;
-                    if (progressCallback) {
-                        progressCallback(this.localFileScanner.getCurrentlyScanning());
-                    }            
+                localHashedFile = await this.computeLocalHash(filePath, fileStat, contentType, assetTempDir, openStream, progressCallback);
+                if (!localHashedFile) {
+                    // Failed validation.
                     return;
                 }
-    
-                //
-                // Compute (and cache) the hash of the file.
-                //
-                localHashedFile = await this.computeHash(filePath, fileStat, openStream, this.localHashCache);
             }
     
             const metadataCollection = this.bsonDatabase.collection("metadata");
@@ -742,7 +713,7 @@ export class MediaFileDatabase {
                     throw new Error(`Failed to get info for file "${assetPath}"`);
                 }
                 
-                const hashedAsset = await this.computeHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath), this.databaseHashCache);
+                const hashedAsset = await this.computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath));
                 if (hashedAsset.hash.toString("hex") !== localHashStr) {
                     throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
@@ -758,7 +729,7 @@ export class MediaFileDatabase {
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                     }
-                    const hashedThumb = await this.computeHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath), this.databaseHashCache);
+                    const hashedThumb = await this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath));
                     await this.assetDatabase.addFile(thumbPath, hashedThumb);
                 }
 
@@ -772,7 +743,7 @@ export class MediaFileDatabase {
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display "${displayPath}"`);
                     }
-                    const hashedDisplay = await this.computeHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!), this.databaseHashCache);
+                    const hashedDisplay = await this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!));
                     await this.assetDatabase.addFile(displayPath, hashedDisplay);
                 }
 
@@ -878,11 +849,21 @@ export class MediaFileDatabase {
     //
     // Checks if a file has already been added to the media file database.
     //
-    private checkFile = async  (filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
+    private checkFile = async  (filePath: string, fileStat: IFileStat, contentType: string, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
 
         let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
-        if (!localHashedFile) {            
-            localHashedFile = await this.computeHash(filePath, fileStat, openStream, this.localHashCache);
+        if (!localHashedFile) {          
+            const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
+            await fs.ensureDir(tempDir);
+
+            //
+            // Validate, compute and cache the hash of the file.
+            //
+            localHashedFile = await this.computeLocalHash(filePath, fileStat, contentType, tempDir, openStream, progressCallback);
+            if (!localHashedFile) {
+                // Failed validation.
+                return;
+            }
         }
 
         const metadataCollection = this.bsonDatabase.collection("metadata");
@@ -924,7 +905,6 @@ export class MediaFileDatabase {
             //          changes to files that should be updated 
             //          in the hash cache.
             //
-            await this.databaseHashCache.save();
             await this.assetDatabase.save();
         }
     }
@@ -975,9 +955,33 @@ export class MediaFileDatabase {
     }
 
     //
-    // Computes the has h of a file and stores it in the hash cache.
+    // Computes the hash of a local file and stores it in the local hash cache.
     //
-    async computeHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, hashCache: HashCache): Promise<IHashedFile> {
+    async computeLocalHash(
+        filePath: string, 
+        fileStat: IFileStat, 
+        contentType: string, 
+        assetTempDir: string, 
+        openStream: (() => NodeJS.ReadableStream) | undefined,
+        progressCallback: ProgressCallback
+    ): Promise<IHashedFile | undefined> {
+
+        if (openStream === undefined) {
+            openStream = () => fs.createReadStream(filePath);
+        }
+        
+        //
+        // We might not have seen this file before, so we need to validate it.
+        //
+        if (!await this.validateFile(filePath, contentType, assetTempDir, openStream)) {
+            log.error(`File "${filePath}" has failed validation.`);
+            this.addSummary.filesFailed++;
+            if (progressCallback) {
+                progressCallback(this.localFileScanner.getCurrentlyScanning());
+            }            
+            return undefined;
+        }
+
         //
         // Compute the hash of the file.
         //
@@ -991,9 +995,24 @@ export class MediaFileDatabase {
         //
         // At the point where we commit the hash to the hash cache, we have tested that the file is valid.
         //
-        hashCache.addHash(filePath, hashedFile);
+        this.localHashCache.addHash(filePath, hashedFile);
 
         return hashedFile;
+    }
+
+    //
+    // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
+    //
+    async computeAssetHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<IHashedFile> {
+        //
+        // Compute the hash of the file.
+        //
+        const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
+        return {
+            hash,
+            lastModified: fileStat.lastModified,
+            length: fileStat.length,
+        };
     }
 
     //
@@ -1046,7 +1065,8 @@ export class MediaFileDatabase {
             }
 
 
-            const fileHash = this.databaseHashCache.getHash(file.fileName);
+            const merkleTree = this.assetDatabase.getMerkleTree();
+            const fileHash = getFileInfo(merkleTree, file.fileName);
             if (!fileHash) {
                 result.new.push(file.fileName);
                 continue;
@@ -1057,7 +1077,7 @@ export class MediaFileDatabase {
             
             if (sizeChanged || timestampChanged) {
                 // File metadata has changed - check if content actually changed by computing the hash.
-                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
                 const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
                 
                 if (contentChanged) {
@@ -1090,7 +1110,7 @@ export class MediaFileDatabase {
             }
             else if (options?.full) {
                 // The file doesn't seem to have changed, but the full verification is requested.
-                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
                 const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
                 
                 if (!contentChanged) {
@@ -1218,7 +1238,7 @@ export class MediaFileDatabase {
                     return false;
                 }
 
-                const copiedHash = await this.computeHash(fileName, copiedFileInfo, () => this.assetStorage.readStream(fileName), this.databaseHashCache);
+                const copiedHash = await this.computeAssetHash(fileName, copiedFileInfo, () => this.assetStorage.readStream(fileName));
                 if (Buffer.compare(copiedHash.hash, expectedHash) !== 0) {
                     log.warn(`Repaired file hash mismatch: ${fileName}`);
                     return false;
@@ -1243,7 +1263,8 @@ export class MediaFileDatabase {
             }
 
             const fileInfo = await this.assetStorage.info(file.fileName);
-            const fileHash = this.databaseHashCache.getHash(file.fileName);
+            const merkleTree = this.assetDatabase.getMerkleTree();
+            const fileHash = getFileInfo(merkleTree, file.fileName);
             
             if (!fileHash) {
                 result.new.push(file.fileName);
@@ -1272,7 +1293,7 @@ export class MediaFileDatabase {
                 || options.full) {
                 
                 // Verify the actual hash
-                const freshHash = await this.computeHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName), this.databaseHashCache);
+                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
                 
                 if (freshHash.hash.toString("hex") !== fileHash.hash.toString("hex")) {
                     // File is corrupted - try to repair
@@ -1348,10 +1369,18 @@ export class MediaFileDatabase {
 
         const srcStorage = this.assetStorage;
 
-        const destHashCache = new HashCache(destMetadataStorage, "");
-        await retry(() => destHashCache.load());
-
-        let newDestTree = createTree(this.timestampProvider, this.uuidGenerator);
+        // Try to load existing destination merkle tree, otherwise create a new one
+        let destTree = await loadTree("tree.dat", destMetadataStorage);
+        if (!destTree) {
+            destTree = createTree(this.timestampProvider, this.uuidGenerator);
+            if (progressCallback) {
+                progressCallback("Creating new destination database...");
+            }
+        } else {
+            if (progressCallback) {
+                progressCallback("Found existing destination database, checking for differences...");
+            }
+        }
 
         //
         // Copies an asset from the source storage to the destination storage.
@@ -1360,29 +1389,15 @@ export class MediaFileDatabase {
         const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
             result.filesConsidered++;
             
-            const destHash = destHashCache.getHash(fileName);
-            if (destHash) {
-                //
-                // The file already exists in the destination database.
-                // Check if the hash matches. Compare the buffers.
-                //
-                if (Buffer.compare(sourceHash, destHash.hash) === 0) {
-                    //
-                    // The hash matches, so we don't need to copy the file.
-                    //
-                    result.existingFiles++;
-
-                    //
-                    // Add the existing file to the destination merkle tree.
-                    //
-                    newDestTree = addFile(newDestTree, {
-                        fileName,
-                        hash: destHash.hash,
-                        length: destHash.length,
-                    }, this.timestampProvider, this.uuidGenerator);
-
-                    return;                
+            // Check if file already exists in destination tree with matching hash
+            const destFileInfo = getFileInfo(destTree, fileName);
+            if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
+                // File already exists with correct hash, skip copying
+                result.existingFiles++;
+                if (progressCallback) {
+                    progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
                 }
+                return;
             }
 
             const srcFileInfo = await retry(() => srcStorage.info(fileName));
@@ -1419,21 +1434,13 @@ export class MediaFileDatabase {
             }
 
             //
-            // Add the file to the destination hash cache.
+            // Add or update the file in the destination merkle tree.
             //
-            destHashCache.addHash(fileName, {
-                hash: copiedHash,
-                lastModified: copiedFileInfo.lastModified,
-                length: copiedFileInfo.length,
-            });
-
-            //
-            // Add the file to the destination merkle tree.
-            //
-            newDestTree = addFile(newDestTree, {
+            destTree = upsertFile(destTree, {
                 fileName,
                 hash: copiedHash,
                 length: copiedFileInfo.length,
+                lastModified: copiedFileInfo.lastModified,
             }, this.timestampProvider, this.uuidGenerator);
 
             result.copiedFiles++;
@@ -1460,19 +1467,13 @@ export class MediaFileDatabase {
                 }
                                
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
-
-                if (result.copiedFiles % 100 === 0) {
-                    await retry(() => destHashCache.save());
-                }
             }
             return true; // Continue traversing.
         };
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
-        await retry(() => destHashCache.save());
-
-        await retry(() => saveTree("tree.dat", newDestTree, destMetadataStorage));
+        await retry(() => saveTree("tree.dat", destTree, destMetadataStorage));
         
         return result;
     }
