@@ -13,7 +13,8 @@ function createFileHash(fileName: string, content: string): FileHash {
   return {
     fileName,
     hash,
-    length: content.length
+    length: content.length,
+    lastModified: new Date(),
   };
 }
 

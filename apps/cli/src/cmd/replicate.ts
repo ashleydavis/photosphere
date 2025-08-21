@@ -68,8 +68,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     // Check if destination database already exists
     const s3Config = await getS3Config();
     const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
-    const destDbExists = await destMetadataStorage.fileExists('tree.dat');
-    
+    const destDbExists = await destMetadataStorage.fileExists('tree.dat');    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
         const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');
@@ -113,7 +112,8 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
                 await exit(1);
             }
         }
-    } else {
+    } 
+    else {
         // Database doesn't exist - ask about encryption if not already specified
         if (!options.destKey && !options.generateKey && !nonInteractive) {
             const encryptionResult = await promptForEncryption('Would you like to encrypt the destination database?');

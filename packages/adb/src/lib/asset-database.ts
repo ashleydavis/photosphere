@@ -157,6 +157,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             fileName: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
+            lastModified: hashedFile.lastModified,
         }, this.timestampProvider, this.uuidGenerator);
     }
 

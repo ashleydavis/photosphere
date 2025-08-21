@@ -33,7 +33,8 @@ describe('Merkle Tree Metadata', () => {
         return {
             fileName,
             hash,
-            length: content.length
+            length: content.length,
+            lastModified: new Date(),
         };
     }
 

@@ -21,6 +21,7 @@ function createFileHash(fileName: string, content: string = fileName): FileHash 
     fileName,
     hash,
     length: content.length,
+    lastModified: new Date(),
   };
 }
 
