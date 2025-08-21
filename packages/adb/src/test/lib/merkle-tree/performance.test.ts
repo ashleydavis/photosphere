@@ -8,7 +8,7 @@ import {
   getActiveFiles,
   createTree,
 } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
+import { TestUuidGenerator } from 'node-utils';
 
 /**
  * Helper function to create a file hash with specified content
@@ -48,7 +48,6 @@ function generateFileNames(count: number, prefix: string = 'file-'): string[] {
 jest.setTimeout(30000);
 
 describe('Merkle Tree Performance Tests', () => {
-  const timestampProvider = new TestTimestampProvider();
   const uuidGenerator = new TestUuidGenerator();
   
   test('should measure performance of adding files to tree', () => {
@@ -56,11 +55,11 @@ describe('Merkle Tree Performance Tests', () => {
     
     for (const size of sizes) {
       const fileNames = generateFileNames(size);
-      let tree = createTree(timestampProvider, uuidGenerator);
+      let tree = createTree(uuidGenerator);
       
       const [resultTree, time] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+          tree = addFile(tree, createFileHash(fileName), uuidGenerator);
         }
         return tree;
       });
@@ -91,10 +90,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First, build a tree with a large number of files
     const fileCount = 10000;
     const fileNames = generateFileNames(fileCount);
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
     }
     
     // Test the performance of updating files at different positions
@@ -105,7 +104,7 @@ describe('Merkle Tree Performance Tests', () => {
       const updatedContent = `Updated content for ${fileName}`;
       
       const [success, time] = measureTime(() => {
-        return updateFile(tree, createFileHash(fileName, updatedContent), timestampProvider);
+        return updateFile(tree, createFileHash(fileName, updatedContent));
       });
       
       console.log(`Updating file at index ${index} took ${time.toFixed(2)}ms`);
@@ -132,10 +131,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First, build a tree with a large number of files
     const fileCount = 10000;
     const fileNames = generateFileNames(fileCount);
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
     }
     
     // Active file count before deletions
@@ -149,7 +148,7 @@ describe('Merkle Tree Performance Tests', () => {
       const fileName = fileNames[index];
       
       const [success, time] = measureTime(() => {
-        return markFileAsDeleted(tree!, fileName, timestampProvider);
+        return markFileAsDeleted(tree!, fileName);
       });
       
       console.log(`Marking file ${fileName} as deleted took ${time.toFixed(2)}ms`);
@@ -177,12 +176,12 @@ describe('Merkle Tree Performance Tests', () => {
     for (const size of treeSizes) {
       // Create a tree with 'size' number of files
       const fileNames = generateFileNames(size);
-      let tree = createTree(timestampProvider, uuidGenerator);
+      let tree = createTree(uuidGenerator);
       
       // Measure time to build entire tree
       const [resultTree, addTime] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+          tree = addFile(tree, createFileHash(fileName), uuidGenerator);
         }
         return tree;
       });
@@ -190,7 +189,7 @@ describe('Merkle Tree Performance Tests', () => {
       // Measure time to update a file in the middle of the tree
       const middleFileName = fileNames[Math.floor(size / 2)];
       const [, updateTime] = measureTime(() => {
-        return updateFile(resultTree, createFileHash(middleFileName, 'updated content'), timestampProvider);
+        return updateFile(resultTree, createFileHash(middleFileName, 'updated content'));
       });
       
       results[size] = { addTime, updateTime };
@@ -229,10 +228,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First create a baseline tree with 1000 files
     const baselineCount = 1000;
     const baseFileNames = generateFileNames(baselineCount);
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     
     for (const fileName of baseFileNames) {
-      tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
     }
     
     // Now measure bulk operations on this tree
@@ -244,7 +243,7 @@ describe('Merkle Tree Performance Tests', () => {
     const [treeAfterAdd, addBatchTime] = measureTime(() => {
       let currentTree = tree;
       for (const fileName of newFileNames) {
-        currentTree = addFile(currentTree, createFileHash(fileName), timestampProvider, uuidGenerator);
+        currentTree = addFile(currentTree, createFileHash(fileName), uuidGenerator);
       }
       return currentTree;
     });
@@ -260,7 +259,7 @@ describe('Merkle Tree Performance Tests', () => {
     
     const [updateResults, updateBatchTime] = measureTime(() => {
       return filesToUpdate.map(fileName => 
-        updateFile(treeAfterAdd, createFileHash(fileName, `updated-${fileName}`), timestampProvider)
+        updateFile(treeAfterAdd, createFileHash(fileName, `updated-${fileName}`))
       );
     });
     
@@ -271,7 +270,7 @@ describe('Merkle Tree Performance Tests', () => {
     const filesToDelete = baseFileNames.slice(updateBatchSize, updateBatchSize + deleteBatchSize);
     
     const [deleteResults, deleteBatchTime] = measureTime(() => {
-      return filesToDelete.map(fileName => markFileAsDeleted(treeAfterAdd!, fileName, timestampProvider));
+      return filesToDelete.map(fileName => markFileAsDeleted(treeAfterAdd!, fileName));
     });
     
     console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${deleteBatchTime.toFixed(2)}ms`);

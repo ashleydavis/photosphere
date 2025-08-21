@@ -445,7 +445,7 @@ export class MediaFileDatabase {
 
         this.isReadonly = isReadonly;
         
-        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, this.timestampProvider, uuidGenerator, isReadonly);
+        this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, uuidGenerator, isReadonly);
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
@@ -1372,7 +1372,7 @@ export class MediaFileDatabase {
         // Try to load existing destination merkle tree, otherwise create a new one
         let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
         if (!destTree) {
-            destTree = createTree(this.timestampProvider, this.uuidGenerator);
+            destTree = createTree(this.uuidGenerator);
             if (progressCallback) {
                 progressCallback("Creating new destination database...");
             }
@@ -1441,7 +1441,7 @@ export class MediaFileDatabase {
                 hash: copiedHash,
                 length: copiedFileInfo.length,
                 lastModified: copiedFileInfo.lastModified,
-            }, this.timestampProvider, this.uuidGenerator);
+            }, this.uuidGenerator);
 
             result.copiedFiles++;
 

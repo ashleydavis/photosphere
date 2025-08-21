@@ -71,8 +71,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
 
     constructor(
         private readonly assetStorage: IStorage, 
-        private readonly metadataStorage: IStorage,
-        private readonly timestampProvider: ITimestampProvider,
+        private readonly metadataStorage: IStorage,        
         private readonly uuidGenerator: IUuidGenerator,
         private readonly isReadonly: boolean = false
     ) {
@@ -97,7 +96,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        this.merkleTree = createTree(this.timestampProvider, this.uuidGenerator);
+        this.merkleTree = createTree(this.uuidGenerator);
         await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
@@ -158,7 +157,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             hash: hashedFile.hash,
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
-        }, this.timestampProvider, this.uuidGenerator);
+        }, this.uuidGenerator);
     }
 
     //
@@ -169,7 +168,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
-        markFileAsDeleted(this.merkleTree, filePath, this.timestampProvider);
+        markFileAsDeleted(this.merkleTree, filePath);
     }
 
     //
