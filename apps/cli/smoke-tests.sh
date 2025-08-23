@@ -2095,13 +2095,6 @@ run_all_tests() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first
     check_tools
@@ -2297,13 +2290,6 @@ run_multiple_commands() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first before running any tests
     check_tools
@@ -2671,13 +2657,6 @@ main() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first before running individual test
     check_tools

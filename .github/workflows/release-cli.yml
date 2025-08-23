@@ -118,9 +118,6 @@ jobs:
         working-directory: ./apps/cli
         run: bun run build-fe-linux
 
-      - name: Make test scripts executable
-        run: chmod +x test/normalize-timestamps.sh
-
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |
