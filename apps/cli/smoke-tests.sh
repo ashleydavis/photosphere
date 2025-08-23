@@ -59,6 +59,15 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
+# Trap to show summary on exit (including failures)
+cleanup_and_show_summary() {
+    echo ""
+    show_test_hash_summary
+    write_github_step_summary
+}
+
+trap cleanup_and_show_summary EXIT
+
 # Global variable to store which ImageMagick command to use
 IMAGEMAGICK_IDENTIFY_CMD=""
 
@@ -82,8 +91,8 @@ TEST_RESULTS=()
 test_passed() {
     ((TESTS_PASSED++))
     
-    # Capture database hash if database exists and we're in GitHub Actions
-    if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+    # Capture database hash if database exists
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
         if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
@@ -98,8 +107,8 @@ test_failed() {
     ((TESTS_FAILED++))
     FAILED_TESTS+=("$test_name")
     
-    # Capture database hash if database exists and we're in GitHub Actions
-    if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+    # Capture database hash if database exists
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
         if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("FAIL:$test_name:$hash_output")
@@ -252,6 +261,29 @@ EOF
     if [ -f "$report_file" ]; then
         local file_size=$(stat -c%s "$report_file" 2>/dev/null || echo "unknown")
         log_info "Report size: $file_size bytes"
+    fi
+}
+
+# Show test hash summary for local console output
+show_test_hash_summary() {
+    if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
+        echo "======================================"
+        echo "DATABASE HASH PROGRESSION"
+        echo "======================================"
+        local test_num=1
+        for result in "${TEST_RESULTS[@]}"; do
+            local status=$(echo "$result" | cut -d: -f1)
+            if [ "$status" = "PASS" ]; then
+                local hash=$(echo "$result" | cut -d: -f2-)
+                echo -e "${test_num}. ${GREEN}✓${NC} $hash"
+            else
+                local test_name=$(echo "$result" | cut -d: -f2)
+                local hash=$(echo "$result" | cut -d: -f3-)
+                echo -e "${test_num}. ${RED}✗ $test_name${NC} $hash"
+            fi
+            ((test_num++))
+        done
+        echo "======================================"
     fi
 }
 
@@ -2122,9 +2154,6 @@ run_all_tests() {
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "all"
     
-    # Write concise summary to GitHub step summary
-    write_github_step_summary
-    
     # Preserve test database for further inspection or hash capture
     echo ""
     log_info "Preserving test database for inspection"
@@ -2670,9 +2699,6 @@ main() {
     mkdir -p ./tmp/reports
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "individual"
-    
-    # Write concise summary to GitHub step summary
-    write_github_step_summary
     
     exit 0
 }
