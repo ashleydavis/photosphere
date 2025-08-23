@@ -131,20 +131,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -296,20 +282,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (Linux)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (Linux)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -462,21 +434,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        shell: bash
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (Windows)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (Windows)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -634,20 +591,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (macOS x64)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (macOS x64)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -803,20 +746,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (macOS ARM64)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (macOS ARM64)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
