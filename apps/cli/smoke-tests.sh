@@ -75,15 +75,38 @@ log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
+# Array to store test results with hashes
+TEST_RESULTS=()
+
 # Test counting functions - only increment once per test function
 test_passed() {
     ((TESTS_PASSED++))
+    
+    # Capture database hash if database exists and we're in GitHub Actions
+    if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+        local hash_output
+        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+            TEST_RESULTS+=("PASS:$hash_output")
+        else
+            TEST_RESULTS+=("PASS:hash_failed")
+        fi
+    fi
 }
 
 test_failed() {
     local test_name="$1"
     ((TESTS_FAILED++))
     FAILED_TESTS+=("$test_name")
+    
+    # Capture database hash if database exists and we're in GitHub Actions
+    if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+        local hash_output
+        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+            TEST_RESULTS+=("FAIL:$test_name:$hash_output")
+        else
+            TEST_RESULTS+=("FAIL:$test_name:hash_failed")
+        fi
+    fi
 }
 
 log_warning() {
@@ -249,6 +272,26 @@ write_github_step_summary() {
                         echo "- $failed_test"
                     done
                 fi
+            fi
+            
+            # Add test results with hashes if we have them
+            if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
+                echo ""
+                echo "**Database hashes after each test:**"
+                echo ""
+                local test_num=1
+                for result in "${TEST_RESULTS[@]}"; do
+                    local status=$(echo "$result" | cut -d: -f1)
+                    if [ "$status" = "PASS" ]; then
+                        local hash=$(echo "$result" | cut -d: -f2-)
+                        echo "$test_num. ✅ \`$hash\`"
+                    else
+                        local test_name=$(echo "$result" | cut -d: -f2)
+                        local hash=$(echo "$result" | cut -d: -f3-)
+                        echo "$test_num. ❌ **$test_name** \`$hash\`"
+                    fi
+                    ((test_num++))
+                done
             fi
             
             # Add final database hash if database exists
