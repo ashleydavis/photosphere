@@ -232,6 +232,41 @@ EOF
     fi
 }
 
+# Write concise summary to GitHub step summary if running in GitHub Actions
+write_github_step_summary() {
+    if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+        {
+            echo "## Smoke Test Results"
+            echo ""
+            if [ $TESTS_FAILED -eq 0 ]; then
+                echo "✅ **PASSED** ($TESTS_PASSED tests)"
+            else
+                echo "❌ **FAILED** ($TESTS_FAILED failed, $TESTS_PASSED passed)"
+                if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+                    echo ""
+                    echo "**Failed tests:**"
+                    for failed_test in "${FAILED_TESTS[@]}"; do
+                        echo "- $failed_test"
+                    done
+                fi
+            fi
+            
+            # Add final database hash if database exists
+            if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+                echo ""
+                echo "**Final database hash:**"
+                echo "\`\`\`"
+                if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null); then
+                    echo "$hash_output"
+                else
+                    echo "Failed to get database hash"
+                fi
+                echo "\`\`\`"
+            fi
+        } >> "$GITHUB_STEP_SUMMARY"
+    fi
+}
+
 
 # Check if a value matches expected value
 expect_value() {
@@ -2044,6 +2079,9 @@ run_all_tests() {
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "all"
     
+    # Write concise summary to GitHub step summary
+    write_github_step_summary
+    
     # Preserve test database for further inspection or hash capture
     echo ""
     log_info "Preserving test database for inspection"
@@ -2589,6 +2627,9 @@ main() {
     mkdir -p ./tmp/reports
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "individual"
+    
+    # Write concise summary to GitHub step summary
+    write_github_step_summary
     
     exit 0
 }
