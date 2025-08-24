@@ -27,12 +27,24 @@ function intro(message) {
     return;
 }
 
+function note(message, title) {
+    // Do nothing in tests
+    return;
+}
+
+async function text({ message, placeholder, defaultValue, validate }) {
+    // Return default value or a test string
+    return defaultValue || 'test-input';
+}
+
 module.exports = {
     confirm,
     isCancel,
     select,
     outro,
-    intro
+    intro,
+    note,
+    text
 };
 
 module.exports.default = module.exports;
