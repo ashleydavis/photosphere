@@ -1,21 +1,19 @@
 #!/bin/bash
 
-set -e  # Exit immediately if any command fails
+set -e
 
-# Blacklist of directories to ignore
-BLACKLIST=("node_modules" "deprecated")
+# Directories to ignore
+BLACKLIST="node_modules deprecated"
 
-# Build the find command with exclusions
-EXCLUDE_ARGS="-not -path ./package.json"  # Always exclude root
-for dir in "${BLACKLIST[@]}"; do
-    EXCLUDE_ARGS="$EXCLUDE_ARGS -not -path */$dir/*"
-done
-
-# Find all directories containing package.json and run bun run test
-find . -name "package.json" -type f $EXCLUDE_ARGS | while read -r package; do
+# Find and test all packages
+find . -name "package.json" -not -path "./package.json" | grep -vE "($(echo $BLACKLIST | tr ' ' '|'))" | while read package; do
     dir=$(dirname "$package")
-    echo "Running tests in: $dir"
-    cd "$dir" || exit 1
-    bun run test
-    cd - > /dev/null
+    
+    # Check if package.json has a test script
+    if grep -q '"test":' "$package"; then
+        echo "Testing: $dir"
+        (cd "$dir" && bun run test)
+    else
+        echo "Skipping $dir (no test script found)"
+    fi
 done
