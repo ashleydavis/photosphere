@@ -31,9 +31,9 @@
         "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
         "t": "bun run test",
         "tw": "bun run test:watch",
-        "test": "cross-env NODE_ENV=development jest",
-        "test:coverage": "cross-env NODE_ENV=development jest --coverage",
-        "test:watch": "cross-env NODE_ENV=development jest --watch"
+        "test": "cross-env NODE_ENV=development jest --passWithNoTests",
+        "test:coverage": "cross-env NODE_ENV=development jest --coverage --passWithNoTests",
+        "test:watch": "cross-env NODE_ENV=development jest --watch --passWithNoTests"
     },
     "keywords": [],
     "author": "ashley@codecapers.com.au",
