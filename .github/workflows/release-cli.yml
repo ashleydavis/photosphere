@@ -6,10 +6,16 @@ on:
       - '*'
     tags:
       - 'v*.*.*'
+    paths:
+      - 'apps/cli/**'
+      - 'packages/**'
 
   pull_request:
     branches:
       - main
+    paths:
+      - 'apps/cli/**'
+      - 'packages/**'
 
   workflow_dispatch:
 
