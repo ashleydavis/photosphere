@@ -12,7 +12,10 @@ find . -name "package.json" -not -path "./package.json" | grep -vE "($(echo $BLA
     # Check if package.json has a test script
     if grep -q '"test":' "$package"; then
         echo "Testing: $dir"
-        (cd "$dir" && bun run test)
+        if ! (cd "$dir" && bun run test); then
+            echo "❌ TESTS FAILED IN: $dir"
+            exit 1
+        fi
     else
         echo "Skipping $dir (no test script found)"
     fi
