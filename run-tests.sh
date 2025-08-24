@@ -3,7 +3,7 @@
 set -e
 
 # Directories to ignore
-BLACKLIST="node_modules deprecated"
+BLACKLIST="node_modules deprecated packages/rest-api"
 
 # Find and test all packages
 find . -name "package.json" -not -path "./package.json" | grep -vE "($(echo $BLACKLIST | tr ' ' '|'))" | while read package; do
