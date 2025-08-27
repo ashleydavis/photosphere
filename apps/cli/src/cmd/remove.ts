@@ -21,7 +21,7 @@ export async function removeCommand(assetId: string, options: IRemoveCommandOpti
         log.info(`Removing asset ${pc.cyan(assetId)} from database at ${pc.yellow(dbPath)}`);
 
         // Load the database using shared function
-        const { database } = await loadDatabase(dbPath, options);
+        const { database } = await loadDatabase(dbPath, options, false, false);
 
         // Remove the asset using the comprehensive removal method
         log.info(`Removing asset with ID: ${pc.cyan(assetId)}`);

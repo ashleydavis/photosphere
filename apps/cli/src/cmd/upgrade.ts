@@ -17,10 +17,9 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     
     intro(pc.blue(`Upgrading media file database...`));
 
-    // Load the database in readonly mode to check version without modifications
+    // Load the database in readonly mode to check version without modifications.
     const { database } = await loadDatabase(options.db, options, true, true);
 
-    // Get the current tree version
     const merkleTree = database.getAssetDatabase().getMerkleTree();
     const currentVersion = merkleTree.version;
 
@@ -64,11 +63,14 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
             return;
         }
         
-        // Reload the database for upgrade
-        const { database: upgradeDatabase, metadataStorage } = await loadDatabase(options.db, options, true);
-        
-        // Perform the upgrade using the reusable function
-        await performDatabaseUpgrade(upgradeDatabase, metadataStorage, currentVersion);        
+        // Reload the database for upgrade in readwrite mode.
+        const { database: upgradeDatabase, metadataStorage } = await loadDatabase(options.db, options, true, false);
+
+        log.info(`Upgrading database from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}...`);
+
+        await performDatabaseUpgrade(upgradeDatabase, metadataStorage, false);
+
+        log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 
     else {
         outro(pc.red(`✗ Database version ${currentVersion} is newer than the current supported version ${CURRENT_DATABASE_VERSION}.\n  Please update your Photosphere CLI tool.`));
