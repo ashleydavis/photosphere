@@ -12,6 +12,7 @@ import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
+import { performDatabaseUpgrade } from "./database-upgrade";
 
 //
 // Helper function to resolve encryption key path
@@ -36,15 +37,11 @@ export async function getAvailableKeys(): Promise<string[]> {
 //
 // Checks if a tree version is compatible with the current version
 //
-function checkVersionCompatibility(tree: IMerkleTree<IDatabaseMetadata>, allowOlderVersions: boolean = false): { isCompatible: boolean, message?: string } {
+function checkVersionCompatibility(tree: IMerkleTree<IDatabaseMetadata>): { isCompatible: boolean, message?: string } {
     if (tree.version === CURRENT_DATABASE_VERSION) {
         return { isCompatible: true };
     }
-    
-    if (allowOlderVersions) {
-        return { isCompatible: true };
-    }
-    
+        
     if (tree.version < CURRENT_DATABASE_VERSION) {
         return { 
             isCompatible: false, 
@@ -291,7 +288,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean = false, readonly: boolean = false): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean, readonly: boolean): Promise<IInitResult> {
 
     const nonInteractive = options.yes || false;
     
@@ -397,11 +394,13 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 
     // Check database version compatibility
     const merkleTree = database.getAssetDatabase().getMerkleTree();
-    const versionCheck = checkVersionCompatibility(merkleTree, allowOlderVersions);
-    
-    if (!versionCheck.isCompatible) {
-        outro(pc.red(`✗ ${versionCheck.message}`));
-        await exit(1);
+
+    if (!allowOlderVersions) {
+        const versionCheck = checkVersionCompatibility(merkleTree);    
+        if (!versionCheck.isCompatible) {
+            outro(pc.red(`✗ ${versionCheck.message}`));
+            await exit(1);
+        }
     }
 
     return {
