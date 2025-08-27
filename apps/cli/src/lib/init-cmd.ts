@@ -395,13 +395,18 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // Check database version compatibility
     const merkleTree = database.getAssetDatabase().getMerkleTree();
 
-    if (!allowOlderVersions) {
+    if (allowOlderVersions) {
+        await performDatabaseUpgrade(database, metadataStorage, readonly);
+    }
+    else {
         const versionCheck = checkVersionCompatibility(merkleTree);    
         if (!versionCheck.isCompatible) {
             outro(pc.red(`✗ ${versionCheck.message}`));
             await exit(1);
         }
     }
+
+
 
     return {
         database,
