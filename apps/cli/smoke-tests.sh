@@ -1886,10 +1886,10 @@ test_repair_damaged_database() {
 
 
 
-test_v2_database_summary() {
+test_v2_database_readonly_commands() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 27: V2 DATABASE SUMMARY ACCESS ==="
+    echo "=== TEST 27: V2 DATABASE READONLY COMMANDS ==="
     
     local v2_db_dir="../../test/dbs/v2"
     
@@ -1903,29 +1903,42 @@ test_v2_database_summary() {
     
     # Check that summary contains database version
     expect_output_string "$summary_output" "Database version: 2" "Summary shows v2 database version"
-    
     log_success "Summary command successfully accessed v2 database"
+    
+    # Test that verify command works on v2 database (readonly operations should work)
+    local verify_output
+    invoke_command "Run verify on v2 database" "$(get_cli_command) verify --db $v2_db_dir --yes" 0 "verify_output"
+    log_success "Verify command successfully accessed v2 database (readonly access)"
+    
     test_passed
 }
 
-test_v2_database_incompatible_commands() {
+test_v2_database_write_commands_fail() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 28: V2 DATABASE INCOMPATIBLE COMMANDS ==="
+    echo "=== TEST 28: V2 DATABASE WRITE COMMANDS FAIL ==="
     
     local v2_db_dir="../../test/dbs/v2"
     
     # Check that v2 database exists
     check_exists "$v2_db_dir" "V2 test database directory"
     
-    # Test that verify command fails on v2 database with version error
-    local verify_output
-    invoke_command "Run verify on v2 database (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1 "verify_output"
+    # Test that add command fails on v2 database with version error
+    local add_output
+    invoke_command "Run add on v2 database (should fail)" "$(get_cli_command) add $TEST_FILES_DIR/test.png --db $v2_db_dir --yes" 1 "add_output"
     
     # Check that error message mentions upgrade
-    expect_output_string "$verify_output" "upgrade" "Error message suggests running upgrade command"
+    expect_output_string "$add_output" "upgrade" "Add command error message suggests running upgrade command"
+    log_success "Add command correctly rejected v2 database"
     
-    log_success "Verify command correctly rejected v2 database"
+    # Test that remove command fails on v2 database with version error
+    local remove_output
+    invoke_command "Run remove on v2 database (should fail)" "$(get_cli_command) remove 27165d3c-207b-46b6-ab4e-bc92a09aeda3 --db $v2_db_dir --yes" 1 "remove_output"
+    
+    # Check that error message mentions upgrade
+    expect_output_string "$remove_output" "upgrade" "Remove command error message suggests running upgrade command"
+    log_success "Remove command correctly rejected v2 database"
+    
     test_passed
 }
 
@@ -2126,8 +2139,8 @@ run_all_tests() {
     test_repair_ok_database
     test_remove_asset
     test_repair_damaged_database
-    test_v2_database_summary
-    test_v2_database_incompatible_commands
+    test_v2_database_readonly_commands
+    test_v2_database_write_commands_fail
     test_v2_database_upgrade
     test_v3_database_upgrade_no_effect
     
@@ -2250,11 +2263,11 @@ run_test() {
         "repair-damaged"|"26")
             test_repair_damaged_database
             ;;
-        "v2-summary"|"27")
-            test_v2_database_summary
+        "v2-readonly"|"27")
+            test_v2_database_readonly_commands
             ;;
-        "v2-incompatible"|"28")
-            test_v2_database_incompatible_commands
+        "v2-write-fail"|"28")
+            test_v2_database_write_commands_fail
             ;;
         "v2-upgrade"|"29")
             test_v2_database_upgrade
@@ -2512,8 +2525,8 @@ show_usage() {
     echo "  repair-ok (24)      - Repair OK database (no changes)"
     echo "  remove (25)         - Remove asset by ID from database"
     echo "  repair-damaged (26) - Repair damaged database from replica"
-    echo "  v2-summary (27)     - Run summary command on v2 database"
-    echo "  v2-incompatible (28) - Test v2 database compatibility errors"
+    echo "  v2-readonly (27)    - Test readonly commands work on v2 database (summary, verify)"
+    echo "  v2-write-fail (28)  - Test write commands fail on v2 database (add, remove)"
     echo "  v2-upgrade (29)     - Upgrade v2 database to v3"
     echo "  v3-upgrade-no-effect (30) - Test v3 upgrade has no effect"
     echo ""
