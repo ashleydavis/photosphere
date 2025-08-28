@@ -6,7 +6,9 @@ import {
     addFile,
     saveTree,
     loadTree,
-    createTree
+    loadTreeVersion,
+    createTree,
+    CURRENT_DATABASE_VERSION
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
 import { TestUuidGenerator } from 'node-utils';
@@ -203,5 +205,131 @@ describe('Merkle Tree Save/Load', () => {
             expect(loadedNode.leafCount).toBe(originalNode.leafCount);
             expect(loadedNode.fileName).toBe(originalNode.fileName);
         }
+    });
+});
+
+describe('loadTreeVersion', () => {
+    const TEST_VERSION_FILE_PATH = './test-tree-version.bin';
+    const storage = new FileStorage("");
+    const uuidGenerator = new TestUuidGenerator();
+    
+    // Clean up test file after each test
+    afterEach(async () => {
+        try {
+            await fs.access(TEST_VERSION_FILE_PATH);
+            await fs.unlink(TEST_VERSION_FILE_PATH);
+        } catch (error) {
+            // File doesn't exist, nothing to do
+        }
+    });
+
+    test('should load version from a valid tree file', async () => {
+        // Create a tree and save it
+        const originalTree = createTree(uuidGenerator);
+        await saveTree(TEST_VERSION_FILE_PATH, originalTree, storage);
+        
+        // Load just the version
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        expect(version).toBe(CURRENT_DATABASE_VERSION);
+    });
+
+    test('should throw error for non-existent file', async () => {
+        await expect(loadTreeVersion('./non-existent-file.bin', storage)).rejects.toThrow();
+    });
+
+    test('should return undefined for empty file', async () => {
+        // Create an empty file
+        await fs.writeFile(TEST_VERSION_FILE_PATH, Buffer.alloc(0));
+        
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        expect(version).toBeUndefined();
+    });
+
+    test('should return undefined for file with less than 4 bytes', async () => {
+        // Create a file with only 2 bytes
+        await fs.writeFile(TEST_VERSION_FILE_PATH, Buffer.from([0x01, 0x02]));
+        
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        expect(version).toBeUndefined();
+    });
+
+    test('should correctly read version from file with exactly 4 bytes', async () => {
+        // Create a file with exactly 4 bytes representing version 42
+        const versionBuffer = Buffer.alloc(4);
+        versionBuffer.writeUInt32LE(42, 0);
+        await fs.writeFile(TEST_VERSION_FILE_PATH, versionBuffer);
+        
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        expect(version).toBe(42);
+    });
+
+    test('should read version from large file without loading entire file', async () => {
+        // Create a file with version followed by lots of data
+        const versionBuffer = Buffer.alloc(4);
+        versionBuffer.writeUInt32LE(123, 0);
+        
+        // Add 1MB of additional data after the version
+        const largeData = Buffer.alloc(1024 * 1024, 0xFF);
+        const completeFile = Buffer.concat([versionBuffer, largeData]);
+        
+        await fs.writeFile(TEST_VERSION_FILE_PATH, completeFile);
+        
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        expect(version).toBe(123);
+    });
+
+    test('should handle different version values correctly', async () => {
+        const testVersions = [0, 1, 2, 3, 255, 65535, 4294967295]; // Test edge cases
+        
+        for (const expectedVersion of testVersions) {
+            // Create file with specific version
+            const versionBuffer = Buffer.alloc(4);
+            versionBuffer.writeUInt32LE(expectedVersion, 0);
+            await fs.writeFile(TEST_VERSION_FILE_PATH, versionBuffer);
+            
+            const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+            
+            expect(version).toBe(expectedVersion);
+            
+            // Clean up for next iteration
+            await fs.unlink(TEST_VERSION_FILE_PATH);
+        }
+    });
+
+    test('should work correctly with large tree files', async () => {
+        // Create a complex tree with many files to demonstrate the function works with large files
+        const fileNames = Array.from({ length: 100 }, (_, i) => `file-${i.toString().padStart(3, '0')}.txt`);
+        let originalTree = createTree(uuidGenerator);
+        
+        for (const fileName of fileNames) {
+            const fileHash: FileHash = {
+                fileName,
+                hash: crypto.createHash('sha256').update(fileName).digest(),
+                length: fileName.length,
+                lastModified: new Date(),
+            };
+            originalTree = addFile(originalTree, fileHash, uuidGenerator);
+        }
+        
+        await saveTree(TEST_VERSION_FILE_PATH, originalTree, storage);
+        
+        // Load version from the large tree file
+        const version = await loadTreeVersion(TEST_VERSION_FILE_PATH, storage);
+        
+        // Also load the full tree to compare
+        const fullTree = await loadTree(TEST_VERSION_FILE_PATH, storage);
+        
+        // Verify both methods return the same version
+        expect(version).toBe(CURRENT_DATABASE_VERSION);
+        expect(fullTree?.version).toBe(CURRENT_DATABASE_VERSION);
+        expect(version).toBe(fullTree?.version);
+        
+        // Verify the tree has the expected number of files
+        expect(fullTree?.metadata.totalFiles).toBe(100);
     });
 });

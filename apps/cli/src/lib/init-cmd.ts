@@ -1,6 +1,6 @@
 import { IDatabaseMetadata, MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
-import { CURRENT_DATABASE_VERSION, IMerkleTree } from "adb";
+import { CURRENT_DATABASE_VERSION, IMerkleTree, loadTreeVersion } from "adb";
 import { configureLog } from "./log";
 import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -32,27 +32,6 @@ export async function getAvailableKeys(): Promise<string[]> {
     // Filter for .key files (private keys are all we need)
     return allFiles
         .filter(file => file.endsWith('.key'));
-}
-
-//
-// Checks if a tree version is compatible with the current version
-//
-function checkVersionCompatibility(tree: IMerkleTree<IDatabaseMetadata>): { isCompatible: boolean, message?: string } {
-    if (tree.version === CURRENT_DATABASE_VERSION) {
-        return { isCompatible: true };
-    }
-        
-    if (tree.version < CURRENT_DATABASE_VERSION) {
-        return { 
-            isCompatible: false, 
-            message: `Database version ${tree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`
-        };
-    } else {
-        return { 
-            isCompatible: false, 
-            message: `Database version ${tree.version} is newer than the current supported version ${CURRENT_DATABASE_VERSION}. Please update your Photosphere CLI tool.`
-        };
-    }
 }
 
 //
@@ -368,7 +347,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         }
     }
 
-    // Create appropriate providers based on NODE_ENV
+    // Test providers are automatically configured when NODE_ENV === "testing"
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
@@ -376,15 +355,28 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         ? new TestTimestampProvider()
         : new TimestampProvider();
     
-    // Test providers are automatically configured when NODE_ENV === "testing"
 
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
+
+    if (!readonly && !allowOlderVersions) {
+        //
+        // When trying to load the database in write mode and we don't allow older versions,
+        // quickly load the version from the database and reject if the database is old.
+        //
+        // This is the slow path because it loads the database twice. Once in readonly mode and again in write mode.
+        //
+        const databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);
+        if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
+            outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
+            await exit(1);
+        }
+    }
         
-    // Create database instance
+    // Create database instance.
     const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, readonly); 
 
-    // Register termination callback to ensure clean shutdown
+    // Register termination callback to ensure clean shutdown.
     registerTerminationCallback(async () => {
         await database.close();
     });    
@@ -392,21 +384,29 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // Load the database
     await database.load();
 
-    // Check database version compatibility
-    const merkleTree = database.getAssetDatabase().getMerkleTree();
-
-    if (allowOlderVersions) {
-        await performDatabaseUpgrade(database, metadataStorage, readonly);
-    }
-    else {
-        const versionCheck = checkVersionCompatibility(merkleTree);    
-        if (!versionCheck.isCompatible) {
-            outro(pc.red(`✗ ${versionCheck.message}`));
+    if (readonly && !allowOlderVersions) {
+        // 
+        // When trying to load the database in readonly mode and we don't allow older versions,
+        // reject if the database is old.
+        //
+        // This is the fast path for readonly database access. We only load the database once.
+        //
+        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
+            outro(pc.red(`✗ Database version ${merkleTree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
         }
     }
 
-
+    if (allowOlderVersions) {
+        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
+            //
+            // When loading an older database, upgrade it.
+            //
+            await performDatabaseUpgrade(database, metadataStorage, readonly);
+        }
+    }
 
     return {
         database,
@@ -498,7 +498,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, false); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {

@@ -427,8 +427,6 @@ export class MediaFileDatabase {
         averageSize: 0,
     };
 
-
-
     //
     // Flag to indicate if the database is in readonly mode.
     //
@@ -440,7 +438,7 @@ export class MediaFileDatabase {
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
         private readonly timestampProvider: ITimestampProvider,
-        isReadonly: boolean = false
+        isReadonly: boolean
             ) {
 
         this.isReadonly = isReadonly;
