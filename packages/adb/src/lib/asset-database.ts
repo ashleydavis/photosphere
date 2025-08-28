@@ -73,7 +73,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         private readonly assetStorage: IStorage, 
         private readonly metadataStorage: IStorage,        
         private readonly uuidGenerator: IUuidGenerator,
-        private readonly isReadonly: boolean = false
+        private readonly isReadonly: boolean
     ) {
     }
 
