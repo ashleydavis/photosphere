@@ -6,18 +6,17 @@ import {
     addFile,
     updateFile,
     markFileAsDeleted,
-    saveTreeV2,
-    loadTreeV2,
+    saveTree,
+    loadTree,
     createDefaultMetadata,
     updateMetadata,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
+import { TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree Metadata', () => {
     const TEST_FILE_PATH = './test-tree-metadata.bin';
-    const timestampProvider = new TestTimestampProvider();
     const uuidGenerator = new TestUuidGenerator();
     
     beforeEach(() => {
@@ -33,19 +32,20 @@ describe('Merkle Tree Metadata', () => {
         return {
             fileName,
             hash,
-            length: content.length
+            length: content.length,
+            lastModified: new Date(),
         };
     }
 
     /**
      * Helper function to build a tree with the given file names
      */
-    function buildTree(fileNames: string[]): IMerkleTree {
-        let merkleTree = createTree(timestampProvider, uuidGenerator);
+    function buildTree(fileNames: string[]): IMerkleTree<any>{
+        let merkleTree = createTree(uuidGenerator);
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash, timestampProvider, uuidGenerator);
+            merkleTree = addFile(merkleTree, fileHash, uuidGenerator);
         }
 
         if (!merkleTree) {
@@ -77,15 +77,7 @@ describe('Merkle Tree Metadata', () => {
             
             // Verify node and file counts
             expect(originalTree.metadata.totalNodes).toBe(originalTree.nodes.length);
-            expect(originalTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
-            
-            // Timestamps should be valid dates (within the last minute)
-            const now = Date.now();
-            const oneMinuteAgo = now - 60000;
-            expect(originalTree.metadata.createdAt).toBeGreaterThan(oneMinuteAgo);
-            expect(originalTree.metadata.createdAt).toBeLessThanOrEqual(now);
-            expect(originalTree.metadata.modifiedAt).toBeGreaterThan(oneMinuteAgo);
-            expect(originalTree.metadata.modifiedAt).toBeLessThanOrEqual(now);
+            expect(originalTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);            
         }
     });
     
@@ -99,7 +91,7 @@ describe('Merkle Tree Metadata', () => {
         
         // Add a new file
         const fileHashC = createFileHash('C');
-        tree = addFile(tree, fileHashC, timestampProvider, uuidGenerator);
+        tree = addFile(tree, fileHashC, uuidGenerator);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -111,12 +103,6 @@ describe('Merkle Tree Metadata', () => {
             // Counts should be updated
             expect(tree.metadata.totalNodes).toBe(tree.nodes.length);
             expect(tree.metadata.totalFiles).toBe(tree.metadata.totalFiles);
-            
-            // Created time should remain the same
-            expect(tree.metadata.createdAt).toEqual(originalMetadata.createdAt);
-            
-            // Modified time should be updated
-            expect(tree.metadata.modifiedAt).toBeGreaterThan(originalMetadata.modifiedAt);
         }
     });
     
@@ -130,7 +116,7 @@ describe('Merkle Tree Metadata', () => {
         
         // Update file A
         const updatedFileHashA = createFileHash('A', 'modified content');
-        updateFile(tree, updatedFileHashA, timestampProvider);
+        updateFile(tree, updatedFileHashA);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -142,12 +128,6 @@ describe('Merkle Tree Metadata', () => {
             // Counts should remain the same (updating doesn't add nodes)
             expect(tree.metadata.totalNodes).toBe(originalMetadata.totalNodes);
             expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles);
-            
-            // Created time should remain the same
-            expect(tree.metadata.createdAt).toEqual(originalMetadata.createdAt);
-            
-            // Modified time should be updated
-            expect(tree.metadata.modifiedAt).toBeGreaterThan(originalMetadata.modifiedAt);
         }
     });
     
@@ -160,7 +140,7 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Delete file B
-        markFileAsDeleted(tree, 'B', timestampProvider);
+        markFileAsDeleted(tree, 'B');
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -172,12 +152,6 @@ describe('Merkle Tree Metadata', () => {
             // Counts should remain the same (soft delete doesn't remove nodes)
             expect(tree.metadata.totalNodes).toBe(originalMetadata.totalNodes);
             expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles);
-            
-            // Created time should remain the same
-            expect(tree.metadata.createdAt).toEqual(originalMetadata.createdAt);
-            
-            // Modified time should be updated
-            expect(tree.metadata.modifiedAt).toBeGreaterThan(originalMetadata.modifiedAt);
         }
     });
     
@@ -187,10 +161,10 @@ describe('Merkle Tree Metadata', () => {
         expect(originalTree.metadata).toBeDefined();
         
         // Save the tree to a file
-        await saveTreeV2(TEST_FILE_PATH, originalTree, new FileStorage(""));
+        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree from the file
-        const loadedTree = (await loadTreeV2(TEST_FILE_PATH, new FileStorage("")))!;
+        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Check that metadata was preserved
         expect(loadedTree.metadata).toBeDefined();
@@ -200,13 +174,11 @@ describe('Merkle Tree Metadata', () => {
             expect(loadedTree.metadata.id).toEqual(originalTree.metadata.id);
             expect(loadedTree.metadata.totalNodes).toEqual(originalTree.metadata.totalNodes);
             expect(loadedTree.metadata.totalFiles).toEqual(originalTree.metadata.totalFiles);
-            expect(loadedTree.metadata.createdAt).toEqual(originalTree.metadata.createdAt);
-            expect(loadedTree.metadata.modifiedAt).toEqual(originalTree.metadata.modifiedAt);
         }
     });
     
     test('createDefaultMetadata should generate valid metadata', () => {
-        const metadata = createDefaultMetadata(timestampProvider, uuidGenerator);
+        const metadata = createDefaultMetadata(uuidGenerator);
         
         // UUID should be properly formatted
         expect(metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -214,23 +186,16 @@ describe('Merkle Tree Metadata', () => {
         // Initial counts should be zero
         expect(metadata.totalNodes).toBe(0);
         expect(metadata.totalFiles).toBe(0);
-        
-        // Timestamps should be valid dates (within the last minute)
-        const now = Date.now();
-        const oneMinuteAgo = now - 60000;
-        expect(metadata.createdAt).toBeGreaterThan(oneMinuteAgo);
-        expect(metadata.createdAt).toBeLessThanOrEqual(now);
-        expect(metadata.modifiedAt).toEqual(metadata.createdAt);
     });
     
     test('updateMetadata should update counts and modified time', () => {
-        const original = createDefaultMetadata(timestampProvider, uuidGenerator);
+        const original = createDefaultMetadata(uuidGenerator);
         
         // Let time pass
         jest.advanceTimersByTime(1000);
         
         // Update metadata
-        const updated = updateMetadata(original, 10, 5, 3, timestampProvider);
+        const updated = updateMetadata(original, 10, 5, 3);
         
         // UUID should remain the same
         expect(updated.id).toEqual(original.id);
@@ -239,11 +204,5 @@ describe('Merkle Tree Metadata', () => {
         expect(updated.totalNodes).toBe(10);
         expect(updated.totalFiles).toBe(5);
         expect(updated.totalSize).toBe(3);
-        
-        // Created time should remain the same
-        expect(updated.createdAt).toEqual(original.createdAt);
-        
-        // Modified time should be updated
-        expect(updated.modifiedAt).toBeGreaterThan(original.modifiedAt);
     });
 });

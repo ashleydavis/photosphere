@@ -9,15 +9,14 @@ import {
     markFileAsDeleted,
     isFileDeleted,
     getActiveFiles,
-    saveTreeV2,
-    loadTreeV2,
+    saveTree,
+    loadTree,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
+import { TestUuidGenerator } from 'node-utils';
 
 describe('File Deletion', () => {
-    const timestampProvider = new TestTimestampProvider();
     const uuidGenerator = new TestUuidGenerator();
 
     // Helper function to create a file hash
@@ -29,16 +28,17 @@ describe('File Deletion', () => {
             fileName,
             hash,
             length: content.length,
+            lastModified: new Date(),
         };
     }
 
     // Helper function to build a small test tree
-    function buildTestTree(): IMerkleTree {
-        let tree = createTree(timestampProvider, uuidGenerator);
+    function buildTestTree(): IMerkleTree<any>{
+        let tree = createTree(uuidGenerator);
         const fileNames = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName), timestampProvider, uuidGenerator);
+            tree = addFile(tree, createFileHash(fileName), uuidGenerator);
         }
         
         if (!tree) {
@@ -61,7 +61,7 @@ describe('File Deletion', () => {
         expect(nodeBeforeDeletion?.fileName).toBe(fileToDelete);
         
         // Mark the file as deleted
-        const result = markFileAsDeleted(tree, fileToDelete, timestampProvider);
+        const result = markFileAsDeleted(tree, fileToDelete);
         expect(result).toBe(true);
         
         // Verify the node is still in the tree but marked as deleted
@@ -95,7 +95,7 @@ describe('File Deletion', () => {
 
     test('should handle deleting a non-existent file', () => {
         const tree = buildTestTree();
-        const result = markFileAsDeleted(tree, 'non-existent-file.txt', timestampProvider);
+        const result = markFileAsDeleted(tree, 'non-existent-file.txt');
         expect(result).toBe(false);
     });
 
@@ -104,14 +104,14 @@ describe('File Deletion', () => {
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
         
-        markFileAsDeleted(tree, fileToDelete, timestampProvider);
+        markFileAsDeleted(tree, fileToDelete);
         
         // Save the tree to a temporary file
         const tempFile = '/tmp/merkle-tree-delete-test.bin';
-        await saveTreeV2(tempFile, tree, new FileStorage(""));
+        await saveTree(tempFile, tree, new FileStorage(""));
         
         // Load the tree back
-        const loadedTree = (await loadTreeV2(tempFile, new FileStorage("")))!;
+        const loadedTree = (await loadTree(tempFile, new FileStorage("")))!;
         
         // Verify the deletion status was preserved
         expect(isFileDeleted(loadedTree, fileToDelete)).toBe(true);
@@ -125,9 +125,9 @@ describe('File Deletion', () => {
         const tree = buildTestTree();
         
         // Delete multiple files
-        markFileAsDeleted(tree, 'file1.txt', timestampProvider);
-        markFileAsDeleted(tree, 'file3.txt', timestampProvider);
-        markFileAsDeleted(tree, 'file5.txt', timestampProvider);
+        markFileAsDeleted(tree, 'file1.txt');
+        markFileAsDeleted(tree, 'file3.txt');
+        markFileAsDeleted(tree, 'file5.txt');
         
         // Check that all files are marked correctly
         expect(isFileDeleted(tree, 'file1.txt')).toBe(true);
@@ -150,7 +150,7 @@ describe('File Deletion', () => {
         const originalRootHash = tree.nodes[0].hash.toString('hex');
         
         // Delete a file
-        markFileAsDeleted(tree, 'file3.txt', timestampProvider);
+        markFileAsDeleted(tree, 'file3.txt');
         
         // Get new root hash
         const newRootHash = tree.nodes[0].hash.toString('hex');

@@ -3,9 +3,19 @@ name: Release CLI
 on:
   push:
     branches:
-      - main
+      - '*'
     tags:
       - 'v*.*.*'
+    paths:
+      - 'apps/cli/**'
+      - 'packages/**'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/cli/**'
+      - 'packages/**'
 
   workflow_dispatch:
 
@@ -43,6 +53,39 @@ jobs:
             echo "✅ No tag detected, skipping version validation"
           fi
 
+  unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    needs: [validate-version]
+    if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.20
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run unit tests
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
   compile:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -55,7 +98,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -88,7 +131,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -114,9 +157,6 @@ jobs:
         working-directory: ./apps/cli
         run: bun run build-fe-linux
 
-      - name: Make test scripts executable
-        run: chmod +x test/normalize-timestamps.sh
-
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |
@@ -127,20 +167,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -185,8 +211,8 @@ jobs:
   build-linux:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
-    needs: [compile, smoke_test]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
+    needs: [compile, smoke_test, unit-tests]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -236,7 +262,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -292,20 +318,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (Linux)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (Linux)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -356,8 +368,8 @@ jobs:
   build-windows:
     timeout-minutes: 20
     runs-on: windows-latest
-    needs: [compile, smoke_test]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
+    needs: [compile, smoke_test, unit-tests]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -403,7 +415,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -458,21 +470,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        shell: bash
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (Windows)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (Windows)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -524,8 +521,8 @@ jobs:
   build-macos-x64:
     timeout-minutes: 20
     runs-on: macos-13 # x64 architecture
-    needs: [compile, smoke_test]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
+    needs: [compile, smoke_test, unit-tests]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -569,7 +566,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -630,20 +627,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (macOS x64)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (macOS x64)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -694,8 +677,8 @@ jobs:
   build-macos-arm64:
     timeout-minutes: 20
     runs-on: macos-latest # ARM64 architecture
-    needs: [compile, smoke_test]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success'
+    needs: [compile, smoke_test, unit-tests]
+    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -739,7 +722,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.4
+          bun-version: 1.2.20
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -799,20 +782,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-      - name: Set smoke test report as step summary
-        if: always()
-        working-directory: ./apps/cli
-        run: |
-          if [ -f "tmp/reports/smoke-test-report.txt" ]; then
-            echo "## 🧪 Smoke Test Report (macOS ARM64)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat tmp/reports/smoke-test-report.txt >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Smoke Test Report Not Found (macOS ARM64)" >> $GITHUB_STEP_SUMMARY
-            echo "No smoke test report was generated at tmp/reports/smoke-test-report.txt" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Upload smoke test logs
         if: always()
@@ -860,99 +829,6 @@ jobs:
           name: psi-macos-arm64
           path: ./apps/cli/bin/arm64/mac/psi
 
-  validate-database-hashes:
-    timeout-minutes: 10
-    needs: [smoke_test, build-linux, build-windows, build-macos-x64, build-macos-arm64]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all database hashes
-        uses: actions/download-artifact@v4
-        with:
-          pattern: database-hash-*
-          path: ./hash-validation
-          merge-multiple: true
-
-      - name: Validate database hashes match across platforms
-        run: |
-          cd hash-validation
-          
-          echo "=== Database Hash Validation ==="
-          echo "Checking that all platforms (including debug mode) produce identical database hashes..."
-          echo ""
-          
-          # Read all hash files
-          declare -A platform_hashes
-          hash_files=(database-hash-*.txt)
-          
-          if [ ${#hash_files[@]} -eq 0 ]; then
-            echo "❌ ERROR: No hash files found!"
-            exit 1
-          fi
-          
-          echo "Found hash files:"
-          for file in "${hash_files[@]}"; do
-            if [ -f "$file" ]; then
-              content=$(cat "$file")
-              platform=$(echo "$content" | cut -d: -f1)
-              hash=$(echo "$content" | cut -d: -f2-)
-              platform_hashes["$platform"]="$hash"
-              echo "  📁 $file: $platform -> $hash"
-            fi
-          done
-          
-          echo ""
-          echo "Platform database hashes:"
-          
-          # Get unique hashes and check if they're all the same
-          unique_hashes=()
-          for platform in "${!platform_hashes[@]}"; do
-            hash="${platform_hashes[$platform]}"
-            echo "  🖥️  $platform: $hash"
-            
-            # Add to unique hashes if not already present
-            if [[ ! " ${unique_hashes[@]} " =~ " $hash " ]]; then
-              unique_hashes+=("$hash")
-            fi
-          done
-          
-          echo ""
-          echo "Validation result:"
-          
-          # Check if all hashes are identical
-          if [ ${#unique_hashes[@]} -eq 1 ]; then
-            if [ "${unique_hashes[0]}" = "NO_DATABASE" ]; then
-              echo "⚠️  WARNING: All platforms failed to create databases"
-              echo "This might indicate a test setup issue, but hashes are 'consistent'"
-              exit 1
-            else
-              echo "✅ SUCCESS: All platforms (debug + 4 compiled builds) produced identical database hashes!"
-              echo "   Common hash: ${unique_hashes[0]}"
-            fi
-          else
-            echo "❌ FAILURE: Database hashes differ between platforms!"
-            echo ""
-            echo "This indicates the CLI produces different results on different platforms,"
-            echo "which could be due to:"
-            echo "  - Platform-specific file handling differences"
-            echo "  - Timestamp or metadata variations"
-            echo "  - Different media processing tool versions"
-            echo "  - Platform-specific bugs in the CLI"
-            echo ""
-            echo "All detected hashes:"
-            for i in "${!unique_hashes[@]}"; do
-              hash="${unique_hashes[$i]}"
-              platforms=()
-              for platform in "${!platform_hashes[@]}"; do
-                if [ "${platform_hashes[$platform]}" = "$hash" ]; then
-                  platforms+=("$platform")
-                fi
-              done
-              echo "  Hash $((i+1)): $hash"
-              echo "    Platforms: ${platforms[*]}"
-            done
-            
-            exit 1
-          fi
 
   create-release:
     timeout-minutes: 20

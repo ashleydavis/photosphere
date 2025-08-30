@@ -17,6 +17,10 @@ export class StoragePrefixWrapper implements IStorage {
         return pathJoin(this.storage.location, this.prefix);
     }
 
+    get isReadonly(): boolean {
+        return this.storage.isReadonly;
+    }
+
     //
     // Make a full path using the prefix.
     //

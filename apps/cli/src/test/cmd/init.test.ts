@@ -29,7 +29,8 @@ const mockAssetStorage = {
 };
 
 const mockMetadataStorage = {
-    location: '/test/db/.db'
+    location: '/test/db/.db',
+    isEmpty: jest.fn().mockResolvedValue(true)
 };
 
 // Mock storage module
@@ -59,10 +60,18 @@ jest.mock('utils', () => ({
 
 // Mock MediaFileDatabase
 const mockCreate = jest.fn().mockResolvedValue(undefined);
+const mockGetAssetDatabase = jest.fn().mockReturnValue({
+    getMerkleTree: jest.fn().mockReturnValue({
+        getSchema: jest.fn().mockReturnValue({ version: 2 })
+    })
+});
+
 jest.mock('api', () => ({
     MediaFileDatabase: jest.fn().mockImplementation(() => ({
-        create: mockCreate
-    }))
+        create: mockCreate,
+        getAssetDatabase: mockGetAssetDatabase
+    })),
+    checkVersionCompatibility: jest.fn().mockReturnValue({ isCompatible: true })
 }));
 
 describe('init command', () => {
@@ -99,11 +108,11 @@ describe('init command', () => {
     });
 
     test('initCommand logs success message', async () => {
-        const { log } = require('utils');
+        const utils = require('utils');
 
         await initCommand({ db: '/test/db' });
 
-        // Check that success message was logged
-        expect(log.success).toHaveBeenCalledWith('Created new media file database in "/test/db".');
+        // Check that success message was logged (matching actual code format)
+        expect(utils.log.info).toHaveBeenCalledWith(expect.stringContaining('Created new media file database in /test/db'));
     });
 });

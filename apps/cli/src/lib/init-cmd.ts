@@ -1,5 +1,6 @@
-import { MediaFileDatabase } from "api";
+import { IDatabaseMetadata, MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import { CURRENT_DATABASE_VERSION, IMerkleTree, loadTreeVersion } from "adb";
 import { configureLog } from "./log";
 import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -11,6 +12,7 @@ import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
+import { performDatabaseUpgrade } from "./database-upgrade";
 
 //
 // Helper function to resolve encryption key path
@@ -265,7 +267,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean, readonly: boolean): Promise<IInitResult> {
 
     const nonInteractive = options.yes || false;
     
@@ -295,9 +297,16 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     let resolvedKeyPath = await resolveKeyPath(options.key);
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
+    // Add readonly flag to storage options
+    if (storageOptions) {
+        storageOptions.readonly = readonly;
+    } else {
+        storageOptions = { readonly };
+    }
+
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config, { readonly });
 
     // Make sure the merkle tree file exists.
     if (!await metadataStorage.fileExists('tree.dat')) {
@@ -324,6 +333,13 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
                 const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
                 storageOptions = newStorageOptions;
                 
+                // Add readonly flag to storage options
+                if (storageOptions) {
+                    storageOptions.readonly = readonly;
+                } else {
+                    storageOptions = { readonly };
+                }
+                
                 // Recreate storage with the new encryption options
                 const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
                 assetStorage = newAssetStorage;
@@ -331,7 +347,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         }
     }
 
-    // Create appropriate providers based on NODE_ENV
+    // Test providers are automatically configured when NODE_ENV === "testing"
     const uuidGenerator = process.env.NODE_ENV === "testing" 
         ? new TestUuidGenerator()
         : new RandomUuidGenerator();
@@ -339,21 +355,58 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         ? new TestTimestampProvider()
         : new TimestampProvider();
     
-    // Test providers are automatically configured when NODE_ENV === "testing"
 
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
-        
-    // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
 
-    // Register termination callback to ensure clean shutdown
+    if (!readonly && !allowOlderVersions) {
+        //
+        // When trying to load the database in write mode and we don't allow older versions,
+        // quickly load the version from the database and reject if the database is old.
+        //
+        // This is the slow path because it loads the database twice. Once in readonly mode and again in write mode.
+        //
+        const databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);
+        if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
+            outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
+            await exit(1);
+        }
+    }
+        
+    // Create database instance.
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, readonly); 
+
+    // Register termination callback to ensure clean shutdown.
     registerTerminationCallback(async () => {
         await database.close();
     });    
 
     // Load the database
     await database.load();
+
+    if (readonly && !allowOlderVersions) {
+        // 
+        // When trying to load the database in readonly mode and we don't allow older versions,
+        // reject if the database is old.
+        //
+        // This is the fast path for readonly database access. We only load the database once.
+        //
+        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
+            outro(pc.red(`✗ Database version ${merkleTree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
+            await exit(1);
+        }
+    }
+
+    if (allowOlderVersions) {
+        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
+            //
+            // When loading an older database, upgrade it.
+            //
+            await performDatabaseUpgrade(database, metadataStorage, readonly);
+        }
+    }
 
     return {
         database,
@@ -445,7 +498,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, false); 
 
     // Register termination callback to ensure clean shutdown
     registerTerminationCallback(async () => {

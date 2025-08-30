@@ -1,13 +1,12 @@
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions } from "../lib/init-cmd";
-import { configureLog } from "../lib/log";
-import { createStorage, pathJoin } from "storage";
-import { getS3Config } from "../lib/config";
-import { intro, outro } from '../lib/clack/prompts';
+import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
+import { intro, outro, confirm } from '../lib/clack/prompts';
+import { CURRENT_DATABASE_VERSION } from "adb";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
+    yes?: boolean;
 }
 
 //
@@ -17,76 +16,64 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     
     intro(pc.blue(`Upgrading media file database...`));
 
-    const nonInteractive = options.yes || false;
-    
-    // Configure logging
-    await configureLog({
-        verbose: options.verbose,
-        tools: options.tools
-    });
+    // Load the database in readonly mode to check version without modifications.
+    const { database } = await loadDatabase(options.db, options, true, true);
 
-    // Use provided db directory or current directory
-    const dbDir = options.db || ".";
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    const merkleTree = database.getAssetDatabase().getMerkleTree();
+    const currentVersion = merkleTree.version;
 
-    log.verbose(`Database directory: ${dbDir}`);
-    log.verbose(`Metadata directory: ${metaPath}`);
+    log.info(`✓ Found database version ${currentVersion}`);
 
-    try {
-        const s3Config = await getS3Config();
-        const { storage: metadataStorage } = createStorage(metaPath, s3Config);
-
-        // Check if this is a valid database directory
-        if (!await metadataStorage.fileExists('tree.dat')) {
-            outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata (tree.dat file).\n\nThis doesn't appear to be a valid Photosphere database directory.`));
-            await exit(1);
-        }
-
-        log.info(`✓ Found valid database at ${dbDir}`);
-
-        // Check if metadata.json exists
-        const metadataExists = await metadataStorage.fileExists('metadata.json');
+    if (currentVersion === CURRENT_DATABASE_VERSION) {
+        log.info(pc.green(`✓ Database is already at the latest version (${CURRENT_DATABASE_VERSION})`));
+    } 
+    else if (currentVersion < CURRENT_DATABASE_VERSION) {        
+        log.warn(pc.yellow(`⚠️  IMPORTANT: Database upgrade will modify your database files.`));
+        log.warn(pc.yellow(`   It is strongly recommended to backup your database before proceeding.`));
+        log.warn(pc.yellow(`   You can backup your database by copying the entire directory:`));
         
-        if (!metadataExists) {
-            log.info(`Adding missing metadata.json file...`);
-            
-            // Create the default metadata.json structure
-            const defaultMetadata = {
-                filesImported: 0,
-                version: 1
-            };
-
-            // Write the metadata.json file
-            const metadataContent = JSON.stringify(defaultMetadata, null, 2);
-            await metadataStorage.write('metadata.json', 'application/json', Buffer.from(metadataContent, 'utf-8'));
-            
-            log.info(pc.green(`✓ Created metadata.json file`));
+        // Provide platform-specific backup commands
+        if (process.platform === 'win32') {
+            log.warn(pc.yellow(`   xcopy "${options.db}" "${options.db}-backup" /E /I`));
+        } 
+        else {
+            log.warn(pc.yellow(`   cp -r "${options.db}" "${options.db}-backup"`));
+        }
+        console.log("");
+        
+        let shouldProceed: boolean;
+        
+        if (options.yes) {
+            // Non-interactive mode: proceed automatically
+            log.info(pc.blue(`✓ Non-interactive mode: proceeding with database upgrade`));
+            shouldProceed = true;
         } else {
-            log.info(`✓ metadata.json already exists`);
+            // Interactive mode: ask for confirmation
+            const confirmResult = await confirm({
+                message: `Do you want to proceed with upgrading from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}?`,
+                initialValue: false,
+            });
+            shouldProceed = confirmResult === true;
         }
-
-        // Check for other expected files
-        const expectedFiles = ['tree.dat'];
-        const missingFiles = [];
-
-        for (const file of expectedFiles) {
-            if (!await metadataStorage.fileExists(file)) {
-                missingFiles.push(file);
-            }
-        }
-
-        if (missingFiles.length > 0) {
-            log.info('');
-            log.info(pc.yellow(`⚠️  Missing expected files: ${missingFiles.join(', ')}`));
-            log.info(pc.yellow(`   This may indicate database corruption or an incomplete database.`));
-        }
-
-        log.info('');
-        log.info(pc.green(`✓ Database upgrade completed successfully`));
         
-    } catch (error) {
-        log.error(`Failed to upgrade database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        if (!shouldProceed) {
+            outro(pc.gray("Database upgrade cancelled."));
+            await exit(0);
+            return;
+        }
+        
+        log.info(`Upgrading database from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}...`);
+
+        // Reload the database for upgrade in readwrite mode.
+        // The updated database is automatically saved.
+        await loadDatabase(options.db, options, true, false);
+
+        log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
+    } 
+    else {
+        outro(pc.red(`✗ Database version ${currentVersion} is newer than the current supported version ${CURRENT_DATABASE_VERSION}.\n  Please update your Photosphere CLI tool.`));
         await exit(1);
+        return;
     }
 
     await exit(0);

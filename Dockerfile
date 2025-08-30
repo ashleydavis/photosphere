@@ -20,7 +20,7 @@ RUN bun run build
 WORKDIR /build/apps/backend
 
 # Build the backend
-RUN bun build --compile --minify --sourcemap --target=bun-linux-x64 --outfile photosphere-server ./src/index.ts
+RUN bun build --env=disable --compile --minify --sourcemap --target=bun-linux-x64 --outfile photosphere-server ./src/index.ts
 
 # Have to use the Bun image so that we can install sharp.
 FROM oven/bun:1-alpine 

@@ -1,20 +1,24 @@
 import { IFileInfo, IListResult, IStorage } from "storage";
 import { IAssetDatabase } from "./asset-database";
 import { computeHash } from "./hash";
-import { HashCache } from "./hash-cache";
 
 //
 // A type of storage that updates the asset database merkle tree when files are added or removed.
 //
 export class AssetDatabaseStorage implements IStorage {
 
-    constructor(private readonly storage: IStorage, private readonly assetDatabase: IAssetDatabase, private readonly hashCache: HashCache) {
+    constructor(private readonly storage: IStorage, private readonly assetDatabase: IAssetDatabase) {
     }
 
     //
     // Updates the merkle tree when a file is added or removed.
     //    
     private async updateMerkleTree(filePath: string): Promise<void> {
+        if (this.storage.isReadonly) {
+            // Skip merkle tree updates in readonly mode
+            return;
+        }
+        
         const info = await this.storage.info(filePath);
         if (!info) {
             throw new Error(`Failed to get info for file "${filePath}"`);
@@ -25,7 +29,6 @@ export class AssetDatabaseStorage implements IStorage {
             lastModified: info.lastModified,
             length: info.length,
         };
-        this.hashCache.addHash(filePath, hashedFile);
         this.assetDatabase.addFile(filePath, hashedFile);
 
         // console.log(`Updated the merkle tree for file "${filePath}"`);
@@ -33,6 +36,10 @@ export class AssetDatabaseStorage implements IStorage {
 
     get location(): string {
         return this.storage.location;
+    }
+
+    get isReadonly(): boolean {
+        return this.storage.isReadonly;
     }
 
     //
@@ -88,7 +95,7 @@ export class AssetDatabaseStorage implements IStorage {
     //
     // Writes a file to storage.
     //
-    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {               
+    async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {           
         await this.storage.write(filePath, contentType, data);
         await this.updateMerkleTree(filePath);
     }

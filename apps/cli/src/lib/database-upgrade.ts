@@ -1,0 +1,79 @@
+import { log } from "utils";
+import pc from "picocolors";
+import { CURRENT_DATABASE_VERSION, HashCache } from "adb";
+import { pathJoin } from "storage";
+import type { MediaFileDatabase } from "api";
+import type { IStorage } from "storage";
+
+//
+// Performs the actual database upgrade logic for a database from a given version to the current version.
+//
+export async function performDatabaseUpgrade(
+    database: MediaFileDatabase, 
+    metadataStorage: IStorage, 
+    readonly: boolean
+): Promise<void> {
+
+    const merkleTree = database.getAssetDatabase().getMerkleTree();
+    const currentVersion = merkleTree.version;
+   
+    // For any upgrade from version 2, copy file metadata from hash cache to merkle tree
+    if (currentVersion === 2) {        
+        // Load the hash cache
+        const hashCache = new HashCache(metadataStorage, "", false);
+        const cacheLoaded = await hashCache.load();        
+        if (cacheLoaded) {
+            // Get the merkle tree and update leaf nodes with file metadata
+            const assetDb = database.getAssetDatabase();
+            const merkleTree = assetDb.getMerkleTree();
+            
+            // Track how many files we updated
+            let filesUpdated = 0;
+            
+            // Update leaf nodes with lastModified from hash cache
+            for (const node of merkleTree.nodes) {
+                if (node.fileName) { // This is a leaf node
+                    const cacheEntry = hashCache.getHash(node.fileName);
+                    if (cacheEntry) {
+                        node.lastModified = cacheEntry.lastModified;
+                        filesUpdated++;
+                    }
+                }
+            }
+            
+            log.info(`✓ Updated ${filesUpdated} files with metadata from hash cache`);
+        }
+               
+        const assetStorage = database.getAssetStorage();
+
+        let filesFromFilesystem = 0;
+        
+        for (const node of merkleTree.nodes) {
+            if (node.fileName && !node.lastModified) {
+                const fileInfo = await assetStorage.info(node.fileName);
+                if (fileInfo) {
+                    node.lastModified = fileInfo.lastModified;
+                    filesFromFilesystem++;
+                }
+            }
+        }
+        
+        if (filesFromFilesystem > 0) {
+            log.info(`✓ Retrieved dates from filesystem for ${filesFromFilesystem} files`);
+        }
+    }
+    
+    if (!readonly) {
+        // Save the database - this will write in the latest format
+        await database.getAssetDatabase().save();
+
+        // Delete the hash cache file after successful upgrade from version 2
+        if (currentVersion === 2) {
+            const hashCachePath = pathJoin("", "hash-cache-x.dat");
+            if (await metadataStorage.fileExists(hashCachePath)) {
+                await metadataStorage.deleteFile(hashCachePath);
+                log.info(`✓ Removed hash cache file (no longer needed in version ${CURRENT_DATABASE_VERSION})`);
+            }
+        }
+    }    
+}

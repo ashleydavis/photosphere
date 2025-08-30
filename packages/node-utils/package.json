@@ -7,7 +7,8 @@
   "scripts": {
     "t": "bun run test",
     "tw": "bun run test:watch",
-    "test": "jest --coverage --passWithNoTests",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
     "test:watch": "jest --watch --passWithNoTests",
     "c": "bun run compile",
     "cw": "bun run compile:watch",

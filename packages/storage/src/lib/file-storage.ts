@@ -1,11 +1,11 @@
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage } from "./storage";
+import { IFileInfo, IListResult, IStorage, checkReadonly } from "./storage";
 
 export class FileStorage implements IStorage {
 
-    constructor(public readonly location: string) {
+    constructor(public readonly location: string, public readonly isReadonly: boolean = false) {
     }
 
     //
@@ -135,6 +135,7 @@ export class FileStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
+        checkReadonly(this.isReadonly, 'write file');
         await fs.ensureDir(path.dirname(filePath));
         await fs.writeFile(filePath, data);
     }
@@ -150,6 +151,7 @@ export class FileStorage implements IStorage {
     // Writes an input stream to storage.
     //
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
+        checkReadonly(this.isReadonly, 'write stream');
         return new Promise<void>((resolve, reject) => {
             fs.ensureDir(path.dirname(filePath))
                 .then(() => {
@@ -172,6 +174,7 @@ export class FileStorage implements IStorage {
     // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'delete file');
         try {
             await fs.unlink(filePath);
         } catch (err) {
@@ -183,6 +186,7 @@ export class FileStorage implements IStorage {
     // Deletes a directory and all its contents from storage.
     //
     async deleteDir(dirPath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'delete directory');
         try {
             await fs.rm(dirPath, { recursive: true, force: true });
         } catch (err) {

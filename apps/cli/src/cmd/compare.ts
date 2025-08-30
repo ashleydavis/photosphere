@@ -6,7 +6,7 @@ import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
-import { compareTrees, loadTreeV2 } from "adb";
+import { compareTrees, loadTree } from "adb";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface ICompareCommandOptions { 
@@ -105,14 +105,14 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     log.info(`  Destination:    ${pc.cyan(destDir)}`);
     log.info('');
 
-    const srcMerkleTree = await loadTreeV2("tree.dat", srcMetadataStorage);
+    const srcMerkleTree = await loadTree("tree.dat", srcMetadataStorage);
     if (!srcMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Source Merkle tree not found in ${pathJoin(srcDir, 'tree.dat')}`));
         await exit(1);
     }
 
-    const destMerkleTree = await loadTreeV2("tree.dat", destMetadataStorage);
+    const destMerkleTree = await loadTree("tree.dat", destMetadataStorage);
     if (!destMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destDir, 'tree.dat')}`));
