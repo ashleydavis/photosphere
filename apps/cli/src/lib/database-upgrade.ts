@@ -48,6 +48,7 @@ export async function performDatabaseUpgrade(
             if (node.fileName && !node.lastModified) {
                 const fileInfo = await assetStorage.info(node.fileName);
                 if (fileInfo) {
+                    // Fill in missing lastModified from file info
                     node.lastModified = fileInfo.lastModified;
                 }
             }
@@ -58,12 +59,8 @@ export async function performDatabaseUpgrade(
         // Save the database - this will write in the latest format
         await database.getAssetDatabase().save();
 
-        // Delete the hash cache file after successful upgrade from version 2
-        if (currentVersion === 2) {
-            const hashCachePath = pathJoin("", "hash-cache-x.dat");
-            if (await metadataStorage.fileExists(hashCachePath)) {
-                await metadataStorage.deleteFile(hashCachePath);
-            }
-        }
+        // Delete old files after successful upgrade.
+        await metadataStorage.deleteFile("hash-cache-x.dat");
+        await metadataStorage.deleteFile("metadata.json");
     }    
 }
