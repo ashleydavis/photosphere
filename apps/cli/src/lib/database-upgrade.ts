@@ -62,6 +62,28 @@ export async function performDatabaseUpgrade(
             log.info(`✓ Retrieved dates from filesystem for ${filesFromFilesystem} files`);
         }
     }
+
+    // Initialize database metadata for any version upgrade
+    const assetDb = database.getAssetDatabase();
+    const updatedMerkleTree = assetDb.getMerkleTree();
+    
+    // Count files in the assets directory to get the actual number of imported files
+    const assetStorage = database.getAssetStorage();
+    let filesImported = 0;
+    let next: string | undefined = undefined;
+    
+    do {
+        const assetFiles = await assetStorage.listFiles("assets", 1000, next);
+        filesImported += assetFiles.names.length;
+        next = assetFiles.next;
+    } while (next);
+    
+    if (!updatedMerkleTree.databaseMetadata) {
+        updatedMerkleTree.databaseMetadata = { filesImported };
+    }
+    else {
+        updatedMerkleTree.databaseMetadata.filesImported = filesImported;
+    }
     
     if (!readonly) {
         // Save the database - this will write in the latest format
