@@ -6,7 +6,7 @@ export class MockStorage implements IStorage {
     private files: Map<string, { data: Buffer, contentType?: string }> = new Map();
     private directories: Set<string> = new Set();
     
-    constructor(public readonly location: string = "memory://mock") {}
+    constructor(public readonly location: string = "memory://mock", public readonly isReadonly: boolean = false) {}
 
     async isEmpty(path: string): Promise<boolean> {
         const hasSubDirs = Array.from(this.directories).some(dir => 

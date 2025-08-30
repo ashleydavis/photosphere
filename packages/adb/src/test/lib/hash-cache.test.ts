@@ -6,7 +6,7 @@ import { HashCache } from '../../lib/hash-cache';
 class MockStorage implements IStorage {
     private files: Map<string, Buffer> = new Map();
     
-    constructor(public readonly location: string = 'mock-storage') {}
+    constructor(public readonly location: string = 'mock-storage', public readonly isReadonly: boolean = false) {}
     
     async isEmpty(path: string): Promise<boolean> {
         for (const filePath of this.files.keys()) {

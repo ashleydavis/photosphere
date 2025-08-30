@@ -42,6 +42,11 @@ export interface IBsonDatabaseOptions {
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
+
+    //
+    // Whether the database is in readonly mode.
+    //
+    readonly?: boolean;
 }
 
 export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
@@ -88,6 +93,7 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
                 directory: name,
                 uuidGenerator: this.options.uuidGenerator,
                 maxCachedShards: this.options.maxCachedShards,
+                readonly: this.options.readonly,
             });
             this._collections.set(name, collection);
         }        

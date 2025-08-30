@@ -7,6 +7,9 @@
 # Set NODE_ENV to testing for deterministic UUID generation
 export NODE_ENV=testing
 
+# Disable colors for consistent output parsing
+export NO_COLOR=1
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,6 +59,15 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
+# Trap to show summary on exit (including failures)
+cleanup_and_show_summary() {
+    echo ""
+    show_test_hash_summary
+    write_github_step_summary
+}
+
+trap cleanup_and_show_summary EXIT
+
 # Global variable to store which ImageMagick command to use
 IMAGEMAGICK_IDENTIFY_CMD=""
 
@@ -72,25 +84,44 @@ log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
+# Array to store test results with hashes
+TEST_RESULTS=()
+
 # Test counting functions - only increment once per test function
 test_passed() {
     ((TESTS_PASSED++))
+    
+    # Capture database hash if database exists
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+        local hash_output
+        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+            TEST_RESULTS+=("PASS:$hash_output")
+        else
+            TEST_RESULTS+=("PASS:hash_failed")
+        fi
+    fi
 }
 
 test_failed() {
     local test_name="$1"
     ((TESTS_FAILED++))
     FAILED_TESTS+=("$test_name")
+    
+    # Capture database hash if database exists
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+        local hash_output
+        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+            TEST_RESULTS+=("FAIL:$test_name:$hash_output")
+        else
+            TEST_RESULTS+=("FAIL:$test_name:hash_failed")
+        fi
+    fi
 }
 
 log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Helper function to strip ANSI color codes from text
-strip_ansi_codes() {
-    sed 's/\x1b\[[0-9;]*m//g'
-}
 
 generate_test_report() {
     local report_file="$1"
@@ -137,31 +168,31 @@ EOF
         # Get root hash
         echo "ROOT HASH:" >> "$report_file"
         echo "----------" >> "$report_file"
-        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
+        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get merkle tree
         echo "MERKLE TREE STRUCTURE:" >> "$report_file"
         echo "---------------------" >> "$report_file"
-        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
+        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database summary
         echo "DATABASE SUMMARY:" >> "$report_file"
         echo "-----------------" >> "$report_file"
-        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
+        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database file listing
         echo "DATABASE FILE LISTING:" >> "$report_file"
         echo "----------------------" >> "$report_file"
-        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
+        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database verification
         echo "DATABASE VERIFICATION:" >> "$report_file"
         echo "----------------------" >> "$report_file"
-        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to verify database" >> "$report_file"
+        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to verify database" >> "$report_file"
         echo "" >> "$report_file"
         
         # Show database directory structure
@@ -189,9 +220,9 @@ EOF
     
     # Get local and database hash cache info
     if [ -d "$TEST_DB_DIR" ]; then
-        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
     else
-        $(get_cli_command) debug hash-cache --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
+        $(get_cli_command) debug hash-cache --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
     fi
     echo "" >> "$report_file"
     
@@ -209,13 +240,13 @@ EOF
     # Add CLI version information
     echo "CLI VERSION INFORMATION:" >> "$report_file"
     echo "------------------------" >> "$report_file"
-    $(get_cli_command) version 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
+    $(get_cli_command) version 2>/dev/null >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
     echo "" >> "$report_file"
     
     # Add tool information
     echo "TOOL INFORMATION:" >> "$report_file"
     echo "-----------------" >> "$report_file"
-    $(get_cli_command) tools --yes 2>/dev/null | strip_ansi_codes >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
+    $(get_cli_command) tools --yes 2>/dev/null >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
     echo "" >> "$report_file"
     
     # Add report footer
@@ -230,6 +261,84 @@ EOF
     if [ -f "$report_file" ]; then
         local file_size=$(stat -c%s "$report_file" 2>/dev/null || echo "unknown")
         log_info "Report size: $file_size bytes"
+    fi
+}
+
+# Show test hash summary for local console output
+show_test_hash_summary() {
+    if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
+        echo "======================================"
+        echo "DATABASE HASH PROGRESSION"
+        echo "======================================"
+        local test_num=1
+        for result in "${TEST_RESULTS[@]}"; do
+            local status=$(echo "$result" | cut -d: -f1)
+            if [ "$status" = "PASS" ]; then
+                local hash=$(echo "$result" | cut -d: -f2-)
+                echo -e "${test_num}. ${GREEN}✓${NC} $hash"
+            else
+                local test_name=$(echo "$result" | cut -d: -f2)
+                local hash=$(echo "$result" | cut -d: -f3-)
+                echo -e "${test_num}. ${RED}✗ $test_name${NC} $hash"
+            fi
+            ((test_num++))
+        done
+        echo "======================================"
+    fi
+}
+
+# Write concise summary to GitHub step summary if running in GitHub Actions
+write_github_step_summary() {
+    if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+        {
+            echo "## Smoke Test Results"
+            echo ""
+            if [ $TESTS_FAILED -eq 0 ]; then
+                echo "✅ **PASSED** ($TESTS_PASSED tests)"
+            else
+                echo "❌ **FAILED** ($TESTS_FAILED failed, $TESTS_PASSED passed)"
+                if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+                    echo ""
+                    echo "**Failed tests:**"
+                    for failed_test in "${FAILED_TESTS[@]}"; do
+                        echo "- $failed_test"
+                    done
+                fi
+            fi
+            
+            # Add test results with hashes if we have them
+            if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
+                echo ""
+                echo "**Database hashes after each test:**"
+                echo ""
+                local test_num=1
+                for result in "${TEST_RESULTS[@]}"; do
+                    local status=$(echo "$result" | cut -d: -f1)
+                    if [ "$status" = "PASS" ]; then
+                        local hash=$(echo "$result" | cut -d: -f2-)
+                        echo "$test_num. ✅ \`$hash\`"
+                    else
+                        local test_name=$(echo "$result" | cut -d: -f2)
+                        local hash=$(echo "$result" | cut -d: -f3-)
+                        echo "$test_num. ❌ **$test_name** \`$hash\`"
+                    fi
+                    ((test_num++))
+                done
+            fi
+            
+            # Add final database hash if database exists
+            if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+                echo ""
+                echo "**Final database hash:**"
+                echo "\`\`\`"
+                if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null); then
+                    echo "$hash_output"
+                else
+                    echo "Failed to get database hash"
+                fi
+                echo "\`\`\`"
+            fi
+        } >> "$GITHUB_STEP_SUMMARY"
     fi
 }
 
@@ -292,8 +401,7 @@ parse_numeric() {
     local pattern="$2"
     local default_value="${3:-0}"
     
-    # First strip ANSI color codes if present
-    local clean_output=$(echo "$output" | sed $'s/\033\[[0-9;]*m//g')
+    local clean_output="$output"
     
     # Escape special regex characters in the pattern - but keep parentheses as literals
     local escaped_pattern=$(echo "$pattern" | sed 's/[[\.*^$+?{|]/\\&/g')
@@ -524,10 +632,12 @@ invoke_command() {
     
     if [ -n "$output_var_name" ]; then
         # Capture output and display it, ensuring all output is visible
-        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        # Use tee to both capture output and display it immediately
-        command_output=$(eval "$full_command" 2>&1 | tee /dev/stderr)
+        # Execute command and capture both output and exit code properly
+        command_output=$(eval "$full_command" 2>&1)
         actual_exit_code=$?
+        # Display the output after capturing it
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        echo "$command_output"
         echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         
         # Store output in caller's variable
@@ -1776,6 +1886,144 @@ test_repair_damaged_database() {
 
 
 
+test_v2_database_readonly_commands() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 27: V2 DATABASE READONLY COMMANDS ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    check_exists "$v2_db_dir/metadata" "V2 database metadata directory"
+    
+    # Test that summary command can read v2 database
+    local summary_output
+    invoke_command "Run summary on v2 database" "$(get_cli_command) summary --db $v2_db_dir --yes" 0 "summary_output"
+    
+    # Check that summary contains database version
+    expect_output_string "$summary_output" "Database version: 2" "Summary shows v2 database version"
+    log_success "Summary command successfully accessed v2 database"
+    
+    # Test that verify command works on v2 database (readonly operations should work)
+    local verify_output
+    invoke_command "Run verify on v2 database" "$(get_cli_command) verify --db $v2_db_dir --yes" 0 "verify_output"
+    log_success "Verify command successfully accessed v2 database (readonly access)"
+    
+    test_passed
+}
+
+test_v2_database_write_commands_fail() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 28: V2 DATABASE WRITE COMMANDS FAIL ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    
+    # Test that add command fails on v2 database with version error
+    local add_output
+    invoke_command "Run add on v2 database (should fail)" "$(get_cli_command) add $TEST_FILES_DIR/test.png --db $v2_db_dir --yes" 1 "add_output"
+    
+    # Check that error message mentions upgrade
+    expect_output_string "$add_output" "upgrade" "Add command error message suggests running upgrade command"
+    log_success "Add command correctly rejected v2 database"
+    
+    # Test that remove command fails on v2 database with version error
+    local remove_output
+    invoke_command "Run remove on v2 database (should fail)" "$(get_cli_command) remove 27165d3c-207b-46b6-ab4e-bc92a09aeda3 --db $v2_db_dir --yes" 1 "remove_output"
+    
+    # Check that error message mentions upgrade
+    expect_output_string "$remove_output" "upgrade" "Remove command error message suggests running upgrade command"
+    log_success "Remove command correctly rejected v2 database"
+    
+    test_passed
+}
+
+test_v2_database_upgrade() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 29: V2 DATABASE UPGRADE TO V3 ==="
+    
+    local v2_db_dir="../../test/dbs/v2"
+    local temp_v2_dir="./test/tmp/test-v2-upgrade"
+    
+    # Check that v2 database exists
+    check_exists "$v2_db_dir" "V2 test database directory"
+    
+    # Create a copy of v2 database for upgrade testing
+    log_info "Creating copy of v2 database for upgrade testing"
+    rm -rf "$temp_v2_dir"
+    cp -r "$v2_db_dir" "$temp_v2_dir"
+    
+    # Test upgrade command on v2 database
+    local upgrade_output
+    invoke_command "Upgrade v2 database to v3" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade was successful
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 3" "Upgrade completed successfully"
+    
+    # Verify the upgraded database is now version 3
+    local summary_output
+    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v2_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 3" "Upgraded database is now version 3"
+    
+    # Test that verify command now works on upgraded database
+    local verify_output
+    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v2_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v2_dir"
+    log_success "Cleaned up temporary v2 upgrade database"
+    test_passed
+}
+
+test_v3_database_upgrade_no_effect() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 30: V3 DATABASE UPGRADE HAS NO EFFECT ==="
+    
+    local v3_db_dir="../../test/dbs/v3"
+    local temp_v3_dir="./test/tmp/test-v3-upgrade"
+    
+    # Check that v3 database exists
+    check_exists "$v3_db_dir" "V3 test database directory"
+    
+    # Create a copy of v3 database for upgrade testing
+    log_info "Creating copy of v3 database for upgrade testing"
+    rm -rf "$temp_v3_dir"
+    cp -r "$v3_db_dir" "$temp_v3_dir"
+    
+    # Test upgrade command on v3 database (should have no effect)
+    local upgrade_output
+    invoke_command "Upgrade v3 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade reports database is already current
+    expect_output_string "$upgrade_output" "Database is already at the latest version (3)" "Upgrade reports database is already current"
+    
+    # Verify the database is still version 3
+    local summary_output
+    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 3" "Database is still version 3"
+    
+    # Test that verify command still works
+    local verify_output
+    invoke_command "Verify v3 database after upgrade" "$(get_cli_command) verify --db $temp_v3_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "V3 database verifies successfully after upgrade"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v3_dir"
+    log_success "Cleaned up temporary v3 upgrade database"
+    test_passed
+}
+
 # Reset function to clean up test artifacts
 reset_environment() {
     echo "======================================"
@@ -1860,13 +2108,6 @@ run_all_tests() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first
     check_tools
@@ -1898,6 +2139,10 @@ run_all_tests() {
     test_repair_ok_database
     test_remove_asset
     test_repair_damaged_database
+    test_v2_database_readonly_commands
+    test_v2_database_write_commands_fail
+    test_v2_database_upgrade
+    test_v3_database_upgrade_no_effect
     
     # If we get here, all tests passed
     echo ""
@@ -2018,6 +2263,18 @@ run_test() {
         "repair-damaged"|"26")
             test_repair_damaged_database
             ;;
+        "v2-readonly"|"27")
+            test_v2_database_readonly_commands
+            ;;
+        "v2-write-fail"|"28")
+            test_v2_database_write_commands_fail
+            ;;
+        "v2-upgrade"|"29")
+            test_v2_database_upgrade
+            ;;
+        "v3-upgrade-no-effect"|"30")
+            test_v3_database_upgrade_no_effect
+            ;;
         *)
             log_error "Unknown test: $test_name"
             echo ""
@@ -2046,13 +2303,6 @@ run_multiple_commands() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first before running any tests
     check_tools
@@ -2275,6 +2525,10 @@ show_usage() {
     echo "  repair-ok (24)      - Repair OK database (no changes)"
     echo "  remove (25)         - Remove asset by ID from database"
     echo "  repair-damaged (26) - Repair damaged database from replica"
+    echo "  v2-readonly (27)    - Test readonly commands work on v2 database (summary, verify)"
+    echo "  v2-write-fail (28)  - Test write commands fail on v2 database (add, remove)"
+    echo "  v2-upgrade (29)     - Upgrade v2 database to v3"
+    echo "  v3-upgrade-no-effect (30) - Test v3 upgrade has no effect"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -2416,13 +2670,6 @@ main() {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
-    # Normalize test file timestamps for deterministic results
-    log_info "Normalizing test file timestamps"
-    if ! ../../test/normalize-timestamps.sh; then
-        log_error "Failed to normalize test file timestamps"
-        exit 1
-    fi
-    log_success "Test file timestamps normalized"
     
     # Check tools first before running individual test
     check_tools

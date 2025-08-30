@@ -12,9 +12,8 @@ export interface ISummaryCommandOptions extends IBaseCommandOptions {
 //
 export async function summaryCommand(options: ISummaryCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options);
+    const { database } = await loadDatabase(options.db, options, true, true);
 
-    // Get database summary information
     const summary = await database.getDatabaseSummary();
 
     log.info('');
@@ -23,6 +22,7 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     log.info(`Files imported:   ${pc.green(summary.totalAssets.toString())}`);
     log.info(`Total files:      ${pc.green(summary.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);
+    log.info(`Database version: ${pc.green(summary.databaseVersion.toString())}`);
     log.info(`Tree root hash:   ${pc.gray(summary.fullHash)}`);
 
     // Show follow-up commands

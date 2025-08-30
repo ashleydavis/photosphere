@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import aws from "aws-sdk";
-import { IFileInfo, IListResult, IStorage } from "./storage";
+import { IFileInfo, IListResult, IStorage, checkReadonly } from "./storage";
 import { WrappedError } from "utils";
 
 //
@@ -34,7 +34,7 @@ export class CloudStorage implements IStorage {
     //
     private s3!: aws.S3;
 
-    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
+    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials, public readonly isReadonly: boolean = false) {
         const s3Config: aws.S3.ClientConfiguration = {
             endpoint: credentials?.endpoint || process.env.AWS_ENDPOINT,
         };
@@ -344,6 +344,7 @@ export class CloudStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
+        checkReadonly(this.isReadonly, 'write file');
 
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
@@ -417,6 +418,7 @@ export class CloudStorage implements IStorage {
     // Writes an input stream to storage.
     //
     async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {
+        checkReadonly(this.isReadonly, 'write stream');
 
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
@@ -465,6 +467,7 @@ export class CloudStorage implements IStorage {
     // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'delete file');
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
@@ -487,6 +490,7 @@ export class CloudStorage implements IStorage {
     // Deletes a directory and all its contents from storage.
     //
     async deleteDir(dirPath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'delete directory');
         let { bucket, key } = this.parsePath(dirPath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.

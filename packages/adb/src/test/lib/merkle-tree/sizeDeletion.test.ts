@@ -7,10 +7,9 @@ import {
   findFileNodeWithDeletionStatus,
   createTree
 } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
+import { TestUuidGenerator } from 'node-utils';
 
 describe('Size calculation with file deletion', () => {
-  const timestampProvider = new TestTimestampProvider();
   const uuidGenerator = new TestUuidGenerator();
   
   // Helper function to create a file hash with specific size
@@ -22,12 +21,13 @@ describe('Size calculation with file deletion', () => {
       fileName,
       hash,
       length: size,
+      lastModified: new Date(),
     };
   }
 
   // Helper to build a test tree with files of specific sizes
-  function buildTestTree(): IMerkleTree {
-    let tree = createTree(timestampProvider, uuidGenerator);
+  function buildTestTree(): IMerkleTree<any>{
+    let tree = createTree(uuidGenerator);
     const files = [
       { name: 'file1.txt', content: 'content 1', size: 1000 },
       { name: 'file2.txt', content: 'content 2', size: 2000 },
@@ -37,7 +37,7 @@ describe('Size calculation with file deletion', () => {
     ];
     
     for (const file of files) {
-      tree = addFile(tree, createFileHash(file.name, file.content, file.size), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(file.name, file.content, file.size), uuidGenerator);
     }
     
     return tree;
@@ -52,7 +52,7 @@ describe('Size calculation with file deletion', () => {
     expect(initialNode?.size).toBe(3000);
     
     // Mark the file as deleted
-    markFileAsDeleted(tree, fileToDelete, timestampProvider);
+    markFileAsDeleted(tree, fileToDelete);
     
     // Verify the deleted node has size set to 0
     const deletedNode = findFileNodeWithDeletionStatus(tree, fileToDelete, true);
@@ -69,7 +69,7 @@ describe('Size calculation with file deletion', () => {
     expect(tree.metadata.totalSize).toBe(initialTotalSize);
     
     // Delete a file of size 3000
-    markFileAsDeleted(tree, 'file3.txt', timestampProvider);
+    markFileAsDeleted(tree, 'file3.txt');
     
     // Expected new total: 15000 - 3000 = 12000
     expect(tree.nodes[0].size).toBe(12000);
@@ -84,15 +84,15 @@ describe('Size calculation with file deletion', () => {
     expect(tree.metadata.totalSize).toBe(initialTotalSize);
     
     // Delete multiple files
-    markFileAsDeleted(tree, 'file1.txt', timestampProvider); // -1000
-    markFileAsDeleted(tree, 'file4.txt', timestampProvider); // -4000
+    markFileAsDeleted(tree, 'file1.txt'); // -1000
+    markFileAsDeleted(tree, 'file4.txt'); // -4000
     
     // Expected new size: 15000 - (1000 + 4000) = 10000
     expect(tree.nodes[0].size).toBe(10000);
     expect(tree.metadata.totalSize).toBe(10000);
     
     // Delete one more file
-    markFileAsDeleted(tree, 'file5.txt', timestampProvider); // -5000
+    markFileAsDeleted(tree, 'file5.txt'); // -5000
     
     // Expected final size: 10000 - 5000 = 5000
     expect(tree.nodes[0].size).toBe(5000);
@@ -101,11 +101,11 @@ describe('Size calculation with file deletion', () => {
 
   test('sizes are correctly propagated up through all parent nodes', () => {
     // Create a tree with 7 files to create a 3-level tree
-    let tree = createTree(timestampProvider, uuidGenerator);
+    let tree = createTree(uuidGenerator);
     const fileSizes = [100, 200, 300, 400, 500, 600, 700];
     
     for (let i = 0; i < fileSizes.length; i++) {
-      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, fileSizes[i]), timestampProvider, uuidGenerator);
+      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, fileSizes[i]), uuidGenerator);
     }
     
     // A 7-file tree will have a structure like:
@@ -122,7 +122,7 @@ describe('Size calculation with file deletion', () => {
     expect(tree.nodes[0].size).toBe(totalSize);
     
     // Delete file C (index 2, size 300)
-    markFileAsDeleted(tree, 'file2.txt', timestampProvider);
+    markFileAsDeleted(tree, 'file2.txt');
     
     // Verify node C size is 0
     const nodeC = findFileNodeWithDeletionStatus(tree, 'file2.txt', true);
@@ -141,13 +141,13 @@ describe('Size calculation with file deletion', () => {
     const initialTotalSize = 15000;
     
     // Delete files one by one and verify metadata is updated each time
-    markFileAsDeleted(tree, 'file1.txt', timestampProvider); // -1000
+    markFileAsDeleted(tree, 'file1.txt'); // -1000
     expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000);
     
-    markFileAsDeleted(tree, 'file3.txt', timestampProvider); // -3000
+    markFileAsDeleted(tree, 'file3.txt'); // -3000
     expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000 - 3000);
     
-    markFileAsDeleted(tree, 'file5.txt', timestampProvider); // -5000
+    markFileAsDeleted(tree, 'file5.txt'); // -5000
     expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000 - 3000 - 5000);
     
     // Final size should be 2000 + 4000 = 6000

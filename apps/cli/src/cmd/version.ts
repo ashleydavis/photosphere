@@ -6,6 +6,7 @@ import { version } from "../lib/version";
 import { buildMetadata } from "../lib/build-metadata";
 import { join } from "path";
 import * as os from "os";
+import { CURRENT_DATABASE_VERSION } from "adb";
 
 //
 // Command that displays version information for psi and its dependencies.
@@ -16,7 +17,10 @@ export async function versionCommand(): Promise<void> {
     log.info(pc.bold('📋 Version Information\n'));
     
     // Show psi version
-    log.info(`${pc.bold('psi')}: ${pc.green(version)}`);
+    log.info(`${pc.bold('Photosphere')}: ${pc.green(version)}`);
+    
+    // Show database version
+    log.info(`${pc.bold('Database version')}: ${pc.green(CURRENT_DATABASE_VERSION.toString())}`);
     
     // Show build information if available
     if (buildMetadata.commitHash !== "dev") {

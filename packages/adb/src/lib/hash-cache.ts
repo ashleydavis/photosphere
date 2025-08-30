@@ -25,10 +25,12 @@ export class HashCache {
      *
      * @param storage The storage implementation for persistence
      * @param cacheDir The directory where the hash cache will be stored
+     * @param isReadonly Whether the cache should skip saves when in readonly mode
      */
     constructor(
         private readonly storage: IStorage,
-        private readonly cacheDir: string
+        private readonly cacheDir: string,
+        private readonly isReadonly: boolean = false
     ) {}
 
     //
@@ -139,7 +141,7 @@ export class HashCache {
      * Saves the hash cache to storage
      */
     async save(): Promise<void> {
-        if (!this.initialized || !this.isDirty || !this.buffer) {
+        if (!this.initialized || !this.isDirty || !this.buffer || this.isReadonly) {
             return;
         }
 

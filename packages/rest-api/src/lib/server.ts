@@ -98,7 +98,8 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
                 metadataStorage,
                 this.googleApiKey,
                 uuidGenerator,
-                timestampProvider
+                timestampProvider,
+                false
             );
             await mediaFileDatabase.load();
             this.databaseMap.set(databaseId, mediaFileDatabase);
@@ -184,7 +185,8 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             this.metadataStorage,
             this.googleApiKey,
             uuidGenerator,
-            timestampProvider
+            timestampProvider,
+            false
         );
         await this.mediaFileDatabase.load();
 
