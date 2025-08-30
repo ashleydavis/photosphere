@@ -141,6 +141,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
         .action(merkleTreeCommand);
 
@@ -154,6 +155,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
@@ -166,6 +168,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .action(rootHashCommand);
 
     // Add clear-cache subcommand
@@ -178,6 +181,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
 
@@ -189,6 +193,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash'))
         .action(debugHashCommand);
 
