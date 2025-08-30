@@ -40,27 +40,18 @@ export async function performDatabaseUpgrade(
                     }
                 }
             }
-            
-            log.info(`✓ Updated ${filesUpdated} files with metadata from hash cache`);
         }
                
         const assetStorage = database.getAssetStorage();
 
-        let filesFromFilesystem = 0;
-        
         for (const node of merkleTree.nodes) {
             if (node.fileName && !node.lastModified) {
                 const fileInfo = await assetStorage.info(node.fileName);
                 if (fileInfo) {
                     node.lastModified = fileInfo.lastModified;
-                    filesFromFilesystem++;
                 }
             }
-        }
-        
-        if (filesFromFilesystem > 0) {
-            log.info(`✓ Retrieved dates from filesystem for ${filesFromFilesystem} files`);
-        }
+        }        
     }
     
     if (!readonly) {
@@ -72,7 +63,6 @@ export async function performDatabaseUpgrade(
             const hashCachePath = pathJoin("", "hash-cache-x.dat");
             if (await metadataStorage.fileExists(hashCachePath)) {
                 await metadataStorage.deleteFile(hashCachePath);
-                log.info(`✓ Removed hash cache file (no longer needed in version ${CURRENT_DATABASE_VERSION})`);
             }
         }
     }    
