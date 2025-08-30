@@ -1070,6 +1070,7 @@ export class MediaFileDatabase {
             const merkleTree = this.assetDatabase.getMerkleTree();
             const fileHash = getFileInfo(merkleTree, file.fileName);
             if (!fileHash) {
+                log.verbose(`New file found: ${file.fileName}`);
                 result.new.push(file.fileName);
                 continue;
             }
