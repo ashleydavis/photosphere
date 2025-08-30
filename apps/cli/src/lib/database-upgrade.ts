@@ -40,27 +40,19 @@ export async function performDatabaseUpgrade(
                     }
                 }
             }
-            
-            log.info(`✓ Updated ${filesUpdated} files with metadata from hash cache`);
         }
                
         const assetStorage = database.getAssetStorage();
 
-        let filesFromFilesystem = 0;
-        
         for (const node of merkleTree.nodes) {
             if (node.fileName && !node.lastModified) {
                 const fileInfo = await assetStorage.info(node.fileName);
                 if (fileInfo) {
+                    // Fill in missing lastModified from file info
                     node.lastModified = fileInfo.lastModified;
-                    filesFromFilesystem++;
                 }
             }
-        }
-        
-        if (filesFromFilesystem > 0) {
-            log.info(`✓ Retrieved dates from filesystem for ${filesFromFilesystem} files`);
-        }
+        }        
     }
 
     // Initialize database metadata for any version upgrade
@@ -89,13 +81,8 @@ export async function performDatabaseUpgrade(
         // Save the database - this will write in the latest format
         await database.getAssetDatabase().save();
 
-        // Delete the hash cache file after successful upgrade from version 2
-        if (currentVersion === 2) {
-            const hashCachePath = pathJoin("", "hash-cache-x.dat");
-            if (await metadataStorage.fileExists(hashCachePath)) {
-                await metadataStorage.deleteFile(hashCachePath);
-                log.info(`✓ Removed hash cache file (no longer needed in version ${CURRENT_DATABASE_VERSION})`);
-            }
-        }
+        // Delete old files after successful upgrade.
+        await metadataStorage.deleteFile("hash-cache-x.dat");
+        await metadataStorage.deleteFile("metadata.json");
     }    
 }

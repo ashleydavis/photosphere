@@ -141,6 +141,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
         .action(merkleTreeCommand);
 
@@ -154,6 +155,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
@@ -166,6 +168,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .action(rootHashCommand);
 
     // Add clear-cache subcommand
@@ -178,6 +181,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
 
@@ -189,6 +193,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash'))
         .action(debugHashCommand);
 
@@ -211,6 +216,7 @@ Resources:
         .option("-t, --type <type>", "Type of asset to export: original, display, or thumb (default: original)", "original")
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('export'))
         .action(exportCommand);
 
@@ -249,6 +255,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
         .addHelpText('after', getCommandExamplesHelp('list'))
         .action(listCommand);
@@ -263,6 +270,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('remove'))
         .action(removeCommand);
 
@@ -278,6 +286,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('repair'))
         .action(repairCommand);
 
@@ -309,6 +318,7 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('summary'))
         .action(summaryCommand);
 
@@ -337,6 +347,7 @@ Resources:
         .option(...metadataDirOption)
         .option(...verboseOption)
         .option(...yesOption)
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('upgrade'))
         .action(upgradeCommand);
 
@@ -352,6 +363,7 @@ Resources:
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
+        .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
 

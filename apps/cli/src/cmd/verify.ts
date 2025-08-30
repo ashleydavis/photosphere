@@ -46,6 +46,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     log.info(`Files imported:   ${pc.cyan(result.filesImported.toString())}`);
     log.info(`Total files:      ${pc.cyan(result.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.cyan(formatBytes(result.totalSize))}`);
+    log.info(`Files processed:  ${pc.cyan(result.filesProcessed.toString())}`);
     log.info(`Nodes processed:  ${pc.cyan(result.nodesProcessed.toString())}`);
     log.info(`Unmodified:       ${pc.green(result.numUnmodified.toString())}`);
     log.info(`Modified:         ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
@@ -56,34 +57,25 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     if (result.modified.length > 0) {
         log.info('');
         log.info(pc.red(`Modified files:`));
-        result.modified.slice(0, 10).forEach(file => {
+        result.modified.forEach(file => {
             log.info(`  ${pc.red('●')} ${file}`);
         });
-        if (result.modified.length > 10) {
-            log.info(pc.gray(`  ... and ${result.modified.length - 10} more`));
-        }
     }
     
     if (result.new.length > 0) {
         log.info('');
         log.info(pc.yellow(`New files:`));
-        result.new.slice(0, 10).forEach(file => {
+        result.new.forEach(file => {
             log.info(`  ${pc.yellow('+')} ${file}`);
         });
-        if (result.new.length > 10) {
-            log.info(pc.gray(`  ... and ${result.new.length - 10} more`));
-        }
     }
     
     if (result.removed.length > 0) {
         log.info('');
         log.info(pc.red(`Removed files:`));
-        result.removed.slice(0, 10).forEach(file => {
+        result.removed.forEach(file => {
             log.info(`  ${pc.red('-')} ${file}`);
         });
-        if (result.removed.length > 10) {
-            log.info(pc.gray(`  ... and ${result.removed.length - 10} more`));
-        }
     }
     
     log.info('');
