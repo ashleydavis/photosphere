@@ -10,7 +10,6 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
-import { pickDirectory } from "../lib/directory-picker";
 import { join } from "path";
 
 //
