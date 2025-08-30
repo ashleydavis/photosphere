@@ -1045,7 +1045,6 @@ export class MediaFileDatabase {
         //
         // Check all files in the database to find new and modified files.
         //
-        let filesProcessed = 0;
         for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
              if (pathFilter) {
                 if (!file.fileName.startsWith(pathFilter)) {
@@ -1053,10 +1052,10 @@ export class MediaFileDatabase {
                 }
             }
 
-            filesProcessed++;
+            result.filesProcessed++;
 
             if (progressCallback) {
-                progressCallback(`Verified file ${filesProcessed} of ${summary.totalFiles}`);
+                progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
             }
 
             const fileInfo = await this.assetStorage.info(file.fileName);
