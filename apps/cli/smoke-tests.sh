@@ -564,7 +564,7 @@ validate_database_assets() {
     log_info "Validating $asset_type assets for asset ID: $asset_id..."
     
     # Find the asset file using the asset ID
-    local asset_file="$db_dir/assets/$asset_id"
+    local asset_file="$db_dir/asset/$asset_id"
     if [ ! -f "$asset_file" ]; then
         log_error "Asset file not found in database for asset ID: $asset_id"
         exit 1
@@ -1133,12 +1133,12 @@ test_export_assets() {
     mkdir -p "$export_dir"
     
     # Try to find assets in the database directory directly first
-    local assets_dir="$TEST_DB_DIR/assets"
+    local assets_dir="$TEST_DB_DIR/asset"
     local test_asset_id=""
     
     if [ -d "$assets_dir" ]; then
         test_asset_id=$(ls "$assets_dir" | head -1)
-        log_info "Found asset files in assets directory"
+        log_info "Found asset files in asset directory"
     fi
     
     if [ -z "$test_asset_id" ]; then
@@ -1156,7 +1156,7 @@ test_export_assets() {
         log_info "List output:"
         echo "$list_output"
         log_info "Assets directory contents:"
-        ls -la "$TEST_DB_DIR/assets" || echo "Assets directory not found"
+        ls -la "$TEST_DB_DIR/asset" || echo "Assets directory not found"
         exit 1
     fi
     
@@ -1347,14 +1347,14 @@ test_detect_deleted_file() {
         exit 1
     fi
     
-    # Find and delete the first file from the assets directory
-    local file_to_delete=$(find "$test_copy_dir/assets" -type f | sort | head -1)
+    # Find and delete the first file from the asset directory
+    local file_to_delete=$(find "$test_copy_dir/asset" -type f | sort | head -1)
     if [ -n "$file_to_delete" ]; then
         local relative_path="${file_to_delete#$test_copy_dir/}"
         rm "$file_to_delete"
         log_info "Deleted file: $relative_path"
     else
-        log_error "No file found in assets directory to delete"
+        log_error "No file found in asset directory to delete"
         exit 1
     fi
     
@@ -1406,15 +1406,15 @@ test_detect_modified_file() {
         exit 1
     fi
     
-    # Find and modify the first file from the assets directory
-    local file_to_modify=$(find "$test_copy_dir/assets" -type f | sort | head -1)
+    # Find and modify the first file from the asset directory
+    local file_to_modify=$(find "$test_copy_dir/asset" -type f | sort | head -1)
     if [ -n "$file_to_modify" ]; then
         local relative_path="${file_to_modify#$test_copy_dir/}"
         # Append some data to modify the file
         echo "Modified content" >> "$file_to_modify"
         log_info "Modified file: $relative_path"
     else
-        log_error "No file found in assets directory to modify"
+        log_error "No file found in asset directory to modify"
         exit 1
     fi
     
@@ -1566,7 +1566,7 @@ test_compare_with_changes() {
     local webp_add_output
     invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
     
-    # Validate the WEBP assets in the database
+    # Validate the WEBP asset in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
     
     # Test comparison between original and replica (should show differences after adding new asset)
@@ -1641,13 +1641,13 @@ test_remove_asset() {
     echo "============================================================================"
     echo "=== TEST 25: REMOVE ASSET BY ID ==="
     
-    # Find an asset ID to remove by listing the assets directory
-    local assets_dir="$TEST_DB_DIR/assets"
+    # Find an asset ID to remove by listing the asset directory
+    local assets_dir="$TEST_DB_DIR/asset"
     local test_asset_id=""
     
     if [ -d "$assets_dir" ]; then
         test_asset_id=$(ls "$assets_dir" | head -1)
-        log_info "Found asset files in assets directory"
+        log_info "Found asset files in asset directory"
     fi
     
     if [ -z "$test_asset_id" ]; then
@@ -1691,7 +1691,7 @@ test_remove_asset() {
     invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id ./test/tmp/should-fail.png --yes" 1
     
     # Verify the asset files no longer exist in storage
-    local original_file="$TEST_DB_DIR/assets/$test_asset_id"
+    local original_file="$TEST_DB_DIR/asset/$test_asset_id"
     local display_file="$TEST_DB_DIR/display/$test_asset_id"
     local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
     
@@ -1732,11 +1732,11 @@ test_remove_asset() {
     log_info "Performing comprehensive scan for any remaining files with asset ID..."
     local remaining_files=""
     
-    # Check assets directory
-    if [ -d "$TEST_DB_DIR/assets" ]; then
-        remaining_files=$(find "$TEST_DB_DIR/assets" -name "*$test_asset_id*" 2>/dev/null || true)
+    # Check asset directory
+    if [ -d "$TEST_DB_DIR/asset" ]; then
+        remaining_files=$(find "$TEST_DB_DIR/asset" -name "*$test_asset_id*" 2>/dev/null || true)
         if [ -n "$remaining_files" ]; then
-            log_error "Found remaining files in assets directory:"
+            log_error "Found remaining files in asset directory:"
             echo "$remaining_files"
             exit 1
         fi
@@ -1828,18 +1828,18 @@ test_repair_damaged_database() {
     
     # Damage the database by:
     # 1. Deleting one file
-    local file_to_delete=$(find "$damaged_dir/assets" -type f | head -1)
+    local file_to_delete=$(find "$damaged_dir/asset" -type f | head -1)
     if [ -n "$file_to_delete" ]; then
         local relative_path="${file_to_delete#$damaged_dir/}"
         rm "$file_to_delete"
         log_info "Deleted file to simulate damage: $relative_path"
     else
-        log_error "No file found in assets directory to delete"
+        log_error "No file found in asset directory to delete"
         exit 1
     fi
     
     # 2. Corrupting another file (if available)
-    local file_to_corrupt=$(find "$damaged_dir/assets" -type f | head -1)
+    local file_to_corrupt=$(find "$damaged_dir/asset" -type f | head -1)
     if [ -n "$file_to_corrupt" ]; then
         local relative_path="${file_to_corrupt#$damaged_dir/}"
         echo "CORRUPTED FILE CONTENT - THIS IS NOT THE ORIGINAL DATA" > "$file_to_corrupt"
