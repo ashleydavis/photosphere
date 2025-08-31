@@ -700,7 +700,7 @@ export class MediaFileDatabase {
                 assetDetails = await getImageDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
             }
     
-            const assetPath = `assets/${assetId}`;
+            const assetPath = `asset/${assetId}`;
             const thumbPath = `thumb/${assetId}`;
             const displayPath = `display/${assetId}`;
 
@@ -1477,7 +1477,7 @@ export class MediaFileDatabase {
     //
     async remove(assetId: string): Promise<void> {
         this.checkReadonly('remove asset');
-        await this.assetStorage.deleteFile(pathJoin("assets", assetId));
+        await this.assetStorage.deleteFile(pathJoin("asset", assetId));
         await this.assetStorage.deleteFile(pathJoin("display", assetId));
         await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
 

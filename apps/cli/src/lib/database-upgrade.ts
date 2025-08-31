@@ -65,7 +65,7 @@ export async function performDatabaseUpgrade(
     let next: string | undefined = undefined;
     
     do {
-        const assetFiles = await assetStorage.listFiles("assets", 1000, next);
+        const assetFiles = await assetStorage.listFiles("asset", 1000, next);
         filesImported += assetFiles.names.length;
         next = assetFiles.next;
     } while (next);

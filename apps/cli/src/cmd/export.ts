@@ -54,13 +54,13 @@ export async function exportCommand(assetId: string, outputPath: string, options
         const getAssetStoragePath = (type: AssetType): string => {
             switch (type) {
                 case "original":
-                    return path.join("assets", assetId);
+                    return path.join("asset", assetId);
                 case "display":
                     return path.join("display", assetId);
                 case "thumb":
                     return path.join("thumb", assetId);
                 default:
-                    return path.join("assets", assetId);
+                    return path.join("asset", assetId);
             }
         };
 
