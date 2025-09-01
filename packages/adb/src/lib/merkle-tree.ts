@@ -2,7 +2,6 @@ import * as crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
-import { ITimestampProvider, IUuidGenerator } from 'utils';
 
 //
 // Current database version
@@ -247,10 +246,9 @@ function _addFile(nodeIndex: number, nodes: MerkleNode[], fileHash: FileHash): M
 /**
  * Create default metadata for a new tree
  */
-export function createDefaultMetadata(uuidGenerator: IUuidGenerator): TreeMetadata {
-    const id = uuidGenerator.generate();
+export function createDefaultMetadata(uuid: string): TreeMetadata {
     return {
-        id,
+        id: uuid,
         totalNodes: 0,
         totalFiles: 0,
         totalSize: 0,
@@ -277,11 +275,11 @@ export function updateMetadata(
 //
 // Create a new empty Merkle tree.
 //
-export function createTree<DatabaseMetadata>(uuidGenerator: IUuidGenerator): IMerkleTree<DatabaseMetadata> {
+export function createTree<DatabaseMetadata>(uuid: string): IMerkleTree<DatabaseMetadata> {
     return {
         nodes: [],
         sortedNodeRefs: [],
-        metadata: createDefaultMetadata(uuidGenerator),
+        metadata: createDefaultMetadata(uuid),
         version: CURRENT_DATABASE_VERSION,
     };
 }
@@ -292,12 +290,11 @@ export function createTree<DatabaseMetadata>(uuidGenerator: IUuidGenerator): IMe
  */
 export function addFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash,
-    uuidGenerator: IUuidGenerator
+    fileHash: FileHash
 ): IMerkleTree<DatabaseMetadata> {
 
     let nodes: MerkleNode[];
-    let metadata = merkleTree?.metadata || createDefaultMetadata(uuidGenerator);
+    let metadata = merkleTree.metadata;
     
     //
     // Adds the new leaf node to the merkle tree.
@@ -481,8 +478,7 @@ function calculatePathToRoot(nodeIndex: number, nodes: MerkleNode[]): number[] {
 //
 export function upsertFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash,
-    uuidGenerator: IUuidGenerator
+    fileHash: FileHash
 ): IMerkleTree<DatabaseMetadata> {
     if (merkleTree && merkleTree.sortedNodeRefs.length > 0) {
         if (updateFile(merkleTree, fileHash)) {
@@ -491,7 +487,7 @@ export function upsertFile<DatabaseMetadata>(
         }
     }
 
-    return addFile(merkleTree, fileHash, uuidGenerator);
+    return addFile(merkleTree, fileHash);
 }
 
 /**

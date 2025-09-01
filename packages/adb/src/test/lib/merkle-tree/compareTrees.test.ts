@@ -7,10 +7,8 @@ import {
     generateTreeDiffReport,
     createTree
 } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Tree Comparison', () => {
-    const uuidGenerator = new TestUuidGenerator();
 
     // Helper function to create a file hash
     function createFileHash(fileName: string, content: string = fileName) {
@@ -33,18 +31,18 @@ describe('Tree Comparison', () => {
 
         // Create second tree with differences
         let treeB = buildTree(['file1.txt']);
-        treeB = addFile(treeB, createFileHash('file4.txt', 'Modified content'), uuidGenerator); // Modified
-        treeB = addFile(treeB, createFileHash('file5.txt'), uuidGenerator);
-        treeB = addFile(treeB, createFileHash('file6.txt'), uuidGenerator); // New file
+        treeB = addFile(treeB, createFileHash('file4.txt', 'Modified content')); // Modified
+        treeB = addFile(treeB, createFileHash('file5.txt'));
+        treeB = addFile(treeB, createFileHash('file6.txt')); // New file
 
         return { treeA, treeB };
     }
 
     function buildTree(fileNames: string[]): IMerkleTree<any> {
-        let tree = createTree<any>(uuidGenerator);
+        let tree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+            tree = addFile(tree, createFileHash(fileName));
         }
         
         if (!tree) {
@@ -99,7 +97,7 @@ describe('Tree Comparison', () => {
         expect(diff.deleted).toEqual([]);
         
         // Let's add file3 to B to test this properly
-        const treeB2 = addFile(treeB, createFileHash('file3.txt'), uuidGenerator);
+        const treeB2 = addFile(treeB, createFileHash('file3.txt'));
         const diff2 = compareTrees(treeA, treeB2);
         
         // Now file3 should be in the deleted category

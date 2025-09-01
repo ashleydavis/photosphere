@@ -11,11 +11,9 @@ import {
     CURRENT_DATABASE_VERSION
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
-import { TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree Save/Load', () => {
     const TEST_FILE_PATH = './test-tree-v2.bin';
-    const uuidGenerator = new TestUuidGenerator();
     
     /**
      * Helper function to create a file hash with a given name and content
@@ -35,11 +33,11 @@ describe('Merkle Tree Save/Load', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree<any>{
-        let merkleTree = createTree(uuidGenerator);
+        let merkleTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash, uuidGenerator);
+            merkleTree = addFile(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -211,7 +209,6 @@ describe('Merkle Tree Save/Load', () => {
 describe('loadTreeVersion', () => {
     const TEST_VERSION_FILE_PATH = './test-tree-version.bin';
     const storage = new FileStorage("");
-    const uuidGenerator = new TestUuidGenerator();
     
     // Clean up test file after each test
     afterEach(async () => {
@@ -225,7 +222,7 @@ describe('loadTreeVersion', () => {
 
     test('should load version from a valid tree file', async () => {
         // Create a tree and save it
-        const originalTree = createTree(uuidGenerator);
+        const originalTree = createTree("12345678-1234-5678-9abc-123456789abc");
         await saveTree(TEST_VERSION_FILE_PATH, originalTree, storage);
         
         // Load just the version
@@ -304,7 +301,7 @@ describe('loadTreeVersion', () => {
     test('should work correctly with large tree files', async () => {
         // Create a complex tree with many files to demonstrate the function works with large files
         const fileNames = Array.from({ length: 100 }, (_, i) => `file-${i.toString().padStart(3, '0')}.txt`);
-        let originalTree = createTree(uuidGenerator);
+        let originalTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
             const fileHash: FileHash = {
@@ -313,7 +310,7 @@ describe('loadTreeVersion', () => {
                 length: fileName.length,
                 lastModified: new Date(),
             };
-            originalTree = addFile(originalTree, fileHash, uuidGenerator);
+            originalTree = addFile(originalTree, fileHash);
         }
         
         await saveTree(TEST_VERSION_FILE_PATH, originalTree, storage);
