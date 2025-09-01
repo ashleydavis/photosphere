@@ -1365,6 +1365,12 @@ export class MediaFileDatabase {
         let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
         if (!destTree) {
             destTree = createTree(merkleTree.metadata.id);
+            
+            // Copy database metadata from source to destination
+            if (merkleTree.databaseMetadata) {
+                destTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+            }
+            
             if (progressCallback) {
                 progressCallback("Creating new destination database...");
             }
