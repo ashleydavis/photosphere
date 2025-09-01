@@ -6,8 +6,6 @@ import {
     findFileNode,
     createTree, 
 } from '../../../lib/merkle-tree';
-import { TestUuidGenerator } from 'node-utils';
-
 // Helper to create a file hash
 function createFileHash(fileName: string, content: string): FileHash {
   const hash = crypto.createHash('sha256').update(content).digest();
@@ -20,10 +18,9 @@ function createFileHash(fileName: string, content: string): FileHash {
 }
 
 describe('Merkle Tree UpdateFile', () => {
-  const uuidGenerator = new TestUuidGenerator();
   it('should update a file and recalculate hashes along the path to root', () => {
     // Create a tree with multiple files to ensure we have a good structure
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     // Add several files to create a multi-level tree
     const file1 = createFileHash('file1.txt', 'original content 1');
@@ -33,11 +30,11 @@ describe('Merkle Tree UpdateFile', () => {
     const file5 = createFileHash('file5.txt', 'original content 5');
     
     // Build the tree
-    tree = addFile(tree, file1, uuidGenerator);
-    tree = addFile(tree, file2, uuidGenerator);
-    tree = addFile(tree, file3, uuidGenerator);
-    tree = addFile(tree, file4, uuidGenerator);
-    tree = addFile(tree, file5, uuidGenerator);
+    tree = addFile(tree, file1);
+    tree = addFile(tree, file2);
+    tree = addFile(tree, file3);
+    tree = addFile(tree, file4);
+    tree = addFile(tree, file5);
     
     // Get the root hash before update
     const originalRootHash = tree.nodes[0].hash.toString('hex');
@@ -99,7 +96,7 @@ describe('Merkle Tree UpdateFile', () => {
   //
   it('should preserve hash integrity through the entire tree after update', () => {
     // Create a more complex tree
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     // Add files in a specific order to create a known structure
     const fileNames = ['A.txt', 'B.txt', 'C.txt', 'D.txt', 'E.txt', 'F.txt', 'G.txt'];
@@ -110,7 +107,7 @@ describe('Merkle Tree UpdateFile', () => {
       const content = `Original content of ${fileName}`;
       originalContents[fileName] = content;
       const fileHash = createFileHash(fileName, content);
-      tree = addFile(tree, fileHash, uuidGenerator);
+      tree = addFile(tree, fileHash);
     }
     
     // Store the original tree structure for comparison

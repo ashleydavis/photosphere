@@ -1,8 +1,6 @@
 import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree NodeRefs', () => {
-    const uuidGenerator = new TestUuidGenerator();
     
     /**
      * Helper function to create a file hash with content
@@ -23,11 +21,11 @@ describe('Merkle Tree NodeRefs', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree<any>{
-        let merkleTree = createTree(uuidGenerator);
+        let merkleTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash, uuidGenerator);
+            merkleTree = addFile(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -40,7 +38,7 @@ describe('Merkle Tree NodeRefs', () => {
     // Test 1: Create a tree with a single file and verify sortedNodeRefs
     test('creates a tree with a single file and verifies sortedNodeRefs', () => {
         const fileHash = createFileHash('A');
-        const tree = addFile(createTree(uuidGenerator), fileHash, uuidGenerator);
+        const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
         // Check sortedNodeRefs
         expect(tree.sortedNodeRefs).toBeDefined();
@@ -123,13 +121,13 @@ describe('Merkle Tree NodeRefs', () => {
         let tree = buildTree(['B', 'D']);
         
         // Add a file that should be inserted at the beginning of sortedNodeRefs
-        tree = addFile(tree, createFileHash('A'), uuidGenerator);
+        tree = addFile(tree, createFileHash('A'));
         
         // Add a file that should be inserted in the middle of sortedNodeRefs
-        tree = addFile(tree, createFileHash('C'), uuidGenerator);
+        tree = addFile(tree, createFileHash('C'));
         
         // Add a file that should be inserted at the end of sortedNodeRefs
-        tree = addFile(tree, createFileHash('E'), uuidGenerator);
+        tree = addFile(tree, createFileHash('E'));
         
         // Verify sortedNodeRefs are correct
         expect(tree.sortedNodeRefs.length).toBe(5);
@@ -160,7 +158,7 @@ describe('Merkle Tree NodeRefs', () => {
         }
         
         // Add another file to force more restructuring
-        const updatedTree = addFile(tree, createFileHash('H'), uuidGenerator);
+        const updatedTree = addFile(tree, createFileHash('H'));
         
         // Verify all updated node indices in sortedNodeRefs are valid
         for (const nodeRef of updatedTree.sortedNodeRefs) {
@@ -184,7 +182,7 @@ describe('Merkle Tree NodeRefs', () => {
         expect(aRef?.fileIndex).toBe(0);
         
         // Add another file and check if A's index is updated
-        tree = addFile(tree, createFileHash('B'), uuidGenerator);
+        tree = addFile(tree, createFileHash('B'));
         aRef = findNodeRef(tree, 'A');
         expect(aRef).toBeDefined();
         const nodeIndex = getLeafNodeIndex(aRef!.fileIndex, 0, tree.nodes);
@@ -195,7 +193,7 @@ describe('Merkle Tree NodeRefs', () => {
         expect(bRef).toBeDefined();
         
         // Add C and verify all indices
-        tree = addFile(tree, createFileHash('C'), uuidGenerator);
+        tree = addFile(tree, createFileHash('C'));
         
         // Check all references point to correct nodes after tree restructuring
         for (const ref of tree.sortedNodeRefs) {
@@ -220,7 +218,7 @@ describe('Merkle Tree NodeRefs', () => {
         });
         
         // Add a file that will cause subtree restructuring
-        tree = addFile(tree, createFileHash('E'), uuidGenerator);
+        tree = addFile(tree, createFileHash('E'));
         
         // Verify all references still point to correct nodes
         for (const ref of tree.sortedNodeRefs) {
@@ -230,8 +228,8 @@ describe('Merkle Tree NodeRefs', () => {
         }
         
         // Add another file to force more restructuring
-        tree = addFile(tree, createFileHash('F'), uuidGenerator);
-        tree = addFile(tree, createFileHash('G'), uuidGenerator);
+        tree = addFile(tree, createFileHash('F'));
+        tree = addFile(tree, createFileHash('G'));
         
         // Print final tree
         // console.log(visualizeTree(tree));

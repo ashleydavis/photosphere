@@ -3,13 +3,13 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, IUuidGenerator, RandomUuidGenerator, ITimestampProvider } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { addFile, AssetDatabase, AssetDatabaseStorage, computeHash, createTree, getFileInfo, HashCache, IHashedFile, IMerkleTree, loadTree, MerkleNode, saveTree, traverseTree, upsertFile, visualizeTree } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, createTree, getFileInfo, HashCache, IHashedFile, loadTree, MerkleNode, saveTree, traverseTree, upsertFile, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -17,7 +17,6 @@ dayjs.extend(customParseFormat);
 
 import { Image } from "tools";
 import _ from "lodash";
-import { contentType } from "mime-types";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -1365,7 +1364,7 @@ export class MediaFileDatabase {
         // Try to load existing destination merkle tree, otherwise create a new one
         let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
         if (!destTree) {
-            destTree = createTree(this.uuidGenerator);
+            destTree = createTree(merkleTree.metadata.id);
             if (progressCallback) {
                 progressCallback("Creating new destination database...");
             }
@@ -1434,7 +1433,7 @@ export class MediaFileDatabase {
                 hash: copiedHash,
                 length: copiedFileInfo.length,
                 lastModified: copiedFileInfo.lastModified,
-            }, this.uuidGenerator);
+            });
 
             result.copiedFiles++;
 

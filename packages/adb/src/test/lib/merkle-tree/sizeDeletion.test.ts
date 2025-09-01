@@ -7,10 +7,8 @@ import {
   findFileNodeWithDeletionStatus,
   createTree
 } from '../../../lib/merkle-tree';
-import { TestUuidGenerator } from 'node-utils';
 
 describe('Size calculation with file deletion', () => {
-  const uuidGenerator = new TestUuidGenerator();
   
   // Helper function to create a file hash with specific size
   function createFileHash(fileName: string, content: string, size: number): FileHash {
@@ -27,7 +25,7 @@ describe('Size calculation with file deletion', () => {
 
   // Helper to build a test tree with files of specific sizes
   function buildTestTree(): IMerkleTree<any>{
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     const files = [
       { name: 'file1.txt', content: 'content 1', size: 1000 },
       { name: 'file2.txt', content: 'content 2', size: 2000 },
@@ -37,7 +35,7 @@ describe('Size calculation with file deletion', () => {
     ];
     
     for (const file of files) {
-      tree = addFile(tree, createFileHash(file.name, file.content, file.size), uuidGenerator);
+      tree = addFile(tree, createFileHash(file.name, file.content, file.size));
     }
     
     return tree;
@@ -101,11 +99,11 @@ describe('Size calculation with file deletion', () => {
 
   test('sizes are correctly propagated up through all parent nodes', () => {
     // Create a tree with 7 files to create a 3-level tree
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     const fileSizes = [100, 200, 300, 400, 500, 600, 700];
     
     for (let i = 0; i < fileSizes.length; i++) {
-      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, fileSizes[i]), uuidGenerator);
+      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, fileSizes[i]));
     }
     
     // A 7-file tree will have a structure like:

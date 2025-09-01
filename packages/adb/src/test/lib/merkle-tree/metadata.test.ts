@@ -13,11 +13,9 @@ import {
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
-import { TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree Metadata', () => {
     const TEST_FILE_PATH = './test-tree-metadata.bin';
-    const uuidGenerator = new TestUuidGenerator();
     
     beforeEach(() => {
         jest.useFakeTimers();
@@ -41,11 +39,11 @@ describe('Merkle Tree Metadata', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree<any>{
-        let merkleTree = createTree(uuidGenerator);
+        let merkleTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash, uuidGenerator);
+            merkleTree = addFile(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -91,7 +89,7 @@ describe('Merkle Tree Metadata', () => {
         
         // Add a new file
         const fileHashC = createFileHash('C');
-        tree = addFile(tree, fileHashC, uuidGenerator);
+        tree = addFile(tree, fileHashC);
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -178,7 +176,7 @@ describe('Merkle Tree Metadata', () => {
     });
     
     test('createDefaultMetadata should generate valid metadata', () => {
-        const metadata = createDefaultMetadata(uuidGenerator);
+        const metadata = createDefaultMetadata("12345678-1234-5678-9abc-123456789abc");
         
         // UUID should be properly formatted
         expect(metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -189,7 +187,7 @@ describe('Merkle Tree Metadata', () => {
     });
     
     test('updateMetadata should update counts and modified time', () => {
-        const original = createDefaultMetadata(uuidGenerator);
+        const original = createDefaultMetadata("12345678-1234-5678-9abc-123456789abc");
         
         // Let time pass
         jest.advanceTimersByTime(1000);

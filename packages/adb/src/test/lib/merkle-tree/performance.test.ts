@@ -8,7 +8,6 @@ import {
   getActiveFiles,
   createTree,
 } from '../../../lib/merkle-tree';
-import { TestUuidGenerator } from 'node-utils';
 
 /**
  * Helper function to create a file hash with specified content
@@ -48,18 +47,17 @@ function generateFileNames(count: number, prefix: string = 'file-'): string[] {
 jest.setTimeout(30000);
 
 describe('Merkle Tree Performance Tests', () => {
-  const uuidGenerator = new TestUuidGenerator();
   
   test('should measure performance of adding files to tree', () => {
     const sizes = [10, 100, 1000, 5000, 10000];
     
     for (const size of sizes) {
       const fileNames = generateFileNames(size);
-      let tree = createTree(uuidGenerator);
+      let tree = createTree("12345678-1234-5678-9abc-123456789abc");
       
       const [resultTree, time] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+          tree = addFile(tree, createFileHash(fileName));
         }
         return tree;
       });
@@ -90,10 +88,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First, build a tree with a large number of files
     const fileCount = 10000;
     const fileNames = generateFileNames(fileCount);
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName));
     }
     
     // Test the performance of updating files at different positions
@@ -131,10 +129,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First, build a tree with a large number of files
     const fileCount = 10000;
     const fileNames = generateFileNames(fileCount);
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName));
     }
     
     // Active file count before deletions
@@ -176,12 +174,12 @@ describe('Merkle Tree Performance Tests', () => {
     for (const size of treeSizes) {
       // Create a tree with 'size' number of files
       const fileNames = generateFileNames(size);
-      let tree = createTree(uuidGenerator);
+      let tree = createTree("12345678-1234-5678-9abc-123456789abc");
       
       // Measure time to build entire tree
       const [resultTree, addTime] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+          tree = addFile(tree, createFileHash(fileName));
         }
         return tree;
       });
@@ -228,10 +226,10 @@ describe('Merkle Tree Performance Tests', () => {
     // First create a baseline tree with 1000 files
     const baselineCount = 1000;
     const baseFileNames = generateFileNames(baselineCount);
-    let tree = createTree(uuidGenerator);
+    let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of baseFileNames) {
-      tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+      tree = addFile(tree, createFileHash(fileName));
     }
     
     // Now measure bulk operations on this tree
@@ -243,7 +241,7 @@ describe('Merkle Tree Performance Tests', () => {
     const [treeAfterAdd, addBatchTime] = measureTime(() => {
       let currentTree = tree;
       for (const fileName of newFileNames) {
-        currentTree = addFile(currentTree, createFileHash(fileName), uuidGenerator);
+        currentTree = addFile(currentTree, createFileHash(fileName));
       }
       return currentTree;
     });

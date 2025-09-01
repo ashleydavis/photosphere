@@ -1,8 +1,6 @@
 import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
-import { TestTimestampProvider, TestUuidGenerator } from 'node-utils';
 
 describe('Merkle Tree', () => {
-    const uuidGenerator = new TestUuidGenerator();
 
     /**
      * Helper function to create a file hash with a given name and length
@@ -20,11 +18,11 @@ describe('Merkle Tree', () => {
      * Helper function to build a tree with the given file names
      */
     function buildTree(fileNames: string[]): IMerkleTree<any> {
-        let merkleTree = createTree<any>(uuidGenerator);
+        let merkleTree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
             const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash, uuidGenerator);
+            merkleTree = addFile(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -119,7 +117,7 @@ describe('Merkle Tree', () => {
         // Tree after: A (single node)
         test('creates a new tree with a single file', () => {
             const fileHash = createFileHash('A');
-            const tree = addFile(createTree(uuidGenerator), fileHash, uuidGenerator);
+            const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
             verifyLeafNode(0, tree.nodes, 'A');
 
@@ -141,10 +139,10 @@ describe('Merkle Tree', () => {
         //   A    B
         test('adds a second file to an existing tree', () => {
             const fileHashA = createFileHash('A');            
-            const treeA = addFile(createTree(uuidGenerator), fileHashA, uuidGenerator);
+            const treeA = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHashA);
 
             const fileHashB = createFileHash('B');
-            const treeAB = addFile(treeA, fileHashB, uuidGenerator);
+            const treeAB = addFile(treeA, fileHashB);
 
             verifyTree(treeAB, {
                 tag: 'AB',
@@ -186,7 +184,7 @@ describe('Merkle Tree', () => {
             
             // Add C to the tree.
             const fileHashC = createFileHash('C');
-            const treeABC = addFile(tree, fileHashC, uuidGenerator);
+            const treeABC = addFile(tree, fileHashC);
 
             verifyTree(treeABC, {
                 tag: 'ABC',
@@ -239,7 +237,7 @@ describe('Merkle Tree', () => {
             
             // Add D to the tree.
             const fileHashD = createFileHash('D');
-            const treeABCD = addFile(tree, fileHashD, uuidGenerator);
+            const treeABCD = addFile(tree, fileHashD);
 
             verifyTree(treeABCD, {
                 tag: 'ABCD',
@@ -304,7 +302,7 @@ describe('Merkle Tree', () => {
             
             // Add E to the tree.
             const fileHashE = createFileHash('E');
-            const treeABCDE = addFile(tree, fileHashE, uuidGenerator);
+            const treeABCDE = addFile(tree, fileHashE);
 
             verifyTree(treeABCDE, {
                 tag: 'ABCDE',
@@ -380,7 +378,7 @@ describe('Merkle Tree', () => {
 
             // Add F to the tree.
             const fileHashF = createFileHash('F');
-            const treeABCDEF = addFile(tree, fileHashF, uuidGenerator);
+            const treeABCDEF = addFile(tree, fileHashF);
 
             verifyTree(treeABCDEF, {
                 tag: 'ABCDEF',
@@ -466,7 +464,7 @@ describe('Merkle Tree', () => {
             
             // Add G to the tree.
             const fileHashG = createFileHash('G');
-            const treeABCDEFG = addFile(tree, fileHashG, uuidGenerator);
+            const treeABCDEFG = addFile(tree, fileHashG);
 
             verifyTree(treeABCDEFG, {
                 tag: 'ABCDEFG',
@@ -565,7 +563,7 @@ describe('Merkle Tree', () => {
 
             // Add H to the tree.
             const fileHashH = createFileHash('H');
-            const treeABCDEFGH = addFile(tree, fileHashH, uuidGenerator);
+            const treeABCDEFGH = addFile(tree, fileHashH);
 
             verifyTree(treeABCDEFGH, {
                 tag: 'ABCDEFGH',
@@ -672,7 +670,7 @@ describe('Merkle Tree', () => {
 
             // Add I to the tree.
             const fileHashI = createFileHash('I');
-            const rootABCDEFGHI = addFile(tree, fileHashI, uuidGenerator);
+            const rootABCDEFGHI = addFile(tree, fileHashI);
 
             verifyTree(rootABCDEFGHI, {
                 tag: 'ABCDEFGHI',
@@ -789,7 +787,7 @@ describe('Merkle Tree', () => {
 
             // Add J to the tree.
             const fileHashJ = createFileHash('J');
-            const treeABCDEFGHIJ = addFile(tree, fileHashJ, uuidGenerator);
+            const treeABCDEFGHIJ = addFile(tree, fileHashJ);
 
             verifyTree(treeABCDEFGHIJ, {
                 tag: 'ABCDEFGHIJ',
@@ -917,7 +915,7 @@ describe('Merkle Tree', () => {
 
             // Add K to the tree.
             const fileHashK = createFileHash('K');
-            const treeABCDEFGHIJK = addFile(tree, fileHashK, uuidGenerator);
+            const treeABCDEFGHIJK = addFile(tree, fileHashK);
 
             verifyTree(treeABCDEFGHIJK, {
                 tag: 'ABCDEFGHIJK',
@@ -1038,11 +1036,11 @@ describe('Merkle Tree', () => {
     //  C    A   D   B
     //
     test('adding files out of order still yields a sorted list', () => {
-        let tree = createTree(uuidGenerator);
-        tree = addFile(tree, createFileHash('C'), uuidGenerator);
-        tree = addFile(tree, createFileHash('A'), uuidGenerator);
-        tree = addFile(tree, createFileHash('D'), uuidGenerator);
-        tree = addFile(tree, createFileHash('B'), uuidGenerator);
+        let tree = createTree("12345678-1234-5678-9abc-123456789abc");
+        tree = addFile(tree, createFileHash('C'));
+        tree = addFile(tree, createFileHash('A'));
+        tree = addFile(tree, createFileHash('D'));
+        tree = addFile(tree, createFileHash('B'));
 
         expect(tree.sortedNodeRefs).toEqual([
             {

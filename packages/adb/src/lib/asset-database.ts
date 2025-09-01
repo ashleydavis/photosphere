@@ -1,6 +1,6 @@
 import { IStorage, pathJoin } from "storage";
 import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
-import { ITimestampProvider, IUuidGenerator } from "utils";
+import { IUuidGenerator } from "utils";
 
 //
 // The hash and other information about a file.
@@ -96,7 +96,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        this.merkleTree = createTree(this.uuidGenerator);
+        this.merkleTree = createTree(this.uuidGenerator.generate());
         await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
@@ -157,7 +157,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             hash: hashedFile.hash,
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
-        }, this.uuidGenerator);
+        });
     }
 
     //

@@ -14,10 +14,8 @@ import {
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
-import { TestUuidGenerator } from 'node-utils';
 
 describe('File Deletion', () => {
-    const uuidGenerator = new TestUuidGenerator();
 
     // Helper function to create a file hash
     function createFileHash(fileName: string, content: string = fileName): FileHash {
@@ -34,11 +32,11 @@ describe('File Deletion', () => {
 
     // Helper function to build a small test tree
     function buildTestTree(): IMerkleTree<any>{
-        let tree = createTree(uuidGenerator);
+        let tree = createTree("12345678-1234-5678-9abc-123456789abc");
         const fileNames = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName), uuidGenerator);
+            tree = addFile(tree, createFileHash(fileName));
         }
         
         if (!tree) {
