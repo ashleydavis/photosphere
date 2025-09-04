@@ -17,7 +17,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     intro(pc.blue(`Upgrading media file database...`));
 
     // Load the database in readonly mode to check version without modifications.
-    const { database } = await loadDatabase(options.db, options, true, true);
+    const { database, databaseDir } = await loadDatabase(options.db, options, true, true);
 
     const merkleTree = database.getAssetDatabase().getMerkleTree();
     const currentVersion = merkleTree.version;
@@ -34,10 +34,10 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         
         // Provide platform-specific backup commands
         if (process.platform === 'win32') {
-            log.warn(pc.yellow(`   xcopy "${options.db}" "${options.db}-backup" /E /I`));
+            log.warn(pc.yellow(`   xcopy "${databaseDir}" "${databaseDir}-backup" /E /I`));
         } 
         else {
-            log.warn(pc.yellow(`   cp -r "${options.db}" "${options.db}-backup"`));
+            log.warn(pc.yellow(`   cp -r "${databaseDir}" "${databaseDir}-backup"`));
         }
         console.log("");
         
