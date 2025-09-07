@@ -45,11 +45,9 @@ describe('SortIndex Tree Balance', () => {
         // Calculate depth of each leaf node by traversing from root
         const nodeDepths = new Map<string, number>();
         
-        // BFS to calculate depths
-        const queue: { nodeId: string; depth: number }[] = [];
-        
         // Start with root at depth 0
         const visualization = await index.visualizeTree();
+
         const lines = visualization.split('\n');
         
         // Extract node structure from visualization
@@ -120,7 +118,6 @@ describe('SortIndex Tree Balance', () => {
         const maxDepth = Math.max(...balance.leafDepths);
         expect(maxDepth - minDepth).toBeLessThanOrEqual(1);
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain balanced tree with random insertions', async () => {
@@ -163,7 +160,6 @@ describe('SortIndex Tree Balance', () => {
         // For a B-tree with branching factor ~4, height should be around log_4(100) ≈ 3-4
         expect(balance.treeHeight).toBeLessThanOrEqual(5);
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain balance during record additions', async () => {
@@ -200,7 +196,6 @@ describe('SortIndex Tree Balance', () => {
             expect(balance.treeHeight).toBeLessThanOrEqual(4);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain balance with duplicate values', async () => {
@@ -237,7 +232,6 @@ describe('SortIndex Tree Balance', () => {
         const duplicateRecords = await sortIndex.findByValue(5);
         expect(duplicateRecords.length).toBe(5);
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain balance after record deletions', async () => {
@@ -280,7 +274,6 @@ describe('SortIndex Tree Balance', () => {
         const deleted = await sortIndex.findByValue(3);
         expect(deleted.length).toBe(0);
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain balance with mixed operations', async () => {
@@ -334,7 +327,6 @@ describe('SortIndex Tree Balance', () => {
         // Tree should still be reasonably shallow
         expect(balance.treeHeight).toBeLessThanOrEqual(4);
         
-        await sortIndex.shutdown();
     });
 
     test('should handle large datasets while maintaining balance', async () => {
@@ -378,6 +370,5 @@ describe('SortIndex Tree Balance', () => {
             expect(balance.stats.internalStats.avgKeysPerInternal).toBeLessThanOrEqual(12);
         }
         
-        await sortIndex.shutdown();
     });
 });

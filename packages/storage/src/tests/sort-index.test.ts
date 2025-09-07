@@ -45,7 +45,6 @@ describe('SortIndex', () => {
         // Initialize the index
         await sortIndex.build();
         
-        await sortIndex.shutdown();
         
         // Check that tree file has been written
         expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);

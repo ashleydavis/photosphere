@@ -180,8 +180,6 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return {
             id: shardIndex,
             records: new Map(shardRecords.map(record => [record._id, record])),
-            dirty: false,
-            lastAccessed: 0,
         };
     }
 }

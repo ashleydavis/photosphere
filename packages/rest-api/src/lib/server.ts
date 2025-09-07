@@ -665,13 +665,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
             console.log("Shutting down server.");
 
             // Close the asset storage provider
-            await mediaFileDatabaseProvider.close();
-            
-            // Close the user database if it exists.
-            if (db) {
-                await db.close();
-                db = undefined;
-            }
+            await mediaFileDatabaseProvider.close(); //todo: be good to get rid of this.
         },
     };
 }

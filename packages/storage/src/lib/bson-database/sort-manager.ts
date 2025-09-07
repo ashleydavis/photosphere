@@ -192,19 +192,6 @@ export class SortManager<RecordT extends IRecord> {
             await this.storage.deleteDir(collectionIndexPath);
         }
     }
-    
-    //
-    // Shut down all sort indexes, saving any dirty pages.
-    //
-    async shutdown(): Promise<void> {
-        // Call shutdown on all sort indexes.
-        for (const sortIndex of this.sortIndexes.values()) {
-            await sortIndex.shutdown();
-        }
-        
-        // Clear the cache.
-        this.sortIndexes.clear();
-    }
 
     //
     // Adds a record to all sort indexes for this collection.

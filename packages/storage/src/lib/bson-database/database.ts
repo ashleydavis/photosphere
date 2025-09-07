@@ -17,11 +17,6 @@ export interface IBsonDatabase {
     // Gets a named collection.
     //
     collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT>;
-    
-    //
-    // Writes all pending changes to the database and shuts down the database.
-    //
-    close(): Promise<void>;
 }
 
 //
@@ -37,11 +32,6 @@ export interface IBsonDatabaseOptions {
     // UUID generator for creating unique identifiers.
     //
     uuidGenerator: IUuidGenerator;
-
-    //
-    // The maximum number of shards to keep in memory.
-    //
-    maxCachedShards?: number;
 
     //
     // Whether the database is in readonly mode.
@@ -92,22 +82,10 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
                 storage: this.options.storage,
                 directory: name,
                 uuidGenerator: this.options.uuidGenerator,
-                maxCachedShards: this.options.maxCachedShards,
                 readonly: this.options.readonly,
             });
             this._collections.set(name, collection);
         }        
         return collection as IBsonCollection<RecordT>;
-    }
-
-    //
-    // Writes all pending changes to the database and shuts down the database.
-    //
-    async close(): Promise<void> {
-        for (let collection of this._collections.values()) {
-            await collection.shutdown();
-        }
-
-        this._collections.clear();
     }
 }

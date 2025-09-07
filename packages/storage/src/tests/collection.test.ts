@@ -22,22 +22,10 @@ describe('BsonCollection', () => {
             storage,
             directory: 'users',
             uuidGenerator: new RandomUuidGenerator(),
-            numShards: 10, 
-            maxCachedShards: 5
+            numShards: 10
         });
     });
-    
-    afterEach(async () => {
-        // Ensure collection is properly shut down to avoid async issues
-        await collection.shutdown();
-    });
-    
-    // Helper function to force a save by manually calling saveDirtyShards
-    async function forceSave(): Promise<void> {
-        // Use any casting to access private method
-        await (collection as any).saveDirtyShards();
-    }
-    
+        
     test('should insert and retrieve a record', async () => {
         const user: TestUser = {
             _id: '123e4567-e89b-12d3-a456-426614174000',
@@ -48,7 +36,6 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user);
-        await forceSave();
         
         const retrieved = await collection.getOne(user._id);
         expect(retrieved).toEqual(user);
@@ -64,7 +51,6 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user as any); // Cast to any to bypass TypeScript error
-        await forceSave();
         
         // Get all records to find the one we inserted
         const result = await collection.getAll();
@@ -86,7 +72,6 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user);
-        await forceSave();
         
         const updates = {
             age: 31,
@@ -95,7 +80,6 @@ describe('BsonCollection', () => {
         
         const updateResult = await collection.updateOne(user._id, updates);
         expect(updateResult).toBe(true);
-        await forceSave();
         
         const updated = await collection.getOne(user._id);
         expect(updated).toEqual({
@@ -123,7 +107,6 @@ describe('BsonCollection', () => {
         
         const updateResult = await collection.updateOne(id, updates, { upsert: true });
         expect(updateResult).toBe(true);
-        await forceSave();
         
         const upserted = await collection.getOne(id);
         expect(upserted).toEqual({
@@ -142,7 +125,6 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user);
-        await forceSave();
         
         const replacement: TestUser = {
             _id: user._id,
@@ -154,7 +136,6 @@ describe('BsonCollection', () => {
         
         const replaceResult = await collection.replaceOne(user._id, replacement);
         expect(replaceResult).toBe(true);
-        await forceSave();
         
         const replaced = await collection.getOne(user._id);
         expect(replaced).toEqual(replacement);
@@ -170,11 +151,9 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user);
-        await forceSave();
         
         const deleteResult = await collection.deleteOne(user._id);
         expect(deleteResult).toBe(true);
-        await forceSave();
         
         const deleted = await collection.getOne(user._id);
         expect(deleted).toBeUndefined();
@@ -216,10 +195,7 @@ describe('BsonCollection', () => {
         for (const user of users) {
             await collection.insertOne(user);
         }
-        
-        // Force save all records
-        await forceSave();
-        
+                
         // Collect all records from the iterator
         const retrievedUsers: TestUser[] = [];
         for await (const user of collection.iterateRecords()) {
@@ -264,10 +240,7 @@ describe('BsonCollection', () => {
         for (const user of users) {
             await collection.insertOne(user);
         }
-        
-        // Force save all records
-        await forceSave();
-        
+                
         // Get first page
         let result = await collection.getAll();
         expect(result.records.length).toBeGreaterThan(0);
@@ -319,10 +292,7 @@ describe('BsonCollection', () => {
         for (const user of users) {
             await collection.insertOne(user);
         }
-        
-        // Force save all records
-        await forceSave();
-        
+                
         // Create an index on the age field
         await collection.ensureSortIndex('age', 'asc', 'number');
         
@@ -365,10 +335,7 @@ describe('BsonCollection', () => {
         for (const user of users) {
             await collection.insertOne(user);
         }
-        
-        // Force save all records
-        await forceSave();
-        
+                
         // Create an index on the role field
         await collection.ensureSortIndex('role', 'asc', 'string');
         
@@ -426,7 +393,6 @@ describe('BsonCollection', () => {
         };
         
         await collection.insertOne(user);
-        await forceSave();
         
         // Create an index
         await collection.ensureSortIndex('role', 'asc', 'string');

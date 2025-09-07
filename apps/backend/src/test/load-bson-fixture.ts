@@ -57,14 +57,9 @@ async function loadFixtures(fixturesPath: string, databasePath: string): Promise
     const { storage } = await createStorage(databasePath);
     const bsonDatabase = new BsonDatabase({ storage, uuidGenerator: new RandomUuidGenerator() });
 
-    try {
-        for (const file of files) {
-            if (file.endsWith(".js")) {
-                await loadFixture(fixturesPath, file, bsonDatabase);
-            }
+    for (const file of files) {
+        if (file.endsWith(".js")) {
+            await loadFixture(fixturesPath, file, bsonDatabase);
         }
-    }
-    finally {
-        await bsonDatabase.close();
     }
 }

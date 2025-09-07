@@ -51,8 +51,6 @@ export interface IRecord {
 
 export interface IShard<RecordT extends IRecord> {
     id: number;
-    dirty: boolean;
-    lastAccessed: number;
     records: Map<string, RecordT>;
 }
 
@@ -60,9 +58,6 @@ export interface IGetAllResult<RecordT extends IRecord> {
     records: RecordT[];
     next?: string;
 }
-
-const saveDebounceMs = 300;
-const maxSaveDelayMs = 1000;
 
 export interface IBsonCollection<RecordT extends IRecord> {
 
@@ -175,11 +170,6 @@ export interface IBsonCollection<RecordT extends IRecord> {
     deleteIndex(fieldName: string): Promise<boolean>;
 
     //
-    // Writes all pending changes and shuts down the collection.
-    //
-    shutdown(): Promise<void>;
-
-    //
     // Drops the whole collection.
     //
     drop(): Promise<void>;
@@ -199,9 +189,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private storage: IStorage;
     private directory: string;
     private numShards: number;
-    private shardCache: Map<number, IShard<RecordT>> = new Map();
-    private isAlive: boolean = true;
-    private maxCachedShards: number;
     private sortManager: SortManager<RecordT>;
 
     //
@@ -223,7 +210,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.storage = options.storage;
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
-        this.maxCachedShards = options.maxCachedShards || 10;
         this.uuidGenerator = options.uuidGenerator;
         this.isReadonly = options.readonly || false;
 
@@ -232,8 +218,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             baseDirectory: this.directory.split('/').slice(0, -1).join('/'), // Parent directory
             uuidGenerator: this.uuidGenerator
         }, this, this.name);
-        
-        this.keepWorkerAlive();
     }
     
     //
@@ -262,13 +246,20 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
+    // Saves the shard.
+    //
+    private async saveShard(shard: IShard<any>): Promise<void> {
+        const filePath = `${this.directory}/${shard.id}`;
+        await this.saveShardFile(filePath, shard);
+    }
+
+    //
     // Adds a record to the shard cache.
     //
-    private setRecord(id: string, record: RecordT, shard: IShard<any>): void {
+    private async setRecord(id: string, record: RecordT, shard: IShard<any>): Promise<void> {
         const normalizedId = this.normalizeId(id);
         shard.records.set(normalizedId, record);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
+        await this.saveShard(shard);
     }
 
     //
@@ -285,191 +276,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private deleteRecord(id: string, shard: IShard<any>): void {
         const normalizedId = this.normalizeId(id);
         shard.records.delete(normalizedId);
-        shard.dirty = true;
-        shard.lastAccessed = Date.now();
-    }
-
-    //
-    // Save all dirty shards.
-    //
-    private async saveDirtyShards(): Promise<void> {
-
-        // console.log(`Saving dirty shards.`);
-
-        const dirtyShards = Array.from(this.shardCache.values()).filter(shard => shard.dirty);
-        if (dirtyShards.length === 0) {
-            // console.log(`No dirty shards to save.`);
-            return;
-        }
-
-        for (const shard of dirtyShards) {
-            const filePath = `${this.directory}/${shard.id}`;
-            await this.saveShardFile(filePath, shard);
-            shard.dirty = false;
-
-            // console.log(`  Saved shard ${shard.id}`);
-        }   
-
-        // console.log(`Saved ${dirtyShards.length} dirty shards.`);
-
-        this.lastSaveTime = Date.now();
-
-        //
-        // Now that we have saved we can evict the oldest shards.
-        //
-        this.evictOldestShards();
-    }
-
-    //
-    // Evict oldest shards that are not dirty.
-    //
-    private evictOldestShards(): void {
-        const numShardsToExict = this.shardCache.size - this.maxCachedShards;
-
-        //
-        // Sort non-dirty shards by last accessed time.
-        //
-        const sortedShards = Array.from(this.shardCache.values())
-            .filter(shard => !shard.dirty)
-            .sort((a, b) => a.lastAccessed - b.lastAccessed);
-
-        //
-        // Remove the oldest shards.
-        //
-        for (let i = 0; i < numShardsToExict && i < sortedShards.length; i++) {
-            // console.log(`Evicting shard ${sortedShards[i].id} last accessed at ${sortedShards[i].lastAccessed}`);
-            const shard = sortedShards[i];
-            this.shardCache.delete(shard.id);
-        }
-    }
-
-    //
-    // Resolves the worker wait promise, waking it up to perform a save.
-    //
-    private resolveWorkerPromise: (() => void) | undefined = undefined;
-
-    //
-    // Loops and saves all records in the cache.
-    //
-    private async startWorker(): Promise<void> {
-
-        // console.log(`Worker started.`);
-
-        while (this.isAlive) {
-
-            // console.log(`Worker waiting.`);
-
-            //
-            // Wait for notification to save.
-            //
-            await new Promise<void>(resolve => {
-                this.resolveWorkerPromise = resolve;
-            });
-
-            this.resolveWorkerPromise = undefined;
-
-            if (!this.isAlive) {
-                // Exit the worker if the collection is shutting down.
-                // console.log(`Worker exiting on shutdown.`);
-                break;
-            }
-
-            // console.log(`Worker triggered saving.`);
-
-            await this.saveDirtyShards();
-        }
-    }
-
-    //
-    // Wakes the worker to save records.
-    //
-    private wakeWorker(): void {
-        if (this.resolveWorkerPromise) {
-            this.resolveWorkerPromise();
-        }
-    }
-
-    //
-    // Time for the next scheduled save or undefined if not scheduled.
-    //
-    private saveTimer: NodeJS.Timeout | undefined;
-
-    //
-    // Schedules the worker to wake up and save record.
-    //
-    private scheduleSave(reason: string): void {
-
-        // console.log(`Scheduling save because ${reason}`);
-
-        this.clearSchedule();
-
-        if (this.lastSaveTime === undefined) {
-            this.lastSaveTime = Date.now();
-            // console.log(`Set last save time for the first time: ${this.lastSaveTime}`);
-        }
-        else {
-            const timeNow = Date.now();
-            const timeSinceLastSaveMs = timeNow - this.lastSaveTime;
-            // console.log(`Time since last save: ${(timeSinceLastSaveMs)}ms, Time now: ${timeNow}`);
-
-            if (timeSinceLastSaveMs > maxSaveDelayMs) {
-                // console.log(`Too much time elapsed, forcing immediate save.`);
-                this.wakeWorker(); // Waker the worker to perform an immediate save. Too much time has passed.
-                return;
-            }
-        }
-
-        //
-        // Start a new timer for debounced save.
-        //
-        this.saveTimer = setTimeout(() => {
-            this.saveTimer = undefined;
-            // console.log(`Scheduled save triggered.`);
-            this.wakeWorker(); // Waker the worker to perform the save.
-        }, saveDebounceMs);
-    }
-
-    //
-    // Clear any current schedule.
-    //
-    private clearSchedule(): void {
-        if (this.saveTimer) {
-
-            // console.log(`Cleared schedule.`);
-
-            clearTimeout(this.saveTimer);
-            this.saveTimer = undefined;
-        }
-    }
-
-    //
-    // Keeps the worker alive, even when it has failed.
-    //
-    private keepWorkerAlive(): void {
-        this.startWorker()
-            .catch((err: any) => {
-                console.error("Worker failed.");
-                console.error(err.stack);
-
-                this.keepWorkerAlive();
-            });
-    }
-
-    //
-    // Writes all pending changes and shuts down the collection.
-    //
-    async shutdown(): Promise<void> {
-        // console.log(`Shutting down collection.`);
-        this.clearSchedule(); // Clear any pending saves.
-        this.isAlive = false; // Causes the worker to exit after saving.
-        this.wakeWorker(); // Wake the worker so it can exit.
-        
-        if (!this.isReadonly) {
-            await this.saveDirtyShards(); // Save any remaining dirty shards.
-            
-            // Shut down the sort manager to save any dirty sort index pages
-            await this.sortManager.shutdown();
-        }
     }
 
     //
@@ -655,30 +461,15 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads the requested shard from cache or from storage.
     //
     async loadShard(shardId: number): Promise<IShard<RecordT>> {
-        let shard = this.shardCache.get(shardId);
-        if (shard === undefined) {
-            const filePath = `${this.directory}/${shardId}`;
-            const records = await this.loadRecords(filePath);
-            shard = {
-                id: shardId,
-                dirty: true, // If we don't do this the shard  an be evicted immediately.
-                lastAccessed: Date.now(),
-                records: new Map<string, RecordT>(),
-            };
-            for (const record of records) {
-                this.setRecord(record._id, record, shard);
-            }
-            this.shardCache.set(shardId, shard);
+        const filePath = `${this.directory}/${shardId}`;
+        const records = await this.loadRecords(filePath);
+        let shard = {
+            id: shardId,
+            records: new Map<string, RecordT>(),
+        };
 
-            //
-            // If we are over the maximum now, evict the oldest shards that have already been saved.
-            // If all loaded shards are dirty, then we will have to wait for them to be saved.
-            //
-            this.evictOldestShards();
-        }
-        else {
-            // console.log(`Found shard ${shardId} in cache.`);
-            shard.lastAccessed = Date.now();
+        for (const record of records) {
+            await this.setRecord(record._id, record, shard);
         }
 
         return shard;
@@ -700,11 +491,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error(`Document with ID ${record._id} already exists in shard ${shardId}`);
         }
 
-        this.setRecord(record._id, record, shard);
+        await this.setRecord(record._id, record, shard);
+        await this.saveShard(shard);
 
         await this.sortManager.addRecord(record);
-
-        this.scheduleSave(`inserted record ${record._id}`);
     }
 
     //
@@ -723,8 +513,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return undefined; // Record not found
         }
 
-        shard.lastAccessed = Date.now();
-
         return record;
     }
 
@@ -734,17 +522,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async *iterateRecords(): AsyncGenerator<RecordT, void, unknown> {
 
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            let shard = this.shardCache.get(shardId);
-            if (shard !== undefined) {
-                //
-                // The shard is already cached in memory.
-                //
-                for (const record of shard.records.values()) {
-                    yield record;
-                }
-                continue;
-             }
-
              const buffer = await this.storage.read(`${this.directory}/${shardId}`);
              if (!buffer || buffer.length === 0) {
                  continue;
@@ -768,15 +545,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateShards(): AsyncGenerator<Iterable<RecordT>, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            let shard = this.shardCache.get(shardId);
-            if (shard !== undefined) {
-                //
-                // The shard is already cached in memory.
-                //
-                yield shard.records.values();
-                continue;
-            }
-
             const buffer = await this.storage.read(`${this.directory}/${shardId}`);
             if (!buffer || buffer.length === 0) {
                 continue;
@@ -806,21 +574,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         let shardId = next ? parseInt(next) : 0;
         while (shardId < this.numShards) {
-            const shard = this.shardCache.get(shardId);
-            if (shard !== undefined) {
-                // The shard is already cached in memory
-                const records = Array.from(shard.records.values());
-                if (records.length > 0) {
-                    return { records, next: `${shardId + 1}` };
-                }
-            }
-            else {
-                // Load records from storage
-                const filePath = `${this.directory}/${shardId}`;
-                const records = await this.loadRecords(filePath);
-                if (records.length > 0) {
-                    return { records, next: `${shardId + 1}` };
-                }
+            // Load records from storage
+            const filePath = `${this.directory}/${shardId}`;
+            const records = await this.loadRecords(filePath);
+            if (records.length > 0) {
+                return { records, next: `${shardId + 1}` };
             }
 
             shardId += 1;
@@ -858,11 +616,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Updates the record.
         //
         const updatedRecord: any = { ...existingRecord, ...updates };
-        this.setRecord(id, updatedRecord, shard);
+        await this.setRecord(id, updatedRecord, shard);
+        await this.saveShard(shard);
 
         await this.sortManager.updateRecord(updatedRecord, existingRecord);
-
-        this.scheduleSave(`updated record ${id}`);
 
         return true;
     }
@@ -886,11 +643,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Replaces the record.
         //
-        this.setRecord(id, record, shard);
+        await this.setRecord(id, record, shard);
+        await this.saveShard(shard);
 
         await this.sortManager.updateRecord(record, existingRecord);
-
-        this.scheduleSave(`replaced record ${id}`);
 
         return true;
     }
@@ -915,10 +671,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         // Delete the record.
         //
         this.deleteRecord(id, shard);
+        await this.saveShard(shard);
 
         await this.sortManager.deleteRecord(id, existingRecord);
-
-        this.scheduleSave(`deleted record ${id}`);
 
         return true;
     }   
@@ -1020,10 +775,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Drops the whole collection.
     //
-    async drop(): Promise<void> {
-        this.clearSchedule(); // Clear any pending saves.
-        this.shardCache.clear(); // Clear all shards from memory.
-        
+    async drop(): Promise<void> {       
         // Delete sort indexes if any
         await this.sortManager.deleteAllSortIndexes();
         
