@@ -28,13 +28,6 @@ const splitKeysThreshold = 1.2;
 //
 const leafSplitThreshold = 1.5;
 
-// let id = 0;
-
-// Removed makeId function - now using injected UUID generator
-
-// Constants for save debouncing
-const maxSaveDelayMs = 10_000;
-
 export interface ISortedIndexEntry<RecordT> {
     // The ID of the record
     recordId: string; //TODO: this should be a UUID buffer type.
@@ -140,13 +133,7 @@ export interface ISortIndex<RecordT extends IRecord> {
     // Find records by range query using optimized leaf traversal.
     //
     findByRange(options: IRangeOptions): Promise<RecordT[]>;
-    
-    //
-    // Saves all dirty nodes and metadata, then clears the cache
-    // Should be called when shutting down the database
-    //
-    shutdown(): Promise<void>;
-    
+        
     //
     // Visualizes the B-tree structure for debugging purposes
     // Returns a string representation of the tree
@@ -197,28 +184,14 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private totalEntries: number = 0;
     private totalPages: number = 0; // Tracks only leaf nodes (user-facing pages)
     private loaded: boolean = false;
-    private saving: boolean = false; // Flag to prevent concurrent saves.
-    private dirty: boolean = false; // Set to true when the tree is modified and needs saving.
     private rootPageId: string | undefined;
     private type?: SortDataType; // Optional type for value conversion
     
     // Path to the single file that contains all tree nodes and metadata
     private treeFilePath: string;
-
-    // Cache for loaded leaf records
-    private leafRecordsCache: Map<string, {
-        records: ISortedIndexEntry<RecordT>[];
-        dirty: boolean;
-        lastAccessed: number;
-    }> = new Map();
     
     // Map of all tree nodes
-    private treeNodes: Map<string, IBTreeNode> = new Map();
-    
-    // Maximum number of pages to keep in cache
-    private maxCachedPages: number = 10;
-    
-    private lastSaveTime: number | undefined = undefined;
+    private treeNodes: Map<string, IBTreeNode> = new Map(); //todo: load this as needed.
     
     // UUID generator for creating unique identifiers
     private readonly uuidGenerator: IUuidGenerator;
@@ -346,7 +319,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 this.reconstructParentChildRelationships();
                 
                 this.loaded = true;
-                this.dirty = false;
                 return true;
             }
         }
@@ -519,10 +491,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             throw new Error('Root page ID is not set. Cannot save tree.');
         }
 
-        if (!this.dirty) {
-            return; // No changes to save.
-        }
-
         // Calculate total size needed for the buffer
         const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
         const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
@@ -664,8 +632,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Write to storage        
         await retry(() => this.storage.write(this.treeFilePath, undefined, dataWithChecksum));
-
-        this.dirty = false; // Mark as clean after saving.
     }
 
     //
@@ -675,7 +641,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         if (this.loaded) {
             return;
         }
-       
+      
         // Create an empty root leaf node to start with (empty children array means it's a leaf)
         const emptyRoot: IBTreeNode = {
             keys: [],
@@ -699,9 +665,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Track whether we've added any records
         let recordsAdded = 0;
-
-        let startTime = Date.now();
-        
+       
         // Iterate through all records and add them directly to the B-tree
         for await (const record of this.collection.iterateRecords()) {
             const value = record[this.fieldName];
@@ -709,28 +673,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 // Add each record directly to the index
                 await this.addRecord(record);
                 recordsAdded++;
-
-                // if ((recordsAdded % 1000) === 0) {
-                //     const endTime = Date.now();
-                //     const elapsedSeconds = (endTime - startTime)
-                //     console.log(``);
-                //     console.log(``);
-                //     console.log(`>>> Processed 1k records in ${elapsedSeconds}ms (${(1000 / elapsedSeconds).toFixed(2)} records/sec)`);
-
-                //     console.log(`Nodes in memory after adding record ${recordsAdded}: ${this.treeNodes.size}`);
-                //     // console.log(`Leaf records in memory after adding record ${recordsAdded}: ${this.leafRecordsCache.size}`);
-
-                //     startTime = endTime; // Reset start time for next batch.
-                // }
             }
         }
         
         // Save tree nodes and metadata to the single file
         await this.saveTree();
-               
-        // Save metadata
-        await this.markDirty();
-        
+                       
         this.loaded = true;
     }
     
@@ -987,23 +935,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     });
                 }
                 
-                // Update numRecords in the node
-                const node = this.getNode(pageId);
-                if (node && node.children.length === 0) {
-                    await this.markNodeDirty(pageId, node);
-                }
-                
                 return records;
-            } else {
+            } 
+            else {
                 // Old BSON array format (backward compatibility)
                 const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
                 const records = leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
-                
-                // Update numRecords in the node
-                const node = this.getNode(pageId);
-                if (node && node.children.length === 0) {
-                    this.markNodeDirty(pageId, node);
-                }
                 
                 return records;
             }
@@ -1016,189 +953,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private getNode(pageId: string): IBTreeNode | undefined {       
         return this.treeNodes.get(pageId);
     }
-    
-    // Get leaf records from cache or load from file
-    private async getLeafRecords(pageId: string): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
-        // Check if records are in cache
-        const cachedRecords = this.leafRecordsCache.get(pageId);
-        if (cachedRecords) {
-            // Update last accessed time
-            cachedRecords.lastAccessed = Date.now();
-            return cachedRecords.records;
-        }
-        
-        // Load from storage if not in cache
-        const records = await this.loadLeafRecords(pageId);
-        
-        // If loaded successfully, add to cache
-        if (records) {
-            this.leafRecordsCache.set(pageId, {
-                records,
-                dirty: false,
-                lastAccessed: Date.now(),
-            });
-            
-            // Evict oldest records if cache is too large
-            await this.evictOldestLeafRecords();
-        }
-        
-        return records;
-    }
-    
-    // Mark a node as dirty and schedule a save
-    private async markNodeDirty(pageId: string, node: IBTreeNode): Promise<void> {
-        this.dirty = true;
-
-        // Store in tree nodes map
-        this.treeNodes.set(pageId, node);
-                
-        // Schedule a save
-        await this.scheduleSave(`updated node ${pageId}`);
-    }
-    
-    // Mark leaf records as dirty and schedule a save
-    private async markLeafRecordsDirty(pageId: string, records: ISortedIndexEntry<RecordT>[], reason: string): Promise<void> {
-        const cachedRecords = this.leafRecordsCache.get(pageId);
-        // console.log(`Marking leaf records for page ${pageId} as dirty because ${reason}`);
-        if (cachedRecords) {
-            // Update existing cache entry
-            cachedRecords.records = records;
-            cachedRecords.dirty = true;
-            cachedRecords.lastAccessed = Date.now();
-        } else {
-            // Add to cache if not already there
-            this.leafRecordsCache.set(pageId, {
-                records,
-                dirty: true,
-                lastAccessed: Date.now(),
-            });
-        }
-        
-        // Schedule a save
-        await this.scheduleSave(`updated leaf records ${pageId}`);
-    }
-        
-    // Evict oldest leaf records that are not dirty from cache
-    private async evictOldestLeafRecords(): Promise<void> {
-
-        //
-        // First stage of eviction: remove oldest non-dirty records.
-        //
-
-        if (this.leafRecordsCache.size <= this.maxCachedPages) {
-            return; // No need to evict
-        }
-        
-        let numRecordsToEvict = this.leafRecordsCache.size - this.maxCachedPages;
-        
-        // Sort non-dirty records by last accessed time
-        const records = Array.from(this.leafRecordsCache.entries())
-            .filter(([_, rec]) => !rec.dirty)
-            .sort(([_a, recA], [_b, recB]) => recA.lastAccessed - recB.lastAccessed);
-        
-        // Evict oldest records
-        for (let i = 0; i < numRecordsToEvict && i < records.length; i++) {
-            // console.log(`Evicting non-dirty leaf records for page ${records[i][0]}`);
-            this.leafRecordsCache.delete(records[i][0]);
-        }
-
-        //
-        // Second stage of eviction: if we still have too many cached pages,
-        // We will save and evict the oldest dirty records as well.
-        //
-
-        if (this.leafRecordsCache.size <= this.maxCachedPages) {
-            return; // No need to evict
-        }
-        
-        numRecordsToEvict = this.leafRecordsCache.size - this.maxCachedPages;
-
-        const dirtyRecords = Array.from(this.leafRecordsCache.entries())
-            .filter(([_, rec]) => rec.dirty)
-            .sort(([_a, recA], [_b, recB]) => recA.lastAccessed - recB.lastAccessed);
-
-        // Evict oldest dirty records
-        for (let i = 0; i < numRecordsToEvict && i < dirtyRecords.length; i++) {
-            const [pageId, cachedRecords] = dirtyRecords[i];
-
-            // console.log(`Saving and evicting dirty leaf records for page ${pageId}`);
-            
-            // Save dirty records before eviction.
-            await this.saveLeafRecords(pageId, cachedRecords.records);
-
-            // Evict from cache.
-            this.leafRecordsCache.delete(pageId);            
-        }
-    }
-    
-    // Schedule saving of all dirty nodes
-    private async scheduleSave(reason: string): Promise<void> {        
-        if (this.lastSaveTime === undefined) {
-            this.lastSaveTime = Date.now();
-        } 
-        else {
-            const timeNow = Date.now();
-            const timeSinceLastSaveMs = timeNow - this.lastSaveTime;
-            
-            if (timeSinceLastSaveMs > maxSaveDelayMs) {
-                // Too much time elapsed, save immediately
-                await this.saveDirtyNodes();
-                return;
-            }
-        }
-    }   
-   
-    // Save all dirty nodes and metadata
-    private async saveDirtyNodes(): Promise<void> {
-        if (this.saving) {            
-            console.warn(`Save already in progress, skipping save.`);
-            return; // Avoid concurrent saves.
-        }
-
-        this.saving = true;
-
-        try {
-            // Save dirty metadata and tree nodes if exists
-            if (this.dirty) {
-                await this.saveTree();
-            }
-                    
-            // Save all dirty leaf records
-            const dirtyLeafRecords = Array.from(this.leafRecordsCache.entries())
-                .filter(([_, rec]) => rec.dirty);            
-            if (dirtyLeafRecords.length > 0) {
-                // for (const [pageId, cachedRecords] of dirtyLeafRecords) {
-                //     console.log(`  ${pageId}`);
-                // }
-    
-                for (const [pageId, cachedRecords] of dirtyLeafRecords) {
-                    await this.saveLeafRecords(pageId, cachedRecords.records);
-                    cachedRecords.dirty = false; // Mark as clean after saving
-
-                }
-            }
-            
-            this.lastSaveTime = Date.now();
-            
-            // Now that we've saved, we can evict oldest nodes and records
-            await this.evictOldestLeafRecords();
-        }
-        finally {
-            this.saving = false;
-        }
-    }
-    
-    //
-    // Marks the tree as dirty and schedules a save.
-    //
-    private async markDirty(): Promise<void> {
-        this.dirty = true;
-        
-        // Schedule save
-        await this.scheduleSave('updated metadata');
-    }
-    
-    
+     
     //
     // Get a page of records from the collection using the sort index.
     //
@@ -1234,7 +989,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         }
         
         // Get the records from the leaf records file
-        const leafRecords = await this.getLeafRecords(pageId);
+        const leafRecords = await this.loadLeafRecords(pageId);
         if (!leafRecords) {
             return {
                 records: [],
@@ -1275,7 +1030,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         this.totalEntries = 0;
         this.totalPages = 0;
         this.loaded = false;
-        this.leafRecordsCache.clear();
         this.treeNodes.clear();
     }
     
@@ -1296,7 +1050,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             const leafId = this.findLeafForValue(oldValue);
             if (leafId) {
                 const leafNode = this.getNode(leafId);
-                const leafRecords = await this.getLeafRecords(leafId);
+                const leafRecords = await this.loadLeafRecords(leafId);
                 
                 if (leafNode && leafNode.children.length === 0 && leafRecords) {
                     // Find the entry with matching ID
@@ -1340,7 +1094,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                 if (prevLeafNode && prevLeafNode.children.length === 0) {
                                     // Update the next pointer to skip this empty node
                                     prevLeafNode.nextLeaf = leafNode.nextLeaf;
-                                    await this.markNodeDirty(prevLeafId, prevLeafNode);
+                                    await this.saveTree();
                                 }
                             }
                             
@@ -1349,7 +1103,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                 const nextLeafNode = this.getNode(leafNode.nextLeaf);
                                 if (nextLeafNode && nextLeafNode.children.length === 0) {
                                     nextLeafNode.previousLeaf = prevLeafId;
-                                    await this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
+                                    await this.saveTree();
                                 }
                             }
                             
@@ -1362,9 +1116,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                             
                             // Decrement total pages since we're effectively removing this page
                             this.totalPages--;
-                        } else {
+                        } 
+                        else {
                             // Update leaf records
-                            await this.markLeafRecordsDirty(leafId, leafRecords, `removed index ${entryIndex}`);
+                            await this.saveLeafRecords(leafId, leafRecords);
                         }
                         
                         // Decrement total entries
@@ -1392,7 +1147,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     
                     while (currentNode) {
                         if (currentNode.children.length === 0) {
-                            const leafRecords = await this.getLeafRecords(currentId);
+                            const leafRecords = await this.loadLeafRecords(currentId);
                             if (leafRecords) {
                                 // Find the entry with matching ID
                                 const entryIndex = leafRecords.findIndex(
@@ -1410,7 +1165,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                             const prevNode = this.getNode(prevNodeId);
                                             if (prevNode && prevNode.children.length === 0) {
                                                 prevNode.nextLeaf = currentNode.nextLeaf;
-                                                await this.markNodeDirty(prevNodeId, prevNode);
+                                                await this.saveTree();
                                             }
                                         }
                                         
@@ -1419,7 +1174,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                             const nextNode = this.getNode(currentNode.nextLeaf);
                                             if (nextNode && nextNode.children.length === 0) {
                                                 nextNode.previousLeaf = prevNodeId;
-                                                await this.markNodeDirty(currentNode.nextLeaf, nextNode);
+                                                await this.saveTree();
                                             }
                                         }
                                         
@@ -1434,7 +1189,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                         this.totalPages--;
                                     } else {
                                         // Update leaf records
-                                        await this.markLeafRecordsDirty(currentId, leafRecords, `removed index ${entryIndex}`);
+                                        await this.saveLeafRecords(currentId, leafRecords);
                                     }
                                     
                                     // Decrement total entries
@@ -1479,7 +1234,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         const leafId = this.findLeafForValue(value);
         if (leafId) {
             const leafNode = this.getNode(leafId);
-            const leafRecords = await this.getLeafRecords(leafId);
+            const leafRecords = await this.loadLeafRecords(leafId);
             
             if (leafNode && leafNode.children.length === 0 && leafRecords) {
                 // Find the entry with matching ID
@@ -1528,7 +1283,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                             if (prevLeafNode && prevLeafNode.children.length === 0) {
                                 // Update the next pointer to skip this empty node
                                 prevLeafNode.nextLeaf = leafNode.nextLeaf;
-                                this.markNodeDirty(prevLeafId, prevLeafNode);
+                                await this.saveTree();
                             }
                         }
                         
@@ -1537,7 +1292,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                             const nextLeafNode = this.getNode(leafNode.nextLeaf);
                             if (nextLeafNode && nextLeafNode.children.length === 0) {
                                 nextLeafNode.previousLeaf = prevLeafId;
-                                await this.markNodeDirty(leafNode.nextLeaf, nextLeafNode);
+                                await this.saveTree();
                             }
                         }
                         
@@ -1552,7 +1307,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                         this.totalPages--;
                     } else {
                         // Update the leaf records
-                        await this.markLeafRecordsDirty(leafId, leafRecords, `removed index ${entryIndex}`);
+                        await this.saveLeafRecords(leafId, leafRecords);
                     }
                     
                     // Decrement total entries
@@ -1583,7 +1338,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 
                 while (currentNode) {
                     if (currentNode.children.length === 0) {
-                        const leafRecords = await this.getLeafRecords(currentId);
+                        const leafRecords = await this.loadLeafRecords(currentId);
                         if (leafRecords) {
                             // Find the entry with matching ID
                             const entryIndex = leafRecords.findIndex(
@@ -1607,7 +1362,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                         const prevNode = this.getNode(prevNodeId);
                                         if (prevNode && prevNode.children.length === 0) {
                                             prevNode.nextLeaf = currentNode.nextLeaf;
-                                            await this.markNodeDirty(prevNodeId, prevNode);
+                                            await this.saveTree();
                                         }
                                     }
                                     
@@ -1616,7 +1371,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                         const nextNode = this.getNode(currentNode.nextLeaf);
                                         if (nextNode && nextNode.children.length === 0) {
                                             nextNode.previousLeaf = prevNodeId;
-                                            await this.markNodeDirty(currentNode.nextLeaf, nextNode);
+                                            await this.saveTree();
                                         }
                                     }
                                     
@@ -1631,7 +1386,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                                     this.totalPages--;
                                 } else {
                                     // Update the leaf records
-                                    await this.markLeafRecordsDirty(currentId, leafRecords, `removed index ${entryIndex}`);
+                                    await this.saveLeafRecords(currentId, leafRecords);
                                 }
                                 
                                 // Decrement total entries
@@ -1654,7 +1409,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Update metadata if we found and removed a record
         if (recordDeleted) {
-            await this.markDirty();
+            await this.saveTree();
         }
     }
     
@@ -1717,10 +1472,14 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         if (!nodeId) return;
         
         const node = this.getNode(nodeId);
-        if (!node || !node.parentId) return;
+        if (!node || !node.parentId) {
+            return;
+        }
                
         const parentNode = this.getNode(node.parentId);
-        if (!parentNode) return;
+        if (!parentNode) {
+            return;
+        }
         
         // Find the index of the key that references this node
         const childIndex = parentNode.children.indexOf(nodeId);
@@ -1728,7 +1487,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         // If this isn't the leftmost child (i > 0), it has a key in the parent
         if (childIndex > 0 && this.compareValues(parentNode.keys[childIndex - 1], oldKey) === 0) {
             parentNode.keys[childIndex - 1] = newKey;
-            await this.markNodeDirty(node.parentId, parentNode);
+            await this.saveTree();
         }
         
         // Recursively update parent nodes if needed
@@ -1767,7 +1526,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         }
         
         // Get the leaf records
-        let leafRecords = await this.getLeafRecords(leafId) || [];
+        let leafRecords = await this.loadLeafRecords(leafId) || [];
         
         // Insert the entry in the correct position using binary search
         let left = 0;
@@ -1800,21 +1559,18 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // If the leaf is now too large, split it
         if (leafRecords.length > this.pageSize * leafSplitThreshold) {
-            await this.splitLeafNode(leafId, leafNode, leafRecords);
+            this.splitLeafNode(leafId, leafNode, leafRecords);
         } 
         else {
             // Just update the leaf records
-            await this.markLeafRecordsDirty(leafId, leafRecords, `added index at ${insertIndex}`);
+            await this.saveLeafRecords(leafId, leafRecords);
         }
         
         // Increment total entries
         this.totalEntries++;
         
         // Update metadata
-        await this.markDirty();
-
-        // Evict oldest records if cache is too large
-        await this.evictOldestLeafRecords();
+        await this.saveTree();
     }
     
     /**
@@ -1834,8 +1590,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         // Create new leaf node with the second half
         const newEntries = records.splice(splitIndex);
         const newNodeId = this.uuidGenerator.generate();
-
-        
+     
         const newNode: IBTreeNode = {
             // Node is a leaf (children array is empty)
             keys: [],
@@ -1844,6 +1599,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             previousLeaf: nodeId,
             parentId: node.parentId, // Copy parent from original node
         };
+        this.treeNodes.set(newNodeId, newNode);
         
         // Update pointers in the original node
         node.nextLeaf = newNodeId;
@@ -1853,7 +1609,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             const nextNode = this.getNode(newNode.nextLeaf);
             if (nextNode && nextNode.children.length === 0) {
                 nextNode.previousLeaf = newNodeId;
-                await this.markNodeDirty(newNode.nextLeaf, nextNode);
             }
         }
         
@@ -1867,9 +1622,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 children: [nodeId, newNodeId],
                 parentId: undefined,
             };
-            
-            // Save the new root
-            await this.markNodeDirty(newRootId, newRoot);
+            this.treeNodes.set(newRootId, newRoot);
             
             // Update parent references for children
             node.parentId = newRootId;
@@ -1894,30 +1647,23 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     // Insert the separator key (first key in new leaf) in the parent's keys array
                     parentNode.keys.splice(childIndex, 0, newEntries[0].value);
                     
-                    // Save the updated parent node
-                    await this.markNodeDirty(parentId, parentNode);
-                    
                     // If the parent node is now too large, we need to split it too
                     if (parentNode.keys.length > (this.keySize * splitKeysThreshold)) {
-                        await this.splitInternalNode(parentId, parentNode);
+                        this.splitInternalNode(parentId, parentNode);
                     }
                 }
             }
         }
         
-        // Save both nodes
-        await this.markNodeDirty(nodeId, node);
-        await this.markNodeDirty(newNodeId, newNode);
-        
         // Save leaf records for both nodes
-        await this.markLeafRecordsDirty(nodeId, records, `split leaf at ${splitIndex}`);
-        await this.markLeafRecordsDirty(newNodeId, newEntries, `split leaf at ${splitIndex}`);
-        
+        await this.saveLeafRecords(nodeId, records);
+        await this.saveLeafRecords(newNodeId, newEntries);
+
         // Increment total pages since we created a new leaf page
         this.totalPages++;
         
-        // Update metadata with the new root page ID
-        await this.markDirty();
+        // Save both nodes
+        await this.saveTree();
     }
     
     // Find records by exact value using binary search on the sorted index
@@ -1935,7 +1681,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Process the initial leaf node
         const leafNode = this.getNode(leafId);
-        const leafRecords = await this.getLeafRecords(leafId);
+        const leafRecords = await this.loadLeafRecords(leafId);
         
         if (leafNode && leafNode.children.length === 0 && leafRecords) {
             // Find all entries with the exact value
@@ -1953,7 +1699,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     const nextNode = this.getNode(nextId);
                     if (!nextNode || nextNode.children.length > 0) break;
                     
-                    const nextRecords = await this.getLeafRecords(nextId);
+                    const nextRecords = await this.loadLeafRecords(nextId);
                     if (!nextRecords || nextRecords.length === 0) break;
                     
                     // Find any matching records in this leaf
@@ -1976,7 +1722,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     const prevNode = this.getNode(prevId);
                     if (!prevNode || prevNode.children.length > 0) break;
                     
-                    const prevRecords = await this.getLeafRecords(prevId);
+                    const prevRecords = await this.loadLeafRecords(prevId);
                     if (!prevRecords || prevRecords.length === 0) break;
                     
                     // Find any matching records in this leaf
@@ -2005,7 +1751,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 const currentNode = this.getNode(currentId);
                 if (!currentNode || currentNode.children.length > 0) break;
                 
-                const currentRecords = await this.getLeafRecords(currentId);
+                const currentRecords = await this.loadLeafRecords(currentId);
                 if (!currentRecords) {
                     if (!currentNode.nextLeaf) break;
                     currentId = currentNode.nextLeaf;
@@ -2072,7 +1818,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 break;
             }
             
-            const leafRecords = await this.getLeafRecords(currentId);
+            const leafRecords = await this.loadLeafRecords(currentId);
             if (!leafRecords) {
                 if (!node.nextLeaf) break;
                 currentId = node.nextLeaf;
@@ -2146,7 +1892,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     /**
      * Splits an internal node when it gets too large
      */
-    private async splitInternalNode(nodeId: string, node: IBTreeNode): Promise<void> {
+    private splitInternalNode(nodeId: string, node: IBTreeNode): void {
         if (node.children.length === 0) {
             return; // Only process internal nodes
         }
@@ -2165,6 +1911,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             children: node.children.splice(middleIndex + 1), // Take children after the middle
             parentId: node.parentId,
         };
+        this.treeNodes.set(newNodeId, newNode);
         
         // Remove the middle key from the original node (it goes up to the parent)
         node.keys.splice(middleIndex, 1);
@@ -2174,7 +1921,6 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             const childNode = this.getNode(childId);
             if (childNode) {
                 childNode.parentId = newNodeId;
-                await this.markNodeDirty(childId, childNode);
             }
         }
         
@@ -2187,14 +1933,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 children: [nodeId, newNodeId],
                 parentId: undefined,
             };
+            this.treeNodes.set(newRootId, newRoot);
             
             // Update parent references
             node.parentId = newRootId;
             newNode.parentId = newRootId;
-            
-            // Save the new root
-            await this.markNodeDirty(newRootId, newRoot);
-            
+                        
             // Update the root page ID
             this.rootPageId = newRootId;
         } 
@@ -2213,41 +1957,14 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     
                     // Insert the middle key
                     parentNode.keys.splice(childIndex, 0, middleKey);
-                    
-                    // Save the updated parent
-                    await this.markNodeDirty(parentId, parentNode);
-                    
+                                        
                     // Check if the parent needs to be split
                     if (parentNode.keys.length > (this.keySize * splitKeysThreshold)) {
-                        await this.splitInternalNode(parentId, parentNode);
+                        this.splitInternalNode(parentId, parentNode);
                     }
                 }
             }
         }
-        
-        // Save both nodes
-        await this.markNodeDirty(nodeId, node);
-        await this.markNodeDirty(newNodeId, newNode);        
-    }
-
-    /**
-     * Saves all dirty nodes and metadata, then clears the cache
-     * Should be called when shutting down the database
-     */
-    async shutdown(): Promise<void> {
-        if (!this.loaded) {
-            // If the index is not loaded, there's nothing to save.
-            return;
-        }
-
-        // Save all dirty nodes and metadata
-        await this.saveDirtyNodes();
-        
-        // Save all tree nodes and metadata
-        await this.saveTree();
-        
-        // Clear the cache
-        this.leafRecordsCache.clear();
     }
 
     /**
@@ -2267,7 +1984,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         // Recursive function to visualize nodes
         const visualizeNode = async (nodeId: string, level: number): Promise<void> => {
             const node = this.getNode(nodeId);
-            if (!node) return;
+            if (!node) {
+                return;
+            }
             
             const indent = "  ".repeat(level);
             const nodeType = node.children.length === 0 ? "LEAF" : "INTERNAL";
@@ -2279,25 +1998,28 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             }
             
             if (node.children.length === 0) {
-                const records = await this.getLeafRecords(nodeId);
+                const records = await this.loadLeafRecords(nodeId);
                 if (records && records.length > 0) {
                     lines.push(`${indent} Records: ${records.length}`);
                     // Show first few records for preview
                     const preview = records.slice(0, 3).map(r => `${r.value}`).join(', ');
                     if (records.length > 3) {
                         lines.push(`${indent} Values: ${preview}, ...`);
-                    } else {
+                    } 
+                    else {
                         lines.push(`${indent} Values: ${preview}`);
                     }
                     
                     if (node.nextLeaf) {
                         lines.push(`${indent} Next leaf: ${node.nextLeaf}`);
                     }
+
                     if (node.previousLeaf) {
                         lines.push(`${indent} Previous leaf: ${node.previousLeaf}`);
                     }
                 }
-            } else {
+            } 
+            else {
                 // For internal nodes, recursively visualize children
                 for (const childId of node.children) {
                     await visualizeNode(childId, level + 1);
@@ -2381,7 +2103,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             
             // For leaf nodes, also count the records
             if (isLeaf) {
-                const records = await this.getLeafRecords(nodeId);
+                const records = await this.loadLeafRecords(nodeId);
                 if (records) {
                     keyCount = records.length;
                     leafTotalRecords += keyCount;

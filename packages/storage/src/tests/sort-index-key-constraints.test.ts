@@ -195,7 +195,6 @@ describe('SortIndex Key Constraints', () => {
             expect(internal.isValid).toBe(true);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints during dynamic record addition', async () => {
@@ -235,7 +234,6 @@ describe('SortIndex Key Constraints', () => {
             expect(constraints.violations).toHaveLength(0);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints with very small keySize', async () => {
@@ -277,7 +275,6 @@ describe('SortIndex Key Constraints', () => {
             expect(stats.internalStats.maxKeysPerInternal).toBeLessThanOrEqual(keySize);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints after record deletions', async () => {
@@ -317,7 +314,6 @@ describe('SortIndex Key Constraints', () => {
             expect(constraints.allConstraintsMet).toBe(true);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints with random operations', async () => {
@@ -370,7 +366,6 @@ describe('SortIndex Key Constraints', () => {
             }
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints with duplicate values', async () => {
@@ -410,7 +405,6 @@ describe('SortIndex Key Constraints', () => {
         const duplicates = await sortIndex.findByValue(5);
         expect(duplicates.length).toBe(8);
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints with large dataset', async () => {
@@ -460,7 +454,6 @@ describe('SortIndex Key Constraints', () => {
             expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
         }
         
-        await sortIndex.shutdown();
     });
 
     test('should maintain key constraints across different keySize values', async () => {
@@ -502,7 +495,6 @@ describe('SortIndex Key Constraints', () => {
                 expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
             }
             
-            await sortIndex.shutdown();
-        }
+            }
     });
 });

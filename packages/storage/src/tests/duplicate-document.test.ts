@@ -28,8 +28,6 @@ describe('Collection duplicate document tests', () => {
     });
     
     afterEach(async () => {
-        // Clean up
-        await db.close();
         if (fs.existsSync(tempDir)) {
             fs.rmSync(tempDir, { recursive: true, force: true });
         }

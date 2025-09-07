@@ -458,7 +458,6 @@ export class MediaFileDatabase {
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
             uuidGenerator: uuidGenerator,
-            maxCachedShards: 100,
             readonly: isReadonly,
         });
 
@@ -895,9 +894,8 @@ export class MediaFileDatabase {
     // Closes the database.
     //
     async close(): Promise<void> {
-        await this.localHashCache.save();
-        await this.bsonDatabase.close();
-        await this.assetDatabase.close();
+        await this.localHashCache.save(); //todo: get rid of this?
+        await this.assetDatabase.close(); //todo: can i get rid of this?
 
         if (!this.isReadonly) {
             //
@@ -906,7 +904,7 @@ export class MediaFileDatabase {
             //          changes to files that should be updated 
             //          in the hash cache.
             //
-            await this.assetDatabase.save();
+            await this.assetDatabase.save(); //todo: get rid of this?
         }
     }
 
