@@ -121,6 +121,14 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi debug hash s3:bucket/path/to/file.jpg", description: "Hashes a file stored in S3." },
         { command: "psi debug hash /encrypted/file.jpg --key ./my-key.pem", description: "Hashes an encrypted file using a private key." }
     ],
+
+    "debug update": [
+        { command: "psi debug update --db .", description: "Updates file hashes in current directory database when files have changed." },
+        { command: "psi debug update --db ./photos", description: "Updates file hashes in ./photos database." },
+        { command: "psi debug update --db . --dry-run", description: "Shows what files would be updated without making changes." },
+        { command: "psi debug update --db . --path asset/12345", description: "Updates only a specific file by path." },
+        { command: "psi debug update --db . --full", description: "Forces full verification and update, bypassing cached optimizations." }
+    ],
     
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
