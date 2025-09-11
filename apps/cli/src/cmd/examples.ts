@@ -18,7 +18,7 @@ export async function examplesCommand(): Promise<void> {
         'User Interface': ['ui'],
         'File Analysis': ['info'],
         'Help and Support': ['examples', 'bug'],
-        'Debugging': ['debug merkle-tree', 'debug hash-cache']
+        'Debugging': ['debug merkle-tree', 'debug hash-cache', 'debug hash', 'debug update']
     };
 
     for (const [categoryName, commands] of Object.entries(categories)) {
