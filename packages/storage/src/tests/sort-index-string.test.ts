@@ -90,7 +90,8 @@ describe('SortIndex with string type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'string', // Specify string type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Create descending index on status field
@@ -102,7 +103,8 @@ describe('SortIndex with string type', () => {
             direction: 'desc',
             pageSize: 3,
             type: 'string', // Specify string type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
     });
     
@@ -416,7 +418,8 @@ describe('SortIndex with string type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'string',
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, numericCollection);
         
         await numericSortIndex.build();

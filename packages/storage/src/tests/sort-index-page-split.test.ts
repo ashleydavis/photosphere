@@ -40,7 +40,8 @@ describe('SortIndex Page Split', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 2, // Small page size to trigger splits easily
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
     });
     

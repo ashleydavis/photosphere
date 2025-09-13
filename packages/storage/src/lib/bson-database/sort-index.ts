@@ -75,6 +75,11 @@ export interface ISortIndexOptions {
     // Supports 'date' for ISO string date parsing, 'string' for string comparison, 'number' for numeric comparison
     // If not set, type will be inferred from the values.
     type?: SortDataType;
+
+    //
+    // If true, the index is opened in readonly mode and cannot be modified.
+    //
+    isReadonly: boolean;
 }
 
 export interface ISortResult<RecordT> {
@@ -219,6 +224,8 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     private maxCachedPages: number = 10;
     
     private lastSaveTime: number | undefined = undefined;
+
+    private isReadonly: boolean;
     
     // UUID generator for creating unique identifiers
     private readonly uuidGenerator: IUuidGenerator;
@@ -233,6 +240,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
         this.uuidGenerator = options.uuidGenerator;
+        this.isReadonly = options.isReadonly;
     }
 
     //
@@ -241,6 +249,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     async init(): Promise<void> {
         const loaded = await this.load();
         if (!loaded) {
+            if (this.isReadonly) {
+                throw new Error(`Sort index on field "${this.fieldName}" does not exist and cannot be created in readonly mode.`);
+            }
             await this.build();
         }
     }

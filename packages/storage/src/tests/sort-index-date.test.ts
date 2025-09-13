@@ -77,7 +77,8 @@ describe('SortIndex with date type', () => {
             direction: 'asc',
             pageSize: 2,
             type: 'date', // Specify date type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Create descending index on updatedAt field
@@ -89,7 +90,8 @@ describe('SortIndex with date type', () => {
             direction: 'desc',
             pageSize: 2,
             type: 'date', // Specify date type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
     });
     

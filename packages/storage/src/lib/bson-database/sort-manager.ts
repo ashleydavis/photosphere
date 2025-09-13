@@ -69,7 +69,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Create a existing sort index.
     //
-    private async createSortIndex(fieldName: string, direction: SortDirection, type?: SortDataType, pageSize?: number): Promise<SortIndex<RecordT>> {
+    private async createSortIndex(fieldName: string, direction: SortDirection, isReadonly: boolean, type?: SortDataType, pageSize?: number): Promise<SortIndex<RecordT>> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         let sortIndex = this.sortIndexes.get(key);
@@ -89,7 +89,8 @@ export class SortManager<RecordT extends IRecord> {
             direction,
             uuidGenerator: this.uuidGenerator,
             pageSize: pageSize || this.defaultPageSize,
-            type
+            type,
+            isReadonly,
         },  this.collection);
                
         this.sortIndexes.set(key, sortIndex);
@@ -112,8 +113,8 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Builds the sort index if it doesn't exist.
     //
-    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, isReadonly: boolean): Promise<void> {
+        const sortIndex = await this.createSortIndex(fieldName, direction, isReadonly, type, this.defaultPageSize);
         await sortIndex.init();
     }
     

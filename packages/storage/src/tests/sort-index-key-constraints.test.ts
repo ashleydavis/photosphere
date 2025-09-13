@@ -166,7 +166,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 5,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -210,7 +211,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 6,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build empty index
@@ -256,7 +258,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 4,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -298,7 +301,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 8,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -338,7 +342,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 7,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -394,7 +399,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 6,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -431,7 +437,8 @@ describe('SortIndex Key Constraints', () => {
             direction: 'asc',
             pageSize: 15,
             keySize,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -484,7 +491,8 @@ describe('SortIndex Key Constraints', () => {
                 direction: 'asc',
                 pageSize: 8,
                 keySize,
-            uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
             }, collection);
             
             // Build the index
