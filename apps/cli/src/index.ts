@@ -362,6 +362,7 @@ Resources:
         .description("Upgrades a media file database to the latest format by adding missing metadata files.")
         .option(...dbOption)
         .option(...metadataDirOption)
+        .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
