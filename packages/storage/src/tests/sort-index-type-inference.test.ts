@@ -40,7 +40,8 @@ describe('SortIndex type inference', () => {
                 fieldName: 'name',
                 direction: 'asc',
                 pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
                 // Note: no type specified, should be inferred
             },
             collection
@@ -77,7 +78,8 @@ describe('SortIndex type inference', () => {
                 fieldName: 'score',
                 direction: 'asc',
                 pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
                 // Note: no type specified, should be inferred
             },
             collection
@@ -118,7 +120,8 @@ describe('SortIndex type inference', () => {
                 fieldName: 'eventDate',
                 direction: 'asc',
                 pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
                 // Note: no type specified, should be inferred
             },
             collection
@@ -155,7 +158,8 @@ describe('SortIndex type inference', () => {
                 fieldName: 'value',
                 direction: 'asc',
                 pageSize: 1,  // Small page size to force comparison
-                uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
                 // Note: no type specified, should be inferred
             },
             collection
@@ -183,7 +187,8 @@ describe('SortIndex type inference', () => {
                 fieldName: 'value',
                 direction: 'asc',
                 pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
+                uuidGenerator: new RandomUuidGenerator(),
+                isReadonly: false,
             },
             collection
         );

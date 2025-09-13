@@ -90,7 +90,8 @@ describe('SortIndex with number type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'number', // Specify number type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Create descending index on price field
@@ -102,7 +103,8 @@ describe('SortIndex with number type', () => {
             direction: 'desc',
             pageSize: 3,
             type: 'number', // Specify number type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
     });
     
@@ -389,7 +391,8 @@ describe('SortIndex with number type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'number',
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, stringNumericCollection);
         
         await stringNumericSortIndex.build();
@@ -431,7 +434,8 @@ describe('SortIndex with number type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'number',
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, nanCollection);
         
         await nanSortIndex.build();
@@ -474,7 +478,8 @@ describe('SortIndex with number type', () => {
             direction: 'asc',
             pageSize: 3,
             type: 'number',
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, zeroNegativeCollection);
         
         await zeroNegativeSortIndex.build();

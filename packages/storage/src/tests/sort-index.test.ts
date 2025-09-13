@@ -37,7 +37,8 @@ describe('SortIndex', () => {
             fieldName: 'score',
             direction: 'asc',
             pageSize: 2,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
     });
     

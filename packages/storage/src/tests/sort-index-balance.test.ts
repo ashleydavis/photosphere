@@ -102,7 +102,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 10,
             keySize: 5,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -147,7 +148,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 8,
             keySize: 4,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -177,7 +179,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 5,
             keySize: 3,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build empty index
@@ -221,7 +224,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 6,
             keySize: 4,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -257,7 +261,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 8,
             keySize: 4,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -300,7 +305,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 6,
             keySize: 3,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index
@@ -354,7 +360,8 @@ describe('SortIndex Tree Balance', () => {
             direction: 'asc',
             pageSize: 20,
             keySize: 10,
-            uuidGenerator: new RandomUuidGenerator()
+            uuidGenerator: new RandomUuidGenerator(),
+            isReadonly: false,
         }, collection);
         
         // Build the index

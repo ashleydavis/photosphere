@@ -1000,7 +1000,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Create or rebuild a sort index for the specified field
     //
     async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {       
-        await this.sortManager.ensureSortIndex(fieldName, direction, type);
+        await this.sortManager.ensureSortIndex(fieldName, direction, type, this.isReadonly);
     }
 
     //

@@ -40,7 +40,7 @@ describe('SortManager', () => {
     
     test('should create and return a sort index', async () => {
         // Ensure the sort index exists
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', false);
         
         // Get sort index for price (ascending)
         const result = await sortManager.getSortedRecords('price', 'asc');
@@ -87,7 +87,7 @@ describe('SortManager', () => {
     
     test('should get existing sort index if already created', async () => {
         // Create the index first
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', false);
         await sortManager.getSortedRecords('price', 'asc');
         
         // Get the same index again
@@ -100,7 +100,7 @@ describe('SortManager', () => {
     
     test('should support descending order', async () => {
         // Ensure the sort index exists
-        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        await sortManager.ensureSortIndex('price', 'desc', 'number', false);
         
         // Get sort index for price (descending)
         const result = await sortManager.getSortedRecords('price', 'desc');
@@ -136,13 +136,13 @@ describe('SortManager', () => {
     
     test('should list all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', false);
         await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        await sortManager.ensureSortIndex('price', 'desc', 'number', false);
         await sortManager.getSortedRecords('price', 'desc');
         
-        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.ensureSortIndex('category', 'asc', 'string', false);
         await sortManager.getSortedRecords('category', 'asc');
         
         // List the indexes
@@ -163,7 +163,7 @@ describe('SortManager', () => {
     
     test('should delete a sort index', async () => {
         // Create an index
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', false);
         await sortManager.getSortedRecords('price', 'asc');
         
         // Delete the index
@@ -182,10 +182,10 @@ describe('SortManager', () => {
     
     test('should delete all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', false);
         await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.ensureSortIndex('category', 'asc', 'string', false);
         await sortManager.getSortedRecords('category', 'asc');
         
         // Delete all indexes for the collection
