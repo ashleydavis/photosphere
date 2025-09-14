@@ -1101,6 +1101,41 @@ export class SortIndex<RecordT extends IRecord> {
     
     
     //
+    // Find page ID for a specific page number (1-based) using in-memory tree structure
+    //
+    public async getPageIdByNumber(pageNumber: number): Promise<string | undefined> {
+        await this.init();
+
+        if (pageNumber < 1 || !this.rootPageId) {
+            return undefined;
+        }
+
+        // Find leftmost leaf to start counting from
+        let currentId = this.findLeftmostLeaf();
+        if (!currentId) {
+            return undefined;
+        }
+
+        // Navigate through the leaf linked list to find the target page
+        let currentPageNumber = 1;
+        while (currentId && currentPageNumber < pageNumber) {
+            const node = this.getNode(currentId);
+            if (!node || node.children.length > 0) {
+                return undefined; // Not a leaf node
+            }
+
+            if (!node.nextLeaf) {
+                return undefined; // Reached the end without finding the page
+            }
+
+            currentId = node.nextLeaf;
+            currentPageNumber++;
+        }
+
+        return currentPageNumber === pageNumber ? currentId : undefined;
+    }
+
+    //
     // Get a page of records from the collection using the sort index.
     //
     async getPage(pageId?: string): Promise<ISortResult<RecordT>> {
