@@ -259,7 +259,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private async setRecord(id: string, record: RecordT, shard: IShard<any>): Promise<void> {
         const normalizedId = this.normalizeId(id);
         shard.records.set(normalizedId, record);
-        await this.saveShard(shard);
     }
 
     //
