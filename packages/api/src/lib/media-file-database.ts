@@ -1452,17 +1452,23 @@ export class MediaFileDatabase {
     // This is the comprehensive removal method that handles storage cleanup.
     //
     async remove(assetId: string): Promise<void> {
-        this.checkReadonly('remove asset');
-        await this.assetStorage.deleteFile(pathJoin("asset", assetId));
-        await this.assetStorage.deleteFile(pathJoin("display", assetId));
-        await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
 
+        //
         // Remove the asset from the metadata collection and decrement the count.
+        //
         const removed = await this.metadataCollection.deleteOne(assetId);
         if (removed) {
             this.decrementAssetCount();
             this.assetDatabase.save(); // Save the updated asset count. TODO: Be good to roll this into the previous save.
         }
+
+        // Don't need a write lock to delete assets.
+        // If anything fails after deleting the metadata and before deleting
+        // these files we'll simply have "orphaned assets" in our database.
+        //
+        await this.assetStorage.deleteFile(pathJoin("asset", assetId));
+        await this.assetStorage.deleteFile(pathJoin("display", assetId));
+        await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
     }
 }
 
