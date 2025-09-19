@@ -29,7 +29,7 @@ export class AssetDatabaseStorage implements IStorage {
             lastModified: info.lastModified,
             length: info.length,
         };
-        this.assetDatabase.addFile(filePath, hashedFile);
+        await this.assetDatabase.addFile(filePath, hashedFile);
 
         // console.log(`Updated the merkle tree for file "${filePath}"`);
     }

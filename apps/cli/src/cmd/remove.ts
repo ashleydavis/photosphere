@@ -11,31 +11,15 @@ export interface IRemoveCommandOptions extends IBaseCommandOptions {
 // Command that removes a particular asset by ID from the database.
 //
 export async function removeCommand(assetId: string, options: IRemoveCommandOptions): Promise<void> {
-    try {
-        // Validate inputs
-        if (!assetId) {
-            throw new Error("Asset ID is required");
-        }
+    const dbPath = options.db || process.cwd();
 
-        const dbPath = options.db || process.cwd();
-        log.info(`Removing asset ${pc.cyan(assetId)} from database at ${pc.yellow(dbPath)}`);
+    // Load the database using shared function
+    const { database } = await loadDatabase(dbPath, options, false, false);
 
-        // Load the database using shared function
-        const { database } = await loadDatabase(dbPath, options, false, false);
+    // Remove the asset using the comprehensive removal method
+    await database.remove(assetId);
 
-        // Remove the asset using the comprehensive removal method
-        log.info(`Removing asset with ID: ${pc.cyan(assetId)}`);
-        await database.remove(assetId);
-
-        // Save the updated database
-        await database.close();
-
-        log.info(pc.green(`✓ Successfully removed asset ${assetId} from database`));
-
-    } catch (error) {
-        log.error(pc.red(`Remove failed: ${error instanceof Error ? error.message : String(error)}`));
-        await exit(1);
-    }
+    log.info(pc.green(`✓ Successfully removed asset ${assetId} from database`));
 
     await exit(0);
 }
