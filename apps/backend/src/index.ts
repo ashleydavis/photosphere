@@ -131,7 +131,7 @@ async function main() {
         console.warn("Google API key not set. Reverse geocoding will not work.");
     }
 
-    const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, dbStorage, {
+    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, dbStorage, {
         appMode: APP_MODE,
         authType: AUTH_TYPE,
         staticMiddleware: FRONTEND_STATIC_PATH ? express.static(FRONTEND_STATIC_PATH) : undefined,
@@ -142,8 +142,6 @@ async function main() {
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
-
-        await mediaFileDatabaseProvider.close();
     });    
 
     app.listen(PORT, () => {

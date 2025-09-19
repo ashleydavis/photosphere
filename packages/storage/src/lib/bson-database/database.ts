@@ -32,11 +32,6 @@ export interface IBsonDatabaseOptions {
     // UUID generator for creating unique identifiers.
     //
     uuidGenerator: IUuidGenerator;
-
-    //
-    // Whether the database is in readonly mode.
-    //
-    readonly?: boolean;
 }
 
 export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
@@ -81,8 +76,7 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
             collection = new BsonCollection<IRecord>(name, {
                 storage: this.options.storage,
                 directory: name,
-                uuidGenerator: this.options.uuidGenerator,
-                readonly: this.options.readonly,
+                uuidGenerator: this.options.uuidGenerator
             });
             this._collections.set(name, collection);
         }        

@@ -37,11 +37,6 @@ export interface IBsonCollectionOptions {
     // The maximum number of shards to keep in memory.
     //
     maxCachedShards?: number;
-
-    //
-    // Whether the collection is in readonly mode.
-    //
-    readonly?: boolean;
 }
 
 export interface IRecord {
@@ -196,22 +191,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     private readonly uuidGenerator: IUuidGenerator;
 
-    //
-    // Whether the collection is in readonly mode.
-    //
-    private readonly isReadonly: boolean;
-
-    //
-    // The last time the collection was saved.
-    //
-    private lastSaveTime: number | undefined = undefined;
-
     constructor(private readonly name: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
         this.uuidGenerator = options.uuidGenerator;
-        this.isReadonly = options.readonly || false;
 
         this.sortManager = new SortManager({
             storage: this.storage,

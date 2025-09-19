@@ -57,11 +57,6 @@ export interface IMediaFileDatabaseProvider {
     // Writes an asset to the storage provider.
     //
     write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void>;
-    
-    //
-    // Closes any resources held by the provider.
-    //
-    close(): Promise<void>;
 }
 
 //
@@ -98,8 +93,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
                 metadataStorage,
                 this.googleApiKey,
                 uuidGenerator,
-                timestampProvider,
-                false
+                timestampProvider
             );
             await mediaFileDatabase.load();
             this.databaseMap.set(databaseId, mediaFileDatabase);
@@ -142,16 +136,6 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
         const assetPath = `${databaseId}/${assetType}/${assetId}`;
         await this.assetStorage.write(assetPath, contentType, buffer);
     }
-    
-    //
-    // Closes any resources held by the provider.
-    //
-    async close(): Promise<void> {
-        for (const mediaFileDatabase of this.databaseMap.values()) {
-            await mediaFileDatabase.close();
-        }
-        this.databaseMap.clear();
-    }
 }
 
 //
@@ -185,8 +169,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             this.metadataStorage,
             this.googleApiKey,
             uuidGenerator,
-            timestampProvider,
-            false
+            timestampProvider
         );
         await this.mediaFileDatabase.load();
 
@@ -227,16 +210,6 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         const storage = this.mediaFileDatabase.getAssetStorage();
         await storage.write(assetPath, contentType, buffer);
     }            
-
-    //
-    // Closes any resources held by the provider.
-    //
-    async close(): Promise<void> {
-        if (this.mediaFileDatabase) {
-            await this.mediaFileDatabase.close();
-            this.mediaFileDatabase = undefined;
-        }
-    }
 }
 
 export interface IServerOptions {
@@ -661,11 +634,5 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
 
     return {
         app,
-        close: async () => {
-            console.log("Shutting down server.");
-
-            // Close the asset storage provider
-            await mediaFileDatabaseProvider.close(); //todo: be good to get rid of this.
-        },
     };
 }

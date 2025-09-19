@@ -12,7 +12,7 @@ describe("photosphere backend", () => {
     const dateNow = dayjs("2023-02-08T01:27:01.419Z").toDate();
     const setId = "automated-tests-collection";
 
-    let servers: { server: http.Server, close: () => Promise<void> }[] = [];
+    let servers: { server: http.Server }[] = [];
 
     //
     // Initialises the server for testing.
@@ -87,13 +87,13 @@ describe("photosphere backend", () => {
             close: jest.fn()
         };
 
-        const { app, close } = await createServer(() => dateNow, mockMediaFileDatabaseProvider, mockStorage, {
+        const { app } = await createServer(() => dateNow, mockMediaFileDatabaseProvider, mockStorage, {
             appMode: "readwrite",
             authType: "no-auth"
         });
 
         const server = app.listen();
-        servers.push({ server, close });
+        servers.push({ server });
 
         const address = server.address() as AddressInfo;
         const baseUrl = `http://localhost:${address.port}`;
@@ -120,7 +120,6 @@ describe("photosphere backend", () => {
     afterEach(() => {
         for (const server of servers) {
             server.server.close();
-            server.close();
         }
         servers = [];
     });

@@ -374,12 +374,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     }
         
     // Create database instance.
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, readonly); 
-
-    // Register termination callback to ensure clean shutdown.
-    registerTerminationCallback(async () => {
-        await database.close();
-    });    
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider);
 
     // Load the database
     await database.load();
@@ -498,12 +493,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, false); 
-
-    // Register termination callback to ensure clean shutdown
-    registerTerminationCallback(async () => {
-        await database.close();
-    });    
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
 
     // Create the database (instead of loading)
     await database.create();

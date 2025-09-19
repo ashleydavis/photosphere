@@ -106,7 +106,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     // Start the Photosphere REST API.
     //
-    const { app, close } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, undefined, {
+    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, undefined, {
         appMode: "readwrite", 
         authType: "no-auth",
         staticMiddleware,
@@ -116,8 +116,6 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
-
-        await mediaFileDatabaseProvider.close();
     });
 
     //

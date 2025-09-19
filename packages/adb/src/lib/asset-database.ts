@@ -37,14 +37,9 @@ export interface IAssetDatabase {
     load(): Promise<void>;
 
     //
-    // Closes the database and saves any outstanding data.
-    //
-    close(): Promise<void>;
-
-    //
     // Adds a file or directory to the merkle tree.
     //
-    addFile(filePath: string, hashedFile: IHashedFile): void;
+    addFile(filePath: string, hashedFile: IHashedFile): Promise<void>;
 
     //
     // Deletes a file from the merkle tree.
@@ -72,26 +67,14 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     constructor(
         private readonly assetStorage: IStorage, 
         private readonly metadataStorage: IStorage,        
-        private readonly uuidGenerator: IUuidGenerator,
-        private readonly isReadonly: boolean
+        private readonly uuidGenerator: IUuidGenerator        
     ) {
-    }
-
-    //
-    // Checks if the database is in readonly mode and throws an error if write operations are attempted.
-    //
-    private checkReadonly(operation: string): void {
-        if (this.isReadonly) {
-            throw new Error(`Cannot perform ${operation} operation: asset database is in readonly mode`);
-        }
     }
 
     //
     // Creates a new asset database.
     //
     async create(): Promise<void> {
-        this.checkReadonly('create');
-
         if (!await this.assetStorage.isEmpty("./")) {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
@@ -124,7 +107,6 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     // Saves the database to disk.
     //
     async save(): Promise<void> {
-        this.checkReadonly('save');
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
         }
@@ -132,22 +114,9 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     }
 
     //
-    // Closes the database and saves any outstanding data.
-    //
-    async close(): Promise<void> {
-        if (!this.isReadonly) {
-            if (!this.merkleTree) {
-                throw new Error("Cannot close database. No database loaded.");
-            }
-            await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
-        }
-    }
-
-    //
     // Adds a file or directory to the merkle tree.
     //
-    addFile(filePath: string, hashedFile: IHashedFile): void {
-        this.checkReadonly('add file');
+    async addFile(filePath: string, hashedFile: IHashedFile): Promise<void> { //todo: check challs have "await"
         if (!this.merkleTree) {
             throw new Error("Cannot add file to database. No database loaded.");
         }
@@ -158,24 +127,26 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
         });
+        
+        await this.save();
     }
 
     //
     // Deletes a file from the merkle tree.
     //
     async deleteFile(filePath: string): Promise<void> {
-        this.checkReadonly('delete file');
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
         markFileAsDeleted(this.merkleTree, filePath);
+
+        await this.save();
     }
 
     //
     // Deletes a directory from the merkle tree.
     //
     async deleteDir(dirPath: string): Promise<void> {
-        this.checkReadonly('delete directory');
         let next: string | undefined = undefined;
         do {
             const result = await this.assetStorage.listFiles(dirPath, 1000, next);
