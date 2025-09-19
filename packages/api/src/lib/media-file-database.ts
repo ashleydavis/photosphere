@@ -597,16 +597,20 @@ export class MediaFileDatabase {
                 result.openStream,
                 progressCallback
             );
-
-            // Save hash caches progressively to make the next run faster
-            if (this.addSummary.filesAdded % 100 === 0) {
-                await this.localHashCache.save();
-                await this.assetDatabase.save();
+            
+            if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
+                await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
             }
+
         }, progressCallback);
 
         // Update the number of ignored files after scanning
         this.addSummary.filesIgnored += this.localFileScanner.getNumFilesIgnored();
+
+        //
+        // Commit any additions that were made.
+        //
+        await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
     }
 
     //
