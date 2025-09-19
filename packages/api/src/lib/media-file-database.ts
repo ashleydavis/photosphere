@@ -621,7 +621,14 @@ export class MediaFileDatabase {
                 result.openStream,
                 progressCallback
             );
+            
+            if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
+                await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
+            }
+
         }, progressCallback);
+
+         await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
     }
 
     //
