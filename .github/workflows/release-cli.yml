@@ -456,6 +456,8 @@ jobs:
       - name: Bun workaround # Workaround for Bun issue on Windows: https://github.com/oven-sh/bun/issues/13513
         run: |
           New-Item -ItemType Directory -Force -Path "C:\Users\runneradmin\.bun\install\cache\bun-windows-x64-baseline-v1.2.20"
+          takeown /F "C:\Users\runneradmin\.bun" /R /D Y
+          icacls "C:\Users\runneradmin\.bun" /grant runneradmin:F /T
 
       - name: Build Windows executable
         working-directory: ./apps/cli
