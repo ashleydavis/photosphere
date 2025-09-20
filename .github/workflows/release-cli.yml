@@ -455,7 +455,7 @@ jobs:
 
       - name: Bun workaround # Workaround for Bun issue on Windows: https://github.com/oven-sh/bun/issues/13513
         run: |
-          mkdir "%USERPROFILE%\.bun\install\cache" 2>nul
+          mkdir "C:\Users\runneradmin\.bun\install\cache" 2>nul
 
       - name: Build Windows executable
         working-directory: ./apps/cli
