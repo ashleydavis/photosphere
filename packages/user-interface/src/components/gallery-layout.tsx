@@ -191,7 +191,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         count: layout?.rows.length || 0,
         getScrollElement: () => containerRef.current,
         estimateSize: (i) => layout?.rows[i].height || 0,
-        overscan: 0,
+        overscan: 10,
     });
 
     //
