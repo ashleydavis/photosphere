@@ -1,5 +1,5 @@
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { KeyObject } from "node:crypto";
 import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
 import { createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
@@ -116,5 +116,28 @@ export class EncryptedStorage implements IStorage {
     //
     copyTo(srcPath: string, destPath: string): Promise<void> {
         return this.storage.copyTo(srcPath, destPath);
+    }
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        return this.storage.checkWriteLock(filePath);
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        return this.storage.acquireWriteLock(filePath, owner);
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    releaseWriteLock(filePath: string): Promise<void> {
+        return this.storage.releaseWriteLock(filePath);
     }
 }

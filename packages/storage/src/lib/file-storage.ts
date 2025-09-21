@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage, checkReadonly } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
 
 export class FileStorage implements IStorage {
 
@@ -201,6 +201,71 @@ export class FileStorage implements IStorage {
     async copyTo(srcPath: string, destPath: string): Promise<void> {
         await fs.ensureDir(path.dirname(destPath));
         await fs.copy(srcPath, destPath);
+    }
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        try {
+            if (await fs.pathExists(filePath)) {
+                const lockContent = await fs.readFile(filePath, 'utf8');
+                const lockData = JSON.parse(lockContent.trim());
+                return {
+                    owner: lockData.owner,
+                    acquiredAt: new Date(lockData.acquiredAt)
+                };
+            }
+            return undefined;
+        } catch (err) {
+            return undefined;
+        }
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        checkReadonly(this.isReadonly, 'acquire write lock');
+        
+        try {
+            // Check if lock already exists
+            if (await fs.pathExists(filePath)) {
+                return false;
+            }
+            
+            // Ensure directory exists
+            await fs.ensureDir(path.dirname(filePath));
+            
+            // Create lock file with owner and timestamp information
+            const lockInfo = {
+                owner,
+                acquiredAt: new Date().toISOString()
+            };
+            await fs.writeFile(filePath, JSON.stringify(lockInfo), { flag: 'wx' }); // 'wx' flag fails if file exists
+            return true;
+        } catch (err: any) {
+            // If file already exists (EEXIST), return false
+            if (err.code === 'EEXIST') {
+                return false;
+            }
+            throw err;
+        }
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    async releaseWriteLock(filePath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'release write lock');
+        
+        try {
+            await fs.unlink(filePath);
+        } catch (err) {
+            // Ignore errors if the lock file doesn't exist
+        }
     }
 
 }

@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import aws from "aws-sdk";
-import { IFileInfo, IListResult, IStorage, checkReadonly } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
 import { WrappedError } from "utils";
 
 //
@@ -569,6 +569,112 @@ export class CloudStorage implements IStorage {
                 throw new WrappedError(`Failed to copy from ${srcPath} to ${destPath}: ${err.message}`, { cause: err });
             }
             throw err;
+        }
+    }
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+       
+        let { bucket, key } = this.parsePath(filePath);
+        if (key.startsWith("/")) {
+            key = key.slice(1); // Remove leading slash.
+        }
+
+        const getParams: aws.S3.Types.GetObjectRequest = {
+            Bucket: bucket,
+            Key: key,
+        };
+
+        try {
+            const getObjectOutput = await this.s3.getObject(getParams).promise();
+            const lockContent = getObjectOutput.Body?.toString('utf8');
+            if (lockContent) {
+                const lockData = JSON.parse(lockContent.trim());
+                return {
+                    owner: lockData.owner,
+                    acquiredAt: new Date(lockData.acquiredAt)
+                };
+            }
+            return undefined;
+        } catch (err: any) {
+            if (err.code === 'NoSuchKey') {
+                return undefined;
+            }
+            if (this.verbose) {
+                throw new WrappedError(`Failed to check write lock for ${filePath}: ${err.message}`, { cause: err });
+            }
+            throw err;
+        }
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        checkReadonly(this.isReadonly, 'acquire write lock');
+        
+        let { bucket, key } = this.parsePath(filePath);
+        if (key.startsWith("/")) {
+            key = key.slice(1); // Remove leading slash.
+        }
+
+        // Create lock information with owner and timestamp
+        const lockInfo = {
+            owner,
+            acquiredAt: new Date().toISOString()
+        };
+        const lockContent = JSON.stringify(lockInfo);
+
+        const putParams: aws.S3.Types.PutObjectRequest = {
+            Bucket: bucket,
+            Key: key,
+            Body: Buffer.from(lockContent, 'utf8'),
+            ContentType: 'application/json',
+            ContentLength: Buffer.byteLength(lockContent, 'utf8'),
+        };
+
+        try {
+            // Use conditional write to ensure atomic "create if not exists"
+            const request = this.s3.putObject(putParams);
+            request.httpRequest.headers['If-None-Match'] = '*';
+            await request.promise();
+            return true;
+        } catch (putErr: any) {
+            // If the condition failed (object already exists), return false
+            if (putErr.statusCode === 412 || putErr.code === 'PreconditionFailed') {
+                return false;
+            }
+            if (this.verbose) {
+                throw new WrappedError(`Failed to acquire write lock for ${filePath}: ${putErr.message}`, { cause: putErr });
+            }
+            throw putErr;
+        }
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    async releaseWriteLock(filePath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'release write lock');
+        
+        let { bucket, key } = this.parsePath(filePath);
+        if (key.startsWith("/")) {
+            key = key.slice(1); // Remove leading slash.
+        }
+
+        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+            Bucket: bucket,
+            Key: key,
+        };
+
+        try {
+            await this.s3.deleteObject(deleteParams).promise();
+        } catch (err: any) {
+            // Ignore errors if the lock file doesn't exist
         }
     }
 }

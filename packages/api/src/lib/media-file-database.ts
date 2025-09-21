@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -408,7 +408,6 @@ export class MediaFileDatabase {
     //
     private readonly localHashCache: HashCache;
 
-
     //
     // The file scanner for scanning directories and files.
     //
@@ -483,6 +482,67 @@ export class MediaFileDatabase {
     }
 
     //
+    // Acquires the write lock for the database.
+    // Only needed for writing to:
+    // - the merkle tree file (tree.dat).
+    // - the BSON database and sorted indexes.
+    //
+    // Throws when the write lock cannot be acquired.
+    //
+    private async acquireWriteLock(): Promise<void> {
+        
+        const lockFilePath = ".db/write.lock";
+        const maxAttempts = 3;
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const haveWriteLock = await this.assetStorage.acquireWriteLock(lockFilePath, "cli"); //TODO: Be good to pass in client UUID here to identify who has the lock.
+            if (haveWriteLock) {
+                //
+                // Always reload the database after acquiring the write lock to ensure we have the latest tree.
+                //
+                await this.assetDatabase.load();
+                return;
+            }
+            
+            // Wait with increasing timeout before next attempt (unless this is the last attempt).
+            if (attempt < maxAttempts) {
+                const timeoutMs = attempt * 1000; // 1s, 2s
+                await sleep(timeoutMs);
+            }
+        }
+        
+        // All attempts failed - check lock info for detailed error message.
+        const lockInfo = await this.assetStorage.checkWriteLock(lockFilePath);
+        if (lockInfo) {
+            const timeSinceLocked = Date.now() - lockInfo.acquiredAt.getTime();
+            const timeString = timeSinceLocked < 60000 
+                ? `${Math.round(timeSinceLocked / 1000)}s`
+                : `${Math.round(timeSinceLocked / 60000)}m`;
+            
+            throw new Error(
+                `Failed to acquire write lock after ${maxAttempts} attempts. ` +
+                `Lock is currently held by "${lockInfo.owner}" since ${timeString} ago ` +
+                `(acquired at ${lockInfo.acquiredAt.toISOString()}).`
+            );
+        } 
+        else {
+            throw new Error(
+                `Failed to acquire write lock after ${maxAttempts} attempts. ` +
+                `Lock appears to be available but acquisition failed.`
+            );
+        }
+    }
+
+    //
+    // Releases the write lock for the database.
+    //
+    private async releaseWriteLock(): Promise<void> {
+        this.assetDatabase.save(); // Ensure the tree is saved before releasing the lock.
+
+        await retry(() => this.assetStorage.releaseWriteLock(".db/write.lock"));
+    }
+
+    //
     // Increments the asset count.
     //
     private incrementAssetCount(): void {
@@ -514,14 +574,11 @@ export class MediaFileDatabase {
 
         await this.assetDatabase.create();
 
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        merkleTree.databaseMetadata = { filesImported: 0 };
+
         await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
         await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
-
-        // Initialize database metadata
-        const merkleTree = this.assetDatabase.getMerkleTree();
-        if (!merkleTree.databaseMetadata) {
-            merkleTree.databaseMetadata = { filesImported: 0 };
-        }
 
         // Create README.md file with warning about manual modifications
         try {
@@ -530,6 +587,8 @@ export class MediaFileDatabase {
             // Don't fail database creation if README write fails
             log.warn(`Warning: Could not create README.md: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
+
+        await this.assetDatabase.save();
 
         log.verbose(`Created new media file database.`);
     }
@@ -693,9 +752,17 @@ export class MediaFileDatabase {
             const thumbPath = `thumb/${assetId}`;
             const displayPath = `display/${assetId}`;
 
+            //
+            // Acquire the write lock before writing shared files in the database.
+            // Ideally we would upload new files before acquiring the lock and then update the merkle tree and BSON database,
+            // but the way the code is currently structured is that file uploads and merkle tree changes are intertwined.
+            //
+            await this.acquireWriteLock();
+
             try {
                 //
                 // Uploads the full asset.
+                // No write lock is needed to write new assets as the asset UUID is unique.
                 //
                 await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
 
@@ -708,11 +775,17 @@ export class MediaFileDatabase {
                 if (hashedAsset.hash.toString("hex") !== localHashStr) {
                     throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
-                await this.assetDatabase.addFile(assetPath, hashedAsset);
+
+                //
+                // Write lock is needed to update the merkle tree and BSON database.
+                //
+                this.assetDatabase.addFile(assetPath, hashedAsset);
 
                 if (assetDetails?.thumbnailPath) {
                     //
                     // Uploads the thumbnail.
+                    // No write lock is needed to write new assets as the asset UUID is unique.
+                    // Write lock is needed to update the merkle tree and BSON database.
                     //
                     await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
 
@@ -721,12 +794,17 @@ export class MediaFileDatabase {
                         throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                     }
                     const hashedThumb = await this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath));
-                    await this.assetDatabase.addFile(thumbPath, hashedThumb);
+
+                    //
+                    // Write lock is needed to update the merkle tree and BSON database.
+                    //
+                    this.assetDatabase.addFile(thumbPath, hashedThumb);
                 }
 
                 if (assetDetails?.displayPath) {
                     //
                     // Uploads the display asset.
+                    // No write lock is needed to write new assets as the asset UUID is unique.
                     //
                     await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
 
@@ -735,7 +813,11 @@ export class MediaFileDatabase {
                         throw new Error(`Failed to get info for display "${displayPath}"`);
                     }
                     const hashedDisplay = await this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!));
-                    await this.assetDatabase.addFile(displayPath, hashedDisplay);
+
+                    //
+                    // Write lock is needed to update the merkle tree and BSON database.
+                    //
+                    this.assetDatabase.addFile(displayPath, hashedDisplay);
                 }
 
                 const properties: any = {};
@@ -783,6 +865,7 @@ export class MediaFileDatabase {
 
                 //
                 // Add the asset's metadata to the database.
+                // Write lock is needed to update the merkle tree and BSON database.
                 //
                 await this.bsonDatabase.collection("metadata").insertOne({
                     _id: assetId,
@@ -807,9 +890,11 @@ export class MediaFileDatabase {
 
                 log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
 
-                // Increment asset count in metadata
+                //
+                // Increment the imported files count.
+                // Write lock is needed to update the merkle tree and BSON database.
+                //
                 this.incrementAssetCount();
-                this.assetDatabase.save(); // Save the asset count. TODO: Be good to roll this save into the previous one.
 
                 this.addSummary.filesAdded++;
                 this.addSummary.totalSize += fileStat.length;
@@ -820,6 +905,11 @@ export class MediaFileDatabase {
             catch (err: any) {
                 log.exception(`Failed to upload asset data for file "${filePath}"`, err);
 
+                //
+                // If we get here it means something went wrong during the upload or database update.
+                // Clean up any files that might have been uploaded.
+                // No write lock is needed to delete files as we are deleting by unique asset ID.
+                //
                 await this.assetStorage.deleteFile(assetPath);
                 await this.assetStorage.deleteFile(thumbPath);
                 await this.assetStorage.deleteFile(displayPath);
@@ -829,8 +919,14 @@ export class MediaFileDatabase {
                     progressCallback(this.localFileScanner.getCurrentlyScanning());
                 }
             }
+            finally {
+                //
+                // Release the write lock after writing shared files in the database.
+                //
+                await this.releaseWriteLock();
+            }
         }
-        finally {
+        finally {            
             //
             // Remove all temporary assets created during the process.
             //
@@ -1192,6 +1288,11 @@ export class MediaFileDatabase {
 
                 // Copy file from source to target
                 const readStream = sourceAssetStorage.readStream(fileName);
+
+                // 
+                // A write lock isn't needed here unless we think multiple repairs might try to operate on the tree at the same time.
+                // TODO: Maybe a "repair lock" will be in order at some point in the future.
+                //
                 await this.assetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
 
                 // Verify copied file
@@ -1335,7 +1436,7 @@ export class MediaFileDatabase {
         // Try to load existing destination merkle tree, otherwise create a new one
         let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
         if (!destTree) {
-            destTree = createTree(merkleTree.metadata.id);
+            destTree = createTree(merkleTree.metadata.id); // No write lock is needed creating a tree for the first time.
             
             // Copy database metadata from source to destination
             if (merkleTree.databaseMetadata) {
@@ -1378,6 +1479,8 @@ export class MediaFileDatabase {
             // Copy the file from source to dest.
             //
             await retry(async  () => {
+                // This doesn't need a write lock because in the future `replicate` will only work for creating fresh database instances.
+                // Replicate will never be used to update a live database.
                 const readStream = srcStorage.readStream(fileName);
                 await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
             });
@@ -1442,6 +1545,9 @@ export class MediaFileDatabase {
 
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
+        //
+        // A write lock isn't needed here because `replicate` creates fresh databases rather than updating existing ones.
+        //
         await retry(() => saveTree("tree.dat", destTree, destMetadataStorage));
         
         return result;
@@ -1454,21 +1560,35 @@ export class MediaFileDatabase {
     async remove(assetId: string): Promise<void> {
 
         //
-        // Remove the asset from the metadata collection and decrement the count.
+        // Acquire a write lock before modifying shared database state.
         //
-        const removed = await this.metadataCollection.deleteOne(assetId);
-        if (removed) {
-            this.decrementAssetCount();
-            this.assetDatabase.save(); // Save the updated asset count. TODO: Be good to roll this into the previous save.
-        }
+        await this.acquireWriteLock();
 
-        // Don't need a write lock to delete assets.
-        // If anything fails after deleting the metadata and before deleting
-        // these files we'll simply have "orphaned assets" in our database.
-        //
-        await this.assetStorage.deleteFile(pathJoin("asset", assetId));
-        await this.assetStorage.deleteFile(pathJoin("display", assetId));
-        await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
+        try {
+            //
+            // Remove the asset from the metadata collection and decrement the count.
+            //
+            const removed = await this.metadataCollection.deleteOne(assetId);
+            if (removed) {
+                this.decrementAssetCount();
+            }
+
+            //
+            // We need the write lock for deleting assets only because this also update the merkle tree.
+            // If anything fails after deleting the metadata and before deleting
+            // these files, they will become "orphaned assets" in our database.
+            //
+            await this.assetStorage.deleteFile(pathJoin("asset", assetId));
+            await this.assetStorage.deleteFile(pathJoin("display", assetId));
+            await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
+        }
+        finally {
+            //
+            // Release the write lock after modifying shared database state.
+            //
+            await this.releaseWriteLock();
+        }
+    
     }
 }
 

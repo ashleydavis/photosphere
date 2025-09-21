@@ -35,6 +35,21 @@ export interface IFileInfo {
 }
 
 //
+// Information about a write lock.
+//
+export interface IWriteLockInfo {
+    //
+    // The owner of the lock.
+    //
+    owner: string;
+
+    //
+    // The time when the lock was acquired.
+    //
+    acquiredAt: Date;
+}
+
+//
 // Helper function for storage classes to check readonly mode and throw appropriate errors.
 //
 export function checkReadonly(isReadonly: boolean, operation: string): void {
@@ -120,4 +135,21 @@ export interface IStorage {
     // Copies a file from one location to another.
     //
     copyTo(srcPath: string, destPath: string): Promise<void>;
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined>;
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    acquireWriteLock(filePath: string, owner: string): Promise<boolean>;
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    releaseWriteLock(filePath: string): Promise<void>;
 }

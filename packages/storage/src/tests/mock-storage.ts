@@ -1,10 +1,11 @@
 import { Readable } from 'stream';
-import { IFileInfo, IListResult, IStorage } from '../lib/storage';
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from '../lib/storage';
 
 // Mock IStorage implementation for testing
 export class MockStorage implements IStorage {
     private files: Map<string, { data: Buffer, contentType?: string }> = new Map();
     private directories: Set<string> = new Set();
+    private locks: Map<string, IWriteLockInfo> = new Map();
     
     constructor(public readonly location: string = "memory://mock", public readonly isReadonly: boolean = false) {}
 
@@ -183,5 +184,25 @@ export class MockStorage implements IStorage {
         }
         
         await this.write(destPath, file.contentType, file.data);
+    }
+
+    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        return this.locks.get(filePath);
+    }
+
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        if (this.locks.has(filePath)) {
+            return false;
+        }
+        
+        this.locks.set(filePath, {
+            owner,
+            acquiredAt: new Date()
+        });
+        return true;
+    }
+
+    async releaseWriteLock(filePath: string): Promise<void> {
+        this.locks.delete(filePath);
     }
 }
