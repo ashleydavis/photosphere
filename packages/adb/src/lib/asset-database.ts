@@ -39,13 +39,13 @@ export interface IAssetDatabase {
     //
     // Adds a file or directory to the merkle tree.
     //
-    addFile(filePath: string, hashedFile: IHashedFile): Promise<void>;
+    addFile(filePath: string, hashedFile: IHashedFile): void;
 
     //
     // Deletes a file from the merkle tree.
     // This should be called before actually deleting the file from storage.
     //
-    deleteFile(filePath: string): Promise<void>;
+    deleteFile(filePath: string): void;
 
     //
     // Deletes a directory from the merkle tree.
@@ -80,7 +80,6 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         }
 
         this.merkleTree = createTree(this.uuidGenerator.generate());
-        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //
@@ -116,7 +115,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     //
     // Adds a file or directory to the merkle tree.
     //
-    async addFile(filePath: string, hashedFile: IHashedFile): Promise<void> { //todo: check challs have "await"
+    addFile(filePath: string, hashedFile: IHashedFile): void {
         if (!this.merkleTree) {
             throw new Error("Cannot add file to database. No database loaded.");
         }
@@ -127,20 +126,16 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
         });
-        
-        await this.save();
     }
 
     //
     // Deletes a file from the merkle tree.
     //
-    async deleteFile(filePath: string): Promise<void> {
+    deleteFile(filePath: string): void {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
         markFileAsDeleted(this.merkleTree, filePath);
-
-        await this.save();
     }
 
     //
@@ -151,7 +146,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         do {
             const result = await this.assetStorage.listFiles(dirPath, 1000, next);
             for (const fileName of result.names) {
-                await this.deleteFile(pathJoin(dirPath, fileName));
+                this.deleteFile(pathJoin(dirPath, fileName));
             }
             next = result.next;
         } while (next);

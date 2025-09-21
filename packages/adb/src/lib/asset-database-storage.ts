@@ -1,4 +1,4 @@
-import { IFileInfo, IListResult, IStorage } from "storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "storage";
 import { IAssetDatabase } from "./asset-database";
 import { computeHash } from "./hash";
 
@@ -29,7 +29,7 @@ export class AssetDatabaseStorage implements IStorage {
             lastModified: info.lastModified,
             length: info.length,
         };
-        await this.assetDatabase.addFile(filePath, hashedFile);
+        this.assetDatabase.addFile(filePath, hashedFile);
 
         // console.log(`Updated the merkle tree for file "${filePath}"`);
     }
@@ -119,7 +119,7 @@ export class AssetDatabaseStorage implements IStorage {
     // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
-        await this.assetDatabase.deleteFile(filePath);
+        this.assetDatabase.deleteFile(filePath);
         await this.storage.deleteFile(filePath);
     }
 
@@ -137,5 +137,28 @@ export class AssetDatabaseStorage implements IStorage {
     async copyTo(srcPath: string, destPath: string): Promise<void> {
         await this.storage.copyTo(srcPath, destPath);
         await this.updateMerkleTree(destPath); //TODO: This won't work unless dest path is relative to this storage.
+    }
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        return this.storage.checkWriteLock(filePath);
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        return this.storage.acquireWriteLock(filePath, owner);
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    releaseWriteLock(filePath: string): Promise<void> {
+        return this.storage.releaseWriteLock(filePath);
     }
 }

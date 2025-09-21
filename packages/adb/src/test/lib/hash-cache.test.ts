@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { IStorage } from 'storage';
+import { IStorage, IWriteLockInfo } from 'storage';
 import { HashCache } from '../../lib/hash-cache';
 
 // Mock implementation of IStorage
@@ -88,6 +88,18 @@ class MockStorage implements IStorage {
         if (data) {
             this.files.set(destPath, data);
         }
+    }
+    
+    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        return undefined;
+    }
+    
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        return true;
+    }
+    
+    async releaseWriteLock(filePath: string): Promise<void> {
+        // No-op in mock
     }
 }
 
