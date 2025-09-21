@@ -1,0 +1,607 @@
+================================================================================
+PHOTOSPHERE CLI SMOKE TEST REPORT
+================================================================================
+Generated: 2025-09-21 08:10:49 UTC
+Test Mode: all
+Platform: linux x64
+Working Directory: /home/ash/Projects/photosphere/apps/cli
+NODE_ENV: testing
+
+================================================================================
+TEST RESULTS SUMMARY
+================================================================================
+Tests Passed: 31
+Tests Failed: 0
+
+=================================================================================
+DATABASE INFORMATION
+=================================================================================
+Database Directory: ./test/tmp/test-db
+
+ROOT HASH:
+----------
+d344cbf0ebacf9a943c64553bf181066368790fa9e00e72d6c94135d7acb2d49
+
+MERKLE TREE STRUCTURE:
+---------------------
+
+Merkle Tree Visualization:
+==================================================
+Merkle Tree Structure:
+
+Tree Metadata:
+  UUID: 93694f6e-3acb-4a1c-afd2-5fb8397575a5
+  Total Nodes: 55
+  Total Files: 28
+  Total Size: 23445360 bytes
+
+Database Metadata:
+  filesImported: 5
+
+Version: 3
+
+│   
+└── Node[0]     d344-2d49
+    │   Full:   d344cbf0ebacf9a943c64553bf181066368790fa9e00e72d6c94135d7acb2d49
+    │   Count:  55 nodes
+    │   Leaves: 28 files
+    │   Size:   23445360 bytes
+    │   
+    ├── Node[1]     ce42-1fba
+    │   │   Full:   ce42cd0c675c7a6dfc870dc1c2531718747b0920343416376907895af9541fba
+    │   │   Count:  31 nodes
+    │   │   Leaves: 16 files
+    │   │   Size:   23378504 bytes
+    │   │   
+    │   ├── Node[2]     5742-8492
+    │   │   │   Full:   5742486d532a81b0b64b049385c0f2b75736df4346db6e680a67d9980b518492
+    │   │   │   Count:  15 nodes
+    │   │   │   Leaves: 8 files
+    │   │   │   Size:   284393 bytes
+    │   │   │   
+    │   │   ├── Node[3]     7cb2-2976
+    │   │   │   │   Full:   7cb260c91a7758a7dfd4939e2aa53510b115416e2510f7ca93761866c4002976
+    │   │   │   │   Count:  7 nodes
+    │   │   │   │   Leaves: 4 files
+    │   │   │   │   Size:   253358 bytes
+    │   │   │   │   
+    │   │   │   ├── Node[4]     fcaa-11a2
+    │   │   │   │   │   Full:   fcaa17d1d5c8cba64a7fe5734a97a91011d93f760c5e045bfcdd74ee891c11a2
+    │   │   │   │   │   Count:  3 nodes
+    │   │   │   │   │   Leaves: 2 files
+    │   │   │   │   │   Size:   126776 bytes
+    │   │   │   │   │   
+    │   │   │   │   ├── Leaf[5]       96a9-4aa5
+    │   │   │   │   │       Full:     96a920bd183295003e047204b3ed310d831a263930604d814dc83ab88d494aa5
+    │   │   │   │   │       File:     metadata/sort_indexes/metadata/hash_asc/5c724a85-6b64-4e6a-9e15-dfa0821821e1
+    │   │   │   │   │       Size:     126583 bytes
+    │   │   │   │   │       Modified: 2025-09-21T08:07:57.062Z
+    │   │   │   │   │   
+    │   │   │   │   └── Leaf[6]       2e1b-dc7e
+    │   │   │   │           Full:     2e1b279c87fcac37ef5d0d918a4481b0219ce3afad17d71f8c9333c37b49dc7e
+    │   │   │   │           File:     metadata/sort_indexes/metadata/hash_asc/tree.dat
+    │   │   │   │           Size:     193 bytes
+    │   │   │   │           Modified: 2025-09-21T08:07:57.078Z
+    │   │   │   │   
+    │   │   │   └── Node[7]     81ff-b960
+    │   │   │       │   Full:   81ffa35d81a3f29dcfeea44867cdb7852463bc93787f22d8547747ae7693b960
+    │   │   │       │   Count:  3 nodes
+    │   │   │       │   Leaves: 2 files
+    │   │   │       │   Size:   126582 bytes
+    │   │   │       │   
+    │   │   │       ├── Leaf[8]       2984-cd06
+    │   │   │       │       Full:     298421f836e2cb21a763add5e08038c3524f1f84dcadd61adf530f5cef86cd06
+    │   │   │       │       File:     metadata/sort_indexes/metadata/photoDate_desc/aff78597-8c6d-46c1-82eb-9619293609fa
+    │   │   │       │       Size:     126383 bytes
+    │   │   │       │       Modified: 2025-09-21T08:07:57.081Z
+    │   │   │       │   
+    │   │   │       └── Leaf[9]       8366-f4ae
+    │   │   │               Full:     8366f00d0dd68813e192ea73a48bce7f7804d68a78ee38e95468391960abf4ae
+    │   │   │               File:     metadata/sort_indexes/metadata/photoDate_desc/tree.dat
+    │   │   │               Size:     199 bytes
+    │   │   │               Modified: 2025-09-21T08:07:57.086Z
+    │   │   │   
+    │   │   └── Node[10]    90d9-5d5a
+    │   │       │   Full:   90d9200adf5a3b9c4e57251b06986694c52c14568b6bd568603cc7cc2b165d5a
+    │   │       │   Count:  7 nodes
+    │   │       │   Leaves: 4 files
+    │   │       │   Size:   31035 bytes
+    │   │       │   
+    │   │       ├── Node[11]    dbcb-18b7
+    │   │       │   │   Full:   dbcb4e7b2fe78a0397aea65dfa94af65b545ce460dc49ce8b9c297775e3718b7
+    │   │       │   │   Count:  3 nodes
+    │   │       │   │   Leaves: 2 files
+    │   │       │   │   Size:   2230 bytes
+    │   │       │   │   
+    │   │       │   ├── Leaf[12]      94f2-77b7
+    │   │       │   │       Full:     94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7
+    │   │       │   │       File:     README.md
+    │   │       │   │       Size:     913 bytes
+    │   │       │   │       Modified: 2025-09-21T08:07:57.087Z
+    │   │       │   │   
+    │   │       │   └── Leaf[13]      3d9d-08d9
+    │   │       │           Full:     3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9
+    │   │       │           File:     asset/f8258712-231c-47e3-9d73-558cefc6a40e
+    │   │       │           Size:     1317 bytes
+    │   │       │           Modified: 2025-09-21T08:08:05.259Z
+    │   │       │   
+    │   │       └── Node[14]    ad99-35e5
+    │   │           │   Full:   ad991562552dfd311fc9e48ab2a36b23b99492cc5d69e35f539394ef5d7235e5
+    │   │           │   Count:  3 nodes
+    │   │           │   Leaves: 2 files
+    │   │           │   Size:   28805 bytes
+    │   │           │   
+    │   │           ├── Leaf[15]      ceff-9f21
+    │   │           │       Full:     ceffcf6f12bd0d3dca121a8e134e53f02a6b0564ada72324b3da88da7a399f21
+    │   │           │       File:     thumb/f8258712-231c-47e3-9d73-558cefc6a40e
+    │   │           │       Size:     3304 bytes
+    │   │           │       Modified: 2025-09-21T08:08:05.266Z
+    │   │           │   
+    │   │           └── Leaf[16]      ab8a-8167
+    │   │                   Full:     ab8a2ae3d82dc4a2fd2ba9f06dd8f38b92e09d6a19c3700e9c2e0b0148a48167
+    │   │                   File:     display/f8258712-231c-47e3-9d73-558cefc6a40e
+    │   │                   Size:     25501 bytes
+    │   │                   Modified: 2025-09-21T08:08:05.268Z
+    │   │   
+    │   └── Node[17]    b271-807d
+    │       │   Full:   b27179f2ec79366fc2a323e752c37cceb1737456883920fb1b0646fa5183807d
+    │       │   Count:  15 nodes
+    │       │   Leaves: 8 files
+    │       │   Size:   23094111 bytes
+    │       │   
+    │       ├── Node[18]    79c2-d78d
+    │       │   │   Full:   79c280d79dacea14ffe58f07f52ca5c72f02de5e4078bdec55b541f1f3acd78d
+    │       │   │   Count:  7 nodes
+    │       │   │   Leaves: 4 files
+    │       │   │   Size:   2877464 bytes
+    │       │   │   
+    │       │   ├── Node[19]    cafb-ceed
+    │       │   │   │   Full:   cafb547d2e7e6e26aca6f26434eee95a96c91e4edc6f98c19acaa4d00da5ceed
+    │       │   │   │   Count:  3 nodes
+    │       │   │   │   Leaves: 2 files
+    │       │   │   │   Size:   2050859 bytes
+    │       │   │   │   
+    │       │   │   ├── Leaf[20]      108e-93a0
+    │       │   │   │       Full:     108e208204f0665237b30d0f76acbb65720f33178d39908ec04ed838506693a0
+    │       │   │   │       File:     metadata/metadata/62
+    │       │   │   │       Size:     1059 bytes
+    │       │   │   │       Modified: 2025-09-21T08:08:05.347Z
+    │       │   │   │   
+    │       │   │   └── Leaf[21]      426f-5e7c
+    │       │   │           Full:     426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
+    │       │   │           File:     asset/3007f933-67a1-48ff-9ad5-64c958f89e92
+    │       │   │           Size:     2049800 bytes
+    │       │   │           Modified: 2025-09-21T08:08:12.958Z
+    │       │   │   
+    │       │   └── Node[22]    5b5c-82db
+    │       │       │   Full:   5b5cc618ef5a57dd4564cb4da5278d7c3324a0ff6b61c48eec8518d658cd82db
+    │       │       │   Count:  3 nodes
+    │       │       │   Leaves: 2 files
+    │       │       │   Size:   826605 bytes
+    │       │       │   
+    │       │       ├── Leaf[23]      9ecd-36e6
+    │       │       │       Full:     9ecd6efc5383fbda3c1125ea06a1311aa6fa9906fb4c8c85362797b8240c36e6
+    │       │       │       File:     thumb/3007f933-67a1-48ff-9ad5-64c958f89e92
+    │       │       │       Size:     130591 bytes
+    │       │       │       Modified: 2025-09-21T08:08:12.978Z
+    │       │       │   
+    │       │       └── Leaf[24]      8a22-65d9
+    │       │               Full:     8a2205c424a91b8b643a11bc4c12529d56517198fa977243bbf26cfcd1a165d9
+    │       │               File:     display/3007f933-67a1-48ff-9ad5-64c958f89e92
+    │       │               Size:     696014 bytes
+    │       │               Modified: 2025-09-21T08:08:12.984Z
+    │       │   
+    │       └── Node[25]    d156-8916
+    │           │   Full:   d156df48758dd1584041150df503cf72f4ef209ccfdd7c4c45d9e53868ba8916
+    │           │   Count:  7 nodes
+    │           │   Leaves: 4 files
+    │           │   Size:   20216647 bytes
+    │           │   
+    │           ├── Node[26]    9e9b-ef01
+    │           │   │   Full:   9e9bfe2234f9157da13772d57427561cd84a9256f6573f3ef4b7f7262ed8ef01
+    │           │   │   Count:  3 nodes
+    │           │   │   Leaves: 2 files
+    │           │   │   Size:   20166324 bytes
+    │           │   │   
+    │           │   ├── Leaf[27]      4265-f915
+    │           │   │       Full:     42658a0cb6929f5b991d9bb472f85bb7489d4ae79d044acdded5c6524d27f915
+    │           │   │       File:     metadata/metadata/70
+    │           │   │       Size:     120528 bytes
+    │           │   │       Modified: 2025-09-21T08:08:13.060Z
+    │           │   │   
+    │           │   └── Leaf[28]      8dcb-9012
+    │           │           Full:     8dcb3ce7a5459621d9e84899fd8ded1b50e8acb8770a0930b0302f2962889012
+    │           │           File:     asset/ed05d015-4927-44c7-ac5b-5ac999c29932
+    │           │           Size:     20045796 bytes
+    │           │           Modified: 2025-09-21T08:08:21.102Z
+    │           │   
+    │           └── Node[29]    afa9-e670
+    │               │   Full:   afa9d4e1a7c7c5ecbd815051f04e2eea755c31b79e1a3693a8848d8e4760e670
+    │               │   Count:  3 nodes
+    │               │   Leaves: 2 files
+    │               │   Size:   50323 bytes
+    │               │   
+    │               ├── Leaf[30]      b2ae-0fa6
+    │               │       Full:     b2aea11e2a885df25b0c718b52485d546e0fbe5647178ee145c513ba15d80fa6
+    │               │       File:     thumb/ed05d015-4927-44c7-ac5b-5ac999c29932
+    │               │       Size:     47892 bytes
+    │               │       Modified: 2025-09-21T08:08:21.205Z
+    │               │   
+    │               └── Leaf[31]      8c73-e55c
+    │                       Full:     8c73a59590f0dc7e1380e697a1c1c3247596ed3c650ab296f98308c30ec8e55c
+    │                       File:     metadata/metadata/37
+    │                       Size:     2431 bytes
+    │                       Modified: 2025-09-21T08:08:21.291Z
+    │   
+    └── Node[32]    0608-1485
+        │   Full:   06084cda1a63fdc775657b37360a2766ac7249fc14182506f4c3fcf622a81485
+        │   Count:  23 nodes
+        │   Leaves: 12 files
+        │   Size:   66856 bytes
+        │   
+        ├── Node[33]    ade4-d7a5
+        │   │   Full:   ade488f4c9271be0c35a7b7a351cb8a4139463e86d12cda3b9b04bd8f815d7a5
+        │   │   Count:  15 nodes
+        │   │   Leaves: 8 files
+        │   │   Size:   29666 bytes
+        │   │   
+        │   ├── Node[34]    d9b8-73a0
+        │   │   │   Full:   d9b8a9dcb0eac545f067a06f7afcff5bb91c08ba49205ac817e432001f1573a0
+        │   │   │   Count:  7 nodes
+        │   │   │   Leaves: 4 files
+        │   │   │   Size:   29666 bytes
+        │   │   │   
+        │   │   ├── Node[35]    5e80-b7d8
+        │   │   │   │   Full:   5e80a0301c16981c29c4a166aa3c4ef0d515452aa9808ab8974520844e4fb7d8
+        │   │   │   │   Count:  3 nodes
+        │   │   │   │   Leaves: 2 files
+        │   │   │   │   Size:   4014 bytes
+        │   │   │   │   
+        │   │   │   ├── Leaf[36]      baa8-6ab7
+        │   │   │   │       Full:     baa82d130ce3d49905841ae4132b27003ab1c172b3dcbeabc198c59e3b456ab7
+        │   │   │   │       File:     asset/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+        │   │   │   │       Size:     715 bytes
+        │   │   │   │       Modified: 2025-09-21T08:08:34.188Z
+        │   │   │   │   
+        │   │   │   └── Leaf[37]      9e78-de2f
+        │   │   │           Full:     9e783b87290f2dd3edaf3a5489ee29fb2d88cf5997468e5bc3759e70a9bdde2f
+        │   │   │           File:     thumb/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+        │   │   │           Size:     3299 bytes
+        │   │   │           Modified: 2025-09-21T08:08:34.190Z
+        │   │   │   
+        │   │   └── Node[38]    ee9c-1888
+        │   │       │   Full:   ee9c20787b60cc883fd5810e8698b380a8083eb146ac9fc0b4306af799bc1888
+        │   │       │   Count:  3 nodes
+        │   │       │   Leaves: 2 files
+        │   │       │   Size:   25652 bytes
+        │   │       │   
+        │   │       ├── Leaf[39]      3498-81dc
+        │   │       │       Full:     3498516cc30e3bea6a2c2dbbdfaa9661d32948246f2859309efdea346c2f81dc
+        │   │       │       File:     display/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+        │   │       │       Size:     24743 bytes
+        │   │       │       Modified: 2025-09-21T08:08:34.192Z
+        │   │       │   
+        │   │       └── Leaf[40]      92a8-7c70
+        │   │               Full:     92a8148b9e7785455fcc07bd3681a50160d22ba28abc9da019c020ab253e7c70
+        │   │               File:     metadata/metadata/83
+        │   │               Size:     909 bytes
+        │   │               Modified: 2025-09-21T08:08:34.274Z
+        │   │   
+        │   └── Node[41]    2fe9-d320
+        │       │   Full:   2fe9901985f764c4dedabdc10f48840d741888caa4bf6bf0b5549afe037dd320
+        │       │   Count:  7 nodes
+        │       │   Leaves: 4 files
+        │       │   Size:   0 bytes
+        │       │   
+        │       ├── Node[42]    ed2e-86f2
+        │       │   │   Full:   ed2eb9440338cb5cc9e6c866f87d6d24f265310edf9442c7af5c8af7d83e86f2
+        │       │   │   Count:  3 nodes
+        │       │   │   Leaves: 2 files
+        │       │   │   Size:   0 bytes
+        │       │   │   
+        │       │   ├── Leaf[43] [DELETED] da9b-8fdf
+        │       │   │       Full:     da9b94a4fdd80bacbf05c7b877c09466dc9dc54ed84124dd0391851cb3be8fdf
+        │       │   │       File:     asset/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b
+        │       │   │       Modified: 2025-09-21T08:08:34.468Z
+        │       │   │   
+        │       │   └── Leaf[44] [DELETED] d81a-94f1
+        │       │           Full:     d81a63df1b8d81cdf20c9516177bd0cc33ae4a51b9a62cdf484b8d83752d94f1
+        │       │           File:     thumb/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b
+        │       │           Modified: 2025-09-21T08:08:34.471Z
+        │       │   
+        │       └── Node[45]    f3fb-109e
+        │           │   Full:   f3fbf3790e4300d116451babe4e767c703bda4724a7a7b1cedbd3a6f53bf109e
+        │           │   Count:  3 nodes
+        │           │   Leaves: 2 files
+        │           │   Size:   0 bytes
+        │           │   
+        │           ├── Leaf[46] [DELETED] cf81-1663
+        │           │       Full:     cf812fbc9b521bfaefc13faf86c78da2d06ae3f52aac31584eefc288a3b51663
+        │           │       File:     display/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b
+        │           │       Modified: 2025-09-21T08:08:34.474Z
+        │           │   
+        │           └── Leaf[47] [DELETED] 357c-c6e7
+        │                   Full:     357ccddfb28f33d49d57734f4fa16a7028a7b14d276eaeed8968780e272dc6e7
+        │                   File:     metadata/metadata/95
+        │                   Modified: 2025-09-21T08:08:34.542Z
+        │   
+        └── Node[48]    36ac-0f2d
+            │   Full:   36acdce675494989dc445d77be4e4bdc51ec467f7d23bba3b50f793c9d370f2d
+            │   Count:  7 nodes
+            │   Leaves: 4 files
+            │   Size:   37190 bytes
+            │   
+            ├── Node[49]    f57b-13a7
+            │   │   Full:   f57b24b1cc4dc5a90962ca2d06baef0e81e4924d657a1441780d38f0f78713a7
+            │   │   Count:  3 nodes
+            │   │   Leaves: 2 files
+            │   │   Size:   4337 bytes
+            │   │   
+            │   ├── Leaf[50]      8e1b-0c04
+            │   │       Full:     8e1b5783d50e811fb8be6a66703a5779bd00bb3b4b93543c74e716ef1d2f0c04
+            │   │       File:     asset/52d718ac-5627-4543-b463-a309a7944e8b
+            │   │       Size:     328 bytes
+            │   │       Modified: 2025-09-21T08:09:43.427Z
+            │   │   
+            │   └── Leaf[51]      1f04-1e8b
+            │           Full:     1f04252c63b9ece154a6401731922a5fc22cc855cb48cf05732e817263a81e8b
+            │           File:     thumb/52d718ac-5627-4543-b463-a309a7944e8b
+            │           Size:     4009 bytes
+            │           Modified: 2025-09-21T08:09:43.432Z
+            │   
+            └── Node[52]    01bf-db78
+                │   Full:   01bf666e437770b6010e3e071f073e070fecda19ce861ae178a35511b403db78
+                │   Count:  3 nodes
+                │   Leaves: 2 files
+                │   Size:   32853 bytes
+                │   
+                ├── Leaf[53]      14f1-f8f4
+                │       Full:     14f15aa7de2e0d11d2b4be5f2b6faa1e563e7a2d9f58a033a93a01eb7da9f8f4
+                │       File:     display/52d718ac-5627-4543-b463-a309a7944e8b
+                │       Size:     31812 bytes
+                │       Modified: 2025-09-21T08:09:43.434Z
+                │   
+                └── Leaf[54]      6b57-51e0
+                        Full:     6b5765f110b6446fc31d3202d3969d81b9cd21a7e559d7e2b7a8bf4a7ad351e0
+                        File:     metadata/metadata/74
+                        Size:     1041 bytes
+                        Modified: 2025-09-21T08:09:43.511Z
+
+Sorted Node References:
+  1. asset/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b [DELETED] -> File[20] Node[43] da9b-8fdf
+  2. asset/3007f933-67a1-48ff-9ad5-64c958f89e92 -> File[9] Node[21] 426f-5e7c
+  3. asset/52d718ac-5627-4543-b463-a309a7944e8b -> File[24] Node[50] 8e1b-0c04
+  4. asset/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7 -> File[16] Node[36] baa8-6ab7
+  5. asset/ed05d015-4927-44c7-ac5b-5ac999c29932 -> File[13] Node[28] 8dcb-9012
+  6. asset/f8258712-231c-47e3-9d73-558cefc6a40e -> File[5] Node[13] 3d9d-08d9
+  7. display/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b [DELETED] -> File[22] Node[46] cf81-1663
+  8. display/3007f933-67a1-48ff-9ad5-64c958f89e92 -> File[11] Node[24] 8a22-65d9
+  9. display/52d718ac-5627-4543-b463-a309a7944e8b -> File[26] Node[53] 14f1-f8f4
+  10. display/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7 -> File[18] Node[39] 3498-81dc
+  11. display/f8258712-231c-47e3-9d73-558cefc6a40e -> File[7] Node[16] ab8a-8167
+  12. metadata/metadata/37 -> File[15] Node[31] 8c73-e55c
+  13. metadata/metadata/62 -> File[8] Node[20] 108e-93a0
+  14. metadata/metadata/70 -> File[12] Node[27] 4265-f915
+  15. metadata/metadata/74 -> File[27] Node[54] 6b57-51e0
+  16. metadata/metadata/83 -> File[19] Node[40] 92a8-7c70
+  17. metadata/metadata/95 [DELETED] -> File[23] Node[47] 357c-c6e7
+  18. metadata/sort_indexes/metadata/hash_asc/5c724a85-6b64-4e6a-9e15-dfa0821821e1 -> File[0] Node[5] 96a9-4aa5
+  19. metadata/sort_indexes/metadata/hash_asc/tree.dat -> File[1] Node[6] 2e1b-dc7e
+  20. metadata/sort_indexes/metadata/photoDate_desc/aff78597-8c6d-46c1-82eb-9619293609fa -> File[2] Node[8] 2984-cd06
+  21. metadata/sort_indexes/metadata/photoDate_desc/tree.dat -> File[3] Node[9] 8366-f4ae
+  22. README.md -> File[4] Node[12] 94f2-77b7
+  23. thumb/15cccc63-a628-45c3-9dfb-fcd8c00f6a4b [DELETED] -> File[21] Node[44] d81a-94f1
+  24. thumb/3007f933-67a1-48ff-9ad5-64c958f89e92 -> File[10] Node[23] 9ecd-36e6
+  25. thumb/52d718ac-5627-4543-b463-a309a7944e8b -> File[25] Node[51] 1f04-1e8b
+  26. thumb/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7 -> File[17] Node[37] 9e78-de2f
+  27. thumb/ed05d015-4927-44c7-ac5b-5ac999c29932 -> File[14] Node[30] b2ae-0fa6
+  28. thumb/f8258712-231c-47e3-9d73-558cefc6a40e -> File[6] Node[15] ceff-9f21
+
+
+DATABASE SUMMARY:
+-----------------
+
+📊 Database Summary
+
+Files imported:   5
+Total files:      28
+Total size:       22.4 MiB
+Database version: 3
+Tree root hash:   d344cbf0ebacf9a943c64553bf181066368790fa9e00e72d6c94135d7acb2d49
+
+Next steps:
+    psi verify                    Verify the integrity of all files in the database
+    psi add <paths>               Add more files to your database
+    psi replicate --dest <path>   Create a backup copy of your database
+    psi ui                        Open the web interface to browse your media
+
+DATABASE FILE LISTING:
+----------------------
+
+📁 Database Files
+
+Files are sorted by date (newest first).
+
+--- Page 1 ---
+3007f933-67a1-48ff-9ad5-64c958f89e92 test.jpg
+  Date: 5/27/2025 | Size: Unknown | Type: image/jpeg | 2560×1920
+  Path: ../../test
+
+ed05d015-4927-44c7-ac5b-5ac999c29932 test.mp4
+  Date: 5/27/2025 | Size: Unknown | Type: video/mp4 | 1920×1080
+  Path: ../../test
+
+f8258712-231c-47e3-9d73-558cefc6a40e test.png
+  Date: 1/1/2024 | Size: Unknown | Type: image/png | 100×90
+  Path: ../../test
+
+7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7 test-1.jpeg
+  Date: 1/1/2024 | Size: Unknown | Type: image/jpeg | 100×80
+  Path: ../../test/multiple-images
+
+52d718ac-5627-4543-b463-a309a7944e8b test.webp
+  Date: 1/1/2024 | Size: Unknown | Type: image/webp | 100×80
+  Path: ../../test
+
+
+End of results. Displayed 5 files total.
+
+DATABASE VERIFICATION:
+----------------------
+
+📊 Verified 28 files.
+
+Files imported:   5
+Total files:      28
+Total size:       22.4 MiB
+Files processed:  24
+Nodes processed:  55
+Unmodified:       24
+Modified:         0
+New:              0
+Removed:          0
+
+✅ Database verification passed - all files are intact
+
+Next steps:
+    psi replicate --dest <path>   Create a backup copy of your database
+    psi compare --dest <path>     Compare this database with another location
+    psi summary                   View database summary and tree hash
+    psi ui                        Open the web interface to browse your media
+
+DATABASE DIRECTORY STRUCTURE:
+-----------------------------
+./test/tmp/test-db
+├── asset
+│   ├── 3007f933-67a1-48ff-9ad5-64c958f89e92
+│   ├── 52d718ac-5627-4543-b463-a309a7944e8b
+│   ├── 7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+│   ├── ed05d015-4927-44c7-ac5b-5ac999c29932
+│   └── f8258712-231c-47e3-9d73-558cefc6a40e
+├── display
+│   ├── 3007f933-67a1-48ff-9ad5-64c958f89e92
+│   ├── 52d718ac-5627-4543-b463-a309a7944e8b
+│   ├── 7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+│   └── f8258712-231c-47e3-9d73-558cefc6a40e
+├── metadata
+│   ├── metadata
+│   │   ├── 37
+│   │   ├── 62
+│   │   ├── 70
+│   │   ├── 74
+│   │   └── 83
+│   └── sort_indexes
+│       └── metadata
+│           ├── hash_asc
+│           │   ├── 5c724a85-6b64-4e6a-9e15-dfa0821821e1
+│           │   └── tree.dat
+│           └── photoDate_desc
+│               ├── aff78597-8c6d-46c1-82eb-9619293609fa
+│               └── tree.dat
+├── README.md
+└── thumb
+    ├── 3007f933-67a1-48ff-9ad5-64c958f89e92
+    ├── 52d718ac-5627-4543-b463-a309a7944e8b
+    ├── 7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7
+    ├── ed05d015-4927-44c7-ac5b-5ac999c29932
+    └── f8258712-231c-47e3-9d73-558cefc6a40e
+
+10 directories, 24 files
+
+=================================================================================
+HASH CACHE INFORMATION
+=================================================================================
+
+=== Local Hash Cache ===
+Location: /tmp/photosphere
+Entries: 6
+
+Cache entries:
+
+  ../../test/multiple-images/test-1.jpeg
+    Size: 715 Bytes
+    Modified: 2024-01-01 00:00:00
+    Hash: baa82d130ce3d49905841ae4132b27003ab1c172b3dcbeabc198c59e3b456ab7
+
+  ../../test/multiple-images/test-2.png
+    Size: 874 Bytes
+    Modified: 2024-01-01 00:00:00
+    Hash: ddf59c460a9ff0bcb90cceb02a6b62c3770a4146c611743f8392e3875febd141
+
+  ../../test/test.jpg
+    Size: 1.95 MiB
+    Modified: 2024-01-01 00:00:00
+    Hash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
+
+  ../../test/test.mp4
+    Size: 19.1 MiB
+    Modified: 2024-01-01 00:00:00
+    Hash: 8dcb3ce7a5459621d9e84899fd8ded1b50e8acb8770a0930b0302f2962889012
+
+  ../../test/test.png
+    Size: 1.29 KiB
+    Modified: 2024-01-01 00:00:00
+    Hash: 3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9
+
+  ../../test/test.webp
+    Size: 328 Bytes
+    Modified: 2024-01-01 00:00:00
+    Hash: 8e1b5783d50e811fb8be6a66703a5779bd00bb3b4b93543c74e716ef1d2f0c04
+
+  Total: 6 entries
+
+=== Database Hash Cache ===
+Database hash cache not found or empty.
+
+
+=================================================================================
+SYSTEM INFORMATION
+=================================================================================
+Operating System: Linux ash-linux-laptop 6.14.0-27-generic #27~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Jul 22 17:38:49 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+Current User: ash
+Current Directory: /home/ash/Projects/photosphere/apps/cli
+Disk Usage:
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  432G  209G  201G  52% /
+
+CLI VERSION INFORMATION:
+------------------------
+
+📋 Version Information
+
+Photosphere: 0.0.4
+Database version: 3
+
+Dependencies:
+  ImageMagick (convert/identify): 6.9.12-98
+  ffmpeg: 6.1.1-3ubuntu5
+  ffprobe: 6.1.1-3ubuntu5
+
+Configuration:
+  Config directory: /home/ash/.config/photosphere
+  Keys directory: /home/ash/.config/photosphere/keys
+
+✅ All dependencies are available
+
+TOOL INFORMATION:
+-----------------
+
+📦 Media Processing Tools Status
+
+Tool Status:
+
+✅ ImageMagick (convert/identify): Available (v6.9.12-98)
+   Image processing - resizing, format conversion, metadata extraction
+
+✅ ffmpeg: Available (v6.1.1-3ubuntu5)
+   Video processing - format conversion and thumbnail extraction
+
+✅ ffprobe: Available (v6.1.1-3ubuntu5)
+   Video analysis - metadata extraction, duration, dimensions, codecs
+
+🎉 All tools are available and ready to use!
+
+=================================================================================
+END OF REPORT
+=================================================================================
+Report generated at: 2025-09-21 08:10:55 UTC
