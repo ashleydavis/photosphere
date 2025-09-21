@@ -1044,8 +1044,8 @@ jobs:
             
             ## Download
             - **Linux**: `psi-linux-x64.tar.gz`
-            - **Windows**: `psi-windows-x64.zip`
-            - **Windows baseline (for older processors)**: `psi-windows-x64-baseline.zip` 
+            - **Windows modern**: `psi-windows-x64.zip` (for modern processors, try this one first)
+            - **Windows baseline**: `psi-windows-x64-baseline.zip` (for older processors, try this one next)
             - **macOS (Intel)**: `psi-macos-x64.tar.gz`
             - **macOS (Apple Silicon)**: `psi-macos-arm64.tar.gz`
             
