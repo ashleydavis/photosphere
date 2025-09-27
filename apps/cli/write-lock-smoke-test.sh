@@ -196,7 +196,7 @@ worker_process() {
     
     # Initialize process output file
     echo "# Process $process_id output" > "$output_file"
-    echo "# Format: timestamp,filename,hash,size_bytes,add_result,lock_contention,duration_ms" >> "$output_file"
+    echo "# Format: timestamp,filename,hash,size_bytes,add_result,duration_ms" >> "$output_file"
     
     for ((i=1; i<=NUM_ITERATIONS; i++)); do
         # Random sleep between SLEEP_MIN and SLEEP_MAX seconds
@@ -224,7 +224,6 @@ worker_process() {
         local add_output
         local add_exit_code=0
         local add_result="SUCCESS"
-        local lock_contention="NO"
         
         add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes 2>&1) || add_exit_code=$?
         
@@ -233,10 +232,6 @@ worker_process() {
         
         if [ $add_exit_code -ne 0 ]; then
             add_result="FAILED"
-            # Check if failure was due to write lock contention
-            if echo "$add_output" | grep -q "Failed to acquire write lock"; then
-                lock_contention="YES"
-            fi
         fi
         
         # Extract lock events from verbose output and save to separate lock log
@@ -244,7 +239,7 @@ worker_process() {
         echo "$add_output" | grep "\[LOCK\]" >> "$lock_log_file" 2>/dev/null || true
         
         # Log the result with enhanced information
-        echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$lock_contention,$duration_ms" >> "$output_file"
+        echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$duration_ms" >> "$output_file"
         
         log_info "Process $process_id: Added $filename ($add_result)"
     done
@@ -292,7 +287,6 @@ validate_results() {
     local tracked_files=()
     local successful_adds=0
     local failed_adds=0
-    local lock_contentions=0
     local total_duration=0
     local max_duration=0
     
@@ -300,16 +294,13 @@ validate_results() {
         local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
         if [ -f "$output_file" ]; then
             # Skip comment lines and count results
-            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
+            while IFS=',' read -r timestamp filename hash size result duration_ms; do
                 if [[ ! "$timestamp" =~ ^# ]]; then
                     tracked_files+=("$filename:$hash:$size")
                     if [ "$result" = "SUCCESS" ]; then
                         ((successful_adds++))
                     else
                         ((failed_adds++))
-                    fi
-                    if [ "$lock_contention" = "YES" ]; then
-                        ((lock_contentions++))
                     fi
                     if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
                         total_duration=$((total_duration + duration_ms))
@@ -325,6 +316,14 @@ validate_results() {
     local avg_duration=0
     if [ "${#tracked_files[@]}" -gt 0 ]; then
         avg_duration=$((total_duration / ${#tracked_files[@]}))
+    fi
+    
+    # Get lock contention from verbose logs
+    local combined_locks="$PROCESS_OUTPUT_DIR/combined_locks.log"
+    cat "$PROCESS_OUTPUT_DIR"/process_*_locks.log > "$combined_locks" 2>/dev/null || true
+    local lock_contentions=0
+    if [ -f "$combined_locks" ]; then
+        lock_contentions=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
     fi
     
     log_info "Tracked files: ${#tracked_files[@]}, Successful: $successful_adds, Failed: $failed_adds"
@@ -547,7 +546,6 @@ generate_lock_summary() {
     local total_operations=0
     local total_successes=0
     local total_failures=0
-    local total_lock_contentions=0
     local total_duration=0
     local max_duration=0
     local operations_over_3s=0
@@ -555,16 +553,13 @@ generate_lock_summary() {
     for ((p=1; p<=NUM_PROCESSES; p++)); do
         local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
         if [ -f "$output_file" ]; then
-            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
+            while IFS=',' read -r timestamp filename hash size result duration_ms; do
                 if [[ ! "$timestamp" =~ ^# ]]; then
                     ((total_operations++))
                     if [ "$result" = "SUCCESS" ]; then
                         ((total_successes++))
                     else
                         ((total_failures++))
-                    fi
-                    if [ "$lock_contention" = "YES" ]; then
-                        ((total_lock_contentions++))
                     fi
                     if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
                         total_duration=$((total_duration + duration_ms))
@@ -580,6 +575,14 @@ generate_lock_summary() {
             done < "$output_file"
         fi
     done
+    
+    # Get lock contention from verbose logs
+    local combined_locks="$PROCESS_OUTPUT_DIR/combined_locks.log"
+    cat "$PROCESS_OUTPUT_DIR"/process_*_locks.log > "$combined_locks" 2>/dev/null || true
+    local total_lock_contentions=0
+    if [ -f "$combined_locks" ]; then
+        total_lock_contentions=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
+    fi
     
     local avg_duration=0
     local success_rate=0
@@ -615,20 +618,16 @@ generate_lock_summary() {
             local p_operations=0
             local p_successes=0
             local p_failures=0
-            local p_lock_contentions=0
             local p_total_duration=0
             local p_max_duration=0
             
-            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
+            while IFS=',' read -r timestamp filename hash size result duration_ms; do
                 if [[ ! "$timestamp" =~ ^# ]]; then
                     ((p_operations++))
                     if [ "$result" = "SUCCESS" ]; then
                         ((p_successes++))
                     else
                         ((p_failures++))
-                    fi
-                    if [ "$lock_contention" = "YES" ]; then
-                        ((p_lock_contentions++))
                     fi
                     if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
                         p_total_duration=$((p_total_duration + duration_ms))
@@ -638,6 +637,13 @@ generate_lock_summary() {
                     fi
                 fi
             done < "$output_file"
+            
+            # Get per-process lock contention from verbose logs
+            local p_lock_contentions=0
+            local process_lock_file="$PROCESS_OUTPUT_DIR/process_${p}_locks.log"
+            if [ -f "$process_lock_file" ]; then
+                p_lock_contentions=$(grep -c "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null || echo 0)
+            fi
             
             local p_avg_duration=0
             if [ $p_operations -gt 0 ]; then

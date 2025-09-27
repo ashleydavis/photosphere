@@ -108,8 +108,8 @@ When running in debug mode (`--debug`), temporary files are preserved:
 ### Process Log Format
 ```
 # Process 1 output
-# Format: timestamp,filename,hash,size_bytes,add_result
-1758939000188008219,process_1_iter_1_1758939000188008219.png,5ee038692d0455ea349cea8ed68db4754337b5775b83d56e696e48e87a6a8aa0,180,SUCCESS
+# Format: timestamp,filename,hash,size_bytes,add_result,duration_ms
+1758939000188008219,process_1_iter_1_1758939000188008219.png,5ee038692d0455ea349cea8ed68db4754337b5775b83d56e696e48e87a6a8aa0,180,SUCCESS,1150
 ```
 
 ## Exit Codes
