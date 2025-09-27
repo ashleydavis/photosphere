@@ -2,6 +2,7 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
+import { log } from "utils";
 
 export class FileStorage implements IStorage {
 
@@ -230,9 +231,19 @@ export class FileStorage implements IStorage {
     async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
         checkReadonly(this.isReadonly, 'acquire write lock');
         
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},ACQUIRE_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
         try {
             // Check if lock already exists
             if (await fs.pathExists(filePath)) {
+                if (log.verboseEnabled) {
+                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath}`);
+                }
                 return false;
             }
             
@@ -245,11 +256,21 @@ export class FileStorage implements IStorage {
                 acquiredAt: new Date().toISOString()
             };
             await fs.writeFile(filePath, JSON.stringify(lockInfo), { flag: 'wx' }); // 'wx' flag fails if file exists
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS,${processId},${owner},${filePath}`);
+            }
             return true;
         } catch (err: any) {
             // If file already exists (EEXIST), return false
             if (err.code === 'EEXIST') {
+                if (log.verboseEnabled) {
+                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RACE,${processId},${owner},${filePath}`);
+                }
                 return false;
+            }
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_ERROR,${processId},${owner},${filePath},error:${err.message}`);
             }
             throw err;
         }
@@ -260,6 +281,10 @@ export class FileStorage implements IStorage {
     //
     async releaseWriteLock(filePath: string): Promise<void> {
         checkReadonly(this.isReadonly, 'release write lock');
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
+        }
         
         try {
             await fs.unlink(filePath);

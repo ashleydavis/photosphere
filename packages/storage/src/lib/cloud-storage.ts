@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import aws from "aws-sdk";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
 import { WrappedError } from "utils";
+import { log } from "utils";
 
 //
 // S3 credentials.
@@ -617,6 +618,13 @@ export class CloudStorage implements IStorage {
     async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
         checkReadonly(this.isReadonly, 'acquire write lock');
         
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},ACQUIRE_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
@@ -642,12 +650,24 @@ export class CloudStorage implements IStorage {
             const request = this.s3.putObject(putParams);
             request.httpRequest.headers['If-None-Match'] = '*';
             await request.promise();
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS,${processId},${owner},${filePath}`);
+            }
             return true;
         } catch (putErr: any) {
             // If the condition failed (object already exists), return false
             if (putErr.statusCode === 412 || putErr.code === 'PreconditionFailed') {
+                if (log.verboseEnabled) {
+                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath}`);
+                }
                 return false;
             }
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_ERROR,${processId},${owner},${filePath},error:${putErr.message}`);
+            }
+            
             if (this.verbose) {
                 throw new WrappedError(`Failed to acquire write lock for ${filePath}: ${putErr.message}`, { cause: putErr });
             }
@@ -673,8 +693,14 @@ export class CloudStorage implements IStorage {
 
         try {
             await this.s3.deleteObject(deleteParams).promise();
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
+            }
         } catch (err: any) {
             // Ignore errors if the lock file doesn't exist
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${Date.now()},RELEASE_FAILED,${process.pid},unknown,${filePath},error:${err?.message || 'unknown'}`);
+            }
         }
     }
 }
