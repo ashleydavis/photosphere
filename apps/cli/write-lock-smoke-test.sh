@@ -149,7 +149,7 @@ check_dependencies() {
 setup_test_environment() {
     log_info "Setting up test environment..."
     
-    # Clean up any existing test directories
+    # Clean up any existing test directories from previous runs
     rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
     
     # Create directories
@@ -506,15 +506,6 @@ generate_lock_summary() {
     log_info "  Summary saved to: $summary_file"
 }
 
-# Cleanup function
-cleanup() {
-    log_info "Cleaning up test environment..."
-    if [ "$DEBUG_MODE" = "false" ]; then
-        rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
-    else
-        log_info "Debug mode: keeping test files in $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
-    fi
-}
 
 # Main test execution
 main() {
@@ -550,16 +541,11 @@ main() {
     # Generate write lock contention summary
     generate_lock_summary
     
-    # Cleanup
-    if [ "$DEBUG_MODE" = "false" ]; then
-        cleanup
-    fi
+    log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
     
     exit $exit_code
 }
 
-# Trap to ensure cleanup on script exit
-trap cleanup EXIT
 
 # Run main function
 main "$@"
