@@ -62,6 +62,17 @@ Quick test with minimal delays for rapid feedback.
 ```
 Tests with longer delays to create different timing patterns.
 
+## How Parallel Execution Works
+
+The script achieves true parallelism using bash background jobs:
+
+1. **Background Jobs**: Each worker process is launched with `worker_process "$p" &`, where the `&` operator runs it as a background process
+2. **Process ID Tracking**: The process ID of each background job (`$!`) is captured and stored in an array
+3. **Synchronization**: The main script uses `wait "$pid"` to wait for each background process to complete
+4. **Concurrent Execution**: All processes run simultaneously, competing for the same database write lock to create realistic contention scenarios
+
+This approach ensures that multiple processes are genuinely attempting to acquire the write lock at the same time, which is essential for testing the lock mechanism's effectiveness.
+
 ## What the Test Does
 
 1. **Environment Setup**
@@ -69,14 +80,17 @@ Tests with longer delays to create different timing patterns.
    - Initializes a fresh Photosphere database
 
 2. **Parallel Execution**
-   - Spawns the specified number of worker processes
+   - Spawns the specified number of worker processes using bash background jobs (`&`)
+   - Each worker process runs independently and concurrently
+   - Process IDs are tracked and synchronized using `wait` commands
    - Each process generates unique PNG files with random colors/dimensions
    - Processes sleep for random intervals within the specified range
-   - Files are added to the shared database using the CLI
+   - Files are added to the shared database using the CLI, creating real lock contention
 
 3. **File Tracking**
    - Each process logs: timestamp, filename, hash, size, and add result
    - Output files stored in `./test/tmp/write-lock-outputs/process_N.log`
+   - Lock events are captured in debug mode for detailed contention analysis
 
 4. **Validation**
    - Verifies database integrity using `psi verify`
