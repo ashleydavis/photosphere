@@ -323,7 +323,7 @@ validate_results() {
     cat "$PROCESS_OUTPUT_DIR"/process_*_locks.log > "$combined_locks" 2>/dev/null || true
     local lock_contentions=0
     if [ -f "$combined_locks" ]; then
-        lock_contentions=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
+        lock_contentions=$(grep "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null | wc -l)
     fi
     
     log_info "Tracked files: ${#tracked_files[@]}, Successful: $successful_adds, Failed: $failed_adds"
@@ -408,10 +408,10 @@ analyze_lock_events() {
     local total_releases=0
     
     # Count events by type
-    total_attempts=$(grep -c "ACQUIRE_ATTEMPT" "$combined_locks" 2>/dev/null || echo 0)
-    total_successes=$(grep -c "ACQUIRE_SUCCESS" "$combined_locks" 2>/dev/null || echo 0)
-    total_failures=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
-    total_releases=$(grep -c "RELEASE_SUCCESS" "$combined_locks" 2>/dev/null || echo 0)
+    total_attempts=$(grep "ACQUIRE_ATTEMPT" "$combined_locks" 2>/dev/null | wc -l)
+    total_successes=$(grep "ACQUIRE_SUCCESS" "$combined_locks" 2>/dev/null | wc -l)
+    total_failures=$(grep "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null | wc -l)
+    total_releases=$(grep "RELEASE_SUCCESS" "$combined_locks" 2>/dev/null | wc -l)
     
     echo "Lock Event Summary:" >> "$lock_analysis_file"
     echo "  Total lock attempts: $total_attempts" >> "$lock_analysis_file"
@@ -429,9 +429,15 @@ analyze_lock_events() {
     echo "Lock Contention Analysis:" >> "$lock_analysis_file"
     
     # Count different failure types
-    local failed_exists=$(grep -c "ACQUIRE_FAILED_EXISTS" "$combined_locks" 2>/dev/null || echo 0)
-    local failed_race=$(grep -c "ACQUIRE_FAILED_RACE" "$combined_locks" 2>/dev/null || echo 0)
-    local failed_error=$(grep -c "ACQUIRE_FAILED_ERROR" "$combined_locks" 2>/dev/null || echo 0)
+    local failed_exists=0
+    local failed_race=0  
+    local failed_error=0
+    
+    if [ -f "$combined_locks" ]; then
+        failed_exists=$(grep "ACQUIRE_FAILED_EXISTS" "$combined_locks" 2>/dev/null | wc -l)
+        failed_race=$(grep "ACQUIRE_FAILED_RACE" "$combined_locks" 2>/dev/null | wc -l)
+        failed_error=$(grep "ACQUIRE_FAILED_ERROR" "$combined_locks" 2>/dev/null | wc -l)
+    fi
     
     echo "  Lock already exists: $failed_exists" >> "$lock_analysis_file"
     echo "  Race condition failures: $failed_race" >> "$lock_analysis_file"
@@ -448,10 +454,10 @@ analyze_lock_events() {
     for ((p=1; p<=NUM_PROCESSES; p++)); do
         local process_lock_file="$PROCESS_OUTPUT_DIR/process_${p}_locks.log"
         if [ -f "$process_lock_file" ] && [ -s "$process_lock_file" ]; then
-            local p_attempts=$(grep -c "ACQUIRE_ATTEMPT" "$process_lock_file" 2>/dev/null || echo 0)
-            local p_successes=$(grep -c "ACQUIRE_SUCCESS" "$process_lock_file" 2>/dev/null || echo 0)
-            local p_failures=$(grep -c "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null || echo 0)
-            local p_releases=$(grep -c "RELEASE_SUCCESS" "$process_lock_file" 2>/dev/null || echo 0)
+            local p_attempts=$(grep "ACQUIRE_ATTEMPT" "$process_lock_file" 2>/dev/null | wc -l)
+            local p_successes=$(grep "ACQUIRE_SUCCESS" "$process_lock_file" 2>/dev/null | wc -l)
+            local p_failures=$(grep "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null | wc -l)
+            local p_releases=$(grep "RELEASE_SUCCESS" "$process_lock_file" 2>/dev/null | wc -l)
             
             echo "  Process $p: $p_attempts attempts, $p_successes successes, $p_failures failures, $p_releases releases" >> "$lock_analysis_file"
         else
@@ -581,7 +587,7 @@ generate_lock_summary() {
     cat "$PROCESS_OUTPUT_DIR"/process_*_locks.log > "$combined_locks" 2>/dev/null || true
     local total_lock_contentions=0
     if [ -f "$combined_locks" ]; then
-        total_lock_contentions=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
+        total_lock_contentions=$(grep "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null | wc -l)
     fi
     
     local avg_duration=0
@@ -642,7 +648,7 @@ generate_lock_summary() {
             local p_lock_contentions=0
             local process_lock_file="$PROCESS_OUTPUT_DIR/process_${p}_locks.log"
             if [ -f "$process_lock_file" ]; then
-                p_lock_contentions=$(grep -c "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null || echo 0)
+                p_lock_contentions=$(grep "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null | wc -l)
             fi
             
             local p_avg_duration=0
