@@ -196,7 +196,7 @@ worker_process() {
     
     # Initialize process output file
     echo "# Process $process_id output" > "$output_file"
-    echo "# Format: timestamp,filename,hash,size_bytes,add_result" >> "$output_file"
+    echo "# Format: timestamp,filename,hash,size_bytes,add_result,lock_contention,duration_ms" >> "$output_file"
     
     for ((i=1; i<=NUM_ITERATIONS; i++)); do
         # Random sleep between SLEEP_MIN and SLEEP_MAX seconds
@@ -219,14 +219,28 @@ worker_process() {
         local file_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
         local file_size=$(stat -c%s "$file_path")
         
-        # Add file to database
+        # Add file to database and capture timing and detailed output
+        local start_time=$(date +%s%N)
+        local add_output
+        local add_exit_code=0
         local add_result="SUCCESS"
-        if ! $(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
+        local lock_contention="NO"
+        
+        add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --yes 2>&1) || add_exit_code=$?
+        
+        local end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+        
+        if [ $add_exit_code -ne 0 ]; then
             add_result="FAILED"
+            # Check if failure was due to write lock contention
+            if echo "$add_output" | grep -q "Failed to acquire write lock"; then
+                lock_contention="YES"
+            fi
         fi
         
-        # Log the result
-        echo "$timestamp,$filename,$file_hash,$file_size,$add_result" >> "$output_file"
+        # Log the result with enhanced information
+        echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$lock_contention,$duration_ms" >> "$output_file"
         
         log_info "Process $process_id: Added $filename ($add_result)"
     done
@@ -270,16 +284,19 @@ validate_results() {
     fi
     log_success "Database integrity check passed"
     
-    # Collect all tracked files from process outputs
+    # Collect all tracked files from process outputs and analyze lock contention
     local tracked_files=()
     local successful_adds=0
     local failed_adds=0
+    local lock_contentions=0
+    local total_duration=0
+    local max_duration=0
     
     for ((p=1; p<=NUM_PROCESSES; p++)); do
         local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
         if [ -f "$output_file" ]; then
             # Skip comment lines and count results
-            while IFS=',' read -r timestamp filename hash size result; do
+            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
                 if [[ ! "$timestamp" =~ ^# ]]; then
                     tracked_files+=("$filename:$hash:$size")
                     if [ "$result" = "SUCCESS" ]; then
@@ -287,12 +304,27 @@ validate_results() {
                     else
                         ((failed_adds++))
                     fi
+                    if [ "$lock_contention" = "YES" ]; then
+                        ((lock_contentions++))
+                    fi
+                    if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
+                        total_duration=$((total_duration + duration_ms))
+                        if [ "$duration_ms" -gt "$max_duration" ]; then
+                            max_duration=$duration_ms
+                        fi
+                    fi
                 fi
             done < "$output_file"
         fi
     done
     
-    log_info "Tracked files: ${#tracked_files[@]}, Successful adds: $successful_adds, Failed adds: $failed_adds"
+    local avg_duration=0
+    if [ "${#tracked_files[@]}" -gt 0 ]; then
+        avg_duration=$((total_duration / ${#tracked_files[@]}))
+    fi
+    
+    log_info "Tracked files: ${#tracked_files[@]}, Successful: $successful_adds, Failed: $failed_adds"
+    log_info "Lock contentions: $lock_contentions, Avg duration: ${avg_duration}ms, Max duration: ${max_duration}ms"
     
     # Verify each successfully tracked file is in the database with correct metadata
     local verification_errors=0
@@ -344,6 +376,136 @@ validate_results() {
     fi
 }
 
+# Generate write lock contention summary
+generate_lock_summary() {
+    local summary_file="$PROCESS_OUTPUT_DIR/write_lock_summary.txt"
+    
+    echo "============================================================================" > "$summary_file"
+    echo "=== WRITE LOCK CONTENTION SUMMARY ===" >> "$summary_file"
+    echo "============================================================================" >> "$summary_file"
+    echo "Test Configuration:" >> "$summary_file"
+    echo "  Processes: $NUM_PROCESSES" >> "$summary_file"
+    echo "  Iterations per process: $NUM_ITERATIONS" >> "$summary_file"
+    echo "  Sleep range: ${SLEEP_MIN}s - ${SLEEP_MAX}s" >> "$summary_file"
+    echo "" >> "$summary_file"
+    
+    # Aggregate statistics across all processes
+    local total_operations=0
+    local total_successes=0
+    local total_failures=0
+    local total_lock_contentions=0
+    local total_duration=0
+    local max_duration=0
+    local operations_over_3s=0
+    
+    for ((p=1; p<=NUM_PROCESSES; p++)); do
+        local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
+        if [ -f "$output_file" ]; then
+            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
+                if [[ ! "$timestamp" =~ ^# ]]; then
+                    ((total_operations++))
+                    if [ "$result" = "SUCCESS" ]; then
+                        ((total_successes++))
+                    else
+                        ((total_failures++))
+                    fi
+                    if [ "$lock_contention" = "YES" ]; then
+                        ((total_lock_contentions++))
+                    fi
+                    if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
+                        total_duration=$((total_duration + duration_ms))
+                        if [ "$duration_ms" -gt "$max_duration" ]; then
+                            max_duration=$duration_ms
+                        fi
+                        # Count operations taking over 3 seconds (likely lock waits)
+                        if [ "$duration_ms" -gt 3000 ]; then
+                            ((operations_over_3s++))
+                        fi
+                    fi
+                fi
+            done < "$output_file"
+        fi
+    done
+    
+    local avg_duration=0
+    local success_rate=0
+    local lock_contention_rate=0
+    
+    if [ $total_operations -gt 0 ]; then
+        avg_duration=$((total_duration / total_operations))
+        success_rate=$((total_successes * 100 / total_operations))
+        lock_contention_rate=$((total_lock_contentions * 100 / total_operations))
+    fi
+    
+    echo "Overall Statistics:" >> "$summary_file"
+    echo "  Total operations: $total_operations" >> "$summary_file"
+    echo "  Successful operations: $total_successes" >> "$summary_file"
+    echo "  Failed operations: $total_failures" >> "$summary_file"
+    echo "  Success rate: ${success_rate}%" >> "$summary_file"
+    echo "" >> "$summary_file"
+    echo "Write Lock Contention:" >> "$summary_file"
+    echo "  Explicit lock contentions: $total_lock_contentions" >> "$summary_file"
+    echo "  Lock contention rate: ${lock_contention_rate}%" >> "$summary_file"
+    echo "  Operations over 3s (likely lock waits): $operations_over_3s" >> "$summary_file"
+    echo "" >> "$summary_file"
+    echo "Timing Analysis:" >> "$summary_file"
+    echo "  Average operation duration: ${avg_duration}ms" >> "$summary_file"
+    echo "  Maximum operation duration: ${max_duration}ms" >> "$summary_file"
+    echo "" >> "$summary_file"
+    
+    # Per-process breakdown
+    echo "Per-Process Breakdown:" >> "$summary_file"
+    for ((p=1; p<=NUM_PROCESSES; p++)); do
+        local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
+        if [ -f "$output_file" ]; then
+            local p_operations=0
+            local p_successes=0
+            local p_failures=0
+            local p_lock_contentions=0
+            local p_total_duration=0
+            local p_max_duration=0
+            
+            while IFS=',' read -r timestamp filename hash size result lock_contention duration_ms; do
+                if [[ ! "$timestamp" =~ ^# ]]; then
+                    ((p_operations++))
+                    if [ "$result" = "SUCCESS" ]; then
+                        ((p_successes++))
+                    else
+                        ((p_failures++))
+                    fi
+                    if [ "$lock_contention" = "YES" ]; then
+                        ((p_lock_contentions++))
+                    fi
+                    if [ -n "$duration_ms" ] && [ "$duration_ms" -gt 0 ]; then
+                        p_total_duration=$((p_total_duration + duration_ms))
+                        if [ "$duration_ms" -gt "$p_max_duration" ]; then
+                            p_max_duration=$duration_ms
+                        fi
+                    fi
+                fi
+            done < "$output_file"
+            
+            local p_avg_duration=0
+            if [ $p_operations -gt 0 ]; then
+                p_avg_duration=$((p_total_duration / p_operations))
+            fi
+            
+            echo "  Process $p: $p_successes/$p_operations successful, $p_lock_contentions lock contentions, avg ${p_avg_duration}ms, max ${p_max_duration}ms" >> "$summary_file"
+        fi
+    done
+    
+    echo "" >> "$summary_file"
+    echo "Lock contention data saved to: $summary_file" | tee -a "$summary_file"
+    
+    # Display summary to user
+    log_info "Write lock contention summary:"
+    log_info "  Total operations: $total_operations"
+    log_info "  Success rate: ${success_rate}%"
+    log_info "  Lock contentions: $total_lock_contentions (${lock_contention_rate}%)"
+    log_info "  Long operations (>3s): $operations_over_3s"
+    log_info "  Summary saved to: $summary_file"
+}
+
 # Cleanup function
 cleanup() {
     log_info "Cleaning up test environment..."
@@ -384,6 +546,9 @@ main() {
         log_error "Write lock smoke test FAILED"
         local exit_code=1
     fi
+    
+    # Generate write lock contention summary
+    generate_lock_summary
     
     # Cleanup
     if [ "$DEBUG_MODE" = "false" ]; then
