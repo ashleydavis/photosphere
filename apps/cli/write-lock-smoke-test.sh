@@ -226,7 +226,7 @@ worker_process() {
         local add_result="SUCCESS"
         local lock_contention="NO"
         
-        add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --yes 2>&1) || add_exit_code=$?
+        add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes 2>&1) || add_exit_code=$?
         
         local end_time=$(date +%s%N)
         local duration_ms=$(( (end_time - start_time) / 1000000 ))
@@ -238,6 +238,10 @@ worker_process() {
                 lock_contention="YES"
             fi
         fi
+        
+        # Extract lock events from verbose output and save to separate lock log
+        local lock_log_file="$PROCESS_OUTPUT_DIR/process_${process_id}_locks.log"
+        echo "$add_output" | grep "\[LOCK\]" >> "$lock_log_file" 2>/dev/null || true
         
         # Log the result with enhanced information
         echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$lock_contention,$duration_ms" >> "$output_file"
@@ -373,6 +377,156 @@ validate_results() {
     else
         log_error "File verification failed with $verification_errors errors"
         return 1
+    fi
+}
+
+# Analyze lock events from verbose logs
+analyze_lock_events() {
+    local lock_analysis_file="$PROCESS_OUTPUT_DIR/lock_analysis.txt"
+    
+    echo "============================================================================" > "$lock_analysis_file"
+    echo "=== WRITE LOCK EVENT ANALYSIS ===" >> "$lock_analysis_file"
+    echo "============================================================================" >> "$lock_analysis_file"
+    echo "Test Configuration:" >> "$lock_analysis_file"
+    echo "  Processes: $NUM_PROCESSES" >> "$lock_analysis_file"
+    echo "  Iterations per process: $NUM_ITERATIONS" >> "$lock_analysis_file"
+    echo "  Sleep range: ${SLEEP_MIN}s - ${SLEEP_MAX}s" >> "$lock_analysis_file"
+    echo "" >> "$lock_analysis_file"
+    
+    # Combine all lock logs
+    local combined_locks="$PROCESS_OUTPUT_DIR/combined_locks.log"
+    cat "$PROCESS_OUTPUT_DIR"/process_*_locks.log > "$combined_locks" 2>/dev/null || true
+    
+    if [ ! -s "$combined_locks" ]; then
+        echo "No lock events found in verbose output" >> "$lock_analysis_file"
+        return
+    fi
+    
+    # Parse lock events
+    local total_attempts=0
+    local total_successes=0
+    local total_failures=0
+    local total_releases=0
+    
+    # Count events by type
+    total_attempts=$(grep -c "ACQUIRE_ATTEMPT" "$combined_locks" 2>/dev/null || echo 0)
+    total_successes=$(grep -c "ACQUIRE_SUCCESS" "$combined_locks" 2>/dev/null || echo 0)
+    total_failures=$(grep -c "ACQUIRE_FAILED" "$combined_locks" 2>/dev/null || echo 0)
+    total_releases=$(grep -c "RELEASE_SUCCESS" "$combined_locks" 2>/dev/null || echo 0)
+    
+    echo "Lock Event Summary:" >> "$lock_analysis_file"
+    echo "  Total lock attempts: $total_attempts" >> "$lock_analysis_file"
+    echo "  Successful acquisitions: $total_successes" >> "$lock_analysis_file"
+    echo "  Failed acquisitions: $total_failures" >> "$lock_analysis_file"
+    echo "  Successful releases: $total_releases" >> "$lock_analysis_file"
+    
+    if [ $total_attempts -gt 0 ]; then
+        local success_rate=$((total_successes * 100 / total_attempts))
+        echo "  Lock success rate: ${success_rate}%" >> "$lock_analysis_file"
+    fi
+    echo "" >> "$lock_analysis_file"
+    
+    # Analyze lock contention patterns
+    echo "Lock Contention Analysis:" >> "$lock_analysis_file"
+    
+    # Count different failure types
+    local failed_exists=$(grep -c "ACQUIRE_FAILED_EXISTS" "$combined_locks" 2>/dev/null || echo 0)
+    local failed_race=$(grep -c "ACQUIRE_FAILED_RACE" "$combined_locks" 2>/dev/null || echo 0)
+    local failed_error=$(grep -c "ACQUIRE_FAILED_ERROR" "$combined_locks" 2>/dev/null || echo 0)
+    
+    echo "  Lock already exists: $failed_exists" >> "$lock_analysis_file"
+    echo "  Race condition failures: $failed_race" >> "$lock_analysis_file"
+    echo "  Other errors: $failed_error" >> "$lock_analysis_file"
+    echo "" >> "$lock_analysis_file"
+    
+    # Analyze lock hold durations
+    echo "Lock Hold Duration Analysis:" >> "$lock_analysis_file"
+    analyze_lock_hold_durations "$combined_locks" >> "$lock_analysis_file"
+    echo "" >> "$lock_analysis_file"
+    
+    # Per-process analysis
+    echo "Per-Process Lock Activity:" >> "$lock_analysis_file"
+    for ((p=1; p<=NUM_PROCESSES; p++)); do
+        local process_lock_file="$PROCESS_OUTPUT_DIR/process_${p}_locks.log"
+        if [ -f "$process_lock_file" ] && [ -s "$process_lock_file" ]; then
+            local p_attempts=$(grep -c "ACQUIRE_ATTEMPT" "$process_lock_file" 2>/dev/null || echo 0)
+            local p_successes=$(grep -c "ACQUIRE_SUCCESS" "$process_lock_file" 2>/dev/null || echo 0)
+            local p_failures=$(grep -c "ACQUIRE_FAILED" "$process_lock_file" 2>/dev/null || echo 0)
+            local p_releases=$(grep -c "RELEASE_SUCCESS" "$process_lock_file" 2>/dev/null || echo 0)
+            
+            echo "  Process $p: $p_attempts attempts, $p_successes successes, $p_failures failures, $p_releases releases" >> "$lock_analysis_file"
+        else
+            echo "  Process $p: No lock events recorded" >> "$lock_analysis_file"
+        fi
+    done
+    
+    echo "" >> "$lock_analysis_file"
+    echo "Lock event analysis saved to: $lock_analysis_file" | tee -a "$lock_analysis_file"
+    
+    # Display key metrics to user
+    log_info "Lock Event Analysis:"
+    log_info "  Lock attempts: $total_attempts, Successes: $total_successes, Failures: $total_failures"
+    log_info "  Contention events: exists=$failed_exists, race=$failed_race, errors=$failed_error"
+    log_info "  Analysis saved to: $lock_analysis_file"
+}
+
+# Analyze lock hold durations by matching acquire/release pairs
+analyze_lock_hold_durations() {
+    local lock_file="$1"
+    
+    # Extract acquire and release events with timestamps and process IDs
+    local temp_acquire="/tmp/acquire_events.tmp"
+    local temp_release="/tmp/release_events.tmp"
+    
+    grep "ACQUIRE_SUCCESS" "$lock_file" | sed 's/\[LOCK\] //' | awk -F',' '{print $1 "," $3 "," $5}' > "$temp_acquire" 2>/dev/null || true
+    grep "RELEASE_SUCCESS" "$lock_file" | sed 's/\[LOCK\] //' | awk -F',' '{print $1 "," $3 "," $5}' > "$temp_release" 2>/dev/null || true
+    
+    local total_holds=0
+    local total_duration=0
+    local min_duration=999999999
+    local max_duration=0
+    
+    # Match acquire/release pairs by process ID and calculate durations
+    while IFS=',' read -r acquire_time process_id file_path; do
+        # Skip empty or malformed lines
+        if [ -z "$acquire_time" ] || [ -z "$process_id" ]; then
+            continue
+        fi
+        
+        # Validate acquire_time is numeric
+        if ! [[ "$acquire_time" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+        
+        # Find corresponding release for same process and file
+        local release_time=$(grep "$process_id.*$file_path" "$temp_release" | head -1 | cut -d',' -f1)
+        
+        # Validate release_time is numeric and non-empty
+        if [ -n "$release_time" ] && [[ "$release_time" =~ ^[0-9]+$ ]] && [ "$release_time" -gt "$acquire_time" ]; then
+            local duration=$((release_time - acquire_time))
+            total_duration=$((total_duration + duration))
+            ((total_holds++))
+            
+            if [ $duration -lt $min_duration ]; then
+                min_duration=$duration
+            fi
+            if [ $duration -gt $max_duration ]; then
+                max_duration=$duration
+            fi
+        fi
+    done < "$temp_acquire"
+    
+    # Clean up temp files
+    rm -f "$temp_acquire" "$temp_release"
+    
+    if [ $total_holds -gt 0 ]; then
+        local avg_duration=$((total_duration / total_holds))
+        echo "  Total lock holds: $total_holds"
+        echo "  Average hold duration: ${avg_duration}ms"
+        echo "  Minimum hold duration: ${min_duration}ms"
+        echo "  Maximum hold duration: ${max_duration}ms"
+    else
+        echo "  No complete acquire/release pairs found"
     fi
 }
 
@@ -538,8 +692,11 @@ main() {
         local exit_code=1
     fi
     
-    # Generate write lock contention summary
-    generate_lock_summary
+    # Analyze lock events from verbose logs (don't let this affect exit code)
+    analyze_lock_events || true
+    
+    # Generate write lock contention summary (don't let this affect exit code)
+    generate_lock_summary || true
     
     log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
     
