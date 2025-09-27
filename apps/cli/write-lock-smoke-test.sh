@@ -1,0 +1,400 @@
+#!/bin/bash
+
+# Photosphere CLI Write Lock Smoke Tests
+# Tests write lock functionality with parallel processes
+
+set -e
+
+# Set NODE_ENV to testing for deterministic UUID generation
+export NODE_ENV=testing
+
+# Disable colors for consistent output parsing
+export NO_COLOR=1
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Test configuration
+TEST_DB_DIR="./test/tmp/write-lock-test-db"
+TEST_FILES_DIR="./test/tmp/write-lock-files"
+PROCESS_OUTPUT_DIR="./test/tmp/write-lock-outputs"
+
+# Default values
+DEBUG_MODE=false
+NUM_PROCESSES=4
+NUM_ITERATIONS=6
+SLEEP_MIN=0.1
+SLEEP_MAX=2.0
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            DEBUG_MODE=true
+            shift
+            ;;
+        --processes)
+            NUM_PROCESSES="$2"
+            shift 2
+            ;;
+        --iterations)
+            NUM_ITERATIONS="$2"
+            shift 2
+            ;;
+        --sleep-range)
+            IFS='-' read -r SLEEP_MIN SLEEP_MAX <<< "$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX]"
+            echo "  --debug       Use bun run start instead of binary"
+            echo "  --processes   Number of parallel processes (default: 4)"
+            echo "  --iterations  Number of iterations per process (default: 6)"
+            echo "  --sleep-range Sleep range in seconds as MIN-MAX (default: 0.1-2.0)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Platform detection functions (copied from smoke-tests.sh)
+detect_platform() {
+    local os="$(uname -s)"
+    case "$os" in
+        Linux*)     echo "linux";;
+        Darwin*)    echo "mac";;
+        CYGWIN*|MINGW*|MSYS*) echo "win";;
+        *)          echo "unknown";;
+    esac
+}
+
+detect_architecture() {
+    local arch="$(uname -m)"
+    case "$arch" in
+        x86_64|amd64) echo "x64";;
+        arm64|aarch64) echo "arm64";;
+        *) echo "x64";;  # Default to x64
+    esac
+}
+
+# Get CLI command based on platform and debug mode
+get_cli_command() {
+    if [ "$DEBUG_MODE" = "true" ]; then
+        echo "bun run start --"
+    else
+        local platform=$(detect_platform)
+        local arch=$(detect_architecture)
+        
+        case "$platform" in
+            "linux")
+                echo "./bin/x64/linux/psi"
+                ;;
+            "mac")
+                if [ "$arch" = "arm64" ]; then
+                    echo "./bin/arm64/mac/psi"
+                else
+                    echo "./bin/x64/mac/psi"
+                fi
+                ;;
+            "win")
+                echo "./bin/x64/win/psi.exe"
+                ;;
+            *)
+                echo "./bin/x64/linux/psi"  # Default to linux
+                ;;
+        esac
+    fi
+}
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[PASS]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[FAIL]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+# Check if required tools are available
+check_dependencies() {
+    # Check if convert (ImageMagick) is available for PNG generation
+    if ! command -v convert &> /dev/null; then
+        log_error "convert (ImageMagick) is required but not installed"
+        exit 1
+    fi
+    
+    # Check if sha256sum is available
+    if ! command -v sha256sum &> /dev/null; then
+        log_error "sha256sum is required but not installed"
+        exit 1
+    fi
+}
+
+# Setup test environment
+setup_test_environment() {
+    log_info "Setting up test environment..."
+    
+    # Clean up any existing test directories
+    rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    
+    # Create directories
+    mkdir -p "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    
+    # Initialize database
+    log_info "Initializing test database..."
+    $(get_cli_command) init --db "$TEST_DB_DIR" --yes
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to initialize database"
+        exit 1
+    fi
+    
+    log_success "Test environment setup complete"
+}
+
+# Generate a unique PNG file
+generate_png_file() {
+    local file_path="$1"
+    local width=$((100 + RANDOM % 200))
+    local height=$((100 + RANDOM % 200))
+    local red=$((RANDOM % 256))
+    local green=$((RANDOM % 256))
+    local blue=$((RANDOM % 256))
+    
+    # Generate a random colored PNG using ImageMagick
+    convert -size ${width}x${height} "xc:rgb($red,$green,$blue)" "$file_path"
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to generate PNG file: $file_path"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Worker process function
+worker_process() {
+    local process_id="$1"
+    local output_file="$PROCESS_OUTPUT_DIR/process_${process_id}.log"
+    
+    log_info "Starting worker process $process_id"
+    
+    # Initialize process output file
+    echo "# Process $process_id output" > "$output_file"
+    echo "# Format: timestamp,filename,hash,size_bytes,add_result" >> "$output_file"
+    
+    for ((i=1; i<=NUM_ITERATIONS; i++)); do
+        # Random sleep between SLEEP_MIN and SLEEP_MAX seconds
+        local sleep_range=$(awk "BEGIN {printf \"%.1f\", $SLEEP_MAX - $SLEEP_MIN}")
+        local sleep_time=$(awk "BEGIN {srand(); printf \"%.1f\", rand() * $sleep_range + $SLEEP_MIN}")
+        sleep "$sleep_time"
+        
+        # Generate unique filename
+        local timestamp=$(date +%s%N)
+        local filename="process_${process_id}_iter_${i}_${timestamp}.png"
+        local file_path="$TEST_FILES_DIR/$filename"
+        
+        # Generate PNG file
+        if ! generate_png_file "$file_path"; then
+            echo "$timestamp,$filename,GENERATION_FAILED,0,FAILED" >> "$output_file"
+            continue
+        fi
+        
+        # Calculate file hash and size
+        local file_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
+        local file_size=$(stat -c%s "$file_path")
+        
+        # Add file to database
+        local add_result="SUCCESS"
+        if ! $(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
+            add_result="FAILED"
+        fi
+        
+        # Log the result
+        echo "$timestamp,$filename,$file_hash,$file_size,$add_result" >> "$output_file"
+        
+        log_info "Process $process_id: Added $filename ($add_result)"
+    done
+    
+    log_success "Worker process $process_id completed"
+}
+
+# Start parallel processes
+start_parallel_processes() {
+    log_info "Starting $NUM_PROCESSES parallel processes, $NUM_ITERATIONS iterations each"
+    
+    local pids=()
+    
+    # Start worker processes in background
+    for ((p=1; p<=NUM_PROCESSES; p++)); do
+        worker_process "$p" &
+        pids+=($!)
+    done
+    
+    # Wait for all processes to complete
+    log_info "Waiting for all processes to complete..."
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+        if [ $? -ne 0 ]; then
+            log_warning "Process $pid exited with non-zero status"
+        fi
+    done
+    
+    log_success "All parallel processes completed"
+}
+
+# Validate database integrity and file tracking
+validate_results() {
+    log_info "Validating database integrity and file tracking..."
+    
+    # Check database integrity
+    log_info "Checking database integrity..."
+    if ! $(get_cli_command) verify --db "$TEST_DB_DIR" --yes > /dev/null 2>&1; then
+        log_error "Database integrity check failed"
+        return 1
+    fi
+    log_success "Database integrity check passed"
+    
+    # Collect all tracked files from process outputs
+    local tracked_files=()
+    local successful_adds=0
+    local failed_adds=0
+    
+    for ((p=1; p<=NUM_PROCESSES; p++)); do
+        local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
+        if [ -f "$output_file" ]; then
+            # Skip comment lines and count results
+            while IFS=',' read -r timestamp filename hash size result; do
+                if [[ ! "$timestamp" =~ ^# ]]; then
+                    tracked_files+=("$filename:$hash:$size")
+                    if [ "$result" = "SUCCESS" ]; then
+                        ((successful_adds++))
+                    else
+                        ((failed_adds++))
+                    fi
+                fi
+            done < "$output_file"
+        fi
+    done
+    
+    log_info "Tracked files: ${#tracked_files[@]}, Successful adds: $successful_adds, Failed adds: $failed_adds"
+    
+    # Verify each successfully tracked file is in the database with correct metadata
+    local verification_errors=0
+    
+    for file_info in "${tracked_files[@]}"; do
+        IFS=':' read -r filename expected_hash expected_size <<< "$file_info"
+        local file_path="$TEST_FILES_DIR/$filename"
+        
+        # Skip if file addition failed
+        local add_result=$(grep "$filename" "$PROCESS_OUTPUT_DIR"/process_*.log | cut -d',' -f5)
+        if [ "$add_result" != "SUCCESS" ]; then
+            continue
+        fi
+        
+        # Check if file exists
+        if [ ! -f "$file_path" ]; then
+            log_error "Tracked file not found: $file_path"
+            ((verification_errors++))
+            continue
+        fi
+        
+        # Verify file hash and size
+        local actual_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
+        local actual_size=$(stat -c%s "$file_path")
+        
+        if [ "$actual_hash" != "$expected_hash" ]; then
+            log_error "Hash mismatch for $filename: expected $expected_hash, got $actual_hash"
+            ((verification_errors++))
+        fi
+        
+        if [ "$actual_size" != "$expected_size" ]; then
+            log_error "Size mismatch for $filename: expected $expected_size, got $actual_size"
+            ((verification_errors++))
+        fi
+        
+        # Check if file is in database
+        if ! $(get_cli_command) check --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
+            log_error "File not found in database: $file_path"
+            ((verification_errors++))
+        fi
+    done
+    
+    if [ $verification_errors -eq 0 ]; then
+        log_success "All file verification checks passed"
+        return 0
+    else
+        log_error "File verification failed with $verification_errors errors"
+        return 1
+    fi
+}
+
+# Cleanup function
+cleanup() {
+    log_info "Cleaning up test environment..."
+    if [ "$DEBUG_MODE" = "false" ]; then
+        rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    else
+        log_info "Debug mode: keeping test files in $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    fi
+}
+
+# Main test execution
+main() {
+    echo "============================================================================"
+    echo "=== PHOTOSPHERE WRITE LOCK SMOKE TEST ==="
+    echo "============================================================================"
+    echo "Configuration:"
+    echo "  Processes: $NUM_PROCESSES"
+    echo "  Iterations per process: $NUM_ITERATIONS"
+    echo "  Sleep range: ${SLEEP_MIN}s - ${SLEEP_MAX}s"
+    echo "  Debug mode: $DEBUG_MODE"
+    echo "  CLI command: $(get_cli_command)"
+    echo "============================================================================"
+    
+    # Check dependencies
+    check_dependencies
+    
+    # Setup test environment
+    setup_test_environment
+    
+    # Start parallel processes
+    start_parallel_processes
+    
+    # Validate results
+    if validate_results; then
+        log_success "Write lock smoke test PASSED"
+        local exit_code=0
+    else
+        log_error "Write lock smoke test FAILED"
+        local exit_code=1
+    fi
+    
+    # Cleanup
+    if [ "$DEBUG_MODE" = "false" ]; then
+        cleanup
+    fi
+    
+    exit $exit_code
+}
+
+# Trap to ensure cleanup on script exit
+trap cleanup EXIT
+
+# Run main function
+main "$@"
