@@ -4,7 +4,6 @@
 
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage } from "./storage";
-import { join } from "path";
 import { pathJoin } from "./storage-factory";
 
 export class StoragePrefixWrapper implements IStorage {
@@ -27,7 +26,7 @@ export class StoragePrefixWrapper implements IStorage {
             return this.prefix + path
         }
         else {
-            return join(this.prefix, path);
+            return pathJoin(this.prefix, path);
         }
     }
 
