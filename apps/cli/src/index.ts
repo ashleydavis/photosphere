@@ -182,7 +182,6 @@ Resources:
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .option('-t, --type <type>', 'Cache type to clear: \'local\', \'database\', or \'both\' (default: \'both\')')
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
