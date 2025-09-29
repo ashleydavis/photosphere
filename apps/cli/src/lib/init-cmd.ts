@@ -212,6 +212,11 @@ export interface IBaseCommandOptions {
     // Set the current working directory for directory selection prompts.
     //
     cwd?: string;
+
+    //
+    // Session identifier for write lock tracking.
+    //
+    sessionId?: string;
 }
 
 //
@@ -374,7 +379,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     }
         
     // Create database instance.
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider);
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId);
 
     // Load the database
     await database.load();
@@ -493,7 +498,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     const googleApiKey = await getGoogleApiKey();
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId); 
 
     // Create the database (instead of loading)
     await database.create();

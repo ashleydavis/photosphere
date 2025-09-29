@@ -197,7 +197,8 @@ export class MockStorage implements IStorage {
         
         this.locks.set(filePath, {
             owner,
-            acquiredAt: new Date()
+            acquiredAt: new Date(),
+            timestamp: Date.now()
         });
         return true;
     }

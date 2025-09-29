@@ -596,7 +596,8 @@ export class CloudStorage implements IStorage {
                 const lockData = JSON.parse(lockContent.trim());
                 return {
                     owner: lockData.owner,
-                    acquiredAt: new Date(lockData.acquiredAt)
+                    acquiredAt: new Date(lockData.acquiredAt),
+                    timestamp: lockData.timestamp
                 };
             }
             return undefined;
@@ -633,7 +634,8 @@ export class CloudStorage implements IStorage {
         // Create lock information with owner and timestamp
         const lockInfo = {
             owner,
-            acquiredAt: new Date().toISOString()
+            acquiredAt: new Date().toISOString(),
+            timestamp
         };
         const lockContent = JSON.stringify(lockInfo);
 

@@ -41,6 +41,7 @@ async function main() {
     const toolsOption: [string, string, boolean] = ["--tools", "Enables output from media processing tools (ImageMagick, ffmpeg, etc.).", false];
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
     const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts. Defaults to the current directory from your shell/terminal. This is mostly for testing/debugging."];
+    const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
 
     program
         .name("psi")
@@ -78,6 +79,7 @@ Resources:
         .option(...toolsOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...sessionIdOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
@@ -243,6 +245,7 @@ Resources:
         .option(...toolsOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...sessionIdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initCommand);
 

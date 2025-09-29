@@ -419,6 +419,11 @@ export class MediaFileDatabase {
     private readonly uuidGenerator: IUuidGenerator;
 
     //
+    // The session ID for this instance (used for write lock identification).
+    //
+    private readonly sessionId: string;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -435,7 +440,8 @@ export class MediaFileDatabase {
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
-        private readonly timestampProvider: ITimestampProvider
+        private readonly timestampProvider: ITimestampProvider,
+        sessionId?: string
             ) {
         
         this.assetDatabase = new AssetDatabase(assetStorage, metadataStorage, uuidGenerator);
@@ -458,6 +464,9 @@ export class MediaFileDatabase {
 
         // Use the provided UUID generator
         this.uuidGenerator = uuidGenerator;
+
+        // Set session ID for write lock identification
+        this.sessionId = sessionId || this.uuidGenerator.generate();
     }
 
     //
@@ -495,7 +504,7 @@ export class MediaFileDatabase {
         const maxAttempts = 3;
         
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const haveWriteLock = await this.assetStorage.acquireWriteLock(lockFilePath, "cli"); //TODO: Be good to pass in client UUID here to identify who has the lock.
+            const haveWriteLock = await this.assetStorage.acquireWriteLock(lockFilePath, this.sessionId);
             if (haveWriteLock) {
                 //
                 // Always reload the database after acquiring the write lock to ensure we have the latest tree.
@@ -740,7 +749,6 @@ export class MediaFileDatabase {
             
             let assetDetails: IAssetDetails | undefined = undefined;
             
-    
             if (contentType?.startsWith("video")) {
                 assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
             }
