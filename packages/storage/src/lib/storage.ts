@@ -47,6 +47,11 @@ export interface IWriteLockInfo {
     // The time when the lock was acquired.
     //
     acquiredAt: Date;
+
+    //
+    // The unix timestamp when the lock was acquired.
+    //
+    timestamp: number;
 }
 
 //

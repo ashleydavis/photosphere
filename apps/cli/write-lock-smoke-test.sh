@@ -157,7 +157,7 @@ setup_test_environment() {
     
     # Initialize database
     log_info "Initializing test database..."
-    $(get_cli_command) init --db "$TEST_DB_DIR" --yes
+    $(get_cli_command) init --db "$TEST_DB_DIR" --yes --session-id "setup-process"
     
     if [ $? -ne 0 ]; then
         log_error "Failed to initialize database"
@@ -198,6 +198,16 @@ worker_process() {
     echo "# Process $process_id output" > "$output_file"
     echo "# Format: timestamp,filename,hash,size_bytes,add_result,duration_ms" >> "$output_file"
     
+    # Create subdirectory for this process
+    local process_dir="$PROCESS_OUTPUT_DIR/process_${process_id}"
+    mkdir -p "$process_dir"
+    
+    # Initialize summary file for this process (kept for backwards compatibility)
+    local detailed_output_file="$PROCESS_OUTPUT_DIR/process_${process_id}_detailed.log"
+    echo "# Process $process_id detailed output and errors" > "$detailed_output_file"
+    echo "# Each iteration shows: command, exit code, stdout, stderr" >> "$detailed_output_file"
+    echo "# Individual iteration files are stored in: $process_dir/" >> "$detailed_output_file"
+    
     for ((i=1; i<=NUM_ITERATIONS; i++)); do
         # Random sleep between SLEEP_MIN and SLEEP_MAX seconds
         local sleep_range=$(awk "BEGIN {printf \"%.1f\", $SLEEP_MAX - $SLEEP_MIN}")
@@ -221,11 +231,27 @@ worker_process() {
         
         # Add file to database and capture timing and detailed output
         local start_time=$(date +%s%N)
-        local add_output
+        local add_stdout_file="/tmp/stdout_p${process_id}_i${i}.tmp"
+        local add_stderr_file="/tmp/stderr_p${process_id}_i${i}.tmp"
         local add_exit_code=0
         local add_result="SUCCESS"
+        local cli_command="$(get_cli_command) add --db \"$TEST_DB_DIR\" \"$file_path\" --verbose --yes --session-id \"process-$process_id-iter-$i\""
         
-        add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes 2>&1) || add_exit_code=$?
+        # Run command and capture stdout/stderr to temporary files
+        $(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes --session-id "process-$process_id-iter-$i" > "$add_stdout_file" 2> "$add_stderr_file"
+        add_exit_code=$?
+        
+        # Read captured output
+        local add_stdout=""
+        local add_stderr=""
+        if [ -f "$add_stdout_file" ]; then
+            add_stdout=$(cat "$add_stdout_file")
+            rm -f "$add_stdout_file"
+        fi
+        if [ -f "$add_stderr_file" ]; then
+            add_stderr=$(cat "$add_stderr_file")
+            rm -f "$add_stderr_file"
+        fi
         
         local end_time=$(date +%s%N)
         local duration_ms=$(( (end_time - start_time) / 1000000 ))
@@ -234,9 +260,50 @@ worker_process() {
             add_result="FAILED"
         fi
         
-        # Extract lock events from verbose output and save to separate lock log
+        # Create individual iteration file
+        local iteration_file="$process_dir/iteration_${i}.log"
+        {
+            echo "============================================================================"
+            echo "Iteration $i (Process $process_id) - $(date)"
+            echo "============================================================================"
+            echo "File: $filename"
+            echo "Hash: $file_hash"
+            echo "Size: $file_size bytes"
+            echo "Command: $cli_command"
+            echo "Exit Code: $add_exit_code"
+            echo "Duration: ${duration_ms}ms"
+            echo "Result: $add_result"
+            echo ""
+            echo "STDOUT:"
+            echo "$add_stdout"
+            echo ""
+            echo "STDERR:" 
+            echo "$add_stderr"
+            echo ""
+        } > "$iteration_file"
+        
+        # Also append summary to main detailed log (for backwards compatibility)
+        {
+            echo "============================================================================"
+            echo "Iteration $i (Process $process_id) - $(date) - $add_result (${duration_ms}ms)"
+            echo "============================================================================"
+            echo "File: $iteration_file"
+            echo "Result: $add_result, Duration: ${duration_ms}ms, Exit Code: $add_exit_code"
+            if [ "$add_exit_code" -ne 0 ]; then
+                echo "FAILED - See $iteration_file for full details"
+            fi
+            echo ""
+        } >> "$detailed_output_file"
+        
+        # Extract lock events from verbose output and save to separate lock logs
         local lock_log_file="$PROCESS_OUTPUT_DIR/process_${process_id}_locks.log"
-        echo "$add_output" | grep "\[LOCK\]" >> "$lock_log_file" 2>/dev/null || true
+        local iteration_lock_file="$process_dir/iteration_${i}_locks.log"
+        
+        # Save lock events to both combined and individual files
+        {
+            echo "$add_stdout" | grep "\[LOCK\]" 2>/dev/null || true
+            echo "$add_stderr" | grep "\[LOCK\]" 2>/dev/null || true
+        } | tee -a "$lock_log_file" > "$iteration_lock_file"
         
         # Log the result with enhanced information
         echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$duration_ms" >> "$output_file"
@@ -247,6 +314,32 @@ worker_process() {
     log_success "Worker process $process_id completed"
 }
 
+# Cleanup function to kill any orphaned processes
+cleanup_processes() {
+    if [ ${#background_pids[@]} -gt 0 ]; then
+        log_warning "Cleaning up background processes..."
+        for pid in "${background_pids[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                log_info "Terminating process $pid"
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+        # Give processes time to exit gracefully
+        sleep 2
+        # Force kill any remaining processes
+        for pid in "${background_pids[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                log_warning "Force killing process $pid"
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+}
+
+# Set up cleanup trap
+background_pids=()
+trap cleanup_processes EXIT INT TERM
+
 # Start parallel processes
 start_parallel_processes() {
     log_info "Starting $NUM_PROCESSES parallel processes, $NUM_ITERATIONS iterations each"
@@ -256,17 +349,29 @@ start_parallel_processes() {
     # Start worker processes in background
     for ((p=1; p<=NUM_PROCESSES; p++)); do
         worker_process "$p" &
-        pids+=($!)
+        local pid=$!
+        pids+=($pid)
+        background_pids+=($pid)
+        log_info "Started worker process $p with PID $pid"
     done
     
     # Wait for all processes to complete
     log_info "Waiting for all processes to complete..."
+    local failed_processes=0
     for pid in "${pids[@]}"; do
-        wait "$pid"
-        if [ $? -ne 0 ]; then
-            log_warning "Process $pid exited with non-zero status"
+        if wait "$pid"; then
+            log_info "Process $pid completed successfully"
+        else
+            local exit_code=$?
+            log_warning "Process $pid exited with status $exit_code"
+            ((failed_processes++))
         fi
     done
+    
+    if [ $failed_processes -gt 0 ]; then
+        log_error "$failed_processes worker processes failed"
+        return 1
+    fi
     
     log_success "All parallel processes completed"
 }
@@ -473,6 +578,8 @@ analyze_lock_events() {
     log_info "  Lock attempts: $total_attempts, Successes: $total_successes, Failures: $total_failures"
     log_info "  Contention events: exists=$failed_exists, race=$failed_race, errors=$failed_error"
     log_info "  Analysis saved to: $lock_analysis_file"
+    log_info "  Process directories: $PROCESS_OUTPUT_DIR/process_*/"
+    log_info "  Individual iteration logs: $PROCESS_OUTPUT_DIR/process_*/iteration_*.log"
 }
 
 # Analyze lock hold durations by matching acquire/release pairs
@@ -670,6 +777,8 @@ generate_lock_summary() {
     log_info "  Lock contentions: $total_lock_contentions (${lock_contention_rate}%)"
     log_info "  Long operations (>3s): $operations_over_3s"
     log_info "  Summary saved to: $summary_file"
+    log_info "  Process directories: $PROCESS_OUTPUT_DIR/process_*/"
+    log_info "  Individual iteration logs: $PROCESS_OUTPUT_DIR/process_*/iteration_*.log"
 }
 
 
@@ -693,7 +802,13 @@ main() {
     setup_test_environment
     
     # Start parallel processes
-    start_parallel_processes
+    if ! start_parallel_processes; then
+        log_error "Parallel processes failed"
+        exit 1
+    fi
+    
+    # Clear background_pids since all processes completed successfully
+    background_pids=()
     
     # Validate results
     if validate_results; then
@@ -711,6 +826,8 @@ main() {
     generate_lock_summary || true
     
     log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    log_info "Process directories: $PROCESS_OUTPUT_DIR/process_*/"
+    log_info "Individual iteration logs: $PROCESS_OUTPUT_DIR/process_*/iteration_*.log"
     
     exit $exit_code
 }

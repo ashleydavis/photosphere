@@ -215,7 +215,8 @@ export class FileStorage implements IStorage {
                 const lockData = JSON.parse(lockContent.trim());
                 return {
                     owner: lockData.owner,
-                    acquiredAt: new Date(lockData.acquiredAt)
+                    acquiredAt: new Date(lockData.acquiredAt),
+                    timestamp: lockData.timestamp
                 };
             }
             return undefined;
@@ -253,7 +254,8 @@ export class FileStorage implements IStorage {
             // Create lock file with owner and timestamp information
             const lockInfo = {
                 owner,
-                acquiredAt: new Date().toISOString()
+                acquiredAt: new Date().toISOString(),
+                timestamp
             };
             await fs.writeFile(filePath, JSON.stringify(lockInfo), { flag: 'wx' }); // 'wx' flag fails if file exists
             
