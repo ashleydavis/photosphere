@@ -617,6 +617,11 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
             page: nextPage,
             pageSize: 1000, //todo: Be good to tie this in directly to the continuation token.            
         }); 
+
+        for (const record of result.records) {
+            delete record.properties; // Reduces memory needed on the client.
+        }
+
         res.json({
             records: result.records,
             next: (nextPage + 1).toString(),
