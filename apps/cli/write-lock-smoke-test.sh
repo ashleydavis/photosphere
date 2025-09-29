@@ -208,6 +208,10 @@ worker_process() {
     echo "# Each iteration shows: command, exit code, stdout, stderr" >> "$detailed_output_file"
     echo "# Individual iteration files are stored in: $process_dir/" >> "$detailed_output_file"
     
+    # Track consecutive failures for early abort
+    local consecutive_failures=0
+    local max_consecutive_failures=10
+    
     for ((i=1; i<=NUM_ITERATIONS; i++)); do
         # Random sleep between SLEEP_MIN and SLEEP_MAX seconds
         local sleep_range=$(awk "BEGIN {printf \"%.1f\", $SLEEP_MAX - $SLEEP_MIN}")
@@ -258,6 +262,9 @@ worker_process() {
         
         if [ $add_exit_code -ne 0 ]; then
             add_result="FAILED"
+            ((consecutive_failures++))
+        else
+            consecutive_failures=0
         fi
         
         # Create individual iteration file
@@ -309,6 +316,13 @@ worker_process() {
         echo "$timestamp,$filename,$file_hash,$file_size,$add_result,$duration_ms" >> "$output_file"
         
         log_info "Process $process_id: Added $filename ($add_result)"
+        
+        # Check for consecutive failures and abort if threshold reached
+        if [ $consecutive_failures -ge $max_consecutive_failures ]; then
+            log_error "Process $process_id: Aborting after $consecutive_failures consecutive failures"
+            echo "# Process $process_id aborted after $consecutive_failures consecutive failures" >> "$output_file"
+            return 1
+        fi
     done
     
     log_success "Worker process $process_id completed"
