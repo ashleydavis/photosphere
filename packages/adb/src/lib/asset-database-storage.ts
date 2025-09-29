@@ -161,4 +161,11 @@ export class AssetDatabaseStorage implements IStorage {
     releaseWriteLock(filePath: string): Promise<void> {
         return this.storage.releaseWriteLock(filePath);
     }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        return this.storage.refreshWriteLock(filePath, owner);
+    }
 }

@@ -157,4 +157,10 @@ export interface IStorage {
     // Releases a write lock for the specified file.
     //
     releaseWriteLock(filePath: string): Promise<void>;
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Throws an error if the lock is no longer owned by the specified owner.
+    //
+    refreshWriteLock(filePath: string, owner: string): Promise<void>;
 }

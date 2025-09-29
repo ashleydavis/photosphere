@@ -147,4 +147,11 @@ export class StoragePrefixWrapper implements IStorage {
     releaseWriteLock(filePath: string): Promise<void> {
         return this.storage.releaseWriteLock(this.makeFullPath(filePath));
     }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        return this.storage.refreshWriteLock(this.makeFullPath(filePath), owner);
+    }
 }

@@ -206,4 +206,23 @@ export class MockStorage implements IStorage {
     async releaseWriteLock(filePath: string): Promise<void> {
         this.locks.delete(filePath);
     }
+
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        const existingLock = this.locks.get(filePath);
+        if (!existingLock) {
+            throw new Error(`Cannot refresh write lock: lock does not exist for ${filePath}`);
+        }
+        
+        if (existingLock.owner !== owner) {
+            throw new Error(`Cannot refresh write lock: lock is owned by ${existingLock.owner}, not ${owner} for ${filePath}`);
+        }
+        
+        // Update timestamp
+        const timestamp = Date.now();
+        this.locks.set(filePath, {
+            owner,
+            acquiredAt: new Date(),
+            timestamp
+        });
+    }
 }
