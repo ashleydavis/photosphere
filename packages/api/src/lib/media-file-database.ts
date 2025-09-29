@@ -543,6 +543,13 @@ export class MediaFileDatabase {
     }
 
     //
+    // Refreshes the write lock to prevent timeout.
+    //
+    private async refreshWriteLock(): Promise<void> {
+        await this.assetStorage.refreshWriteLock(".db/write.lock", this.sessionId);
+    }
+
+    //
     // Releases the write lock for the database.
     //
     private async releaseWriteLock(): Promise<void> {
@@ -791,6 +798,11 @@ export class MediaFileDatabase {
                 }
 
                 //
+                // Refresh the timeout of the write lock.
+                //
+                await this.refreshWriteLock();
+
+                //
                 // Write lock is needed to update the merkle tree and BSON database.
                 //
                 this.assetDatabase.addFile(assetPath, hashedAsset);
@@ -810,6 +822,11 @@ export class MediaFileDatabase {
                     const hashedThumb = await this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath));
 
                     //
+                    // Refresh the timeout of the write lock.
+                    //
+                    await this.refreshWriteLock();
+
+                    //
                     // Write lock is needed to update the merkle tree and BSON database.
                     //
                     this.assetDatabase.addFile(thumbPath, hashedThumb);
@@ -827,6 +844,11 @@ export class MediaFileDatabase {
                         throw new Error(`Failed to get info for display "${displayPath}"`);
                     }
                     const hashedDisplay = await this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!));
+
+                    //
+                    // Refresh the timeout of the write lock.
+                    //
+                    await this.refreshWriteLock();
 
                     //
                     // Write lock is needed to update the merkle tree and BSON database.
@@ -878,6 +900,11 @@ export class MediaFileDatabase {
                     : undefined;
 
                 //
+                // Refresh the timeout of the write lock.
+                //
+                await this.refreshWriteLock();
+
+                //
                 // Add the asset's metadata to the database.
                 // Write lock is needed to update the merkle tree and BSON database.
                 //
@@ -903,6 +930,11 @@ export class MediaFileDatabase {
                 });
 
                 log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
+
+                //
+                // Refresh the timeout of the write lock.
+                //
+                await this.refreshWriteLock();
 
                 //
                 // Increment the imported files count.

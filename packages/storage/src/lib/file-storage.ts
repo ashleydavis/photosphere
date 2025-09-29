@@ -4,6 +4,9 @@ import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
 import { log } from "utils";
 
+// Write lock timeout in milliseconds (10 seconds)
+const WRITE_LOCK_TIMEOUT_MS = 10000;
+
 export class FileStorage implements IStorage {
 
     constructor(public readonly location: string, public readonly isReadonly: boolean = false) {
@@ -242,10 +245,30 @@ export class FileStorage implements IStorage {
         try {
             // Check if lock already exists
             if (await fs.pathExists(filePath)) {
-                if (log.verboseEnabled) {
-                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath}`);
+                // Check if existing lock has timed out (10 seconds = 10000ms)
+                const existingLock = await this.checkWriteLock(filePath);
+                if (existingLock) {
+                    const lockAge = timestamp - existingLock.timestamp;
+                    if (lockAge > WRITE_LOCK_TIMEOUT_MS) {
+                        // Lock has timed out, remove it and proceed to acquire new lock
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_TIMEOUT_BREAK,${processId},${owner},${filePath},age:${lockAge}ms,oldOwner:${existingLock.owner}`);
+                        }
+                        await fs.remove(filePath);
+                    } else {
+                        // Lock is still valid
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath},age:${lockAge}ms,owner:${existingLock.owner}`);
+                        }
+                        return false;
+                    }
+                } else {
+                    // Corrupted lock file, remove it
+                    if (log.verboseEnabled) {
+                        log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
+                    }
+                    await fs.remove(filePath);
                 }
-                return false;
             }
             
             // Ensure directory exists
@@ -292,6 +315,50 @@ export class FileStorage implements IStorage {
             await fs.unlink(filePath);
         } catch (err) {
             // Ignore errors if the lock file doesn't exist
+        }
+    }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Throws an error if the lock is no longer owned by the specified owner.
+    //
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'refresh write lock');
+        
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},REFRESH_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
+        try {
+            // Check if lock exists and we own it
+            const existingLock = await this.checkWriteLock(filePath);
+            if (!existingLock) {
+                throw new Error(`Cannot refresh write lock: lock does not exist for ${filePath}`);
+            }
+            
+            if (existingLock.owner !== owner) {
+                throw new Error(`Cannot refresh write lock: lock is owned by ${existingLock.owner}, not ${owner} for ${filePath}`);
+            }
+            
+            // Update the lock with new timestamp
+            const lockInfo = {
+                owner,
+                acquiredAt: new Date().toISOString(),
+                timestamp
+            };
+            await fs.writeFile(filePath, JSON.stringify(lockInfo));
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_SUCCESS,${processId},${owner},${filePath}`);
+            }
+        } catch (err: any) {
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_FAILED,${processId},${owner},${filePath},error:${err.message}`);
+            }
+            throw err;
         }
     }
 

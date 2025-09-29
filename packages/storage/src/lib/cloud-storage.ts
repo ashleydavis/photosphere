@@ -4,6 +4,9 @@ import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from 
 import { WrappedError } from "utils";
 import { log } from "utils";
 
+// Write lock timeout in milliseconds (10 seconds)
+const WRITE_LOCK_TIMEOUT_MS = 10000;
+
 //
 // S3 credentials.
 //
@@ -658,12 +661,75 @@ export class CloudStorage implements IStorage {
             }
             return true;
         } catch (putErr: any) {
-            // If the condition failed (object already exists), return false
+            // If the condition failed (object already exists), check if it's timed out
             if (putErr.statusCode === 412 || putErr.code === 'PreconditionFailed') {
-                if (log.verboseEnabled) {
-                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath}`);
+                // Check if existing lock has timed out (10 seconds = 10000ms)
+                const existingLock = await this.checkWriteLock(filePath);
+                if (existingLock) {
+                    const lockAge = timestamp - existingLock.timestamp;
+                    if (lockAge > WRITE_LOCK_TIMEOUT_MS) {
+                        // Lock has timed out, delete it and try to acquire new lock
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_TIMEOUT_BREAK,${processId},${owner},${filePath},age:${lockAge}ms,oldOwner:${existingLock.owner}`);
+                        }
+                        
+                        try {
+                            // Delete the expired lock
+                            const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+                                Bucket: bucket,
+                                Key: key,
+                            };
+                            await this.s3.deleteObject(deleteParams).promise();
+                            
+                            // Try to acquire the lock again (without conditional header this time)
+                            const retryPutParams = { ...putParams };
+                            await this.s3.putObject(retryPutParams).promise();
+                            
+                            if (log.verboseEnabled) {
+                                log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS_AFTER_TIMEOUT,${processId},${owner},${filePath}`);
+                            }
+                            return true;
+                        } catch (retryErr) {
+                            // Another process might have acquired the lock in the meantime
+                            if (log.verboseEnabled) {
+                                log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RETRY,${processId},${owner},${filePath}`);
+                            }
+                            return false;
+                        }
+                    } else {
+                        // Lock is still valid
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath},age:${lockAge}ms,owner:${existingLock.owner}`);
+                        }
+                        return false;
+                    }
+                } else {
+                    // Lock file exists but is corrupted, try to delete and retry
+                    if (log.verboseEnabled) {
+                        log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
+                    }
+                    
+                    try {
+                        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+                            Bucket: bucket,
+                            Key: key,
+                        };
+                        await this.s3.deleteObject(deleteParams).promise();
+                        
+                        const retryPutParams = { ...putParams };
+                        await this.s3.putObject(retryPutParams).promise();
+                        
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS_AFTER_CORRUPT,${processId},${owner},${filePath}`);
+                        }
+                        return true;
+                    } catch (retryErr) {
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RETRY,${processId},${owner},${filePath}`);
+                        }
+                        return false;
+                    }
                 }
-                return false;
             }
             
             if (log.verboseEnabled) {
@@ -703,6 +769,65 @@ export class CloudStorage implements IStorage {
             if (log.verboseEnabled) {
                 log.verbose(`[LOCK] ${Date.now()},RELEASE_FAILED,${process.pid},unknown,${filePath},error:${err?.message || 'unknown'}`);
             }
+        }
+    }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Throws an error if the lock is no longer owned by the specified owner.
+    //
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'refresh write lock');
+        
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},REFRESH_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
+        let { bucket, key } = this.parsePath(filePath);
+        if (key.startsWith("/")) {
+            key = key.slice(1); // Remove leading slash.
+        }
+
+        try {
+            // Check if lock exists and we own it
+            const existingLock = await this.checkWriteLock(filePath);
+            if (!existingLock) {
+                throw new Error(`Cannot refresh write lock: lock does not exist for ${filePath}`);
+            }
+            
+            if (existingLock.owner !== owner) {
+                throw new Error(`Cannot refresh write lock: lock is owned by ${existingLock.owner}, not ${owner} for ${filePath}`);
+            }
+                       
+            // Update the lock with new timestamp
+            const lockInfo = {
+                owner,
+                acquiredAt: new Date().toISOString(),
+                timestamp
+            };
+            const lockContent = JSON.stringify(lockInfo);
+
+            const putParams: aws.S3.Types.PutObjectRequest = {
+                Bucket: bucket,
+                Key: key,
+                Body: Buffer.from(lockContent, 'utf8'),
+                ContentType: 'application/json',
+                ContentLength: Buffer.byteLength(lockContent, 'utf8'),
+            };
+
+            await this.s3.putObject(putParams).promise();
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_SUCCESS,${processId},${owner},${filePath}`);
+            }
+        } catch (err: any) {
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_FAILED,${processId},${owner},${filePath},error:${err.message}`);
+            }
+            throw err;
         }
     }
 }
