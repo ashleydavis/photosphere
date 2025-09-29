@@ -26,6 +26,7 @@ NUM_PROCESSES=4
 NUM_ITERATIONS=6
 SLEEP_MIN=0.1
 SLEEP_MAX=2.0
+SIMULATE_FAILURE=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -46,12 +47,17 @@ while [[ $# -gt 0 ]]; do
             IFS='-' read -r SLEEP_MIN SLEEP_MAX <<< "$2"
             shift 2
             ;;
+        --simulate-failure)
+            SIMULATE_FAILURE=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX]"
+            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX] [--simulate-failure]"
             echo "  --debug       Use bun run start instead of binary"
             echo "  --processes   Number of parallel processes (default: 4)"
             echo "  --iterations  Number of iterations per process (default: 6)"
             echo "  --sleep-range Sleep range in seconds as MIN-MAX (default: 0.1-2.0)"
+            echo "  --simulate-failure Enable failure simulation (10% chance during add-file)"
             exit 0
             ;;
         *)
@@ -237,6 +243,11 @@ worker_process() {
         local add_exit_code=0
         local add_result="SUCCESS"
         local cli_command="$(get_cli_command) add --db \"$TEST_DB_DIR\" \"$file_path\" --verbose --yes --session-id \"process-$process_id-iter-$i\""
+        
+        # Set failure simulation environment variable if enabled
+        if [ "$SIMULATE_FAILURE" = "true" ]; then
+            export SIMULATE_FAILURE=add-file
+        fi
         
         # Run command and capture stdout/stderr to temporary files
         $(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes --session-id "process-$process_id-iter-$i" > "$add_stdout_file" 2> "$add_stderr_file"

@@ -767,6 +767,12 @@ export class MediaFileDatabase {
             //
             await this.acquireWriteLock();
 
+            // Simulate failure for testing (10% chance when SIMULATE_FAILURE=add-file)
+            // This occurs while holding the write lock to test lock recovery scenarios
+            if (process.env.SIMULATE_FAILURE === "add-file" && Math.random() < 0.1) {
+                throw new Error(`Simulated failure during add-file operation for ${filePath}`);
+            }
+
             try {
                 //
                 // Uploads the full asset.

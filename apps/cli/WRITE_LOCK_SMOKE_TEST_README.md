@@ -26,6 +26,7 @@ The `write-lock-smoke-test.sh` script tests the write lock functionality of the 
 | `--processes N` | 4 | Number of parallel processes to run |
 | `--iterations N` | 6 | Number of file additions per process |
 | `--sleep-range MIN-MAX` | 0.1-2.0 | Sleep range in seconds between file additions |
+| `--simulate-failure` | false | Enable failure simulation (10% chance during add-file) |
 | `--help` | - | Display help message |
 
 ### Examples
@@ -61,6 +62,12 @@ Quick test with minimal delays for rapid feedback.
 ./write-lock-smoke-test.sh --processes 8 --iterations 5 --sleep-range 2.0-5.0
 ```
 Tests with longer delays to create different timing patterns.
+
+#### Failure Recovery Test
+```bash
+./write-lock-smoke-test.sh --simulate-failure --processes 4 --iterations 8
+```
+Tests write lock recovery by simulating random failures (10% chance) during file addition operations while holding the write lock.
 
 ## How Parallel Execution Works
 
@@ -153,6 +160,36 @@ If the test reports database corruption:
 - Use minimal load: `--processes 1 --iterations 2`
 - Use debug mode: `--debug`
 - Increase delays: `--sleep-range 5.0-10.0`
+
+## Failure Simulation
+
+The `--simulate-failure` flag enables testing of write lock recovery scenarios by introducing random failures during file addition operations.
+
+### How It Works
+- When enabled, there's a 10% chance of failure during each `add-file` operation
+- Failures occur while the process holds the write lock, simulating real-world crash scenarios
+- The environment variable `SIMULATE_FAILURE=add-file` is set to trigger the simulation
+- Failures are implemented in the `addFile` method of `MediaFileDatabase`
+
+### Use Cases
+- **Lock Recovery Testing**: Verify that write locks are properly released when processes fail
+- **Database Consistency**: Ensure database remains in a consistent state after process crashes
+- **Resilience Validation**: Test that subsequent operations can proceed after failures
+
+### Example Usage
+```bash
+# Test with moderate failure rate
+./write-lock-smoke-test.sh --simulate-failure --processes 3 --iterations 10
+
+# Stress test with failures
+./write-lock-smoke-test.sh --simulate-failure --processes 8 --iterations 15 --debug
+```
+
+### Expected Behavior
+- Some file additions will fail with "Simulated failure" error messages
+- Write locks should be properly released even when processes fail
+- Database should remain consistent and accessible after failures
+- Successful operations should continue normally
 
 ## Expected Results
 
