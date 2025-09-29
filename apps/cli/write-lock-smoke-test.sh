@@ -404,13 +404,18 @@ validate_results() {
     
     # Check database integrity
     log_info "Checking database integrity..."
-    if ! $(get_cli_command) verify --db "$TEST_DB_DIR" --yes > /dev/null 2>&1; then
+    local verify_output_file="/tmp/verify_output.log"
+    if ! $(get_cli_command) verify --db "$TEST_DB_DIR" --yes > "$verify_output_file" 2>&1; then
         log_error "Database integrity check failed"
+        cat "$verify_output_file"
+        rm -f "$verify_output_file"
         return 1
     fi
+    rm -f "$verify_output_file"
     log_success "Database integrity check passed"
     
     # Collect all tracked files from process outputs and analyze lock contention
+    log_info "Analyzing process outputs from $NUM_PROCESSES processes..."
     local tracked_files=()
     local successful_adds=0
     local failed_adds=0
@@ -418,6 +423,7 @@ validate_results() {
     local max_duration=0
     
     for ((p=1; p<=NUM_PROCESSES; p++)); do
+        log_info "Processing output from process $p/$NUM_PROCESSES..."
         local output_file="$PROCESS_OUTPUT_DIR/process_${p}.log"
         if [ -f "$output_file" ]; then
             # Skip comment lines and count results
@@ -458,6 +464,19 @@ validate_results() {
     
     # Verify each successfully tracked file is in the database with correct metadata
     local verification_errors=0
+    local files_to_verify=0
+    
+    # Count files that need verification (successful additions only)
+    for file_info in "${tracked_files[@]}"; do
+        IFS=':' read -r filename expected_hash expected_size <<< "$file_info"
+        local add_result=$(grep "$filename" "$PROCESS_OUTPUT_DIR"/process_*.log | cut -d',' -f5)
+        if [ "$add_result" = "SUCCESS" ]; then
+            ((files_to_verify++))
+        fi
+    done
+    
+    log_info "Verifying $files_to_verify successfully added files..."
+    local current_verification=0
     
     for file_info in "${tracked_files[@]}"; do
         IFS=':' read -r filename expected_hash expected_size <<< "$file_info"
@@ -468,6 +487,9 @@ validate_results() {
         if [ "$add_result" != "SUCCESS" ]; then
             continue
         fi
+        
+        ((current_verification++))
+        log_info "Verifying file $current_verification/$files_to_verify: $filename"
         
         # Check if file exists
         if [ ! -f "$file_path" ]; then
@@ -491,9 +513,12 @@ validate_results() {
         fi
         
         # Check if file is in database
+        log_info "  Checking database entry for $filename..."
         if ! $(get_cli_command) check --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
             log_error "File not found in database: $file_path"
             ((verification_errors++))
+        else
+            log_info "  ✓ Database entry verified for $filename"
         fi
     done
     
