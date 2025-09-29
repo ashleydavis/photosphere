@@ -5,9 +5,6 @@
 
 set -e
 
-# Set NODE_ENV to testing for deterministic UUID generation
-export NODE_ENV=testing
-
 # Disable colors for consistent output parsing
 export NO_COLOR=1
 
