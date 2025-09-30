@@ -580,10 +580,10 @@ export class MediaFileDatabase {
     // Releases the write lock for the database.
     //
     private async releaseWriteLock(): Promise<void> {
-        this.assetDatabase.save(); // Ensure the tree is saved before releasing the lock.
+        await retry(() => this.assetDatabase.save()); // Ensure the tree is saved before releasing the lock.
 
         if (this.writeLock) {
-            await this.writeLock.release();
+            await retry(() => this.writeLock!.release());
             this.writeLock = undefined;
         }
     }
@@ -616,25 +616,25 @@ export class MediaFileDatabase {
     // Creates a new media file database.
     //
     async create(): Promise<void> {
-        await this.localHashCache.load();
+        await retry(() => this.localHashCache.load());
 
-        await this.assetDatabase.create();
+        await retry(() => this.assetDatabase.create());
 
         const merkleTree = this.assetDatabase.getMerkleTree();
         merkleTree.databaseMetadata = { filesImported: 0 };
 
-        await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
-        await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
+        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
+        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
 
         // Create README.md file with warning about manual modifications
         try {
-            await this.assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8'));
+            await retry(() => this.assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
         } catch (error) {
             // Don't fail database creation if README write fails
             log.warn(`Warning: Could not create README.md: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
-        await this.assetDatabase.save();
+        await retry(() => this.assetDatabase.save());
 
         log.verbose(`Created new media file database.`);
     }
@@ -643,11 +643,11 @@ export class MediaFileDatabase {
     // Loads the existing media file database.
     //
     async load(): Promise<void> {
-        await this.localHashCache.load();
-        await this.assetDatabase.load();
+        await retry(() => this.localHashCache.load());
+        await retry(() => this.assetDatabase.load());
 
-        await this.metadataCollection.ensureSortIndex("hash", "asc", "string");
-        await this.metadataCollection.ensureSortIndex("photoDate", "desc", "date");
+        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
+        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date"));
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
@@ -704,7 +704,7 @@ export class MediaFileDatabase {
             );
             
             if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
-                await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
+                await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
             }
 
         }, progressCallback);
@@ -715,7 +715,7 @@ export class MediaFileDatabase {
         //
         // Commit any additions that were made.
         //
-        await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
+        await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
     }
 
     //
@@ -732,12 +732,12 @@ export class MediaFileDatabase {
             );
             
             if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
-                await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
+                await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
             }
 
         }, progressCallback);
 
-         await this.localHashCache.save(); // Saving hashes locally makes if faster next time.
+         await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
     }
 
     //
@@ -817,12 +817,12 @@ export class MediaFileDatabase {
                 //
                 await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
 
-                const assetInfo = await this.assetStorage.info(assetPath);
+                const assetInfo = await retry(() => this.assetStorage.info(assetPath));
                 if (!assetInfo) {
                     throw new Error(`Failed to get info for file "${assetPath}"`);
                 }
-                
-                const hashedAsset = await this.computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath));
+
+                const hashedAsset = await retry(() => this.computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
                 if (hashedAsset.hash.toString("hex") !== localHashStr) {
                     throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
@@ -845,11 +845,11 @@ export class MediaFileDatabase {
                     //
                     await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
 
-                    const thumbInfo = await this.assetStorage.info(thumbPath);
+                    const thumbInfo = await retry(() => this.assetStorage.info(thumbPath));
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                     }
-                    const hashedThumb = await this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath));
+                    const hashedThumb = await retry(() => this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
 
                     //
                     // Refresh the timeout of the write lock.
@@ -869,11 +869,11 @@ export class MediaFileDatabase {
                     //
                     await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
 
-                    const displayInfo = await this.assetStorage.info(displayPath);
+                    const displayInfo = await retry(() => this.assetStorage.info(displayPath));
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display "${displayPath}"`);
                     }
-                    const hashedDisplay = await this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!));
+                    const hashedDisplay = await retry(() => this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
 
                     //
                     // Refresh the timeout of the write lock.
@@ -922,7 +922,7 @@ export class MediaFileDatabase {
                 const description = "";
 
                 const micro = assetDetails?.microPath
-                    ? (await fs.promises.readFile(assetDetails.microPath)).toString("base64")
+                    ? (await retry(() => fs.promises.readFile(assetDetails.microPath))).toString("base64")
                     : undefined;
 
                 const color = assetDetails 
@@ -986,9 +986,9 @@ export class MediaFileDatabase {
                 // Clean up any files that might have been uploaded.
                 // No write lock is needed to delete files as we are deleting by unique asset ID.
                 //
-                await this.assetStorage.deleteFile(assetPath);
-                await this.assetStorage.deleteFile(thumbPath);
-                await this.assetStorage.deleteFile(displayPath);
+                await retry(() => this.assetStorage.deleteFile(assetPath));
+                await retry(() => this.assetStorage.deleteFile(thumbPath));
+                await retry(() => this.assetStorage.deleteFile(displayPath));
 
                 this.addSummary.filesFailed++;
                 if (progressCallback) {
@@ -1006,7 +1006,7 @@ export class MediaFileDatabase {
             //
             // Remove all temporary assets created during the process.
             //
-            await fs.remove(assetTempDir);
+            await retry(() => fs.remove(assetTempDir));
         }
     }
 
