@@ -11,4 +11,6 @@ export * from "./lib/bson-database/collection";
 export * from "./lib/storage-factory";
 export * from "./lib/key-utils";
 export * from "./lib/walk-directory";
+export * from "./lib/write-lock";
+export * from "./lib/local-identifier";
 

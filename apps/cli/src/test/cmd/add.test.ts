@@ -57,10 +57,6 @@ const mockAssetStorage: jest.Mocked<IStorage> = {
     deleteFile: jest.fn(),
     deleteDir: jest.fn(),
     copyTo: jest.fn(),
-    checkWriteLock: jest.fn(),
-    acquireWriteLock: jest.fn(),
-    releaseWriteLock: jest.fn(),
-    refreshWriteLock: jest.fn(),
 };
 
 const mockMetadataStorage: jest.Mocked<IStorage> = {
@@ -79,10 +75,6 @@ const mockMetadataStorage: jest.Mocked<IStorage> = {
     deleteFile: jest.fn(),
     deleteDir: jest.fn(),
     copyTo: jest.fn(),
-    checkWriteLock: jest.fn(),
-    acquireWriteLock: jest.fn(),
-    releaseWriteLock: jest.fn(),
-    refreshWriteLock: jest.fn(),
 };
 
 // Mock storage directly

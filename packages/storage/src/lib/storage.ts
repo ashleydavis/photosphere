@@ -34,25 +34,6 @@ export interface IFileInfo {
     lastModified: Date;
 }
 
-//
-// Information about a write lock.
-//
-export interface IWriteLockInfo {
-    //
-    // The owner of the lock.
-    //
-    owner: string;
-
-    //
-    // The time when the lock was acquired.
-    //
-    acquiredAt: Date;
-
-    //
-    // The unix timestamp when the lock was acquired.
-    //
-    timestamp: number;
-}
 
 //
 // Helper function for storage classes to check readonly mode and throw appropriate errors.
@@ -141,26 +122,4 @@ export interface IStorage {
     //
     copyTo(srcPath: string, destPath: string): Promise<void>;
 
-    //
-    // Checks if a write lock is acquired for the specified file.
-    // Returns the lock information if it exists, undefined otherwise.
-    //
-    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined>;
-
-    //
-    // Attempts to acquire a write lock for the specified file.
-    // Returns true if the lock was acquired, false if it already exists.
-    //
-    acquireWriteLock(filePath: string, owner: string): Promise<boolean>;
-
-    //
-    // Releases a write lock for the specified file.
-    //
-    releaseWriteLock(filePath: string): Promise<void>;
-
-    //
-    // Refreshes a write lock for the specified file, updating its timestamp.
-    // Throws an error if the lock is no longer owned by the specified owner.
-    //
-    refreshWriteLock(filePath: string, owner: string): Promise<void>;
 }
