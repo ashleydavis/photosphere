@@ -2,7 +2,7 @@
 // An implementation of storage that operates under a particular prefix.
 //
 
-import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
+import { IFileInfo, IListResult, IStorage } from "./storage";
 import { pathJoin } from "./storage-factory";
 
 export class StoragePrefixWrapper implements IStorage {
@@ -125,33 +125,4 @@ export class StoragePrefixWrapper implements IStorage {
         return this.storage.copyTo(this.makeFullPath(srcPath), this.makeFullPath(destPath));
     }
 
-    //
-    // Checks if a write lock is acquired for the specified file.
-    // Returns the lock information if it exists, undefined otherwise.
-    //
-    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
-        return this.storage.checkWriteLock(this.makeFullPath(filePath));
-    }
-
-    //
-    // Attempts to acquire a write lock for the specified file.
-    // Returns true if the lock was acquired, false if it already exists.
-    //
-    acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
-        return this.storage.acquireWriteLock(this.makeFullPath(filePath), owner);
-    }
-
-    //
-    // Releases a write lock for the specified file.
-    //
-    releaseWriteLock(filePath: string): Promise<void> {
-        return this.storage.releaseWriteLock(this.makeFullPath(filePath));
-    }
-
-    //
-    // Refreshes a write lock for the specified file, updating its timestamp.
-    //
-    refreshWriteLock(filePath: string, owner: string): Promise<void> {
-        return this.storage.refreshWriteLock(this.makeFullPath(filePath), owner);
-    }
 }
