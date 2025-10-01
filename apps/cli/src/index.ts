@@ -3,6 +3,7 @@ import { version } from '../package.json';
 import { uiCommand } from './cmd/ui';
 import { addCommand } from './cmd/add';
 import { initCommand } from './cmd/init';
+import { debugCommand } from './cmd/debug';
 import pc from "picocolors";
 
 async function main() {
@@ -46,6 +47,8 @@ async function main() {
         .option(...metadataDirOption)
         .option("--no-open", "Disables opening the UI in the default browser.", false)
         .action(uiCommand);
+
+    program.addCommand(debugCommand);
 
     await program.parseAsync(process.argv);    
 }
