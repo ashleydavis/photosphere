@@ -8,6 +8,7 @@ export * from "./lib/encrypted-storage";
 export * from "./lib/storage-prefix-wrapper";
 export * from "./lib/bson-database/database";
 export * from "./lib/bson-database/collection";
+export * from "./lib/bson-database/sort-index";
 export * from "./lib/storage-factory";
 export * from "./lib/key-utils";
 export * from "./lib/walk-directory";

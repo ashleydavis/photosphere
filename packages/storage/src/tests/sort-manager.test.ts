@@ -176,7 +176,7 @@ describe('SortManager', () => {
     
     test('should create and return a sort index', async () => {
         // Get sort index for price (ascending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'asc', page: 1 });
+        const result = await sortManager.getSortedRecords('price', { direction: 'asc' });
         
         // Check that the index was created correctly
         expect(result.records.length).toBeGreaterThan(0);
@@ -235,7 +235,7 @@ describe('SortManager', () => {
     
     test('should support descending order', async () => {
         // Get sort index for price (descending)
-        const result = await sortManager.getSortedRecords('price', { direction: 'desc', page: 1 });
+        const result = await sortManager.getSortedRecords('price', { direction: 'desc' });
         
         // Collect all records across pages
         let allRecords: TestProduct[] = [];
@@ -348,7 +348,7 @@ describe('SortManager', () => {
         // Get the updated index
         const result = await sortManager.getSortedRecords(
             'price',
-            { direction: 'asc', page: 1 }
+            { direction: 'asc' }
         );
         
         // Check that the new record is included
