@@ -98,6 +98,7 @@ describe("getLocalIdentifier", () => {
         test("should handle Windows CI paths", () => {
             expect(getLocalIdentifier("D:\\a\\photosphere\\photosphere\\apps\\cli\\test\\tmp\\test-db")).toBe("fs/d/a/photosphere/photosphere/apps/cli/test/tmp/test-db");
             expect(getLocalIdentifier("fs:D:\\a\\photosphere\\photosphere\\apps\\cli\\test\\tmp\\test-db")).toBe("fs/d/a/photosphere/photosphere/apps/cli/test/tmp/test-db");
+            expect(getLocalIdentifier("d:\\a\\photosphere\\photosphere\\apps\\cli\\test\\tmp\\test-db")).toBe("fs/d/a/photosphere/photosphere/apps/cli/test/tmp/test-db");
         });
     });
 });

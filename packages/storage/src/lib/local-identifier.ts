@@ -32,10 +32,18 @@ export function getLocalIdentifier(storageLocation: string): string {
         // Normalize path separators and handle Windows drive letters
         let normalized = fsPath.replace(/\\/g, "/");
         
-        // Handle Windows drive letters (C: -> c/, C:/ -> c/) and convert to lowercase
-        normalized = normalized.replace(/^([a-zA-Z]):\/?/, "$1/").toLowerCase();
+        // Handle Windows drive letters more explicitly
+        // First replace any drive letter pattern like "C:" or "D:" with "c/" or "d/"
+        if (/^[a-zA-Z]:/.test(normalized)) {
+            const driveLetter = normalized.charAt(0).toLowerCase();
+            const afterColon = normalized.substring(2);
+            // Remove leading slash from afterColon to avoid double slash
+            const cleanAfterColon = afterColon.startsWith("/") ? afterColon.substring(1) : afterColon;
+            normalized = driveLetter + "/" + cleanAfterColon;
+        }
         
-        
+        // Convert to lowercase
+        normalized = normalized.toLowerCase();
         
         // Remove multiple leading slashes only (preserve internal multiple slashes)
         normalized = normalized.replace(/^\/+/, "/");
@@ -70,10 +78,18 @@ export function getLocalIdentifier(storageLocation: string): string {
         // Default to file system storage for paths without explicit scheme
         let normalized = storageLocation.replace(/\\/g, "/");
         
-        // Handle Windows drive letters (C: -> c/, C:/ -> c/) and convert to lowercase
-        normalized = normalized.replace(/^([a-zA-Z]):\/?/, "$1/").toLowerCase();
+        // Handle Windows drive letters more explicitly
+        // First replace any drive letter pattern like "C:" or "D:" with "c/" or "d/"
+        if (/^[a-zA-Z]:/.test(normalized)) {
+            const driveLetter = normalized.charAt(0).toLowerCase();
+            const afterColon = normalized.substring(2);
+            // Remove leading slash from afterColon to avoid double slash
+            const cleanAfterColon = afterColon.startsWith("/") ? afterColon.substring(1) : afterColon;
+            normalized = driveLetter + "/" + cleanAfterColon;
+        }
         
-        
+        // Convert to lowercase
+        normalized = normalized.toLowerCase();
         
         // Remove multiple leading slashes only (preserve internal multiple slashes)
         normalized = normalized.replace(/^\/+/, "/");
