@@ -110,7 +110,6 @@ export class SortManager<RecordT extends IRecord> {
         fieldName: string,
         options?: {
             direction?: 'asc' | 'desc';
-            page?: number;
             pageSize?: number;
             pageId?: string;
             type?: 'date'; // Optional type for sorting
@@ -122,25 +121,6 @@ export class SortManager<RecordT extends IRecord> {
         
         // Get or create the sort index.
         const sortIndex = await this.createOrGetSortIndex(fieldName, direction, pageSize, type);
-        
-        // If page number is specified, convert to page ID
-        if (options?.page !== undefined) {
-            // For backward compatibility, handle page numbers by fetching pages in sequence
-            if (options.page < 1) {
-                throw new Error('Page number must be greater than 0');
-            }
-            
-            // Get the first page, then follow next links until we reach the target page
-            let currentPage = 1;
-            let result = await sortIndex.getPage('');
-            
-            while (currentPage < options.page && result.nextPageId) {
-                result = await sortIndex.getPage(result.nextPageId);
-                currentPage++;
-            }
-            
-            return result;
-        }
         
         // Use pageId if provided, otherwise get the first page
         const pageId = options?.pageId || '';

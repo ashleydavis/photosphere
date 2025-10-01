@@ -89,7 +89,6 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     getSorted(fieldName: string, options?: { 
         direction?: 'asc' | 'desc'; 
-        page?: number; 
         pageSize?: number;
         pageId?: string;
     }): Promise<{
@@ -1110,7 +1109,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async getSorted(fieldName: string, options?: { 
         direction?: 'asc' | 'desc'; 
-        page?: number; 
         pageSize?: number;
         pageId?: string;
     }): Promise<{

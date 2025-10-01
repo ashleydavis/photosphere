@@ -607,14 +607,13 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const databaseId = getValue<string>(req.query, "db");
         const collectionName = getValue<string>(req.query, "col");
         const next = req.query.next as string | undefined;
-        const nextPage = next ? parseInt(next) : 1;
 
         const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
         const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
         const collection = metadataDatabase.collection(collectionName);
         const result = await collection.getSorted("photoDate", { 
             direction: "desc", //todo: The field and direction should be passed through the API.
-            page: nextPage,
+            pageId: next,
             pageSize: 1000, //todo: Be good to tie this in directly to the continuation token.            
         }); 
 
@@ -624,7 +623,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
 
         res.json({
             records: result.records,
-            next: (nextPage + 1).toString(),
+            next: result.nextPageId,
         });
     }));
 
