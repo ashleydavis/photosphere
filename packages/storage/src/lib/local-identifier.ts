@@ -30,10 +30,12 @@ export function getLocalIdentifier(storageLocation: string): string {
         }
         
         // Normalize path separators and handle Windows drive letters
-        let normalized = fsPath.replace(/\\/g, "/").toLowerCase();
+        let normalized = fsPath.replace(/\\/g, "/");
         
-        // Handle Windows drive letters (C: -> c/, C:/ -> c/)
-        normalized = normalized.replace(/^([a-z]):\/?/, "$1/");
+        // Handle Windows drive letters (C: -> c/, C:/ -> c/) and convert to lowercase
+        normalized = normalized.replace(/^([a-zA-Z]):\/?/, "$1/").toLowerCase();
+        
+        
         
         // Remove multiple leading slashes only (preserve internal multiple slashes)
         normalized = normalized.replace(/^\/+/, "/");
@@ -66,10 +68,12 @@ export function getLocalIdentifier(storageLocation: string): string {
         return result;
     } else {
         // Default to file system storage for paths without explicit scheme
-        let normalized = storageLocation.replace(/\\/g, "/").toLowerCase();
+        let normalized = storageLocation.replace(/\\/g, "/");
         
-        // Handle Windows drive letters (C: -> c/, C:/ -> c/)
-        normalized = normalized.replace(/^([a-z]):\/?/, "$1/");
+        // Handle Windows drive letters (C: -> c/, C:/ -> c/) and convert to lowercase
+        normalized = normalized.replace(/^([a-zA-Z]):\/?/, "$1/").toLowerCase();
+        
+        
         
         // Remove multiple leading slashes only (preserve internal multiple slashes)
         normalized = normalized.replace(/^\/+/, "/");

@@ -94,5 +94,10 @@ describe("getLocalIdentifier", () => {
             expect(getLocalIdentifier("fs:/home/user with spaces/db")).toBe("fs/home/user with spaces/db");
             expect(getLocalIdentifier("s3:bucket-123:/path/with spaces")).toBe("s3/bucket-123/path/with spaces");
         });
+
+        test("should handle Windows CI paths", () => {
+            expect(getLocalIdentifier("D:\\a\\photosphere\\photosphere\\apps\\cli\\test\\tmp\\test-db")).toBe("fs/d/a/photosphere/photosphere/apps/cli/test/tmp/test-db");
+            expect(getLocalIdentifier("fs:D:\\a\\photosphere\\photosphere\\apps\\cli\\test\\tmp\\test-db")).toBe("fs/d/a/photosphere/photosphere/apps/cli/test/tmp/test-db");
+        });
     });
 });
