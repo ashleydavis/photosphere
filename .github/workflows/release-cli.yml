@@ -277,8 +277,8 @@ jobs:
   build-linux:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
-    needs: [compile, smoke_test, unit-tests, write-lock-tests]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success' && needs.write-lock-tests.result == 'success'
+    needs: [unit-tests, compile]
+    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -434,8 +434,8 @@ jobs:
   build-windows:
     timeout-minutes: 20
     runs-on: windows-latest
-    needs: [compile, smoke_test, unit-tests, write-lock-tests]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success' && needs.write-lock-tests.result == 'success'
+    needs: [unit-tests, compile]
+    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -587,8 +587,8 @@ jobs:
   build-macos-x64:
     timeout-minutes: 20
     runs-on: macos-13 # x64 architecture
-    needs: [compile, smoke_test, unit-tests, write-lock-tests]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success' && needs.write-lock-tests.result == 'success'
+    needs: [unit-tests, compile]
+    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -743,8 +743,8 @@ jobs:
   build-macos-arm64:
     timeout-minutes: 20
     runs-on: macos-latest # ARM64 architecture
-    needs: [compile, smoke_test, unit-tests, write-lock-tests]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success' && needs.write-lock-tests.result == 'success'
+    needs: [unit-tests, compile]
+    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -898,7 +898,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [build-linux, build-windows, build-macos-x64, build-macos-arm64]
+    needs: [build-linux, build-windows, build-macos-x64, build-macos-arm64, smoke_test, write-lock-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
