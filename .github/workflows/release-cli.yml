@@ -161,7 +161,7 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p write-lock-test-logs
-          ./write-lock-smoke-test.sh 2>&1 | tee write-lock-test-logs/write-lock-tests-output.log
+          ./write-lock-smoke-test.sh --debug 2>&1 | tee write-lock-test-logs/write-lock-tests-output.log
           WRITE_LOCK_EXIT_CODE=${PIPESTATUS[0]}
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE"
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE" >> write-lock-test-logs/write-lock-tests-output.log
