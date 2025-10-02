@@ -133,11 +133,32 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Global variable to store which ImageMagick convert command to use
+IMAGEMAGICK_CONVERT_CMD=""
+
 # Check if required tools are available
 check_dependencies() {
-    # Check if convert (ImageMagick) is available for PNG generation
-    if ! command -v convert &> /dev/null; then
-        log_error "convert (ImageMagick) is required but not installed"
+    # Check ImageMagick - determine which convert command to use
+    if command -v magick &> /dev/null; then
+        local magick_output=$(magick --version 2>/dev/null || echo "")
+        if [ -n "$magick_output" ]; then
+            log_info "ImageMagick 7.x detected (using 'magick')"
+            IMAGEMAGICK_CONVERT_CMD="magick"
+        else
+            log_error "ImageMagick magick command exists but cannot get version"
+            exit 1
+        fi
+    elif command -v convert &> /dev/null; then
+        local convert_output=$(convert -version 2>/dev/null | head -1 || echo "")
+        if [ -n "$convert_output" ]; then
+            log_info "ImageMagick 6.x detected (using 'convert')"
+            IMAGEMAGICK_CONVERT_CMD="convert"
+        else
+            log_error "ImageMagick convert command exists but cannot get version"
+            exit 1
+        fi
+    else
+        log_error "ImageMagick not found in system PATH (tried both 'magick' and 'convert')"
         exit 1
     fi
     
@@ -180,7 +201,7 @@ generate_png_file() {
     local blue=$((RANDOM % 256))
     
     # Generate a random colored PNG using ImageMagick
-    convert -size ${width}x${height} "xc:rgb($red,$green,$blue)" "$file_path"
+    $IMAGEMAGICK_CONVERT_CMD -size ${width}x${height} "xc:rgb($red,$green,$blue)" "$file_path"
     
     if [ $? -ne 0 ]; then
         log_error "Failed to generate PNG file: $file_path"
