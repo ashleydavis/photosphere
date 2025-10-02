@@ -16,84 +16,43 @@ export function getLocalIdentifier(storageLocation: string): string {
     if (storageLocation === "") {
         throw new Error("Storage location cannot be empty");
     }
-    
-    // Handle case-insensitive scheme detection
-    const lowerLocation = storageLocation.toLowerCase();
-    
-    if (lowerLocation.startsWith("fs:")) {
-        // File system storage: "fs:/path/to/db" -> "fs/path/to/db"
-        const fsPath = storageLocation.substring(3); // Remove "fs:" prefix
-        
-        // Handle empty path after fs:
-        if (fsPath === "") {
-            throw new Error("Empty path after fs: scheme");
-        }
-        
-        // Normalize path separators and handle Windows drive letters
-        let normalized = fsPath.replace(/\\/g, "/");
-        
-        // Handle Windows drive letters more explicitly
-        // First replace any drive letter pattern like "C:" or "D:" with "c/" or "d/"
-        if (/^[a-zA-Z]:/.test(normalized)) {
-            const driveLetter = normalized.charAt(0).toLowerCase();
-            const afterColon = normalized.substring(2);
-            // Remove leading slash from afterColon to avoid double slash
-            const cleanAfterColon = afterColon.startsWith("/") ? afterColon.substring(1) : afterColon;
-            normalized = driveLetter + "/" + cleanAfterColon;
-        }
-        
-        // Convert to lowercase
-        normalized = normalized.toLowerCase();
-        
-        // Remove multiple leading slashes only (preserve internal multiple slashes)
-        normalized = normalized.replace(/^\/+/, "/");
-        
-        return "fs" + (normalized.startsWith("/") ? normalized : "/" + normalized);
-    } else if (lowerLocation.startsWith("s3:")) {
-        // S3 storage: "s3:bucket-name:/path" -> "s3/bucket-name/path"
-        const s3Path = storageLocation.substring(3); // Remove "s3:" prefix
-        
-        // Handle empty path after s3:
-        if (s3Path === "") {
-            throw new Error("Empty path after s3: scheme");
-        }
-        
-        const colonIndex = s3Path.indexOf(":");
-        if (colonIndex !== -1) {
-            const bucket = s3Path.substring(0, colonIndex);
-            const pathPart = s3Path.substring(colonIndex + 1).replace(/^\/+/, ""); // Remove leading slashes
-            return `s3/${bucket}/${pathPart}`.toLowerCase();
-        }
-        return `s3/${s3Path}`.toLowerCase();
-    } else if (storageLocation.includes("://")) {
-        // Other storage types with explicit schemes (memory://, http://, etc.)
-        let result = storageLocation.toLowerCase();
-        result = result.replace(/\\/g, "/"); // Convert backslashes to forward slashes
-        result = result.replace(/:\/\//g, "/"); // Replace :// with /
-        result = result.replace(/\/+/g, "/"); // Replace multiple slashes with single slash
-        result = result.replace(/^\/+/, ""); // Remove leading slashes
-        result = result.replace(/:/g, "/"); // Replace remaining colons with slashes
-        return result;
-    } else {
-        // Default to file system storage for paths without explicit scheme
-        let normalized = storageLocation.replace(/\\/g, "/");
-        
-        // Handle Windows drive letters more explicitly
-        // First replace any drive letter pattern like "C:" or "D:" with "c/" or "d/"
-        if (/^[a-zA-Z]:/.test(normalized)) {
-            const driveLetter = normalized.charAt(0).toLowerCase();
-            const afterColon = normalized.substring(2);
-            // Remove leading slash from afterColon to avoid double slash
-            const cleanAfterColon = afterColon.startsWith("/") ? afterColon.substring(1) : afterColon;
-            normalized = driveLetter + "/" + cleanAfterColon;
-        }
-        
-        // Convert to lowercase
-        normalized = normalized.toLowerCase();
-        
-        // Remove multiple leading slashes only (preserve internal multiple slashes)
-        normalized = normalized.replace(/^\/+/, "/");
-        
-        return "fs" + (normalized.startsWith("/") ? normalized : "/" + normalized);
+
+    let type = "fs"; // Default to file system storage
+
+    // Remove scheme prefix if present.
+    if (storageLocation.startsWith("fs:")) {
+        type = "fs";
+        storageLocation = storageLocation.substring(3);
+    } 
+    else if (storageLocation.startsWith("s3:")) {
+        type = "s3";
+        storageLocation = storageLocation.substring(3);
     }
+
+    // Normalize path separators.
+    storageLocation = storageLocation.replace(/\\/g, "/");
+
+    // Replace multiple slashes with single slash.
+    storageLocation = storageLocation.replace(/\/+/g, "/"); 
+
+    // Remove leading slashes after scheme.
+    while (storageLocation.startsWith("/")) {
+        storageLocation = storageLocation.substring(1);
+    }
+
+    if (storageLocation === "") {
+        throw new Error("Empty path after scheme");
+    }
+        
+    // Handle Windows drive letters more explicitly
+    // First replace any drive letter pattern like "C:" or "D:" with "c/" or "d/"
+    if (/^[a-zA-Z]:/.test(storageLocation)) {
+        const driveLetter = storageLocation.charAt(0).toLowerCase();
+        const afterColon = storageLocation.substring(2);
+        // Remove leading slash from afterColon to avoid double slash
+        const cleanAfterColon = afterColon.startsWith("/") ? afterColon.substring(1) : afterColon;
+        storageLocation = driveLetter + "/" + cleanAfterColon;
+    }
+        
+    return type + "/" + storageLocation;
 }
