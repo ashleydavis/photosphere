@@ -23,6 +23,7 @@ import { removeCommand } from './cmd/remove';
 import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
+import { debugUpdateCommand } from './cmd/debug-update';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -198,6 +199,22 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('debug hash'))
         .action(debugHashCommand);
 
+    // Add update subcommand
+    debugCommand
+        .command('update')
+        .description('Update file hashes in the database when they don\'t match actual files')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option('--full', 'Force full verification and update (bypass cached hash optimization)')
+        .option('-p, --path <path>', 'Path to a specific file or directory to update (instead of entire database)')
+        .option('--dry-run', 'Show what would be updated without making changes')
+        .addHelpText('after', getCommandExamplesHelp('debug update'))
+        .action(debugUpdateCommand);
+
     program
         .command("examples")
         .description("Shows usage examples for all CLI commands.")
@@ -347,6 +364,7 @@ Resources:
         .description("Upgrades a media file database to the latest format by adding missing metadata files.")
         .option(...dbOption)
         .option(...metadataDirOption)
+        .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
