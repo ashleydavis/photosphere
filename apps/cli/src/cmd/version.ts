@@ -75,13 +75,13 @@ export async function versionCommand(): Promise<void> {
     
     log.info('');
     
-    // Show configuration directory
-    log.info(pc.bold('Configuration:'));
+    log.info(pc.bold('Directories:'));
     const configDir = join(os.homedir(), '.config', 'photosphere');
     const keysDir = join(configDir, 'keys');
-    log.info(`  ${pc.bold('Config directory')}: ${pc.cyan(configDir)}`);
-    log.info(`  ${pc.bold('Keys directory')}: ${pc.cyan(keysDir)}`);
-    
+    log.info(`  ${pc.bold('Config')}: ${pc.cyan(configDir)}`);
+    log.info(`  ${pc.bold('Keys')}: ${pc.cyan(keysDir)}`);
+    log.info(`  ${pc.bold('Temp')}: ${pc.cyan(join(os.tmpdir(), 'photosphere'))}`);
+    log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(os.tmpdir(), 'photosphere', 'logs'))}`);
     log.info('');
     
     // Show overall status
