@@ -159,6 +159,10 @@ export async function buildBlockGraph(
     
     // Iterate through each collection
     for (const collectionName of collectionNames) {
+        if (collectionName === "sort_indexes") {
+            continue;
+        }
+
         log.info(`Processing collection: ${collectionName}`);
         
         const collection = bsonDatabase.collection(collectionName);
