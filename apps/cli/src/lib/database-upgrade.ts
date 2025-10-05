@@ -134,14 +134,14 @@ export async function performDatabaseUpgrade(
 //
 // Build a block graph that contains all updates needed to rebuild the current BSON database
 //
-export async function buildBlockGraph(
-    database: MediaFileDatabase,
-    metadataStorage: IStorage
-): Promise<void> {
+export async function buildBlockGraph(database: MediaFileDatabase): Promise<void> {
     log.info("Building block graph from current database state...");
     
-    // Initialize block graph with the metadata storage
-    const blockGraph = new BlockGraph<DatabaseUpdate[]>(metadataStorage);
+    // Use the existing AssetDatabaseStorage to automatically update merkle tree when blocks are written
+    const assetStorage = database.getAssetStorage();
+    
+    // Initialize block graph with the asset storage
+    const blockGraph = new BlockGraph<DatabaseUpdate[]>(assetStorage);
     await blockGraph.loadHeadBlocks();
 
     // Get the BSON database
