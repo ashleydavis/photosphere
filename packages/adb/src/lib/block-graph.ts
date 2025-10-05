@@ -7,7 +7,6 @@ import { DatabaseUpdate } from './database-update';
 //
 export interface IBlockDetails {
     _id: string;           // Unique block identifier (UUID)
-    nodeId: string;        // ID of the node that created the block
     prevBlocks: string[];  // Array of previous block IDs
 }
 
@@ -26,7 +25,7 @@ export class BlockGraph<DataT> {
     private blockMap = new Map<string, IBlock<DataT>>();  // In-memory block cache
     private headBlockIds: string[] = [];                  // Current head blocks
     
-    constructor(private nodeId: string, private storage: IStorage) {}
+    constructor(private storage: IStorage) {}
 
     //
     // Load head blocks from persistent storage
@@ -113,7 +112,6 @@ export class BlockGraph<DataT> {
         
         const block: IBlock<DataT> = {
             _id: blockId,
-            nodeId: this.nodeId,
             prevBlocks: [...this.headBlockIds], // Link to current head blocks
             data: data
         };
