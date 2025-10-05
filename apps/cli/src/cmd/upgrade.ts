@@ -4,6 +4,7 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { CURRENT_DATABASE_VERSION } from "adb";
+import { buildBlockGraph } from "../lib/database-upgrade";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -66,7 +67,11 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
 
         // Reload the database for upgrade in readwrite mode.
         // The updated database is automatically saved.
-        await loadDatabase(options.db, options, true, false);
+        const { database: upgradedDatabase, metadataStorage } = await loadDatabase(options.db, options, true, false);
+
+        // Build block graph automatically for database version 4
+        log.info("Building block graph for database version 4...");
+        await buildBlockGraph(upgradedDatabase, metadataStorage);
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 
