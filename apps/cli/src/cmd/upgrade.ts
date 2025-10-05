@@ -67,11 +67,14 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
 
         // Reload the database for upgrade in readwrite mode.
         // The updated database is automatically saved.
-        const { database: upgradedDatabase, metadataStorage } = await loadDatabase(options.db, options, true, false);
+        const { database: upgradedDatabase } = await loadDatabase(options.db, options, true, false);
 
         // Build block graph automatically for database version 4
         log.info("Building block graph for database version 4...");
-        await buildBlockGraph(upgradedDatabase, metadataStorage);
+        await buildBlockGraph(upgradedDatabase);
+
+        // Save the updated merkle tree.
+        await upgradedDatabase.getAssetDatabase().save(); 
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 
