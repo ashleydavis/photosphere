@@ -6,7 +6,7 @@ import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 //
 // Current database version
 //
-export const CURRENT_DATABASE_VERSION = 3;
+export const CURRENT_DATABASE_VERSION = 4;
 
 //
 // Represents a node in the Merkle tree.
