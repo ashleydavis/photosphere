@@ -1,9 +1,11 @@
 import { log } from "utils";
 import pc from "picocolors";
-import { CURRENT_DATABASE_VERSION, HashCache, computeHash } from "adb";
+import { CURRENT_DATABASE_VERSION, HashCache, computeHash, saveTree } from "adb";
 import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
+import { BlockGraph, DatabaseUpdate, IUpsertUpdate } from "adb";
+import { v4 as uuid } from 'uuid';
 
 //
 // Performs the actual database upgrade logic for a database from a given version to the current version.
@@ -127,4 +129,66 @@ export async function performDatabaseUpgrade(
         await metadataStorage.deleteFile("hash-cache-x.dat");
         await metadataStorage.deleteFile("metadata.json");
     }    
+}
+
+//
+// Build a block graph that contains all updates needed to rebuild the current BSON database
+//
+export async function buildBlockGraph(
+    database: MediaFileDatabase,
+    metadataStorage: IStorage
+): Promise<void> {
+    log.info("Building block graph from current database state...");
+
+    // Create a unique node ID for this operation
+    const nodeId = uuid(); //todo: This might be device id.
+    
+    // Initialize block graph with the metadata storage
+    const blockGraph = new BlockGraph<DatabaseUpdate[]>(nodeId, metadataStorage);
+    await blockGraph.loadHeadBlocks();
+
+    // Get the BSON database
+    const bsonDatabase = database.getMetadataDatabase();
+    const currentTimestamp = Date.now();
+    
+    // Create upsert operations for all database records
+    const databaseUpdates: DatabaseUpdate[] = [];
+    let totalRecords = 0;
+    
+    // Get all collections in the database
+    const collectionNames = await bsonDatabase.collections();
+    
+    log.info(`Found ${collectionNames.length} collections: ${collectionNames.join(', ')}`);
+    
+    // Iterate through each collection
+    for (const collectionName of collectionNames) {
+        log.info(`Processing collection: ${collectionName}`);
+        
+        const collection = bsonDatabase.collection(collectionName);
+        let recordCount = 0;
+        
+        // Iterate through all records in the collection
+        for await (const record of collection.iterateRecords()) {
+            const upsertUpdate: IUpsertUpdate = {
+                type: "upsert",
+                timestamp: currentTimestamp,
+                collection: collectionName,
+                _id: record._id,
+                document: record
+            };
+            
+            databaseUpdates.push(upsertUpdate);
+            recordCount++;
+            totalRecords++;
+        }
+        
+        log.info(`✓ Processed ${recordCount} records from collection '${collectionName}'`);
+    }
+
+    // Commit the block containing all database updates
+    const block = await blockGraph.commitBlock(databaseUpdates);
+
+    log.info(`✓ Block graph created with block ID: ${block._id}`);
+    log.info(`✓ Block graph saved to metadata storage`);
+    log.info(`✓ Block contains ${databaseUpdates.length} upsert operations from ${collectionNames.length} collections (${totalRecords} total records)`);
 }
