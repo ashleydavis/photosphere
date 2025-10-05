@@ -139,12 +139,9 @@ export async function buildBlockGraph(
     metadataStorage: IStorage
 ): Promise<void> {
     log.info("Building block graph from current database state...");
-
-    // Create a unique node ID for this operation
-    const nodeId = uuid(); //todo: This might be device id.
     
     // Initialize block graph with the metadata storage
-    const blockGraph = new BlockGraph<DatabaseUpdate[]>(nodeId, metadataStorage);
+    const blockGraph = new BlockGraph<DatabaseUpdate[]>(metadataStorage);
     await blockGraph.loadHeadBlocks();
 
     // Get the BSON database
