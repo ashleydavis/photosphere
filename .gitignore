@@ -47,3 +47,5 @@ packages/tools/build/
 apps/cli/test/test-db-replica/
 apps/cli/test/tmp/
 apps/cli/keys
+apps/cli/tmp/
+packages/adb/test/tmp

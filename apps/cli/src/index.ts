@@ -24,6 +24,7 @@ import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
 import { debugUpdateCommand } from './cmd/debug-update';
+import { deviceCommand } from './cmd/device';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -392,6 +393,11 @@ Resources:
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
+
+    program
+        .command("device")
+        .description("Returns the device ID.")
+        .action(deviceCommand);
 
     // Parse the command line arguments
     try {
