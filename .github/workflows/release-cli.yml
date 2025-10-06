@@ -368,11 +368,23 @@ jobs:
           ffprobe -version | head -1
           echo ""
           
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command before building..."
+          bun run start -- version
+
       - name: Build Linux executable
         working-directory: ./apps/cli
         run: |
           bun run build-linux
           chmod +x bin/x64/linux/psi
+          
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/linux/psi version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
@@ -519,10 +531,22 @@ jobs:
           ffprobe -version 2>&1 | Select-Object -First 1
           echo ""
 
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command before building..."
+          bun run start -- version
+
       - name: Build Windows executable
         working-directory: ./apps/cli
         run: |
           bun run build-win
+          
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/win/psi.exe version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
@@ -751,11 +775,23 @@ jobs:
             ffprobe -version | head -1
             echo ""
 
+        - name: Test version command
+          working-directory: ./apps/cli
+          run: |
+            echo "Testing version command before building..."
+            bun run start -- version
+
         - name: Build macOS executable
           working-directory: ./apps/cli
           run: |
             bun run build-mac-x64
             chmod +x bin/x64/mac/psi
+            
+        - name: Test built version command
+          working-directory: ./apps/cli
+          run: |
+            echo "Testing version command after building..."
+            ./bin/x64/mac/psi version
 
         - name: Run smoke tests
           working-directory: ./apps/cli
@@ -906,11 +942,23 @@ jobs:
           ffprobe -version | head -1
           echo ""
 
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command before building..."
+          bun run start -- version
+
       - name: Build macOS ARM64 executable
         working-directory: ./apps/cli
         run: |
           bun run build-mac-arm64
           chmod +x bin/arm64/mac/psi
+          
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/arm64/mac/psi version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
