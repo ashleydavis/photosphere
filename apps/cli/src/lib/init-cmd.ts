@@ -2,7 +2,7 @@ import { IDatabaseMetadata, MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { CURRENT_DATABASE_VERSION, IMerkleTree, loadTreeVersion } from "adb";
 import { configureLog } from "./log";
-import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider } from "node-utils";
+import { exit, registerTerminationCallback, TestUuidGenerator, TestTimestampProvider, generateDeviceId } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
@@ -313,8 +313,8 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath, s3Config, { readonly });
 
-    // Make sure the merkle tree file exists.
-    if (!await metadataStorage.fileExists('tree.dat')) {
+    // Make sure the .db directory exists.
+    if (!await assetStorage.dirExists('.db')) {
         outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
     }
@@ -371,7 +371,17 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         //
         // This is the slow path because it loads the database twice. Once in readonly mode and again in write mode.
         //
-        const databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);
+        
+        // Try device-specific location first, then fall back to old location
+        const deviceId = await generateDeviceId();
+        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
+        
+        let databaseVersion = await loadTreeVersion(deviceTreePath, metadataStorage);
+        if (!databaseVersion) {
+            // Fall back to old location for backward compatibility
+            databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);
+        }
+        
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
