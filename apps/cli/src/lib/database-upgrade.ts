@@ -5,6 +5,7 @@ import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
 import { BlockGraph, DatabaseUpdate, IUpsertUpdate } from "adb";
+import { generateDeviceId } from "node-utils";
 import { v4 as uuid } from 'uuid';
 
 //
@@ -193,6 +194,7 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
     log.info(`✓ Block graph saved to metadata storage`);
     log.info(`✓ Block contains ${databaseUpdates.length} upsert operations from ${collectionNames.length} collections (${totalRecords} total records)`);    
 }
+
 
 //
 // Remove files from the merkle tree that are intended to be local only and not replicated.
