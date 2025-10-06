@@ -139,27 +139,27 @@ export function getChildren(nodeIndex: number, nodes: MerkleNode[]) {
 //
 // Gets the node index of a leaf node from its file index in a flattened Merkle tree.
 //
-export function getLeafNodeIndex(fileHashIndex: number, nodeIndex: number, nodes: MerkleNode[]): number {
-    const node = nodes[nodeIndex];
+export function getLeafNodeIndex(fileHashIndex: number, startingNodeIndex: number, nodes: MerkleNode[]): number {
+    const node = nodes[startingNodeIndex];
     // console.log(`have file index ${fileHashIndex}, visiting node ${nodeIndex} ${node.fileName || ''} with ${node.leafCount} leafs`);
     if (node.leafCount === 1) {
         // The tree only has one leaf node, so return its index.
-        return nodeIndex + fileHashIndex;
+        return startingNodeIndex + fileHashIndex;
     }
 
-    const { leftNode, leftCount, rightIndex, rightCount } = getChildren(nodeIndex, nodes);
+    const { leftNode, leftCount, rightIndex, rightCount } = getChildren(startingNodeIndex, nodes);
     if (leftCount === rightCount) { // Check if this tree is balanced.
         //
         // It is balanced, so use the simple formula.
         //
-        return nodeIndex + getLeafNodeIndex_balanced(fileHashIndex, node.leafCount); // No +1 in this case, including the parent node in this calculation.
+        return startingNodeIndex + getLeafNodeIndex_balanced(fileHashIndex, node.leafCount); // No +1 in this case, including the parent node in this calculation.
     }
 
     if (fileHashIndex < leftNode.leafCount) {
         //
         // The file is in the left subtree, which by definition is always balanced so we can use the simple formula.
         //
-        return nodeIndex + 1 // +1 to skip the parent node.
+        return startingNodeIndex + 1 // +1 to skip the parent node.
             + getLeafNodeIndex_balanced(fileHashIndex, leftNode.leafCount); 
     }
 
@@ -1226,6 +1226,103 @@ export function markFileAsDeleted<DatabaseMetadata>(
     
     return true;
 }
+
+/**
+ * Completely removes multiple files from the merkle tree by rebuilding the tree without those files.
+ * This is different from markFileAsDeleted which only marks files as deleted but keeps the nodes.
+ * 
+ * WARNING: This function is inefficient as it rebuilds the entire tree. Use sparingly and prefer
+ * markFileAsDeleted for most use cases. This function is intended for cleanup operations like
+ * database upgrades where a complete rebuild is acceptable.
+ * 
+ * @param merkleTree The merkle tree to remove the files from
+ * @param fileNames Array of file names to completely remove
+ * @returns number of files that were found and removed
+ */
+export function deleteFiles<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata>, 
+    fileNames: string[]
+): number {
+    if (!merkleTree || merkleTree.sortedNodeRefs.length === 0) {
+        throw new Error("Cannot delete files from empty or invalid merkle tree");
+    }
+    
+    if (fileNames.length === 0) {
+        throw new Error("Cannot delete files: no file names provided");
+    }
+    
+    // Create a set for efficient lookup and check all files exist
+    const filesToDelete = new Set(fileNames);
+    const existingFiles = new Set(merkleTree.sortedNodeRefs.filter(ref => !ref.isDeleted).map(ref => ref.fileName));
+    
+    // Check if any files don't exist
+    const nonExistentFiles = fileNames.filter(fileName => !existingFiles.has(fileName));
+    if (nonExistentFiles.length > 0) {
+        throw new Error(`Cannot delete files: the following files do not exist: ${nonExistentFiles.join(', ')}`);
+    }
+    
+    let filesRemoved = 0;
+    
+    // Get all remaining files (excluding the ones to delete)
+    const remainingFiles: FileHash[] = [];
+    
+    for (const nodeRef of merkleTree.sortedNodeRefs) {
+        if (!nodeRef.isDeleted) {
+            if (filesToDelete.has(nodeRef.fileName)) {
+                filesRemoved++;
+            } else {
+                // Find the corresponding node to get file details
+                const nodeIndex = getLeafNodeIndex(nodeRef.fileIndex, 0, merkleTree.nodes);
+                const node = merkleTree.nodes[nodeIndex];
+                
+                if (node.fileName && node.lastModified) {
+                    remainingFiles.push({
+                        fileName: node.fileName,
+                        hash: node.hash,
+                        length: node.size,
+                        lastModified: node.lastModified
+                    });
+                }
+            }
+        }
+    }
+    
+    // If no files remain, create an empty tree
+    if (remainingFiles.length === 0) {
+        merkleTree.nodes = [];
+        merkleTree.sortedNodeRefs = [];
+        if (merkleTree.metadata) {
+            merkleTree.metadata.totalFiles = 0;
+            merkleTree.metadata.totalNodes = 0;
+            merkleTree.metadata.totalSize = 0;
+        }
+        return filesRemoved;
+    }
+    
+    // Rebuild the tree with the remaining files
+    let newTree = createTree<DatabaseMetadata>(merkleTree.metadata.id);
+    for (const fileHash of remainingFiles) {
+        newTree = addFile(newTree, fileHash);
+    }
+    
+    // Preserve the original metadata but update file counts
+    if (merkleTree.metadata) {
+        newTree.metadata = {
+            ...merkleTree.metadata,
+            totalFiles: remainingFiles.length,
+            totalNodes: newTree.nodes.length,
+            totalSize: newTree.nodes.length > 0 ? newTree.nodes[0].size : 0
+        };
+    }
+    
+    // Replace the tree contents
+    merkleTree.nodes = newTree.nodes;
+    merkleTree.sortedNodeRefs = newTree.sortedNodeRefs;
+    merkleTree.metadata = newTree.metadata;
+    
+    return filesRemoved;
+}
+
 
 /**
  * Checks if a file is marked as deleted in the Merkle tree

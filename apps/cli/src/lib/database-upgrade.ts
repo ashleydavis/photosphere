@@ -1,6 +1,6 @@
 import { log } from "utils";
 import pc from "picocolors";
-import { CURRENT_DATABASE_VERSION, HashCache, computeHash, saveTree } from "adb";
+import { CURRENT_DATABASE_VERSION, HashCache, computeHash, saveTree, deleteFiles, IBlock } from "adb";
 import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
@@ -191,5 +191,28 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
 
     log.info(`✓ Block graph created with block ID: ${block._id}`);
     log.info(`✓ Block graph saved to metadata storage`);
-    log.info(`✓ Block contains ${databaseUpdates.length} upsert operations from ${collectionNames.length} collections (${totalRecords} total records)`);
+    log.info(`✓ Block contains ${databaseUpdates.length} upsert operations from ${collectionNames.length} collections (${totalRecords} total records)`);    
+}
+
+//
+// Remove files from the merkle tree that are intended to be local only and not replicated.
+//
+export function removeLocalOnlyFiles(database: MediaFileDatabase): void {
+    // Remove metadata files from the merkle tree
+    log.info("Removing metadata files from merkle tree...");
+
+    const merkleTree = database.getAssetDatabase().getMerkleTree();
+
+    // Find all metadata files to remove
+    const filesToRemove = merkleTree.sortedNodeRefs
+        .filter(ref => ref.fileName && ref.fileName.startsWith('metadata/'))
+        .map(ref => ref.fileName!);
+
+    // Remove all files in a single operation (only if there are files to remove)
+    if (filesToRemove.length > 0) {
+        const filesRemoved = deleteFiles(merkleTree, filesToRemove);
+        log.info(`✓ Removed ${filesRemoved} metadata files from merkle tree`);
+    } else {
+        log.info(`✓ No metadata files found in merkle tree to remove`);
+    }
 }
