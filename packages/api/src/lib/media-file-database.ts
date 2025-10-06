@@ -11,6 +11,7 @@ import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
 import { AssetDatabase, AssetDatabaseStorage, computeHash, createTree, getFileInfo, HashCache, IHashedFile, loadTree, MerkleNode, saveTree, traverseTree, upsertFile, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
+import { generateDeviceId } from "node-utils";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
@@ -1510,7 +1511,16 @@ export class MediaFileDatabase {
         const srcStorage = this.assetStorage;
 
         // Try to load existing destination merkle tree, otherwise create a new one
-        let destTree = (await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage))!;
+        // Check device-specific location first, then fall back to old location
+        const deviceId = await generateDeviceId();
+        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
+        
+        let destTree = await loadTree<IDatabaseMetadata>(deviceTreePath, destMetadataStorage);
+        if (!destTree) {
+            // Fall back to old location for backward compatibility
+            destTree = await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage);
+        }
+        
         if (!destTree) {
             destTree = createTree(merkleTree.metadata.id); // No write lock is needed creating a tree for the first time.
             
@@ -1536,7 +1546,7 @@ export class MediaFileDatabase {
             result.filesConsidered++;
             
             // Check if file already exists in destination tree with matching hash
-            const destFileInfo = getFileInfo(destTree, fileName);
+            const destFileInfo = getFileInfo(destTree!, fileName);
             if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
                 // File already exists with correct hash, skip copying
                 result.existingFiles++;
@@ -1584,7 +1594,7 @@ export class MediaFileDatabase {
             //
             // Add or update the file in the destination merkle tree.
             //
-            destTree = upsertFile(destTree, {
+            destTree = upsertFile(destTree!, {
                 fileName,
                 hash: copiedHash,
                 length: copiedFileInfo.length,
@@ -1623,8 +1633,9 @@ export class MediaFileDatabase {
 
         //
         // A write lock isn't needed here because `replicate` creates fresh databases rather than updating existing ones.
+        // Save to device-specific location
         //
-        await retry(() => saveTree("tree.dat", destTree, destMetadataStorage));
+        await retry(() => saveTree(deviceTreePath, destTree!, destMetadataStorage));
         
         return result;
     }
