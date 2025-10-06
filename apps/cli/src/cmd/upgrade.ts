@@ -4,7 +4,7 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { CURRENT_DATABASE_VERSION } from "adb";
-import { buildBlockGraph } from "../lib/database-upgrade";
+import { buildBlockGraph, removeLocalOnlyFiles } from "../lib/database-upgrade";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -72,6 +72,9 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // Build block graph automatically for database version 4
         log.info("Building block graph for database version 4...");
         await buildBlockGraph(upgradedDatabase);
+
+        // Remove files from the merkle tree that are intended to be local only and not replicated.
+        removeLocalOnlyFiles(database);
 
         // Save the updated merkle tree.
         await upgradedDatabase.getAssetDatabase().save(); 
