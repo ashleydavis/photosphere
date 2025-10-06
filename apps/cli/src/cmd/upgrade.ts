@@ -74,10 +74,17 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         await buildBlockGraph(upgradedDatabase);
 
         // Remove files from the merkle tree that are intended to be local only and not replicated.
-        removeLocalOnlyFiles(database);
+        removeLocalOnlyFiles(upgradedDatabase);
 
         // Save the updated merkle tree.
         await upgradedDatabase.getAssetDatabase().save(); 
+
+        // Clean up old tree.dat file after successful migration to device-specific location
+        const metadataStorage = upgradedDatabase.getAssetDatabase().getMetadataStorage();
+        if (await metadataStorage.fileExists("tree.dat")) {
+            await metadataStorage.deleteFile("tree.dat");
+            log.info("✓ Removed old tree.dat file after migration to device-specific location");
+        }
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 

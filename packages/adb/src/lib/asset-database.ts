@@ -1,6 +1,7 @@
 import { IStorage, pathJoin } from "storage";
 import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
 import { IUuidGenerator } from "utils";
+import { generateDeviceId } from "node-utils";
 
 //
 // The hash and other information about a file.
@@ -86,9 +87,19 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     // Loads an existing asset database.
     //
     async load(): Promise<void> {
-        this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
+        // Try to load from device-specific location first
+        const deviceId = await generateDeviceId();
+        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
+        
+        this.merkleTree = await loadTree(deviceTreePath, this.metadataStorage);
+        
         if (!this.merkleTree) {
-            throw new Error(`Failed to load asset database. No tree found at ${this.metadataStorage.location}/tree.dat.`);
+            // Fall back to old location for backward compatibility
+            this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
+        }
+        
+        if (!this.merkleTree) {
+            throw new Error(`Failed to load asset database. No tree found at ${this.metadataStorage.location}/${deviceTreePath} or ${this.metadataStorage.location}/tree.dat.`);
         }
     }
 
@@ -103,13 +114,23 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     }
 
     //
+    // Gets the metadata storage.
+    //
+    getMetadataStorage(): IStorage {
+        return this.metadataStorage;
+    }
+
+    //
     // Saves the database to disk.
     //
     async save(): Promise<void> {
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
         }
-        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
+        // Save to device-specific location
+        const deviceId = await generateDeviceId();
+        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
+        await saveTree(deviceTreePath, this.merkleTree, this.metadataStorage);
     }
 
     //
