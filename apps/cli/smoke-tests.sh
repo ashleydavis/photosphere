@@ -1945,7 +1945,7 @@ test_v2_database_write_commands_fail() {
 test_v2_database_upgrade() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 29: V2 DATABASE UPGRADE TO V3 ==="
+    echo "=== TEST 29: V2 DATABASE UPGRADE TO V4 ==="
     
     local v2_db_dir="../../test/dbs/v2"
     local temp_v2_dir="./test/tmp/test-v2-upgrade"
@@ -1960,16 +1960,16 @@ test_v2_database_upgrade() {
     
     # Test upgrade command on v2 database
     local upgrade_output
-    invoke_command "Upgrade v2 database to v3" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v2 database to v4" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
     
     # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 3" "Upgrade completed successfully"
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 4" "Upgrade completed successfully"
     
-    # Verify the upgraded database is now version 3
+    # Verify the upgraded database is now version 4
     local summary_output
     invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v2_dir --yes" 0 "summary_output"
     
-    expect_output_string "$summary_output" "Database version: 3" "Upgraded database is now version 3"
+    expect_output_string "$summary_output" "Database version: 4" "Upgraded database is now version 4"
     
     # Test that verify command now works on upgraded database
     local verify_output
@@ -1983,10 +1983,10 @@ test_v2_database_upgrade() {
     test_passed
 }
 
-test_v3_database_upgrade_no_effect() {
+test_v3_database_upgrade() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 30: V3 DATABASE UPGRADE HAS NO EFFECT ==="
+    echo "=== TEST 30: V3 DATABASE UPGRADE TO V4 ==="
     
     local v3_db_dir="../../test/dbs/v3"
     local temp_v3_dir="./test/tmp/test-v3-upgrade"
@@ -1999,28 +1999,74 @@ test_v3_database_upgrade_no_effect() {
     rm -rf "$temp_v3_dir"
     cp -r "$v3_db_dir" "$temp_v3_dir"
     
-    # Test upgrade command on v3 database (should have no effect)
+    # Test upgrade command on v3 database
     local upgrade_output
-    invoke_command "Upgrade v3 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v3 database to v4" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
     
-    # Check that upgrade reports database is already current
-    expect_output_string "$upgrade_output" "Database is already at the latest version (3)" "Upgrade reports database is already current"
+    # Check that upgrade was successful
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 4" "Upgrade completed successfully"
     
-    # Verify the database is still version 3
+    # Verify the upgraded database is now version 4
     local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
+    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
     
-    expect_output_string "$summary_output" "Database version: 3" "Database is still version 3"
+    expect_output_string "$summary_output" "Database version: 4" "Upgraded database is now version 4"
     
-    # Test that verify command still works
+    # Test that verify command now works on upgraded database
     local verify_output
-    invoke_command "Verify v3 database after upgrade" "$(get_cli_command) verify --db $temp_v3_dir --yes" 0 "verify_output"
+    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v3_dir --yes" 0 "verify_output"
     
-    expect_output_string "$verify_output" "Database verification passed" "V3 database verifies successfully after upgrade"
+    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
     # Clean up temporary database
     rm -rf "$temp_v3_dir"
     log_success "Cleaned up temporary v3 upgrade database"
+    test_passed
+}
+
+test_v4_database_upgrade_no_effect() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 31: V4 DATABASE UPGRADE HAS NO EFFECT ==="
+    
+    # We need to first create a v4 database by upgrading a v3 database
+    local v3_db_dir="../../test/dbs/v3"
+    local temp_v4_dir="./test/tmp/test-v4-upgrade"
+    
+    # Check that v3 database exists
+    check_exists "$v3_db_dir" "V3 test database directory"
+    
+    # Create a copy of v3 database and upgrade it to v4
+    log_info "Creating v4 database for upgrade testing"
+    rm -rf "$temp_v4_dir"
+    cp -r "$v3_db_dir" "$temp_v4_dir"
+    
+    # First upgrade to v4
+    local initial_upgrade_output
+    invoke_command "Initial upgrade v3 to v4" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "initial_upgrade_output"
+    
+    # Test upgrade command on v4 database (should have no effect)
+    local upgrade_output
+    invoke_command "Upgrade v4 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade reports database is already current
+    expect_output_string "$upgrade_output" "Database is already at the latest version (4)" "Upgrade reports database is already current"
+    
+    # Verify the database is still version 4
+    local summary_output
+    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 4" "Database is still version 4"
+    
+    # Test that verify command still works
+    local verify_output
+    invoke_command "Verify v4 database after upgrade" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "V4 database verifies successfully after upgrade"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v4_dir"
+    log_success "Cleaned up temporary v4 upgrade database"
     test_passed
 }
 
@@ -2466,13 +2512,16 @@ run_test() {
         "v2-upgrade"|"29")
             test_v2_database_upgrade
             ;;
-        "v3-upgrade-no-effect"|"30")
-            test_v3_database_upgrade_no_effect
+        "v3-upgrade"|"30")
+            test_v3_database_upgrade
             ;;
-        "write-lock-small"|"31")
+        "v4-upgrade-no-effect"|"31")
+            test_v4_database_upgrade_no_effect
+            ;;
+        "write-lock-small"|"32")
             test_write_lock_parallel_add_small
             ;;
-        "write-lock-medium"|"32")
+        "write-lock-medium"|"33")
             test_write_lock_parallel_add_medium
             ;;
         *)
@@ -2727,10 +2776,11 @@ show_usage() {
     echo "  repair-damaged (26) - Repair damaged database from replica"
     echo "  v2-readonly (27)    - Test readonly commands work on v2 database (summary, verify)"
     echo "  v2-write-fail (28)  - Test write commands fail on v2 database (add, remove)"
-    echo "  v2-upgrade (29)     - Upgrade v2 database to v3"
-    echo "  v3-upgrade-no-effect (30) - Test v3 upgrade has no effect"
-    echo "  write-lock-small (31)     - Test write locking with 2 parallel processes (2 files)"
-    echo "  write-lock-medium (32)    - Test write locking with 4 parallel processes (4 files)"
+    echo "  v2-upgrade (29)     - Upgrade v2 database to v4"
+    echo "  v3-upgrade (30)     - Upgrade v3 database to v4"
+    echo "  v4-upgrade-no-effect (31) - Test v4 upgrade has no effect"
+    echo "  write-lock-small (32)     - Test write locking with 2 parallel processes (2 files)"
+    echo "  write-lock-medium (33)    - Test write locking with 4 parallel processes (4 files)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
