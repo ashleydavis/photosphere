@@ -35,15 +35,15 @@ export interface IGalleryImageProps {
     height: number;
 
     //
-    // True if the scrollbar is being dragged.
+    // True if the image should load it's thumbnail.
     //
-    isDragging: boolean;
+    shouldLoad: boolean;
 }
 
 //
 // Renders an image for the gallery.
 //
-export function GalleryImage({ item, onClick, x, y, width, height, isDragging }: IGalleryImageProps) {
+export function GalleryImage({ item, onClick, x, y, width, height, shouldLoad }: IGalleryImageProps) {
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
@@ -55,7 +55,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
             return;
         }
 
-        if (!isDragging) {       
+        if (shouldLoad) {       
             loadAsset(item._id, "thumb")
                 .then(assetLoaded => {
                     if (assetLoaded) {
@@ -72,11 +72,12 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
         }
 
         return () => {
-            if (!isDragging) {
+            if (thumbObjectURL) {
                 unloadAsset(item._id, "thumb");
+                setThumbObjectURL(undefined);
             }
         };
-    }, [isDragging]);
+    }, [shouldLoad, thumbObjectURL]);
 
     const isSelected = selectedItems.has(item._id);
 
@@ -114,7 +115,8 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
             }}
             >
             {item.color
-                && <div                    
+                && <div
+                    className="fade-in-thumb-placeholder"
                     style={{
                         position: "absolute",
                         left: `0px`,
@@ -128,10 +130,10 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                 </div>
             }    
 
-            {microDataURL
+            {(shouldLoad && microDataURL)
                 && <img 
                     data-testid="gallery-thumb"
-                    className="gallery-thumb"
+                    className="gallery-thumb fade-in-thumb-micro"
                     src={microDataURL}
                     {...longPressHandlers}
                     style={{

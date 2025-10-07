@@ -122,8 +122,16 @@ i {
     }
 }
 
+.fade-in-thumb-placeholder {
+    animation: fadeInThumb 0.1s cubic-bezier(1, 0, 1, 1);
+}
+
+.fade-in-thumb-micro {
+    animation: fadeInThumb 0.2s cubic-bezier(1, 0, 1, 1);
+}
+
 .fade-in-thumb {
-    animation: fadeInThumb 0.5s cubic-bezier(1,0,.95,.82);
+    animation: fadeInThumb 0.5s cubic-bezier(1, 0, 1, 1);
 }
 
 .selection-tick {

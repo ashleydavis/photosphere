@@ -6,13 +6,14 @@ import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GalleryPreview } from "./gallery-preview";
 import { Theme, useTheme } from "@mui/joy";
+import _ from "lodash";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
 //
 // Renders a row of items in the gallery.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined, isDragging: boolean) {
+function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined, shouldLoad: boolean) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -65,7 +66,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         y={0}
                         width={item.thumbWidth!}
                         height={item.thumbHeight!}
-                        isDragging={isDragging}
+                        shouldLoad={shouldLoad}
                         />
                 );
             })}
@@ -155,6 +156,11 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     //
     const [ isDragging, setIsDragging ] = useState(false);
 
+    //
+    // Set to true when the gallery is being scrolled.
+    //
+    const [ isScrolling, setIsScrolling ] = useState(false);
+
     const containerRef = useRef<HTMLDivElement>(null);  
 
     const theme = useTheme();
@@ -234,6 +240,40 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         stickHeadingVisible.current = false;
     }
 
+    const scrollStartTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+    // Create throttled function that sets isScrolling to false.
+    const setScrollingFalse = useRef(
+        _.debounce(() => {
+            setIsScrolling(false);
+        }, 800, { leading: false, trailing: true })
+    ).current;
+        
+    // Watch virtualizer.isScrolling and update our state.
+    useEffect(() => {
+        if (rowVirtualizer.isScrolling) {
+            // Clear any existing timeout.
+            clearTimeout(scrollStartTimeoutRef.current);
+            
+            // Set isScrolling to true after delay.
+            scrollStartTimeoutRef.current = setTimeout(() => {
+                setIsScrolling(true);
+            }, 2000)
+            
+            // Cancel any pending throttled call.
+            setScrollingFalse.cancel();
+        } 
+        else {
+            // Clear the timeout if scrolling stopped for a bit.
+            clearTimeout(scrollStartTimeoutRef.current);
+            
+            // If isScrolling was already true, wait before setting to false.
+            if (isScrolling) {
+                setScrollingFalse();
+            }
+        }
+    }, [rowVirtualizer.isScrolling, setScrollingFalse, isScrolling]);
+
     return (
         <>
             {stickyHeading.current &&
@@ -279,14 +319,25 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                     }}
                     >
 
-                    {isDragging
+                    {/* {(isDragging || rowVirtualizer.isScrolling)
                         ? virtualRows.map(virtualRow => {
                             return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
                         })
                         : virtualRows.map(virtualRow => {
-                            return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
+                            return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging || rowVirtualizer.isScrolling);
                         })
-                    }
+
+                    } */}
+
+                    {/* {virtualRows.map(virtualRow => {
+                        return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
+                    })} */}
+
+                    {/* Removing this next bit reduces memory a lot! */}
+
+                    {virtualRows.map(virtualRow => {
+                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, !isDragging && !isScrolling);
+                    })}
                     
                 </div>
 

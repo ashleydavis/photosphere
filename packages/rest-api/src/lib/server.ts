@@ -619,6 +619,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
 
         for (const record of result.records) {
             delete record.properties; // Reduces memory needed on the client.
+            // delete record.micro; // This doesn't seem to help memory use much.
         }
 
         res.json({
