@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry } from 'utils';
+import { pathJoin } from '../storage-factory';
 
 //
 // Split internal nodes when they exceed 1.2x the key size.
@@ -143,7 +144,7 @@ export class SortIndex<RecordT extends IRecord> {
     
     constructor(options: ISortIndexOptions, private readonly collection: IBsonCollection<RecordT>) {
         this.storage = options.storage;
-        this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
+        this.indexDirectory = pathJoin(options.baseDirectory, `sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`);
         this.fieldName = options.fieldName;
         this.direction = options.direction;
         this.pageSize = options.pageSize || 1000;
@@ -612,9 +613,7 @@ export class SortIndex<RecordT extends IRecord> {
         
         // Track whether we've added any records
         let recordsAdded = 0;
-
-        let startTime = Date.now();
-        
+       
         // Iterate through all records and add them directly to the B-tree
         for await (const record of this.collection.iterateRecords()) {
             const value = record[this.fieldName];

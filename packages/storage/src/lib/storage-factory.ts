@@ -10,7 +10,7 @@ import path from 'node:path';
 // Join paths.
 //
 export function pathJoin(...paths: string[]): string {
-    return paths.join('/').replace(/\/+$/, '');
+    return paths.join('/').replace(/\/+$/, '').replace(/\/+/g, '/');
 }
 
 /**

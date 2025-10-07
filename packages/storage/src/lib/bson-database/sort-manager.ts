@@ -2,7 +2,7 @@
 // Manages the creation and usage of sort indexes for collections
 //
 
-import { IStorage } from 'storage';
+import { IStorage, pathJoin } from 'storage';
 import { IBsonCollection, IRecord } from './collection';
 import { SortIndex, ISortResult } from './sort-index';
 
@@ -48,7 +48,7 @@ export class SortManager<RecordT extends IRecord> {
         }
         
         // Check if the index exists on disk.
-        const indexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}/${fieldName}_${direction}`;
+        const indexPath = pathJoin(this.baseDirectory, `sort_indexes/${this.collectionName}/${fieldName}_${direction}`);
         if (await this.storage.dirExists(indexPath)) {
             // Create a new sort index but don't initialize it.
             const sortIndex = new SortIndex<RecordT>({
@@ -155,8 +155,7 @@ export class SortManager<RecordT extends IRecord> {
         direction: 'asc' | 'desc';
         type?: 'date';
     }>> {
-        const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
-        
+        const collectionIndexPath = pathJoin(this.baseDirectory, `sort_indexes/${this.collectionName}`);        
         if (!await this.storage.dirExists(collectionIndexPath)) {
             return [];
         }
@@ -212,7 +211,7 @@ export class SortManager<RecordT extends IRecord> {
         } 
         else {
             // If not in memory, try to delete from disk.
-            const indexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}/${fieldName}_${direction}`;
+            const indexPath = pathJoin(this.baseDirectory, `sort_indexes/${this.collectionName}/${fieldName}_${direction}`);
             if (await this.storage.dirExists(indexPath)) {
                 await this.storage.deleteDir(indexPath);
             } 
@@ -237,7 +236,7 @@ export class SortManager<RecordT extends IRecord> {
         }
         
         // Delete from disk.
-        const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
+        const collectionIndexPath = pathJoin(this.baseDirectory, `sort_indexes/${this.collectionName}`);
         if (await this.storage.dirExists(collectionIndexPath)) {
             await this.storage.deleteDir(collectionIndexPath);
         }
