@@ -247,7 +247,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         _.debounce(() => {
             // console.log("Setting isScrolling to false");
             setIsScrolling(false);
-        }, 10, { leading: false, trailing: true })
+        }, 350, { leading: false, trailing: true })
     ).current;
         
     // Watch virtualizer.isScrolling and update our state.
