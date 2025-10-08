@@ -245,34 +245,43 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     // Create throttled function that sets isScrolling to false.
     const setScrollingFalse = useRef(
         _.debounce(() => {
+            // console.log("Setting isScrolling to false");
             setIsScrolling(false);
-        }, 800, { leading: false, trailing: true })
+        }, 10, { leading: false, trailing: true })
     ).current;
         
     // Watch virtualizer.isScrolling and update our state.
     useEffect(() => {
+        // Clear any existing timeout.
+        clearTimeout(scrollStartTimeoutRef.current);
+
         if (rowVirtualizer.isScrolling) {
-            // Clear any existing timeout.
-            clearTimeout(scrollStartTimeoutRef.current);
+            // Cancel any pending throttled call.
+            setScrollingFalse.cancel();
             
             // Set isScrolling to true after delay.
             scrollStartTimeoutRef.current = setTimeout(() => {
+                // console.log("Setting isScrolling to true");
                 setIsScrolling(true);
-            }, 2000)
-            
-            // Cancel any pending throttled call.
-            setScrollingFalse.cancel();
+            }, 1000);            
         } 
-        else {
-            // Clear the timeout if scrolling stopped for a bit.
-            clearTimeout(scrollStartTimeoutRef.current);
-            
+        else {           
             // If isScrolling was already true, wait before setting to false.
             if (isScrolling) {
                 setScrollingFalse();
             }
         }
     }, [rowVirtualizer.isScrolling, setScrollingFalse, isScrolling]);
+
+    //
+    // Trigger scrolling for testing.
+    //
+    // useEffect(() => {
+    //     setTimeout(() => {
+    //         console.log("Setting isScrolling to true (timeout)");
+    //         setIsScrolling(true);
+    //     }, 5_000);
+    // }, []);
 
     return (
         <>
@@ -328,12 +337,6 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         })
 
                     } */}
-
-                    {/* {virtualRows.map(virtualRow => {
-                        return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
-                    })} */}
-
-                    {/* Removing this next bit reduces memory a lot! */}
 
                     {virtualRows.map(virtualRow => {
                         return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, !isDragging && !isScrolling);
