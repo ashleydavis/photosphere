@@ -116,7 +116,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, shouldLoad }:
             >
             {item.color
                 && <div
-                    className="fade-in-thumb-placeholder"
                     style={{
                         position: "absolute",
                         left: `0px`,
