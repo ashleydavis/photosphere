@@ -61,9 +61,9 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     // The target row height of the gallery.
     //
-    const savedHeight = localStorage.getItem("gallery-row-height");
-    const [targetRowHeight, _setTargetRowHeight] = useState(savedHeight ? parseInt(savedHeight) : 80);
-    
+    // const savedHeight = localStorage.getItem("gallery-row-height");
+    const defaultHeight = window.innerWidth < 768 ? 100 : 200;
+    const [targetRowHeight, _setTargetRowHeight] = useState(defaultHeight);
     //
     // The current layout of the gallery.
     //
