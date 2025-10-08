@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useLongPress } from "../lib/long-press";
@@ -44,6 +44,7 @@ export interface IGalleryImageProps {
 // Renders an image for the gallery.
 //
 export function GalleryImage({ item, onClick, x, y, width, height, shouldLoad }: IGalleryImageProps) {
+    const loading = useRef<boolean>(false);
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
 
@@ -55,7 +56,13 @@ export function GalleryImage({ item, onClick, x, y, width, height, shouldLoad }:
             return;
         }
 
+        if (loading.current) {
+            // Already loading.
+            return;
+        }
+
         if (shouldLoad) {       
+            loading.current = true;
             loadAsset(item._id, "thumb")
                 .then(assetLoaded => {
                     if (assetLoaded) {
