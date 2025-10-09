@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, acquireWriteLock, checkWriteLock, ILock, getLocalIdentifier } from "storage";
+import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, acquireWriteLock, checkWriteLock, ILock, getLocalIdentifier, IOrderedFile } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
@@ -9,9 +9,8 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, createTree, getFileInfo, HashCache, IHashedFile, loadTree, MerkleNode, saveTree, traverseTree, upsertFile, visualizeTree } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
-import { generateDeviceId } from "node-utils";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
@@ -1166,6 +1165,25 @@ export class MediaFileDatabase {
     }
 
     //
+    // Walk protected files in the file system.
+    //
+    async* walkProtectedFiles({ pathFilter }: { pathFilter?: string } | undefined = {}): AsyncGenerator<IOrderedFile> {
+        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+            if (pathFilter) {
+                if (!file.fileName.startsWith(pathFilter)) {
+                    continue; // Skips files that don't match the path filter.
+                }
+            }
+
+            if (file.fileName.startsWith('metadata/')) {
+                continue; // Skip metadata files
+            }
+
+            yield file;
+        }        
+    }
+
+    //
     // Verifies the media file database.
     // Checks for missing files, modified files, and new files.
     // If any files are corrupted, this will pick them up as modified.
@@ -1192,7 +1210,7 @@ export class MediaFileDatabase {
         //
         // Check all files in the database to find new and modified files.
         //
-        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+        for await (const file of this.walkProtectedFiles(options)) {
              if (pathFilter) {
                 if (!file.fileName.startsWith(pathFilter)) {
                     continue; // Skips files that don't match the path filter.
@@ -1322,8 +1340,7 @@ export class MediaFileDatabase {
     //
     // Repairs the media file database by restoring corrupted or missing files from a source database.
     //
-    async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {
-        
+    async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {        
         const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
         const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
         const { storage: sourceMetadataStorage } = createStorage(options.sourceMeta || pathJoin(options.source, '.db'));
@@ -1404,12 +1421,7 @@ export class MediaFileDatabase {
         // Check all files in the database to find corrupted/missing files
         //
         let filesProcessed = 0;
-        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
-
-            if (file.fileName.startsWith('metadata/')) {
-                continue; // Skip metadata files
-            }
-
+        for await (const file of this.walkProtectedFiles()) {
             filesProcessed++;
 
             if (progressCallback) {
