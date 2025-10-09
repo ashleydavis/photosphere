@@ -1405,6 +1405,11 @@ export class MediaFileDatabase {
         //
         let filesProcessed = 0;
         for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
+
+            if (file.fileName.startsWith('metadata/')) {
+                continue; // Skip metadata files
+            }
+
             filesProcessed++;
 
             if (progressCallback) {
