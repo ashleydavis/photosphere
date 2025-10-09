@@ -373,6 +373,12 @@ jobs:
         run: |
           bun run build-linux
           chmod +x bin/x64/linux/psi
+          
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/linux/psi version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
@@ -383,7 +389,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
-
 
       - name: Upload smoke test logs
         if: always()
@@ -523,6 +528,12 @@ jobs:
         working-directory: ./apps/cli
         run: |
           bun run build-win
+          
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/win/psi.exe version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
@@ -668,151 +679,163 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-        - name: Modify package.json for nightly builds
-          if: github.ref_type != 'tag'
-          run: |
-            cd apps/cli
-            
-            # Get current version from package.json
-            CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
-            
-            # Generate nightly suffix with current UTC date/time in ISO format
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
-            
-            echo "Original version: $CURRENT_VERSION"
-            echo "Nightly version: $NIGHTLY_VERSION"
-            
-            # Update package.json with nightly version
-            sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
-            
-            # Verify the change
-            echo "Updated package.json version:"
-            grep '"version"' package.json
+      - name: Modify package.json for nightly builds
+        if: github.ref_type != 'tag'
+        run: |
+          cd apps/cli
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          
+          # Generate nightly suffix with current UTC date/time in ISO format
+          NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+          NIGHTLY_VERSION="${CURRENT_VERSION}-nightly.${NIGHTLY_TIMESTAMP}"
+          
+          echo "Original version: $CURRENT_VERSION"
+          echo "Nightly version: $NIGHTLY_VERSION"
+          
+          # Update package.json with nightly version
+          sed -i "" "s/\"version\": *\"[^\"]*\"/\"version\": \"$NIGHTLY_VERSION\"/" package.json
+          
+          # Verify the change
+          echo "Updated package.json version:"
+          grep '"version"' package.json
 
-        - name: Capture build metadata
-          run: |
-            cd apps/cli
-            
-            # Create build metadata file
-            echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-            echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-            echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-            echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-            echo "};" >> src/lib/build-metadata.ts
-            
-            echo "Generated build metadata:"
-            cat src/lib/build-metadata.ts
+      - name: Capture build metadata
+        run: |
+          cd apps/cli
+          
+          # Create build metadata file
+          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
+          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
+          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
+          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
+          echo "};" >> src/lib/build-metadata.ts
+          
+          echo "Generated build metadata:"
+          cat src/lib/build-metadata.ts
 
-        - name: Setup Bun
-          uses: oven-sh/setup-bun@v2
-          with:
-            bun-version: 1.2.20
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.20
 
-        - name: Cache Bun dependencies
-          uses: actions/cache@v4
-          with:
-            path: |
-              ~/.bun/install/cache
-              node_modules
-              */*/node_modules
-            key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
-            restore-keys: |
-              ${{ runner.os }}-${{ runner.arch }}-bun-
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
-        - name: Verify runner architecture
-          run: |
-            echo "Architecture: $(uname -m)"
-            echo "Processor: $(uname -p)"
-            echo "OS Version: $(sw_vers)"
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          echo "OS Version: $(sw_vers)"
 
-        - name: Install dependencies
-          run: bun install
+      - name: Install dependencies
+        run: bun install
 
-        - name: Install media processing tools
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
-            brew install imagemagick ffmpeg tree
+      - name: Install media processing tools
+        run: |
+          echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+          brew install imagemagick ffmpeg tree
 
-        - name: Verify media tool versions
-          run: |
-            echo "=== Media Tool Versions ==="
-            echo ""
-            echo "ImageMagick (magick):"
-            magick --version | head -1 || echo "magick command not found"
-            echo ""
-            echo "ImageMagick (convert):"
-            convert --version | head -1 || echo "convert command not found"
-            echo ""
-            echo "ffmpeg:"
-            ffmpeg -version | head -1
-            echo ""
-            echo "ffprobe:"
-            ffprobe -version | head -1
-            echo ""
+      - name: Verify media tool versions
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | head -1 || echo "magick command not found"
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1 || echo "convert command not found"
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
 
-        - name: Build macOS executable
-          working-directory: ./apps/cli
-          run: |
-            bun run build-mac-x64
-            chmod +x bin/x64/mac/psi
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command before building..."
+          bun run start -- version
 
-        - name: Run smoke tests
-          working-directory: ./apps/cli
-          run: |
-            mkdir -p smoke-test-logs
-            ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
-            SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
-            echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
-            echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
-            exit $SMOKE_TEST_EXIT_CODE
+      - name: Build macOS executable
+        working-directory: ./apps/cli
+        run: |
+          bun run build-mac-x64
+          chmod +x bin/x64/mac/psi
+          
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/mac/psi version
+
+      - name: Run smoke tests
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
 
 
-        - name: Upload smoke test logs
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: smoke-test-logs-macos-x64
-            path: ./apps/cli/smoke-test-logs/
-            retention-days: 7
+      - name: Upload smoke test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-macos-x64
+          path: ./apps/cli/smoke-test-logs/
+          retention-days: 7
 
-        - name: Upload smoke test reports
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: smoke-test-reports-macos-x64
-            path: ./apps/cli/tmp/reports/
+      - name: Upload smoke test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-reports-macos-x64
+          path: ./apps/cli/tmp/reports/
 
-        - name: Capture database hash
-          working-directory: ./apps/cli
-          run: |
-            # Capture the root hash from the test database created during smoke tests
-            echo "Capturing database root hash for cross-platform validation..."
-            
-            # Create hash capture directory
-            mkdir -p hash-validation
-            
-            # Get the database root hash from the smoke test database
-            if [ -d "./test/tmp/test-db" ]; then
-              DB_HASH=$(./bin/x64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-              echo "macos-x64:$DB_HASH" > hash-validation/database-hash-macos-x64.txt
-              echo "macOS x64 database hash: $DB_HASH"
-            else
-              echo "No test database found, cannot capture hash"
-              echo "macos-x64:NO_DATABASE" > hash-validation/database-hash-macos-x64.txt
-            fi
+      - name: Capture database hash
+        working-directory: ./apps/cli
+        run: |
+          # Capture the root hash from the test database created during smoke tests
+          echo "Capturing database root hash for cross-platform validation..."
+          
+          # Create hash capture directory
+          mkdir -p hash-validation
+          
+          # Get the database root hash from the smoke test database
+          if [ -d "./test/tmp/test-db" ]; then
+            DB_HASH=$(./bin/x64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            echo "macos-x64:$DB_HASH" > hash-validation/database-hash-macos-x64.txt
+            echo "macOS x64 database hash: $DB_HASH"
+          else
+            echo "No test database found, cannot capture hash"
+            echo "macos-x64:NO_DATABASE" > hash-validation/database-hash-macos-x64.txt
+          fi
 
-        - name: Upload database hash
-          uses: actions/upload-artifact@v4
-          with:
-            name: database-hash-macos-x64
-            path: ./apps/cli/hash-validation/database-hash-macos-x64.txt
+      - name: Upload database hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-hash-macos-x64
+          path: ./apps/cli/hash-validation/database-hash-macos-x64.txt
 
-        - name: Upload macOS x64 artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: psi-macos-x64
-            path: ./apps/cli/bin/x64/mac/psi
+      - name: Upload macOS x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: psi-macos-x64
+          path: ./apps/cli/bin/x64/mac/psi
 
   build-macos-arm64:
     timeout-minutes: 20
@@ -911,6 +934,12 @@ jobs:
         run: |
           bun run build-mac-arm64
           chmod +x bin/arm64/mac/psi
+          
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/arm64/mac/psi version
 
       - name: Run smoke tests
         working-directory: ./apps/cli
