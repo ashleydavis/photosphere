@@ -534,7 +534,9 @@ export class MediaFileDatabase {
                 //
                 // Always reload the database after acquiring the write lock to ensure we have the latest tree.
                 //
-                await this.assetDatabase.load();
+                if (!await this.assetDatabase.load()) {
+                    throw new Error(`Failed to load asset database after acquiring write lock.`);
+                }
                 return;
             }
             
@@ -645,7 +647,9 @@ export class MediaFileDatabase {
     //
     async load(): Promise<void> {
         await retry(() => this.localHashCache.load());
-        await retry(() => this.assetDatabase.load());
+        if (!await retry(() => this.assetDatabase.load())) {
+            throw new Error(`Failed to load media file database.`);
+        }
 
         await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date"));
@@ -1508,34 +1512,21 @@ export class MediaFileDatabase {
             copiedFiles: 0,
         };
 
-        const srcStorage = this.assetStorage;
-
-        // Try to load existing destination merkle tree, otherwise create a new one
-        // Check device-specific location first, then fall back to old location
-        const deviceId = await generateDeviceId();
-        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
-        
-        let destTree = await loadTree<IDatabaseMetadata>(deviceTreePath, destMetadataStorage);
-        if (!destTree) {
-            // Fall back to old location for backward compatibility
-            destTree = await loadTree<IDatabaseMetadata>("tree.dat", destMetadataStorage);
+        //
+        // Load the destination database, or create it if it doesn't exist.
+        //
+        const destAssetDatabase = new AssetDatabase<IDatabaseMetadata>(destAssetStorage, destMetadataStorage, this.uuidGenerator);
+        if (!await retry(() => destAssetDatabase.load())) {
+            await retry(() => destAssetDatabase.create());
         }
+
+        const destMerkleTree = destAssetDatabase.getMerkleTree();
         
-        if (!destTree) {
-            destTree = createTree(merkleTree.metadata.id); // No write lock is needed creating a tree for the first time.
-            
-            // Copy database metadata from source to destination
-            if (merkleTree.databaseMetadata) {
-                destTree.databaseMetadata = { ...merkleTree.databaseMetadata };
-            }
-            
-            if (progressCallback) {
-                progressCallback("Creating new destination database...");
-            }
-        } else {
-            if (progressCallback) {
-                progressCallback("Found existing destination database, checking for differences...");
-            }
+        //
+        // Copy database metadata from source to destination.
+        //
+        if (merkleTree.databaseMetadata) {
+            destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
         }
 
         //
@@ -1545,10 +1536,10 @@ export class MediaFileDatabase {
         const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
             result.filesConsidered++;
             
-            // Check if file already exists in destination tree with matching hash
-            const destFileInfo = getFileInfo(destTree!, fileName);
+            // Check if file already exists in destination tree with matching hash.
+            const destFileInfo = getFileInfo(destMerkleTree, fileName);
             if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
-                // File already exists with correct hash, skip copying
+                // File already exists with correct hash, skip copying.
                 result.existingFiles++;
                 if (progressCallback) {
                     progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
@@ -1556,7 +1547,7 @@ export class MediaFileDatabase {
                 return;
             }
 
-            const srcFileInfo = await retry(() => srcStorage.info(fileName));
+            const srcFileInfo = await retry(() => this.assetStorage.info(fileName));
             if (!srcFileInfo) {
                 throw new Error(`Source file "${fileName}" does not exist in the source database.`);
             }
@@ -1565,9 +1556,7 @@ export class MediaFileDatabase {
             // Copy the file from source to dest.
             //
             await retry(async  () => {
-                // This doesn't need a write lock because in the future `replicate` will only work for creating fresh database instances.
-                // Replicate will never be used to update a live database.
-                const readStream = srcStorage.readStream(fileName);
+                const readStream = this.assetStorage.readStream(fileName);
                 await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
             });
 
@@ -1594,8 +1583,7 @@ export class MediaFileDatabase {
             //
             // Add or update the file in the destination merkle tree.
             //
-            destTree = upsertFile(destTree!, {
-                fileName,
+            destAssetDatabase.upsertFile(fileName, {
                 hash: copiedHash,
                 length: copiedFileInfo.length,
                 lastModified: copiedFileInfo.lastModified,
@@ -1632,10 +1620,16 @@ export class MediaFileDatabase {
         await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
 
         //
-        // A write lock isn't needed here because `replicate` creates fresh databases rather than updating existing ones.
-        // Save to device-specific location
+        // Saves the dest database.
         //
-        await retry(() => saveTree(deviceTreePath, destTree!, destMetadataStorage));
+        await retry(() => destAssetDatabase.save());
+
+        //
+        // Delete the old tree file if it exists.
+        //
+        if (await destMetadataStorage.fileExists("tree.dat")) {
+            await retry(() => destMetadataStorage.deleteFile("tree.dat"));
+        }
         
         return result;
     }

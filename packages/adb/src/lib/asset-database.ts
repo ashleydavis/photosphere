@@ -1,6 +1,6 @@
 import { IStorage, pathJoin } from "storage";
 import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
-import { IUuidGenerator } from "utils";
+import { IUuidGenerator, log } from "utils";
 import { generateDeviceId } from "node-utils";
 
 //
@@ -35,12 +35,17 @@ export interface IAssetDatabase {
     //
     // Loads an existing asset database.
     //
-    load(): Promise<void>;
+    load(): Promise<boolean>;
 
     //
     // Adds a file or directory to the merkle tree.
     //
     addFile(filePath: string, hashedFile: IHashedFile): void;
+
+    //
+    // Updates or inserts a file in the merkle tree.
+    //
+    upsertFile(filePath: string, hashedFile: IHashedFile): void;
 
     //
     // Deletes a file from the merkle tree.
@@ -86,21 +91,27 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     //
     // Loads an existing asset database.
     //
-    async load(): Promise<void> {
-        // Try to load from device-specific location first
+    async load(): Promise<boolean> {
+        //
+        // Try to load from device-specific location first.
+        //
         const deviceId = await generateDeviceId();
-        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
-        
-        this.merkleTree = await loadTree(deviceTreePath, this.metadataStorage);
-        
+        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");        
+        this.merkleTree = await loadTree(deviceTreePath, this.metadataStorage);        
         if (!this.merkleTree) {
-            // Fall back to old location for backward compatibility
+            log.info(`No device-specific tree found at .db/${deviceTreePath}. Falling back to old location.`);
+            
+            //
+            // Fall back to old location for backward compatibility.
+            //
             this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
+            if (!this.merkleTree) {
+                log.info(`No tree found at old location .db/tree.dat.`);
+                return false;
+            }
         }
-        
-        if (!this.merkleTree) {
-            throw new Error(`Failed to load asset database. No tree found at ${this.metadataStorage.location}/${deviceTreePath} or ${this.metadataStorage.location}/tree.dat.`);
-        }
+
+        return !!this.merkleTree;
     }
 
     //
@@ -127,6 +138,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
         }
+
         // Save to device-specific location
         const deviceId = await generateDeviceId();
         const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
@@ -148,6 +160,24 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             lastModified: hashedFile.lastModified,
         });
     }
+
+    //
+    // Updates or inserts a file in the merkle tree.
+    //
+    upsertFile(filePath: string, hashedFile: IHashedFile): void {
+        if (!this.merkleTree) {
+            throw new Error("Cannot upsert file to database. No database loaded.");
+        }
+
+        this.merkleTree = upsertFile(this.merkleTree, {
+            fileName: filePath,
+            hash: hashedFile.hash,
+            length: hashedFile.length,
+            lastModified: hashedFile.lastModified,
+        });
+    };
+
+
 
     //
     // Deletes a file from the merkle tree.
