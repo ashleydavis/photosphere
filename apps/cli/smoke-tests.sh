@@ -2034,7 +2034,7 @@ test_v4_database_upgrade_no_effect() {
     
     # We need to first create a v4 database by upgrading a v3 database
     local v3_db_dir="../../test/dbs/v3"
-    local temp_v4_dir="./test/tmp/test-v4-upgrade"
+    local temp_v4_dir="./test/tmp/test-v4-upgrade" # TODO: I need a v4 db backed into the repo
     
     # Check that v3 database exists
     check_exists "$v3_db_dir" "V3 test database directory"
@@ -2076,7 +2076,7 @@ test_v4_database_upgrade_no_effect() {
 test_write_lock_parallel_add_small() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 31: WRITE LOCK - PARALLEL ADD FILES (2 FILES) ==="
+    echo "=== TEST 32: WRITE LOCK - PARALLEL ADD FILES (2 FILES) ==="
     
     local lock_test_db_dir="$(pwd)/test/tmp/write-lock-test-$(date +%s)-$$"
     
@@ -2173,7 +2173,7 @@ test_write_lock_parallel_add_small() {
 test_write_lock_parallel_add_medium() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 32: WRITE LOCK - PARALLEL ADD FILES (4 FILES) ==="
+    echo "=== TEST 33: WRITE LOCK - PARALLEL ADD FILES (4 FILES) ==="
     
     local lock_test_db_dir="$(pwd)/test/tmp/write-lock-test-$(date +%s)-$$"
     
