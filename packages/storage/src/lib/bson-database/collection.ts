@@ -112,6 +112,11 @@ export interface IBsonCollection<RecordT extends IRecord> {
     ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void>;
 
     //
+    // Load a sort index from storage.
+    //
+    loadSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void>;
+
+    //
     // List all sort indexes for this collection
     //
     listSortIndexes(): Promise<Array<{
@@ -739,6 +744,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {       
         await this.sortManager.ensureSortIndex(fieldName, direction, type);
+    }
+
+    //
+    // Load a sort index from storage.
+    //
+    async loadSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        await this.sortManager.loadSortIndex(fieldName, direction, type);
     }
 
     //

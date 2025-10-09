@@ -92,10 +92,15 @@ export interface ISortResult<RecordT> {
 
 export interface ISortIndex<RecordT extends IRecord> {
     //
-    // Lazily initializes the sort index.
+    // Loads the sort index metadata and tree nodes from disk.
     //
-    init(): Promise<void>;
-    
+    load(): Promise<boolean>;
+
+    //
+    // Builds the sort index from the collection.
+    //
+    build(): Promise<void>;
+
     //
     // Get a page of records from the collection using the sort index.
     //
@@ -209,20 +214,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
 
     //
-    // Lazily initializes the sort index.
-    //
-    async init(): Promise<void> {
-        const loaded = await this.load();
-        if (!loaded) {
-            await this.build();
-        }
-    }
-
-    //
     // Loads the sort index metadata and tree nodes from disk.
     // Returns false if the sort index is not built.
     //
-    private async load(): Promise<boolean> {
+    async load(): Promise<boolean> {
         if (this.loaded) {
             return true; // Already loaded
         }
@@ -958,7 +953,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     // Get a page of records from the collection using the sort index.
     //
     async getPage(pageId?: string): Promise<ISortResult<RecordT>> {
-        await this.init();
+        if (!this.loaded) {
+            throw new Error('Sort index is not loaded. Call load/build first.');
+        }
         
         // If pageId is not provided or invalid, find the leftmost leaf (first page)
         if (!pageId) {
@@ -1038,7 +1035,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
      * If the indexed field value has changed, the record will be removed and added again
      */
     async updateRecord(record: RecordT, oldRecord: RecordT | undefined): Promise<void> {
-        await this.init();
+        if (!this.loaded) {
+            throw new Error('Sort index is not loaded. Call load/build first.');
+        }
 
         const recordId = record._id;
         const oldValue = oldRecord && oldRecord[this.fieldName];
@@ -1220,7 +1219,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
      * @param value The value of the indexed field, used to help locate the record
      */
     async deleteRecord(recordId: string, oldRecord: RecordT): Promise<void> {
-        await this.init();
+        if (!this.loaded) {
+            throw new Error('Sort index is not loaded. Call load/build first.');
+        }
 
         const value = oldRecord[this.fieldName];
         if (value === undefined) {
@@ -1668,7 +1669,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     
     // Find records by exact value using binary search on the sorted index
     async findByValue(value: any): Promise<RecordT[]> {
-        await this.init();
+        if (!this.loaded) {
+            throw new Error('Sort index is not loaded. Call load/build first.');
+        }
         
         const matchingEntries: ISortedIndexEntry<RecordT>[] = [];
         
@@ -1788,7 +1791,9 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             throw new Error('At least one of min or max must be specified for range query');
         }
         
-        await this.init();
+        if (!this.loaded) {
+            throw new Error('Sort index is not loaded. Call load/build first.');
+        }
         
         const matchingRecords: RecordT[] = [];
         
@@ -2054,7 +2059,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         };
     }> {
         if (!this.loaded) {
-            await this.init();
+            throw new Error('Sort index is not loaded. Call load/build first.');
         }
         
         if (!this.rootPageId) {

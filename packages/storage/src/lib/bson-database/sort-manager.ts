@@ -114,9 +114,21 @@ export class SortManager<RecordT extends IRecord> {
     //
     async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
         const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
-        await sortIndex.init();
+        if (!await sortIndex.load()) {
+            await sortIndex.build();
+        }
     }
     
+    //
+    // Loads the sort index.
+    //
+    async loadSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
+        if (!await sortIndex.load()) {
+            console.error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist on disk.`);
+        }
+    }
+
     // List available sort indexes for a collection
     async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
         const collectionIndexPath = `${this.baseDirectory}/sort_indexes/${this.collectionName}`;
