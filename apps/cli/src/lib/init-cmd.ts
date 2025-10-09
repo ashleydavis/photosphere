@@ -313,13 +313,19 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
     const { storage: metadataStorage } = createStorage(metaPath, s3Config, { readonly });
 
-    // Make sure the .db directory exists.
-    if (!await assetStorage.dirExists('.db')) {
+    //
+    // Check that tree.dat exists.
+    //
+    const deviceId = await generateDeviceId();
+    const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");        
+    if (!await metadataStorage.fileExists(deviceTreePath) && !await metadataStorage.fileExists("tree.dat")) {
         outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
     }
 
+    //
     // See if the database is encrypted and requires a key.
+    //
     if (await metadataStorage.fileExists('encryption.pub')) {
         if (!resolvedKeyPath) {
             if (nonInteractive) {
@@ -360,7 +366,6 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         ? new TestTimestampProvider()
         : new TimestampProvider();
     
-
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
 
@@ -372,16 +377,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         // This is the slow path because it loads the database twice. Once in readonly mode and again in write mode.
         //
         
-        // Try device-specific location first, then fall back to old location
-        const deviceId = await generateDeviceId();
-        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
-        
-        let databaseVersion = await loadTreeVersion(deviceTreePath, metadataStorage);
-        if (!databaseVersion) {
-            // Fall back to old location for backward compatibility
-            databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);
-        }
-        
+        // Try device-specific location first, then fall back to old location.
+        let databaseVersion = await metadataStorage.fileExists(deviceTreePath) 
+            ? await loadTreeVersion(deviceTreePath, metadataStorage) 
+            : await loadTreeVersion("tree.dat", metadataStorage);        
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
