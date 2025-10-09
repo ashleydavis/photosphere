@@ -52,6 +52,10 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         // Mock implementation - no-op for testing
     }
 
+    async loadSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        // Mock implementation - no-op for testing
+    }
+
     async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
         throw new Error('Method not implemented.');
     }

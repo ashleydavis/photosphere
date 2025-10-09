@@ -651,8 +651,8 @@ export class MediaFileDatabase {
             throw new Error(`Failed to load media file database.`);
         }
 
-        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
-        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date"));
+        await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
+        await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }

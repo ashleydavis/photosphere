@@ -47,7 +47,7 @@ describe('SortIndex type inference', () => {
         );
         
         // Initialize the index
-        await index.init();
+        await index.build();
         
         // Get sorted results
         const results = await index.getPage();
@@ -84,7 +84,7 @@ describe('SortIndex type inference', () => {
         );
         
         // Initialize the index
-        await index.init();
+        await index.build();
         
         // Get sorted results
         const results = await index.getPage();
@@ -125,7 +125,7 @@ describe('SortIndex type inference', () => {
         );
         
         // Initialize the index
-        await index.init();
+        await index.build();
         
         // Get sorted results
         const results = await index.getPage();
@@ -162,7 +162,7 @@ describe('SortIndex type inference', () => {
         );
         
         // This should throw an error during initialization when comparing values
-        await expect(index.init()).rejects.toThrow(/Type mismatch/);
+        await expect(index.build()).rejects.toThrow(/Type mismatch/);
     });
     
     test('should work correctly when all values are the same inferred type', async () => {
@@ -189,7 +189,7 @@ describe('SortIndex type inference', () => {
         );
         
         // Should work fine since all values are strings
-        await index.init();
+        await index.build();
         const results = await index.getPage();
         
         expect(results.records.length).toBe(3);
