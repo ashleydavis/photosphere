@@ -97,6 +97,10 @@ export class AssetDatabaseStorage implements IStorage {
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {           
         await this.storage.write(filePath, contentType, data);
+        if (filePath.startsWith('metadata/')) {
+            return; // Skip metadata files
+        }
+
         await this.updateMerkleTree(filePath);
     }
 
@@ -112,6 +116,10 @@ export class AssetDatabaseStorage implements IStorage {
     //
     async writeStream(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength?: number): Promise<void> {
         await this.storage.writeStream(filePath, contentType, inputStream, contentLength);
+        if (filePath.startsWith('metadata/')) {
+            return; // Skip metadata files
+        }
+
         await this.updateMerkleTree(filePath);
     }
 
@@ -136,6 +144,10 @@ export class AssetDatabaseStorage implements IStorage {
     //
     async copyTo(srcPath: string, destPath: string): Promise<void> {
         await this.storage.copyTo(srcPath, destPath);
+        if (destPath.startsWith('metadata/')) {
+            return; // Skip metadata files
+        }
+        
         await this.updateMerkleTree(destPath); //TODO: This won't work unless dest path is relative to this storage.
     }
 
