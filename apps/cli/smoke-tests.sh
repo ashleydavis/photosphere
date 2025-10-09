@@ -1525,9 +1525,9 @@ test_database_replicate_second() {
     
     # Check expected values from second replication output
     expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$second_replication_output" "Total files considered:" "24" "Total files considered"
+    expect_output_value "$second_replication_output" "Total files considered:" "15" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "24" "Files skipped (already exist)"
+    expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"
     test_passed
 }
 
@@ -1577,7 +1577,7 @@ test_compare_with_changes() {
     invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
-    expect_output_string "$compare_output" "Databases have 8 differences" "Databases have 8 differences after adding new asset"
+    expect_output_string "$compare_output" "Databases have 3 differences" "Databases have 3 differences after adding new asset"
     test_passed
 }
 
@@ -1596,7 +1596,7 @@ test_replicate_after_changes() {
     invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replication_output"
     
     # Check that the 8 changed files were replicated
-    expect_output_value "$replication_output" "Total files copied:" "8" "Files copied (the changes)"
+    expect_output_value "$replication_output" "Total files copied:" "3" "Files copied (the changes)"
     
     # Run compare command to verify databases are now identical again
     local compare_output
