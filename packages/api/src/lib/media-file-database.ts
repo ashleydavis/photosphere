@@ -1199,6 +1199,10 @@ export class MediaFileDatabase {
                 }
             }
 
+            if (file.fileName.startsWith('metadata/')) {
+                continue; // Skip metadata files
+            }
+
             result.filesProcessed++;
 
             if (progressCallback) {
