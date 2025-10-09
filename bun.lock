@@ -202,6 +202,7 @@
       "version": "1.0.0",
       "dependencies": {
         "axios": "^0.27.2",
+        "bson": "^6.10.3",
         "dayjs": "^1.11.7",
         "jszip": "^3.10.1",
         "lodash": "^4.17.21",
