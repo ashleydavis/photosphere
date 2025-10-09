@@ -1,12 +1,12 @@
-import { log } from "utils";
+import { log, RandomUuidGenerator } from "utils";
 import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
-import { exit } from "node-utils";
+import { exit, TestUuidGenerator } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
-import { compareTrees, loadTree } from "adb";
+import { AssetDatabase, compareTrees, loadTree } from "adb";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface ICompareCommandOptions { 
@@ -105,19 +105,28 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     log.info(`  Destination:    ${pc.cyan(destDir)}`);
     log.info('');
 
-    const srcMerkleTree = await loadTree("tree.dat", srcMetadataStorage);
-    if (!srcMerkleTree) {
+    // Test providers are automatically configured when NODE_ENV === "testing"
+    const uuidGenerator = process.env.NODE_ENV === "testing" 
+        ? new TestUuidGenerator()
+        : new RandomUuidGenerator();
+
+    const srcAssetDatabase = new AssetDatabase(srcMetadataStorage, srcMetadataStorage, uuidGenerator);
+    if (!await srcAssetDatabase.load()) {
         clearProgressMessage();
-        log.info(pc.red(`Error: Source Merkle tree not found in ${pathJoin(srcDir, 'tree.dat')}`));
+        log.info(pc.red(`Error: Failed to load source database from ${srcMetaPath}`));
         await exit(1);
     }
 
-    const destMerkleTree = await loadTree("tree.dat", destMetadataStorage);
-    if (!destMerkleTree) {
+    const srcMerkleTree = srcAssetDatabase.getMerkleTree();
+    
+    const destAssetDatabase = new AssetDatabase(destMetadataStorage, destMetadataStorage, uuidGenerator);
+    if (!await destAssetDatabase.load()) {
         clearProgressMessage();
-        log.info(pc.red(`Error: Destination Merkle tree not found in ${pathJoin(destDir, 'tree.dat')}`));
+        log.info(pc.red(`Error: Failed to load destination database from ${destMetaPath}`));
         await exit(1);
-    }   
+    }
+
+    const destMerkleTree = destAssetDatabase.getMerkleTree();
 
     // Fast path: Compare root hashes first
     if (Buffer.compare(srcMerkleTree!.nodes[0].hash, destMerkleTree!.nodes[0].hash) === 0) {
