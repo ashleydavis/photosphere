@@ -24,6 +24,7 @@ import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
 import { debugUpdateCommand } from './cmd/debug-update';
+import { debugBuildSnapshotCommand } from './cmd/debug-build-snapshot';
 import { deviceCommand } from './cmd/device';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
@@ -215,6 +216,19 @@ Resources:
         .option('--dry-run', 'Show what would be updated without making changes')
         .addHelpText('after', getCommandExamplesHelp('debug update'))
         .action(debugUpdateCommand);
+
+    debugCommand
+        .command('build-snapshot')
+        .description('Build or update the BSON database and sort indexes from the block graph')
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option('--force', 'Force full rebuild from scratch (delete existing metadata)')
+        .addHelpText('after', getCommandExamplesHelp('debug build-snapshot'))
+        .action(debugBuildSnapshotCommand);
 
     program
         .command("examples")

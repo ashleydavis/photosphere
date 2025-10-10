@@ -291,4 +291,55 @@ export class BlockGraph<DataT extends readonly unknown[]> {
         const headBlocksJson = JSON.stringify(headBlocksData, null, 2);
         await this.storage.write('head-blocks.json', undefined, Buffer.from(headBlocksJson, 'utf8'));
     }
+
+    //
+    // Sets the head block (for tracking processed blocks)
+    //
+    async setHeadBlocks(headBlockIds: string[]): Promise<void> {
+        this.headBlockIds = [...headBlockIds];
+        await this.storeHeadBlocks();
+    }
+
+    //
+    // Clears all head blocks
+    //
+    async clearHeadBlocks(): Promise<void> {
+        this.headBlockIds = [];
+        await this.storeHeadBlocks();
+    }
+
+    //
+    // Gets the head hashes for database updates
+    //
+    async getHeadHashes(): Promise<string[]> {
+        try {
+            const headHashesData = await this.storage.read('head-hashes.json');
+            if (headHashesData) {
+                const parsed = JSON.parse(headHashesData.toString('utf8'));
+                return parsed.headHashes || [];
+            }
+        } catch (error) {
+            // File doesn't exist or is corrupted
+        }
+        return [];
+    }
+
+    //
+    // Sets the head hashes for database updates
+    //
+    async setHeadHashes(headHashes: string[]): Promise<void> {
+        const headHashesData = {
+            headHashes: headHashes,
+            lastUpdated: new Date().toISOString()
+        };
+        const headHashesJson = JSON.stringify(headHashesData, null, 2);
+        await this.storage.write('head-hashes.json', undefined, Buffer.from(headHashesJson, 'utf8'));
+    }
+
+    //
+    // Clears the head hashes
+    //
+    async clearHeadHashes(): Promise<void> {
+        await this.storage.write('head-hashes.json', undefined, Buffer.from('{"headHashes": []}', 'utf8'));
+    }
 }

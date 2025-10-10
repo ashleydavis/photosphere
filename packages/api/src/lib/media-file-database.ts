@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, createStorage, FileStorage, IBsonCollection, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, acquireWriteLock, checkWriteLock, ILock, getLocalIdentifier, IOrderedFile } from "storage";
+import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, acquireWriteLock, checkWriteLock, ILock, getLocalIdentifier, IOrderedFile } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
@@ -691,6 +691,20 @@ export class MediaFileDatabase {
     //
     visualizeMerkleTree(): string {
         return visualizeTree(this.assetDatabase.getMerkleTree());
+    }
+
+    //
+    // Gets a BSON collection for database operations
+    //
+    getCollection<T extends IRecord = IRecord>(name: string): IBsonCollection<T> {
+        return this.bsonDatabase.collection<T>(name);
+    }
+
+    //
+    // Gets the BSON database interface
+    //
+    getBsonDatabase(): IBsonDatabase {
+        return this.bsonDatabase;
     }
 
     //
