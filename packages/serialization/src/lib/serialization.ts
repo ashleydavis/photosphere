@@ -155,6 +155,17 @@ export type DeserializerFunction<T> = (deserializer: IDeserializer) => T;
 export type DeserializerMap<T> = Record<number, DeserializerFunction<T>>;
 
 //
+// Migration function that converts data from one version to another
+//
+export type MigrationFunction<TFrom, TTo> = (data: TFrom) => TTo;
+
+//
+// Map of version transitions to migration functions
+// Key format: "fromVersion:toVersion" (e.g., "1:2", "2:3")
+//
+export type MigrationMap = Record<string, (data: any) => any>;
+
+//
 // Implementation of ISerializer for writing binary data
 //
 export class BinarySerializer implements ISerializer {
@@ -424,7 +435,9 @@ export async function save<T>(
 export async function load<T>(
     storage: IStorage,
     filePath: string,
-    deserializers: DeserializerMap<T>
+    deserializers: Record<number, DeserializerFunction<unknown>>,
+    migrations?: MigrationMap,
+    targetVersion?: number
 ): Promise<T> {
     // Read the file from storage
     const buffer = await retry(() => storage.read(filePath));
@@ -449,16 +462,101 @@ export async function load<T>(
         throw new Error(`Checksum mismatch: expected ${storedChecksum.toString(16)}, got ${calculatedChecksum.toString(16)}`);
     }
     
-    // Get the appropriate deserializer
+    // Determine the target version (latest available if not specified)
+    const availableVersions = Object.keys(deserializers).map(Number).sort((a, b) => b - a);
+    const finalTargetVersion = targetVersion ?? availableVersions[0];
+    
+    // Get the appropriate deserializer for the file's version
     const deserializerFunction = deserializers[version];
     if (!deserializerFunction) {
-        const availableVersions = Object.keys(deserializers).map(Number);
         throw new UnsupportedVersionError(version, availableVersions);
     }
     
-    // Create deserializer instance
+    // Create deserializer instance and deserialize the data
     const binaryDeserializer = new BinaryDeserializer(dataBuffer);
+    let data = deserializerFunction(binaryDeserializer);
     
-    // Deserialize and return the data
-    return deserializerFunction(binaryDeserializer);
+    // Apply migrations if needed to get to target version
+    if (version !== finalTargetVersion && migrations) {
+        data = applyMigrations(data, version, finalTargetVersion, migrations);
+    }
+    
+    return data as T;
+}
+
+//
+// Applies a chain of migrations to convert data from one version to another
+//
+function applyMigrations(data: any, fromVersion: number, toVersion: number, migrations: MigrationMap): any {
+    if (fromVersion === toVersion) {
+        return data;
+    }
+
+    // Build migration path from fromVersion to toVersion
+    const migrationPath = findMigrationPath(fromVersion, toVersion, migrations);
+    if (!migrationPath) {
+        throw new Error(`No migration path found from version ${fromVersion} to ${toVersion}`);
+    }
+
+    // Apply migrations in sequence
+    let currentData = data;
+    for (let i = 0; i < migrationPath.length - 1; i++) {
+        const currentVersion = migrationPath[i];
+        const nextVersion = migrationPath[i + 1];
+        const migrationKey = `${currentVersion}:${nextVersion}`;
+        const migration = migrations[migrationKey];
+        
+        if (!migration) {
+            throw new Error(`Missing migration from version ${currentVersion} to ${nextVersion}`);
+        }
+        
+        currentData = migration(currentData);
+    }
+
+    return currentData;
+}
+
+//
+// Finds the shortest migration path between two versions
+//
+function findMigrationPath(fromVersion: number, toVersion: number, migrations: MigrationMap): number[] | undefined {
+    // Extract all available versions from migration keys
+    const versionSet = new Set<number>();
+    for (const key of Object.keys(migrations)) {
+        const [from, to] = key.split(':').map(Number);
+        versionSet.add(from);
+        versionSet.add(to);
+    }
+    
+    const versions = Array.from(versionSet).sort((a, b) => a - b);
+    
+    // Use BFS to find shortest path
+    const queue: { version: number; path: number[] }[] = [{ version: fromVersion, path: [fromVersion] }];
+    const visited = new Set<number>();
+    
+    while (queue.length > 0) {
+        const { version: currentVersion, path } = queue.shift()!;
+        
+        if (currentVersion === toVersion) {
+            return path;
+        }
+        
+        if (visited.has(currentVersion)) {
+            continue;
+        }
+        visited.add(currentVersion);
+        
+        // Find all possible next versions
+        for (const nextVersion of versions) {
+            const migrationKey = `${currentVersion}:${nextVersion}`;
+            if (migrations[migrationKey] && !visited.has(nextVersion)) {
+                queue.push({
+                    version: nextVersion,
+                    path: [...path, nextVersion]
+                });
+            }
+        }
+    }
+    
+    return undefined; // No path found
 }

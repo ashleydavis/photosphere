@@ -12,5 +12,7 @@ export {
     type IDeserializer,
     type SerializerFunction,
     type DeserializerFunction,
-    type DeserializerMap
+    type DeserializerMap,
+    type MigrationFunction,
+    type MigrationMap
 } from './lib/serialization';
