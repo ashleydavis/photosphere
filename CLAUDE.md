@@ -102,6 +102,7 @@ Frontend:
 - **Comments**: Line comments with `//` preceded by blank line, method docs above function. Use `//` comments for method docs.
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
 - Use 4 space tabs for indentation.
+- Put `else` and `catch` blocks on a new line.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.
@@ -113,4 +114,4 @@ Frontend:
 - Use imports instead of requires.
 - All imports should be at the top of the file and not inside any functions.
 - Don't use dynamic imports.
-
+- Don't add exception handling unless I ask for it.

@@ -23,6 +23,12 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         }
     }
 
+    async listExistingShards(): Promise<number[]> {
+        // Mock implementation - return sequential shard IDs based on number of records
+        const numShards = Math.ceil(this.records.length / 2);
+        return Array.from({ length: numShards }, (_, i) => i);
+    }
+
     async *iterateShards(): AsyncGenerator<Iterable<T>, void, unknown> {
         for (let i = 0; i < this.records.length; i += 2) {
             yield this.records.slice(i, i + 2);

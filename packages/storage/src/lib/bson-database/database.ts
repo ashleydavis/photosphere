@@ -55,13 +55,19 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
         do {
             const storageResult = await this.options.storage.listDirs("", 1000, next);
             for (const name of storageResult.names) { 
-                uniqueSet.add(name);
+                // Filter out system directories
+                if (name !== 'sort_indexes') {
+                    uniqueSet.add(name);
+                }
             }
             next = storageResult.next;
         } while (next);
 
         for (const name of this._collections.keys()) {
-            uniqueSet.add(name);
+            // Also filter out system directories from cached collections
+            if (name !== 'sort_indexes') {
+                uniqueSet.add(name);
+            }
         }
 
         return Array.from(uniqueSet);
