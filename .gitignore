@@ -49,3 +49,4 @@ apps/cli/test/tmp/
 apps/cli/keys
 apps/cli/tmp/
 packages/adb/test/tmp
+packages/serialization/build/
