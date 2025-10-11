@@ -73,6 +73,11 @@ export interface IBsonCollection<RecordT extends IRecord> {
     iterateRecords(): AsyncGenerator<RecordT, void, unknown>;
 
     //
+    // Lists the shard IDs that actually exist as files on disk.
+    //
+    listExistingShards(): Promise<number[]>;
+
+    //
     // Iterate each shared in the collection without loading all into memory.
     //
     iterateShards(): AsyncGenerator<Iterable<RecordT>, void, unknown>;
@@ -526,6 +531,23 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 offset = newOffset;
             }
         }
+    }
+
+    //
+    // Lists the shard IDs that actually exist as files on disk.
+    //
+    async listExistingShards(): Promise<number[]> {
+        const shardIds: number[] = [];
+        
+        for (let shardId = 0; shardId < this.numShards; shardId++) {
+            const filePath = `${this.directory}/${shardId}`;
+            const exists = await this.storage.fileExists(filePath);
+            if (exists) {
+                shardIds.push(shardId);
+            }
+        }
+        
+        return shardIds;
     }
 
     //
