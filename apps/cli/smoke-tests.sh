@@ -2032,21 +2032,17 @@ test_v4_database_upgrade_no_effect() {
     echo "============================================================================"
     echo "=== TEST 31: V4 DATABASE UPGRADE HAS NO EFFECT ==="
     
-    # We need to first create a v4 database by upgrading a v3 database
-    local v3_db_dir="../../test/dbs/v3"
-    local temp_v4_dir="./test/tmp/test-v4-upgrade" # TODO: I need a v4 db backed into the repo
+    # Use the existing v4 database directly instead of upgrading from v3
+    local v4_db_dir="../../test/dbs/v4"
+    local temp_v4_dir="./test/tmp/test-v4-upgrade"
     
-    # Check that v3 database exists
-    check_exists "$v3_db_dir" "V3 test database directory"
+    # Check that v4 database exists
+    check_exists "$v4_db_dir" "V4 test database directory"
     
-    # Create a copy of v3 database and upgrade it to v4
-    log_info "Creating v4 database for upgrade testing"
+    # Create a copy of v4 database for testing
+    log_info "Creating copy of v4 database for upgrade testing"
     rm -rf "$temp_v4_dir"
-    cp -r "$v3_db_dir" "$temp_v4_dir"
-    
-    # First upgrade to v4
-    local initial_upgrade_output
-    invoke_command "Initial upgrade v3 to v4" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "initial_upgrade_output"
+    cp -r "$v4_db_dir" "$temp_v4_dir"
     
     # Test upgrade command on v4 database (should have no effect)
     local upgrade_output
