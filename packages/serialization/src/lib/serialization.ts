@@ -384,7 +384,7 @@ export class UnsupportedVersionError extends Error {
 
 //
 // Saves data to storage with version header and checksum.
-// The format is: [4 bytes version] [data] [4 bytes checksum]
+// The format is: [4 bytes version] [data] [32 bytes SHA-256 checksum]
 //
 export async function save<T>(
     storage: IStorage,
@@ -402,27 +402,23 @@ export async function save<T>(
     // Get the serialized data
     const serializedData = binarySerializer.getBuffer();
     
-    // Calculate SHA256 checksum of the serialized data (use first 4 bytes)
-    const hash = createHash('sha256').update(serializedData).digest();
-    const checksum = hash.readUInt32LE(0);
+    // Calculate SHA256 checksum of the serialized data (full 32 bytes)
+    //TODO: Need as way to make this checksum be 32 bits instead of 32 bytes!
+    const checksum = createHash('sha256').update(serializedData).digest();
     
     // Create version header (32 bits / 4 bytes)
     const versionBuffer = Buffer.alloc(4);
     versionBuffer.writeUInt32LE(version, 0);
     
-    // Create checksum footer (32 bits / 4 bytes)
-    const checksumBuffer = Buffer.alloc(4);
-    checksumBuffer.writeUInt32LE(checksum, 0);
-    
     // Combine version header, serialized data, and checksum footer
-    const finalBuffer = Buffer.concat([versionBuffer, serializedData, checksumBuffer]);
+    const finalBuffer = Buffer.concat([versionBuffer, serializedData, checksum]);
     
     // Write to storage
     await retry(() => storage.write(filePath, undefined, finalBuffer));
 }
 
 //
-// Loads data from storage, reads the version from the first 32 bits and checksum from the last 32 bits,
+// Loads data from storage, reads the version from the first 32 bits and checksum from the last 32 bytes,
 // verifies the checksum, and uses the appropriate deserializer function.
 //
 export async function load<T>(
@@ -431,28 +427,30 @@ export async function load<T>(
     deserializers: Record<number, DeserializerFunction<unknown>>,
     migrations?: MigrationMap,
     targetVersion?: number
-): Promise<T> {
+): Promise<T | undefined> {
     // Read the file from storage
     const buffer = await retry(() => storage.read(filePath));
+    if (!buffer) {
+        return undefined;
+    }
     
-    if (!buffer || buffer.length < 8) {
-        throw new Error(`File '${filePath}' is empty or too small to contain version and checksum`);
+    if (buffer.length < 36) {
+        throw new Error(`File '${filePath}' is too small to contain version and checksum. File has ${buffer.length} bytes, should have at least 36.`);
     }
     
     // Read version from first 32 bits
     const version = buffer.readUInt32LE(0);
     
-    // Read checksum from last 32 bits
-    const storedChecksum = buffer.readUInt32LE(buffer.length - 4);
+    // Read checksum from last 32 bytes
+    const storedChecksum = buffer.subarray(buffer.length - 32);
     
     // Extract data portion (everything between version header and checksum footer)
-    const dataBuffer = buffer.subarray(4, buffer.length - 4);
+    const dataBuffer = buffer.subarray(4, buffer.length - 32);
     
     // Calculate SHA256 checksum of the data and verify it matches
-    const hash = createHash('sha256').update(dataBuffer).digest();
-    const calculatedChecksum = hash.readUInt32LE(0);
-    if (calculatedChecksum !== storedChecksum) {
-        throw new Error(`Checksum mismatch: expected ${storedChecksum.toString(16)}, got ${calculatedChecksum.toString(16)}`);
+    const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+    if (!calculatedChecksum.equals(storedChecksum)) {
+        throw new Error(`Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}`);
     }
     
     // Determine the target version (latest available if not specified)

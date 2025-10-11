@@ -2,15 +2,27 @@
 // Implements a sorted index for a BSON collection with support for pagination
 //
 
-import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry, IUuidGenerator } from 'utils';
-import { BinarySerializer, BinaryDeserializer } from 'serialization';
+import { save, load, IDeserializer, ISerializer } from 'serialization';
 
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';
+
+//
+// Interface for tree data structure
+//
+interface ITreeData {
+    totalEntries: number;
+    totalPages: number;
+    rootPageId: string;
+    fieldName: string;
+    direction: SortDirection;
+    type: SortDataType | undefined;
+    treeNodes: Map<string, IBTreeNode>;
+}
 
 export interface IRangeOptions {
     min?: any;
@@ -215,6 +227,71 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
 
     //
+    // Deserializer function for tree data
+    //
+    private deserializeTree(deserializer: IDeserializer): ITreeData {
+        // Read metadata directly as binary data
+        const totalEntries = deserializer.readUInt32();
+        const totalPages = deserializer.readUInt32();
+        
+        // Read rootPageId with length prefix
+        const rootPageIdBuffer = deserializer.readBuffer();
+        const rootPageId = rootPageIdBuffer.toString('utf8');
+        
+        // Read fieldName with length prefix
+        const fieldNameBuffer = deserializer.readBuffer();
+        const fieldName = fieldNameBuffer.toString('utf8');
+        
+        // Read direction with length prefix
+        const directionBuffer = deserializer.readBuffer();
+        const direction = directionBuffer.toString('utf8') as SortDirection;
+        
+        // Read type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
+        const typeValue = deserializer.readUInt8();
+        let type: SortDataType | undefined;
+        if (typeValue === 1) {
+            type = 'date';
+        } else if (typeValue === 2) {
+            type = 'string';
+        } else if (typeValue === 3) {
+            type = 'number';
+        } else {
+            type = undefined;
+        }
+                     
+        // Skip what used to be the lastUpdatedAt timestamp (8 bytes LE)
+        deserializer.readUInt64();
+        
+        // Read number of nodes (4 bytes LE)
+        const nodeCount = deserializer.readUInt32();
+        
+        // Read each node
+        const treeNodes = new Map<string, IBTreeNode>();
+        for (let i = 0; i < nodeCount; i++) {
+            // Read pageId with length prefix
+            const pageIdBuffer = deserializer.readBuffer();
+            const pageId = pageIdBuffer.toString('utf8');
+            
+            // Read node data with length prefix
+            const nodeBuffer = deserializer.readBuffer();
+            
+            // Deserialize the node
+            const { node } = this.deserializeNode(nodeBuffer, 0);
+            treeNodes.set(pageId, node);
+        }
+
+        return {
+            totalEntries,
+            totalPages,
+            rootPageId,
+            fieldName,
+            direction,
+            type,
+            treeNodes
+        };
+    }
+
+    //
     // Loads the sort index metadata and tree nodes from disk.
     // Returns false if the sort index is not built.
     //
@@ -223,84 +300,26 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             return true; // Already loaded
         }
         
-        const fileData = await retry(() => this.storage.read(this.treeFilePath));        
-        if (fileData && fileData.length > 0) {
-            // Skip the 32-byte checksum at the end
-            const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
-            
-            // Calculate checksum of the data
-            const storedChecksum = fileData.subarray(fileData.length - 32);
-            const calculatedChecksum = crypto.createHash('sha256').update(dataWithoutChecksum).digest();
-            
-            // Verify checksum
-            if (!calculatedChecksum.equals(storedChecksum)) {
-                console.error('Tree file checksum verification failed');
-                return false;
+        const treeData = await load<ITreeData>(
+            this.storage,
+            this.treeFilePath,
+            {
+                2: (deserializer) => this.deserializeTree(deserializer)
             }
-            
-            const deserializer = new BinaryDeserializer(dataWithoutChecksum);
-            
-            // Read version number (4 bytes LE)
-            const version = deserializer.readUInt32();
-            
-            if (version === 2) {
-                // Binary format - using serialization library while preserving exact binary format
-                
-                // Read metadata directly as binary data
-                this.totalEntries = deserializer.readUInt32();
-                this.totalPages = deserializer.readUInt32();
-                
-                // Read rootPageId with length prefix
-                const rootPageIdBuffer = deserializer.readBuffer();
-                this.rootPageId = rootPageIdBuffer.toString('utf8') || this.rootPageId;
-                
-                // Read fieldName with length prefix
-                const fieldNameBuffer = deserializer.readBuffer();
-                
-                // Read direction with length prefix
-                const directionBuffer = deserializer.readBuffer();
-                
-                // Read type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
-                const typeValue = deserializer.readUInt8();
-                if (typeValue === 1) {
-                    this.type = 'date';
-                } else if (typeValue === 2) {
-                    this.type = 'string';
-                } else if (typeValue === 3) {
-                    this.type = 'number';
-                } else {
-                    this.type = undefined;
-                }
-                             
-                // Skip what used to be the lastUpdatedAt timestamp (8 bytes LE)
-                deserializer.readUInt64();
-                
-                // Read number of nodes (4 bytes LE)
-                const nodeCount = deserializer.readUInt32();
-                
-                // Read each node
-                for (let i = 0; i < nodeCount; i++) {
-                    // Read pageId with length prefix
-                    const pageIdBuffer = deserializer.readBuffer();
-                    const pageId = pageIdBuffer.toString('utf8');
-                    
-                    // Read node data with length prefix
-                    const nodeBuffer = deserializer.readBuffer();
-                    
-                    // Deserialize the node
-                    const { node } = this.deserializeNode(nodeBuffer, 0);
-                    this.treeNodes.set(pageId, node);
-                }
-                
-                // Reconstruct parent-child relationships
-                this.reconstructParentChildRelationships();
-                
-                this.loaded = true;
-                return true;
-            }
+        );
+        if (!treeData) {
+            return false;
         }
+
+        this.totalEntries = treeData.totalEntries;
+        this.totalPages = treeData.totalPages;
+        this.rootPageId = treeData.rootPageId || this.rootPageId;
+        this.treeNodes = treeData.treeNodes;
         
-        return false;
+        this.reconstructParentChildRelationships();
+        
+        this.loaded = true;
+        return true;
     }
     
     // Reconstruct parent-child relationships for all nodes
@@ -464,53 +483,60 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         return { node, nextOffset: currentOffset };
     }
 
-    // Save the tree nodes and metadata to a single file using serialization library while preserving exact binary format
-    async saveTree(): Promise<void> {
-        if (!this.rootPageId) {
-            throw new Error('Root page ID is not set. Cannot save tree.');
-        }
+    //
+    // Data structure for tree serialization
+    //
+    private getTreeData(): ITreeData {
+        return {
+            totalEntries: this.totalEntries,
+            totalPages: this.totalPages,
+            rootPageId: this.rootPageId!, // Non-null assertion - checked in saveTree
+            fieldName: this.fieldName,
+            direction: this.direction,
+            type: this.type,
+            treeNodes: this.treeNodes
+        };
+    }
 
-        const serializer = new BinarySerializer();
-
+    //
+    // Serializer function for tree data (without version, as save() handles that)
+    //
+    private serializeTree(treeData: ITreeData, serializer: ISerializer): void {
         // Sort entries by pageId for deterministic ordering
-        const sortedEntries = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
-        
-        // Write version number (4 bytes LE) - version 2 for new binary format
-        serializer.writeUInt32(2);
+        const sortedEntries = Array.from(treeData.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
         
         // Write metadata directly as binary data
-        serializer.writeUInt32(this.totalEntries);
-        serializer.writeUInt32(this.totalPages);
+        serializer.writeUInt32(treeData.totalEntries);
+        serializer.writeUInt32(treeData.totalPages);
         
         // Write rootPageId with length prefix
-        const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
+        const rootPageIdBuffer = Buffer.from(treeData.rootPageId, 'utf8');
         serializer.writeBuffer(rootPageIdBuffer);
         
         // Write fieldName with length prefix
-        const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
+        const fieldNameBuffer = Buffer.from(treeData.fieldName, 'utf8');
         serializer.writeBuffer(fieldNameBuffer);
         
         // Write direction with length prefix
-        const directionBuffer = Buffer.from(this.direction, 'utf8');
+        const directionBuffer = Buffer.from(treeData.direction, 'utf8');
         serializer.writeBuffer(directionBuffer);
         
         // Write type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
         let typeValue = 0;
-        if (this.type === 'date') {
+        if (treeData.type === 'date') {
             typeValue = 1;
-        } else if (this.type === 'string') {
+        } else if (treeData.type === 'string') {
             typeValue = 2;
-        } else if (this.type === 'number') {
+        } else if (treeData.type === 'number') {
             typeValue = 3;
         }
-        // NOTE: Need writeUInt8 method for exact binary format compatibility
         serializer.writeUInt8(typeValue);
                
         // Write lastUpdatedAt timestamp (8 bytes LE) - now set to 0n for compatibility
         serializer.writeUInt64(0n);
         
         // Write number of nodes (4 bytes LE)
-        serializer.writeUInt32(this.treeNodes.size);
+        serializer.writeUInt32(treeData.treeNodes.size);
         
         // Write each node
         for (const [pageId, node] of sortedEntries) {
@@ -528,16 +554,21 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             // Write node data with length prefix
             serializer.writeBuffer(nodeData);
         }
-        
-        // Calculate checksum
-        const buffer = serializer.getBuffer();
-        const checksum = crypto.createHash('sha256').update(buffer).digest();
-        
-        // Combine data and checksum
-        const dataWithChecksum = Buffer.concat([buffer, checksum]);
-        
-        // Write to storage        
-        await retry(() => this.storage.write(this.treeFilePath, undefined, dataWithChecksum));
+    }
+
+    // Save the tree nodes and metadata to a single file using serialization library while preserving exact binary format
+    async saveTree(): Promise<void> {
+        if (!this.rootPageId) {
+            throw new Error('Root page ID is not set. Cannot save tree.');
+        }
+
+        await save(
+            this.storage,
+            this.treeFilePath,
+            this.getTreeData(),
+            2,
+            (treeData, serializer) => this.serializeTree(treeData, serializer)
+        );
     }
 
     //
@@ -717,14 +748,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
     
     // Save leaf records to separate file using serialization library while preserving exact binary format
-    private async saveLeafRecords(pageId: string, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
-        const filePath = `${this.indexDirectory}/${pageId}`;
-        
-        const serializer = new BinarySerializer();
-        
-        // Write version number (4 bytes LE) - version 1 for new format
-        serializer.writeUInt32(1);
-        
+    //
+    // Serializer function for leaf records (without version, as save() handles that)
+    //
+    private serializeLeafRecords(records: ISortedIndexEntry<RecordT>[], serializer: ISerializer): void {
         // Write record count (4 bytes LE)
         serializer.writeUInt32(records.length);
         
@@ -740,86 +767,89 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             // Write record as BSON with length prefix
             serializer.writeBSON(entry.record);
         }
-        
-        // Calculate checksum
-        const buffer = serializer.getBuffer();
-        const checksum = crypto.createHash('sha256').update(buffer).digest();
-        
-        // Combine data and checksum
-        const dataWithChecksum = Buffer.concat([buffer, checksum]);
+    }
 
-        // console.log(`Saving leaf records for page ${pageId} with ${records.length}`);
+    private async saveLeafRecords(pageId: string, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
+        const filePath = `${this.indexDirectory}/${pageId}`;
         
-        // Write to storage
-        await retry(() =>  this.storage.write(filePath, undefined, dataWithChecksum));
+        // Use the new save function with version 1
+        await save(
+            this.storage,
+            filePath,
+            records,
+            1,
+            (recordsData, serializer) => this.serializeLeafRecords(recordsData, serializer)
+        );
     }
     
+    //
+    // Deserializer function for leaf records
+    //
+    private deserializeLeafRecords(deserializer: IDeserializer): ISortedIndexEntry<RecordT>[] {
+        // Read record count (4 bytes LE)
+        const recordCount = deserializer.readUInt32();
+        
+        const records: ISortedIndexEntry<RecordT>[] = [];
+        
+        // Read each record
+        for (let i = 0; i < recordCount; i++) {
+            // Read record ID with length prefix
+            const recordIdBuffer = deserializer.readBuffer();
+            const recordId = recordIdBuffer.toString('utf8');
+            
+            // Read value BSON with length prefix
+            const valueObj = deserializer.readBSON<{ value: any }>();
+            const value = valueObj.value;
+            
+            // Read record BSON with length prefix
+            const record = deserializer.readBSON<RecordT>();
+            
+            records.push({
+                recordId,
+                value,
+                record
+            });
+        }
+        
+        return records;
+    }
+
     // Load leaf records from file using serialization library while preserving exact binary format
     private async loadLeafRecords(pageId: string): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
-        const fileData = await retry(() => this.storage.read(filePath));
-        
-        if (fileData && fileData.length > 0) {
-            // Skip the 32-byte checksum at the end
-            const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
-            
-            // Calculate checksum of the data
-            const storedChecksum = fileData.subarray(fileData.length - 32);
-            const calculatedChecksum = crypto.createHash('sha256').update(dataWithoutChecksum).digest();
-            
-            // Verify checksum
-            if (!calculatedChecksum.equals(storedChecksum)) {
-                console.error(`Leaf records file checksum verification failed: ${filePath}`);
-                return undefined;
-            }
-            
-            const deserializer = new BinaryDeserializer(dataWithoutChecksum);
-            
-            // Check if this is the new format by reading the first 4 bytes as version
-            if (dataWithoutChecksum.length >= 4 && dataWithoutChecksum.readUInt32LE(0) === 1) {
-                // New buffer format - using serialization library while preserving exact binary format
-                
-                // Read version (4 bytes LE)
-                const version = deserializer.readUInt32();
-                
-                // Read record count (4 bytes LE)
-                const recordCount = deserializer.readUInt32();
-                
-                const records: ISortedIndexEntry<RecordT>[] = [];
-                
-                // Read each record
-                for (let i = 0; i < recordCount; i++) {
-                    // Read record ID with length prefix
-                    const recordIdBuffer = deserializer.readBuffer();
-                    const recordId = recordIdBuffer.toString('utf8');
-                    
-                    // Read value BSON with length prefix
-                    const valueObj = deserializer.readBSON<{ value: any }>();
-                    const value = valueObj.value;
-                    
-                    // Read record BSON with length prefix
-                    const record = deserializer.readBSON<RecordT>();
-                    
-                    records.push({
-                        recordId,
-                        value,
-                        record
-                    });
+        try {
+            // Use the new load function with deserializer for version 1
+            const records = await load<ISortedIndexEntry<RecordT>[]>(
+                this.storage,
+                filePath,
+                {
+                    1: (deserializer) => this.deserializeLeafRecords(deserializer)
                 }
-                
-                return records;
-            } 
-            else {
-                // Old BSON array format (backward compatibility)
-                const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
-                const records = leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
-                
-                return records;
+            );
+            return records;
+        } catch (error) {
+
+            //todo: wtf???
+
+            // If file doesn't exist or has a different format, try backward compatibility
+            const fileData = await retry(() => this.storage.read(filePath));
+            
+            if (fileData && fileData.length > 0) {
+                try {
+                    // Try old BSON array format (backward compatibility)
+                    const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
+                    const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
+                    const records = leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
+                    return records;
+                } catch (bsonError) {
+                    console.error(`Failed to load leaf records: ${error}`);
+                    return undefined;
+                }
             }
+            
+            return undefined;
         }
-        
-        return undefined;
     }
     
     // Get a node from cache or map

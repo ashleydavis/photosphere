@@ -5,8 +5,8 @@
 import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from '../storage';
-import { retry, IUuidGenerator } from 'utils';
-import { BinarySerializer, BinaryDeserializer } from 'serialization';
+import { IUuidGenerator } from 'utils';
+import { save, load, ISerializer, IDeserializer } from 'serialization';
 import { SortManager } from './sort-manager';
 import { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
 
@@ -287,13 +287,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Calculate checksum for a buffer.
-    //
-    private calculateChecksum(buffer: Uint8Array): Buffer {
-        return crypto.createHash('sha256').update(buffer).digest();
-    }
-
-    //
     // Saves the shard file to storage.
     //
     private async saveShardFile(shardFilePath: string, shard: IShard<RecordT>): Promise<void> {
@@ -313,12 +306,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Writes a shard to disk.
     //
-    private async writeBsonFile(filePath: string, shard: IShard<RecordT>): Promise<void> {
-        const serializer = new BinarySerializer();
-
-        // Write version (4 bytes LE)
-        serializer.writeUInt32(1);
-        
+    //
+    // Serializer function for shard data (without version, as save() handles that)
+    //
+    private serializeShard(shard: IShard<RecordT>, serializer: ISerializer): void {
         // Write record count (4 bytes LE)
         serializer.writeUInt32(shard.records.size);
 
@@ -339,46 +330,16 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             // Write record BSON data with length prefix
             serializer.writeBSON(recordNoId);
         }
+    }
 
-        const allData = serializer.getBuffer();
-        const allDataChecksum = this.calculateChecksum(allData);
-        if (allDataChecksum.length !== 32) {
-            throw new Error(`Checksum length mismatch: ${allDataChecksum.length}`);
-        }
-        const dataWithChecksum = Buffer.concat([allData, allDataChecksum]);
-
-        //
-        // Writes the file.
-        //
-        await retry(() => this.storage.write(filePath, undefined, dataWithChecksum));
-
-        //
-        // Read the file back to verify it.
-        //
-        const readBuffer = await retry(() => this.storage.read(filePath));
-        if (!readBuffer) {
-            throw new Error(`Verification failed (file not found)`);
-        }
-
-        //
-        // Check the file size matches.
-        //
-        if (readBuffer.length !== dataWithChecksum.length) {
-            throw new Error(`Verification failed (size mismatch: ${readBuffer.length} vs ${dataWithChecksum.length})`);
-        }
-
-        //
-        // Then verify the checksum.
-        //
-        const writtenHeaderChecksum = readBuffer.slice(readBuffer.length-32);
-        if (!writtenHeaderChecksum.equals(allDataChecksum)) {
-            throw new Error(`Verification failed (data checksum mismatch)`);
-        }
-        const writtenData = readBuffer.slice(0, readBuffer.length-32);
-        const computedChecksum = this.calculateChecksum(writtenData);
-        if (!computedChecksum.equals(allDataChecksum)) {
-            throw new Error(`Verification failed (computed checksum mismatch)`);
-        }
+    private async writeBsonFile(filePath: string, shard: IShard<RecordT>): Promise<void> {
+        await save(
+            this.storage,
+            filePath,
+            shard,
+            1,
+            (shardData, serializer) => this.serializeShard(shardData, serializer)
+        );
     }
 
     //
@@ -417,42 +378,49 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Loads all records from a shard file.
+    // Deserializer function for shard data
     //
-    private async loadRecords(shardFilePath: string): Promise<RecordT[]> {
-        let records: RecordT[] = [];
+    private deserializeShard(deserializer: IDeserializer): RecordT[] {
+        const records: RecordT[] = [];
 
-        // Read all records from the file
-        const fileData = await this.storage.read(shardFilePath);
-        if (fileData && fileData.length > 0) {
-            const deserializer = new BinaryDeserializer(fileData);
+        // Read record count (4 bytes LE)
+        const recordCount = deserializer.readUInt32();
 
-            // Read version (4 bytes LE)
-            const version = deserializer.readUInt32();
+        for (let i = 0; i < recordCount; i++) {
+            // Read record ID (16 bytes raw, no length prefix)
+            const recordIdBuffer = deserializer.readBytes(16);
+            const hexString = recordIdBuffer.toString('hex');
+            const recordId = [
+                hexString.substring(0, 8),
+                hexString.substring(8, 12),
+                hexString.substring(12, 16),
+                hexString.substring(16, 20),
+                hexString.substring(20)
+            ].join('-');
 
-            // Read record count (4 bytes LE)
-            const recordCount = deserializer.readUInt32();
-
-            for (let i = 0; i < recordCount; i++) {
-                // Read record ID (16 bytes raw, no length prefix)
-                const recordIdBuffer = deserializer.readBytes(16);
-                const hexString = recordIdBuffer.toString('hex');
-                const recordId = [
-                    hexString.substring(0, 8),
-                    hexString.substring(8, 12),
-                    hexString.substring(12, 16),
-                    hexString.substring(16, 20),
-                    hexString.substring(20)
-                ].join('-');
-
-                // Read record BSON data with length prefix
-                const record = deserializer.readBSON<RecordT>();
-                record._id = recordId;
-                records.push(record);
-            }
+            // Read record BSON data with length prefix
+            const record = deserializer.readBSON<RecordT>();
+            record._id = recordId;
+            records.push(record);
         }
 
         return records;
+    }
+
+    //
+    // Loads all records from a shard file.
+    //
+    private async loadRecords(shardFilePath: string): Promise<RecordT[]> {
+        const records = await load<RecordT[]>(
+            this.storage,
+            shardFilePath,
+            {
+                1: (deserializer) => this.deserializeShard(deserializer)
+            }
+        );
+        
+        // Return empty array if file doesn't exist (load returns undefined)
+        return records || [];
     }
 
     //

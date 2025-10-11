@@ -148,18 +148,18 @@ describe('Serialization', () => {
 
             const savedBuffer = await storage.read(filePath);
             expect(savedBuffer).toBeDefined();
-            expect(savedBuffer!.length).toBeGreaterThan(8); // Version header + data + checksum footer
+            expect(savedBuffer!.length).toBeGreaterThan(36); // Version header (4) + data + checksum footer (32)
 
             // Check version header
             const savedVersion = savedBuffer!.readUInt32LE(0);
             expect(savedVersion).toBe(version);
 
-            // Check checksum footer exists
-            const savedChecksum = savedBuffer!.readUInt32LE(savedBuffer!.length - 4);
-            expect(typeof savedChecksum).toBe('number');
+            // Check checksum footer exists (32 bytes for SHA-256)
+            const savedChecksum = savedBuffer!.subarray(savedBuffer!.length - 32);
+            expect(savedChecksum.length).toBe(32);
 
             // Check data portion by deserializing with our deserializer
-            const dataBuffer = savedBuffer!.subarray(4, savedBuffer!.length - 4);
+            const dataBuffer = savedBuffer!.subarray(4, savedBuffer!.length - 32);
             const deserializer = new BinaryDeserializer(dataBuffer);
             const deserializedData = JSON.parse(deserializer.readString());
             expect(deserializedData).toEqual(data);
@@ -264,23 +264,22 @@ describe('Serialization', () => {
             await storage.write('empty.bin', undefined, Buffer.alloc(0));
             await expect(load(storage, 'empty.bin', deserializers))
                 .rejects
-                .toThrow("File 'empty.bin' is empty or too small to contain version and checksum");
+                .toThrow("File 'empty.bin' is too small to contain version and checksum");
 
-            // Test with file smaller than version and checksum
-            await storage.write('small.bin', undefined, Buffer.alloc(6));
+            // Test with file smaller than version (4 bytes) + checksum (32 bytes) = 36 bytes minimum
+            await storage.write('small.bin', undefined, Buffer.alloc(35));
             await expect(load(storage, 'small.bin', deserializers))
                 .rejects
-                .toThrow("File 'small.bin' is empty or too small to contain version and checksum");
+                .toThrow("File 'small.bin' is too small to contain version and checksum");
         });
 
-        it('should throw error for non-existent files', async () => {
+        it('should return undefined for non-existent files', async () => {
             const deserializers: DeserializerMap<TestDataV1> = {
                 1: deserializeV1,
             };
 
-            await expect(load(storage, 'non-existent.bin', deserializers))
-                .rejects
-                .toThrow();
+            const result = await load(storage, 'non-existent.bin', deserializers);
+            expect(result).toBeUndefined();
         });
 
         it('should handle files with minimal data', async () => {
@@ -297,14 +296,11 @@ describe('Serialization', () => {
             lengthBuffer.writeUInt32LE(0, 0); // String length of 0
             const dataBuffer = Buffer.concat([lengthBuffer]);
             
-            // Calculate checksum of the data portion
+            // Calculate 32-byte SHA-256 checksum of the data portion
             const { createHash } = await import('crypto');
-            const hash = createHash('sha256').update(dataBuffer).digest();
-            const checksum = hash.readUInt32LE(0);
-            const checksumBuffer = Buffer.alloc(4);
-            checksumBuffer.writeUInt32LE(checksum, 0);
+            const checksum = createHash('sha256').update(dataBuffer).digest(); // Full 32-byte hash
             
-            const fileBuffer = Buffer.concat([versionBuffer, dataBuffer, checksumBuffer]);
+            const fileBuffer = Buffer.concat([versionBuffer, dataBuffer, checksum]);
 
             await storage.write('minimal.bin', undefined, fileBuffer);
 
@@ -419,8 +415,9 @@ describe('Serialization', () => {
             // Read the saved buffer and corrupt the checksum
             const validBuffer = await storage.read('valid.bin');
             const corruptedBuffer = Buffer.from(validBuffer!);
-            // Corrupt the checksum (last 4 bytes)
-            corruptedBuffer.writeUInt32LE(0xDEADBEEF, corruptedBuffer.length - 4);
+            // Corrupt the checksum (last 32 bytes for SHA-256)
+            const badChecksum = Buffer.from('deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'hex');
+            badChecksum.copy(corruptedBuffer, corruptedBuffer.length - 32);
 
             // Write corrupted checksum back
             await storage.write('bad-checksum.bin', undefined, corruptedBuffer);
@@ -440,11 +437,11 @@ describe('Serialization', () => {
             // Save valid data
             await save(storage, 'valid.bin', data, 1, serializeV1);
 
-            // Read the saved buffer and set a specific bad checksum
+            // Read the saved buffer and set a specific bad checksum (32 bytes for SHA-256)
             const validBuffer = await storage.read('valid.bin');
             const corruptedBuffer = Buffer.from(validBuffer!);
-            const badChecksum = 0x12345678;
-            corruptedBuffer.writeUInt32LE(badChecksum, corruptedBuffer.length - 4);
+            const badChecksum = Buffer.from('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', 'hex');
+            badChecksum.copy(corruptedBuffer, corruptedBuffer.length - 32);
 
             // Write corrupted checksum back
             await storage.write('bad-checksum.bin', undefined, corruptedBuffer);
@@ -458,8 +455,8 @@ describe('Serialization', () => {
                 const errorMessage = (error as Error).message;
                 console.log('Checksum error message:', errorMessage);
                 
-                // Verify it contains the expected and actual checksums in hex
-                expect(errorMessage).toMatch(/Checksum mismatch: expected 12345678, got [0-9a-f]+/);
+                // Verify it contains the expected and actual checksums in hex (32-byte format)
+                expect(errorMessage).toMatch(/Checksum mismatch: expected 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef, got [0-9a-f]{64}/);
             }
         });
     });
@@ -855,8 +852,9 @@ describe('Serialization', () => {
             // Should choose shortest path (1 -> 4 directly)
             const result = await load<DataV4>(storage, 'data-v1.bin', deserializers, migrations);
 
-            expect(result.description).toBe('Direct migration to v4');
-            expect(result.tags).toEqual(['direct']);
+            expect(result).toBeDefined();
+            expect(result!.description).toBe('Direct migration to v4');
+            expect(result!.tags).toEqual(['direct']);
         });
 
         it('should load current version without migration', async () => {
@@ -947,7 +945,8 @@ describe('Serialization', () => {
 
             // This should work with direct path
             const result = await load<DataV3>(storage, 'data-v1.bin', deserializers, migrations);
-            expect(result.description).toBe('direct');
+            expect(result).toBeDefined();
+            expect(result!.description).toBe('direct');
         });
 
         it('should work without migrations when versions match', async () => {
