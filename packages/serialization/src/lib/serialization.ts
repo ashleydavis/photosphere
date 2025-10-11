@@ -133,21 +133,6 @@ export interface IDeserializer {
     readBytes(length: number): Buffer;
 
     //
-    // Get current read position
-    //
-    getPosition(): number;
-
-    //
-    // Set read position
-    //
-    setPosition(position: number): void;
-
-    //
-    // Get remaining bytes from current position
-    //
-    getRemainingBytes(): number;
-
-    //
     // Read BSON data (reads 32-bit length prefix and deserializes to object)
     //
     readBSON<T>(): T;
@@ -369,21 +354,6 @@ export class BinaryDeserializer implements IDeserializer {
         const value = this.buffer.subarray(this.position, this.position + length);
         this.position += length;
         return value;
-    }
-
-    getPosition(): number {
-        return this.position;
-    }
-
-    setPosition(position: number): void {
-        if (position < 0 || position > this.buffer.length) {
-            throw new Error(`Position ${position} is out of bounds (buffer length: ${this.buffer.length})`);
-        }
-        this.position = position;
-    }
-
-    getRemainingBytes(): number {
-        return this.buffer.length - this.position;
     }
 
     readBSON<T>(): T {
