@@ -335,10 +335,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
             const recordNoId: any = { ...record };
             delete recordNoId._id; // Remove the id, no need to store it twice.
-            const recordBson = BSON.serialize(recordNoId);
 
             // Write record BSON data with length prefix
-            serializer.writeBuffer(Buffer.from(recordBson));
+            serializer.writeBSON(recordNoId);
         }
 
         const allData = serializer.getBuffer();
@@ -447,8 +446,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 ].join('-');
 
                 // Read record BSON data with length prefix
-                const recordData = deserializer.readBuffer();
-                const record = BSON.deserialize(recordData) as RecordT;
+                const record = deserializer.readBSON<RecordT>();
                 record._id = recordId;
                 records.push(record);
             }
