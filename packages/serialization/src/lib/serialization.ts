@@ -47,6 +47,11 @@ export interface ISerializer {
     writeBoolean(value: boolean): void;
 
     //
+    // Write an 8-bit unsigned integer
+    //
+    writeUInt8(value: number): void;
+
+    //
     // Write a UTF-8 string (prefixed with 32-bit length)
     //
     writeString(value: string): void;
@@ -106,6 +111,11 @@ export interface IDeserializer {
     // Read a boolean from a single byte
     //
     readBoolean(): boolean;
+
+    //
+    // Read an 8-bit unsigned integer
+    //
+    readUInt8(): number;
 
     //
     // Read a UTF-8 string (reads 32-bit length prefix first)
@@ -236,6 +246,12 @@ export class BinarySerializer implements ISerializer {
         this.position += 1;
     }
 
+    writeUInt8(value: number): void {
+        this.ensureCapacity(1);
+        this.buffer.writeUInt8(value, this.position);
+        this.position += 1;
+    }
+
     writeString(value: string): void {
         const stringBuffer = Buffer.from(value, 'utf8');
         this.writeUInt32(stringBuffer.length);
@@ -323,6 +339,13 @@ export class BinaryDeserializer implements IDeserializer {
         const value = this.buffer.readUInt8(this.position);
         this.position += 1;
         return value !== 0;
+    }
+
+    readUInt8(): number {
+        this.checkBounds(1);
+        const value = this.buffer.readUInt8(this.position);
+        this.position += 1;
+        return value;
     }
 
     readString(): string {
