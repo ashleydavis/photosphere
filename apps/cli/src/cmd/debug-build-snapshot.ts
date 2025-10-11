@@ -63,7 +63,11 @@ export async function getBlocksBehindHeads<DataElementT extends IDataElement>(
 //
 // Finds blocks that need to be applied (not yet behind the stored head hashes).
 // Uses brute force algorithm for now.
+//
 // TODO: Want a more efficient algorithm that doesn't require loading all blocks each time.
+//       It's not that difficult. We just need to track the new blocks we are copying into the local
+//       database and by definition these are blocks that have not yet been applied. So we just
+//       need only those blocks and we won't need to run this search of all blocks.
 //
 export async function getBlocksToApply<DataElementT extends IDataElement>(
     blockGraph: BlockGraph<DataElementT>,
