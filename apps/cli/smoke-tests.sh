@@ -2069,10 +2069,86 @@ test_v4_database_upgrade_no_effect() {
     test_passed
 }
 
+test_v4_database_add_file() {
+    echo ""
+    echo "============================================================================"
+    echo "=== TEST 32: V4 DATABASE ADD FILE AND VERIFY INTEGRITY ==="
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local temp_v4_dir="./test/tmp/test-v4-add-file"
+    local test_file="../../test/test.jpg"
+    
+    # Check that v4 database and test file exist
+    check_exists "$v4_db_dir" "V4 test database directory"
+    check_exists "$test_file" "Test image file"
+    
+    # Create a copy of v4 database for testing
+    log_info "Creating copy of v4 database for file addition testing"
+    rm -rf "$temp_v4_dir"
+    cp -r "$v4_db_dir" "$temp_v4_dir"
+    
+    # Get initial asset count
+    local initial_summary_output
+    invoke_command "Get initial asset count" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "initial_summary_output"
+    
+    # Extract initial asset count from summary
+    local initial_count
+    initial_count=$(echo "$initial_summary_output" | grep -o "Total assets: [0-9]*" | grep -o "[0-9]*")
+    log_info "Initial asset count: $initial_count"
+    
+    # Add test file to the database
+    local add_output
+    invoke_command "Add test file to v4 database" "$(get_cli_command) add --db $temp_v4_dir $test_file --yes" 0 "add_output"
+    
+    # Verify file was added successfully
+    expect_output_string "$add_output" "Added" "File was added successfully"
+    
+    # Get final asset count and verify it increased
+    local final_summary_output
+    invoke_command "Get final asset count" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "final_summary_output"
+    
+    # Extract final asset count from summary
+    local final_count
+    final_count=$(echo "$final_summary_output" | grep -o "Total assets: [0-9]*" | grep -o "[0-9]*")
+    log_info "Final asset count: $final_count"
+    
+    # Verify asset count increased by 1
+    local expected_count=$((initial_count + 1))
+    if [ "$final_count" -eq "$expected_count" ]; then
+        log_success "Asset count increased correctly from $initial_count to $final_count"
+    else
+        log_error "Asset count mismatch: expected $expected_count, got $final_count"
+        test_failed
+        return 1
+    fi
+    
+    # Verify database integrity
+    local verify_output
+    invoke_command "Verify database integrity after adding file" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "Database maintains integrity after adding file"
+    
+    # Verify database is still version 4
+    expect_output_string "$final_summary_output" "Database version: 4" "Database is still version 4"
+    
+    # List assets to verify the new file is present
+    local list_output
+    invoke_command "List assets to verify new file" "$(get_cli_command) list --db $temp_v4_dir --yes" 0 "list_output"
+    
+    # Check that the test file appears in the listing
+    expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v4_dir"
+    log_success "Cleaned up temporary v4 add-file database"
+    test_passed
+}
+
 test_write_lock_parallel_add_small() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 32: WRITE LOCK - PARALLEL ADD FILES (2 FILES) ==="
+    echo "=== TEST 33: WRITE LOCK - PARALLEL ADD FILES (2 FILES) ==="
     
     local lock_test_db_dir="$(pwd)/test/tmp/write-lock-test-$(date +%s)-$$"
     
@@ -2169,7 +2245,7 @@ test_write_lock_parallel_add_small() {
 test_write_lock_parallel_add_medium() {
     echo ""
     echo "============================================================================"
-    echo "=== TEST 33: WRITE LOCK - PARALLEL ADD FILES (4 FILES) ==="
+    echo "=== TEST 34: WRITE LOCK - PARALLEL ADD FILES (4 FILES) ==="
     
     local lock_test_db_dir="$(pwd)/test/tmp/write-lock-test-$(date +%s)-$$"
     
@@ -2379,7 +2455,9 @@ run_all_tests() {
     test_v2_database_readonly_commands
     test_v2_database_write_commands_fail
     test_v2_database_upgrade
-    test_v3_database_upgrade_no_effect
+    test_v3_database_upgrade
+    test_v4_database_upgrade_no_effect
+    test_v4_database_add_file
     test_write_lock_parallel_add_small
     test_write_lock_parallel_add_medium
     
@@ -2517,10 +2595,13 @@ run_test() {
         "v4-upgrade-no-effect"|"31")
             test_v4_database_upgrade_no_effect
             ;;
-        "write-lock-small"|"32")
+        "v4-add-file"|"32")
+            test_v4_database_add_file
+            ;;
+        "write-lock-small"|"33")
             test_write_lock_parallel_add_small
             ;;
-        "write-lock-medium"|"33")
+        "write-lock-medium"|"34")
             test_write_lock_parallel_add_medium
             ;;
         *)
