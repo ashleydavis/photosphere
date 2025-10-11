@@ -250,18 +250,15 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 this.totalEntries = deserializer.readUInt32();
                 this.totalPages = deserializer.readUInt32();
                 
-                // Read rootPageId length and data (4 bytes length + data)
-                const rootPageIdLength = deserializer.readUInt32();
-                const rootPageIdBuffer = deserializer.readBytes(rootPageIdLength);
+                // Read rootPageId with length prefix
+                const rootPageIdBuffer = deserializer.readBuffer();
                 this.rootPageId = rootPageIdBuffer.toString('utf8') || this.rootPageId;
                 
-                // Read fieldName length and data (4 bytes length + data)
-                const fieldNameLength = deserializer.readUInt32();
-                const fieldNameBuffer = deserializer.readBytes(fieldNameLength);
+                // Read fieldName with length prefix
+                const fieldNameBuffer = deserializer.readBuffer();
                 
-                // Read direction length and data (4 bytes length + data)
-                const directionLength = deserializer.readUInt32();
-                const directionBuffer = deserializer.readBytes(directionLength);
+                // Read direction with length prefix
+                const directionBuffer = deserializer.readBuffer();
                 
                 // Read type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
                 const typeValue = deserializer.readUInt8();
@@ -283,14 +280,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 
                 // Read each node
                 for (let i = 0; i < nodeCount; i++) {
-                    // Read pageId length and data (4 bytes length + data)
-                    const pageIdLength = deserializer.readUInt32();
-                    const pageIdBuffer = deserializer.readBytes(pageIdLength);
+                    // Read pageId with length prefix
+                    const pageIdBuffer = deserializer.readBuffer();
                     const pageId = pageIdBuffer.toString('utf8');
                     
-                    // Read node length and data (4 bytes length + data)
-                    const nodeLength = deserializer.readUInt32();
-                    const nodeBuffer = deserializer.readBytes(nodeLength);
+                    // Read node data with length prefix
+                    const nodeBuffer = deserializer.readBuffer();
                     
                     // Deserialize the node
                     const { node } = this.deserializeNode(nodeBuffer, 0);
@@ -485,20 +480,17 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         serializer.writeUInt32(this.totalEntries);
         serializer.writeUInt32(this.totalPages);
         
-        // Write rootPageId length and data (4 bytes length + data)
+        // Write rootPageId with length prefix
         const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
-        serializer.writeUInt32(rootPageIdBuffer.length);
-        serializer.writeBytes(rootPageIdBuffer);
+        serializer.writeBuffer(rootPageIdBuffer);
         
-        // Write fieldName length and data (4 bytes length + data)
+        // Write fieldName with length prefix
         const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
-        serializer.writeUInt32(fieldNameBuffer.length);
-        serializer.writeBytes(fieldNameBuffer);
+        serializer.writeBuffer(fieldNameBuffer);
         
-        // Write direction length and data (4 bytes length + data)
+        // Write direction with length prefix
         const directionBuffer = Buffer.from(this.direction, 'utf8');
-        serializer.writeUInt32(directionBuffer.length);
-        serializer.writeBytes(directionBuffer);
+        serializer.writeBuffer(directionBuffer);
         
         // Write type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
         let typeValue = 0;
@@ -522,9 +514,8 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
-            // Write pageId length and data (4 bytes length + data)
-            serializer.writeUInt32(pageIdBuffer.length);
-            serializer.writeBytes(pageIdBuffer);
+            // Write pageId with length prefix
+            serializer.writeBuffer(pageIdBuffer);
             
             // Serialize node to separate buffer first to get length
             const nodeBuffer = Buffer.alloc(65536); // Temporary buffer for node
@@ -532,9 +523,8 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             const nodeLength = nodeEndOffset;
             const nodeData = nodeBuffer.subarray(0, nodeLength);
             
-            // Write node length and data (4 bytes length + data)
-            serializer.writeUInt32(nodeLength);
-            serializer.writeBytes(nodeData);
+            // Write node data with length prefix
+            serializer.writeBuffer(nodeData);
         }
         
         // Calculate checksum
@@ -738,20 +728,17 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Write each record
         for (const entry of records) {
-            // Write record ID length and data (4 bytes length + data)
+            // Write record ID with length prefix
             const idBuffer = Buffer.from(entry.recordId, 'utf8');
-            serializer.writeUInt32(idBuffer.length);
-            serializer.writeBytes(idBuffer);
+            serializer.writeBuffer(idBuffer);
             
-            // Write value as BSON length and data (4 bytes length + data)
+            // Write value as BSON with length prefix
             const valueBson = Buffer.from(BSON.serialize({ value: entry.value }));
-            serializer.writeUInt32(valueBson.length);
-            serializer.writeBytes(valueBson);
+            serializer.writeBuffer(valueBson);
             
-            // Write record as BSON length and data (4 bytes length + data)
+            // Write record as BSON with length prefix
             const recordBson = Buffer.from(BSON.serialize(entry.record));
-            serializer.writeUInt32(recordBson.length);
-            serializer.writeBytes(recordBson);
+            serializer.writeBuffer(recordBson);
         }
         
         // Calculate checksum
@@ -803,20 +790,17 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 
                 // Read each record
                 for (let i = 0; i < recordCount; i++) {
-                    // Read record ID length and data (4 bytes length + data)
-                    const idLength = deserializer.readUInt32();
-                    const recordIdBuffer = deserializer.readBytes(idLength);
+                    // Read record ID with length prefix
+                    const recordIdBuffer = deserializer.readBuffer();
                     const recordId = recordIdBuffer.toString('utf8');
                     
-                    // Read value BSON length and data (4 bytes length + data)
-                    const valueLength = deserializer.readUInt32();
-                    const valueBson = deserializer.readBytes(valueLength);
+                    // Read value BSON with length prefix
+                    const valueBson = deserializer.readBuffer();
                     const valueObj = BSON.deserialize(valueBson);
                     const value = valueObj.value;
                     
-                    // Read record BSON length and data (4 bytes length + data)
-                    const recordLength = deserializer.readUInt32();
-                    const recordBson = deserializer.readBytes(recordLength);
+                    // Read record BSON with length prefix
+                    const recordBson = deserializer.readBuffer();
                     const record = BSON.deserialize(recordBson) as RecordT;
                     
                     records.push({
