@@ -338,6 +338,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
 
     // Serialize a single node to a buffer
+    //TODO: Would be good if this used the new serialization interface.
     private serializeNode(node: IBTreeNode, buffer: Buffer, offset: number): number {
         let currentOffset = offset;
         
@@ -393,6 +394,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
     
     // Deserialize a single node from a buffer
+    //TODO: Would be good if this used the new serialization interface.
     private deserializeNode(buffer: Buffer, offset: number): { node: IBTreeNode, nextOffset: number } {
         let currentOffset = offset;
         
@@ -733,12 +735,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             serializer.writeBuffer(idBuffer);
             
             // Write value as BSON with length prefix
-            const valueBson = Buffer.from(BSON.serialize({ value: entry.value }));
-            serializer.writeBuffer(valueBson);
+            serializer.writeBSON({ value: entry.value });
             
             // Write record as BSON with length prefix
-            const recordBson = Buffer.from(BSON.serialize(entry.record));
-            serializer.writeBuffer(recordBson);
+            serializer.writeBSON(entry.record);
         }
         
         // Calculate checksum
@@ -795,13 +795,11 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     const recordId = recordIdBuffer.toString('utf8');
                     
                     // Read value BSON with length prefix
-                    const valueBson = deserializer.readBuffer();
-                    const valueObj = BSON.deserialize(valueBson);
+                    const valueObj = deserializer.readBSON<{ value: any }>();
                     const value = valueObj.value;
                     
                     // Read record BSON with length prefix
-                    const recordBson = deserializer.readBuffer();
-                    const record = BSON.deserialize(recordBson) as RecordT;
+                    const record = deserializer.readBSON<RecordT>();
                     
                     records.push({
                         recordId,
