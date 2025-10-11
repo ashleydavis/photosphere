@@ -7,6 +7,7 @@ import { BSON } from 'bson';
 import { IRecord, IBsonCollection } from './collection';
 import { IStorage } from '../storage';
 import { retry, IUuidGenerator } from 'utils';
+import { BinarySerializer, BinaryDeserializer } from 'serialization';
 
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';
@@ -237,42 +238,33 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 return false;
             }
             
-            // Read version number (first 4 bytes)
-            const version = dataWithoutChecksum.readUInt32LE(0);
+            const deserializer = new BinaryDeserializer(dataWithoutChecksum);
+            
+            // Read version number (4 bytes LE)
+            const version = deserializer.readUInt32();
             
             if (version === 2) {
-                // Binary format
-                let offset = 4; // Skip version
+                // Binary format - using serialization library while preserving exact binary format
                 
                 // Read metadata directly as binary data
-                this.totalEntries = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
+                this.totalEntries = deserializer.readUInt32();
+                this.totalPages = deserializer.readUInt32();
                 
-                this.totalPages = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
-                
-                // Read rootPageId length and data
-                const rootPageIdLength = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
-                const rootPageIdBuffer = dataWithoutChecksum.subarray(offset, offset + rootPageIdLength);
-                offset += rootPageIdLength;
+                // Read rootPageId length and data (4 bytes length + data)
+                const rootPageIdLength = deserializer.readUInt32();
+                const rootPageIdBuffer = deserializer.readBytes(rootPageIdLength);
                 this.rootPageId = rootPageIdBuffer.toString('utf8') || this.rootPageId;
                 
-                // Read fieldName length and data
-                const fieldNameLength = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
-                const fieldNameBuffer = dataWithoutChecksum.subarray(offset, offset + fieldNameLength);
-                offset += fieldNameLength;
+                // Read fieldName length and data (4 bytes length + data)
+                const fieldNameLength = deserializer.readUInt32();
+                const fieldNameBuffer = deserializer.readBytes(fieldNameLength);
                 
-                // Read direction length and data
-                const directionLength = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
-                const directionBuffer = dataWithoutChecksum.subarray(offset, offset + directionLength);
-                offset += directionLength;
+                // Read direction length and data (4 bytes length + data)
+                const directionLength = deserializer.readUInt32();
+                const directionBuffer = deserializer.readBytes(directionLength);
                 
                 // Read type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
-                const typeValue = dataWithoutChecksum.readUInt8(offset);
-                offset += 1;
+                const typeValue = deserializer.readUInt8();
                 if (typeValue === 1) {
                     this.type = 'date';
                 } else if (typeValue === 2) {
@@ -283,30 +275,25 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     this.type = undefined;
                 }
                              
-                // Skip what used to be the lastUpdatedAt timestamp. This field is no longer serialized. Can be removed in future versions.
-                offset += 8; 
+                // Skip what used to be the lastUpdatedAt timestamp (8 bytes LE)
+                deserializer.readUInt64();
                 
-                // Read number of nodes
-                const nodeCount = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
+                // Read number of nodes (4 bytes LE)
+                const nodeCount = deserializer.readUInt32();
                 
                 // Read each node
                 for (let i = 0; i < nodeCount; i++) {
-                    // Read pageId length and data
-                    const pageIdLength = dataWithoutChecksum.readUInt32LE(offset);
-                    offset += 4;
-                    const pageIdBuffer = dataWithoutChecksum.subarray(offset, offset + pageIdLength);
-                    offset += pageIdLength;
+                    // Read pageId length and data (4 bytes length + data)
+                    const pageIdLength = deserializer.readUInt32();
+                    const pageIdBuffer = deserializer.readBytes(pageIdLength);
                     const pageId = pageIdBuffer.toString('utf8');
                     
-                    // Read node length and data
-                    const nodeLength = dataWithoutChecksum.readUInt32LE(offset);
-                    offset += 4;
-                    const nodeBuffer = dataWithoutChecksum.subarray(offset, offset + nodeLength);
-                    offset += nodeLength;
+                    // Read node length and data (4 bytes length + data)
+                    const nodeLength = deserializer.readUInt32();
+                    const nodeBuffer = deserializer.readBytes(nodeLength);
                     
                     // Deserialize the node
-                    const { node } = this.deserializeNode(Buffer.from(nodeBuffer), 0);
+                    const { node } = this.deserializeNode(nodeBuffer, 0);
                     this.treeNodes.set(pageId, node);
                 }
                 
@@ -480,100 +467,38 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         return { node, nextOffset: currentOffset };
     }
 
-    // Save the tree nodes and metadata to a single file
+    // Save the tree nodes and metadata to a single file using serialization library while preserving exact binary format
     async saveTree(): Promise<void> {
         if (!this.rootPageId) {
             throw new Error('Root page ID is not set. Cannot save tree.');
         }
 
-        // Calculate total size needed for the buffer
-        const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
-        const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
-        const directionBuffer = Buffer.from(this.direction, 'utf8');
-        
-        // Calculate size for all nodes
-        let totalNodesSize = 0;
-        
-        // First pass: calculate the total size needed
+        const serializer = new BinarySerializer();
+
         // Sort entries by pageId for deterministic ordering
         const sortedEntries = Array.from(this.treeNodes.entries()).sort(([a], [b]) => a.localeCompare(b));
-        for (const [pageId, node] of sortedEntries) {
-            const pageIdBuffer = Buffer.from(pageId, 'utf8');
-            
-            // Estimate node size without actually serializing
-            let estimatedSize = 1; // isLeaf flag
-            
-            // Keys BSON size estimate
-            const keysBson = Buffer.from(BSON.serialize({ keys: node.keys }));
-            estimatedSize += 4 + keysBson.length; // keys length + data
-            
-            // Children size estimate
-            estimatedSize += 4; // children count
-            for (const child of node.children) {
-                estimatedSize += 4 + Buffer.from(child, 'utf8').length; // child length + data
-            }
-            
-            // nextLeaf and previousLeaf size estimate
-            estimatedSize += 4; // nextLeaf length
-            if (node.nextLeaf) {
-                estimatedSize += Buffer.from(node.nextLeaf, 'utf8').length;
-            }
-            
-            estimatedSize += 4; // previousLeaf length
-            if (node.previousLeaf) {
-                estimatedSize += Buffer.from(node.previousLeaf, 'utf8').length;
-            }
-            
-            estimatedSize += 4; // numRecords
-            
-            totalNodesSize += 4 + pageIdBuffer.length + 4 + estimatedSize; // pageId length + pageId + node length + node data
-        }
         
-        // Calculate total buffer size
-        const totalSize = 
-            4 + // version
-            4 + // totalEntries
-            4 + // totalPages  
-            4 + rootPageIdBuffer.length + // rootPageId length + data
-            4 + fieldNameBuffer.length + // fieldName length + data
-            4 + directionBuffer.length + // direction length + data
-            1 + // type (single byte: 0 for no type, 1 for date)
-            8 + // lastUpdatedAt timestamp
-            4 + // node count
-            totalNodesSize; // all nodes
-        
-        // Allocate single buffer
-        const buffer = Buffer.alloc(totalSize);
-        let offset = 0;
-        
-        // Write version number (4 bytes) - version 2 for new binary format
-        buffer.writeUInt32LE(2, offset);
-        offset += 4;
+        // Write version number (4 bytes LE) - version 2 for new binary format
+        serializer.writeUInt32(2);
         
         // Write metadata directly as binary data
-        buffer.writeUInt32LE(this.totalEntries, offset);
-        offset += 4;
+        serializer.writeUInt32(this.totalEntries);
+        serializer.writeUInt32(this.totalPages);
         
-        buffer.writeUInt32LE(this.totalPages, offset);
-        offset += 4;
+        // Write rootPageId length and data (4 bytes length + data)
+        const rootPageIdBuffer = Buffer.from(this.rootPageId, 'utf8');
+        serializer.writeUInt32(rootPageIdBuffer.length);
+        serializer.writeBytes(rootPageIdBuffer);
         
-        // Write rootPageId length and data
-        buffer.writeUInt32LE(rootPageIdBuffer.length, offset);
-        offset += 4;
-        rootPageIdBuffer.copy(buffer, offset);
-        offset += rootPageIdBuffer.length;
+        // Write fieldName length and data (4 bytes length + data)
+        const fieldNameBuffer = Buffer.from(this.fieldName, 'utf8');
+        serializer.writeUInt32(fieldNameBuffer.length);
+        serializer.writeBytes(fieldNameBuffer);
         
-        // Write fieldName length and data
-        buffer.writeUInt32LE(fieldNameBuffer.length, offset);
-        offset += 4;
-        fieldNameBuffer.copy(buffer, offset);
-        offset += fieldNameBuffer.length;
-        
-        // Write direction length and data
-        buffer.writeUInt32LE(directionBuffer.length, offset);
-        offset += 4;
-        directionBuffer.copy(buffer, offset);
-        offset += directionBuffer.length;
+        // Write direction length and data (4 bytes length + data)
+        const directionBuffer = Buffer.from(this.direction, 'utf8');
+        serializer.writeUInt32(directionBuffer.length);
+        serializer.writeBytes(directionBuffer);
         
         // Write type as a single byte: 0 for no type, 1 for date, 2 for string, 3 for number
         let typeValue = 0;
@@ -584,42 +509,36 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         } else if (this.type === 'number') {
             typeValue = 3;
         }
-        buffer.writeUInt8(typeValue, offset);
-        offset += 1;
+        // NOTE: Need writeUInt8 method for exact binary format compatibility
+        serializer.writeUInt8(typeValue);
                
-        buffer.writeBigUInt64LE(0n, offset); // Used to be lastUpdatedAt, now set to 0n for compatibility. Remove in future versions.
-        offset += 8;
+        // Write lastUpdatedAt timestamp (8 bytes LE) - now set to 0n for compatibility
+        serializer.writeUInt64(0n);
         
-        // Write number of nodes
-        buffer.writeUInt32LE(this.treeNodes.size, offset);
-        offset += 4;
+        // Write number of nodes (4 bytes LE)
+        serializer.writeUInt32(this.treeNodes.size);
         
-        // Second pass: write the nodes
+        // Write each node
         for (const [pageId, node] of sortedEntries) {
             const pageIdBuffer = Buffer.from(pageId, 'utf8');
             
-            // Write pageId length and data
-            buffer.writeUInt32LE(pageIdBuffer.length, offset);
-            offset += 4;
-            pageIdBuffer.copy(buffer, offset);
-            offset += pageIdBuffer.length;
+            // Write pageId length and data (4 bytes length + data)
+            serializer.writeUInt32(pageIdBuffer.length);
+            serializer.writeBytes(pageIdBuffer);
             
-            // Reserve space for node length (will fill in after serialization)
-            const nodeLengthPosition = offset;
-            offset += 4;
+            // Serialize node to separate buffer first to get length
+            const nodeBuffer = Buffer.alloc(65536); // Temporary buffer for node
+            const nodeEndOffset = this.serializeNode(node, nodeBuffer, 0);
+            const nodeLength = nodeEndOffset;
+            const nodeData = nodeBuffer.subarray(0, nodeLength);
             
-            // Serialize the node directly into the buffer
-            const endOffset = this.serializeNode(node, buffer, offset);
-            
-            // Calculate and write actual node length
-            const nodeLength = endOffset - offset;
-            buffer.writeUInt32LE(nodeLength, nodeLengthPosition);
-            
-            // Update offset to the end of the serialized node
-            offset = endOffset;
+            // Write node length and data (4 bytes length + data)
+            serializer.writeUInt32(nodeLength);
+            serializer.writeBytes(nodeData);
         }
         
         // Calculate checksum
+        const buffer = serializer.getBuffer();
         const checksum = crypto.createHash('sha256').update(buffer).digest();
         
         // Combine data and checksum
@@ -805,59 +724,38 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         return 0;
     }
     
-    // Save leaf records to separate file
+    // Save leaf records to separate file using serialization library while preserving exact binary format
     private async saveLeafRecords(pageId: string, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
-        // First pass: calculate total buffer size needed
-        let totalSize = 4 + 4; // version (4 bytes) + record count (4 bytes)
+        const serializer = new BinarySerializer();
         
+        // Write version number (4 bytes LE) - version 1 for new format
+        serializer.writeUInt32(1);
+        
+        // Write record count (4 bytes LE)
+        serializer.writeUInt32(records.length);
+        
+        // Write each record
         for (const entry of records) {
-            const idSize = Buffer.byteLength(entry.recordId, 'utf8');
-            const valueBsonSize = BSON.calculateObjectSize({ value: entry.value });
-            const recordBsonSize = BSON.calculateObjectSize(entry.record);
-            
-            // Add to total: 4 bytes for ID length + ID data + 4 bytes for value length + value data + 4 bytes for record length + record data
-            totalSize += 4 + idSize + 4 + valueBsonSize + 4 + recordBsonSize;
-        }
-        
-        // Allocate buffer
-        const buffer = Buffer.alloc(totalSize);
-        let offset = 0;
-        
-        // Write version number (4 bytes) - version 1 for new format
-        buffer.writeUInt32LE(1, offset);
-        offset += 4;
-        
-        // Write record count
-        buffer.writeUInt32LE(records.length, offset);
-        offset += 4;
-        
-        // Second pass: write each record
-        for (const entry of records) {
-            // Write record ID
+            // Write record ID length and data (4 bytes length + data)
             const idBuffer = Buffer.from(entry.recordId, 'utf8');
-            buffer.writeUInt32LE(idBuffer.length, offset);
-            offset += 4;
-            idBuffer.copy(buffer, offset);
-            offset += idBuffer.length;
+            serializer.writeUInt32(idBuffer.length);
+            serializer.writeBytes(idBuffer);
             
-            // Write value as BSON
+            // Write value as BSON length and data (4 bytes length + data)
             const valueBson = Buffer.from(BSON.serialize({ value: entry.value }));
-            buffer.writeUInt32LE(valueBson.length, offset);
-            offset += 4;
-            valueBson.copy(buffer, offset);
-            offset += valueBson.length;
+            serializer.writeUInt32(valueBson.length);
+            serializer.writeBytes(valueBson);
             
-            // Write record as BSON
+            // Write record as BSON length and data (4 bytes length + data)
             const recordBson = Buffer.from(BSON.serialize(entry.record));
-            buffer.writeUInt32LE(recordBson.length, offset);
-            offset += 4;
-            recordBson.copy(buffer, offset);
-            offset += recordBson.length;
+            serializer.writeUInt32(recordBson.length);
+            serializer.writeBytes(recordBson);
         }
         
         // Calculate checksum
+        const buffer = serializer.getBuffer();
         const checksum = crypto.createHash('sha256').update(buffer).digest();
         
         // Combine data and checksum
@@ -869,7 +767,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         await retry(() =>  this.storage.write(filePath, undefined, dataWithChecksum));
     }
     
-    // Load leaf records from file
+    // Load leaf records from file using serialization library while preserving exact binary format
     private async loadLeafRecords(pageId: string): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
@@ -889,38 +787,36 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 return undefined;
             }
             
+            const deserializer = new BinaryDeserializer(dataWithoutChecksum);
+            
             // Check if this is the new format by reading the first 4 bytes as version
             if (dataWithoutChecksum.length >= 4 && dataWithoutChecksum.readUInt32LE(0) === 1) {
-                // New buffer format
-                let offset = 4; // Skip version (4 bytes)
+                // New buffer format - using serialization library while preserving exact binary format
                 
-                // Read record count
-                const recordCount = dataWithoutChecksum.readUInt32LE(offset);
-                offset += 4;
+                // Read version (4 bytes LE)
+                const version = deserializer.readUInt32();
+                
+                // Read record count (4 bytes LE)
+                const recordCount = deserializer.readUInt32();
                 
                 const records: ISortedIndexEntry<RecordT>[] = [];
                 
                 // Read each record
                 for (let i = 0; i < recordCount; i++) {
-                    // Read record ID
-                    const idLength = dataWithoutChecksum.readUInt32LE(offset);
-                    offset += 4;
-                    const recordId = dataWithoutChecksum.subarray(offset, offset + idLength).toString('utf8');
-                    offset += idLength;
+                    // Read record ID length and data (4 bytes length + data)
+                    const idLength = deserializer.readUInt32();
+                    const recordIdBuffer = deserializer.readBytes(idLength);
+                    const recordId = recordIdBuffer.toString('utf8');
                     
-                    // Read value BSON
-                    const valueLength = dataWithoutChecksum.readUInt32LE(offset);
-                    offset += 4;
-                    const valueBson = dataWithoutChecksum.subarray(offset, offset + valueLength);
-                    offset += valueLength;
+                    // Read value BSON length and data (4 bytes length + data)
+                    const valueLength = deserializer.readUInt32();
+                    const valueBson = deserializer.readBytes(valueLength);
                     const valueObj = BSON.deserialize(valueBson);
                     const value = valueObj.value;
                     
-                    // Read record BSON
-                    const recordLength = dataWithoutChecksum.readUInt32LE(offset);
-                    offset += 4;
-                    const recordBson = dataWithoutChecksum.subarray(offset, offset + recordLength);
-                    offset += recordLength;
+                    // Read record BSON length and data (4 bytes length + data)
+                    const recordLength = deserializer.readUInt32();
+                    const recordBson = deserializer.readBytes(recordLength);
                     const record = BSON.deserialize(recordBson) as RecordT;
                     
                     records.push({

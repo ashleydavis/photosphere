@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { BSON } from 'bson';
 import { IStorage } from '../storage';
 import { retry, IUuidGenerator } from 'utils';
+import { BinarySerializer, BinaryDeserializer } from 'serialization';
 import { SortManager } from './sort-manager';
 import { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
 
@@ -313,13 +314,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Writes a shard to disk.
     //
     private async writeBsonFile(filePath: string, shard: IShard<RecordT>): Promise<void> {
+        const serializer = new BinarySerializer();
 
-        const buffers: Uint8Array[] = [];
-
-        const header = Buffer.alloc(4 * 2);
-        header.writeUInt32LE(1, 0); // Version
-        header.writeUInt32LE(shard.records.size, 4); // Record count
-        buffers.push(header);
+        // Write version (4 bytes LE)
+        serializer.writeUInt32(1);
+        
+        // Write record count (4 bytes LE)
+        serializer.writeUInt32(shard.records.size);
 
         // Sort records by ID to ensure deterministic output
         const sortedRecords = Array.from(shard.records.values()).sort((a, b) => a._id.localeCompare(b._id));
@@ -329,19 +330,20 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             if (recordIdBuffer.length !== 16) {
                 throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
             }
-            buffers.push(recordIdBuffer);
+            // Write record ID (16 bytes raw, no length prefix)
+            serializer.writeBytes(recordIdBuffer);
 
             const recordNoId: any = { ...record };
             delete recordNoId._id; // Remove the id, no need to store it twice.
             const recordBson = BSON.serialize(recordNoId);
 
-            const recordHeader = Buffer.alloc(4);
-            recordHeader.writeUInt32LE(recordBson.length, 0);
-            buffers.push(recordHeader);
-            buffers.push(recordBson);
+            // Write record length (4 bytes LE) 
+            serializer.writeUInt32(recordBson.length);
+            // Write record BSON data (no length prefix since we wrote it manually)
+            serializer.writeBytes(Buffer.from(recordBson));
         }
 
-        const allData = Buffer.concat(buffers);
+        const allData = serializer.getBuffer();
         const allDataChecksum = this.calculateChecksum(allData);
         if (allDataChecksum.length !== 32) {
             throw new Error(`Checksum length mismatch: ${allDataChecksum.length}`);
@@ -421,22 +423,39 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads all records from a shard file.
     //
     private async loadRecords(shardFilePath: string): Promise<RecordT[]> {
-
         let records: RecordT[] = [];
 
         // Read all records from the file
         const fileData = await this.storage.read(shardFilePath);
         if (fileData && fileData.length > 0) {
+            const deserializer = new BinaryDeserializer(fileData);
 
-            const version = fileData.readUInt32LE(0); // Version
+            // Read version (4 bytes LE)
+            const version = deserializer.readUInt32();
 
-            const recordCount = fileData.readUInt32LE(4); // Record count
-            let offset = 8; // Skip the version and record count.
+            // Read record count (4 bytes LE)
+            const recordCount = deserializer.readUInt32();
 
             for (let i = 0; i < recordCount; i++) {
-                const { record, offset: newOffset } = this.readRecord(fileData, offset);
+                // Read record ID (16 bytes raw, no length prefix)
+                const recordIdBuffer = deserializer.readBytes(16);
+                const hexString = recordIdBuffer.toString('hex');
+                const recordId = [
+                    hexString.substring(0, 8),
+                    hexString.substring(8, 12),
+                    hexString.substring(12, 16),
+                    hexString.substring(16, 20),
+                    hexString.substring(20)
+                ].join('-');
+
+                // Read record length (4 bytes LE)
+                const recordLength = deserializer.readUInt32();
+
+                // Read record BSON data (no length prefix since we read length manually)
+                const recordData = deserializer.readBytes(recordLength);
+                const record = BSON.deserialize(recordData) as RecordT;
+                record._id = recordId;
                 records.push(record);
-                offset = newOffset;
             }
         }
 
