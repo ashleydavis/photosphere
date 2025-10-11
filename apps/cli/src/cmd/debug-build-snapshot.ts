@@ -187,7 +187,6 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
         await blockGraph.clearHeadHashes();
         
         // Get all blocks from storage.
-        //TODO: This can be a function on the block graph.
         let next: string | undefined;
         do {
             const listResult = await storage.listFiles("blocks", 1000, next);
