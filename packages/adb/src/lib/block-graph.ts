@@ -21,18 +21,22 @@ export interface IBlockDetails {
     prevBlocks: string[];  // Array of previous block IDs
 }
 
+export interface IDataElement {
+    timestamp: number; // Unix timestamp of the update.
+}
+
 //
 // Complete block with data
 //
-export interface IBlock<DataT> extends IBlockDetails {
-    data: DataT;           // The actual data payload
+export interface IBlock<DataElementT extends IDataElement> extends IBlockDetails {
+    data: DataElementT[]; // The actual data payload.
 }
 
 //
 // BlockGraph implementation for managing content-addressable blocks
 //
-export class BlockGraph<DataT extends readonly unknown[]> {
-    private blockMap = new Map<string, IBlock<DataT>>();  // In-memory block cache
+export class BlockGraph<DataElementT extends IDataElement> {
+    private blockMap = new Map<string, IBlock<DataElementT>>(); // In-memory block cache
     private headBlockIds: string[] = [];                  // Current head blocks
     
     private static readonly BLOCK_VERSION = 1;             // Binary format version
@@ -81,8 +85,8 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Get current head block objects
     //
-    async getHeadBlocks(): Promise<IBlock<DataT>[]> {
-        const headBlocks: IBlock<DataT>[] = [];
+    async getHeadBlocks(): Promise<IBlock<DataElementT>[]> {
+        const headBlocks: IBlock<DataElementT>[] = [];
         for (const blockId of this.headBlockIds) {
             const block = await this.getBlock(blockId);
             if (block) {
@@ -111,7 +115,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Retrieve block, loading from storage if needed
     //
-    async getBlock(id: string): Promise<IBlock<DataT> | undefined> {
+    async getBlock(id: string): Promise<IBlock<DataElementT> | undefined> {
         // Check memory cache first
         if (this.blockMap.has(id)) {
             return this.blockMap.get(id);
@@ -135,7 +139,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Serialize block to binary format
     //
-    private serializeBlock(block: IBlock<DataT>): Buffer {
+    private serializeBlock(block: IBlock<DataElementT>): Buffer {
         // Serialize data to BSON (wrap arrays since BSON doesn't support root arrays)
         const bsonData = BSON.serialize({ d: block.data });
         
@@ -183,7 +187,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Deserialize block from binary format
     //
-    private deserializeBlock(buffer: Buffer): IBlock<DataT> {
+    private deserializeBlock(buffer: Buffer): IBlock<DataElementT> {
         let offset = 0;
         
         // Read version (4 bytes LE)
@@ -219,7 +223,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
         const bsonData = buffer.subarray(offset, offset + dataLength);
         const deserializedData = BSON.deserialize(bsonData);
         // Unwrap array that was wrapped during serialization
-        const data = deserializedData.d as DataT;
+        const data = deserializedData.d as DataElementT[];
         
         return {
             _id: blockId,
@@ -231,10 +235,10 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Create and commit a new block
     //
-    async commitBlock(data: DataT): Promise<IBlock<DataT>> {
+    async commitBlock(data: DataElementT[]): Promise<IBlock<DataElementT>> {
         const blockId = uuid();
         
-        const block: IBlock<DataT> = {
+        const block: IBlock<DataElementT> = {
             _id: blockId,
             prevBlocks: [...this.headBlockIds], // Link to current head blocks
             data: data
@@ -253,7 +257,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Integrate external block from another node
     //
-    async integrateBlock(block: IBlock<DataT>): Promise<void> {
+    async integrateBlock(block: IBlock<DataElementT>): Promise<void> {
         // Store the block
         await this.storeBlock(block);
         
@@ -274,7 +278,7 @@ export class BlockGraph<DataT extends readonly unknown[]> {
     //
     // Store block to persistent storage
     //
-    private async storeBlock(block: IBlock<DataT>): Promise<void> {
+    private async storeBlock(block: IBlock<DataElementT>): Promise<void> {
         this.blockMap.set(block._id, block);
         const binaryData = this.serializeBlock(block);
         await this.storage.write(`blocks/${block._id}`, undefined, binaryData);

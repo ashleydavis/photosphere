@@ -5,7 +5,7 @@ import { IStorage } from "storage";
 
 describe('BlockGraph', () => {
     let storage: MockStorage;
-    let blockGraph: BlockGraph<DatabaseUpdate[]>;
+    let blockGraph: BlockGraph<DatabaseUpdate>;
 
     // Helper function to get file contents as string
     const getFileContents = async (filePath: string): Promise<string | undefined> => {
@@ -15,7 +15,7 @@ describe('BlockGraph', () => {
 
     beforeEach(() => {
         storage = new MockStorage();
-        blockGraph = new BlockGraph<DatabaseUpdate[]>(storage);
+        blockGraph = new BlockGraph<DatabaseUpdate>(storage);
     });
 
     describe('initialization', () => {
@@ -130,7 +130,7 @@ describe('BlockGraph', () => {
             const originalBlock = await blockGraph.commitBlock(updates);
 
             // Create new block graph instance (simulating restart)
-            const newBlockGraph = new BlockGraph<DatabaseUpdate[]>(storage);
+            const newBlockGraph = new BlockGraph<DatabaseUpdate>(storage);
             
             // Should be able to retrieve the block from storage
             const retrievedBlock = await newBlockGraph.getBlock(originalBlock._id);
@@ -405,7 +405,7 @@ describe('BlockGraph', () => {
             const originalRead = errorStorage.read.bind(errorStorage);
             errorStorage.read = async () => { throw new Error('Storage error'); };
 
-            const errorBlockGraph = new BlockGraph<DatabaseUpdate[]>(errorStorage);
+            const errorBlockGraph = new BlockGraph<DatabaseUpdate>(errorStorage);
             
             // Should handle load error gracefully
             await expect(errorBlockGraph.loadHeadBlocks()).resolves.toBeUndefined();
