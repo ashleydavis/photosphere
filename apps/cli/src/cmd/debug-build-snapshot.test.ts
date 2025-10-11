@@ -4,18 +4,18 @@ import { MockStorage, MockDatabase } from 'storage';
 import { IStorage } from 'storage';
 
 // Mock BlockGraph
-class MockBlockGraph extends BlockGraph<DatabaseUpdate[]> {
-    private mockBlocks = new Map<string, IBlock<DatabaseUpdate[]>>();
+class MockBlockGraph extends BlockGraph<DatabaseUpdate> {
+    private mockBlocks = new Map<string, IBlock<DatabaseUpdate>>();
 
     constructor(storage: IStorage) {
         super(storage);
     }
 
-    addMockBlock(block: IBlock<DatabaseUpdate[]>): void {
+    addMockBlock(block: IBlock<DatabaseUpdate>): void {
         this.mockBlocks.set(block._id, block);
     }
 
-    async getBlock(id: string): Promise<IBlock<DatabaseUpdate[]> | undefined> {
+    async getBlock(id: string): Promise<IBlock<DatabaseUpdate> | undefined> {
         return this.mockBlocks.get(id);
     }
 }
@@ -39,12 +39,12 @@ describe('debug-build-snapshot functions', () => {
 
         test('should return all blocks from storage', async () => {
             // Setup mock storage with block files
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['block1'],
                 data: [{ type: 'field', timestamp: 2000, collection: 'test', _id: 'doc1', field: 'name', value: 'test2' } as IFieldUpdate]
@@ -66,12 +66,12 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle pagination correctly', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 2000, collection: 'test', _id: 'doc2', document: { name: 'test2' } } as IUpsertUpdate]
@@ -94,7 +94,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should skip blocks that cannot be loaded', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
@@ -121,7 +121,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should return single block when head has no predecessors', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: []
@@ -136,17 +136,17 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should traverse backwards through predecessor blocks', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: []
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['block1'],
                 data: []
             };
-            const block3: IBlock<DatabaseUpdate[]> = {
+            const block3: IBlock<DatabaseUpdate> = {
                 _id: 'block3',
                 prevBlocks: ['block2'],
                 data: []
@@ -165,17 +165,17 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle multiple head blocks', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: []
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: [],
                 data: []
             };
-            const block3: IBlock<DatabaseUpdate[]> = {
+            const block3: IBlock<DatabaseUpdate> = {
                 _id: 'block3',
                 prevBlocks: ['block1'],
                 data: []
@@ -194,22 +194,22 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle diamond-shaped graph correctly', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: []
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['block1'],
                 data: []
             };
-            const block3: IBlock<DatabaseUpdate[]> = {
+            const block3: IBlock<DatabaseUpdate> = {
                 _id: 'block3',
                 prevBlocks: ['block1'],
                 data: []
             };
-            const block4: IBlock<DatabaseUpdate[]> = {
+            const block4: IBlock<DatabaseUpdate> = {
                 _id: 'block4',
                 prevBlocks: ['block2', 'block3'],
                 data: []
@@ -230,7 +230,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle missing blocks gracefully', async () => {
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['missing-block'],
                 data: []
@@ -248,7 +248,7 @@ describe('debug-build-snapshot functions', () => {
 
     describe('getBlocksToApply', () => {
         test('should return all blocks when no stored head hashes', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
@@ -264,7 +264,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should return empty array when no unapplied blocks', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
@@ -280,22 +280,22 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should find blocks after minimum timestamp of unapplied blocks', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['block1'],
                 data: [{ type: 'field', timestamp: 2000, collection: 'test', _id: 'doc1', field: 'name', value: 'test2' } as IFieldUpdate]
             };
-            const block3: IBlock<DatabaseUpdate[]> = {
+            const block3: IBlock<DatabaseUpdate> = {
                 _id: 'block3',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 3000, collection: 'test', _id: 'doc2', document: { name: 'test3' } } as IUpsertUpdate]
             };
-            const block4: IBlock<DatabaseUpdate[]> = {
+            const block4: IBlock<DatabaseUpdate> = {
                 _id: 'block4',
                 prevBlocks: [],
                 data: [{ type: 'field', timestamp: 4000, collection: 'test', _id: 'doc2', field: 'name', value: 'test4' } as IFieldUpdate]
@@ -322,7 +322,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should include applied blocks if they have updates at or after minimum timestamp', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [
@@ -330,7 +330,7 @@ describe('debug-build-snapshot functions', () => {
                     { type: 'field', timestamp: 3500, collection: 'test', _id: 'doc1', field: 'name', value: 'updated' } as IFieldUpdate
                 ]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 4000, collection: 'test', _id: 'doc2', document: { name: 'test2' } } as IUpsertUpdate]
@@ -353,7 +353,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle blocks with updates spanning the minimum timestamp', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [
@@ -361,7 +361,7 @@ describe('debug-build-snapshot functions', () => {
                     { type: 'field', timestamp: 4500, collection: 'test', _id: 'doc1', field: 'name', value: 'new' } as IFieldUpdate
                 ]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2', 
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 4000, collection: 'test', _id: 'doc2', document: { name: 'test2' } } as IUpsertUpdate]
@@ -387,22 +387,22 @@ describe('debug-build-snapshot functions', () => {
             // block1 -> block2 (applied branch)
             //        -> block3 (unapplied branch, timestamp 3000)
             // block4 (independent unapplied, timestamp 5000)
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 1000, collection: 'test', _id: 'doc1', document: { name: 'test1' } } as IUpsertUpdate]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: ['block1'],
                 data: [{ type: 'field', timestamp: 2000, collection: 'test', _id: 'doc1', field: 'name', value: 'test2' } as IFieldUpdate]
             };
-            const block3: IBlock<DatabaseUpdate[]> = {
+            const block3: IBlock<DatabaseUpdate> = {
                 _id: 'block3',
                 prevBlocks: ['block1'],
                 data: [{ type: 'upsert', timestamp: 3000, collection: 'test', _id: 'doc3', document: { name: 'test3' } } as IUpsertUpdate]
             };
-            const block4: IBlock<DatabaseUpdate[]> = {
+            const block4: IBlock<DatabaseUpdate> = {
                 _id: 'block4',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 5000, collection: 'test', _id: 'doc4', document: { name: 'test4' } } as IUpsertUpdate]
@@ -428,7 +428,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should handle mixed timestamps where applied block has later updates', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [
@@ -436,7 +436,7 @@ describe('debug-build-snapshot functions', () => {
                     { type: 'field', timestamp: 6000, collection: 'test', _id: 'doc1', field: 'name', value: 'late' } as IFieldUpdate
                 ]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 5000, collection: 'test', _id: 'doc2', document: { name: 'test2' } } as IUpsertUpdate]
@@ -458,7 +458,7 @@ describe('debug-build-snapshot functions', () => {
         });
 
         test('should exclude applied blocks when all their updates are before minimum timestamp', async () => {
-            const block1: IBlock<DatabaseUpdate[]> = {
+            const block1: IBlock<DatabaseUpdate> = {
                 _id: 'block1',
                 prevBlocks: [],
                 data: [
@@ -466,7 +466,7 @@ describe('debug-build-snapshot functions', () => {
                     { type: 'field', timestamp: 2000, collection: 'test', _id: 'doc1', field: 'name', value: 'early2' } as IFieldUpdate
                 ]
             };
-            const block2: IBlock<DatabaseUpdate[]> = {
+            const block2: IBlock<DatabaseUpdate> = {
                 _id: 'block2',
                 prevBlocks: [],
                 data: [{ type: 'upsert', timestamp: 5000, collection: 'test', _id: 'doc2', document: { name: 'test2' } } as IUpsertUpdate]

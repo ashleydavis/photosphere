@@ -1,5 +1,5 @@
 import { IBsonDatabase, IBsonCollection, IStorage } from "storage";
-import { BlockGraph, DatabaseUpdate, IBlock, IFieldUpdate, IUpsertUpdate, IDeleteUpdate } from "adb";
+import { BlockGraph, DatabaseUpdate, IBlock, IFieldUpdate, IUpsertUpdate, IDeleteUpdate, IDataElement } from "adb";
 import { MediaFileDatabase } from "api";
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
@@ -15,11 +15,11 @@ export interface IDebugBuildSnapshotCommandOptions extends IBaseCommandOptions {
 //
 // Gets all blocks from storage.
 //
-export async function getAllBlocks<T extends readonly unknown[]>(
-    blockGraph: BlockGraph<T>,
+export async function getAllBlocks<DataElementT extends IDataElement>(
+    blockGraph: BlockGraph<DataElementT>,
     storage: IStorage
-): Promise<IBlock<T>[]> {
-    const allBlocks: IBlock<T>[] = [];
+): Promise<IBlock<DataElementT>[]> {
+    const allBlocks: IBlock<DataElementT>[] = [];
     let next: string | undefined;
     
     do {
@@ -39,8 +39,8 @@ export async function getAllBlocks<T extends readonly unknown[]>(
 //
 // Finds all blocks that are "behind" (reachable from) the given head blocks by traversing backwards.
 //
-export async function getBlocksBehindHeads<T extends readonly unknown[]>(
-    blockGraph: BlockGraph<T>,
+export async function getBlocksBehindHeads<DataElementT extends IDataElement>(
+    blockGraph: BlockGraph<DataElementT>,
     headBlockIds: string[]
 ): Promise<Set<string>> {
     const behindBlocks = new Set<string>();
@@ -65,20 +65,19 @@ export async function getBlocksBehindHeads<T extends readonly unknown[]>(
 // Uses brute force algorithm for now.
 // TODO: Want a more efficient algorithm that doesn't require loading all blocks each time.
 //
-export async function getBlocksToApply<T extends readonly unknown[]>(
-    blockGraph: BlockGraph<T>,
+export async function getBlocksToApply<DataElementT extends IDataElement>(
+    blockGraph: BlockGraph<DataElementT>,
     storage: IStorage,
     storedHeadHashes: string[]
-): Promise<IBlock<T>[]> {
+): Promise<IBlock<DataElementT>[]> {
     // Get all blocks in the graph
-    const allBlocks = await getAllBlocks(blockGraph, storage);
-    
+    const allBlocks = await getAllBlocks(blockGraph, storage);    
     if (storedHeadHashes.length === 0) {
-        // No stored head hashes means all blocks are unapplied
+        // No stored head hashes means all blocks are unapplied.
         return allBlocks;
     }
     
-    // Find all blocks that are behind (already applied based on) the stored head hashes
+    // Find all blocks that are behind (already applied based on) the stored head hashes.
     const behindBlocks = await getBlocksBehindHeads(blockGraph, storedHeadHashes);
     
     // Find blocks that are NOT behind the stored head hashes (unapplied)
@@ -93,9 +92,7 @@ export async function getBlocksToApply<T extends readonly unknown[]>(
     ));
     
     // Return all blocks (applied or unapplied) that have updates at or after the minimum timestamp
-    return allBlocks.filter(block => 
-        block.data.some((update: any) => update.timestamp >= minTimestamp)
-    );
+    return allBlocks.filter(block => block.data[0].timestamp >= minTimestamp);
 }
 
 //
@@ -150,7 +147,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     const storage = assetDatabase.getMetadataStorage();
     
     // Load the block graph
-    const blockGraph = new BlockGraph<DatabaseUpdate[]>(storage);
+    const blockGraph = new BlockGraph<DatabaseUpdate>(storage);
     await blockGraph.loadHeadBlocks();
     const headBlockIds = blockGraph.getHeadBlockIds();
             
@@ -175,7 +172,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
         console.log("Updating existing database with new blocks");
     }
     
-    let blocksToProcess: IBlock<DatabaseUpdate[]>[] = [];
+    let blocksToProcess: IBlock<DatabaseUpdate>[] = [];
     
     if (rebuildFromScratch) {
         // Delete metadata directory and clear head hashes

@@ -142,7 +142,7 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
     const assetStorage = database.getAssetStorage();
     
     // Initialize block graph with the asset storage
-    const blockGraph = new BlockGraph<DatabaseUpdate[]>(assetStorage);
+    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage);
     await blockGraph.loadHeadBlocks();
 
     // Get the BSON database
