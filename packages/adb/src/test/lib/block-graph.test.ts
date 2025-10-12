@@ -28,8 +28,7 @@ describe('BlockGraph', () => {
         test('should load existing head blocks from storage', async () => {
             // Pre-populate storage with head blocks
             const headBlocksData = {
-                headBlockIds: ['block-1', 'block-2'],
-                lastUpdated: new Date().toISOString()
+                headBlockIds: ['block-1', 'block-2']
             };
             await storage.write('head-blocks.json', 'application/json', 
                 Buffer.from(JSON.stringify(headBlocksData), 'utf8'));
@@ -39,14 +38,12 @@ describe('BlockGraph', () => {
             expect(headBlockIds).toEqual(['block-1', 'block-2']);
         });
 
-        test('should handle corrupted head blocks file gracefully', async () => {
+        test('should throw error on corrupted head blocks file', async () => {
             // Write invalid JSON
             await storage.write('head-blocks.json', 'application/json', 
                 Buffer.from('invalid json', 'utf8'));
 
-            await blockGraph.loadHeadBlocks();
-            const headBlockIds = blockGraph.getHeadBlockIds();
-            expect(headBlockIds).toEqual([]);
+            await expect(blockGraph.loadHeadBlocks()).rejects.toThrow();
         });
     });
 
@@ -311,7 +308,6 @@ describe('BlockGraph', () => {
             expect(headBlocksContent).toBeDefined();
             const parsedHeadBlocks = JSON.parse(headBlocksContent!);
             expect(parsedHeadBlocks.headBlockIds).toEqual([block._id]);
-            expect(parsedHeadBlocks.lastUpdated).toBeDefined();
         });
     });
 
@@ -399,7 +395,7 @@ describe('BlockGraph', () => {
     });
 
     describe('error handling', () => {
-        test('should handle storage errors gracefully', async () => {
+        test('should throw error on storage errors', async () => {
             // Create a new MockStorage instance and override methods to throw errors
             const errorStorage = new MockStorage();
             const originalRead = errorStorage.read.bind(errorStorage);
@@ -407,9 +403,8 @@ describe('BlockGraph', () => {
 
             const errorBlockGraph = new BlockGraph<DatabaseUpdate>(errorStorage);
             
-            // Should handle load error gracefully
-            await expect(errorBlockGraph.loadHeadBlocks()).resolves.toBeUndefined();
-            expect(errorBlockGraph.getHeadBlockIds()).toEqual([]);
+            // Should throw storage error
+            await expect(errorBlockGraph.loadHeadBlocks()).rejects.toThrow('Storage error');
         });
     });
 });
