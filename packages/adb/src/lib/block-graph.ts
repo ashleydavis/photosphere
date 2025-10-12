@@ -2,6 +2,7 @@ import { v4 as uuid } from 'uuid';
 import { IStorage } from 'storage';
 import { DatabaseUpdate } from './database-update';
 import { BSON } from 'bson';
+import { BinarySerializer, BinaryDeserializer, ISerializer, IDeserializer } from 'serialization';
 
 //
 // Binary Block Format:
@@ -140,87 +141,83 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Serialize block to binary format
     //
     private serializeBlock(block: IBlock<DataElementT>): Buffer {
-        // Serialize data to BSON (wrap arrays since BSON doesn't support root arrays)
-        const bsonData = BSON.serialize({ d: block.data });
-        
-        // Calculate total size
-        const totalSize = 4 + 16 + 4 + (block.prevBlocks.length * 16) + 4 + bsonData.length;
-        
-        // Create buffer and write data
-        const buffer = Buffer.alloc(totalSize);
-        let offset = 0;
-        
+        const serializer = new BinarySerializer();
+        this.serializeBlockData(block, serializer);
+        return serializer.getBuffer();
+    }
+
+    //
+    // Serialize block data using ISerializer interface
+    //
+    private serializeBlockData(block: IBlock<DataElementT>, serializer: ISerializer): void {
         // Write version (4 bytes LE)
-        buffer.writeUInt32LE(BlockGraph.BLOCK_VERSION, offset);
-        offset += 4;
+        serializer.writeUInt32(BlockGraph.BLOCK_VERSION);
         
         // Write block ID (16 bytes)
         const blockIdBytes = BlockGraph.uuidToBytes(block._id);
-        blockIdBytes.copy(buffer, offset);
-        offset += 16;
+        serializer.writeBytes(blockIdBytes);
         
         // Write previous blocks count (4 bytes LE)
-        buffer.writeUInt32LE(block.prevBlocks.length, offset);
-        offset += 4;
+        serializer.writeUInt32(block.prevBlocks.length);
         
         // Write previous block IDs (N*16 bytes)
         for (const prevBlock of block.prevBlocks) {
             const prevBlockBytes = BlockGraph.uuidToBytes(prevBlock);
-            prevBlockBytes.copy(buffer, offset);
-            offset += 16;
+            serializer.writeBytes(prevBlockBytes);
         }
         
+        // Serialize data to BSON (wrap arrays since BSON doesn't support root arrays)
+        const bsonData = BSON.serialize({ d: block.data });
+        
         // Write data length (4 bytes LE)
-        buffer.writeUInt32LE(bsonData.length, offset);
-        offset += 4;
+        serializer.writeUInt32(bsonData.length);
 
         //
         //TODO: For better binary data packing, hard code the database operations in the binary format instead of using BSON.
         //
         
         // Write BSON data
-        Buffer.from(bsonData).copy(buffer, offset);
-        
-        return buffer;
+        serializer.writeBytes(Buffer.from(bsonData));
     }
 
     //
     // Deserialize block from binary format
     //
     private deserializeBlock(buffer: Buffer): IBlock<DataElementT> {
-        let offset = 0;
-        
+        const deserializer = new BinaryDeserializer(buffer);
+        return this.deserializeBlockData(deserializer);
+    }
+
+    //
+    // Deserialize block data using IDeserializer interface
+    //
+    private deserializeBlockData(deserializer: IDeserializer): IBlock<DataElementT> {
         // Read version (4 bytes LE)
-        const version = buffer.readUInt32LE(offset);
-        offset += 4;
+        const version = deserializer.readUInt32();
         
         if (version !== BlockGraph.BLOCK_VERSION) {
             throw new Error(`Unsupported block version: ${version}`);
         }
         
         // Read block ID (16 bytes)
-        const blockIdBytes = buffer.subarray(offset, offset + 16);
+        const blockIdBytes = deserializer.readBytes(16);
         const blockId = BlockGraph.bytesToUuid(blockIdBytes);
-        offset += 16;
         
         // Read previous blocks count (4 bytes LE)
-        const prevCount = buffer.readUInt32LE(offset);
-        offset += 4;
+        const prevCount = deserializer.readUInt32();
         
         // Read previous block IDs (N*16 bytes)
         const prevBlocks: string[] = [];
         for (let i = 0; i < prevCount; i++) {
-            const prevIdBytes = buffer.subarray(offset, offset + 16);
+            const prevIdBytes = deserializer.readBytes(16);
             prevBlocks.push(BlockGraph.bytesToUuid(prevIdBytes));
-            offset += 16;
         }
         
         // Read data length (4 bytes LE)
-        const dataLength = buffer.readUInt32LE(offset);
-        offset += 4;
+        const dataLength = deserializer.readUInt32();
         
         // Read and deserialize BSON data
-        const bsonData = buffer.subarray(offset, offset + dataLength);
+        const bsonData = deserializer.readBytes(dataLength);
         const deserializedData = BSON.deserialize(bsonData);
         // Unwrap array that was wrapped during serialization
         const data = deserializedData.d as DataElementT[];
