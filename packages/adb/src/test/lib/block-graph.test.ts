@@ -22,8 +22,7 @@ describe('BlockGraph', () => {
 
     describe('initialization', () => {
         test('should initialize with empty head blocks', async () => {
-            await blockGraph.loadHeadBlocks();
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toEqual([]);
         });
 
@@ -35,8 +34,7 @@ describe('BlockGraph', () => {
             await metadataStorage.write('head-blocks.json', 'application/json', 
                 Buffer.from(JSON.stringify(headBlocksData), 'utf8'));
 
-            await blockGraph.loadHeadBlocks();
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toEqual(['block-1', 'block-2']);
         });
 
@@ -45,13 +43,12 @@ describe('BlockGraph', () => {
             await metadataStorage.write('head-blocks.json', 'application/json', 
                 Buffer.from('invalid json', 'utf8'));
 
-            await expect(blockGraph.loadHeadBlocks()).rejects.toThrow();
+            await expect(blockGraph.getHeadBlockIds()).rejects.toThrow();
         });
     });
 
     describe('block operations', () => {
         test('should create and commit a block with no predecessors', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -74,12 +71,11 @@ describe('BlockGraph', () => {
             expect(blockExists).toBe(true);
 
             // Verify head blocks updated
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toEqual([block._id]);
         });
 
         test('should create a block with predecessors', async () => {
-            await blockGraph.loadHeadBlocks();
 
             // Create first block
             const updates1: DatabaseUpdate[] = [
@@ -110,12 +106,11 @@ describe('BlockGraph', () => {
             expect(block2.prevBlocks).toEqual([block1._id]);
             
             // Verify head blocks points to latest block
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toEqual([block2._id]);
         });
 
         test('should retrieve blocks from storage', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -142,7 +137,6 @@ describe('BlockGraph', () => {
         });
 
         test('should check block existence correctly', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -163,7 +157,6 @@ describe('BlockGraph', () => {
 
     describe('head block management', () => {
         test('should get head blocks', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -183,7 +176,6 @@ describe('BlockGraph', () => {
         });
 
         test('should handle empty head blocks list', async () => {
-            await blockGraph.loadHeadBlocks();
             const headBlocks = await blockGraph.getHeadBlocks();
             expect(headBlocks).toEqual([]);
         });
@@ -191,7 +183,6 @@ describe('BlockGraph', () => {
 
     describe('block integration', () => {
         test('should integrate external block', async () => {
-            await blockGraph.loadHeadBlocks();
 
             // Create an external block (simulating from another node)
             const externalBlock = {
@@ -215,12 +206,11 @@ describe('BlockGraph', () => {
             expect(retrievedBlock).toEqual(externalBlock);
 
             // Should be added to head blocks
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toContain(externalBlock._id);
         });
 
         test('should handle block integration with predecessors', async () => {
-            await blockGraph.loadHeadBlocks();
 
             // Create first block locally
             const updates1: DatabaseUpdate[] = [
@@ -254,7 +244,7 @@ describe('BlockGraph', () => {
 
             // First block should no longer be a head (it has a successor)
             // External block should be the new head
-            const headBlockIds = blockGraph.getHeadBlockIds();
+            const headBlockIds = await blockGraph.getHeadBlockIds();
             expect(headBlockIds).toEqual([externalBlock._id]);
             expect(headBlockIds).not.toContain(block1._id);
         });
@@ -262,7 +252,6 @@ describe('BlockGraph', () => {
 
     describe('persistence', () => {
         test('should persist blocks to correct paths', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -287,7 +276,6 @@ describe('BlockGraph', () => {
         });
 
         test('should persist head blocks to correct path', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const updates: DatabaseUpdate[] = [
                 {
@@ -315,7 +303,6 @@ describe('BlockGraph', () => {
 
     describe('multiple database update types', () => {
         test('should handle field updates', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const fieldUpdate: IFieldUpdate = {
                 type: 'field',
@@ -331,7 +318,6 @@ describe('BlockGraph', () => {
         });
 
         test('should handle upsert updates', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const upsertUpdate: IUpsertUpdate = {
                 type: 'upsert',
@@ -350,7 +336,6 @@ describe('BlockGraph', () => {
         });
 
         test('should handle delete updates', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const deleteUpdate: IDeleteUpdate = {
                 type: 'delete',
@@ -364,7 +349,6 @@ describe('BlockGraph', () => {
         });
 
         test('should handle mixed update types in single block', async () => {
-            await blockGraph.loadHeadBlocks();
 
             const mixedUpdates: DatabaseUpdate[] = [
                 {
@@ -407,7 +391,7 @@ describe('BlockGraph', () => {
             const errorBlockGraph = new BlockGraph<DatabaseUpdate>(errorStorage, errorMetadataStorage);
             
             // Should throw storage error
-            await expect(errorBlockGraph.loadHeadBlocks()).rejects.toThrow('Storage error');
+            await expect(errorBlockGraph.getHeadBlockIds()).rejects.toThrow('Storage error');
         });
     });
 });

@@ -148,7 +148,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     // Get the asset storage and block graph
     const assetStorage = database.getAssetStorage();
     const blockGraph = database.getBlockGraph();
-    const headBlockIds = blockGraph.getHeadBlockIds();
+    const headBlockIds = await blockGraph.getHeadBlockIds();
             
     // Get the last head hashes
     const currentHeadHashes = await blockGraph.getHeadHashes();
