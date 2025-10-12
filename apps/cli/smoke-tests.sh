@@ -2117,6 +2117,13 @@ test_v4_database_add_file() {
     final_count=$(echo "$final_summary_output" | grep -o "Total assets: [0-9]*" | grep -o "[0-9]*")
     log_info "Final asset count: $final_count"
     
+    # Verify we got a valid number
+    if [ -z "$final_count" ] || ! [[ "$final_count" =~ ^[0-9]+$ ]]; then
+        log_error "Failed to extract final asset count from summary output"
+        test_failed "failed to extract final asset count"
+        return 1
+    fi
+    
     # Verify asset count increased by 1
     local expected_count=$((initial_count + 1))
     if [ "$final_count" -eq "$expected_count" ]; then
