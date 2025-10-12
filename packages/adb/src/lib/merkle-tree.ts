@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
-import { BSON } from 'bson';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
+import { BinarySerializer, BinaryDeserializer } from 'serialization';
 
 //
 // Current database version
@@ -819,57 +819,13 @@ function combineBigNum(input: { low: number, high: number }): bigint {
  *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  */
 export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
-    // Calculate total buffer size needed
-    let totalSize = 4; // 4 bytes version
-
-    // Add database metadata BSON size (always present in version 3+)
-    const databaseMetadataBson = Buffer.from(BSON.serialize(tree.databaseMetadata as any));
-    totalSize += 4; // 4 bytes for BSON length
-    totalSize += databaseMetadataBson.length; // BSON data
-
-    // Add tree metadata size.
-    // 16 bytes UUID + 4 bytes totalNodes + 4 bytes totalFiles + 8 bytes totalSize + 8 bytes createdAt + 8 bytes modifiedAt
-    totalSize += 16 + 4 + 4 + 8 + 8 + 8;
-    
-    // Calculate size needed for all nodes
-    for (const node of tree.nodes) {
-        // Base size: 32 bytes hash + 4 bytes nodeCount + 4 bytes leafCount + 8 bytes size + 4 bytes fileNameLength + 1 byte isDeleted
-        totalSize += 32 + 4 + 4 + 8 + 4 + 1;
-        
-        // Version 3+ adds file metadata for leaf nodes: 8 bytes lastModified timestamp
-        if (node.fileName) { // This is a leaf node
-            totalSize += 8; // lastModified
-        }
-        
-        // Add fileName size if present
-        if (node.fileName) {
-            totalSize += Buffer.byteLength(node.fileName, 'utf8');
-        }
-    }
-    
-    // Add space for nodeRefs count
-    totalSize += 4;
-    
-    // Calculate size needed for all nodeRefs
-    for (const nodeRef of tree.sortedNodeRefs) {
-        const fileNameLength = Buffer.byteLength(nodeRef.fileName, 'utf8');
-        // 4 bytes fileNameLength + X bytes fileName + 4 bytes fileIndex + 1 byte isDeleted
-        totalSize += 4 + fileNameLength + 4 + 1;
-    }
-    
-    // Create buffer for the entire tree
-    const buffer = Buffer.alloc(totalSize);
-    let offset = 0;
+    const serializer = new BinarySerializer();
     
     // Write format version (always use current version when saving)
-    buffer.writeUInt32LE(CURRENT_DATABASE_VERSION, offset);
-    offset += 4;
+    serializer.writeUInt32(CURRENT_DATABASE_VERSION);
 
     // Write database metadata BSON (always present in version 3+)
-    buffer.writeUInt32LE(databaseMetadataBson.length, offset);
-    offset += 4;
-    databaseMetadataBson.copy(buffer, offset);
-    offset += databaseMetadataBson.length;
+    serializer.writeBSON(tree.databaseMetadata);
         
     // Write tree metadata.
     // Write UUID
@@ -877,93 +833,81 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
     if (idBuffer.length !== 16) {
         throw new Error(`Invalid UUID length: ${idBuffer.length}`);
     }
-    idBuffer.copy(buffer, offset);
-    offset += 16;
+    serializer.writeBytes(idBuffer);
     
     // Write totalNodes
-    buffer.writeUInt32LE(tree.metadata.totalNodes, offset);
-    offset += 4;
+    serializer.writeUInt32(tree.metadata.totalNodes);
     
     // Write totalFiles
-    buffer.writeUInt32LE(tree.metadata.totalFiles, offset);
-    offset += 4;
+    serializer.writeUInt32(tree.metadata.totalFiles);
 
     // Write totalSize
     const splitTotalSize = splitBigNum(BigInt(tree.metadata.totalSize));
-    buffer.writeUInt32LE(splitTotalSize.low, offset);
-    buffer.writeUInt32LE(splitTotalSize.high, offset + 4);
-    offset += 8;
+    serializer.writeUInt32(splitTotalSize.low);
+    serializer.writeUInt32(splitTotalSize.high);
     
     // Write all nodes
     for (const node of tree.nodes) {
         // Write hash
-        node.hash.copy(buffer, offset);
-        offset += 32;
+        serializer.writeBytes(node.hash);
         
         // Write nodeCount
-        buffer.writeUInt32LE(node.nodeCount, offset);
-        offset += 4;
+        serializer.writeUInt32(node.nodeCount);
         
         // Write leafCount
-        buffer.writeUInt32LE(node.leafCount, offset);
-        offset += 4;
+        serializer.writeUInt32(node.leafCount);
 
         // Write tree size
         const splitSize = splitBigNum(BigInt(node.size));
-        buffer.writeUInt32LE(splitSize.low, offset);
-        buffer.writeUInt32LE(splitSize.high, offset + 4);
-        offset += 8;
+        serializer.writeUInt32(splitSize.low);
+        serializer.writeUInt32(splitSize.high);
         
         // Write fileName if present
         if (node.fileName) {
             const fileNameLength = Buffer.byteLength(node.fileName, 'utf8');
-            buffer.writeUInt32LE(fileNameLength, offset);
-            offset += 4;
-            buffer.write(node.fileName, offset, 'utf8');
-            offset += fileNameLength;
+            serializer.writeUInt32(fileNameLength);
+            // Create a buffer with exact length and write string into it
+            const fileNameBuffer = Buffer.alloc(fileNameLength);
+            fileNameBuffer.write(node.fileName, 0, 'utf8');
+            serializer.writeBytes(fileNameBuffer);
             
             // Write file metadata for leaf nodes in version 3+
             // Write lastModified timestamp (8 bytes)
             const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
             const splitLastModified = splitBigNum(BigInt(lastModified));
-            buffer.writeUInt32LE(splitLastModified.low, offset);
-            buffer.writeUInt32LE(splitLastModified.high, offset + 4);
-            offset += 8;
+            serializer.writeUInt32(splitLastModified.low);
+            serializer.writeUInt32(splitLastModified.high);
         } else {
             // No fileName
-            buffer.writeUInt32LE(0, offset);
-            offset += 4;
+            serializer.writeUInt32(0);
         }
         
         // Write isDeleted flag
-        buffer.writeUInt8(node.isDeleted ? 1 : 0, offset);
-        offset += 1;
+        serializer.writeUInt8(node.isDeleted ? 1 : 0);
     }
     
     // Write nodeRefs count
-    buffer.writeUInt32LE(tree.sortedNodeRefs.length, offset);
-    offset += 4;
+    serializer.writeUInt32(tree.sortedNodeRefs.length);
     
     // Write all nodeRefs
     for (const nodeRef of tree.sortedNodeRefs) {
         // Write fileName
         const fileNameLength = Buffer.byteLength(nodeRef.fileName, 'utf8');
-        buffer.writeUInt32LE(fileNameLength, offset);
-        offset += 4;
-        buffer.write(nodeRef.fileName, offset, 'utf8');
-        offset += fileNameLength;
+        serializer.writeUInt32(fileNameLength);
+        // Create a buffer with exact length and write string into it
+        const fileNameBuffer = Buffer.alloc(fileNameLength);
+        fileNameBuffer.write(nodeRef.fileName, 0, 'utf8');
+        serializer.writeBytes(fileNameBuffer);
         
         // Write fileIndex
-        buffer.writeUInt32LE(nodeRef.fileIndex, offset);
-        offset += 4;
+        serializer.writeUInt32(nodeRef.fileIndex);
         
         // Write isDeleted flag
-        buffer.writeUInt8(nodeRef.isDeleted ? 1 : 0, offset);
-        offset += 1;
+        serializer.writeUInt8(nodeRef.isDeleted ? 1 : 0);
     }
     
     // Write the buffer to file
-    await storage.write(filePath, undefined, buffer);
+    await storage.write(filePath, undefined, serializer.getBuffer());
 }
 
 /**
@@ -1016,37 +960,33 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
         return undefined;
     }
     
-    const version = treeData.readUInt32LE(0); // Read the version number
-    let offset = 4; // Start after version.
+    const deserializer = new BinaryDeserializer(treeData);
+    
+    const version = deserializer.readUInt32(); // Read the version number
     
     // Read database metadata BSON for version 3+
     let databaseMetadata: DatabaseMetadata | undefined;
     if (version >= 3) {
-        const bsonLength = treeData.readUInt32LE(offset);
-        offset += 4;
-        const bsonData = treeData.slice(offset, offset + bsonLength);
-        databaseMetadata = BSON.deserialize(bsonData) as DatabaseMetadata;
-        offset += bsonLength;
+        databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
     }
     
     // Read tree metadata fields
-    const uuid = stringifyUuid(treeData.slice(offset, offset + 16));
-    offset += 16;
+    const uuidBytes = deserializer.readBytes(16);
+    const uuid = stringifyUuid(uuidBytes);
     
-    const totalNodes = treeData.readUInt32LE(offset);
-    offset += 4;
+    const totalNodes = deserializer.readUInt32();
     
-    const totalFiles = treeData.readUInt32LE(offset);
-    offset += 4;
+    const totalFiles = deserializer.readUInt32();
 
-    const low = treeData.readUInt32LE(offset);
-    const high = treeData.readUInt32LE(offset + 4);
-    const totalSize = Number(combineBigNum({ low, high }));
-    offset += 8;
+    const totalSizeLow = deserializer.readUInt32();
+    const totalSizeHigh = deserializer.readUInt32();
+    const totalSize = Number(combineBigNum({ low: totalSizeLow, high: totalSizeHigh }));
 
     if (version < 3) {
-        offset += 8; // Created at removed in v3.
-        offset += 8; // Modified at removed in v3.
+        deserializer.readUInt32(); // Created at low removed in v3.
+        deserializer.readUInt32(); // Created at high removed in v3.
+        deserializer.readUInt32(); // Modified at low removed in v3.
+        deserializer.readUInt32(); // Modified at high removed in v3.
     }
     
     // Create metadata object
@@ -1062,50 +1002,43 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
-        const hash = Buffer.from(treeData.slice(offset, offset + 32));
-        offset += 32;
+        const hash = deserializer.readBytes(32);
         
         // Read nodeCount
-        const nodeCount = treeData.readUInt32LE(offset);
-        offset += 4;
+        const nodeCount = deserializer.readUInt32();
         
         // Read leafCount
-        const leafCount = treeData.readUInt32LE(offset);
-        offset += 4;
+        const leafCount = deserializer.readUInt32();
 
         // Read tree size.
-        const low = treeData.readUInt32LE(offset);
-        const high = treeData.readUInt32LE(offset + 4);
-        const size = Number(combineBigNum({ low, high }));
-        offset += 8;
+        const sizeLow = deserializer.readUInt32();
+        const sizeHigh = deserializer.readUInt32();
+        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
 
         // Read fileName if present
-        const fileNameLength = treeData.readUInt32LE(offset);
-        offset += 4;
+        const fileNameLength = deserializer.readUInt32();
         
         let fileName: string | undefined;
         let lastModified: Date | undefined;
         
         if (fileNameLength > 0) {
-            fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
-            offset += fileNameLength;
+            const fileNameBytes = deserializer.readBytes(fileNameLength);
+            fileName = fileNameBytes.toString('utf8');
             
             // Read file metadata for leaf nodes in version 3+
             if (version >= 3) {
                 // Read lastModified timestamp (8 bytes)
-                const lastModifiedLow = treeData.readUInt32LE(offset);
-                const lastModifiedHigh = treeData.readUInt32LE(offset + 4);
+                const lastModifiedLow = deserializer.readUInt32();
+                const lastModifiedHigh = deserializer.readUInt32();
                 const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
                 if (lastModifiedTimestamp > 0) {
                     lastModified = new Date(lastModifiedTimestamp);
                 }
-                offset += 8;
             }
         }
         
         // Read isDeleted flag (if exists in format)
-        const isDeleted = treeData.readUInt8(offset) === 1;
-        offset += 1;
+        const isDeleted = deserializer.readUInt8() === 1;
         
         // Create node
         nodes.push({
@@ -1120,26 +1053,20 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
     }
     
     // Read all nodeRefs
-    const nodeRefCount = treeData.readUInt32LE(offset);
-    offset += 4;
+    const nodeRefCount = deserializer.readUInt32();
     
     const sortedNodeRefs: MerkleNodeRef[] = [];
     
     for (let i = 0; i < nodeRefCount; i++) {
         // Read fileName
-        const fileNameLength = treeData.readUInt32LE(offset);
-        offset += 4;
-        
-        const fileName = treeData.slice(offset, offset + fileNameLength).toString('utf8');
-        offset += fileNameLength;
+        const fileNameLength = deserializer.readUInt32();
+        const fileName = deserializer.readBytes(fileNameLength).toString('utf8');
         
         // Read fileIndex
-        const fileIndex = treeData.readUInt32LE(offset);
-        offset += 4;
+        const fileIndex = deserializer.readUInt32();
         
         // Read isDeleted flag (if exists in format)
-        const isDeleted = treeData.readUInt8(offset) === 1;
-        offset += 1;
+        const isDeleted = deserializer.readUInt8() === 1;
         
         // Create nodeRef
         sortedNodeRefs.push({
