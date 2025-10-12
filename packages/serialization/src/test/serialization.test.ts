@@ -2,7 +2,7 @@
 // Tests for binary serialization and deserialization with versioning support.
 //
 
-import { save, load, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction } from '../lib/serialization';
+import { save, load, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction, type SerializationOptions } from '../lib/serialization';
 import { IStorage } from 'storage';
 
 //
@@ -296,9 +296,10 @@ describe('Serialization', () => {
             lengthBuffer.writeUInt32LE(0, 0); // String length of 0
             const dataBuffer = Buffer.concat([lengthBuffer]);
             
-            // Calculate 32-byte SHA-256 checksum of the data portion
+            // Calculate 32-byte SHA-256 checksum of the version + data portion (everything except checksum)
             const { createHash } = await import('crypto');
-            const checksum = createHash('sha256').update(dataBuffer).digest(); // Full 32-byte hash
+            const dataWithVersion = Buffer.concat([versionBuffer, dataBuffer]);
+            const checksum = createHash('sha256').update(dataWithVersion).digest(); // Full 32-byte hash
             
             const fileBuffer = Buffer.concat([versionBuffer, dataBuffer, checksum]);
 
@@ -966,6 +967,161 @@ describe('Serialization', () => {
             const result = await load<DataV2>(storage, 'data-v2.bin', deserializers);
 
             expect(result).toEqual(dataV2);
+        });
+    });
+
+    describe('checksum options', () => {
+        const testData: TestDataV1 = { name: 'test', value: 42 };
+        const deserializers: DeserializerMap<TestDataV1> = {
+            1: deserializeV1,
+        };
+
+        it('should enable checksum by default when options is undefined', async () => {
+            await save(storage, 'default.bin', testData, 1, serializeV1);
+            
+            const savedBuffer = await storage.read('default.bin');
+            expect(savedBuffer).toBeDefined();
+            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
+            
+            // Should be able to load with checksum verification
+            const result = await load(storage, 'default.bin', deserializers);
+            expect(result).toEqual(testData);
+        });
+
+        it('should enable checksum by default when options.checksum is undefined', async () => {
+            const options: SerializationOptions = {}; // No checksum property
+            
+            await save(storage, 'default-empty-options.bin', testData, 1, serializeV1, options);
+            
+            const savedBuffer = await storage.read('default-empty-options.bin');
+            expect(savedBuffer).toBeDefined();
+            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
+            
+            // Should be able to load with checksum verification
+            const result = await load(storage, 'default-empty-options.bin', deserializers, undefined, undefined, options);
+            expect(result).toEqual(testData);
+        });
+
+        it('should enable checksum when explicitly set to true', async () => {
+            const options: SerializationOptions = { checksum: true };
+            
+            await save(storage, 'checksum-enabled.bin', testData, 1, serializeV1, options);
+            
+            const savedBuffer = await storage.read('checksum-enabled.bin');
+            expect(savedBuffer).toBeDefined();
+            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
+            
+            // Should be able to load with checksum verification
+            const result = await load(storage, 'checksum-enabled.bin', deserializers, undefined, undefined, options);
+            expect(result).toEqual(testData);
+        });
+
+        it('should disable checksum when explicitly set to false', async () => {
+            const options: SerializationOptions = { checksum: false };
+            
+            await save(storage, 'checksum-disabled.bin', testData, 1, serializeV1, options);
+            
+            const savedBuffer = await storage.read('checksum-disabled.bin');
+            expect(savedBuffer).toBeDefined();
+            
+            // Should not have checksum, so length should be just version (4) + data
+            // For our test data, serialized size should be much smaller than with checksum
+            expect(savedBuffer!.length).toBeLessThan(36);
+            
+            // Should be able to load without checksum verification
+            const result = await load(storage, 'checksum-disabled.bin', deserializers, undefined, undefined, options);
+            expect(result).toEqual(testData);
+        });
+
+        it('should successfully load checksummed file without checksum verification', async () => {
+            // Save with checksum
+            await save(storage, 'with-checksum.bin', testData, 1, serializeV1, { checksum: true });
+            
+            // Load without checksum verification
+            // This works because our serializer reads the correct amount of data based on length prefixes
+            const result = await load(storage, 'with-checksum.bin', deserializers, undefined, undefined, { checksum: false });
+            
+            // The result should be correct because the deserializer reads the right amount of data
+            expect(result).toEqual(testData);
+        });
+
+        it('should fail to load non-checksummed file with checksum option', async () => {
+            // Save without checksum
+            await save(storage, 'without-checksum.bin', testData, 1, serializeV1, { checksum: false });
+            
+            // Try to load with checksum verification (should fail because file is too small)
+            await expect(load(storage, 'without-checksum.bin', deserializers, undefined, undefined, { checksum: true }))
+                .rejects
+                .toThrow('too small to contain version and checksum');
+        });
+
+        it('should handle round-trip with checksum disabled', async () => {
+            const options: SerializationOptions = { checksum: false };
+            const complexData: TestDataV3 = {
+                name: 'complex test',
+                value: 12345,
+                description: 'testing without checksum',
+                tags: ['no-checksum', 'test', 'round-trip']
+            };
+            
+            const deserializersV3: DeserializerMap<TestDataV3> = {
+                3: deserializeV3,
+            };
+            
+            // Save without checksum
+            await save(storage, 'round-trip-no-checksum.bin', complexData, 3, serializeV3, options);
+            
+            // Load without checksum
+            const result = await load(storage, 'round-trip-no-checksum.bin', deserializersV3, undefined, undefined, options);
+            
+            expect(result).toEqual(complexData);
+        });
+
+        it('should produce different file sizes with and without checksum', async () => {
+            const options1: SerializationOptions = { checksum: true };
+            const options2: SerializationOptions = { checksum: false };
+            
+            await save(storage, 'size-test-with.bin', testData, 1, serializeV1, options1);
+            await save(storage, 'size-test-without.bin', testData, 1, serializeV1, options2);
+            
+            const withChecksum = await storage.read('size-test-with.bin');
+            const withoutChecksum = await storage.read('size-test-without.bin');
+            
+            expect(withChecksum).toBeDefined();
+            expect(withoutChecksum).toBeDefined();
+            
+            // File with checksum should be exactly 32 bytes larger
+            expect(withChecksum!.length).toBe(withoutChecksum!.length + 32);
+        });
+
+        it('should maintain data integrity with checksum disabled', async () => {
+            const options: SerializationOptions = { checksum: false };
+            const specialData = {
+                unicode: '🚀 Unicode test with émojis',
+                binary: 'Binary data: \x00\x01\x02\xFF',
+                numbers: [42, -1, 3.14159, Number.MAX_SAFE_INTEGER],
+                nested: {
+                    deep: {
+                        value: 'deeply nested value'
+                    }
+                }
+            };
+
+            const specialSerializer = (data: any, serializer: ISerializer): void => {
+                serializer.writeString(JSON.stringify(data));
+            };
+            const specialDeserializer = (deserializer: IDeserializer) => {
+                return JSON.parse(deserializer.readString());
+            };
+
+            const specialDeserializers: Record<number, DeserializerFunction<unknown>> = {
+                1: specialDeserializer,
+            };
+
+            await save(storage, 'special-no-checksum.bin', specialData, 1, specialSerializer, options);
+            const result = await load(storage, 'special-no-checksum.bin', specialDeserializers, undefined, undefined, options);
+
+            expect(result).toEqual(specialData);
         });
     });
 });
