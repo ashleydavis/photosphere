@@ -2081,7 +2081,7 @@ test_v4_database_add_file() {
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
     local temp_v4_dir="./test/tmp/test-v4-add-file"
-    local test_file="../../test/test.jpg"
+    local test_file="../../test/test.png"
     
     # Check that v4 database and test file exist
     check_exists "$v4_db_dir" "V4 test database directory"
@@ -2098,7 +2098,7 @@ test_v4_database_add_file() {
     
     # Extract initial asset count from summary
     local initial_count
-    initial_count=$(echo "$initial_summary_output" | grep -o "Total assets: [0-9]*" | grep -o "[0-9]*")
+    initial_count=$(echo "$initial_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")
     log_info "Initial asset count: $initial_count"
     
     # Add test file to the database
@@ -2114,7 +2114,7 @@ test_v4_database_add_file() {
     
     # Extract final asset count from summary
     local final_count
-    final_count=$(echo "$final_summary_output" | grep -o "Total assets: [0-9]*" | grep -o "[0-9]*")
+    final_count=$(echo "$final_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")
     log_info "Final asset count: $final_count"
     
     # Verify we got a valid number
@@ -2124,8 +2124,8 @@ test_v4_database_add_file() {
         return 1
     fi
     
-    # Verify asset count increased by 1
-    local expected_count=$((initial_count + 1))
+    # Verify asset count increased (adding 1 image creates 3 files: original, display, thumbnail)
+    local expected_count=$((initial_count + 3))
     if [ "$final_count" -eq "$expected_count" ]; then
         log_success "Asset count increased correctly from $initial_count to $final_count"
     else
