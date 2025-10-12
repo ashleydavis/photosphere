@@ -160,15 +160,12 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     log.verbose(`Current block graph head blocks: ${headBlockIds.length > 0 ? headBlockIds.join(", ") : "none"}`);
     log.verbose(`Last head hashes: ${currentHeadHashes.length > 0 ? currentHeadHashes.join(", ") : "none"}`);
     
-    // Determine what needs to be rebuilt
-    const metadataExists = await assetStorage.dirExists("metadata");
-    
     let rebuildFromScratch = false;
     
     if (options.force) {
         console.log("Force flag specified, rebuilding from scratch");
         rebuildFromScratch = true;
-    } else if (!metadataExists || currentHeadHashes.length === 0) {
+    } else if (!await assetStorage.dirExists("metadata") || currentHeadHashes.length === 0) {
         console.log("No metadata directory or head hashes found, rebuilding from scratch");
         rebuildFromScratch = true;
     } else {
@@ -185,8 +182,6 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
         }
         await blockGraph.clearHeadHashes();
 
-        console.log(`111`); //fio:
-        
         // Get all blocks from storage.
         let next: string | undefined;
         do {
