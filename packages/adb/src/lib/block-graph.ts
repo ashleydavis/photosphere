@@ -36,7 +36,6 @@ export interface IBlock<DataElementT extends IDataElement> extends IBlockDetails
 // BlockGraph implementation for managing content-addressable blocks
 //
 export class BlockGraph<DataElementT extends IDataElement> {
-    private blockMap = new Map<string, IBlock<DataElementT>>(); // In-memory block cache
     private headBlockIds: string[] = [];                  // Current head blocks
     
     private static readonly BLOCK_VERSION = 1;             // Binary format version
@@ -95,13 +94,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
     }
 
     //
-    // Check if block exists (memory or storage)
+    // Check if block exists in storage
     //
     async hasBlock(id: string): Promise<boolean> {
-        if (this.blockMap.has(id)) {
-            return true;
-        }
-        
         try {
             const blockData = await this.storage.read(`blocks/${id}`);
             return !!blockData;
@@ -111,14 +106,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
     }
 
     //
-    // Retrieve block, loading from storage if needed
+    // Retrieve block from storage
     //
     async getBlock(id: string): Promise<IBlock<DataElementT> | undefined> {
-        // Check memory cache first
-        if (this.blockMap.has(id)) {
-            return this.blockMap.get(id);
-        }
-
         // Load from binary format using save/load interface
         const deserializers = {
             [BlockGraph.BLOCK_VERSION]: BlockGraph.deserializeBlock<DataElementT>
@@ -133,12 +123,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
             { checksum: false }
         );
         
-        if (block) {
-            this.blockMap.set(id, block); // Cache it
-            return block;
-        }
-        
-        return undefined;
+        return block;
     }
 
     //
@@ -253,8 +238,6 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Store block to persistent storage
     //
     private async storeBlock(block: IBlock<DataElementT>): Promise<void> {
-        this.blockMap.set(block._id, block);
-        
         await save(
             this.storage,
             `blocks/${block._id}`,

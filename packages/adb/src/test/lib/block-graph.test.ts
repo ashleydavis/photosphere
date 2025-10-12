@@ -195,7 +195,7 @@ describe('BlockGraph', () => {
 
             // Create an external block (simulating from another node)
             const externalBlock = {
-                _id: 'external-block-id',
+                _id: '12345678-1234-5678-9abc-123456789abc',
                 prevBlocks: [],
                 data: [
                     {
