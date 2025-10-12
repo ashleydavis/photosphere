@@ -63,15 +63,10 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Load head blocks from persistent storage
     //
     async loadHeadBlocks(): Promise<void> {
-        try {
-            const headBlocksData = await this.storage.read('head-blocks.json');
-            if (headBlocksData) {
-                const headBlocks = JSON.parse(headBlocksData.toString('utf8'));
-                this.headBlockIds = headBlocks.headBlockIds || [];
-            }
-        } catch (error) {
-            // File doesn't exist or is corrupted, start with empty head blocks
-            this.headBlockIds = [];
+        const headBlocksData = await this.storage.read('head-blocks.json');
+        if (headBlocksData) {
+            const headBlocks = JSON.parse(headBlocksData.toString('utf8'));
+            this.headBlockIds = headBlocks.headBlockIds || [];
         }
     }
 
@@ -272,8 +267,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     private async storeHeadBlocks(): Promise<void> {
         const headBlocksData = {
-            headBlockIds: this.headBlockIds,
-            lastUpdated: new Date().toISOString()
+            headBlockIds: this.headBlockIds
         };
         const headBlocksJson = JSON.stringify(headBlocksData, null, 2);
         await this.storage.write('head-blocks.json', undefined, Buffer.from(headBlocksJson, 'utf8'));
@@ -296,37 +290,25 @@ export class BlockGraph<DataElementT extends IDataElement> {
     }
 
     //
-    // Gets the head hashes for database updates
+    // Gets the head hashes for database updates (same as head block IDs)
     //
     async getHeadHashes(): Promise<string[]> {
-        try {
-            const headHashesData = await this.storage.read('head-hashes.json');
-            if (headHashesData) {
-                const parsed = JSON.parse(headHashesData.toString('utf8'));
-                return parsed.headHashes || [];
-            }
-        } catch (error) {
-            // File doesn't exist or is corrupted
-        }
-        return [];
+        return [...this.headBlockIds];
     }
 
     //
-    // Sets the head hashes for database updates
+    // Sets the head hashes for database updates (same as head block IDs)
     //
     async setHeadHashes(headHashes: string[]): Promise<void> {
-        const headHashesData = {
-            headHashes: headHashes,
-            lastUpdated: new Date().toISOString()
-        };
-        const headHashesJson = JSON.stringify(headHashesData, null, 2);
-        await this.storage.write('head-hashes.json', undefined, Buffer.from(headHashesJson, 'utf8'));
+        this.headBlockIds = [...headHashes];
+        await this.storeHeadBlocks();
     }
 
     //
-    // Clears the head hashes
+    // Clears the head hashes (same as clearing head blocks)
     //
     async clearHeadHashes(): Promise<void> {
-        await this.storage.write('head-hashes.json', undefined, Buffer.from('{"headHashes": []}', 'utf8'));
+        this.headBlockIds = [];
+        await this.storeHeadBlocks();
     }
 }
