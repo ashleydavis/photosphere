@@ -147,11 +147,10 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     const { database } = await loadDatabase(options.db!, options, false, false);
     
     // Get the asset database and storage
-    const assetDatabase = database.getAssetDatabase();
-    const storage = assetDatabase.getMetadataStorage();
+    const assetStorage = database.getAssetStorage();
     
     // Load the block graph
-    const blockGraph = new BlockGraph<DatabaseUpdate>(storage);
+    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage);
     await blockGraph.loadHeadBlocks();
     const headBlockIds = blockGraph.getHeadBlockIds();
             
@@ -162,7 +161,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     log.verbose(`Last head hashes: ${currentHeadHashes.length > 0 ? currentHeadHashes.join(", ") : "none"}`);
     
     // Determine what needs to be rebuilt
-    const metadataExists = await storage.dirExists("metadata");
+    const metadataExists = await assetStorage.dirExists("metadata");
     
     let rebuildFromScratch = false;
     
@@ -180,16 +179,18 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     
     if (rebuildFromScratch) {
         // Delete metadata directory and clear head hashes
-        if (await storage.dirExists("metadata")) {
+        if (await assetStorage.dirExists("metadata")) {
             log.verbose(`Deleting metadata directory`);
-            await storage.deleteDir("metadata");
+            await assetStorage.deleteDir("metadata");
         }
         await blockGraph.clearHeadHashes();
+
+        console.log(`111`); //fio:
         
         // Get all blocks from storage.
         let next: string | undefined;
         do {
-            const listResult = await storage.listFiles("blocks", 1000, next);
+            const listResult = await assetStorage.listFiles("blocks", 1000, next);
             for (const blockId of listResult.names) {
                 const block = await blockGraph.getBlock(blockId);
                 if (block) {
@@ -201,7 +202,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     } 
     else {
         // Incremental update: get blocks that haven't been applied yet
-        blocksToProcess = await getBlocksToApply(blockGraph, storage, currentHeadHashes);        
+        blocksToProcess = await getBlocksToApply(blockGraph, assetStorage, currentHeadHashes);        
     }
     
     // Extract updates from new blocks.
