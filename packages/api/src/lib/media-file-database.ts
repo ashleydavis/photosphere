@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree, BlockGraph, DatabaseUpdate } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree, BlockGraph, DatabaseUpdate, IBlock, IUpsertUpdate, IFieldUpdate, IDeleteUpdate } from "adb";
 import { generateDeviceId } from "node-utils";
 import { FileScanner, IFileStat } from "./file-scanner";
 
@@ -699,6 +699,91 @@ export class MediaFileDatabase {
     async ensureSortIndex() {
         await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
+    }
+
+    //
+    // Updates the database to the latest blocks by applying database updates from the provided block IDs.
+    // This loads the blocks, extracts database updates, sorts them by timestamp, and applies them to the BSON database.
+    //
+    async updateToLatestBlocks(blockIds: string[]): Promise<void> {
+        if (blockIds.length === 0) {
+            return;
+        }
+
+        // Load blocks from storage
+        const blockGraph = this.getBlockGraph();
+        const blocks: IBlock<DatabaseUpdate>[] = [];
+        for (const blockId of blockIds) {
+            const block = await blockGraph.getBlock(blockId);
+            if (block) {
+                blocks.push(block);
+            }
+        }
+
+        if (blocks.length === 0) {
+            return;
+        }
+
+        // Extract updates from blocks
+        const allUpdates = blocks.map(b => b.data).flat();
+
+        // Sort updates by timestamp (database updates are idempotent)
+        allUpdates.sort((a, b) => a.timestamp - b.timestamp);
+
+        // Make sure the sort index is established
+        await this.ensureSortIndex();
+        
+        log.verbose(`Processing ${blocks.length} blocks with ${allUpdates.length} database updates`);
+        
+        if (allUpdates.length > 0) {
+            log.verbose("Applying database updates...");
+            await this.applyDatabaseUpdates(allUpdates);
+            log.verbose("Database updates applied successfully");
+        }
+
+        // Update head hashes to current block graph heads
+        const currentHeadBlockIds = await blockGraph.getHeadBlockIds();
+        if (currentHeadBlockIds.length > 0) {
+            await blockGraph.setHeadHashes(currentHeadBlockIds);
+            log.verbose(`Updated head hashes to: ${currentHeadBlockIds.join(", ")}`);
+        }
+    }
+
+    //
+    // Applies database updates to the BSON database.
+    //
+    private async applyDatabaseUpdates(updates: DatabaseUpdate[]): Promise<void> {
+        for (const update of updates) {
+            try {
+                const collection = this.bsonDatabase.collection(update.collection);
+                
+                switch (update.type) {
+                    case "upsert": {
+                        const upsertUpdate = update as IUpsertUpdate;
+                        await collection.replaceOne(upsertUpdate._id, upsertUpdate.document, { upsert: true });
+                        break;
+                    }
+                    
+                    case "field": {
+                        const fieldUpdate = update as IFieldUpdate;
+                        await collection.updateOne(fieldUpdate._id, { [fieldUpdate.field]: fieldUpdate.value }, { upsert: true });
+                        break;
+                    }
+                    
+                    case "delete": {
+                        const deleteUpdate = update as IDeleteUpdate;
+                        await collection.deleteOne(deleteUpdate._id);
+                        break;
+                    }
+                    
+                    default:
+                        const _exhaustiveCheck: never = update;
+                        log.warn(`Unknown update type: ${(_exhaustiveCheck as DatabaseUpdate).type}`);
+                }
+            } catch (error) {
+                log.warn(`Error applying update ${update.type} for ${update._id}: ${String(error)}`);
+            }
+        }
     }
 
     //
