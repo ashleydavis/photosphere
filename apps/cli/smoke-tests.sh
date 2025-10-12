@@ -106,7 +106,7 @@ test_passed() {
 }
 
 test_failed() {
-    local test_name="$1"
+    local test_name="${1:-unknown}"
     ((TESTS_FAILED++))
     FAILED_TESTS+=("$test_name")
     
@@ -119,6 +119,10 @@ test_failed() {
             TEST_RESULTS+=("FAIL:$test_name:hash_failed")
         fi
     fi
+    
+    # Exit immediately on any test failure
+    log_error "Test failed: $test_name - aborting test suite"
+    exit 1
 }
 
 log_warning() {
