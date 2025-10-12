@@ -7,8 +7,8 @@ import { IStorage } from 'storage';
 class MockBlockGraph extends BlockGraph<DatabaseUpdate> {
     private mockBlocks = new Map<string, IBlock<DatabaseUpdate>>();
 
-    constructor(storage: IStorage) {
-        super(storage);
+    constructor(storage: IStorage, metadataStorage: IStorage) {
+        super(storage, metadataStorage);
     }
 
     addMockBlock(block: IBlock<DatabaseUpdate>): void {
@@ -27,7 +27,7 @@ describe('debug-build-snapshot functions', () => {
 
     beforeEach(() => {
         storage = new MockStorage();
-        blockGraph = new MockBlockGraph(storage);
+        blockGraph = new MockBlockGraph(storage, storage);
         bsonDatabase = new MockDatabase();
     });
 

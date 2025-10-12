@@ -5,17 +5,19 @@ import { IStorage } from "storage";
 
 describe('BlockGraph', () => {
     let storage: MockStorage;
+    let metadataStorage: MockStorage;
     let blockGraph: BlockGraph<DatabaseUpdate>;
 
     // Helper function to get file contents as string
     const getFileContents = async (filePath: string): Promise<string | undefined> => {
-        const buffer = await storage.read(filePath);
+        const buffer = await metadataStorage.read(filePath);
         return buffer ? buffer.toString('utf8') : undefined;
     };
 
     beforeEach(() => {
         storage = new MockStorage();
-        blockGraph = new BlockGraph<DatabaseUpdate>(storage);
+        metadataStorage = new MockStorage();
+        blockGraph = new BlockGraph<DatabaseUpdate>(storage, metadataStorage);
     });
 
     describe('initialization', () => {
@@ -30,7 +32,7 @@ describe('BlockGraph', () => {
             const headBlocksData = {
                 headBlockIds: ['block-1', 'block-2']
             };
-            await storage.write('head-blocks.json', 'application/json', 
+            await metadataStorage.write('head-blocks.json', 'application/json', 
                 Buffer.from(JSON.stringify(headBlocksData), 'utf8'));
 
             await blockGraph.loadHeadBlocks();
@@ -40,7 +42,7 @@ describe('BlockGraph', () => {
 
         test('should throw error on corrupted head blocks file', async () => {
             // Write invalid JSON
-            await storage.write('head-blocks.json', 'application/json', 
+            await metadataStorage.write('head-blocks.json', 'application/json', 
                 Buffer.from('invalid json', 'utf8'));
 
             await expect(blockGraph.loadHeadBlocks()).rejects.toThrow();
@@ -127,7 +129,7 @@ describe('BlockGraph', () => {
             const originalBlock = await blockGraph.commitBlock(updates);
 
             // Create new block graph instance (simulating restart)
-            const newBlockGraph = new BlockGraph<DatabaseUpdate>(storage);
+            const newBlockGraph = new BlockGraph<DatabaseUpdate>(storage, metadataStorage);
             
             // Should be able to retrieve the block from storage
             const retrievedBlock = await newBlockGraph.getBlock(originalBlock._id);
@@ -301,7 +303,7 @@ describe('BlockGraph', () => {
 
             // Check that head blocks file exists
             const headBlocksPath = 'head-blocks.json';
-            expect(await storage.fileExists(headBlocksPath)).toBe(true);
+            expect(await metadataStorage.fileExists(headBlocksPath)).toBe(true);
 
             // Check head blocks content
             const headBlocksContent = await getFileContents(headBlocksPath);
@@ -398,10 +400,11 @@ describe('BlockGraph', () => {
         test('should throw error on storage errors', async () => {
             // Create a new MockStorage instance and override methods to throw errors
             const errorStorage = new MockStorage();
-            const originalRead = errorStorage.read.bind(errorStorage);
-            errorStorage.read = async () => { throw new Error('Storage error'); };
+            const errorMetadataStorage = new MockStorage();
+            const originalRead = errorMetadataStorage.read.bind(errorMetadataStorage);
+            errorMetadataStorage.read = async () => { throw new Error('Storage error'); };
 
-            const errorBlockGraph = new BlockGraph<DatabaseUpdate>(errorStorage);
+            const errorBlockGraph = new BlockGraph<DatabaseUpdate>(errorStorage, errorMetadataStorage);
             
             // Should throw storage error
             await expect(errorBlockGraph.loadHeadBlocks()).rejects.toThrow('Storage error');

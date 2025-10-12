@@ -1,12 +1,10 @@
 import { log } from "utils";
-import pc from "picocolors";
-import { CURRENT_DATABASE_VERSION, HashCache, computeHash, saveTree, deleteFiles, IBlock } from "adb";
-import { pathJoin } from "storage";
+import { HashCache, computeHash, deleteFiles } from "adb";
+import { pathJoin, StoragePrefixWrapper } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
 import { BlockGraph, DatabaseUpdate, IUpsertUpdate } from "adb";
 import { generateDeviceId } from "node-utils";
-import { v4 as uuid } from 'uuid';
 
 //
 // Performs the actual database upgrade logic for a database from a given version to the current version.
@@ -141,8 +139,15 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
     // Use the existing AssetDatabaseStorage to automatically update merkle tree when blocks are written
     const assetStorage = database.getAssetStorage();
     
-    // Initialize block graph with the asset storage
-    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage);
+    // Get device-specific metadata storage
+    const deviceId = await generateDeviceId();
+    const deviceMetadataStorage = new StoragePrefixWrapper(
+        database.getAssetDatabase().getMetadataStorage(),
+        pathJoin("devices", deviceId)
+    );
+    
+    // Initialize block graph with the asset storage and device metadata storage
+    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage, deviceMetadataStorage);
     await blockGraph.loadHeadBlocks();
 
     // Get the BSON database
