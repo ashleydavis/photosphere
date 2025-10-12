@@ -523,9 +523,8 @@ export class MediaFileDatabase {
             pathJoin("devices", deviceId)
         );
         
-        // Create and initialize block graph
+        // Create block graph
         this.blockGraph = new BlockGraph<DatabaseUpdate>(this.assetStorage, deviceMetadataStorage);
-        await this.blockGraph.loadHeadBlocks();
     }
 
     //

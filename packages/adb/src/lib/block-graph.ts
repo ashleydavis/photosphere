@@ -36,7 +36,6 @@ export interface IBlock<DataElementT extends IDataElement> extends IBlockDetails
 // BlockGraph implementation for managing content-addressable blocks
 //
 export class BlockGraph<DataElementT extends IDataElement> {
-    private headBlockIds: string[] = [];                  // Current head blocks
     
     private static readonly BLOCK_VERSION = 1;             // Binary format version
     
@@ -59,32 +58,31 @@ export class BlockGraph<DataElementT extends IDataElement> {
     }
 
     //
-    // Load head blocks from persistent storage
+    // Load head block IDs from persistent storage
     //
-    async loadHeadBlocks(): Promise<void> {
+    private async loadHeadBlockIds(): Promise<string[]> {
         const headBlocksData = await this.metadataStorage.read('head-blocks.json');
         if (headBlocksData) {
             const headBlocks = JSON.parse(headBlocksData.toString('utf8'));
-            this.headBlockIds = headBlocks.headBlockIds || [];
+            return headBlocks.headBlockIds || [];
         }
-        else {
-            this.headBlockIds = [];
-        }
+        return [];
     }
 
     //
     // Get current head block IDs
     //
-    getHeadBlockIds(): string[] {
-        return [...this.headBlockIds];
+    async getHeadBlockIds(): Promise<string[]> {
+        return await this.loadHeadBlockIds();
     }
 
     //
     // Get current head block objects
     //
     async getHeadBlocks(): Promise<IBlock<DataElementT>[]> {
+        const headBlockIds = await this.loadHeadBlockIds();
         const headBlocks: IBlock<DataElementT>[] = [];
-        for (const blockId of this.headBlockIds) {
+        for (const blockId of headBlockIds) {
             const block = await this.getBlock(blockId);
             if (block) {
                 headBlocks.push(block);
@@ -196,10 +194,11 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     async commitBlock(data: DataElementT[]): Promise<IBlock<DataElementT>> {
         const blockId = uuid();
+        const currentHeadBlockIds = await this.loadHeadBlockIds();
         
         const block: IBlock<DataElementT> = {
             _id: blockId,
-            prevBlocks: [...this.headBlockIds], // Link to current head blocks
+            prevBlocks: [...currentHeadBlockIds], // Link to current head blocks
             data: data
         };
 
@@ -207,8 +206,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
         await this.storeBlock(block);
         
         // Update head blocks to point to new block
-        this.headBlockIds = [blockId];
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks([blockId]);
 
         return block;
     }
@@ -221,7 +219,8 @@ export class BlockGraph<DataElementT extends IDataElement> {
         await this.storeBlock(block);
         
         // Update head blocks by removing blocks that are now predecessors
-        const newHeadBlocks = this.headBlockIds.filter(headId => 
+        const currentHeadBlockIds = await this.loadHeadBlockIds();
+        const newHeadBlocks = currentHeadBlockIds.filter(headId => 
             !block.prevBlocks.includes(headId)
         );
         
@@ -230,8 +229,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
             newHeadBlocks.push(block._id);
         }
         
-        this.headBlockIds = newHeadBlocks;
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks(newHeadBlocks);
     }
 
     //
@@ -251,9 +249,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Store head block references to persistent storage
     //
-    private async storeHeadBlocks(): Promise<void> {
+    private async storeHeadBlocks(headBlockIds: string[]): Promise<void> {
         const headBlocksData = {
-            headBlockIds: this.headBlockIds
+            headBlockIds: headBlockIds
         };
         const headBlocksJson = JSON.stringify(headBlocksData, null, 2);
         await this.metadataStorage.write('head-blocks.json', undefined, Buffer.from(headBlocksJson, 'utf8'));
@@ -263,38 +261,34 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Sets the head block (for tracking processed blocks)
     //
     async setHeadBlocks(headBlockIds: string[]): Promise<void> {
-        this.headBlockIds = [...headBlockIds];
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks([...headBlockIds]);
     }
 
     //
     // Clears all head blocks
     //
     async clearHeadBlocks(): Promise<void> {
-        this.headBlockIds = [];
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks([]);
     }
 
     //
     // Gets the head hashes for database updates (same as head block IDs)
     //
     async getHeadHashes(): Promise<string[]> {
-        return [...this.headBlockIds];
+        return await this.loadHeadBlockIds();
     }
 
     //
     // Sets the head hashes for database updates (same as head block IDs)
     //
     async setHeadHashes(headHashes: string[]): Promise<void> {
-        this.headBlockIds = [...headHashes];
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks([...headHashes]);
     }
 
     //
     // Clears the head hashes (same as clearing head blocks)
     //
     async clearHeadHashes(): Promise<void> {
-        this.headBlockIds = [];
-        await this.storeHeadBlocks();
+        await this.storeHeadBlocks([]);
     }
 }
