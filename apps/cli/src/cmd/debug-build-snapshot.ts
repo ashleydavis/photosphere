@@ -205,6 +205,9 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
 
     // Sort updates by timestamp (database updates are idempotent)
     allUpdates.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Make sure the sort index is established.
+    await database.ensureSortIndex();
     
     console.log(`Processing ${blocksToProcess.length} blocks with ${allUpdates.length} database updates`);
     

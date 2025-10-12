@@ -625,8 +625,7 @@ export class MediaFileDatabase {
         const merkleTree = this.assetDatabase.getMerkleTree();
         merkleTree.databaseMetadata = { filesImported: 0 };
 
-        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
-        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
+        await this.ensureSortIndex();
 
         // Create README.md file with warning about manual modifications
         try {
@@ -654,6 +653,14 @@ export class MediaFileDatabase {
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
+    }
+
+    //
+    // Ensures the sort index exists.
+    //
+    async ensureSortIndex() {
+        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
+        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
     }
 
     //
