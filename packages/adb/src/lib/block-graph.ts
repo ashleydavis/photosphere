@@ -41,7 +41,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
     
     private static readonly BLOCK_VERSION = 1;             // Binary format version
     
-    constructor(private storage: IStorage) {}
+    constructor(private storage: IStorage, private metadataStorage: IStorage) {}
 
     //
     // Convert UUID string to 16-byte binary representation
@@ -63,7 +63,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Load head blocks from persistent storage
     //
     async loadHeadBlocks(): Promise<void> {
-        const headBlocksData = await this.storage.read('head-blocks.json');
+        const headBlocksData = await this.metadataStorage.read('head-blocks.json');
         if (headBlocksData) {
             const headBlocks = JSON.parse(headBlocksData.toString('utf8'));
             this.headBlockIds = headBlocks.headBlockIds || [];
@@ -270,7 +270,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
             headBlockIds: this.headBlockIds
         };
         const headBlocksJson = JSON.stringify(headBlocksData, null, 2);
-        await this.storage.write('head-blocks.json', undefined, Buffer.from(headBlocksJson, 'utf8'));
+        await this.metadataStorage.write('head-blocks.json', undefined, Buffer.from(headBlocksJson, 'utf8'));
     }
 
     //
