@@ -68,6 +68,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
             const headBlocks = JSON.parse(headBlocksData.toString('utf8'));
             this.headBlockIds = headBlocks.headBlockIds || [];
         }
+        else {
+            this.headBlockIds = [];
+        }
     }
 
     //

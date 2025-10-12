@@ -1,10 +1,9 @@
 import { log } from "utils";
 import { HashCache, computeHash, deleteFiles } from "adb";
-import { pathJoin, StoragePrefixWrapper } from "storage";
+import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
-import { BlockGraph, DatabaseUpdate, IUpsertUpdate } from "adb";
-import { generateDeviceId } from "node-utils";
+import { DatabaseUpdate, IUpsertUpdate } from "adb";
 
 //
 // Performs the actual database upgrade logic for a database from a given version to the current version.
@@ -136,19 +135,8 @@ export async function performDatabaseUpgrade(
 export async function buildBlockGraph(database: MediaFileDatabase): Promise<void> {
     log.info("Building block graph from current database state...");
     
-    // Use the existing AssetDatabaseStorage to automatically update merkle tree when blocks are written
-    const assetStorage = database.getAssetStorage();
-    
-    // Get device-specific metadata storage
-    const deviceId = await generateDeviceId();
-    const deviceMetadataStorage = new StoragePrefixWrapper(
-        database.getAssetDatabase().getMetadataStorage(),
-        pathJoin("devices", deviceId)
-    );
-    
-    // Initialize block graph with the asset storage and device metadata storage
-    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage, deviceMetadataStorage);
-    await blockGraph.loadHeadBlocks();
+    // Get the block graph from the database (handles device-specific storage internally)
+    const blockGraph = database.getBlockGraph();
 
     // Get the BSON database
     const bsonDatabase = database.getMetadataDatabase();
