@@ -1,8 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { IStorage } from 'storage';
-import { DatabaseUpdate } from './database-update';
 import { BSON } from 'bson';
-import { BinarySerializer, BinaryDeserializer, ISerializer, IDeserializer } from 'serialization';
+import { ISerializer, IDeserializer, save, load } from 'serialization';
 
 //
 // Binary Block Format:
@@ -122,37 +121,32 @@ export class BlockGraph<DataElementT extends IDataElement> {
             return this.blockMap.get(id);
         }
 
-        // Load from binary format
-        try {
-            const blockData = await this.storage.read(`blocks/${id}`);
-            if (blockData && blockData.length >= 12) {
-                const block = this.deserializeBlock(blockData);
-                this.blockMap.set(id, block); // Cache it
-                return block;
-            }
-        } catch (error) {
-            // Block doesn't exist
+        // Load from binary format using save/load interface
+        const deserializers = {
+            [BlockGraph.BLOCK_VERSION]: BlockGraph.deserializeBlock<DataElementT>
+        };
+        
+        const block = await load<IBlock<DataElementT>>(
+            this.storage,
+            `blocks/${id}`,
+            deserializers,
+            undefined,
+            undefined,
+            { checksum: false }
+        );
+        
+        if (block) {
+            this.blockMap.set(id, block); // Cache it
+            return block;
         }
         
         return undefined;
     }
 
     //
-    // Serialize block to binary format
+    // Serializer function for save/load interface
     //
-    private serializeBlock(block: IBlock<DataElementT>): Buffer {
-        const serializer = new BinarySerializer();
-        this.serializeBlockData(block, serializer);
-        return serializer.getBuffer();
-    }
-
-    //
-    // Serialize block data using ISerializer interface
-    //
-    private serializeBlockData(block: IBlock<DataElementT>, serializer: ISerializer): void {
-        // Write version (4 bytes LE)
-        serializer.writeUInt32(BlockGraph.BLOCK_VERSION);
-        
+    private static serializeBlock<DataElementT extends IDataElement>(block: IBlock<DataElementT>, serializer: ISerializer): void {
         // Write block ID (16 bytes)
         const blockIdBytes = BlockGraph.uuidToBytes(block._id);
         serializer.writeBytes(blockIdBytes);
@@ -181,24 +175,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
     }
 
     //
-    // Deserialize block from binary format
+    // Deserializer function for save/load interface
     //
-    private deserializeBlock(buffer: Buffer): IBlock<DataElementT> {
-        const deserializer = new BinaryDeserializer(buffer);
-        return this.deserializeBlockData(deserializer);
-    }
-
-    //
-    // Deserialize block data using IDeserializer interface
-    //
-    private deserializeBlockData(deserializer: IDeserializer): IBlock<DataElementT> {
-        // Read version (4 bytes LE)
-        const version = deserializer.readUInt32();
-        
-        if (version !== BlockGraph.BLOCK_VERSION) {
-            throw new Error(`Unsupported block version: ${version}`);
-        }
-        
+    private static deserializeBlock<DataElementT extends IDataElement>(deserializer: IDeserializer): IBlock<DataElementT> {
         // Read block ID (16 bytes)
         const blockIdBytes = deserializer.readBytes(16);
         const blockId = BlockGraph.bytesToUuid(blockIdBytes);
@@ -277,8 +256,15 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     private async storeBlock(block: IBlock<DataElementT>): Promise<void> {
         this.blockMap.set(block._id, block);
-        const binaryData = this.serializeBlock(block);
-        await this.storage.write(`blocks/${block._id}`, undefined, binaryData);
+        
+        await save(
+            this.storage,
+            `blocks/${block._id}`,
+            block,
+            BlockGraph.BLOCK_VERSION,
+            BlockGraph.serializeBlock,
+            { checksum: false }
+        );
     }
 
     //
