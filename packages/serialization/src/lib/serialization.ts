@@ -395,6 +395,9 @@ export async function save<T>(
 ): Promise<void> {
     // Create serializer instance
     const binarySerializer = new BinarySerializer();
+
+    // Version always goes first.
+    binarySerializer.writeUInt32(version);
     
     // Serialize the data using the provided serializer function
     serializer(data, binarySerializer);
@@ -406,12 +409,8 @@ export async function save<T>(
     //TODO: Need as way to make this checksum be 32 bits instead of 32 bytes!
     const checksum = createHash('sha256').update(serializedData).digest();
     
-    // Create version header (32 bits / 4 bytes)
-    const versionBuffer = Buffer.alloc(4);
-    versionBuffer.writeUInt32LE(version, 0);
-    
-    // Combine version header, serialized data, and checksum footer
-    const finalBuffer = Buffer.concat([versionBuffer, serializedData, checksum]);
+    // Combine serialized data and checksum footer.
+    const finalBuffer = Buffer.concat([serializedData, checksum]);
     
     // Write to storage
     await retry(() => storage.write(filePath, undefined, finalBuffer));
@@ -438,17 +437,16 @@ export async function load<T>(
         throw new Error(`File '${filePath}' is too small to contain version and checksum. File has ${buffer.length} bytes, should have at least 36.`);
     }
     
-    // Read version from first 32 bits
-    const version = buffer.readUInt32LE(0);
     
-    // Read checksum from last 32 bytes
-    const storedChecksum = buffer.subarray(buffer.length - 32);
-    
-    // Extract data portion (everything between version header and checksum footer)
-    const dataBuffer = buffer.subarray(4, buffer.length - 32);
-    
+    // Extract data portion (everything between version header and checksum footer).
+    const dataBuffer = buffer.subarray(0, buffer.length - 32);
+
     // Calculate SHA256 checksum of the data and verify it matches
     const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+
+    // Read checksum from last 32 bytes
+    const storedChecksum = buffer.subarray(buffer.length - 32);
+
     if (!calculatedChecksum.equals(storedChecksum)) {
         throw new Error(`Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}`);
     }
@@ -457,6 +455,10 @@ export async function load<T>(
     const availableVersions = Object.keys(deserializers).map(Number).sort((a, b) => b - a);
     const finalTargetVersion = targetVersion ?? availableVersions[0];
     
+    // Read version from first 32 bits
+    const binaryDeserializer = new BinaryDeserializer(dataBuffer);
+    const version = binaryDeserializer.readUInt32();
+
     // Get the appropriate deserializer for the file's version
     const deserializerFunction = deserializers[version];
     if (!deserializerFunction) {
@@ -464,7 +466,6 @@ export async function load<T>(
     }
     
     // Create deserializer instance and deserialize the data
-    const binaryDeserializer = new BinaryDeserializer(dataBuffer);
     let data = deserializerFunction(binaryDeserializer);
     
     // Apply migrations if needed to get to target version
