@@ -9,7 +9,8 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree } from "adb";
+import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree, BlockGraph, DatabaseUpdate } from "adb";
+import { generateDeviceId } from "node-utils";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -429,6 +430,11 @@ export class MediaFileDatabase {
     private writeLock: ILock | undefined;
 
     //
+    // The block graph for managing database updates with device-specific metadata storage.
+    //
+    private blockGraph: BlockGraph<DatabaseUpdate> | undefined;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -493,6 +499,33 @@ export class MediaFileDatabase {
     //
     getAssetDatabase(): AssetDatabase<IDatabaseMetadata> {
         return this.assetDatabase;
+    }
+
+    //
+    // Gets the block graph for managing database updates with device-specific metadata storage.
+    // The block graph is initialized during database create/load.
+    //
+    getBlockGraph(): BlockGraph<DatabaseUpdate> {
+        if (!this.blockGraph) {
+            throw new Error("BlockGraph not initialized. Make sure to call create() or load() first.");
+        }
+        return this.blockGraph;
+    }
+
+    //
+    // Initializes the block graph with device-specific metadata storage.
+    //
+    private async initializeBlockGraph(): Promise<void> {
+        // Get device-specific metadata storage
+        const deviceId = await generateDeviceId();
+        const deviceMetadataStorage = new StoragePrefixWrapper(
+            this.assetDatabase.getMetadataStorage(),
+            pathJoin("devices", deviceId)
+        );
+        
+        // Create and initialize block graph
+        this.blockGraph = new BlockGraph<DatabaseUpdate>(this.assetStorage, deviceMetadataStorage);
+        await this.blockGraph.loadHeadBlocks();
     }
 
     //
@@ -637,6 +670,9 @@ export class MediaFileDatabase {
 
         await retry(() => this.assetDatabase.save());
 
+        // Initialize block graph
+        await this.initializeBlockGraph();
+
         log.verbose(`Created new media file database.`);
     }
 
@@ -651,6 +687,9 @@ export class MediaFileDatabase {
 
         await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
+
+        // Initialize block graph
+        await this.initializeBlockGraph();
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }

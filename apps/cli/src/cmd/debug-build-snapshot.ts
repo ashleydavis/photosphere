@@ -1,7 +1,5 @@
 import { IBsonDatabase, IStorage } from "storage";
 import { BlockGraph, DatabaseUpdate, IBlock, IFieldUpdate, IUpsertUpdate, IDataElement } from "adb";
-import { generateDeviceId } from "node-utils";
-import { pathJoin, StoragePrefixWrapper } from "storage";
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log } from "utils";
@@ -147,19 +145,9 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     
     const { database } = await loadDatabase(options.db!, options, false, false);
     
-    // Get the asset database and storage
+    // Get the asset storage and block graph
     const assetStorage = database.getAssetStorage();
-    
-    // Get device-specific metadata storage
-    const deviceId = await generateDeviceId();
-    const deviceMetadataStorage = new StoragePrefixWrapper(
-        database.getAssetDatabase().getMetadataStorage(),
-        pathJoin("devices", deviceId)
-    );
-    
-    // Load the block graph
-    const blockGraph = new BlockGraph<DatabaseUpdate>(assetStorage, deviceMetadataStorage);
-    await blockGraph.loadHeadBlocks();
+    const blockGraph = database.getBlockGraph();
     const headBlockIds = blockGraph.getHeadBlockIds();
             
     // Get the last head hashes
