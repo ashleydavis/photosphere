@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
-import { BinarySerializer, BinaryDeserializer } from 'serialization';
+import { save, load, ISerializer, IDeserializer } from 'serialization';
 
 //
 // Current database version
@@ -818,12 +818,7 @@ function combineBigNum(input: { low: number, high: number }): bigint {
  *   - 4 bytes: fileIndex (uint32)
  *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  */
-export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
-    const serializer = new BinarySerializer();
-    
-    // Write format version (always use current version when saving)
-    serializer.writeUInt32(CURRENT_DATABASE_VERSION);
-
+function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
     // Write database metadata BSON (always present in version 3+)
     serializer.writeBSON(tree.databaseMetadata);
         
@@ -905,70 +900,14 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
         // Write isDeleted flag
         serializer.writeUInt8(nodeRef.isDeleted ? 1 : 0);
     }
-    
-    // Write the buffer to file
-    await storage.write(filePath, undefined, serializer.getBuffer());
 }
 
-/**
- * Load a Merkle tree from a file.
- */
 //
-// Loads only the version number from a merkle tree file without loading the entire tree.
-// This is useful for version compatibility checks before full database loading.
-// Uses streaming to read only the first 4 bytes for efficiency.
+// Deserializer function for merkle tree (version 4+)
 //
-export async function loadTreeVersion(filePath: string, storage: IStorage): Promise<number | undefined> {
-    return new Promise((resolve, reject) => {
-        const stream = storage.readStream(filePath);
-        let versionBuffer = Buffer.alloc(4);
-        let bytesRead = 0;
-
-        stream.on('data', (chunk: Buffer) => {
-            if (bytesRead < 4) {
-                const bytesToCopy = Math.min(chunk.length, 4 - bytesRead);
-                chunk.copy(versionBuffer, bytesRead, 0, bytesToCopy);
-                bytesRead += bytesToCopy;
-                
-                if (bytesRead >= 4) {
-                    // We have enough bytes, close the stream and resolve
-                    if ('destroy' in stream && typeof stream.destroy === 'function') {
-                        stream.destroy();
-                    }
-                    resolve(versionBuffer.readUInt32LE(0));
-                }
-            }
-        });
-
-        stream.on('end', () => {
-            if (bytesRead < 4) {
-                resolve(undefined); // File too small or empty
-            } else {
-                resolve(versionBuffer.readUInt32LE(0));
-            }
-        });
-
-        stream.on('error', (error) => {
-            reject(error);
-        });
-    });
-}
-
-export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
-    const treeData = await storage.read(filePath);
-    if (!treeData) {
-        return undefined;
-    }
-    
-    const deserializer = new BinaryDeserializer(treeData);
-    
-    const version = deserializer.readUInt32(); // Read the version number
-    
+function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
     // Read database metadata BSON for version 3+
-    let databaseMetadata: DatabaseMetadata | undefined;
-    if (version >= 3) {
-        databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
-    }
+    const databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
     
     // Read tree metadata fields
     const uuidBytes = deserializer.readBytes(16);
@@ -981,13 +920,6 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
     const totalSizeLow = deserializer.readUInt32();
     const totalSizeHigh = deserializer.readUInt32();
     const totalSize = Number(combineBigNum({ low: totalSizeLow, high: totalSizeHigh }));
-
-    if (version < 3) {
-        deserializer.readUInt32(); // Created at low removed in v3.
-        deserializer.readUInt32(); // Created at high removed in v3.
-        deserializer.readUInt32(); // Modified at low removed in v3.
-        deserializer.readUInt32(); // Modified at high removed in v3.
-    }
     
     // Create metadata object
     const metadata: TreeMetadata = {
@@ -1026,14 +958,12 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
             fileName = fileNameBytes.toString('utf8');
             
             // Read file metadata for leaf nodes in version 3+
-            if (version >= 3) {
-                // Read lastModified timestamp (8 bytes)
-                const lastModifiedLow = deserializer.readUInt32();
-                const lastModifiedHigh = deserializer.readUInt32();
-                const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
-                if (lastModifiedTimestamp > 0) {
-                    lastModified = new Date(lastModifiedTimestamp);
-                }
+            // Read lastModified timestamp (8 bytes)
+            const lastModifiedLow = deserializer.readUInt32();
+            const lastModifiedHigh = deserializer.readUInt32();
+            const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
+            if (lastModifiedTimestamp > 0) {
+                lastModified = new Date(lastModifiedTimestamp);
             }
         }
         
@@ -1081,8 +1011,304 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
         sortedNodeRefs,
         metadata,
         databaseMetadata,
-        version,
+        version: 4,
     };
+}
+
+//
+// Deserializer function for merkle tree (version 3)
+//
+function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
+    // Read database metadata BSON for version 3+
+    const databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
+    
+    // Read tree metadata fields
+    const uuidBytes = deserializer.readBytes(16);
+    const uuid = stringifyUuid(uuidBytes);
+    
+    const totalNodes = deserializer.readUInt32();
+    
+    const totalFiles = deserializer.readUInt32();
+
+    const totalSizeLow = deserializer.readUInt32();
+    const totalSizeHigh = deserializer.readUInt32();
+    const totalSize = Number(combineBigNum({ low: totalSizeLow, high: totalSizeHigh }));
+    
+    // Create metadata object
+    const metadata: TreeMetadata = {
+        id: uuid,
+        totalNodes,
+        totalFiles,
+        totalSize,
+    };
+    
+    // Read all nodes
+    const nodes: MerkleNode[] = [];
+    
+    for (let i = 0; i < totalNodes; i++) {
+        // Read hash
+        const hash = deserializer.readBytes(32);
+        
+        // Read nodeCount
+        const nodeCount = deserializer.readUInt32();
+        
+        // Read leafCount
+        const leafCount = deserializer.readUInt32();
+
+        // Read tree size.
+        const sizeLow = deserializer.readUInt32();
+        const sizeHigh = deserializer.readUInt32();
+        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
+
+        // Read fileName if present
+        const fileNameLength = deserializer.readUInt32();
+        
+        let fileName: string | undefined;
+        let lastModified: Date | undefined;
+        
+        if (fileNameLength > 0) {
+            const fileNameBytes = deserializer.readBytes(fileNameLength);
+            fileName = fileNameBytes.toString('utf8');
+            
+            // Read file metadata for leaf nodes in version 3+
+            // Read lastModified timestamp (8 bytes)
+            const lastModifiedLow = deserializer.readUInt32();
+            const lastModifiedHigh = deserializer.readUInt32();
+            const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
+            if (lastModifiedTimestamp > 0) {
+                lastModified = new Date(lastModifiedTimestamp);
+            }
+        }
+        
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = deserializer.readUInt8() === 1;
+        
+        // Create node
+        nodes.push({
+            hash,
+            fileName,
+            nodeCount,
+            leafCount,
+            size,
+            isDeleted,
+            lastModified
+        });
+    }
+    
+    // Read all nodeRefs
+    const nodeRefCount = deserializer.readUInt32();
+    
+    const sortedNodeRefs: MerkleNodeRef[] = [];
+    
+    for (let i = 0; i < nodeRefCount; i++) {
+        // Read fileName
+        const fileNameLength = deserializer.readUInt32();
+        const fileName = deserializer.readBytes(fileNameLength).toString('utf8');
+        
+        // Read fileIndex
+        const fileIndex = deserializer.readUInt32();
+        
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = deserializer.readUInt8() === 1;
+        
+        // Create nodeRef
+        sortedNodeRefs.push({
+            fileName,
+            fileIndex,
+            isDeleted
+        });
+    }
+    
+    return {
+        nodes,
+        sortedNodeRefs,
+        metadata,
+        databaseMetadata,
+        version: 3,
+    };
+}
+
+//
+// Deserializer function for merkle tree (version 2)
+//
+function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
+    
+    // Read tree metadata fields
+    const uuidBytes = deserializer.readBytes(16);
+    const uuid = stringifyUuid(uuidBytes);
+    
+    const totalNodes = deserializer.readUInt32();
+    
+    const totalFiles = deserializer.readUInt32();
+
+    const totalSizeLow = deserializer.readUInt32();
+    const totalSizeHigh = deserializer.readUInt32();
+    const totalSize = Number(combineBigNum({ low: totalSizeLow, high: totalSizeHigh }));
+    
+    deserializer.readUInt32(); // Created at low removed in v3.
+    deserializer.readUInt32(); // Created at high removed in v3.
+    deserializer.readUInt32(); // Modified at low removed in v3.
+    deserializer.readUInt32(); // Modified at high removed in v3.
+
+    // Create metadata object
+    const metadata: TreeMetadata = {
+        id: uuid,
+        totalNodes,
+        totalFiles,
+        totalSize,
+    };
+    
+    // Read all nodes
+    const nodes: MerkleNode[] = [];
+    
+    for (let i = 0; i < totalNodes; i++) {
+        // Read hash
+        const hash = deserializer.readBytes(32);
+        
+        // Read nodeCount
+        const nodeCount = deserializer.readUInt32();
+        
+        // Read leafCount
+        const leafCount = deserializer.readUInt32();
+
+        // Read tree size.
+        const sizeLow = deserializer.readUInt32();
+        const sizeHigh = deserializer.readUInt32();
+        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
+
+        // Read fileName if present
+        const fileNameLength = deserializer.readUInt32();
+        
+        let fileName: string | undefined;
+        let lastModified: Date | undefined;
+        
+        if (fileNameLength > 0) {
+            const fileNameBytes = deserializer.readBytes(fileNameLength);
+            fileName = fileNameBytes.toString('utf8');            
+        }
+        
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = deserializer.readUInt8() === 1;
+        
+        // Create node
+        nodes.push({
+            hash,
+            fileName,
+            nodeCount,
+            leafCount,
+            size,
+            isDeleted,
+            lastModified
+        });
+    }
+    
+    // Read all nodeRefs
+    const nodeRefCount = deserializer.readUInt32();
+    
+    const sortedNodeRefs: MerkleNodeRef[] = [];
+    
+    for (let i = 0; i < nodeRefCount; i++) {
+        // Read fileName
+        const fileNameLength = deserializer.readUInt32();
+        const fileName = deserializer.readBytes(fileNameLength).toString('utf8');
+        
+        // Read fileIndex
+        const fileIndex = deserializer.readUInt32();
+        
+        // Read isDeleted flag (if exists in format)
+        const isDeleted = deserializer.readUInt8() === 1;
+        
+        // Create nodeRef
+        sortedNodeRefs.push({
+            fileName,
+            fileIndex,
+            isDeleted
+        });
+    }
+    
+    return {
+        nodes,
+        sortedNodeRefs,
+        metadata,
+        databaseMetadata: undefined,
+        version: 2,
+    };
+}
+
+//
+// Saves a merkle tree to storage.
+//
+export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
+    await save(
+        storage,
+        filePath,
+        tree,
+        CURRENT_DATABASE_VERSION,
+        serializeMerkleTree,
+        {
+            checksum: false,
+        }
+    );
+}
+
+//
+// Loads only the version number from a merkle tree file without loading the entire tree.
+// This is useful for version compatibility checks before full database loading.
+// Uses streaming to read only the first 4 bytes for efficiency.
+//
+export async function loadTreeVersion(filePath: string, storage: IStorage): Promise<number | undefined> {
+    return new Promise((resolve, reject) => {
+        const stream = storage.readStream(filePath);
+        let versionBuffer = Buffer.alloc(4);
+        let bytesRead = 0;
+
+        stream.on('data', (chunk: Buffer) => {
+            if (bytesRead < 4) {
+                const bytesToCopy = Math.min(chunk.length, 4 - bytesRead);
+                chunk.copy(versionBuffer, bytesRead, 0, bytesToCopy);
+                bytesRead += bytesToCopy;
+                
+                if (bytesRead >= 4) {
+                    // We have enough bytes, close the stream and resolve
+                    if ('destroy' in stream && typeof stream.destroy === 'function') {
+                        stream.destroy();
+                    }
+                    resolve(versionBuffer.readUInt32LE(0));
+                }
+            }
+        });
+
+        stream.on('end', () => {
+            if (bytesRead < 4) {
+                resolve(undefined); // File too small or empty
+            } else {
+                resolve(versionBuffer.readUInt32LE(0));
+            }
+        });
+
+        stream.on('error', (error) => {
+            reject(error);
+        });
+    });
+}
+
+export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
+    const deserializers = {
+        4: deserializeMerkleTreeV4<DatabaseMetadata>,
+        3: deserializeMerkleTreeV3<DatabaseMetadata>,
+        2: deserializeMerkleTreeV2<DatabaseMetadata>,
+    };
+    
+    return await load<IMerkleTree<DatabaseMetadata>>(
+        storage,
+        filePath,
+        deserializers,
+        undefined,
+        CURRENT_DATABASE_VERSION,
+        {
+            checksum: false,
+        }
+    );
 }
 
 /**
