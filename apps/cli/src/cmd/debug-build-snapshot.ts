@@ -144,7 +144,7 @@ export async function applyDatabaseUpdates(
 export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotCommandOptions): Promise<void> {
     console.log("Building snapshot from block graph...");
     
-    const { database } = await loadDatabase(options.db!, options, true, true);
+    const { database } = await loadDatabase(options.db!, options, false, false);
     
     // Get the asset database and storage
     const assetDatabase = database.getAssetDatabase();
