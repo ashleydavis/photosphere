@@ -103,6 +103,7 @@ Frontend:
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
 - Use 4 space tabs for indentation.
 - Put `else` and `catch` blocks on a new line.
+- Tests should go under the directory src/test in each package.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.
