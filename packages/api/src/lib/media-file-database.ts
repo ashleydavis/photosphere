@@ -752,7 +752,7 @@ export class MediaFileDatabase {
     //
     // Applies database updates to the BSON database.
     //
-    private async applyDatabaseUpdates(updates: DatabaseUpdate[]): Promise<void> {
+    public async applyDatabaseUpdates(updates: DatabaseUpdate[]): Promise<void> {
         for (const update of updates) {
             try {
                 const collection = this.bsonDatabase.collection(update.collection);
