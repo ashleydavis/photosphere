@@ -181,7 +181,7 @@ export function testMerkleTreePerformance() {
   // Final tree statistics
   console.log('\n📋 Final Tree Statistics:');
   console.log(`   Total files: ${tree.metadata.totalFiles}`);
-  console.log(`   Tree nodes: ${tree.nodes.length}`);
+  console.log(`   Tree nodes: ${tree.root?.nodeCount || 0}`);
   console.log(`   Sorted refs: ${tree.sortedNodeRefs.length}`);
   console.log(`   Total time: ${totalTime.toFixed(2)}ms`);
   console.log(`   Average time per file: ${(totalTime / TOTAL_FILES).toFixed(4)}ms`);
@@ -216,7 +216,7 @@ export function testMerkleTreePerformance() {
     scalePoints: [] as Array<{size: number, averageMs: number}>,
     tree: {
       totalFiles: tree.metadata.totalFiles,
-      totalNodes: tree.nodes.length,
+      totalNodes: tree.root?.nodeCount || 0,
       sortedRefs: tree.sortedNodeRefs.length
     }
   };

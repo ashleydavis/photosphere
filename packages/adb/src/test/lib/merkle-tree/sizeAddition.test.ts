@@ -27,7 +27,7 @@ describe('Size calculation with file addition', () => {
     const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
     // Verify the leaf node has correct size
-    expect(tree.nodes[0].size).toBe(fileSize);
+    expect(tree.root?.size).toBe(fileSize);
     expect(tree.metadata.totalSize).toBe(fileSize);
   });
 
@@ -41,13 +41,13 @@ describe('Size calculation with file addition', () => {
     tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size));
     
     // Verify root node has sum of all file sizes
-    expect(tree.nodes[0].size).toBe(file1Size + file2Size);
+    expect(tree.root?.size).toBe(file1Size + file2Size);
     
     // Verify left child has correct size
-    expect(tree.nodes[1].size).toBe(file1Size);
+    expect(tree.root?.left?.size).toBe(file1Size);
     
     // Verify right child has correct size
-    expect(tree.nodes[2].size).toBe(file2Size);
+    expect(tree.root?.right?.size).toBe(file2Size);
     
     // Verify metadata reflects total size
     expect(tree.metadata.totalSize).toBe(file1Size + file2Size);
@@ -65,7 +65,7 @@ describe('Size calculation with file addition', () => {
     }
     
     // Verify root node size equals sum of all file sizes
-    expect(tree.nodes[0].size).toBe(totalSize);
+    expect(tree.root?.size).toBe(totalSize);
     
     // Verify metadata reflects total size
     expect(tree.metadata.totalSize).toBe(totalSize);
@@ -81,12 +81,10 @@ describe('Size calculation with file addition', () => {
     
     // Verify internal nodes have correct cumulative sizes
     // Left subtree (ABCD) = 100 + 200 + 300 + 400 = 1000
-    const leftSubtreeIndex = 1; // First child of root
-    expect(tree.nodes[leftSubtreeIndex].size).toBe(1000);
+    expect(tree.root?.left?.size).toBe(1000);
     
     // Right subtree (EFG) = 500 + 600 + 700 = 1800
-    const rightSubtreeIndex = 1 + tree.nodes[1].nodeCount;
-    expect(tree.nodes[rightSubtreeIndex].size).toBe(1800);
+    expect(tree.root?.right?.size).toBe(1800);
   });
   
   test('metadata totalSize is updated when adding files', () => {

@@ -779,7 +779,7 @@ export class MediaFileDatabase {
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
         
         // Get root hash (first node is always the root)
-        const rootHash = merkleTree.nodes.length > 0 ? merkleTree.nodes[0].hash : Buffer.alloc(0);
+        const rootHash = merkleTree.root?.hash || Buffer.alloc(0);
         const fullHash = rootHash.toString('hex');
         
         return {
