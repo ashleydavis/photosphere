@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import { 
     FileHash, 
+    MerkleNode,
     addFile, 
     updateFile, 
     findFileNode,
@@ -37,7 +38,7 @@ describe('Merkle Tree UpdateFile', () => {
     tree = addFile(tree, file5);
     
     // Get the root hash before update
-    const originalRootHash = tree.nodes[0].hash.toString('hex');
+    const originalRootHash = tree.root?.hash.toString('hex');
     
     // Now update file3
     const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
@@ -47,7 +48,7 @@ describe('Merkle Tree UpdateFile', () => {
     expect(updated).toBe(true);
     
     // Get the new root hash
-    const newRootHash = tree.nodes[0].hash.toString('hex');
+    const newRootHash = tree.root?.hash.toString('hex');
     
     // The root hash should have changed
     expect(newRootHash).not.toBe(originalRootHash);
@@ -127,8 +128,8 @@ describe('Merkle Tree UpdateFile', () => {
     
     // Verify hash integrity by manually recalculating all parent hashes
     // Each internal node should have a hash equal to the combined hash of its children
-    function verifyNodeHash(nodeIndex: number): boolean {
-      const node = tree!.nodes[nodeIndex];
+    function verifyNodeHash(node: MerkleNode | undefined): boolean {
+      if (!node) return true;
       
       // Leaf nodes can't be verified this way
       if (node.nodeCount === 1) {
@@ -136,30 +137,28 @@ describe('Merkle Tree UpdateFile', () => {
       }
       
       // For internal nodes, recalculate hash from children
-      const leftIndex = nodeIndex + 1;
-      const leftNode = tree!.nodes[leftIndex];
-      const leftCount = leftNode.nodeCount;
-      const rightIndex = leftIndex + leftCount;
-      const rightNode = tree!.nodes[rightIndex];
+      if (!node.left || !node.right) {
+        return true; // No children to verify
+      }
       
       // Calculate the expected hash
       const expectedHash = crypto.createHash('sha256')
-        .update(leftNode.hash)
-        .update(rightNode.hash)
+        .update(node.left.hash)
+        .update(node.right.hash)
         .digest();
       
       // Compare with actual hash
       const hashesMatch = Buffer.compare(expectedHash, node.hash) === 0;
       
       // Recursively verify children
-      const leftVerified = verifyNodeHash(leftIndex);
-      const rightVerified = verifyNodeHash(rightIndex);
+      const leftVerified = verifyNodeHash(node.left);
+      const rightVerified = verifyNodeHash(node.right);
       
       return hashesMatch && leftVerified && rightVerified;
     }
     
     // Verify the entire tree starting from the root
-    const treeIntegrity = verifyNodeHash(0);
+    const treeIntegrity = verifyNodeHash(tree!.root);
     expect(treeIntegrity).toBe(true);
     
     // Verify all non-updated files still have their original hash

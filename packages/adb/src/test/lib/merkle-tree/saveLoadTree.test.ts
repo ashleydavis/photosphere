@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import * as crypto from 'crypto';
 import { 
     IMerkleTree,
+    MerkleNode,
     FileHash,
     addFile,
     saveTree,
@@ -46,6 +47,20 @@ describe('Merkle Tree Save/Load', () => {
         
         return merkleTree;
     }
+
+    /**
+     * Helper function to compare two binary trees
+     */
+    function compareTrees(original: MerkleNode | undefined, loaded: MerkleNode | undefined) {
+        if (!original && !loaded) return;
+        if (!original || !loaded) throw new Error('Tree structure mismatch');
+        
+        expect(loaded.nodeCount).toEqual(original.nodeCount);
+        expect(loaded.leafCount).toEqual(original.leafCount);
+        
+        compareTrees(original.left, loaded.left);
+        compareTrees(original.right, loaded.right);
+    }
     
     // Clean up test file after each test
     afterEach(async () => {
@@ -69,13 +84,23 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
-        expect(loadedTree.nodes.length).toBe(originalTree.nodes.length);
+        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
         
         // Check that we have the expected file count
         expect(loadedTree.metadata.totalFiles).toBe(2);
         
-        // Find leaf nodes to verify data integrity
-        const leafNodes = loadedTree.nodes.filter(node => node.fileName !== undefined);
+        // Find leaf nodes to verify data integrity using binary tree traversal
+        const leafNodes: MerkleNode[] = [];
+        function collectLeafNodes(node: MerkleNode | undefined) {
+            if (!node) return;
+            if (node.nodeCount === 1 && node.fileName) {
+                leafNodes.push(node);
+            } else {
+                collectLeafNodes(node.left);
+                collectLeafNodes(node.right);
+            }
+        }
+        collectLeafNodes(loadedTree.root);
         expect(leafNodes.length).toBe(2);
         
         // They should have filenames 'A' and 'B' (in some order)
@@ -88,11 +113,8 @@ describe('Merkle Tree Save/Load', () => {
             expect(node.hash.length).toBe(32);
         }
         
-        // Verify node counts and leaf counts are preserved
-        for (let i = 0; i < originalTree.nodes.length; i++) {
-            expect(loadedTree.nodes[i].nodeCount).toEqual(originalTree.nodes[i].nodeCount);
-            expect(loadedTree.nodes[i].leafCount).toEqual(originalTree.nodes[i].leafCount);
-        }
+        // Verify node counts and leaf counts are preserved using binary tree traversal
+        compareTrees(originalTree.root, loadedTree.root);
     });
     
     test('should save and load a complex tree correctly', async () => {
@@ -108,23 +130,30 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(fileNames.length);
-        expect(loadedTree.nodes.length).toBe(originalTree.nodes.length);
+        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
         
-        // Verify leaf nodes have correct file names
-        const leafNodes = loadedTree.nodes.filter(node => node.fileName !== undefined);
+        // Verify leaf nodes have correct file names using binary tree traversal
+        const leafNodes: MerkleNode[] = [];
+        function collectLeafNodes(node: MerkleNode | undefined) {
+            if (!node) return;
+            if (node.nodeCount === 1 && node.fileName) {
+                leafNodes.push(node);
+            } else {
+                collectLeafNodes(node.left);
+                collectLeafNodes(node.right);
+            }
+        }
+        collectLeafNodes(loadedTree.root);
         expect(leafNodes.length).toBe(fileNames.length);
         
         const loadedFileNames = leafNodes.map(node => node.fileName).sort();
         expect(loadedFileNames).toEqual(fileNames.sort());
         
-        // Verify the structure of internal nodes by checking nodeCount and leafCount
-        for (let i = 0; i < originalTree.nodes.length; i++) {
-            expect(loadedTree.nodes[i].nodeCount).toEqual(originalTree.nodes[i].nodeCount);
-            expect(loadedTree.nodes[i].leafCount).toEqual(originalTree.nodes[i].leafCount);
-        }
+        // Verify the structure using the existing compareTrees function
+        compareTrees(originalTree.root, loadedTree.root);
         
         // Verify hash integrity - the root hash should match
-        expect(loadedTree.nodes[0].hash.toString('hex')).toBe(originalTree.nodes[0].hash.toString('hex'));
+        expect(loadedTree.root?.hash.toString('hex')).toBe(originalTree.root?.hash.toString('hex'));
     });
     
     test('should save and load all nodeRefs correctly', async () => {
@@ -165,9 +194,9 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // the tree structure should be exactly the same
-        expect(loadedTree.nodes.length).toBe(tree.nodes.length);
-        expect(loadedTree.nodes[0].fileName).toBe(specialChars);
-        expect(loadedTree.nodes[0].hash.toString('hex')).toBe(tree.nodes[0].hash.toString('hex'));
+        expect(loadedTree.root?.nodeCount || 0).toBe(tree.root?.nodeCount || 0);
+        expect(loadedTree.root?.fileName).toBe(specialChars);
+        expect(loadedTree.root?.hash.toString('hex')).toBe(tree.root?.hash.toString('hex'));
         
         // SortedNodeRefs should be preserved
         expect(loadedTree.sortedNodeRefs.length).toBe(1);
@@ -188,21 +217,13 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify tree properties
         expect(loadedTree.metadata.totalFiles).toBe(100);
-        expect(loadedTree.nodes.length).toBe(originalTree.nodes.length);
+        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
         
         // SortedNodeRefs should be preserved
         expect(loadedTree.sortedNodeRefs.length).toBe(100);
         
-        // Check a sample of the nodes to ensure they were loaded correctly
-        for (let i = 0; i < 5; i++) {
-            const originalNode = originalTree.nodes[i];
-            const loadedNode = loadedTree.nodes[i];
-            
-            expect(loadedNode.hash.toString('hex')).toBe(originalNode.hash.toString('hex'));
-            expect(loadedNode.nodeCount).toBe(originalNode.nodeCount);
-            expect(loadedNode.leafCount).toBe(originalNode.leafCount);
-            expect(loadedNode.fileName).toBe(originalNode.fileName);
-        }
+        // Check that the trees are structurally identical using the compareTrees function
+        compareTrees(originalTree.root, loadedTree.root);
     });
 });
 

@@ -1,4 +1,4 @@
-import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
+import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, createTree } from '../../../lib/merkle-tree';
 
 describe('Merkle Tree', () => {
 
@@ -42,12 +42,13 @@ describe('Merkle Tree', () => {
     }
 
     //
-    // Verify that a node matches the expected structure.
+    // Verify that a node matches the expected structure by recursively walking the binary tree.
     //
-    function verifyNode(nodeIndex: number, tree: IMerkleTree<any>, expectedStructure: any) {
-        const node = tree.nodes[nodeIndex];
+    function verifyNode(node: MerkleNode | undefined, expectedStructure: any) {
+        expect(node).toBeDefined();
+        if (!node) return;
         
-        expect(Buffer.isBuffer(node?.hash)).toBe(true);
+        expect(Buffer.isBuffer(node.hash)).toBe(true);
 
         if (expectedStructure.fileName) {
             expect(node.nodeCount).toBe(1);
@@ -60,41 +61,33 @@ describe('Merkle Tree', () => {
 
         if (expectedStructure.left) {
             expect(node.nodeCount).toBeGreaterThanOrEqual(3);
+            expect(node.left).toBeDefined();
 
-            const leftIndex = nodeIndex + 1;
-            const leftNode = tree.nodes[leftIndex];
             if (typeof(expectedStructure.left) === 'string') {
-                expect(leftNode.fileName).toEqual(expectedStructure.left);
-                expect(leftNode.hash).toEqual(Buffer.from(expectedStructure.left));
+                expect(node.left!.fileName).toEqual(expectedStructure.left);
+                expect(node.left!.hash).toEqual(Buffer.from(expectedStructure.left));
             }
             else {
-                verifyNode(leftIndex, tree, expectedStructure.left);
+                verifyNode(node.left, expectedStructure.left);
             }
         }
 
         if (expectedStructure.right) {
             expect(node.nodeCount).toBeGreaterThanOrEqual(3);
+            expect(node.right).toBeDefined();
 
-            const leftIndex = nodeIndex + 1;
-            const leftNode = tree.nodes[leftIndex];
-            const rightIndex = leftIndex + leftNode.nodeCount;
-            const rightNode = tree.nodes[rightIndex];
             if (typeof(expectedStructure.right) === 'string') {
-                expect(rightNode.fileName).toEqual(expectedStructure.right);
-                expect(rightNode.hash).toEqual(Buffer.from(expectedStructure.right));
+                expect(node.right!.fileName).toEqual(expectedStructure.right);
+                expect(node.right!.hash).toEqual(Buffer.from(expectedStructure.right));
             }
             else {
-                verifyNode(rightIndex, tree, expectedStructure.right);
+                verifyNode(node.right, expectedStructure.right);
             }
         }
 
         if (expectedStructure.left && expectedStructure.right) {
-            const leftIndex = nodeIndex + 1;
-            const leftNode = tree.nodes[leftIndex];
-            const rightIndex = leftIndex + leftNode.nodeCount;
-            const rightNode = tree.nodes[rightIndex];
             // Check that the hash is a combination of the left and right hashes.
-            expect(node.hash).toEqual(combineHashes(leftNode.hash, rightNode.hash));
+            expect(node.hash).toEqual(combineHashes(node.left!.hash, node.right!.hash));
         }
 
         if (!expectedStructure.left && !expectedStructure.right) {
@@ -107,7 +100,7 @@ describe('Merkle Tree', () => {
     // Verify the entire tree structure matches the expected structure.
     //
     function verifyTree(tree: IMerkleTree<any>, expectedStructure: any) {
-        verifyNode(0, tree, expectedStructure);
+        verifyNode(tree.root, expectedStructure);
     }
     
     describe('File Addition', () => {
@@ -119,7 +112,7 @@ describe('Merkle Tree', () => {
             const fileHash = createFileHash('A');
             const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
-            verifyLeafNode(0, tree.nodes, 'A');
+            verifyTree(tree, 'A');
 
             expect(tree.sortedNodeRefs).toEqual([
                 {
@@ -127,8 +120,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 0,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, tree.nodes)).toEqual(0);
         });
 
         // Test 2: Add a second file to an existing tree
@@ -160,9 +151,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 1,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeAB.nodes)).toEqual(1);
-            expect(getLeafNodeIndex(1, 0, treeAB.nodes)).toEqual(2);
         });
 
         // Test 3: Add a third file to an existing tree
@@ -210,10 +198,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 2,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABC.nodes)).toEqual(2);
-            expect(getLeafNodeIndex(1, 0, treeABC.nodes)).toEqual(3);
-            expect(getLeafNodeIndex(2, 0, treeABC.nodes)).toEqual(4);
         });
 
         // Test 4: Add a fourth file to an existing tree
@@ -271,12 +255,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 3,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCD.nodes)).toEqual(2);
-            expect(getLeafNodeIndex(1, 0, treeABCD.nodes)).toEqual(3);
-
-            expect(getLeafNodeIndex(2, 0, treeABCD.nodes)).toEqual(5);
-            expect(getLeafNodeIndex(3, 0, treeABCD.nodes)).toEqual(6);
         });
         
         // Test 5: Add a fifth file to an existing tree
@@ -343,14 +321,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 4,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDE.nodes)).toEqual(3);
-            expect(getLeafNodeIndex(1, 0, treeABCDE.nodes)).toEqual(4);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDE.nodes)).toEqual(6);
-            expect(getLeafNodeIndex(3, 0, treeABCDE.nodes)).toEqual(7);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDE.nodes)).toEqual(8);
         });
         
         // Test 6: Add a sixth file to an existing tree
@@ -428,15 +398,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 5,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDEF.nodes)).toEqual(3);
-            expect(getLeafNodeIndex(1, 0, treeABCDEF.nodes)).toEqual(4);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDEF.nodes)).toEqual(6);
-            expect(getLeafNodeIndex(3, 0, treeABCDEF.nodes)).toEqual(7);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDEF.nodes)).toEqual(9);
-            expect(getLeafNodeIndex(5, 0, treeABCDEF.nodes)).toEqual(10);
         });
         
         // Test 7: Add a seventh file to an existing tree
@@ -522,17 +483,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 6,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDEFG.nodes)).toEqual(3);
-            expect(getLeafNodeIndex(1, 0, treeABCDEFG.nodes)).toEqual(4);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDEFG.nodes)).toEqual(6);
-            expect(getLeafNodeIndex(3, 0, treeABCDEFG.nodes)).toEqual(7);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDEFG.nodes)).toEqual(10);
-            expect(getLeafNodeIndex(5, 0, treeABCDEFG.nodes)).toEqual(11);
-
-            expect(getLeafNodeIndex(6, 0, treeABCDEFG.nodes)).toEqual(12);
         });
         
         // Test 8: Add an eighth file to an existing tree
@@ -629,18 +579,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 7,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDEFGH.nodes)).toEqual(3);
-            expect(getLeafNodeIndex(1, 0, treeABCDEFGH.nodes)).toEqual(4);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDEFGH.nodes)).toEqual(6);
-            expect(getLeafNodeIndex(3, 0, treeABCDEFGH.nodes)).toEqual(7);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDEFGH.nodes)).toEqual(10);
-            expect(getLeafNodeIndex(5, 0, treeABCDEFGH.nodes)).toEqual(11);
-
-            expect(getLeafNodeIndex(6, 0, treeABCDEFGH.nodes)).toEqual(13);
-            expect(getLeafNodeIndex(7, 0, treeABCDEFGH.nodes)).toEqual(14);
         });
         
         // Test 9: Add a ninth file to an existing tree with a balanced approach
@@ -744,18 +682,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 8,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, rootABCDEFGHI.nodes)).toEqual(4);
-            expect(getLeafNodeIndex(1, 0, rootABCDEFGHI.nodes)).toEqual(5);
-
-            expect(getLeafNodeIndex(2, 0, rootABCDEFGHI.nodes)).toEqual(7);
-            expect(getLeafNodeIndex(3, 0, rootABCDEFGHI.nodes)).toEqual(8);
-
-            expect(getLeafNodeIndex(4, 0, rootABCDEFGHI.nodes)).toEqual(11);
-            expect(getLeafNodeIndex(5, 0, rootABCDEFGHI.nodes)).toEqual(12);
-
-            expect(getLeafNodeIndex(6, 0, rootABCDEFGHI.nodes)).toEqual(14);
-            expect(getLeafNodeIndex(7, 0, rootABCDEFGHI.nodes)).toEqual(15);
         });
         
         // Test 10: Add a tenth file to an existing tree with a balanced approach
@@ -869,21 +795,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 9,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDEFGHIJ.nodes)).toEqual(4);
-            expect(getLeafNodeIndex(1, 0, treeABCDEFGHIJ.nodes)).toEqual(5);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDEFGHIJ.nodes)).toEqual(7);
-            expect(getLeafNodeIndex(3, 0, treeABCDEFGHIJ.nodes)).toEqual(8);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDEFGHIJ.nodes)).toEqual(11);
-            expect(getLeafNodeIndex(5, 0, treeABCDEFGHIJ.nodes)).toEqual(12);
-
-            expect(getLeafNodeIndex(6, 0, treeABCDEFGHIJ.nodes)).toEqual(14);
-            expect(getLeafNodeIndex(7, 0, treeABCDEFGHIJ.nodes)).toEqual(15);
-
-            expect(getLeafNodeIndex(8, 0, treeABCDEFGHIJ.nodes)).toEqual(17);
-            expect(getLeafNodeIndex(9, 0, treeABCDEFGHIJ.nodes)).toEqual(18);
         });
         
         // Test 11: Add an eleventh file to an existing tree with a balanced approach
@@ -1005,23 +916,6 @@ describe('Merkle Tree', () => {
                     fileIndex: 10,
                 },
             ]);
-
-            expect(getLeafNodeIndex(0, 0, treeABCDEFGHIJK.nodes)).toEqual(4);
-            expect(getLeafNodeIndex(1, 0, treeABCDEFGHIJK.nodes)).toEqual(5);
-
-            expect(getLeafNodeIndex(2, 0, treeABCDEFGHIJK.nodes)).toEqual(7);
-            expect(getLeafNodeIndex(3, 0, treeABCDEFGHIJK.nodes)).toEqual(8);
-
-            expect(getLeafNodeIndex(4, 0, treeABCDEFGHIJK.nodes)).toEqual(11);
-            expect(getLeafNodeIndex(5, 0, treeABCDEFGHIJK.nodes)).toEqual(12);
-
-            expect(getLeafNodeIndex(6, 0, treeABCDEFGHIJK.nodes)).toEqual(14);
-            expect(getLeafNodeIndex(7, 0, treeABCDEFGHIJK.nodes)).toEqual(15);
-
-            expect(getLeafNodeIndex(8, 0, treeABCDEFGHIJK.nodes)).toEqual(18);
-            expect(getLeafNodeIndex(9, 0, treeABCDEFGHIJK.nodes)).toEqual(19);
-
-            expect(getLeafNodeIndex(10, 0, treeABCDEFGHIJK.nodes)).toEqual(20);
         });
     });
     
@@ -1060,12 +954,6 @@ describe('Merkle Tree', () => {
                 fileIndex: 2,
             }
         ]);
-
-        expect(getLeafNodeIndex(0, 0, tree.nodes)).toEqual(2);
-        expect(getLeafNodeIndex(1, 0, tree.nodes)).toEqual(3);
-
-        expect(getLeafNodeIndex(2, 0, tree.nodes)).toEqual(5);
-        expect(getLeafNodeIndex(3, 0, tree.nodes)).toEqual(6);
     });
 
     // Update File Tests

@@ -74,7 +74,7 @@ describe('Merkle Tree Metadata', () => {
             expect(originalTree.metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
             
             // Verify node and file counts
-            expect(originalTree.metadata.totalNodes).toBe(originalTree.nodes.length);
+            expect(originalTree.metadata.totalNodes).toBe(originalTree.root?.nodeCount || 0);
             expect(originalTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);            
         }
     });
@@ -99,7 +99,7 @@ describe('Merkle Tree Metadata', () => {
             expect(tree.metadata.id).toEqual(originalMetadata.id);
             
             // Counts should be updated
-            expect(tree.metadata.totalNodes).toBe(tree.nodes.length);
+            expect(tree.metadata.totalNodes).toBe(tree.root?.nodeCount || 0);
             expect(tree.metadata.totalFiles).toBe(tree.metadata.totalFiles);
         }
     });

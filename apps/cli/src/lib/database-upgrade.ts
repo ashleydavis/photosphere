@@ -1,5 +1,5 @@
 import { log } from "utils";
-import { HashCache, computeHash, deleteFiles } from "adb";
+import { HashCache, computeHash, deleteFiles, MerkleNode } from "adb";
 import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
@@ -30,29 +30,46 @@ export async function performDatabaseUpgrade(
             // Track how many files we updated
             let filesUpdated = 0;
             
-            // Update leaf nodes with lastModified from hash cache
-            for (const node of merkleTree.nodes) {
+            // Update leaf nodes with lastModified from hash cache using binary tree traversal
+            function updateLeafNodes(node: MerkleNode | undefined) {
+                if (!node) return;
+                
                 if (node.fileName) { // This is a leaf node
                     const cacheEntry = hashCache.getHash(node.fileName);
                     if (cacheEntry) {
                         node.lastModified = cacheEntry.lastModified;
                         filesUpdated++;
                     }
+                } else {
+                    // Internal node, traverse children
+                    updateLeafNodes(node.left);
+                    updateLeafNodes(node.right);
                 }
             }
+            
+            updateLeafNodes(merkleTree.root);
         }
                
         const assetStorage = database.getAssetStorage();
 
-        for (const node of merkleTree.nodes) {
+        // Fill in missing lastModified from file info using binary tree traversal
+        async function fillMissingLastModified(node: MerkleNode | undefined) {
+            if (!node) return;
+            
             if (node.fileName && !node.lastModified) {
                 const fileInfo = await assetStorage.info(node.fileName);
                 if (fileInfo) {
                     // Fill in missing lastModified from file info
                     node.lastModified = fileInfo.lastModified;
                 }
+            } else if (!node.fileName) {
+                // Internal node, traverse children
+                await fillMissingLastModified(node.left);
+                await fillMissingLastModified(node.right);
             }
-        }        
+        }
+        
+        await fillMissingLastModified(merkleTree.root);        
     }
 
     // Initialize database metadata for any version upgrade

@@ -51,7 +51,7 @@ describe('File Deletion', () => {
         // Build a test tree
         const tree = buildTestTree();
         const initialNumFiles = tree.metadata.totalFiles;
-        const initialNodeCount = tree.nodes.length;
+        const initialNodeCount = tree.root?.nodeCount || 0;
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
@@ -71,7 +71,7 @@ describe('File Deletion', () => {
         
         // Verify the tree structure hasn't changed
         expect(tree.metadata.totalFiles).toBe(initialNumFiles);
-        expect(tree.nodes.length).toBe(initialNodeCount);
+        expect(tree.root?.nodeCount || 0).toBe(initialNodeCount);
         
         // Verify the node ref is marked as deleted
         const nodeRefs = tree.sortedNodeRefs.filter(ref => ref.fileName === fileToDelete);
@@ -146,13 +146,13 @@ describe('File Deletion', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.nodes[0].hash.toString('hex');
+        const originalRootHash = tree.root?.hash.toString('hex');
         
         // Delete a file
         markFileAsDeleted(tree, 'file3.txt');
         
         // Get new root hash
-        const newRootHash = tree.nodes[0].hash.toString('hex');
+        const newRootHash = tree.root?.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
@@ -194,7 +194,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Build a test tree
         const tree = buildTestTree();
         const initialNumFiles = tree.metadata.totalFiles;
-        const initialNodeCount = tree.nodes.length;
+        const initialNodeCount = tree.root?.nodeCount || 0;
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
@@ -216,7 +216,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Verify the tree structure has changed (fewer nodes and files)
         expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
-        expect(tree.nodes.length).toBeLessThan(initialNodeCount);
+        expect(tree.root?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
         // Verify no node refs exist for the deleted file
         const nodeRefs = tree.sortedNodeRefs.filter(ref => ref.fileName === fileToDelete);
@@ -251,7 +251,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         tree = addFile(tree, createFileHash('single-file.txt'));
         
         expect(tree.metadata.totalFiles).toBe(1);
-        expect(tree.nodes.length).toBe(1);
+        expect(tree.root?.nodeCount || 0).toBe(1);
         
         // Delete the only file
         const result = deleteFiles(tree, ['single-file.txt']);
@@ -259,7 +259,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
-        expect(tree.nodes.length).toBe(0);
+        expect(tree.root?.nodeCount || 0).toBe(0);
         expect(tree.sortedNodeRefs.length).toBe(0);
     });
 
@@ -322,13 +322,13 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.nodes[0].hash.toString('hex');
+        const originalRootHash = tree.root?.hash.toString('hex');
         
         // Delete a file
         deleteFiles(tree, ['file3.txt']);
         
         // Get new root hash
-        const newRootHash = tree.nodes[0].hash.toString('hex');
+        const newRootHash = tree.root?.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
@@ -344,7 +344,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
-        expect(tree.nodes.length).toBe(0);
+        expect(tree.root?.nodeCount || 0).toBe(0);
         expect(tree.sortedNodeRefs.length).toBe(0);
         expect(getActiveFiles(tree).length).toBe(0);
     });

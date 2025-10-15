@@ -1,4 +1,4 @@
-import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
+import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, IMerkleTree, createTree } from '../../../lib/merkle-tree';
 
 describe('Merkle Tree NodeRefs', () => {
     
@@ -35,6 +35,22 @@ describe('Merkle Tree NodeRefs', () => {
         return merkleTree;
     }
 
+    /**
+     * Helper function to find a file in the binary tree
+     */
+    function findFileInTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
+        if (!node) return undefined;
+        
+        if (node.nodeCount === 1) {
+            return node.fileName === targetFileName ? node : undefined;
+        }
+        
+        const leftResult = findFileInTree(node.left, targetFileName);
+        if (leftResult) return leftResult;
+        
+        return findFileInTree(node.right, targetFileName);
+    }
+
     // Test 1: Create a tree with a single file and verify sortedNodeRefs
     test('creates a tree with a single file and verifies sortedNodeRefs', () => {
         const fileHash = createFileHash('A');
@@ -47,8 +63,8 @@ describe('Merkle Tree NodeRefs', () => {
         expect(tree.sortedNodeRefs[0].fileIndex).toBe(0);
         
         // Verify node is accessible via fileIndex
-        const fileIndex = tree.sortedNodeRefs[0].fileIndex;
-        expect(tree.nodes[fileIndex].hash).toEqual(Buffer.from('A'));
+        const fileNode = findFileInTree(tree.root, 'A');
+        expect(fileNode?.hash).toEqual(Buffer.from('A'));
     });
 
     // Test 2: Create a tree with multiple files and verify sortedNodeRefs are sorted alphabetically
@@ -64,11 +80,10 @@ describe('Merkle Tree NodeRefs', () => {
         const fileNames = tree.sortedNodeRefs.map(ref => ref.fileName);
         expect(fileNames).toEqual(['A', 'B', 'C', 'D', 'E']);
         
-        // Verify each nodeRef points to the correct node
+        // Verify each nodeRef points to the correct node using binary tree search
         for (const nodeRef of tree.sortedNodeRefs) {
-            const nodeIndex = getLeafNodeIndex(nodeRef.fileIndex, 0, tree.nodes);
-            const node = tree.nodes[nodeIndex];
-            expect(node.hash).toEqual(Buffer.from(nodeRef.fileName));
+            const fileNode = findFileInTree(tree.root, nodeRef.fileName);
+            expect(fileNode?.hash).toEqual(Buffer.from(nodeRef.fileName));
         }
     });
 
@@ -82,9 +97,8 @@ describe('Merkle Tree NodeRefs', () => {
         expect(nodeRef!.fileName).toBe('E');
         
         // Verify the node is correct
-        const nodeIndex = getLeafNodeIndex(nodeRef!.fileIndex, 0, tree.nodes);
-        const node = tree.nodes[nodeIndex];
-        expect(node.hash).toEqual(Buffer.from('E'));
+        const node = findFileInTree(tree.root, 'E');
+        expect(node?.hash).toEqual(Buffer.from('E'));
         
         // Find a node at the beginning
         const firstNodeRef = findNodeRef(tree, 'A');
@@ -152,9 +166,8 @@ describe('Merkle Tree NodeRefs', () => {
             const fileIndex = nodeRef.fileIndex;
             expect(fileIndex).toBeGreaterThanOrEqual(0);
             expect(fileIndex).toBeLessThan(tree.metadata.totalFiles);
-            const nodeIndex = getLeafNodeIndex(fileIndex, 0, tree.nodes);
-            const node = tree.nodes[nodeIndex];
-            expect(node.hash).toEqual(Buffer.from(nodeRef.fileName));
+            const node = findFileInTree(tree.root, nodeRef.fileName);
+            expect(node?.hash).toEqual(Buffer.from(nodeRef.fileName));
         }
         
         // Add another file to force more restructuring
@@ -165,9 +178,8 @@ describe('Merkle Tree NodeRefs', () => {
             const fileIndex = nodeRef.fileIndex;
             expect(fileIndex).toBeGreaterThanOrEqual(0);
             expect(fileIndex).toBeLessThan(updatedTree.metadata.totalFiles);
-            const nodeIndex = getLeafNodeIndex(fileIndex, 0, updatedTree.nodes);
-            const node = updatedTree.nodes[nodeIndex];
-            expect(node.hash).toEqual(Buffer.from(nodeRef.fileName));
+            const node = findFileInTree(updatedTree.root, nodeRef.fileName);
+            expect(node?.hash).toEqual(Buffer.from(nodeRef.fileName));
         }
     });
 
@@ -185,8 +197,9 @@ describe('Merkle Tree NodeRefs', () => {
         tree = addFile(tree, createFileHash('B'));
         aRef = findNodeRef(tree, 'A');
         expect(aRef).toBeDefined();
-        const nodeIndex = getLeafNodeIndex(aRef!.fileIndex, 0, tree.nodes);
-        expect(nodeIndex).toBeGreaterThan(0); // Should be pushed down in the tree
+        // Verify A exists in the tree (binary tree structure doesn't use array indices)
+        const aNode = findFileInTree(tree.root, 'A');
+        expect(aNode).toBeDefined();
         
         // Verify B's position
         const bRef = findNodeRef(tree, 'B');
@@ -197,9 +210,8 @@ describe('Merkle Tree NodeRefs', () => {
         
         // Check all references point to correct nodes after tree restructuring
         for (const ref of tree.sortedNodeRefs) {
-            const nodeIndex = getLeafNodeIndex(ref.fileIndex, 0, tree.nodes);
-            const node = tree.nodes[nodeIndex];
-            expect(node.hash).toEqual(Buffer.from(ref.fileName));
+            const node = findFileInTree(tree.root, ref.fileName);
+            expect(node?.hash).toEqual(Buffer.from(ref.fileName));
         }
         
         // Print tree for debugging
@@ -222,9 +234,8 @@ describe('Merkle Tree NodeRefs', () => {
         
         // Verify all references still point to correct nodes
         for (const ref of tree.sortedNodeRefs) {
-            const nodeIndex = getLeafNodeIndex(ref.fileIndex, 0, tree.nodes);
-            const node = tree.nodes[nodeIndex];
-            expect(node.hash).toEqual(Buffer.from(ref.fileName));
+            const node = findFileInTree(tree.root, ref.fileName);
+            expect(node?.hash).toEqual(Buffer.from(ref.fileName));
         }
         
         // Add another file to force more restructuring
@@ -250,15 +261,9 @@ describe('Merkle Tree NodeRefs', () => {
         );
         const tree = buildTree(fileNames);
         
-        // Create a linear search function for testing
+        // Use the existing binary tree search function for testing
         function linearSearch(tree: IMerkleTree<any>, fileName: string): MerkleNode | undefined {
-            for (let i = 0; i < tree.nodes.length; i++) {
-                const node = tree.nodes[i];
-                if (node.hash.toString() === Buffer.from(fileName).toString()) {
-                    return node;
-                }
-            }
-            return undefined;
+            return findFileInTree(tree.root, fileName);
         }
         
         // Prepare search terms (use only existing files)
