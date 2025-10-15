@@ -1,150 +1,150 @@
 {
   "metadata": {
-    "timestamp": "2025-10-15T20:42:03.817Z",
+    "timestamp": "2025-10-15T22:44:01.944Z",
     "totalFiles": 100000,
-    "testDurationMs": 89338.7610709994,
+    "testDurationMs": 23823.444389000233,
     "nodeVersion": "v24.3.0",
     "platform": "linux",
     "arch": "x64"
   },
   "overall": {
-    "meanMs": 0.8933876107099941,
-    "medianMs": 0.786781,
-    "minMs": 0.004273,
-    "maxMs": 22.411688,
-    "p95Ms": 2.295679,
-    "p99Ms": 4.572269,
-    "totalTimeMs": 89338.7610709994,
-    "averageTimePerFileMs": 0.8933876107099941
+    "meanMs": 0.23823444389000234,
+    "medianMs": 0.181321,
+    "minMs": 0.002498,
+    "maxMs": 11.020305,
+    "p95Ms": 0.551138,
+    "p99Ms": 1.211418,
+    "totalTimeMs": 23823.444389000233,
+    "averageTimePerFileMs": 0.23823444389000234
   },
   "scaling": {
-    "firstQuarterAverageMs": 0.20242689595999988,
-    "lastQuarterAverageMs": 1.5007896162000103,
-    "scalingRatio": 7.413983251003219,
+    "firstQuarterAverageMs": 0.05629435963999987,
+    "lastQuarterAverageMs": 0.4480450911600017,
+    "scalingRatio": 7.958969495793748,
     "classification": "poor"
   },
   "trends": [
     {
       "fileRange": "1-5000",
-      "meanMs": 0.04696649780000006,
-      "medianMs": 0.039192
+      "meanMs": 0.019531033600000032,
+      "medianMs": 0.015371
     },
     {
       "fileRange": "5001-10000",
-      "meanMs": 0.1152552540000001,
-      "medianMs": 0.095565
+      "meanMs": 0.03963327660000016,
+      "medianMs": 0.029568
     },
     {
       "fileRange": "10001-15000",
-      "meanMs": 0.2168186270000002,
-      "medianMs": 0.173027
+      "meanMs": 0.05897014959999998,
+      "medianMs": 0.044914
     },
     {
       "fileRange": "15001-20000",
-      "meanMs": 0.2622898436000003,
-      "medianMs": 0.220945
+      "meanMs": 0.06995917580000018,
+      "medianMs": 0.057693
     },
     {
       "fileRange": "20001-25000",
-      "meanMs": 0.3708042574000008,
-      "medianMs": 0.29474
+      "meanMs": 0.09337816260000016,
+      "medianMs": 0.075268
     },
     {
       "fileRange": "25001-30000",
-      "meanMs": 0.4800576353999999,
-      "medianMs": 0.386124
+      "meanMs": 0.1175545752000001,
+      "medianMs": 0.087947
     },
     {
       "fileRange": "30001-35000",
-      "meanMs": 0.5707161508000007,
-      "medianMs": 0.468122
+      "meanMs": 0.1373368758000001,
+      "medianMs": 0.103587
     },
     {
       "fileRange": "35001-40000",
-      "meanMs": 0.537590542199999,
-      "medianMs": 0.443233
+      "meanMs": 0.15645606420000016,
+      "medianMs": 0.120671
     },
     {
       "fileRange": "40001-45000",
-      "meanMs": 0.8378680393999999,
-      "medianMs": 0.652388
+      "meanMs": 0.19330620920000008,
+      "medianMs": 0.137667
     },
     {
       "fileRange": "45001-50000",
-      "meanMs": 0.9058109226000012,
-      "medianMs": 0.764813
+      "meanMs": 0.21064929339999972,
+      "medianMs": 0.156263
     },
     {
       "fileRange": "50001-55000",
-      "meanMs": 1.109832740400001,
-      "medianMs": 0.850524
+      "meanMs": 0.25491628360000096,
+      "medianMs": 0.178541
     },
     {
       "fileRange": "55001-60000",
-      "meanMs": 1.2956812960000024,
-      "medianMs": 0.887733
+      "meanMs": 0.2704922167999992,
+      "medianMs": 0.200818
     },
     {
       "fileRange": "60001-65000",
-      "meanMs": 1.3757196503999953,
-      "medianMs": 1.044287
+      "meanMs": 0.28732540299999926,
+      "medianMs": 0.232721
     },
     {
       "fileRange": "65001-70000",
-      "meanMs": 1.1461973097999996,
-      "medianMs": 0.862191
+      "meanMs": 0.2994883553999999,
+      "medianMs": 0.250323
     },
     {
       "fileRange": "70001-75000",
-      "meanMs": 1.0921953663999984,
-      "medianMs": 0.867906
+      "meanMs": 0.3154663471999991,
+      "medianMs": 0.27359
     },
     {
       "fileRange": "75001-80000",
-      "meanMs": 1.3524054697999917,
-      "medianMs": 0.998952
+      "meanMs": 0.35792409759999994,
+      "medianMs": 0.289559
     },
     {
       "fileRange": "80001-85000",
-      "meanMs": 1.3795899794000008,
-      "medianMs": 1.032253
+      "meanMs": 0.3946976046,
+      "medianMs": 0.311857
     },
     {
       "fileRange": "85001-90000",
-      "meanMs": 1.4374934546,
-      "medianMs": 1.139415
+      "meanMs": 0.4179244026000004,
+      "medianMs": 0.313019
     },
     {
       "fileRange": "90001-95000",
-      "meanMs": 1.6127670366000029,
-      "medianMs": 1.28305
+      "meanMs": 0.46859563,
+      "medianMs": 0.337852
     },
     {
       "fileRange": "95001-100000",
-      "meanMs": 1.7216921405999994,
-      "medianMs": 1.396373
+      "meanMs": 0.6010837209999997,
+      "medianMs": 0.389179
     }
   ],
   "scalePoints": [
     {
       "size": 10000,
-      "averageMs": 0.1345124870000001
+      "averageMs": 0.04453957049999996
     },
     {
       "size": 25000,
-      "averageMs": 0.40032179250000116
+      "averageMs": 0.10266011700000008
     },
     {
       "size": 50000,
-      "averageMs": 0.9508825790000008
+      "averageMs": 0.22477576200000007
     },
     {
       "size": 75000,
-      "averageMs": 1.184480869
+      "averageMs": 0.33020402199999965
     },
     {
       "size": 100000,
-      "averageMs": 1.559520043
+      "averageMs": 0.6940492699999993
     }
   ],
   "tree": {
