@@ -8,6 +8,7 @@ import {
     saveTree,
     loadTree,
     loadTreeVersion,
+    traverseTreeSync,
     createTree,
     CURRENT_DATABASE_VERSION
 } from '../../../lib/merkle-tree';
@@ -91,16 +92,12 @@ describe('Merkle Tree Save/Load', () => {
         
         // Find leaf nodes to verify data integrity using binary tree traversal
         const leafNodes: MerkleNode[] = [];
-        function collectLeafNodes(node: MerkleNode | undefined) {
-            if (!node) return;
+        traverseTreeSync(loadedTree.root, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
-            } else {
-                collectLeafNodes(node.left);
-                collectLeafNodes(node.right);
             }
-        }
-        collectLeafNodes(loadedTree.root);
+            return true; // Continue traversal
+        });
         expect(leafNodes.length).toBe(2);
         
         // They should have filenames 'A' and 'B' (in some order)
@@ -134,16 +131,12 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify leaf nodes have correct file names using binary tree traversal
         const leafNodes: MerkleNode[] = [];
-        function collectLeafNodes(node: MerkleNode | undefined) {
-            if (!node) return;
+        traverseTreeSync(loadedTree.root, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
-            } else {
-                collectLeafNodes(node.left);
-                collectLeafNodes(node.right);
             }
-        }
-        collectLeafNodes(loadedTree.root);
+            return true; // Continue traversal
+        });
         expect(leafNodes.length).toBe(fileNames.length);
         
         const loadedFileNames = leafNodes.map(node => node.fileName).sort();
