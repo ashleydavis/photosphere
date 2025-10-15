@@ -3,6 +3,7 @@ import {
     FileHash, 
     upsertFile, 
     findFileNode,
+    traverseTreeSync,
     createTree
 } from '../../../lib/merkle-tree';
 
@@ -144,13 +145,10 @@ describe('Merkle Tree upsertFile', () => {
     
     // Record original node hashes using depth-first traversal
     const originalHashes: string[] = [];
-    function collectHashes(node: any) {
-        if (!node) return;
+    traverseTreeSync(tree!.root, (node) => {
         originalHashes.push(node.hash.toString('hex'));
-        collectHashes(node.left);
-        collectHashes(node.right);
-    }
-    collectHashes(tree!.root);
+        return true; // Continue traversal
+    });
     
     // Update one file
     const updatedFileC = createFileHash('C.txt', 'updated content C');
@@ -170,13 +168,10 @@ describe('Merkle Tree upsertFile', () => {
     
     // Collect new hashes using depth-first traversal
     const newHashes: string[] = [];
-    function collectNewHashes(node: any) {
-        if (!node) return;
+    traverseTreeSync(tree!.root, (node) => {
         newHashes.push(node.hash.toString('hex'));
-        collectNewHashes(node.left);
-        collectNewHashes(node.right);
-    }
-    collectNewHashes(tree!.root);
+        return true; // Continue traversal
+    });
     
     // Expect changes in C node, CD node, and root node
     expect(newHashes[5]).not.toBe(originalHashes[5]); // C node hash changed

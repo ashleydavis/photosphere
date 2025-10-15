@@ -92,6 +92,99 @@ export interface IMerkleTree<DatabaseMetadata> {
     version: number;
 }
 
+//
+// Core tree traversal utilities - these should be reused everywhere instead of duplicating logic
+//
+
+/**
+ * Find a file node in the binary tree by file name.
+ * This is the core tree traversal function that should be reused everywhere.
+ */
+export function findFileInTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
+    if (!node) return undefined;
+    
+    if (node.nodeCount === 1) {
+        return node.fileName === targetFileName ? node : undefined;
+    }
+    
+    const leftResult = findFileInTree(node.left, targetFileName);
+    if (leftResult) return leftResult;
+    
+    return findFileInTree(node.right, targetFileName);
+}
+
+/**
+ * Generic tree traversal function that calls a callback for each node.
+ * The callback can return false to stop traversal early.
+ */
+export function traverseTreeSync(node: MerkleNode | undefined, callback: (node: MerkleNode) => boolean): void {
+    if (!node) return;
+    
+    if (!callback(node)) return; // Stop if callback returns false
+    
+    traverseTreeSync(node.left, callback);
+    traverseTreeSync(node.right, callback);
+}
+
+/**
+ * Generic async tree traversal function that calls an async callback for each node.
+ * The callback can return false to stop traversal early.
+ */
+export async function traverseTreeAsync(node: MerkleNode | undefined, callback: (node: MerkleNode) => Promise<boolean>): Promise<void> {
+    if (!node) return;
+    
+    const shouldContinue = await callback(node);
+    if (!shouldContinue) return; // Stop if callback returns false
+    
+    await traverseTreeAsync(node.left, callback);
+    await traverseTreeAsync(node.right, callback);
+}
+
+/**
+ * Generic function to find and update a node in the binary tree.
+ * The updater function should return true if the node was updated, false otherwise.
+ * If a node is updated, parent nodes will have their properties recalculated.
+ */
+export function updateNodeInTree<T>(
+    node: MerkleNode, 
+    targetFileName: string, 
+    updater: (node: MerkleNode, targetFileName: string) => T
+): T | undefined {
+    // If this is a leaf node, check if it's the target
+    if (node.nodeCount === 1) {
+        if (node.fileName === targetFileName) {
+            return updater(node, targetFileName);
+        }
+        return undefined; // Not the target
+    }
+    
+    // Internal node - recursively check children
+    let result: T | undefined = undefined;
+    
+    // Check left subtree
+    if (node.left) {
+        result = updateNodeInTree(node.left, targetFileName, updater);
+    }
+    
+    // Check right subtree (only if not found in left)
+    if (!result && node.right) {
+        result = updateNodeInTree(node.right, targetFileName, updater);
+    }
+    
+    // If a child was updated, recalculate this node's properties
+    if (result !== undefined) {
+        const leftSize = node.left?.size || 0;
+        const rightSize = node.right?.size || 0;
+        
+        node.size = leftSize + rightSize;
+        node.hash = combineHashes(
+            node.left?.hash || Buffer.alloc(0),
+            node.right?.hash || Buffer.alloc(0)
+        );
+    }
+    
+    return result;
+}
 
 //
 // Combine two hashes to create a parent hash.
@@ -385,50 +478,14 @@ export function updateFile<DatabaseMetadata>(
         return false;
     }
     
-    // Recursive function to find and update a file in the binary tree (mutating in place)
-    function updateNodeInTree(node: MerkleNode, targetFileName: string, updatedFileHash: FileHash): boolean {
-        // If this is a leaf node, check if it's the target
-        if (node.nodeCount === 1) {
-            if (node.fileName === targetFileName) {
-                // Update the leaf node in place
-                node.hash = updatedFileHash.hash;
-                node.lastModified = updatedFileHash.lastModified;
-                node.size = updatedFileHash.length; // Update the size with the new file length
-                return true; // Found and updated
-            }
-            return false; // Not the target
-        }
-        
-        // Internal node - recursively check children
-        let updated = false;
-        
-        // Check left subtree
-        if (node.left && updateNodeInTree(node.left, targetFileName, updatedFileHash)) {
-            updated = true;
-        }
-        
-        // Check right subtree (only if not found in left)
-        if (!updated && node.right && updateNodeInTree(node.right, targetFileName, updatedFileHash)) {
-            updated = true;
-        }
-        
-        // If a child was updated, recalculate this node's properties
-        if (updated) {
-            const leftSize = node.left?.size || 0;
-            const rightSize = node.right?.size || 0;
-            
-            node.size = leftSize + rightSize;
-            node.hash = combineHashes(
-                node.left?.hash || Buffer.alloc(0),
-                node.right?.hash || Buffer.alloc(0)
-            );
-        }
-        
-        return updated;
-    }
-    
-    // Update the tree starting from root
-    const wasUpdated = updateNodeInTree(merkleTree.root, fileHash.fileName, fileHash);
+    // Use the centralized updateNodeInTree function
+    const wasUpdated = updateNodeInTree(merkleTree.root, fileHash.fileName, (node, targetFileName) => {
+        // Update the leaf node in place
+        node.hash = fileHash.hash;
+        node.lastModified = fileHash.lastModified;
+        node.size = fileHash.length; // Update the size with the new file length
+        return true; // Found and updated
+    }) ?? false;
     
     if (wasUpdated) {
         // Update metadata with new root size  
@@ -518,22 +575,7 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
         return undefined;
     }
 
-    // Recursively search for the file in the binary tree
-    function findFileInTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-        if (!node) return undefined;
-        
-        // If this is a leaf node, check if it's the target
-        if (node.nodeCount === 1) {
-            return node.fileName === targetFileName ? node : undefined;
-        }
-        
-        // Internal node - search both children
-        const leftResult = findFileInTree(node.left, targetFileName);
-        if (leftResult) return leftResult;
-        
-        return findFileInTree(node.right, targetFileName);
-    }
-    
+    // Use the centralized findFileInTree function
     const leafNode = findFileInTree(merkleTree.root, fileName);
 
     if (!leafNode?.lastModified) {
@@ -1263,44 +1305,14 @@ export function markFileAsDeleted<DatabaseMetadata>(
     // Mark the node reference as deleted
     nodeRef.isDeleted = true;
     
-    // Find and mark the actual leaf node as deleted in the binary tree
-    function markNodeInTree(node: MerkleNode, targetFileName: string): boolean {
-        if (node.nodeCount === 1) {
-            // Leaf node
-            if (node.fileName === targetFileName) {
-                node.isDeleted = true;
-                node.hash = createTombstoneHash(targetFileName);
-                node.size = 0;
-                return true;
-            }
-            return false;
-        }
-        
-        // Internal node - search children and update if found
-        let found = false;
-        if (node.left && markNodeInTree(node.left, targetFileName)) {
-            found = true;
-        }
-        if (!found && node.right && markNodeInTree(node.right, targetFileName)) {
-            found = true;
-        }
-        
-        // If we found and marked a descendant, update this node's hash and size
-        if (found) {
-            const leftSize = node.left?.size || 0;
-            const rightSize = node.right?.size || 0;
-            
-            node.size = leftSize + rightSize;
-            node.hash = combineHashes(
-                node.left?.hash || Buffer.alloc(0),
-                node.right?.hash || Buffer.alloc(0)
-            );
-        }
-        
-        return found;
-    }
-    
-    const wasMarked = markNodeInTree(merkleTree.root, fileName);
+    // Use the centralized updateNodeInTree function to mark the node as deleted
+    const wasMarked = updateNodeInTree(merkleTree.root, fileName, (node, targetFileName) => {
+        // Mark the leaf node as deleted
+        node.isDeleted = true;
+        node.hash = createTombstoneHash(targetFileName);
+        node.size = 0;
+        return true; // Found and marked
+    });
     
     // Update metadata if it exists
     if (merkleTree.metadata && wasMarked) {
@@ -1359,20 +1371,7 @@ export function deleteFiles<DatabaseMetadata>(
             if (filesToDelete.has(nodeRef.fileName)) {
                 filesRemoved++;
             } else {
-                // Find the corresponding node to get file details
-                function findFileInTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-                    if (!node) return undefined;
-                    
-                    if (node.nodeCount === 1) {
-                        return node.fileName === targetFileName ? node : undefined;
-                    }
-                    
-                    const leftResult = findFileInTree(node.left, targetFileName);
-                    if (leftResult) return leftResult;
-                    
-                    return findFileInTree(node.right, targetFileName);
-                }
-                
+                // Use the centralized findFileInTree function
                 const node = findFileInTree(merkleTree.root, nodeRef.fileName);
                 
                 if (node && node.fileName && node.lastModified) {
@@ -1538,20 +1537,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
             progressCallback(`Indexing sources files | ${processedFiles} of ${treeA.sortedNodeRefs.length} files`);
         }
         
-        function findFileInTreeA(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-            if (!node) return undefined;
-            
-            if (node.nodeCount === 1) {
-                return node.fileName === targetFileName ? node : undefined;
-            }
-            
-            const leftResult = findFileInTreeA(node.left, targetFileName);
-            if (leftResult) return leftResult;
-            
-            return findFileInTreeA(node.right, targetFileName);
-        }
-        
-        const node = findFileInTreeA(treeA.root, nodeRef.fileName);
+        const node = findFileInTree(treeA.root, nodeRef.fileName);
         if (node) {
             filesInA.set(nodeRef.fileName, { 
                 hash: node.hash.toString('hex'),
@@ -1567,20 +1553,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
             progressCallback(`Indexing dest files | ${processedFiles - treeA.sortedNodeRefs.length} of ${treeB.sortedNodeRefs.length} files`);
         }
         
-        function findFileInTreeB(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-            if (!node) return undefined;
-            
-            if (node.nodeCount === 1) {
-                return node.fileName === targetFileName ? node : undefined;
-            }
-            
-            const leftResult = findFileInTreeB(node.left, targetFileName);
-            if (leftResult) return leftResult;
-            
-            return findFileInTreeB(node.right, targetFileName);
-        }
-        
-        const node = findFileInTreeB(treeB.root, nodeRef.fileName);
+        const node = findFileInTree(treeB.root, nodeRef.fileName);
         if (node) {
             filesInB.set(nodeRef.fileName, { 
                 hash: node.hash.toString('hex'),

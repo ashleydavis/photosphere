@@ -1,4 +1,4 @@
-import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, IMerkleTree, createTree } from '../../../lib/merkle-tree';
+import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, findFileInTree, IMerkleTree, createTree } from '../../../lib/merkle-tree';
 
 describe('Merkle Tree NodeRefs', () => {
     
@@ -35,21 +35,7 @@ describe('Merkle Tree NodeRefs', () => {
         return merkleTree;
     }
 
-    /**
-     * Helper function to find a file in the binary tree
-     */
-    function findFileInTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-        if (!node) return undefined;
-        
-        if (node.nodeCount === 1) {
-            return node.fileName === targetFileName ? node : undefined;
-        }
-        
-        const leftResult = findFileInTree(node.left, targetFileName);
-        if (leftResult) return leftResult;
-        
-        return findFileInTree(node.right, targetFileName);
-    }
+    // Use the centralized findFileInTree function from the main library
 
     // Test 1: Create a tree with a single file and verify sortedNodeRefs
     test('creates a tree with a single file and verifies sortedNodeRefs', () => {

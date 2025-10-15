@@ -5,6 +5,7 @@ import {
     addFile, 
     updateFile, 
     findFileNode,
+    traverseTreeSync,
     createTree, 
 } from '../../../lib/merkle-tree';
 // Helper to create a file hash
@@ -131,30 +132,36 @@ describe('Merkle Tree UpdateFile', () => {
     function verifyNodeHash(node: MerkleNode | undefined): boolean {
       if (!node) return true;
       
-      // Leaf nodes can't be verified this way
-      if (node.nodeCount === 1) {
-        return true;
-      }
+      let allHashesValid = true;
       
-      // For internal nodes, recalculate hash from children
-      if (!node.left || !node.right) {
-        return true; // No children to verify
-      }
+      traverseTreeSync(node, (currentNode) => {
+        // Leaf nodes can't be verified this way
+        if (currentNode.nodeCount === 1) {
+          return true; // Continue traversal
+        }
+        
+        // For internal nodes, recalculate hash from children
+        if (!currentNode.left || !currentNode.right) {
+          return true; // No children to verify, continue traversal
+        }
+        
+        // Calculate the expected hash
+        const expectedHash = crypto.createHash('sha256')
+          .update(currentNode.left.hash)
+          .update(currentNode.right.hash)
+          .digest();
+        
+        // Compare with actual hash
+        const hashesMatch = Buffer.compare(expectedHash, currentNode.hash) === 0;
+        if (!hashesMatch) {
+          allHashesValid = false;
+          return false; // Stop traversal on first error
+        }
+        
+        return true; // Continue traversal
+      });
       
-      // Calculate the expected hash
-      const expectedHash = crypto.createHash('sha256')
-        .update(node.left.hash)
-        .update(node.right.hash)
-        .digest();
-      
-      // Compare with actual hash
-      const hashesMatch = Buffer.compare(expectedHash, node.hash) === 0;
-      
-      // Recursively verify children
-      const leftVerified = verifyNodeHash(node.left);
-      const rightVerified = verifyNodeHash(node.right);
-      
-      return hashesMatch && leftVerified && rightVerified;
+      return allHashesValid;
     }
     
     // Verify the entire tree starting from the root

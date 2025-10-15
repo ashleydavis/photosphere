@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { createTree, addFile, binaryTreeToArray, arrayToBinaryTree, FileHash } from "../../../lib/merkle-tree";
+import { createTree, addFile, binaryTreeToArray, arrayToBinaryTree, traverseTreeSync, FileHash } from "../../../lib/merkle-tree";
 
 describe('Binary Tree Conversion Functions', () => {
 
@@ -219,6 +219,8 @@ describe('Binary Tree Conversion Functions', () => {
             
             // Verify tree structure is maintained
             function verifyTreeStructure(node: any): void {
+                if (!node) return;
+                
                 if (node.nodeCount === 1) {
                     // Leaf node - should have no children and fileName
                     expect(node.left).toBeUndefined();
