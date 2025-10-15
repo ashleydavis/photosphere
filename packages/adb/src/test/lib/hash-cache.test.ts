@@ -101,6 +101,10 @@ class MockStorage implements IStorage {
     async releaseWriteLock(filePath: string): Promise<void> {
         // No-op in mock
     }
+    
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        // No-op in mock
+    }
 }
 
 // Helper function to create a file hash

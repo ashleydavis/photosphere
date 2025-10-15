@@ -1,4 +1,4 @@
-import { IFileInfo, IListResult, IStorage } from "storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "storage";
 import { IAssetDatabase } from "./asset-database";
 import { computeHash } from "./hash";
 
@@ -151,4 +151,33 @@ export class AssetDatabaseStorage implements IStorage {
         await this.updateMerkleTree(destPath); //TODO: This won't work unless dest path is relative to this storage.
     }
 
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        return this.storage.checkWriteLock(filePath);
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        return this.storage.acquireWriteLock(filePath, owner);
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    releaseWriteLock(filePath: string): Promise<void> {
+        return this.storage.releaseWriteLock(filePath);
+    }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        return this.storage.refreshWriteLock(filePath, owner);
+    }
 }
