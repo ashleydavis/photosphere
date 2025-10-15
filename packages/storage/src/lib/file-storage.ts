@@ -1,8 +1,11 @@
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage, checkReadonly } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
 import { log } from "utils";
+
+// Write lock timeout in milliseconds (10 seconds)
+const WRITE_LOCK_TIMEOUT_MS = 10000;
 
 export class FileStorage implements IStorage {
 
@@ -204,5 +207,159 @@ export class FileStorage implements IStorage {
         await fs.copy(srcPath, destPath);
     }
 
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+        try {
+            if (await fs.pathExists(filePath)) {
+                const lockContent = await fs.readFile(filePath, 'utf8');
+                const lockData = JSON.parse(lockContent.trim());
+                return {
+                    owner: lockData.owner,
+                    acquiredAt: new Date(lockData.acquiredAt),
+                    timestamp: lockData.timestamp
+                };
+            }
+            return undefined;
+        } catch (err) {
+            return undefined;
+        }
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        checkReadonly(this.isReadonly, 'acquire write lock');
+        
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},ACQUIRE_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
+        try {
+            // Check if lock already exists
+            if (await fs.pathExists(filePath)) {
+                // Check if existing lock has timed out (10 seconds = 10000ms)
+                const existingLock = await this.checkWriteLock(filePath);
+                if (existingLock) {
+                    const lockAge = timestamp - existingLock.timestamp;
+                    if (lockAge > WRITE_LOCK_TIMEOUT_MS) {
+                        // Lock has timed out, remove it and proceed to acquire new lock
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_TIMEOUT_BREAK,${processId},${owner},${filePath},age:${lockAge}ms,oldOwner:${existingLock.owner}`);
+                        }
+                        await fs.remove(filePath);
+                    } else {
+                        // Lock is still valid
+                        if (log.verboseEnabled) {
+                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath},age:${lockAge}ms,owner:${existingLock.owner}`);
+                        }
+                        return false;
+                    }
+                } else {
+                    // Corrupted lock file, remove it
+                    if (log.verboseEnabled) {
+                        log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
+                    }
+                    await fs.remove(filePath);
+                }
+            }
+            
+            // Ensure directory exists
+            await fs.ensureDir(path.dirname(filePath));
+            
+            // Create lock file with owner and timestamp information
+            const lockInfo = {
+                owner,
+                acquiredAt: new Date().toISOString(),
+                timestamp
+            };
+            await fs.writeFile(filePath, JSON.stringify(lockInfo), { flag: 'wx' }); // 'wx' flag fails if file exists
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS,${processId},${owner},${filePath}`);
+            }
+            return true;
+        } catch (err: any) {
+            // If file already exists (EEXIST), return false
+            if (err.code === 'EEXIST') {
+                if (log.verboseEnabled) {
+                    log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RACE,${processId},${owner},${filePath}`);
+                }
+                return false;
+            }
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_ERROR,${processId},${owner},${filePath},error:${err.message}`);
+            }
+            throw err;
+        }
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    async releaseWriteLock(filePath: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'release write lock');
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
+        }
+        
+        try {
+            await fs.unlink(filePath);
+        } catch (err) {
+            // Ignore errors if the lock file doesn't exist
+        }
+    }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Throws an error if the lock is no longer owned by the specified owner.
+    //
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        checkReadonly(this.isReadonly, 'refresh write lock');
+        
+        const timestamp = Date.now();
+        const processId = process.pid;
+        
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${timestamp},REFRESH_ATTEMPT,${processId},${owner},${filePath}`);
+        }
+        
+        try {
+            // Check if lock exists and we own it
+            const existingLock = await this.checkWriteLock(filePath);
+            if (!existingLock) {
+                throw new Error(`Cannot refresh write lock: lock does not exist for ${filePath}`);
+            }
+            
+            if (existingLock.owner !== owner) {
+                throw new Error(`Cannot refresh write lock: lock is owned by ${existingLock.owner}, not ${owner} for ${filePath}`);
+            }
+            
+            // Update the lock with new timestamp
+            const lockInfo = {
+                owner,
+                acquiredAt: new Date().toISOString(),
+                timestamp
+            };
+            await fs.writeFile(filePath, JSON.stringify(lockInfo));
+            
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_SUCCESS,${processId},${owner},${filePath}`);
+            }
+        } catch (err: any) {
+            if (log.verboseEnabled) {
+                log.verbose(`[LOCK] ${timestamp},REFRESH_FAILED,${processId},${owner},${filePath},error:${err.message}`);
+            }
+            throw err;
+        }
+    }
 
 }

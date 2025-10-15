@@ -80,6 +80,24 @@ class MockStorage implements IStorage {
     clear(): void {
         this.files.clear();
     }
+
+    async checkWriteLock(filePath: string): Promise<{ owner: string; acquiredAt: Date; timestamp: number; } | undefined> {
+        // No write lock support in mock storage
+        return undefined;
+    }
+
+    async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
+        // Always succeed in mock storage
+        return true;
+    }
+
+    async releaseWriteLock(filePath: string): Promise<void> {
+        // No-op in mock storage
+    }
+
+    async refreshWriteLock(filePath: string, owner: string): Promise<void> {
+        // No-op in mock storage
+    }
 }
 
 //

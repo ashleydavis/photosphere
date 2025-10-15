@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, acquireWriteLock, checkWriteLock, ILock, getLocalIdentifier, IOrderedFile } from "storage";
+import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, IOrderedFile } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
@@ -425,11 +425,6 @@ export class MediaFileDatabase {
     private readonly sessionId: string;
 
     //
-    // The write lock for this database instance.
-    //
-    private writeLock: ILock | undefined;
-
-    //
     // The block graph for managing database updates with device-specific metadata storage.
     //
     private blockGraph: BlockGraph<DatabaseUpdate> | undefined;
@@ -528,23 +523,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Gets the local identifier for this database based on its storage location.
-    // Used for creating unique write lock paths in the Photosphere temp directory.
-    //
-    getLocalIdentifier(): string {
-        return getLocalIdentifier(this.assetStorage.location);
-    }
-
-    //
-    // Gets the path to the write lock file for this database.
-    //
-    private getLockFilePath(): string {
-        const localId = this.getLocalIdentifier();
-        const photosphereTempDir = path.join(os.tmpdir(), "photosphere", "locks", localId);
-        return path.join(photosphereTempDir, "write.lock");
-    }
-
-    //
     // Acquires the write lock for the database.
     // Only needed for writing to:
     // - the merkle tree file (tree.dat).
@@ -553,15 +531,13 @@ export class MediaFileDatabase {
     // Throws when the write lock cannot be acquired.
     //
     private async acquireWriteLock(): Promise<void> {
-        // Create lock file path in Photosphere temp directory using database local identifier
-        const lockFilePath = this.getLockFilePath();
         
+        const lockFilePath = ".db/write.lock";
         const maxAttempts = 3;
         
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const lock = await acquireWriteLock(lockFilePath, this.sessionId);
-            if (lock) {
-                this.writeLock = lock;
+            const haveWriteLock = await this.assetStorage.acquireWriteLock(lockFilePath, this.sessionId);
+            if (haveWriteLock) {
                 //
                 // Always reload the database after acquiring the write lock to ensure we have the latest tree.
                 //
@@ -579,7 +555,7 @@ export class MediaFileDatabase {
         }
         
         // All attempts failed - check lock info for detailed error message.
-        const lockInfo = await checkWriteLock(lockFilePath);
+        const lockInfo = await this.assetStorage.checkWriteLock(lockFilePath);
         if (lockInfo) {
             const timeSinceLocked = Date.now() - lockInfo.acquiredAt.getTime();
             const timeString = timeSinceLocked < 60000 
@@ -604,10 +580,7 @@ export class MediaFileDatabase {
     // Refreshes the write lock to prevent timeout.
     //
     private async refreshWriteLock(): Promise<void> {
-        if (!this.writeLock) {
-            throw new Error("Cannot refresh write lock: no write lock is currently held");
-        }
-        await this.writeLock.refresh();
+        await this.assetStorage.refreshWriteLock(".db/write.lock", this.sessionId);
     }
 
     //
@@ -616,10 +589,13 @@ export class MediaFileDatabase {
     private async releaseWriteLock(): Promise<void> {
         await retry(() => this.assetDatabase.save()); // Ensure the tree is saved before releasing the lock.
 
-        if (this.writeLock) {
-            await retry(() => this.writeLock!.release());
-            this.writeLock = undefined;
-        }
+        //fio:
+        // if (this.writeLock) {
+        //     await retry(() => this.writeLock!.release());
+        //     this.writeLock = undefined;
+        // }
+
+        await retry(() => this.assetStorage.releaseWriteLock(".db/write.lock"));
     }
 
     //
