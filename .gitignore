@@ -51,3 +51,4 @@ apps/cli/tmp/
 packages/adb/test/tmp
 packages/serialization/build/
 packages/api/test/tmp/photosphere-test-uuid-counter
+packages/adb/src/test/perf/results/
