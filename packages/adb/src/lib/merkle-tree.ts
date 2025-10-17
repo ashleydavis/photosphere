@@ -898,6 +898,36 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 }
 
 //
+// Rebuild a merkle tree in sorted order and removes a path.
+//
+export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
+
+    let rebuiltTree = createTree<DatabaseMetadata>(tree.metadata.id);
+    rebuiltTree.databaseMetadata = tree.databaseMetadata;
+
+    traverseTreeSync(tree.root, (node) => {
+        if (node.nodeCount === 1 && node.fileName && node.lastModified) {
+            if (pathRemove) {
+                if (node.fileName.startsWith(pathRemove)) {
+                    // Don't add this file to the new tree.
+                    return true;
+                }
+            }
+
+            rebuiltTree = addFile(rebuiltTree, {
+                fileName: node.fileName,
+                hash: node.hash,
+                length: node.size,
+                lastModified: node.lastModified
+            });
+        }
+        return true;
+    });
+
+    return rebuiltTree;
+}
+
+//
 // Deserializer function for merkle tree (version 4+)
 //
 function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {

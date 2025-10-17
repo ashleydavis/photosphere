@@ -189,30 +189,3 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
     log.info(`✓ Block graph saved to metadata storage`);
     log.info(`✓ Block contains ${databaseUpdates.length} upsert operations from ${collectionNames.length} collections (${totalRecords} total records)`);    
 }
-
-
-//
-// Remove files from the merkle tree that are intended to be local only and not replicated.
-//
-export function removeLocalOnlyFiles(database: MediaFileDatabase): void {
-    log.info("Removing metadata files from merkle tree...");
-
-    const merkleTree = database.getAssetDatabase().getMerkleTree();
-
-    const filesToRemove: string[] = [];
-
-    traverseTreeSync(merkleTree.root, (node) => {
-        if (node.fileName && node.fileName.startsWith('metadata/')) {
-            filesToRemove.push(node.fileName);
-        }
-        return true;
-    });
-
-    // Remove all files in a single operation (only if there are files to remove)
-    if (filesToRemove.length > 0) {
-        const filesRemoved = deleteFiles(merkleTree, filesToRemove);
-        log.info(`✓ Removed ${filesRemoved} metadata files from merkle tree`);
-    } else {
-        log.info(`✓ No metadata files found in merkle tree to remove`);
-    }
-}
