@@ -62,7 +62,7 @@ export async function repairCommand(options: IRepairCommandOptions): Promise<voi
     log.info(pc.bold(pc.blue(`🔧 Repair completed - processed ${result.totalFiles} files.`)));
     log.info('');
     
-    log.info(`Files imported:   ${pc.cyan(result.filesImported.toString())}`);
+    log.info(`Files imported:   ${pc.cyan(result.totalImports.toString())}`);
     log.info(`Total files:      ${pc.cyan(result.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.cyan(formatBytes(result.totalSize))}`);
     log.info(`Nodes processed:  ${pc.cyan(result.nodesProcessed.toString())}`);

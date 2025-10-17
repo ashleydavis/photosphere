@@ -43,7 +43,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
         : `📊 Verified ${result.totalFiles} files.`)));
     log.info('');
     
-    log.info(`Files imported:   ${pc.cyan(result.filesImported.toString())}`);
+    log.info(`Files imported:   ${pc.cyan(result.totalImports.toString())}`);
     log.info(`Total files:      ${pc.cyan(result.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.cyan(formatBytes(result.totalSize))}`);
     log.info(`Files processed:  ${pc.cyan(result.filesProcessed.toString())}`);

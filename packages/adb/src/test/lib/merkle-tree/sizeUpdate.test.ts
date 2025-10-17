@@ -1,10 +1,10 @@
 import * as crypto from 'crypto';
 import { 
-  FileHash, 
   addFile, 
   updateFile,
   findFileNode,
-  createTree
+  createTree,
+  FileHash
 } from '../../../lib/merkle-tree';
 
 describe('Size calculation with file updates', () => {

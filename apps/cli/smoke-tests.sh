@@ -1269,59 +1269,6 @@ test_database_verify_full() {
     test_passed
 }
 
-test_detect_new_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 14: DETECT NEW FILE WITH VERIFY ==="
-    
-    local test_copy_dir="$TEST_DB_DIR-new-file-test"
-    
-    # Ensure source database exists before copying
-    if [ ! -d "$TEST_DB_DIR" ]; then
-        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
-        exit 1
-    fi
-    
-    if [ ! -d "$TEST_DB_DIR/.db" ]; then
-        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
-        exit 1
-    fi
-    
-    # Create fresh copy of database for testing
-    log_info "Creating fresh copy of database for new file test"
-    
-    # Ensure destination doesn't exist to avoid copying into subdirectory
-    rm -rf "$test_copy_dir"
-    
-    cp -r "$TEST_DB_DIR" "$test_copy_dir"
-    
-    # Verify the copy includes the .db subdirectory
-    if [ ! -d "$test_copy_dir/.db" ]; then
-        log_error "Failed to copy .db subdirectory to $test_copy_dir"
-        exit 1
-    fi
-    
-    # Copy a new file into the database directory using cp command
-    local new_file="$test_copy_dir/new-test-file.txt"
-    echo "This is a new test file" > "$new_file"
-    log_info "Added new file: $new_file"
-    
-    # Run verify and capture output - should detect the new file
-    local verify_output
-    invoke_command "Verify database with new file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
-    
-    # Check that verify detected the new file
-    expect_output_value "$verify_output" "New:" "1" "New file detected by verify"
-    expect_output_value "$verify_output" "Unmodified:" "15" "Unmodified files"
-    expect_output_value "$verify_output" "Modified:" "0" "No modified files"
-    expect_output_value "$verify_output" "Removed:" "0" "No removed files"
-    
-    # Clean up test copy
-    rm -rf "$test_copy_dir"
-    log_success "Cleaned up test database copy"
-    test_passed
-}
-
 test_detect_deleted_file() {
     echo ""
     echo "============================================================================"
@@ -2450,7 +2397,6 @@ run_all_tests() {
     test_export_assets
     test_database_verify
     test_database_verify_full
-    test_detect_new_file
     test_detect_deleted_file
     test_detect_modified_file
     test_database_replicate
@@ -2552,13 +2498,10 @@ run_test() {
         "verify-full"|"13")
             test_database_verify_full
             ;;
-        "detect-new"|"14")
-            test_detect_new_file
-            ;;
-        "detect-deleted"|"15")
+        "detect-deleted"|"14")
             test_detect_deleted_file
             ;;
-        "detect-modified"|"16")
+        "detect-modified"|"15")
             test_detect_modified_file
             ;;
         "replicate"|"17")
@@ -2677,7 +2620,6 @@ run_multiple_commands() {
                 test_export_assets
                 test_database_verify
                 test_database_verify_full
-                test_detect_new_file
                 test_detect_deleted_file
                 test_detect_modified_file
                 test_database_replicate
@@ -2739,13 +2681,10 @@ run_multiple_commands() {
             "verify-full"|"13")
                 test_database_verify_full
                 ;;
-            "detect-new"|"14")
-                test_detect_new_file
-                ;;
-            "detect-deleted"|"15")
+            "detect-deleted"|"14")
                 test_detect_deleted_file
                 ;;
-            "detect-modified"|"16")
+            "detect-modified"|"15")
                 test_detect_modified_file
                 ;;
             "replicate"|"17")

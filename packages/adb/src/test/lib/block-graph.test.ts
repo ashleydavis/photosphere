@@ -1,7 +1,7 @@
-import { BlockGraph } from "../../lib/block-graph";
+import { BlockGraph, IBlock } from "../../lib/block-graph";
 import { DatabaseUpdate, IFieldUpdate, IUpsertUpdate, IDeleteUpdate } from "../../lib/database-update";
 import { MockStorage } from "storage/src/tests/mock-storage";
-import { IStorage } from "storage";
+import { v4 as uuid } from "uuid";
 
 describe('BlockGraph', () => {
     let storage: MockStorage;
@@ -55,19 +55,19 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { name: 'Test Document' }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { name: 'Test Document' },
+                },
             ];
 
-            const block = await blockGraph.commitBlock(updates);
+            const block = await blockGraph.commitBlock(`blocks`, updates);
 
             expect(block._id).toBeDefined();
             expect(block.prevBlocks).toEqual([]);
             expect(block.data).toEqual(updates);
 
             // Verify block is stored
-            const blockExists = await blockGraph.hasBlock(block._id);
+            const blockExists = await blockGraph.hasBlock(`blocks`, block._id);
             expect(blockExists).toBe(true);
 
             // Verify head blocks updated
@@ -83,12 +83,12 @@ describe('BlockGraph', () => {
                     type: 'field',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
+                    _id: uuid(),
                     field: 'name',
-                    value: 'First'
-                } as IFieldUpdate
+                    value: 'First',
+                },
             ];
-            const block1 = await blockGraph.commitBlock(updates1);
+            const block1 = await blockGraph.commitBlock(`blocks`, updates1);
 
             // Create second block
             const updates2: DatabaseUpdate[] = [
@@ -96,12 +96,12 @@ describe('BlockGraph', () => {
                     type: 'field',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
+                    _id: uuid(),
                     field: 'name',
-                    value: 'Second'
-                } as IFieldUpdate
+                    value: 'Second',
+                },
             ];
-            const block2 = await blockGraph.commitBlock(updates2);
+            const block2 = await blockGraph.commitBlock(`blocks`, updates2);
 
             expect(block2.prevBlocks).toEqual([block1._id]);
             
@@ -117,22 +117,22 @@ describe('BlockGraph', () => {
                     type: 'delete',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1'
-                } as IDeleteUpdate
+                    _id: uuid(),
+                },
             ];
 
-            const originalBlock = await blockGraph.commitBlock(updates);
+            const originalBlock = await blockGraph.commitBlock(`blocks`, updates);
 
             // Create new block graph instance (simulating restart)
             const newBlockGraph = new BlockGraph<DatabaseUpdate>(storage, metadataStorage);
             
             // Should be able to retrieve the block from storage
-            const retrievedBlock = await newBlockGraph.getBlock(originalBlock._id);
+            const retrievedBlock = await newBlockGraph.getBlock(`blocks`, originalBlock._id);
             expect(retrievedBlock).toEqual(originalBlock);
         });
 
         test('should return undefined for non-existent block', async () => {
-            const block = await blockGraph.getBlock('non-existent-id');
+            const block = await blockGraph.getBlock(`blocks`, 'non-existent-id');
             expect(block).toBeUndefined();
         });
 
@@ -143,15 +143,15 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { test: true }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { test: true },
+                },
             ];
 
-            const block = await blockGraph.commitBlock(updates);
+            const block = await blockGraph.commitBlock(`blocks`, updates);
 
-            expect(await blockGraph.hasBlock(block._id)).toBe(true);
-            expect(await blockGraph.hasBlock('non-existent')).toBe(false);
+            expect(await blockGraph.hasBlock(`blocks`, block._id)).toBe(true);
+            expect(await blockGraph.hasBlock(`blocks`, 'non-existent')).toBe(false);
         });
     });
 
@@ -163,20 +163,20 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { value: 1 }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { value: 1 },
+                },
             ];
 
-            const block = await blockGraph.commitBlock(updates);
-            const headBlocks = await blockGraph.getHeadBlocks();
+            const block = await blockGraph.commitBlock(`blocks`, updates);
+            const headBlocks = await blockGraph.getHeadBlocks(`blocks`);
 
             expect(headBlocks).toHaveLength(1);
             expect(headBlocks[0]).toEqual(block);
         });
 
         test('should handle empty head blocks list', async () => {
-            const headBlocks = await blockGraph.getHeadBlocks();
+            const headBlocks = await blockGraph.getHeadBlocks(`blocks`);
             expect(headBlocks).toEqual([]);
         });
     });
@@ -185,24 +185,24 @@ describe('BlockGraph', () => {
         test('should integrate external block', async () => {
 
             // Create an external block (simulating from another node)
-            const externalBlock = {
-                _id: '12345678-1234-5678-9abc-123456789abc',
+            const externalBlock: IBlock<DatabaseUpdate> = {
+                _id: uuid(),
                 prevBlocks: [],
                 data: [
                     {
                         type: 'upsert',
                         timestamp: Date.now(),
                         collection: 'external',
-                        _id: 'doc1',
-                        document: { source: 'external' }
-                    } as IUpsertUpdate
+                        _id: uuid(),
+                        document: { source: 'external' },
+                    },
                 ]
             };
 
-            await blockGraph.integrateBlock(externalBlock);
+            await blockGraph.integrateBlock(`blocks`, externalBlock);
 
             // Should be able to retrieve the block
-            const retrievedBlock = await blockGraph.getBlock(externalBlock._id);
+            const retrievedBlock = await blockGraph.getBlock(`blocks`, externalBlock._id);
             expect(retrievedBlock).toEqual(externalBlock);
 
             // Should be added to head blocks
@@ -218,14 +218,14 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { version: 1 }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { version: 1 },
+                },
             ];
-            const block1 = await blockGraph.commitBlock(updates1);
+            const block1 = await blockGraph.commitBlock(`blocks`, updates1);
 
             // Create external block that references first block
-            const externalBlock = {
+            const externalBlock: IBlock<DatabaseUpdate> = {
                 _id: 'external-block-id',
                 prevBlocks: [block1._id],
                 data: [
@@ -233,14 +233,14 @@ describe('BlockGraph', () => {
                         type: 'field',
                         timestamp: Date.now(),
                         collection: 'test',
-                        _id: 'doc1',
+                        _id: uuid(),
                         field: 'version',
-                        value: 2
-                    } as IFieldUpdate
+                        value: 2,
+                    },
                 ]
             };
 
-            await blockGraph.integrateBlock(externalBlock);
+            await blockGraph.integrateBlock(`blocks`, externalBlock);
 
             // First block should no longer be a head (it has a successor)
             // External block should be the new head
@@ -258,12 +258,12 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { persisted: true }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { persisted: true },
+                },
             ];
 
-            const block = await blockGraph.commitBlock(updates);
+            const block = await blockGraph.commitBlock(`blocks`, updates);
 
             // Check that block file exists at expected path (no extension in current implementation)
             const blockPath = `blocks/${block._id}`;
@@ -282,12 +282,12 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'test',
-                    _id: 'doc1',
-                    document: { test: true }
-                } as IUpsertUpdate
+                    _id: uuid(),
+                    document: { test: true },
+                },
             ];
 
-            const block = await blockGraph.commitBlock(updates);
+            const block = await blockGraph.commitBlock(`blocks`, updates);
 
             // Check that head blocks file exists
             const headBlocksPath = 'head-blocks.json';
@@ -313,7 +313,7 @@ describe('BlockGraph', () => {
                 value: 'John Doe'
             };
 
-            const block = await blockGraph.commitBlock([fieldUpdate]);
+            const block = await blockGraph.commitBlock(`blocks`, [fieldUpdate]);
             expect(block.data[0]).toEqual(fieldUpdate);
         });
 
@@ -331,7 +331,7 @@ describe('BlockGraph', () => {
                 }
             };
 
-            const block = await blockGraph.commitBlock([upsertUpdate]);
+            const block = await blockGraph.commitBlock(`blocks`, [upsertUpdate]);
             expect(block.data[0]).toEqual(upsertUpdate);
         });
 
@@ -344,7 +344,7 @@ describe('BlockGraph', () => {
                 _id: 'temp1'
             };
 
-            const block = await blockGraph.commitBlock([deleteUpdate]);
+            const block = await blockGraph.commitBlock(`blocks`, [deleteUpdate]);
             expect(block.data[0]).toEqual(deleteUpdate);
         });
 
@@ -355,26 +355,26 @@ describe('BlockGraph', () => {
                     type: 'upsert',
                     timestamp: Date.now(),
                     collection: 'users',
-                    _id: 'user1',
-                    document: { name: 'Jane', email: 'jane@example.com' }
-                } as IUpsertUpdate,
+                    _id: uuid(),
+                    document: { name: 'Jane', email: 'jane@example.com' },
+                },
                 {
                     type: 'field',
                     timestamp: Date.now(),
                     collection: 'users',
-                    _id: 'user2',
+                    _id: uuid(),
                     field: 'active',
-                    value: false
-                } as IFieldUpdate,
+                    value: false,
+                },
                 {
                     type: 'delete',
                     timestamp: Date.now(),
                     collection: 'users',
-                    _id: 'user3'
-                } as IDeleteUpdate
+                    _id: uuid(),
+                }
             ];
 
-            const block = await blockGraph.commitBlock(mixedUpdates);
+            const block = await blockGraph.commitBlock(`blocks`, mixedUpdates);
             expect(block.data).toEqual(mixedUpdates);
             expect(block.data).toHaveLength(3);
         });

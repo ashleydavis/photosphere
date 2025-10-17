@@ -24,13 +24,30 @@ export interface MerkleNode {
 }
 
 //
+// The hash and other information about a file.
+//
+export interface IHashedFile {
+    //
+    // The sha256 hash of the file.
+    //
+    hash: Buffer;
+
+    //
+    // The length of the file in bytes.
+    //
+    length: number;
+
+    //
+    // The last modified date of the file.
+    //
+    lastModified: Date;
+}
+
+//
 // Represents a hashed file to add to the Merkle tree.
 //
-export interface FileHash {
+export interface FileHash extends IHashedFile {
     fileName: string; // The file this hash represents. This is relative to the asset database directory.
-    hash: Buffer; // The hash of the file.
-    length: number; // The size of the file in bytes.
-    lastModified: Date; // The last modified date of the file.
 }
 
 //
