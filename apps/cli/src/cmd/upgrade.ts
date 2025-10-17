@@ -1,10 +1,11 @@
-import { log } from "utils";
+import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
-import { CURRENT_DATABASE_VERSION } from "adb";
-import { buildBlockGraph, removeLocalOnlyFiles } from "../lib/database-upgrade";
+import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "adb";
+import { buildBlockGraph } from "../lib/database-upgrade";
+import { IDatabaseMetadata } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -73,11 +74,11 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         log.info("Building block graph for database version 4...");
         await buildBlockGraph(upgradedDatabase);
 
-        // Remove files from the merkle tree that are intended to be local only and not replicated.
-        removeLocalOnlyFiles(upgradedDatabase);
+        // Rebuild the merkle tree in sorted order with no metadata/
+        const rebuiltTree = rebuildTree<IDatabaseMetadata>(upgradedDatabase.getAssetDatabase().getMerkleTree(), "metadata/");
 
-        // Save the updated merkle tree.
-        await upgradedDatabase.getAssetDatabase().save(); 
+        // Save the rebuilt tree.
+        await retry(() => saveTree("tree.dat", rebuiltTree, upgradedDatabase.getMetadataStorage()));
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 
