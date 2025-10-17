@@ -1,7 +1,7 @@
 import { log } from "utils";
-import { HashCache, computeHash, deleteFiles } from "adb";
+import { HashCache, IMerkleTree, computeHash, deleteFiles } from "adb";
 import { pathJoin } from "storage";
-import type { MediaFileDatabase } from "api";
+import type { IDatabaseMetadata, MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
 import { DatabaseUpdate, IUpsertUpdate } from "adb";
 
@@ -181,7 +181,7 @@ export async function buildBlockGraph(database: MediaFileDatabase): Promise<void
     }
 
     // Commit the block containing all database updates
-    const block = await blockGraph.commitBlock(databaseUpdates);
+    const block = await blockGraph.commitBlock(`blocks`, databaseUpdates);
 
     log.info(`✓ Block graph created with block ID: ${block._id}`);
     log.info(`✓ Block graph saved to metadata storage`);

@@ -3,7 +3,7 @@ import {
   addFile, 
   updateFile, 
   markFileAsDeleted,
-  FileHash,
+  IFileHash,
   findFileNode,
   getActiveFiles,
   createTree,
@@ -12,7 +12,7 @@ import {
 /**
  * Helper function to create a file hash with specified content
  */
-function createFileHash(fileName: string, content: string = fileName): FileHash {
+function createFileHash(fileName: string, content: string = fileName): IFileHash {
   const hash = crypto.createHash('sha256')
     .update(content)
     .digest();

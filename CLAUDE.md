@@ -104,6 +104,7 @@ Frontend:
 - Use 4 space tabs for indentation.
 - Put `else` and `catch` blocks on a new line.
 - Tests should go under the directory src/test in each package.
+- Refrain from using the `any` type in normal code, although it's ok sometimes in test code.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.

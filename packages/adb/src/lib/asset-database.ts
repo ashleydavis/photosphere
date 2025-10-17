@@ -1,27 +1,7 @@
 import { IStorage, pathJoin } from "storage";
-import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
+import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile } from "./merkle-tree";
 import { IUuidGenerator, log } from "utils";
 import { generateDeviceId } from "node-utils";
-
-//
-// The hash and other information about a file.
-//
-export interface IHashedFile {
-    //
-    // The sha256 hash of the file.
-    //
-    hash: Buffer;
-
-    //
-    // The length of the file in bytes.
-    //
-    length: number;
-
-    //
-    // The last modified date of the file.
-    //
-    lastModified: Date;
-}
 
 //
 // Manages a generic database of files and the hash tree that protects against corruption.

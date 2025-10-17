@@ -22,13 +22,33 @@ export interface MerkleNode {
 }
 
 //
+// The hash and other information about a file.
+//
+export interface IHashedFile {
+    //
+    // The sha256 hash of the file.
+    //
+    hash: Buffer;
+
+    //
+    // The length of the file in bytes.
+    //
+    length: number;
+
+    //
+    // The last modified date of the file.
+    //
+    lastModified: Date;
+}
+
+//
 // Represents a hashed file to add to the Merkle tree.
 //
-export interface FileHash {
-    fileName: string; // The file this hash represents. This is relative to the asset database directory.
-    hash: Buffer; // The hash of the file.
-    length: number; // The size of the file in bytes.
-    lastModified: Date; // The last modified date of the file.
+export interface IFileHash extends IHashedFile { //todo: merge this and the previous interface?
+    //
+    // The file this hash represents. This is relative to the asset database directory.
+    //
+    fileName: string; 
 }
 
 // 
@@ -182,7 +202,7 @@ export function combineHashes(leftHash: Buffer, rightHash: Buffer): Buffer {
 /**
  * Create a new leaf node for a file
  */
-export function createLeafNode(fileHash: FileHash): MerkleNode {
+export function createLeafNode(fileHash: IFileHash): MerkleNode {
     return {
         hash: fileHash.hash,
         fileName: fileHash.fileName,
@@ -210,7 +230,7 @@ export function createParentNode(left: MerkleNode, right: MerkleNode): MerkleNod
  * Add a file to the Merkle tree, efficiently creating a balanced structure
  * without rebuilding the entire tree
  */
-function _addFile(nodeIndex: number, nodes: MerkleNode[], fileHash: FileHash): MerkleNode[] {
+function _addFile(nodeIndex: number, nodes: MerkleNode[], fileHash: IFileHash): MerkleNode[] {
     // Create a new leaf node for the file
     const newLeaf = createLeafNode(fileHash);
 
@@ -290,7 +310,7 @@ export function createTree<DatabaseMetadata>(uuid: string): IMerkleTree<Database
  */
 export function addFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash
+    fileHash: IFileHash
 ): IMerkleTree<DatabaseMetadata> {
 
     let nodes: MerkleNode[];
@@ -478,7 +498,7 @@ function calculatePathToRoot(nodeIndex: number, nodes: MerkleNode[]): number[] {
 //
 export function upsertFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash
+    fileHash: IFileHash
 ): IMerkleTree<DatabaseMetadata> {
     if (merkleTree && merkleTree.sortedNodeRefs.length > 0) {
         if (updateFile(merkleTree, fileHash)) {
@@ -495,7 +515,7 @@ export function upsertFile<DatabaseMetadata>(
  */
 export function updateFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
-    fileHash: FileHash
+    fileHash: IFileHash
 ): boolean {
     if (!merkleTree || merkleTree.nodes.length === 0) {
         throw new Error(`Tree is empty, cannot update file '${fileHash.fileName}'`);
@@ -609,7 +629,7 @@ export function findNodeRef<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
 // Get file information from merkle tree (hash, size, lastModified)
 // This replaces the need for database hash cache lookups
 //
-export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): { hash: Buffer, length: number, lastModified: Date } | undefined {
+export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): IHashedFile | undefined {
     const nodeRef = findNodeRef(merkleTree, fileName);
     if (!nodeRef || nodeRef.isDeleted) {
         return undefined;
@@ -1417,7 +1437,7 @@ export function deleteFiles<DatabaseMetadata>(
     let filesRemoved = 0;
     
     // Get all remaining files (excluding the ones to delete)
-    const remainingFiles: FileHash[] = [];
+    const remainingFiles: IFileHash[] = [];
     
     for (const nodeRef of merkleTree.sortedNodeRefs) {
         if (!nodeRef.isDeleted) {

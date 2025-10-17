@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import * as crypto from 'crypto';
 import { 
     IMerkleTree,
-    FileHash,
+    IFileHash,
     addFile,
     saveTree,
     loadTree,
@@ -18,7 +18,7 @@ describe('Merkle Tree Save/Load', () => {
     /**
      * Helper function to create a file hash with a given name and content
      */
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createFileHash(fileName: string, content: string = fileName): IFileHash {
         // Create a proper 32-byte SHA-256 hash
         const hash = crypto.createHash('sha256').update(content).digest();
         return {
@@ -304,7 +304,7 @@ describe('loadTreeVersion', () => {
         let originalTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            const fileHash: FileHash = {
+            const fileHash: IFileHash = {
                 fileName,
                 hash: crypto.createHash('sha256').update(fileName).digest(),
                 length: fileName.length,

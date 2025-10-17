@@ -37,7 +37,8 @@ export interface IBlock<DataElementT extends IDataElement> extends IBlockDetails
 //
 export class BlockGraph<DataElementT extends IDataElement> {
     
-    private static readonly BLOCK_VERSION = 1;             // Binary format version
+    // Latest version for the data format.
+    private static readonly BLOCK_VERSION = 1;
     
     constructor(private storage: IStorage, private metadataStorage: IStorage) {}
 
@@ -79,11 +80,11 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Get current head block objects
     //
-    async getHeadBlocks(): Promise<IBlock<DataElementT>[]> {
+    async getHeadBlocks(location: string): Promise<IBlock<DataElementT>[]> {
         const headBlockIds = await this.loadHeadBlockIds();
         const headBlocks: IBlock<DataElementT>[] = [];
         for (const blockId of headBlockIds) {
-            const block = await this.getBlock(blockId);
+            const block = await this.getBlock(location, blockId);
             if (block) {
                 headBlocks.push(block);
             }
@@ -94,32 +95,35 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Check if block exists in storage
     //
-    async hasBlock(id: string): Promise<boolean> {
+    async hasBlock(location: string, id: string): Promise<boolean> {
         try {
-            const blockData = await this.storage.read(`blocks/${id}`);
+            const blockData = await this.storage.read(`${location}/${id}`);
             return !!blockData;
         } catch (error) {
             return false;
         }
     }
-
     //
     // Retrieve block from storage
     //
-    async getBlock(id: string): Promise<IBlock<DataElementT> | undefined> {
+    async getBlock(location: string, id: string): Promise<IBlock<DataElementT> | undefined> {
         // Load from binary format using save/load interface
         const deserializers = {
-            [BlockGraph.BLOCK_VERSION]: BlockGraph.deserializeBlock<DataElementT>
+            [BlockGraph.BLOCK_VERSION]: (deserializer: IDeserializer) => BlockGraph.deserializeBlock<DataElementT>(id, deserializer)
         };
         
-        const block = await load<IBlock<DataElementT>>(
+        const block = await load<any>(
             this.storage,
-            `blocks/${id}`,
+            `${location}/${id}`,
             deserializers,
             undefined,
             undefined,
             { checksum: false }
         );
+
+        if (block) {
+            block._id = id;
+        }        
         
         return block;
     }
@@ -128,10 +132,6 @@ export class BlockGraph<DataElementT extends IDataElement> {
     // Serializer function for save/load interface
     //
     private static serializeBlock<DataElementT extends IDataElement>(block: IBlock<DataElementT>, serializer: ISerializer): void {
-        // Write block ID (16 bytes)
-        const blockIdBytes = BlockGraph.uuidToBytes(block._id);
-        serializer.writeBytes(blockIdBytes);
-        
         // Write previous blocks count (4 bytes LE)
         serializer.writeUInt32(block.prevBlocks.length);
         
@@ -158,10 +158,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Deserializer function for save/load interface
     //
-    private static deserializeBlock<DataElementT extends IDataElement>(deserializer: IDeserializer): IBlock<DataElementT> {
-        // Read block ID (16 bytes)
-        const blockIdBytes = deserializer.readBytes(16);
-        const blockId = BlockGraph.bytesToUuid(blockIdBytes);
+    private static deserializeBlock<DataElementT extends IDataElement>(blockId: string, deserializer: IDeserializer): IBlock<DataElementT> {
         
         // Read previous blocks count (4 bytes LE)
         const prevCount = deserializer.readUInt32();
@@ -192,7 +189,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Create and commit a new block
     //
-    async commitBlock(data: DataElementT[]): Promise<IBlock<DataElementT>> {
+    async commitBlock(location: string, data: DataElementT[]): Promise<IBlock<DataElementT>> {
         const blockId = uuid();
         const currentHeadBlockIds = await this.loadHeadBlockIds();
         
@@ -203,7 +200,7 @@ export class BlockGraph<DataElementT extends IDataElement> {
         };
 
         // Store the block
-        await this.storeBlock(block);
+        await this.storeBlock(location, block);
         
         // Update head blocks to point to new block
         await this.storeHeadBlocks([blockId]);
@@ -214,9 +211,9 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Integrate external block from another node
     //
-    async integrateBlock(block: IBlock<DataElementT>): Promise<void> {
+    async integrateBlock(location: string, block: IBlock<DataElementT>): Promise<void> {
         // Store the block
-        await this.storeBlock(block);
+        await this.storeBlock(location, block);
         
         // Update head blocks by removing blocks that are now predecessors
         const currentHeadBlockIds = await this.loadHeadBlockIds();
@@ -235,11 +232,14 @@ export class BlockGraph<DataElementT extends IDataElement> {
     //
     // Store block to persistent storage
     //
-    private async storeBlock(block: IBlock<DataElementT>): Promise<void> {
+    private async storeBlock(location: string, block: IBlock<DataElementT>): Promise<void> {
+        const blockId = block._id;
+        const blockWithNoId: any = {...block };
+        delete blockWithNoId._id;
         await save(
             this.storage,
-            `blocks/${block._id}`,
-            block,
+            `${location}/${blockId}`,
+            blockWithNoId,
             BlockGraph.BLOCK_VERSION,
             BlockGraph.serializeBlock,
             { checksum: false }
