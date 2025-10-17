@@ -2,10 +2,9 @@ import * as crypto from 'crypto';
 import { 
   addFile, 
   updateFile, 
-  markFileAsDeleted,
+  deleteFile,
   FileHash,
   findFileNode,
-  getActiveFiles,
   createTree,
 } from '../../../lib/merkle-tree';
 
@@ -134,9 +133,9 @@ describe('Merkle Tree Performance Tests', () => {
       tree = addFile(tree, createFileHash(fileName));
     }
     
-    // Active file count before deletions
-    const activeFilesBefore = getActiveFiles(tree!).length;
-    expect(activeFilesBefore).toBe(fileCount);
+    // File count before deletions
+    const filesBefore = tree!.metadata.totalFiles;
+    expect(filesBefore).toBe(fileCount);
     
     // Test the performance of deleting files at different positions
     const indicesToTest = [0, Math.floor(fileCount / 2), fileCount - 1];
@@ -145,25 +144,25 @@ describe('Merkle Tree Performance Tests', () => {
       const fileName = fileNames[index];
       
       const [success, time] = measureTime(() => {
-        return markFileAsDeleted(tree!, fileName);
+        return deleteFile(tree!, fileName);
       });
       
-      // console.log(`Marking file ${fileName} as deleted took ${time.toFixed(2)}ms`);
+      // console.log(`Deleting file ${fileName} took ${time.toFixed(2)}ms`);
       
       // Verify deletion was successful
       expect(success).toBe(true);
       
-      // Verify the file is properly marked as deleted
+      // Verify the file is completely gone
       const node = findFileNode(tree, fileName);
-      expect(node).toBeUndefined(); // Should not be found by normal lookup
+      expect(node).toBeUndefined(); // Should not be found
       
       // Performance assertions - deletion should be O(log n)
       expect(time).toBeLessThan(15); // Should be very fast
     }
     
-    // Make sure active files count is reduced by the number of deletions
-    const activeFilesAfter = getActiveFiles(tree!).length;
-    expect(activeFilesAfter).toBe(activeFilesBefore - indicesToTest.length);
+    // Make sure file count is reduced by the number of deletions
+    const filesAfter = tree!.metadata.totalFiles;
+    expect(filesAfter).toBe(filesBefore - indicesToTest.length);
   });
   
   test('should evaluate the impact of tree depth on operations', () => {
@@ -267,7 +266,7 @@ describe('Merkle Tree Performance Tests', () => {
     const filesToDelete = baseFileNames.slice(updateBatchSize, updateBatchSize + deleteBatchSize);
     
     const [deleteResults, deleteBatchTime] = measureTime(() => {
-      return filesToDelete.map(fileName => markFileAsDeleted(treeAfterAdd!, fileName));
+      return filesToDelete.map(fileName => deleteFile(treeAfterAdd!, fileName));
     });
     
     // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${deleteBatchTime.toFixed(2)}ms`);

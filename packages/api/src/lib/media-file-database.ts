@@ -1436,7 +1436,7 @@ export class MediaFileDatabase {
                 progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
             }
 
-            if (node.fileName && !node.isDeleted) {                
+            if (node.fileName) {
                 if (pathFilter) {
                     if (!node.fileName.startsWith(pathFilter)) {
                         return true; // Skips files that don't match the path filter.
@@ -1617,7 +1617,7 @@ export class MediaFileDatabase {
                 progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
             }
 
-            if (node.fileName && !node.isDeleted) {
+            if (node.fileName) {
                 if (!await this.assetStorage.fileExists(node.fileName)) {
                     // File is missing from storage but exists in tree
                     const repaired = await repairFile(node.fileName, node.hash);
@@ -1741,7 +1741,7 @@ export class MediaFileDatabase {
         // Process a node in the soure merkle tree.
         //
         const processSrcNode = async (srcNode: MerkleNode): Promise<boolean> => {
-            if (srcNode.fileName && !srcNode.isDeleted) {
+            if (srcNode.fileName) {
                 // Skip files that don't match the path filter
                 if (options?.pathFilter) {
                     const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
