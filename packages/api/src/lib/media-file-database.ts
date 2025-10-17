@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper, walkDirectory, IOrderedFile } from "storage";
+import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { AssetDatabase, AssetDatabaseStorage, computeHash, getFileInfo, HashCache, IHashedFile, MerkleNode, traverseTree, visualizeTree, BlockGraph, DatabaseUpdate, IBlock, IUpsertUpdate, IFieldUpdate, IDeleteUpdate } from "adb";
+import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, BlockGraph, DatabaseUpdate, IBlock, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile } from "adb";
 import { generateDeviceId } from "node-utils";
 import { FileScanner, IFileStat } from "./file-scanner";
 
@@ -69,9 +69,9 @@ export const DISPLAY_QUALITY = 95;
 
 export interface IDatabaseSummary {
     //
-    // Total number of assets in the database.
+    // Total number of files imported into the database.
     //
-    totalAssets: number;
+    totalImports: number;
 
     //
     // Total number of files in the database (including thumbnails, display images, BSON files, etc.).
@@ -109,7 +109,6 @@ export interface IDatabaseMetadata {
     // Additional metadata can be added here in the future
     [key: string]: any;
 }
-
 
 export interface IAddSummary {
     //
@@ -220,7 +219,7 @@ export interface IVerifyResult {
     //
     // The total number of files imported into the database.
     //
-    filesImported: number;
+    totalImports: number;
 
     //
     // The total number of files verified (including thumbnails, display, BSON, etc.).
@@ -295,7 +294,7 @@ export interface IRepairResult {
     //
     // The total number of files imported into the database.
     //
-    filesImported: number;
+    totalImports: number;
 
     //
     // The total number of files verified (including thumbnails, display, BSON, etc.).
@@ -336,6 +335,11 @@ export interface IRepairResult {
     // The list of files that could not be repaired.
     //
     unrepaired: string[];
+
+    //
+    // The number of files processed.
+    //
+    filesProcessed: number;
 
     //
     // The number of nodes processed in the merkle tree.
@@ -483,6 +487,13 @@ export class MediaFileDatabase {
     }
 
     //
+    // Gets the metadata storage for reading and writing metadata.
+    //
+    getMetadataStorage(): IStorage {
+        return this.metadataStorage;
+    }
+
+    //
     // Gets the database for reading and writing metadata for assets.
     //
     getMetadataDatabase(): BsonDatabase {
@@ -530,7 +541,7 @@ export class MediaFileDatabase {
     //
     // Throws when the write lock cannot be acquired.
     //
-    private async acquireWriteLock(): Promise<void> {
+    async acquireWriteLock(): Promise<void> {
         
         const lockFilePath = ".db/write.lock";
         const maxAttempts = 3;
@@ -579,14 +590,14 @@ export class MediaFileDatabase {
     //
     // Refreshes the write lock to prevent timeout.
     //
-    private async refreshWriteLock(): Promise<void> {
+    async refreshWriteLock(): Promise<void> {
         await this.assetStorage.refreshWriteLock(".db/write.lock", this.sessionId);
     }
 
     //
     // Releases the write lock for the database.
     //
-    private async releaseWriteLock(): Promise<void> {
+    async releaseWriteLock(): Promise<void> {
         await retry(() => this.assetDatabase.save()); // Ensure the tree is saved before releasing the lock.
 
         //fio:
@@ -678,30 +689,89 @@ export class MediaFileDatabase {
     }
 
     //
-    // Updates the database to the latest blocks by applying database updates from the provided block IDs.
-    // This loads the blocks, extracts database updates, sorts them by timestamp, and applies them to the BSON database.
+    // Updates the database to the latest blocks by processing incoming blocks.
+    // Finds all blocks in the incoming/ directory, loads them, finds minimum time,
+    // walks backward through block graph collecting relevant blocks, sorts updates by timestamp,
+    // applies them, moves files from incoming/ to blocks/, and updates head hashes.
     //
-    async updateToLatestBlocks(blockIds: string[]): Promise<void> {
-        if (blockIds.length === 0) {
+    async updateToLatestBlocks(rebuild: boolean = false): Promise<void> {
+        const blockGraph = this.getBlockGraph();
+        const metadataStorage = this.getMetadataStorage();
+
+        // Find all blocks in the incoming/ directory.
+        let incomingBlockIds: string[] = [];
+        let next: string | undefined = undefined;
+        const location = rebuild ? "blocks" : "incoming";
+
+        do {
+            const listResult = await metadataStorage.listFiles(location, 1000, next);
+            incomingBlockIds = incomingBlockIds.concat(incomingBlockIds);
+            next = listResult.next;
+        } while (next);
+
+        if (incomingBlockIds.length === 0) {
             return;
         }
 
-        // Load blocks from storage
-        const blockGraph = this.getBlockGraph();
-        const blocks: IBlock<DatabaseUpdate>[] = [];
-        for (const blockId of blockIds) {
-            const block = await blockGraph.getBlock(blockId);
+        // Load incoming blocks from their files.
+        const incomingBlocks: IBlock<DatabaseUpdate>[] = [];
+        for (const blockId of incomingBlockIds) {
+            const block = await blockGraph.getBlock(location, blockId);
             if (block) {
-                blocks.push(block);
+                incomingBlocks.push(block);
             }
         }
 
-        if (blocks.length === 0) {
+        if (incomingBlocks.length === 0) {
             return;
         }
 
-        // Extract updates from blocks
-        const allUpdates = blocks.map(b => b.data).flat();
+        // Find the minimum time of those blocks (using the time of the first update in the block)
+        let minTime = Number.MAX_SAFE_INTEGER;
+        for (const block of incomingBlocks) {
+            if (block.data.length > 0) {
+                const firstUpdateTime = block.data[0].timestamp;
+                minTime = Math.min(minTime, firstUpdateTime);
+            }
+        }
+
+        // Start with current head hashes and walk backward through the block graph
+        const currentHeadBlockIds = await blockGraph.getHeadBlockIds();
+        const relevantBlocks: IBlock<DatabaseUpdate>[] = [...incomingBlocks];
+
+        // Collect blocks from the graph, stopping when we see a block where the last update time is less than minTime
+        const visited = new Set<string>();
+        const queue = [...currentHeadBlockIds];
+
+        while (queue.length > 0) {
+            const blockId = queue.shift()!;
+            
+            if (visited.has(blockId) || incomingBlockIds.includes(blockId)) {
+                continue;
+            }
+            visited.add(blockId);
+
+            const block = await blockGraph.getBlock(`blocks`, blockId);
+            if (!block || block.data.length === 0) {
+                continue;
+            }
+
+            // Check if the last update in this block is before our minimum time
+            const lastUpdateTime = block.data[block.data.length - 1].timestamp;
+            if (lastUpdateTime < minTime) {
+                continue; // Stop walking back from this branch
+            }
+
+            relevantBlocks.push(block);
+            
+            // Add parent blocks to the queue
+            if (block.prevBlocks) {
+                queue.push(...block.prevBlocks);
+            }
+        }
+
+        // Flatten all blocks into one list of updates
+        const allUpdates = relevantBlocks.map(block => block.data).flat();
 
         // Sort updates by timestamp (database updates are idempotent)
         allUpdates.sort((a, b) => a.timestamp - b.timestamp);
@@ -709,20 +779,55 @@ export class MediaFileDatabase {
         // Make sure the sort index is established
         await this.ensureSortIndex();
         
-        log.verbose(`Processing ${blocks.length} blocks with ${allUpdates.length} database updates`);
+        log.verbose(`Processing ${relevantBlocks.length} blocks with ${allUpdates.length} database updates`);
         
+        // Apply the updates
         if (allUpdates.length > 0) {
             log.verbose("Applying database updates...");
             await this.applyDatabaseUpdates(allUpdates);
             log.verbose("Database updates applied successfully");
         }
 
-        // Update head hashes to current block graph heads
-        const currentHeadBlockIds = await blockGraph.getHeadBlockIds();
-        if (currentHeadBlockIds.length > 0) {
-            await blockGraph.setHeadHashes(currentHeadBlockIds);
-            log.verbose(`Updated head hashes to: ${currentHeadBlockIds.join(", ")}`);
+        if (!rebuild) {
+            // Move block files from incoming/ to blocks/
+            for (const blockId of incomingBlockIds) {
+                const incomingFile = `incoming/${blockId}`;
+                const targetFile = `blocks/${blockId}`;            
+                const blockData = await metadataStorage.read(incomingFile);
+                if (blockData) {
+                    await metadataStorage.write(targetFile, undefined, blockData);
+                    await metadataStorage.deleteFile(incomingFile);
+                    log.verbose(`Moved block ${blockId} from incoming/ to blocks/`);
+                }
+            }
         }
+
+        // Update head hashes to reflect the new structure of the block graph
+        // After integrating incoming blocks, we need to recalculate which blocks are now at the "end of the graph"
+        const newHeads = await this.determineNewHeadHashes(relevantBlocks);
+        await blockGraph.setHeadHashes(newHeads);
+        log.verbose(`Updated head hashes to new graph heads: ${newHeads.join(", ")}`);
+    }
+
+    //
+    // Calculates the new head hashes after integrating new blocks.
+    // Head blocks are those that have no successors pointing to them.
+    //
+    determineNewHeadHashes(relevantBlocks: IBlock<DatabaseUpdate>[]): string[] {
+        const prevBlocks = new Set<string>();
+        
+        for (const block of relevantBlocks) {
+            if (block.prevBlocks) {
+                for (const prevBlock of block.prevBlocks) {
+                    prevBlocks.add(prevBlock);
+                }
+            }
+        }
+        
+        // The new heads are blocks that are not referenced as predecessors
+        return relevantBlocks
+            .filter(block => !prevBlocks.has(block._id))
+            .map(block => block._id);
     }
 
     //
@@ -783,7 +888,7 @@ export class MediaFileDatabase {
         const fullHash = rootHash.toString('hex');
         
         return {
-            totalAssets: filesImported,
+            totalImports: filesImported,
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
@@ -1285,25 +1390,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Walk protected files in the file system.
-    //
-    async* walkProtectedFiles({ pathFilter }: { pathFilter?: string } | undefined = {}): AsyncGenerator<IOrderedFile> {
-        for await (const file of walkDirectory(this.assetStorage, "", [/\.db/])) {
-            if (pathFilter) {
-                if (!file.fileName.startsWith(pathFilter)) {
-                    continue; // Skips files that don't match the path filter.
-                }
-            }
-
-            if (file.fileName.startsWith('metadata/')) {
-                continue; // Skip metadata files
-            }
-
-            yield file;
-        }        
-    }
-
-    //
     // Verifies the media file database.
     // Checks for missing files, modified files, and new files.
     // If any files are corrupted, this will pick them up as modified.
@@ -1316,7 +1402,7 @@ export class MediaFileDatabase {
 
         const summary = await this.getDatabaseSummary();
         const result: IVerifyResult = {
-            filesImported: summary.totalAssets,
+            totalImports: summary.totalImports,
             totalFiles: summary.totalFiles,
             totalSize: summary.totalSize,
             numUnmodified: 0,
@@ -1328,17 +1414,23 @@ export class MediaFileDatabase {
         };
 
         //
-        // Check all files in the database to find new and modified files.
+        // Check the merkle tree to find files that have been removed.
         //
-        for await (const file of this.walkProtectedFiles(options)) {
-             if (pathFilter) {
-                if (!file.fileName.startsWith(pathFilter)) {
-                    continue; // Skips files that don't match the path filter.
-                }
-            }
+        if (progressCallback) {
+            progressCallback(`Checking for modified/removed files...`);
+        }
 
-            if (file.fileName.startsWith('metadata/')) {
-                continue; // Skip metadata files
+        //
+        // Checks that a file matches the merkle tree record.
+        //
+        const verifyFile = async (node: MerkleNode): Promise<void> => {
+            
+            const fileName = node.fileName!;
+
+             if (pathFilter) {
+                if (!fileName.startsWith(pathFilter)) {
+                    return; // Skips files that don't match the path filter.
+                }
             }
 
             result.filesProcessed++;
@@ -1347,71 +1439,59 @@ export class MediaFileDatabase {
                 progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
             }
 
-            const fileInfo = await this.assetStorage.info(file.fileName);
+            const fileInfo = await this.assetStorage.info(fileName);
             if (!fileInfo) {
                 // The file doesn't exist in the storage.
-                // This shouldn't happen because we literally just walked the directory..
-                log.warn(`File "${file.fileName}" is missing, even though we just found it by walking the directory.`);
-                continue;
+                log.warn(`File "${fileName}" is missing, even though we just found it by walking the directory.`);
+                result.removed.push(fileName);
+                return;
             }
 
-            const merkleTree = this.assetDatabase.getMerkleTree();
-            const fileHash = getFileInfo(merkleTree, file.fileName);
-            if (!fileHash) {
-                log.verbose(`New file found: ${file.fileName}`);
-                result.new.push(file.fileName);
-                continue;
-            }
-
-            const sizeChanged = fileHash.length !== fileInfo.length;
-            const timestampChanged = fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime();             
+            const sizeChanged = node.size !== fileInfo.length;
+            const timestampChanged = node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
             if (sizeChanged || timestampChanged) {
                 // File metadata has changed - check if content actually changed by computing the hash.
-                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
-                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");
-                if (contentChanged) {
+                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
+                if (Buffer.compare(freshHash.hash, node.hash) !== 0) {
                     // The file content has actually been modified.
-                    result.modified.push(file.fileName);
+                    result.modified.push(fileName);
                     
-                    // Log detailed reasons for modification only if verbose logging is enabled
+                    // Log detailed reasons for modification only if verbose logging is enabled.
                     if (log.verboseEnabled) {
                         const reasons: string[] = [];
                         if (sizeChanged) {
-                            const oldSize = this.formatFileSize(fileHash.length);
+                            const oldSize = this.formatFileSize(node.size);
                             const newSize = this.formatFileSize(fileInfo.length);
                             reasons.push(`size changed (${oldSize} → ${newSize})`);
                         }
                         if (timestampChanged) {
-                            const oldTime = fileHash.lastModified.toLocaleString();
+                            const oldTime = node.lastModified!.toLocaleString();
                             const newTime = fileInfo.lastModified.toLocaleString();
                             reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
                         }
-                        if (contentChanged) {
-                            reasons.push('content hash changed');
-                        }
-                        log.verbose(`Modified file: ${file.fileName} - ${reasons.join(', ')}`);
+                        reasons.push('content hash changed');
+                        log.verbose(`Modified file: ${node.fileName} - ${reasons.join(', ')}`);
                     }
                 } 
                 else {
-                    // Content is the same, just metadata changed - cache is already updated by computeHash
+                    // Content is the same, just metadata changed - cache is already updated by computeHash.
                     result.numUnmodified++;
                 }
             }
             else if (options?.full) {
                 // The file doesn't seem to have changed, but the full verification is requested.
-                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
-                const contentChanged = freshHash.hash.toString("hex") !== fileHash.hash.toString("hex");                
-                if (!contentChanged) {
+                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
+                if (Buffer.compare(freshHash.hash, node.hash) === 0) {
                     // The file is unmodified.
                     result.numUnmodified++;
                 } 
                 else {
                     // The file has been modified (content only, since metadata matched).
-                    result.modified.push(file.fileName);
+                    result.modified.push(fileName);
                     
                     // Log detailed reason for modification only if verbose logging is enabled
                     if (log.verboseEnabled) {
-                        log.verbose(`Modified file: ${file.fileName} - content hash changed`);
+                        log.verbose(`Modified file: ${node.fileName} - content hash changed`);
                     }
                 }
             }
@@ -1420,39 +1500,18 @@ export class MediaFileDatabase {
             }
         }
 
-        //
-        // Check the merkle tree to find files that have been removed.
-        //
-        if (progressCallback) {
-            progressCallback(`Checking for removed files...`);
-        }
-
-        let numNodes = 0;
-        
-        await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
-            numNodes++;
-
-            if (progressCallback) {
-                progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
-            }
+        const merkleTree = this.assetDatabase.getMerkleTree();
+        await traverseTree(merkleTree, async (node) => {
+            result.nodesProcessed++;
 
             if (node.fileName) {
-                if (pathFilter) {
-                    if (!node.fileName.startsWith(pathFilter)) {
-                        return true; // Skips files that don't match the path filter.
-                    }
-                }
-
-                if (!await this.assetStorage.fileExists(node.fileName)) {
-                    // The file is missing from the storage, but it exists in the merkle tree.
-                    result.removed.push(node.fileName);
-                }
+                await verifyFile(node);
             }
 
             return true;
         });
        
-        result.nodesProcessed = numNodes;
+        result.nodesProcessed = result.nodesProcessed;
 
         return result;
     }
@@ -1465,13 +1524,9 @@ export class MediaFileDatabase {
         const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
         const { storage: sourceMetadataStorage } = createStorage(options.sourceMeta || pathJoin(options.source, '.db'));
 
-        // Load source hash cache
-        const sourceHashCache = new HashCache(sourceMetadataStorage, "");
-        await retry(() => sourceHashCache.load());
-
         const summary = await this.getDatabaseSummary();
         const result: IRepairResult = {
-            filesImported: summary.totalAssets,
+            totalImports: summary.totalImports,
             totalFiles: summary.totalFiles,
             totalSize: summary.totalSize,
             numUnmodified: 0,
@@ -1480,11 +1535,12 @@ export class MediaFileDatabase {
             removed: [],
             repaired: [],
             unrepaired: [],
+            filesProcessed: 0,
             nodesProcessed: 0,
         };
 
         //
-        // Function to repair a single file
+        // Repairs a single file.
         //
         const repairFile = async (fileName: string, expectedHash: Buffer): Promise<boolean> => {
             try {
@@ -1538,61 +1594,53 @@ export class MediaFileDatabase {
         };
 
         //
-        // Check all files in the database to find corrupted/missing files
+        // Check nodes in the merkle to find corrupted/missing files.
         //
-        let filesProcessed = 0;
-        for await (const file of this.walkProtectedFiles()) {
-            filesProcessed++;
+        const checkFile = async (node: MerkleNode, merkleTree: IMerkleTree<IDatabaseMetadata>): Promise<void> => {
+
+            result.filesProcessed++;
 
             if (progressCallback) {
-                progressCallback(`Checking file ${filesProcessed} of ${summary.totalFiles}`);
+                progressCallback(`Checking file ${result.filesProcessed} of ${summary.totalFiles}`);
             }
 
-            const fileInfo = await this.assetStorage.info(file.fileName);
-            const merkleTree = this.assetDatabase.getMerkleTree();
-            const fileHash = getFileInfo(merkleTree, file.fileName);
-            
-            if (!fileHash) {
-                result.new.push(file.fileName);
-                continue;
-            }
-
+            const fileName = node.fileName!;
+            const fileInfo = await this.assetStorage.info(fileName);
             if (!fileInfo) {
-                // File is missing - try to repair
+                // File is missing - try to repair.
                 if (progressCallback) {
-                    progressCallback(`Repairing missing file: ${file.fileName}`);
+                    progressCallback(`Repairing missing file: ${fileName}`);
                 }
 
-                const repaired = await repairFile(file.fileName, fileHash.hash);
+                const repaired = await repairFile(fileName, node.hash);
                 if (repaired) {
-                    result.repaired.push(file.fileName);
+                    result.repaired.push(fileName);
                 } else {
-                    result.removed.push(file.fileName);
-                    result.unrepaired.push(file.fileName);
+                    result.removed.push(fileName);
+                    result.unrepaired.push(fileName);
                 }
-                continue;
+                return;
             }
 
-            // Check if file is corrupted
-            if (fileHash.length !== fileInfo.length 
-                || fileHash.lastModified.getTime() !== fileInfo.lastModified.getTime()
+            // Check if file is corrupted.
+            if (node.size !== fileInfo.length 
+                || node.lastModified!.getTime() !== fileInfo.lastModified.getTime()
                 || options.full) {
                 
-                // Verify the actual hash
-                const freshHash = await this.computeAssetHash(file.fileName, fileInfo, () => this.assetStorage.readStream(file.fileName));
-                
-                if (freshHash.hash.toString("hex") !== fileHash.hash.toString("hex")) {
-                    // File is corrupted - try to repair
+                // Verify the actual hash.
+                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));                
+                if (Buffer.compare(freshHash.hash, node.hash) !== 0) {
+                    // File is corrupted - try to repair.
                     if (progressCallback) {
-                        progressCallback(`Repairing corrupted file: ${file.fileName}`);
+                        progressCallback(`Repairing corrupted file: ${fileName}`);
                     }
 
-                    const repaired = await repairFile(file.fileName, fileHash.hash);
+                    const repaired = await repairFile(fileName, node.hash);
                     if (repaired) {
-                        result.repaired.push(file.fileName);
+                        result.repaired.push(fileName);
                     } else {
-                        result.modified.push(file.fileName);
-                        result.unrepaired.push(file.fileName);
+                        result.modified.push(fileName);
+                        result.unrepaired.push(fileName);
                     }
                 } else {
                     result.numUnmodified++;
@@ -1602,38 +1650,20 @@ export class MediaFileDatabase {
             }
         }
 
-        //
-        // Check the merkle tree to find files that should exist but don't
-        //
         if (progressCallback) {
-            progressCallback(`Checking for missing files in merkle tree...`);
+            progressCallback(`Checking for missing or corrupt files in merkle tree...`);
         }
 
-        let numNodes = 0;
-        await traverseTree(this.assetDatabase.getMerkleTree(), async (node) => {
-            numNodes++;
-
-            if (progressCallback) {
-                progressCallback(`Node ${numNodes} of ${summary.totalNodes}`);
-            }
-
+        let merkleTree = this.assetDatabase.getMerkleTree();
+        await traverseTree(merkleTree, async (node) => {
+            result.nodesProcessed++;
+        
             if (node.fileName) {
-                if (!await this.assetStorage.fileExists(node.fileName)) {
-                    // File is missing from storage but exists in tree
-                    const repaired = await repairFile(node.fileName, node.hash);
-                    if (repaired) {
-                        result.repaired.push(node.fileName);
-                    } else {
-                        result.removed.push(node.fileName);
-                        result.unrepaired.push(node.fileName);
-                    }
-                }
+                await checkFile(node, merkleTree);
             }
 
             return true;
         });
-
-        result.nodesProcessed = numNodes;
 
         return result;
     }
@@ -1645,7 +1675,7 @@ export class MediaFileDatabase {
 
         const merkleTree = this.assetDatabase.getMerkleTree();
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
-        
+
         const result: IReplicationResult = {
             filesImported,
             filesConsidered: 0,
@@ -1752,7 +1782,7 @@ export class MediaFileDatabase {
                         return true; // Continue traversal
                     }
                 }
-                               
+                                
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
             }
             return true; // Continue traversing.

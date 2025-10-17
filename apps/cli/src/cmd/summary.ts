@@ -19,7 +19,7 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     log.info('');
     log.info(pc.bold(pc.blue(`📊 Database Summary`)));
     log.info('');
-    log.info(`Files imported:   ${pc.green(summary.totalAssets.toString())}`);
+    log.info(`Files imported:   ${pc.green(summary.totalImports.toString())}`);
     log.info(`Total files:      ${pc.green(summary.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);
     log.info(`Database version: ${pc.green(summary.databaseVersion.toString())}`);
