@@ -34,7 +34,6 @@ export interface FileHash {
     lastModified: Date; // The last modified date of the file.
 }
 
-
 //
 // Represents metadata for the merkle tree.
 //
@@ -362,7 +361,6 @@ export function rotateRight(node: MerkleNode): MerkleNode {
         hash: combineHashes(newLeft.hash, combineHashes(newCenter.hash, right.hash)),
         left: newLeft,
         right: {
-            ...node, //todo: Get rid of the spreads like this.
             left: newCenter,
             right: right,
             nodeCount: 1 + newCenter.nodeCount + right.nodeCount,
@@ -404,7 +402,6 @@ export function rotateLeft(node: MerkleNode): MerkleNode {
         minFileName: left.minFileName,
         hash: combineHashes(combineHashes(left.hash, newCenter.hash), newRight.hash),
         left: {
-            ...node, //todo: Get rid of the spreads like this.
             left: left,
             right: newCenter,
             nodeCount: 1 + left.nodeCount + newCenter.nodeCount,
