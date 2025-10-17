@@ -62,7 +62,7 @@ describe('Merkle Tree Performance Tests', () => {
         return tree;
       });
       
-      console.log(`Adding ${size} files took ${time.toFixed(2)}ms`);
+      // console.log(`Adding ${size} files took ${time.toFixed(2)}ms`);
       
       // Basic assertions to verify the tree was built properly
       expect(resultTree).toBeDefined();
@@ -105,7 +105,7 @@ describe('Merkle Tree Performance Tests', () => {
         return updateFile(tree, createFileHash(fileName, updatedContent));
       });
       
-      console.log(`Updating file at index ${index} took ${time.toFixed(2)}ms`);
+      // console.log(`Updating file at index ${index} took ${time.toFixed(2)}ms`);
       
       // Verify update was successful
       expect(success).toBe(true);
@@ -149,7 +149,7 @@ describe('Merkle Tree Performance Tests', () => {
         return markFileAsDeleted(tree!, fileName);
       });
       
-      console.log(`Marking file ${fileName} as deleted took ${time.toFixed(2)}ms`);
+      // console.log(`Marking file ${fileName} as deleted took ${time.toFixed(2)}ms`);
       
       // Verify deletion was successful
       expect(success).toBe(true);
@@ -192,10 +192,10 @@ describe('Merkle Tree Performance Tests', () => {
       
       results[size] = { addTime, updateTime };
       
-      const treeDepth = Math.ceil(Math.log2(size));
-      console.log(`Tree with ~${treeDepth} levels (${size} files):`);
-      console.log(`  - Adding all files: ${addTime.toFixed(2)}ms`);
-      console.log(`  - Updating middle file: ${updateTime.toFixed(2)}ms`);
+      // const treeDepth = Math.ceil(Math.log2(size));
+      // console.log(`Tree with ~${treeDepth} levels (${size} files):`);
+      // console.log(`  - Adding all files: ${addTime.toFixed(2)}ms`);
+      // console.log(`  - Updating middle file: ${updateTime.toFixed(2)}ms`);
     }
     
     // Verify log n scaling for updates (should be much faster than adds)
@@ -246,7 +246,7 @@ describe('Merkle Tree Performance Tests', () => {
       return currentTree;
     });
     
-    console.log(`Bulk adding ${addBatchSize} files to a tree with ${baselineCount} existing files: ${addBatchTime.toFixed(2)}ms`);
+    // console.log(`Bulk adding ${addBatchSize} files to a tree with ${baselineCount} existing files: ${addBatchTime.toFixed(2)}ms`);
     
     // Verify adds worked
     expect(treeAfterAdd!.metadata.totalFiles).toBe(baselineCount + addBatchSize);
@@ -261,7 +261,7 @@ describe('Merkle Tree Performance Tests', () => {
       );
     });
     
-    console.log(`Bulk updating ${updateBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${updateBatchTime.toFixed(2)}ms`);
+    // console.log(`Bulk updating ${updateBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${updateBatchTime.toFixed(2)}ms`);
     
     // 3. Bulk delete 100 files
     const deleteBatchSize = 100;
@@ -271,7 +271,7 @@ describe('Merkle Tree Performance Tests', () => {
       return filesToDelete.map(fileName => markFileAsDeleted(treeAfterAdd!, fileName));
     });
     
-    console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${deleteBatchTime.toFixed(2)}ms`);
+    // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${deleteBatchTime.toFixed(2)}ms`);
     
     // Verify both operations completed successfully
     expect(updateResults.every(success => success === true)).toBe(true);

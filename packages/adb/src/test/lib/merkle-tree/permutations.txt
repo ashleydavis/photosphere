@@ -1,0 +1,6608 @@
+
+=== MERKLE TREE VISUALIZATION TEST ===
+Testing all 120 permutations of adding files: a, b, c, d, e
+
+
+--- Permutation 1: a → b → c → d → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: b, f004b712)
+      ├── "a" (61)
+      └── Node (min: b, 1e0bbd6c)
+          ├── "b" (62)
+          └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, 55c7a00a)
+      ├── "a" (61)
+      └── Node (min: c, f77c1cbb)
+          ├── "b" (62)
+          └── Node (min: c, 21e721c3)
+              ├── "c" (63)
+              └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 837106d4)
+      ├── "a" (61)
+      └── Node (min: d, f4a62289)
+          ├── "b" (62)
+          └── Node (min: d, 720784de)
+              ├── "c" (63)
+              └── Node (min: d, 959a45d4)
+                  ├── "d" (64)
+                  └── "e" (65)
+  
+
+  Final tree for permutation 1:
+  └── Node (min: d, 837106d4)
+      ├── "a" (61)
+      └── Node (min: d, f4a62289)
+          ├── "b" (62)
+          └── Node (min: d, 720784de)
+              ├── "c" (63)
+              └── Node (min: d, 959a45d4)
+                  ├── "d" (64)
+                  └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 2: a → b → c → e → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: b, f004b712)
+      ├── "a" (61)
+      └── Node (min: b, 1e0bbd6c)
+          ├── "b" (62)
+          └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, c68c0b6b)
+      ├── "a" (61)
+      └── Node (min: c, 2d650e7b)
+          ├── "b" (62)
+          └── Node (min: c, e64c826b)
+              ├── "c" (63)
+              └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d1d0c45e)
+      ├── "a" (61)
+      └── Node (min: e, f9faee07)
+          ├── "b" (62)
+          └── Node (min: e, 0444d86d)
+              ├── Node (min: c, 21e721c3)
+              │   ├── "c" (63)
+              │   └── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 2:
+  └── Node (min: e, d1d0c45e)
+      ├── "a" (61)
+      └── Node (min: e, f9faee07)
+          ├── "b" (62)
+          └── Node (min: e, 0444d86d)
+              ├── Node (min: c, 21e721c3)
+              │   ├── "c" (63)
+              │   └── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 3: a → b → d → c → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: b, e2bfbe0b)
+      ├── "a" (61)
+      └── Node (min: b, 5e657ff6)
+          ├── "b" (62)
+          └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 73a177b3)
+      ├── "a" (61)
+      └── Node (min: d, 75e8e0fc)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, a68b6fff)
+      ├── "a" (61)
+      └── Node (min: d, 8424f88e)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 3:
+  └── Node (min: d, a68b6fff)
+      ├── "a" (61)
+      └── Node (min: d, 8424f88e)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 4: a → b → d → e → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: b, e2bfbe0b)
+      ├── "a" (61)
+      └── Node (min: b, 5e657ff6)
+          ├── "b" (62)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ceba4141)
+      ├── "a" (61)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, d2aa63c8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 4:
+  └── Node (min: d, d2aa63c8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 5: a → b → e → c → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: b, cb5eaa8d)
+      ├── "a" (61)
+      └── Node (min: b, 46599c5b)
+          ├── "b" (62)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 2d348809)
+      ├── "a" (61)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, fb38750d)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+
+  Final tree for permutation 5:
+  └── Node (min: e, fb38750d)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 6: a → b → e → d → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: b, cb5eaa8d)
+      ├── "a" (61)
+      └── Node (min: b, 46599c5b)
+          ├── "b" (62)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 8f8e63b1)
+      ├── "a" (61)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, f71574b8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 6:
+  └── Node (min: e, f71574b8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 7: a → c → b → d → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 7:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 8: a → c → b → e → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 8:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 9: a → c → d → b → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, 2cb92c86)
+      ├── "a" (61)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 9:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 10: a → c → d → e → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, 2cb92c86)
+      ├── "a" (61)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8ac35d80)
+      ├── "a" (61)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 10:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 11: a → c → e → b → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, b139aa8d)
+      ├── "a" (61)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 11:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 12: a → c → e → d → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, b139aa8d)
+      ├── "a" (61)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, c9a508cc)
+      ├── "a" (61)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 12:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 13: a → d → b → c → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8eafe412)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 13:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 14: a → d → b → e → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 14:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 15: a → d → c → b → e ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 15:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 16: a → d → c → e → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 16:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 17: a → d → e → b → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 95b71e4e)
+      ├── "a" (61)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 17:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 18: a → d → e → c → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 95b71e4e)
+      ├── "a" (61)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 18:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 19: a → e → b → c → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, f4bbef65)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 19:
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 20: a → e → b → d → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 7c4ce2fc)
+      ├── Node (min: b, e2bfbe0b)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 5e657ff6)
+      │       ├── "b" (62)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 20:
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 21: a → e → c → b → d ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 21:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 22: a → e → c → d → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, e58c3f3a)
+      ├── Node (min: c, 2cb92c86)
+      │   ├── "a" (61)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 22:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 23: a → e → d → b → c ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 23:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 24: a → e → d → c → b ---
+
+  Step 1: Adding "a"
+  └── "a" (61)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 24:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 25: b → a → c → d → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: b, f004b712)
+      ├── "a" (61)
+      └── Node (min: b, 1e0bbd6c)
+          ├── "b" (62)
+          └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, 55c7a00a)
+      ├── "a" (61)
+      └── Node (min: c, f77c1cbb)
+          ├── "b" (62)
+          └── Node (min: c, 21e721c3)
+              ├── "c" (63)
+              └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 837106d4)
+      ├── "a" (61)
+      └── Node (min: d, f4a62289)
+          ├── "b" (62)
+          └── Node (min: d, 720784de)
+              ├── "c" (63)
+              └── Node (min: d, 959a45d4)
+                  ├── "d" (64)
+                  └── "e" (65)
+  
+
+  Final tree for permutation 25:
+  └── Node (min: d, 837106d4)
+      ├── "a" (61)
+      └── Node (min: d, f4a62289)
+          ├── "b" (62)
+          └── Node (min: d, 720784de)
+              ├── "c" (63)
+              └── Node (min: d, 959a45d4)
+                  ├── "d" (64)
+                  └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 26: b → a → c → e → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: b, f004b712)
+      ├── "a" (61)
+      └── Node (min: b, 1e0bbd6c)
+          ├── "b" (62)
+          └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, c68c0b6b)
+      ├── "a" (61)
+      └── Node (min: c, 2d650e7b)
+          ├── "b" (62)
+          └── Node (min: c, e64c826b)
+              ├── "c" (63)
+              └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d1d0c45e)
+      ├── "a" (61)
+      └── Node (min: e, f9faee07)
+          ├── "b" (62)
+          └── Node (min: e, 0444d86d)
+              ├── Node (min: c, 21e721c3)
+              │   ├── "c" (63)
+              │   └── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 26:
+  └── Node (min: e, d1d0c45e)
+      ├── "a" (61)
+      └── Node (min: e, f9faee07)
+          ├── "b" (62)
+          └── Node (min: e, 0444d86d)
+              ├── Node (min: c, 21e721c3)
+              │   ├── "c" (63)
+              │   └── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 27: b → a → d → c → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: b, e2bfbe0b)
+      ├── "a" (61)
+      └── Node (min: b, 5e657ff6)
+          ├── "b" (62)
+          └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 73a177b3)
+      ├── "a" (61)
+      └── Node (min: d, 75e8e0fc)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, a68b6fff)
+      ├── "a" (61)
+      └── Node (min: d, 8424f88e)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 27:
+  └── Node (min: d, a68b6fff)
+      ├── "a" (61)
+      └── Node (min: d, 8424f88e)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 28: b → a → d → e → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: b, e2bfbe0b)
+      ├── "a" (61)
+      └── Node (min: b, 5e657ff6)
+          ├── "b" (62)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ceba4141)
+      ├── "a" (61)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, d2aa63c8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 28:
+  └── Node (min: d, d2aa63c8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 7c9c72ed)
+          ├── "b" (62)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 29: b → a → e → c → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: b, cb5eaa8d)
+      ├── "a" (61)
+      └── Node (min: b, 46599c5b)
+          ├── "b" (62)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 2d348809)
+      ├── "a" (61)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, fb38750d)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+
+  Final tree for permutation 29:
+  └── Node (min: e, fb38750d)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── Node (min: e, 3c971fcb)
+          ├── Node (min: b, 1e0bbd6c)
+          │   ├── "b" (62)
+          │   └── "c" (63)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 30: b → a → e → d → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, fb8e20fc)
+      ├── "a" (61)
+      └── "b" (62)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: b, cb5eaa8d)
+      ├── "a" (61)
+      └── Node (min: b, 46599c5b)
+          ├── "b" (62)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 8f8e63b1)
+      ├── "a" (61)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, f71574b8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 30:
+  └── Node (min: e, f71574b8)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: e, 9238956c)
+          ├── Node (min: b, 5e657ff6)
+          │   ├── "b" (62)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 31: b → c → a → d → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 31:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 32: b → c → a → e → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 32:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 33: b → c → d → a → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, f77c1cbb)
+      ├── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 33:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 34: b → c → d → e → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, f77c1cbb)
+      ├── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, f4a62289)
+      ├── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 34:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 35: b → c → e → a → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, 2d650e7b)
+      ├── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 35:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 36: b → c → e → d → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, 2d650e7b)
+      ├── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, f9faee07)
+      ├── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 36:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 37: b → d → a → c → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8eafe412)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 37:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 38: b → d → a → e → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 38:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 39: b → d → c → a → e ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 39:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 40: b → d → c → e → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 40:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 41: b → d → e → a → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 7c9c72ed)
+      ├── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 41:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 42: b → d → e → c → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 7c9c72ed)
+      ├── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 42:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 43: b → e → a → c → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, f4bbef65)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 43:
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 44: b → e → a → d → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 7c4ce2fc)
+      ├── Node (min: b, e2bfbe0b)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 5e657ff6)
+      │       ├── "b" (62)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 44:
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 45: b → e → c → a → d ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 45:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 46: b → e → c → d → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 9a0458da)
+      ├── Node (min: c, f77c1cbb)
+      │   ├── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 46:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 47: b → e → d → a → c ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 47:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 48: b → e → d → c → a ---
+
+  Step 1: Adding "b"
+  └── "b" (62)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 48:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 49: c → a → b → d → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 49:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 50: c → a → b → e → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 50:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 51: c → a → d → b → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, 2cb92c86)
+      ├── "a" (61)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 51:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 52: c → a → d → e → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, 2cb92c86)
+      ├── "a" (61)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8ac35d80)
+      ├── "a" (61)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 52:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 53: c → a → e → b → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, b139aa8d)
+      ├── "a" (61)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 53:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 54: c → a → e → d → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f45de51c)
+      ├── "a" (61)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, b139aa8d)
+      ├── "a" (61)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, c9a508cc)
+      ├── "a" (61)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 54:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 55: c → b → a → d → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 55:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 56: c → b → a → e → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: c, 3afb804b)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "c" (63)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 56:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 57: c → b → d → a → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, f77c1cbb)
+      ├── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: c, c5fdd166)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 57:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 58: c → b → d → e → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: c, f77c1cbb)
+      ├── "b" (62)
+      └── Node (min: c, 21e721c3)
+          ├── "c" (63)
+          └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, f4a62289)
+      ├── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+
+  Final tree for permutation 58:
+  └── Node (min: d, fa2f7894)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 720784de)
+          ├── "c" (63)
+          └── Node (min: d, 959a45d4)
+              ├── "d" (64)
+              └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 59: c → b → e → a → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, 2d650e7b)
+      ├── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: c, f11065c8)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 59:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 60: c → b → e → d → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 1e0bbd6c)
+      ├── "b" (62)
+      └── "c" (63)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: c, 2d650e7b)
+      ├── "b" (62)
+      └── Node (min: c, e64c826b)
+          ├── "c" (63)
+          └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, f9faee07)
+      ├── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 60:
+  └── Node (min: e, 8c903563)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: e, 0444d86d)
+          ├── Node (min: c, 21e721c3)
+          │   ├── "c" (63)
+          │   └── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 61: c → d → a → b → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 61:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 62: c → d → a → e → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 62:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 63: c → d → b → a → e ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 63:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 64: c → d → b → e → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 64:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 65: c → d → e → a → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 720784de)
+      ├── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 65:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 66: c → d → e → b → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 720784de)
+      ├── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 66:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 67: c → e → a → b → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 67:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 68: c → e → a → d → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, e58c3f3a)
+      ├── Node (min: c, 2cb92c86)
+      │   ├── "a" (61)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 68:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 69: c → e → b → a → d ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 69:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 70: c → e → b → d → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 9a0458da)
+      ├── Node (min: c, f77c1cbb)
+      │   ├── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 70:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 71: c → e → d → a → b ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 71:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 72: c → e → d → b → a ---
+
+  Step 1: Adding "c"
+  └── "c" (63)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 72:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 73: d → a → b → c → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8eafe412)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 73:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 74: d → a → b → e → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 74:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 75: d → a → c → b → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 75:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 76: d → a → c → e → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 76:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 77: d → a → e → b → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 95b71e4e)
+      ├── "a" (61)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 77:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 78: d → a → e → c → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, 70ba3370)
+      ├── "a" (61)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 95b71e4e)
+      ├── "a" (61)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 78:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 79: d → b → a → c → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8eafe412)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 79:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 80: d → b → a → e → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 71fd559a)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 80:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 81: d → b → c → a → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 81:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 82: d → b → c → e → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 82:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 83: d → b → e → a → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 7c9c72ed)
+      ├── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, ab1682a6)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 83:
+  └── Node (min: d, 2906bb71)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 84: d → b → e → c → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 5e657ff6)
+      ├── "b" (62)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 7c9c72ed)
+      ├── "b" (62)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 84:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 85: d → c → a → b → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 85:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 86: d → c → a → e → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: d, 9e3ba5a3)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 86:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 87: d → c → b → a → e ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 7dd46704)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 5: Adding "e"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 87:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 88: d → c → b → e → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: d, 75e8e0fc)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "d" (64)
+  
+
+  Step 4: Adding "e"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 88:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 89: d → c → e → a → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 720784de)
+      ├── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: d, 3311ac6d)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 89:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 90: d → c → e → b → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, 21e721c3)
+      ├── "c" (63)
+      └── "d" (64)
+  
+
+  Step 3: Adding "e"
+  └── Node (min: d, 720784de)
+      ├── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: d, 8424f88e)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+
+  Final tree for permutation 90:
+  └── Node (min: d, 9be9e150)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── Node (min: d, 959a45d4)
+          ├── "d" (64)
+          └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 91: d → e → a → b → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 91:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 92: d → e → a → c → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 92:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 93: d → e → b → a → c ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 93:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 94: d → e → b → c → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 94:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 95: d → e → c → a → b ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 95:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 96: d → e → c → b → a ---
+
+  Step 1: Adding "d"
+  └── "d" (64)
+  
+
+  Step 2: Adding "e"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 96:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 97: e → a → b → c → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, f4bbef65)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 97:
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 98: e → a → b → d → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 7c4ce2fc)
+      ├── Node (min: b, e2bfbe0b)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 5e657ff6)
+      │       ├── "b" (62)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 98:
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 99: e → a → c → b → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 99:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 100: e → a → c → d → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, e58c3f3a)
+      ├── Node (min: c, 2cb92c86)
+      │   ├── "a" (61)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 100:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 101: e → a → d → b → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 101:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 102: e → a → d → c → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "a"
+  └── Node (min: a, f9a00f43)
+      ├── "a" (61)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 102:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 103: e → b → a → c → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, f4bbef65)
+      ├── Node (min: b, f004b712)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 1e0bbd6c)
+      │       ├── "b" (62)
+      │       └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 103:
+  └── Node (min: e, c0090a48)
+      ├── Node (min: c, 55c7a00a)
+      │   ├── "a" (61)
+      │   └── Node (min: c, f77c1cbb)
+      │       ├── "b" (62)
+      │       └── Node (min: c, 21e721c3)
+      │           ├── "c" (63)
+      │           └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 104: e → b → a → d → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, bc5cfb34)
+      ├── Node (min: a, fb8e20fc)
+      │   ├── "a" (61)
+      │   └── "b" (62)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 7c4ce2fc)
+      ├── Node (min: b, e2bfbe0b)
+      │   ├── "a" (61)
+      │   └── Node (min: b, 5e657ff6)
+      │       ├── "b" (62)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 104:
+  └── Node (min: e, 16bed0f4)
+      ├── Node (min: d, 73a177b3)
+      │   ├── "a" (61)
+      │   └── Node (min: d, 75e8e0fc)
+      │       ├── Node (min: b, 1e0bbd6c)
+      │       │   ├── "b" (62)
+      │       │   └── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 105: e → b → c → a → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 105:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 106: e → b → c → d → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 9a0458da)
+      ├── Node (min: c, f77c1cbb)
+      │   ├── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 106:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 107: e → b → d → a → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 107:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 108: e → b → d → c → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "b"
+  └── Node (min: b, 46599c5b)
+      ├── "b" (62)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 108:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 109: e → c → a → b → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 109:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 110: e → c → a → d → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, dba2d108)
+      ├── Node (min: a, f45de51c)
+      │   ├── "a" (61)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, e58c3f3a)
+      ├── Node (min: c, 2cb92c86)
+      │   ├── "a" (61)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 110:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 111: e → c → b → a → d ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 2b50a7be)
+      ├── Node (min: c, 3afb804b)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 5: Adding "d"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 111:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 112: e → c → b → d → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 3c971fcb)
+      ├── Node (min: b, 1e0bbd6c)
+      │   ├── "b" (62)
+      │   └── "c" (63)
+      └── "e" (65)
+  
+
+  Step 4: Adding "d"
+  └── Node (min: e, 9a0458da)
+      ├── Node (min: c, f77c1cbb)
+      │   ├── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 112:
+  └── Node (min: e, d432c113)
+      ├── Node (min: c, c5fdd166)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── Node (min: c, 21e721c3)
+      │       ├── "c" (63)
+      │       └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 113: e → c → d → a → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 113:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 114: e → c → d → b → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "c"
+  └── Node (min: c, e64c826b)
+      ├── "c" (63)
+      └── "e" (65)
+  
+
+  Step 3: Adding "d"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 114:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 115: e → d → a → b → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 115:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 116: e → d → a → c → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "a"
+  └── Node (min: e, 40d90ca3)
+      ├── Node (min: a, 70ba3370)
+      │   ├── "a" (61)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 116:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 117: e → d → b → a → c ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, d32b14e3)
+      ├── Node (min: d, 71fd559a)
+      │   ├── Node (min: a, fb8e20fc)
+      │   │   ├── "a" (61)
+      │   │   └── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "c"
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 117:
+  └── Node (min: e, c53a4c9f)
+      ├── Node (min: d, 8eafe412)
+      │   ├── Node (min: b, f004b712)
+      │   │   ├── "a" (61)
+      │   │   └── Node (min: b, 1e0bbd6c)
+      │   │       ├── "b" (62)
+      │   │       └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 118: e → d → b → c → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "b"
+  └── Node (min: e, 9238956c)
+      ├── Node (min: b, 5e657ff6)
+      │   ├── "b" (62)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "c"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 118:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 119: e → d → c → a → b ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "a"
+  └── Node (min: e, 1992c223)
+      ├── Node (min: d, 9e3ba5a3)
+      │   ├── Node (min: a, f45de51c)
+      │   │   ├── "a" (61)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "b"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 119:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+--- Permutation 120: e → d → c → b → a ---
+
+  Step 1: Adding "e"
+  └── "e" (65)
+  
+
+  Step 2: Adding "d"
+  └── Node (min: d, 959a45d4)
+      ├── "d" (64)
+      └── "e" (65)
+  
+
+  Step 3: Adding "c"
+  └── Node (min: e, 0444d86d)
+      ├── Node (min: c, 21e721c3)
+      │   ├── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 4: Adding "b"
+  └── Node (min: e, c7da5635)
+      ├── Node (min: d, 75e8e0fc)
+      │   ├── Node (min: b, 1e0bbd6c)
+      │   │   ├── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Step 5: Adding "a"
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+
+  Final tree for permutation 120:
+  └── Node (min: e, 80c92e9d)
+      ├── Node (min: d, 7dd46704)
+      │   ├── Node (min: c, 3afb804b)
+      │   │   ├── Node (min: a, fb8e20fc)
+      │   │   │   ├── "a" (61)
+      │   │   │   └── "b" (62)
+      │   │   └── "c" (63)
+      │   └── "d" (64)
+      └── "e" (65)
+  
+──────────────────────────────────────────────────
+
+=== SUMMARY ===
+Tested 120 different insertion orders
+All permutations should result in the same final tree structure (balanced binary search tree)
