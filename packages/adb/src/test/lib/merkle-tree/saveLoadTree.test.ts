@@ -148,36 +148,7 @@ describe('Merkle Tree Save/Load', () => {
         // Verify hash integrity - the root hash should match
         expect(loadedTree.root?.hash.toString('hex')).toBe(originalTree.root?.hash.toString('hex'));
     });
-    
-    test('should save and load all nodeRefs correctly', async () => {
-        // Create a tree with files in a non-alphabetical order
-        const originalTree = buildTree(['C', 'A', 'B']);
-        
-        // Original tree should have sortedNodeRefs sorted alphabetically
-        expect(originalTree.sortedNodeRefs.length).toBe(3);
-        expect(originalTree.sortedNodeRefs.map(ref => ref.fileName)).toEqual(['A', 'B', 'C']);
-        
-        await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
-        
-        const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
-        
-        // Verify the loaded tree has the sortedNodeRefs
-        expect(loadedTree.sortedNodeRefs.length).toBe(3);
-        
-        // Check that the sortedNodeRefs are sorted alphabetically
-        const loadedFileNames = loadedTree.sortedNodeRefs.map(ref => ref.fileName);
-        expect(loadedFileNames).toEqual(['A', 'B', 'C']);
-        
-        // Check the fileIndex values to make sure they match the original
-        for (let i = 0; i < originalTree.sortedNodeRefs.length; i++) {
-            const originalRef = originalTree.sortedNodeRefs[i];
-            const loadedRef = loadedTree.sortedNodeRefs[i];
-            
-            expect(loadedRef.fileName).toBe(originalRef.fileName);
-            expect(loadedRef.fileIndex).toBe(originalRef.fileIndex);
-        }
-    });
-    
+       
     test('should handle trees with special characters in file names', async () => {
         const specialChars = 'file-with-special-chars-!@#$%^&*()_+.txt';
         const tree = buildTree([specialChars]);
@@ -189,12 +160,7 @@ describe('Merkle Tree Save/Load', () => {
         // the tree structure should be exactly the same
         expect(loadedTree.root?.nodeCount || 0).toBe(tree.root?.nodeCount || 0);
         expect(loadedTree.root?.fileName).toBe(specialChars);
-        expect(loadedTree.root?.hash.toString('hex')).toBe(tree.root?.hash.toString('hex'));
-        
-        // SortedNodeRefs should be preserved
-        expect(loadedTree.sortedNodeRefs.length).toBe(1);
-        expect(loadedTree.sortedNodeRefs[0].fileName).toBe(specialChars);
-        expect(loadedTree.sortedNodeRefs[0].fileIndex).toBe(0);
+        expect(loadedTree.root?.hash.toString('hex')).toBe(tree.root?.hash.toString('hex'));        
     });
     
     test('should handle large trees efficiently', async () => {
@@ -211,10 +177,7 @@ describe('Merkle Tree Save/Load', () => {
         // Verify tree properties
         expect(loadedTree.metadata.totalFiles).toBe(100);
         expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
-        
-        // SortedNodeRefs should be preserved
-        expect(loadedTree.sortedNodeRefs.length).toBe(100);
-        
+                
         // Check that the trees are structurally identical using the compareTrees function
         compareTrees(originalTree.root, loadedTree.root);
     });

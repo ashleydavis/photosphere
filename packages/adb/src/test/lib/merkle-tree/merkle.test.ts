@@ -13,13 +13,6 @@ describe('Merkle Tree', () => {
             const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
             verifyTree(tree, 'A');
-
-            expect(tree.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-            ]);
         });
 
         // Test 2: Add a second file to an existing tree
@@ -40,17 +33,6 @@ describe('Merkle Tree', () => {
                 left: 'A',
                 right: 'B',
             });
-
-            expect(treeAB.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-            ]);
         });
 
         // Test 3: Add a third file to an existing tree
@@ -83,21 +65,6 @@ describe('Merkle Tree', () => {
                     right: 'C',
                 },
             });
-
-            expect(treeABC.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-            ]);
         });
 
         // Test 4: Add a fourth file to an existing tree
@@ -136,25 +103,6 @@ describe('Merkle Tree', () => {
                     right: 'D',
                 },
             });
-
-            expect(treeABCD.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-            ]);
         });
         
         // Test 5: Add a fifth file to an existing tree
@@ -199,29 +147,6 @@ describe('Merkle Tree', () => {
                     }
                 },
             });
-
-            expect(treeABCDE.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-            ]);
         });
         
         // Test 6: Add a sixth file to an existing tree
@@ -272,33 +197,6 @@ describe('Merkle Tree', () => {
                     right: 'F',
                 },
             });
-
-            expect(treeABCDEF.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-            ]);
         });
         
         // Test 7: Add a seventh file to an existing tree
@@ -353,37 +251,6 @@ describe('Merkle Tree', () => {
                     },
                 },
             });
-
-            expect(treeABCDEFG.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-                {
-                    fileName: 'G',
-                    fileIndex: 6,
-                },
-            ]);
         });
         
         // Test 8: Add an eighth file to an existing tree
@@ -443,41 +310,6 @@ describe('Merkle Tree', () => {
                     },
                 },
             });
-
-            expect(treeABCDEFGH.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-                {
-                    fileName: 'G',
-                    fileIndex: 6,
-                },
-                {
-                    fileName: 'H',
-                    fileIndex: 7,
-                },
-            ]);
         });
         
         // Test 9: Add a ninth file to an existing tree with a balanced approach
@@ -542,45 +374,6 @@ describe('Merkle Tree', () => {
                     },
                 },
             });
-
-            expect(rootABCDEFGHI.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-                {
-                    fileName: 'G',
-                    fileIndex: 6,
-                },
-                {
-                    fileName: 'H',
-                    fileIndex: 7,
-                },
-                {
-                    fileName: 'I',
-                    fileIndex: 8,
-                },
-            ]);
         });
         
         // Test 10: Add a tenth file to an existing tree with a balanced approach
@@ -646,49 +439,6 @@ describe('Merkle Tree', () => {
                     },
                 },
             });
-
-            expect(treeABCDEFGHIJ.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-                {
-                    fileName: 'G',
-                    fileIndex: 6,
-                },
-                {
-                    fileName: 'H',
-                    fileIndex: 7,
-                },
-                {
-                    fileName: 'I',
-                    fileIndex: 8,
-                },
-                {
-                    fileName: 'J',
-                    fileIndex: 9,
-                },
-            ]);
         });
         
         // Test 11: Add an eleventh file to an existing tree with a balanced approach
@@ -763,93 +513,9 @@ describe('Merkle Tree', () => {
                     },
                 },
             });
-
-            expect(treeABCDEFGHIJK.sortedNodeRefs).toEqual([
-                {
-                    fileName: 'A',
-                    fileIndex: 0,
-                },
-                {
-                    fileName: 'B',
-                    fileIndex: 1,
-                },
-                {
-                    fileName: 'C',
-                    fileIndex: 2,
-                },
-                {
-                    fileName: 'D',
-                    fileIndex: 3,
-                },
-                {
-                    fileName: 'E',
-                    fileIndex: 4,
-                },
-                {
-                    fileName: 'F',
-                    fileIndex: 5,
-                },
-                {
-                    fileName: 'G',
-                    fileIndex: 6,
-                },
-                {
-                    fileName: 'H',
-                    fileIndex: 7,
-                },
-                {
-                    fileName: 'I',
-                    fileIndex: 8,
-                },
-                {
-                    fileName: 'J',
-                    fileIndex: 9,
-                },
-                {
-                    fileName: 'K',
-                    fileIndex: 10,
-                },
-            ]);
         });
     });
     
-    //
-    // Adding files out of order.
-    //
-    // Final tree:  
-    //       CADB (root)
-    //      /    \
-    //    CA      DB
-    //   /  \     / \
-    //  C    A   D   B
-    //
-    test('adding files out of order still yields a sorted list', () => {
-        let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-        tree = addFile(tree, createFileHash('C'));
-        tree = addFile(tree, createFileHash('A'));
-        tree = addFile(tree, createFileHash('D'));
-        tree = addFile(tree, createFileHash('B'));
-
-        expect(tree.sortedNodeRefs).toEqual([
-            {
-                fileName: 'A',
-                fileIndex: 1,
-            },
-            {
-                fileName: 'B',
-                fileIndex: 3,
-            },
-            {
-                fileName: 'C',
-                fileIndex: 0,
-            },
-            {
-                fileName: 'D',
-                fileIndex: 2,
-            }
-        ]);
-    });
-
     // Update File Tests
     describe('File Update', () => {
         /**
