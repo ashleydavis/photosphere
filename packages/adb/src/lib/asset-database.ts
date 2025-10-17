@@ -1,7 +1,6 @@
 import { IStorage, pathJoin } from "storage";
 import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile } from "./merkle-tree";
 import { IUuidGenerator, log } from "utils";
-import { generateDeviceId } from "node-utils";
 
 //
 // Manages a generic database of files and the hash tree that protects against corruption.
@@ -72,26 +71,12 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     // Loads an existing asset database.
     //
     async load(): Promise<boolean> {
-        //
-        // Try to load from device-specific location first.
-        //
-        const deviceId = await generateDeviceId();
-        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");        
-        this.merkleTree = await loadTree(deviceTreePath, this.metadataStorage);        
+        this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
         if (!this.merkleTree) {
-            log.info(`No device-specific tree found at .db/${deviceTreePath}. Falling back to old location.`);
-            
-            //
-            // Fall back to old location for backward compatibility.
-            //
-            this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
-            if (!this.merkleTree) {
-                log.info(`No tree found at old location .db/tree.dat.`);
-                return false;
-            }
+            return false;
         }
 
-        return !!this.merkleTree;
+        return true;
     }
 
     //
@@ -119,10 +104,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             throw new Error("Cannot save database. No database loaded.");
         }
 
-        // Save to device-specific location
-        const deviceId = await generateDeviceId();
-        const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
-        await saveTree(deviceTreePath, this.merkleTree, this.metadataStorage);
+        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
     }
 
     //

@@ -2,7 +2,6 @@ import { verifyTools } from "tools";
 import { Image } from "tools";
 import pc from "picocolors";
 import { log } from "utils";
-import { generateDeviceId } from "node-utils";
 import { version } from "../lib/version";
 import { buildMetadata } from "../lib/build-metadata";
 import { join } from "path";
@@ -22,11 +21,7 @@ export async function versionCommand(): Promise<void> {
     
     // Show database version
     log.info(`${pc.bold('Database version')}: ${pc.green(CURRENT_DATABASE_VERSION.toString())}`);
-    
-    // Show device ID
-    const deviceId = await generateDeviceId();
-    log.info(`${pc.bold('Device ID')}: ${pc.cyan(deviceId)}`);
-    
+       
     // Show build information if available
     if (buildMetadata.commitHash !== "dev") {
         log.info(`${pc.bold('Commit')}: ${pc.cyan(buildMetadata.commitHash.substring(0, 8))}`);

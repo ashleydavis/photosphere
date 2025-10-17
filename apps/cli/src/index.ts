@@ -34,7 +34,6 @@ import {
     debugShowSortIndexCommand, 
     debugShowSortIndexPageCommand 
 } from './cmd/debug-show';
-import { deviceCommand } from './cmd/device';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -514,11 +513,6 @@ Resources:
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
-
-    program
-        .command("device")
-        .description("Returns the device ID.")
-        .action(deviceCommand);
 
     // Parse the command line arguments
     try {

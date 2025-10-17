@@ -138,7 +138,6 @@ export async function performDatabaseUpgrade(
 export async function buildBlockGraph(database: MediaFileDatabase): Promise<void> {
     log.info("Building block graph from current database state...");
     
-    // Get the block graph from the database (handles device-specific storage internally)
     const blockGraph = database.getBlockGraph();
 
     // Get the BSON database
