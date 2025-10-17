@@ -24,7 +24,7 @@ export async function getAllBlocks<DataElementT extends IDataElement>(
     do {
         const listResult = await storage.listFiles("blocks", 1000, next);
         for (const blockId of listResult.names) {
-            const block = await blockGraph.getBlock(blockId);
+            const block = await blockGraph.getBlock(`blocks`, blockId);
             if (block) {
                 allBlocks.push(block);
             }
@@ -50,7 +50,7 @@ export async function getBlocksBehindHeads<DataElementT extends IDataElement>(
         if (behindBlocks.has(blockId)) continue;
         
         behindBlocks.add(blockId);
-        const block = await blockGraph.getBlock(blockId);
+        const block = await blockGraph.getBlock(`blocks`, blockId);
         if (block) {
             queue.push(...block.prevBlocks);
         }
@@ -157,7 +157,7 @@ export async function debugBuildSnapshotCommand(options: IDebugBuildSnapshotComm
     console.log(`Processing ${blockIdsToProcess.length} blocks`);
     
     // Update database to the latest blocks
-    await database.updateToLatestBlocks(blockIdsToProcess);
+    await database.updateToLatestBlocks(true);
     
     console.log("Snapshot build completed successfully");
         

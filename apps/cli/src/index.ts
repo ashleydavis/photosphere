@@ -23,8 +23,8 @@ import { removeCommand } from './cmd/remove';
 import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
-import { debugUpdateCommand } from './cmd/debug-update';
 import { debugBuildSnapshotCommand } from './cmd/debug-build-snapshot';
+import { debugSyncCommand } from './cmd/debug-sync';
 import { 
     debugShowCollectionsCommand,
     debugShowShardsCommand, 
@@ -210,22 +210,6 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('debug hash'))
         .action(debugHashCommand);
 
-    // Add update subcommand
-    debugCommand
-        .command('update')
-        .description('Update file hashes in the database when they don\'t match actual files')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option('--full', 'Force full verification and update (bypass cached hash optimization)')
-        .option('-p, --path <path>', 'Path to a specific file or directory to update (instead of entire database)')
-        .option('--dry-run', 'Show what would be updated without making changes')
-        .addHelpText('after', getCommandExamplesHelp('debug update'))
-        .action(debugUpdateCommand);
-
     debugCommand
         .command('build-snapshot')
         .description('Build or update the BSON database and sort indexes from the block graph')
@@ -238,6 +222,20 @@ Resources:
         .option('--force', 'Force full rebuild from scratch (delete existing metadata)')
         .addHelpText('after', getCommandExamplesHelp('debug build-snapshot'))
         .action(debugBuildSnapshotCommand);
+
+    debugCommand
+        .command('sync')
+        .description('Synchronize the local database with a remote/shared database')
+        .option(...dbOption)
+        .option(...destDbOption)
+        .option(...metadataDirOption)
+        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('debug sync'))
+        .action(debugSyncCommand);
 
     // Add collections subcommand
     debugCommand

@@ -1,4 +1,4 @@
-import { MerkleNode, FileHash, addFile, findNodeRef, findFileNode, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
+import { MerkleNode, IFileHash, addFile, findNodeRef, findFileNode, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
 
 describe('Merkle Tree NodeRefs', () => {
     
@@ -6,7 +6,7 @@ describe('Merkle Tree NodeRefs', () => {
      * Helper function to create a file hash with content
      * Using simple Buffer.from() for the tests to match expectations
      */
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createFileHash(fileName: string, content: string = fileName): IFileHash {
         // For tests, we use Buffer.from(fileName) for simpler verification
         const hash = Buffer.from(fileName);
         return {

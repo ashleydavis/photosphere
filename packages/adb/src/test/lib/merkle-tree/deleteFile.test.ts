@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import { 
     addFile, 
-    FileHash, 
+    IFileHash, 
     IMerkleTree,
     findFileNode,
     findFileNodeWithDeletionStatus,
@@ -19,7 +19,7 @@ import { FileStorage } from 'storage';
 describe('File Deletion', () => {
 
     // Helper function to create a file hash
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createFileHash(fileName: string, content: string = fileName): IFileHash {
         const hash = crypto.createHash('sha256')
             .update(content)
             .digest();
@@ -162,7 +162,7 @@ describe('File Deletion', () => {
 describe('Hard File Deletion (deleteFiles)', () => {
 
     // Helper function to create a file hash
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createFileHash(fileName: string, content: string = fileName): IFileHash {
         const hash = crypto.createHash('sha256')
             .update(content)
             .digest();

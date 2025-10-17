@@ -1,13 +1,13 @@
 import * as crypto from 'crypto';
 import { 
-    FileHash, 
+    IFileHash, 
     addFile, 
     updateFile, 
     findFileNode,
     createTree, 
 } from '../../../lib/merkle-tree';
 // Helper to create a file hash
-function createFileHash(fileName: string, content: string): FileHash {
+function createFileHash(fileName: string, content: string): IFileHash {
   const hash = crypto.createHash('sha256').update(content).digest();
   return {
     fileName,

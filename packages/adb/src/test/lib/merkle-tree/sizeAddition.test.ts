@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { 
-  FileHash, 
+  IFileHash, 
   addFile, 
   createTree
 } from '../../../lib/merkle-tree';
@@ -8,7 +8,7 @@ import {
 describe('Size calculation with file addition', () => {
   
   // Helper function to create a file hash with specific size
-  function createFileHash(fileName: string, content: string, size: number): FileHash {
+  function createFileHash(fileName: string, content: string, size: number): IFileHash {
     const hash = crypto.createHash('sha256')
       .update(content)
       .digest();

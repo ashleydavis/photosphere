@@ -1,11 +1,11 @@
-import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, getLeafNodeIndex, createTree } from '../../../lib/merkle-tree';
+import { MerkleNode, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, getLeafNodeIndex, createTree, IFileHash } from '../../../lib/merkle-tree';
 
 describe('Merkle Tree', () => {
 
     /**
      * Helper function to create a file hash with a given name and length
      */
-    function createFileHash(fileName: string): FileHash {
+    function createFileHash(fileName: string): IFileHash {
         return {
             fileName,
             hash: Buffer.from(fileName),
@@ -1073,7 +1073,7 @@ describe('Merkle Tree', () => {
         /**
          * Helper function to create a modified file hash with different content
          */
-        function createModifiedFileHash(fileName: string, content: string): FileHash {
+        function createModifiedFileHash(fileName: string, content: string): IFileHash {
             return {
                 fileName,
                 hash: Buffer.from(content),
