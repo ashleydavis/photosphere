@@ -25,9 +25,6 @@ MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 # Debug mode flag (can be set via environment variable or command line)
 DEBUG_MODE=${DEBUG_MODE:-false}
 
-# Get device ID for tree.dat path construction
-DEVICE_ID=""
-
 # Get CLI command based on platform and debug mode
 get_cli_command() {
     if [ "$DEBUG_MODE" = "true" ]; then
@@ -95,7 +92,7 @@ test_passed() {
     ((TESTS_PASSED++))
     
     # Capture database hash if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/devices/$DEVICE_ID/tree.dat" ]; then
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
         if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
@@ -947,7 +944,7 @@ test_create_database() {
     # Check if required files were created
     check_exists "$TEST_DB_DIR" "Database directory"
     check_exists "$TEST_DB_DIR/.db" "Database metadata directory"
-    check_exists "$TEST_DB_DIR/.db/devices/$DEVICE_ID/tree.dat" "Database tree file"
+    check_exists "$TEST_DB_DIR/.db/tree.dat" "Database tree file"
     check_exists "$TEST_DB_DIR/metadata" "Asset metadata directory"
     
     # Test initial state - database creation is verified by file existence checks above
@@ -1417,7 +1414,7 @@ test_database_replicate() {
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
-    check_exists "$replica_dir/.db/devices/$DEVICE_ID/tree.dat" "Replica tree file"
+    check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
     test_passed
 }
 
@@ -2861,15 +2858,7 @@ main() {
     if [ "$DEBUG_MODE" = "true" ]; then
         log_info "Debug mode enabled - using 'bun run start --' instead of built executable"
     fi
-    
-    # Get device ID for tree.dat path construction
-    if DEVICE_ID=$($(get_cli_command) device 2>/dev/null); then
-        log_info "Device ID: $DEVICE_ID"
-    else
-        log_error "Failed to get device ID"
-        exit 1
-    fi
-    
+        
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"

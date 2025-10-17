@@ -41,7 +41,6 @@
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
-    "node-machine-id": "^1.1.12",
     "tools": "workspace:*",
     "utils": "workspace:*"
   }

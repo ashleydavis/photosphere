@@ -1,12 +1,13 @@
 import { log } from "utils";
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
-import { exit, generateDeviceId } from "node-utils";
+import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
+import { AssetDatabase } from "adb";
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -68,15 +69,14 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     // Check if destination database already exists
     const s3Config = await getS3Config();
     const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
-    
+
     // Check for tree.dat in device-specific location first, then old location
-    const deviceId = await generateDeviceId();
-    const deviceTreePath = pathJoin("devices", deviceId, "tree.dat");
-    let destDbExists = await destMetadataStorage.fileExists(deviceTreePath);
+    let destDbExists = await destMetadataStorage.fileExists("tree.dat");
     if (!destDbExists) {
         // Fall back to old location for backward compatibility
         destDbExists = await destMetadataStorage.fileExists('tree.dat');
     }    
+    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
         const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');

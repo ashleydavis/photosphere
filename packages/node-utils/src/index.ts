@@ -5,4 +5,3 @@ export * from "./lib/test-uuid-generator";
 export * from "./lib/test-timestamp-provider";
 export * from "./lib/test-random-generator";
 export * from "./lib/dir";
-export * from "./lib/device-id";

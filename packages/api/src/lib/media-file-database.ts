@@ -10,7 +10,6 @@ import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
 import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, BlockGraph, DatabaseUpdate, IBlock, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile } from "adb";
-import { generateDeviceId } from "node-utils";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -522,15 +521,7 @@ export class MediaFileDatabase {
     // Initializes the block graph with device-specific metadata storage.
     //
     private async initializeBlockGraph(): Promise<void> {
-        // Get device-specific metadata storage
-        const deviceId = await generateDeviceId();
-        const deviceMetadataStorage = new StoragePrefixWrapper(
-            this.assetDatabase.getMetadataStorage(),
-            pathJoin("devices", deviceId)
-        );
-        
-        // Create block graph
-        this.blockGraph = new BlockGraph<DatabaseUpdate>(this.assetStorage, deviceMetadataStorage);
+        this.blockGraph = new BlockGraph<DatabaseUpdate>(this.assetStorage, this.metadataStorage);
     }
 
     //
@@ -1794,13 +1785,6 @@ export class MediaFileDatabase {
         // Saves the dest database.
         //
         await retry(() => destAssetDatabase.save());
-
-        //
-        // Delete the old tree file if it exists.
-        //
-        if (await destMetadataStorage.fileExists("tree.dat")) {
-            await retry(() => destMetadataStorage.deleteFile("tree.dat"));
-        }
         
         return result;
     }

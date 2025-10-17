@@ -26,32 +26,15 @@ export async function debugSyncCommand(options: IDebugSyncCommandOptions): Promi
     const { database: sourceDb } = await loadDatabase(options.db, options, false, false);
     const targetOptions = { ...options, db: options.dest, meta: options.destMeta };
     const { database: targetDb } = await loadDatabase(targetOptions.db, targetOptions, false, false);
-    await syncAllDevices(sourceDb, targetDb);
+    await syncDatabases(sourceDb, targetDb);
         
     log.info("Sync completed successfully!");       
 }
 
 //
-// Gets list of other devices from target database by scanning the devices folder.
+// Syncs between source and target databases.
 //
-async function* iterateDevices(metadataStorage: IStorage): AsyncGenerator<string> {
-    let next: string | undefined = undefined;
-    do {
-
-        const listResult = await metadataStorage.listDirs("devices/", 1000, next);
-        for (const deviceId of listResult.names) {
-            yield deviceId;
-        }
-        next = listResult.next;
-
-    } while (next);    
-}
-
-//
-// Syncs all devices between source and target databases.
-// Source device gets bidirectional sync, other devices get pull-only.
-//
-async function syncAllDevices(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
+async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
 
     //
     // Pull incoming files.
