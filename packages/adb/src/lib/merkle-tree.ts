@@ -16,7 +16,6 @@ export interface MerkleNode {
     fileName?: string; // The file this hash represents, for leaf nodes only.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
     leafCount: number; // Number of leaf nodes in the subtree rooted at this node. Set to 1 for leaf nodes.
-    isDeleted?: boolean; // Indicates if this file has been deleted (for leaf nodes only).
     size: number; // The size of the node and children in bytes.
     lastModified?: Date; // The last modified date of the original file (for leaf nodes only, version 3+).
     minFileName: string; // The minimum file name in this subtree (for efficient sorted insertion).
@@ -226,7 +225,6 @@ export function binaryTreeToArray(root: MerkleNode | undefined): Omit<MerkleNode
             fileName: node.fileName,
             nodeCount: node.nodeCount,
             leafCount: node.leafCount,
-            isDeleted: node.isDeleted,
             size: node.size,
             lastModified: node.lastModified,
         };
@@ -603,7 +601,7 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
     // Use the centralized findFileInTree function
     const leafNode = findFileInTree(merkleTree.root, fileName);
     
-    if (!leafNode || leafNode.isDeleted) {
+    if (!leafNode) {
         return undefined;
     }
 
@@ -625,9 +623,39 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
  * Returns the node if found, or undefined if not found.
  */
 export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata> | undefined, fileName: string): MerkleNode | undefined {
-    // Use the enhanced version that respects deletion status
-    // This ensures backward compatibility while making sure deleted files are not returned
-    return findFileNodeWithDeletionStatus(merkleTree, fileName, false);
+    if (!merkleTree || !merkleTree.root) {
+        return undefined;
+    }
+    
+    // Recursive binary search through the tree
+    function searchNode(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
+        if (!node) {
+            return undefined;
+        }
+        
+        // If this is a leaf node, check if it matches
+        if (node.nodeCount === 1) {
+            return node.fileName === targetFileName ? node : undefined;
+        }
+        
+        // Internal node - use binary search based on minFileName
+        const left = node.left;
+        const right = node.right;
+        
+        if (!left || !right) {
+            throw new Error('Invalid tree structure: internal node missing children');
+        }
+        
+        // If target is less than the minimum of right subtree, search left
+        if (targetFileName < right.minFileName) {
+            return searchNode(left, targetFileName);
+        } else {
+            // Otherwise search right
+            return searchNode(right, targetFileName);
+        }
+    }
+    
+    return searchNode(merkleTree.root, fileName);
 }
 
 /**
@@ -677,9 +705,8 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
         
         if (node.nodeCount === 1) {
             // Leaf node
-            const deletedStatus = node.isDeleted ? " [DELETED]" : "";
             const detailPrefix = prefix + (isLast ? "    " : "│   ") + "    ";
-            const leafHeader = `Leaf${deletedStatus}`;
+            const leafHeader = `Leaf`;
             const paddedLeafHeader = leafHeader.padEnd(13);
             
             // Add spacing line that preserves tree structure
@@ -781,13 +808,11 @@ function combineBigNum(input: { low: number, high: number }): bigint {
  *   - 8 bytes: size (uint64)
  *   - 4 bytes: fileNameLength (uint32)
  *   - X bytes: fileName (if fileNameLength > 0)
- *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  * - 4 bytes: Number of nodeRefs (uint32)
  * - For each nodeRef:
  *   - 4 bytes: fileNameLength (uint32)
  *   - X bytes: fileName
  *   - 4 bytes: fileIndex (uint32)
- *   - 1 byte: isDeleted flag (0 = not deleted, 1 = deleted)
  */
 function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
     // Write database metadata BSON (always present in version 3+)
@@ -851,8 +876,6 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
             serializer.writeUInt32(0);
         }
         
-        // Write isDeleted flag
-        serializer.writeUInt8(node.isDeleted ? 1 : 0);
     }
     
 }
@@ -920,10 +943,7 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
             if (lastModifiedTimestamp > 0) {
                 lastModified = new Date(lastModifiedTimestamp);
             }
-        }
-        
-        // Read isDeleted flag (if exists in format)
-        const isDeleted = deserializer.readUInt8() === 1;
+        }        
         
         // Create node
         nodes.push({
@@ -932,7 +952,6 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
             nodeCount,
             leafCount,
             size,
-            isDeleted,
             lastModified
         });
     }
@@ -1010,8 +1029,7 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
             }
         }
         
-        // Read isDeleted flag (if exists in format)
-        const isDeleted = deserializer.readUInt8() === 1;
+        deserializer.readUInt8(); // Discard isDeleted flag.
         
         // Create node
         nodes.push({
@@ -1020,7 +1038,6 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
             nodeCount,
             leafCount,
             size,
-            isDeleted,
             lastModified
         });
     }
@@ -1092,8 +1109,7 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
             fileName = fileNameBytes.toString('utf8');            
         }
         
-        // Read isDeleted flag (if exists in format)
-        const isDeleted = deserializer.readUInt8() === 1;
+        deserializer.readUInt8(); // Discard isDeleted flag.
         
         // Create node
         nodes.push({
@@ -1102,7 +1118,6 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
             nodeCount,
             leafCount,
             size,
-            isDeleted,
             lastModified
         });
     }
@@ -1192,23 +1207,14 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
 }
 
 /**
- * Creates a tombstone hash to represent a deleted file
- */
-function createTombstoneHash(fileName: string): Buffer {
-    return crypto.createHash('sha256')
-        .update('DELETED:' + fileName)
-        .digest();
-}
-
-/**
- * Mark a file as deleted in the Merkle tree without removing the node
- * This preserves the tree structure while indicating the file is deleted
+ * Delete a file node from the Merkle tree, actually removing it from the tree structure
+ * This function properly removes the node and rebalances the tree
  * 
  * @param merkleTree The Merkle tree containing the file
- * @param fileName The name of the file to mark as deleted
- * @returns true if the file was found and marked as deleted, false otherwise
+ * @param fileName The name of the file to delete
+ * @returns true if the file was found and deleted, false otherwise
  */
-export function markFileAsDeleted<DatabaseMetadata>(
+export function deleteFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileName: string
 ): boolean {
@@ -1216,26 +1222,105 @@ export function markFileAsDeleted<DatabaseMetadata>(
         return false;
     }
     
-    // Use the centralized updateNodeInTree function to mark the node as deleted
-    const wasMarked = updateNodeInTree(merkleTree.root, fileName, (node, targetFileName) => {
-        // Mark the leaf node as deleted
-        node.isDeleted = true;
-        node.hash = createTombstoneHash(targetFileName);
-        node.size = 0;
-        return true; // Found and marked
-    });
-    
-    // Update metadata if it exists
-    if (merkleTree.metadata && wasMarked) {
-        merkleTree.metadata = updateMetadata(
-            merkleTree.metadata, 
-            merkleTree.root.nodeCount,
-            merkleTree.metadata.totalFiles,
-            merkleTree.root.size
-        );
+    // Check if the file exists
+    const existingNode = findFileInTree(merkleTree.root, fileName);
+    if (!existingNode) {
+        return false;
     }
     
-    return !!wasMarked;
+    // If this is the only node in the tree, clear the tree
+    if (merkleTree.root.nodeCount === 1) {
+        merkleTree.root = undefined;
+        merkleTree.metadata = {
+            ...merkleTree.metadata,
+            totalFiles: 0,
+            totalNodes: 0,
+            totalSize: 0
+        };
+        return true;
+    }
+    
+    // Remove the node from the tree
+    const newRoot = _deleteNode(merkleTree.root, fileName);
+    if (!newRoot) {
+        return false; // Node not found
+    }
+    
+    // Update the tree
+    merkleTree.root = newRoot;
+    
+    // Update metadata
+    merkleTree.metadata = updateMetadata(
+        merkleTree.metadata,
+        merkleTree.root.nodeCount,
+        merkleTree.metadata.totalFiles - 1, // Decrease file count
+        merkleTree.root.size
+    );
+    
+    return true;
+}
+
+/**
+ * Internal function to delete a node from the tree and return the new root
+ * This handles the complex logic of removing a node while maintaining tree structure
+ */
+function _deleteNode(node: MerkleNode, fileName: string): MerkleNode | undefined {
+    // If this is a leaf node, check if it's the target
+    if (node.nodeCount === 1) {
+        if (node.fileName === fileName) {
+            return undefined; // Signal to parent that this node should be removed
+        }
+        return node; // Not the target, return unchanged
+    }
+    
+    const left = node.left;
+    const right = node.right;
+    if (!left || !right) {
+        throw new Error('Invalid tree structure');
+    }
+    
+    let newLeft = left;
+    let newRight = right;
+    let nodeDeleted = false;
+    
+    // Check if the target is in the left subtree
+    if (fileName < right.minFileName) {
+        const result = _deleteNode(left, fileName);
+        if (result === undefined) {
+            // The left child was deleted, promote the right child
+            return right;
+        }
+        newLeft = result;
+        nodeDeleted = true;
+    } else {
+        // Check if the target is in the right subtree
+        const result = _deleteNode(right, fileName);
+        if (result === undefined) {
+            // The right child was deleted, promote the left child
+            return left;
+        }
+        newRight = result;
+        nodeDeleted = true;
+    }
+    
+    if (!nodeDeleted) {
+        return node; // Node not found
+    }
+    
+    // Create new node with updated children and recalculated properties
+    const newNode = {
+        ...node,
+        left: newLeft,
+        right: newRight,
+        nodeCount: 1 + newLeft.nodeCount + newRight.nodeCount,
+        leafCount: newLeft.leafCount + newRight.leafCount,
+        size: newLeft.size + newRight.size,
+        minFileName: newLeft.minFileName,
+        hash: combineHashes(newLeft.hash, newRight.hash),
+    };
+    
+    // Rebalance the tree after deletion
+    return rebalanceTree(newNode);
 }
 
 /**
@@ -1270,7 +1355,7 @@ export function deleteFiles<DatabaseMetadata>(
     const existingFiles = new Set<string>();
     
     traverseTreeSync(merkleTree.root, (node) => {
-        if (node.nodeCount === 1 && node.fileName && !node.isDeleted) {
+        if (node.nodeCount === 1 && node.fileName) {
             existingFiles.add(node.fileName);
             if (node.lastModified) {
                 allFiles.push({
@@ -1337,82 +1422,6 @@ export function deleteFiles<DatabaseMetadata>(
     return filesRemoved;
 }
 
-/**
- * Checks if a file is marked as deleted in the Merkle tree
- * 
- * @param merkleTree The Merkle tree to check
- * @param fileName The name of the file to check
- * @returns true if the file exists and is marked as deleted, false otherwise
- */
-export function isFileDeleted<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): boolean {
-    if (!merkleTree || !merkleTree.root) {
-        return false;
-    }
-    
-    const node = findFileInTree(merkleTree.root, fileName);
-    return node ? !!node.isDeleted : false;
-}
-
-/**
- * Get all active (non-deleted) files in the Merkle tree
- * 
- * @param merkleTree The Merkle tree to get active files from
- * @returns An array of file names that are not marked as deleted
- */
-export function getActiveFiles<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>): string[] {
-    if (!merkleTree || !merkleTree.root) {
-        return [];
-    }
-    
-    const activeFiles: string[] = [];
-    
-    traverseTreeSync(merkleTree.root, (node) => {
-        if (node.nodeCount === 1 && node.fileName && !node.isDeleted) {
-            activeFiles.push(node.fileName);
-        }
-        return true;
-    });
-    
-    return activeFiles;
-}
-
-/**
- * Modified version of findFileNode that optionally includes or excludes deleted files
- * 
- * @param merkleTree The Merkle tree to search
- * @param fileName The name of the file to find
- * @param includeDeleted Whether to include deleted files in the search (defaults to false)
- * @returns The node if found and matching the deletion criteria, undefined otherwise
- */
-export function findFileNodeWithDeletionStatus<DatabaseMetadata>(
-    merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
-    fileName: string,
-    includeDeleted: boolean = false
-): MerkleNode | undefined {
-    if (!merkleTree || !merkleTree.root) {
-        return undefined;
-    }
-
-    // Search in the binary tree for the actual node
-    function searchTree(node: MerkleNode | undefined, targetFileName: string): MerkleNode | undefined {
-        if (!node) return undefined;
-
-        if (node.nodeCount === 1) { // Leaf node
-            if (node.fileName === targetFileName) {
-                return (includeDeleted || !node.isDeleted) ? node : undefined;
-            }
-            return undefined;
-        }
-
-        // Internal node, search children
-        const leftResult = searchTree(node.left, targetFileName);
-        if (leftResult) return leftResult;
-
-        return searchTree(node.right, targetFileName);
-    }
-
-    return searchTree(merkleTree.root, fileName);
-}
 
 //
 // The result of a comparison between two Merkle trees.
@@ -1432,9 +1441,9 @@ export interface ICompareResult {
  * @returns An object containing the differences between the trees
  */
 export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetadata>, treeB: IMerkleTree<DatabaseMetadata>, progressCallback?: (progress: string) => void): ICompareResult {
-    // Get all files from both trees (including deleted ones for tree A)
-    const filesInA = new Map<string, { hash: string, isDeleted: boolean }>();
-    const filesInB = new Map<string, { hash: string, isDeleted: boolean }>();
+    // Get all files from both trees
+    const filesInA = new Map<string, { hash: string }>();
+    const filesInB = new Map<string, { hash: string }>();
     
     let processedFiles = 0;
     
@@ -1448,8 +1457,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
                 }
                 
                 filesInA.set(node.fileName, { 
-                    hash: node.hash.toString('hex'),
-                    isDeleted: !!node.isDeleted
+                    hash: node.hash.toString('hex')
                 });
             }
             return true;
@@ -1466,8 +1474,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
                 }
                 
                 filesInB.set(node.fileName, { 
-                    hash: node.hash.toString('hex'),
-                    isDeleted: !!node.isDeleted
+                    hash: node.hash.toString('hex')
                 });
             }
             return true;
@@ -1488,16 +1495,12 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
         if (progressCallback && comparedFiles % 1000 === 0) {
             progressCallback(`Comparing source files | ${comparedFiles} of ${filesInA.size} files`);
         }
-        if (fileInfoA.isDeleted) {
-            // Skip files marked as deleted in A for the onlyInA list
-            continue;
-        }
         
         const fileInfoB = filesInB.get(fileName);
         if (!fileInfoB) {
             // File exists in A but not in B
             onlyInA.push(fileName);
-        } else if (!fileInfoB.isDeleted && fileInfoA.hash !== fileInfoB.hash) {
+        } else if (fileInfoA.hash !== fileInfoB.hash) {
             // File exists in both but has different hash (modified)
             modified.push(fileName);
         }
@@ -1511,18 +1514,11 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
         if (progressCallback && comparedFiles % 1000 === 0) {
             progressCallback(`Comparing destination files | ${comparedFiles} of ${filesInB.size} files`);
         }
-        if (fileInfoB.isDeleted) {
-            // Skip files marked as deleted in B
-            continue;
-        }
         
         const fileInfoA = filesInA.get(fileName);
         if (!fileInfoA) {
             // File exists in B but not in A
             onlyInB.push(fileName);
-        } else if (fileInfoA.isDeleted) {
-            // File is deleted in A but exists in B
-            deleted.push(fileName);
         }
     }
     

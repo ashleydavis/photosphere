@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { markFileAsDeleted, createTree, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
+import { createTree, deleteFile, IMerkleTree, loadTree, saveTree, upsertFile } from "./merkle-tree";
 import { IUuidGenerator, log } from "utils";
 import { generateDeviceId } from "node-utils";
 
@@ -177,8 +177,6 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         });
     };
 
-
-
     //
     // Deletes a file from the merkle tree.
     //
@@ -186,7 +184,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
-        markFileAsDeleted(this.merkleTree, filePath);
+        deleteFile<DatabaseMetadata>(this.merkleTree, filePath);
     }
 
     //

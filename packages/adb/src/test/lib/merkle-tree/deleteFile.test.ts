@@ -5,18 +5,15 @@ import {
     FileHash, 
     IMerkleTree,
     findFileNode,
-    findFileNodeWithDeletionStatus,
-    markFileAsDeleted,
+    deleteFile,
     deleteFiles,
-    isFileDeleted,
-    getActiveFiles,
     saveTree,
     loadTree,
     createTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
-describe('File Deletion', () => {
+describe('File Deletion (deleteFile)', () => {
 
     // Helper function to create a file hash
     function createFileHash(fileName: string, content: string = fileName): FileHash {
@@ -47,7 +44,7 @@ describe('File Deletion', () => {
         return tree;
     }
 
-    test('should mark a file as deleted without removing it', () => {
+    test('should completely remove a file from the tree', () => {
         // Build a test tree
         const tree = buildTestTree();
         const initialNumFiles = tree.metadata.totalFiles;
@@ -59,46 +56,37 @@ describe('File Deletion', () => {
         expect(nodeBeforeDeletion).toBeDefined();
         expect(nodeBeforeDeletion?.fileName).toBe(fileToDelete);
         
-        // Mark the file as deleted
-        const result = markFileAsDeleted(tree, fileToDelete);
+        // Delete the file completely
+        const result = deleteFile(tree, fileToDelete);
         expect(result).toBe(true);
         
-        // Verify the node is still in the tree but marked as deleted
-        const nodeAfterDeletion = findFileNodeWithDeletionStatus(tree, fileToDelete, true);
-        expect(nodeAfterDeletion).toBeDefined();
-        expect(nodeAfterDeletion?.fileName).toBe(fileToDelete);
-        expect(nodeAfterDeletion?.isDeleted).toBe(true);
+        // Verify the file is completely gone
+        const nodeAfterDeletion = findFileNode(tree, fileToDelete);
+        expect(nodeAfterDeletion).toBeUndefined();
         
-        // Verify the tree structure hasn't changed
-        expect(tree.metadata.totalFiles).toBe(initialNumFiles);
-        expect(tree.root?.nodeCount || 0).toBe(initialNodeCount);        
+        // Verify the tree structure has changed (fewer nodes and files)
+        expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
+        expect(tree.root?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
-        // Verify regular file lookup doesn't find the deleted file
-        const regularLookup = findFileNode(tree, fileToDelete);
-        expect(regularLookup).toBeUndefined();
-        
-        // Check isFileDeleted helper function
-        expect(isFileDeleted(tree, fileToDelete)).toBe(true);
-        expect(isFileDeleted(tree, 'file1.txt')).toBe(false);
-        
-        // Check getActiveFiles helper function
-        const activeFiles = getActiveFiles(tree);
-        expect(activeFiles.length).toBe(initialNumFiles - 1);
-        expect(activeFiles).not.toContain(fileToDelete);
+        // Verify remaining files are still present
+        expect(findFileNode(tree, 'file1.txt')).toBeDefined();
+        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
+        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
+        expect(findFileNode(tree, 'file5.txt')).toBeDefined();
     });
 
     test('should handle deleting a non-existent file', () => {
         const tree = buildTestTree();
-        const result = markFileAsDeleted(tree, 'non-existent-file.txt');
+        const result = deleteFile(tree, 'non-existent-file.txt');
         expect(result).toBe(false);
     });
 
-    test('should persist deletion status when saving and loading the tree', async () => {
+    test('should persist deletion when saving and loading the tree', async () => {
         // Create a test tree and delete a file
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
         
-        markFileAsDeleted(tree, fileToDelete);
+        deleteFile(tree, fileToDelete);
         
         // Save the tree to a temporary file
         const tempFile = '/tmp/merkle-tree-delete-test.bin';
@@ -107,9 +95,8 @@ describe('File Deletion', () => {
         // Load the tree back
         const loadedTree = (await loadTree(tempFile, new FileStorage("")))!;
         
-        // Verify the deletion status was preserved
-        expect(isFileDeleted(loadedTree, fileToDelete)).toBe(true);
-        expect(getActiveFiles(loadedTree)).not.toContain(fileToDelete);
+        // Verify the file is completely gone
+        expect(findFileNode(loadedTree, fileToDelete)).toBeUndefined();
         
         // Clean up
         await fs.unlink(tempFile).catch(() => {/* ignore error */});
@@ -117,24 +104,22 @@ describe('File Deletion', () => {
 
     test('should allow multiple files to be deleted', () => {
         const tree = buildTestTree();
+        const initialFiles = tree.metadata.totalFiles;
         
         // Delete multiple files
-        markFileAsDeleted(tree, 'file1.txt');
-        markFileAsDeleted(tree, 'file3.txt');
-        markFileAsDeleted(tree, 'file5.txt');
+        deleteFile(tree, 'file1.txt');
+        deleteFile(tree, 'file3.txt');
+        deleteFile(tree, 'file5.txt');
         
-        // Check that all files are marked correctly
-        expect(isFileDeleted(tree, 'file1.txt')).toBe(true);
-        expect(isFileDeleted(tree, 'file2.txt')).toBe(false);
-        expect(isFileDeleted(tree, 'file3.txt')).toBe(true);
-        expect(isFileDeleted(tree, 'file4.txt')).toBe(false);
-        expect(isFileDeleted(tree, 'file5.txt')).toBe(true);
+        // Check that all files are completely gone
+        expect(findFileNode(tree, 'file1.txt')).toBeUndefined();
+        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
+        expect(findFileNode(tree, 'file3.txt')).toBeUndefined();
+        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
+        expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
         
-        // Verify active files
-        const activeFiles = getActiveFiles(tree);
-        expect(activeFiles.length).toBe(2);
-        expect(activeFiles).toContain('file2.txt');
-        expect(activeFiles).toContain('file4.txt');
+        // Verify metadata is correct
+        expect(tree.metadata.totalFiles).toBe(initialFiles - 3);
     });
 
     test('should update Merkle tree hashes when a file is deleted', () => {
@@ -144,13 +129,36 @@ describe('File Deletion', () => {
         const originalRootHash = tree.root?.hash.toString('hex');
         
         // Delete a file
-        markFileAsDeleted(tree, 'file3.txt');
+        deleteFile(tree, 'file3.txt');
         
         // Get new root hash
         const newRootHash = tree.root?.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
+    });
+
+    test('should handle deleting the only file in a tree', () => {
+        // Create a tree with just one file
+        let tree = createTree("12345678-1234-5678-9abc-123456789abc");
+        tree = addFile(tree, createFileHash('single-file.txt'));
+        
+        expect(tree.metadata.totalFiles).toBe(1);
+        expect(tree.root?.nodeCount || 0).toBe(1);
+        
+        // Delete the only file
+        const result = deleteFile(tree, 'single-file.txt');
+        expect(result).toBe(true);
+        
+        // Tree should be empty
+        expect(tree.metadata.totalFiles).toBe(0);
+        expect(tree.root?.nodeCount || 0).toBe(0);
+    });
+
+    test('should handle deleting from empty tree', () => {
+        const emptyTree = createTree("12345678-1234-5678-9abc-123456789abc");
+        const result = deleteFile(emptyTree, 'any-file.txt');
+        expect(result).toBe(false);
     });
 });
 
@@ -205,21 +213,9 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const nodeAfterDeletion = findFileNode(tree, fileToDelete);
         expect(nodeAfterDeletion).toBeUndefined();
         
-        // Verify the file is not found even with deletion status check
-        const nodeWithDeletionCheck = findFileNodeWithDeletionStatus(tree, fileToDelete, true);
-        expect(nodeWithDeletionCheck).toBeUndefined();
-        
         // Verify the tree structure has changed (fewer nodes and files)
         expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
         expect(tree.root?.nodeCount || 0).toBeLessThan(initialNodeCount);
-                
-        // Verify isFileDeleted returns false (file doesn't exist at all)
-        expect(isFileDeleted(tree, fileToDelete)).toBe(false);
-        
-        // Check getActiveFiles helper function
-        const activeFiles = getActiveFiles(tree);
-        expect(activeFiles.length).toBe(initialNumFiles - 1);
-        expect(activeFiles).not.toContain(fileToDelete);
         
         // Verify remaining files are still present
         expect(findFileNode(tree, 'file1.txt')).toBeDefined();
@@ -257,7 +253,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Create a test tree and delete a file
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
-        const initialFiles = getActiveFiles(tree);
+        const initialFiles = tree.metadata.totalFiles;
         
         deleteFiles(tree, [fileToDelete]);
         
@@ -270,11 +266,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Verify the file is completely gone
         expect(findFileNode(loadedTree, fileToDelete)).toBeUndefined();
-        expect(isFileDeleted(loadedTree, fileToDelete)).toBe(false);
-        
-        const activeFiles = getActiveFiles(loadedTree);
-        expect(activeFiles).not.toContain(fileToDelete);
-        expect(activeFiles.length).toBe(initialFiles.length - 1);
         
         // Clean up
         await fs.unlink(tempFile).catch(() => {/* ignore error */});
@@ -282,7 +273,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
 
     test('should allow multiple files to be deleted completely', () => {
         const tree = buildTestTree();
-        const initialFiles = getActiveFiles(tree);
+        const initialFiles = tree.metadata.totalFiles;
         
         // Delete multiple files
         const result = deleteFiles(tree, ['file1.txt', 'file3.txt', 'file5.txt']);
@@ -295,17 +286,8 @@ describe('Hard File Deletion (deleteFiles)', () => {
         expect(findFileNode(tree, 'file4.txt')).toBeDefined();
         expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
         
-        // Verify active files
-        const activeFiles = getActiveFiles(tree);
-        expect(activeFiles.length).toBe(2);
-        expect(activeFiles).toContain('file2.txt');
-        expect(activeFiles).toContain('file4.txt');
-        expect(activeFiles).not.toContain('file1.txt');
-        expect(activeFiles).not.toContain('file3.txt');
-        expect(activeFiles).not.toContain('file5.txt');
-        
         // Verify metadata is correct
-        expect(tree.metadata.totalFiles).toBe(2);
+        expect(tree.metadata.totalFiles).toBe(initialFiles - 3);
     });
 
     test('should update Merkle tree hashes when a file is deleted', () => {
@@ -326,7 +308,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
 
     test('should handle deleting all files from a tree', () => {
         const tree = buildTestTree();
-        const allFiles = getActiveFiles(tree);
+        const allFiles = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         // Delete all files
         const result = deleteFiles(tree, allFiles);
@@ -335,7 +317,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
         expect(tree.root?.nodeCount || 0).toBe(0);
-        expect(getActiveFiles(tree).length).toBe(0);
     });
 
     test('should preserve metadata id and update counts correctly', () => {
@@ -380,7 +361,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         expect(findFileNode(tree, 'file2.txt')).toBeUndefined();
         expect(findFileNode(tree, 'file1.txt')).toBeDefined();
         expect(findFileNode(tree, 'file3.txt')).toBeDefined();
-        expect(getActiveFiles(tree).length).toBe(initialFiles - 1);
     });
 
     test('should handle deleting 2 files', () => {
@@ -397,7 +377,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         expect(findFileNode(tree, 'file2.txt')).toBeDefined();
         expect(findFileNode(tree, 'file3.txt')).toBeDefined();
         expect(findFileNode(tree, 'file5.txt')).toBeDefined();
-        expect(getActiveFiles(tree).length).toBe(initialFiles - 2);
     });
 
     test('should handle deleting 3 files', () => {
@@ -414,7 +393,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
         expect(findFileNode(tree, 'file1.txt')).toBeDefined();
         expect(findFileNode(tree, 'file4.txt')).toBeDefined();
-        expect(getActiveFiles(tree).length).toBe(initialFiles - 3);
     });
 
     test('should throw when trying to delete mix of existing and non-existing files', () => {

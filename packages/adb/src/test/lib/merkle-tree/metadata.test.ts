@@ -5,7 +5,7 @@ import {
     FileHash,
     addFile,
     updateFile,
-    markFileAsDeleted,
+    deleteFile,
     saveTree,
     loadTree,
     createDefaultMetadata,
@@ -138,7 +138,7 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Delete file B
-        markFileAsDeleted(tree, 'B');
+        deleteFile(tree, 'B');
         
         // Check that metadata was updated
         expect(tree.metadata).toBeDefined();
@@ -147,9 +147,9 @@ describe('Merkle Tree Metadata', () => {
             // UUID should remain the same
             expect(tree.metadata.id).toEqual(originalMetadata.id);
             
-            // Counts should remain the same (soft delete doesn't remove nodes)
-            expect(tree.metadata.totalNodes).toBe(originalMetadata.totalNodes);
-            expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles);
+            // Counts should decrease (hard delete removes nodes)
+            expect(tree.metadata.totalNodes).toBeLessThan(originalMetadata.totalNodes);
+            expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles - 1);
         }
     });
     
