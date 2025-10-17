@@ -67,7 +67,6 @@ describe('Merkle Tree Performance Tests', () => {
       // Basic assertions to verify the tree was built properly
       expect(resultTree).toBeDefined();
       expect(resultTree!.metadata.totalFiles).toBe(size);
-      expect(resultTree!.sortedNodeRefs.length).toBe(size);
       
       // Performance assertions
       if (size <= 100) {

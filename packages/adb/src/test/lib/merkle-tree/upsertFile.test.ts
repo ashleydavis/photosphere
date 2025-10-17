@@ -98,10 +98,7 @@ describe('Merkle Tree upsertFile', () => {
     // Verify initial state
     expect(tree!.metadata.totalFiles).toBe(4);
     const initialNodeCount = tree!.root?.nodeCount || 0;
-    
-    // Record a copy of the sorted node references
-    const originalRefs = [...tree!.sortedNodeRefs];
-    
+        
     // Update an existing file
     const updatedFile2 = createFileHash('file2.txt', 'updated content 2');
     tree = upsertFile(tree, updatedFile2);
@@ -118,14 +115,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Verify the correct file was updated
     const updatedNode = findFileNode(tree, 'file2.txt');
-    expect(updatedNode!.hash.toString('hex')).toBe(updatedFile2.hash.toString('hex'));
-    
-    // Verify sortedNodeRefs has same structure (indices should match)
-    expect(tree!.sortedNodeRefs.length).toBe(originalRefs.length);
-    for (let i = 0; i < originalRefs.length; i++) {
-      expect(tree!.sortedNodeRefs[i].fileName).toBe(originalRefs[i].fileName);
-      expect(tree!.sortedNodeRefs[i].fileIndex).toBe(originalRefs[i].fileIndex);
-    }
+    expect(updatedNode!.hash.toString('hex')).toBe(updatedFile2.hash.toString('hex'));   
   });
   
   test('propagates hash changes up the tree when updating', () => {

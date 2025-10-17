@@ -1550,7 +1550,7 @@ test_database_compare() {
     invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences for identical databases
-    expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
+    expect_output_string "$compare_output" "Databases have 0 differences" "No differences detected between databases"
     
     
     # Test comparison with self (database vs itself)
@@ -1607,7 +1607,7 @@ test_replicate_after_changes() {
     invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences after replication
-    expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
+    expect_output_string "$compare_output" "Databases have 0 differences" "No differences detected after replicating changes"
     test_passed
 }
 

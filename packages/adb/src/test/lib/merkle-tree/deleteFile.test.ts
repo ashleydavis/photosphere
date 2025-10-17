@@ -71,12 +71,7 @@ describe('File Deletion', () => {
         
         // Verify the tree structure hasn't changed
         expect(tree.metadata.totalFiles).toBe(initialNumFiles);
-        expect(tree.root?.nodeCount || 0).toBe(initialNodeCount);
-        
-        // Verify the node ref is marked as deleted
-        const nodeRefs = tree.sortedNodeRefs.filter(ref => ref.fileName === fileToDelete);
-        expect(nodeRefs.length).toBe(1);
-        expect(nodeRefs[0].isDeleted).toBe(true);
+        expect(tree.root?.nodeCount || 0).toBe(initialNodeCount);        
         
         // Verify regular file lookup doesn't find the deleted file
         const regularLookup = findFileNode(tree, fileToDelete);
@@ -217,11 +212,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Verify the tree structure has changed (fewer nodes and files)
         expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
         expect(tree.root?.nodeCount || 0).toBeLessThan(initialNodeCount);
-        
-        // Verify no node refs exist for the deleted file
-        const nodeRefs = tree.sortedNodeRefs.filter(ref => ref.fileName === fileToDelete);
-        expect(nodeRefs.length).toBe(0);
-        
+                
         // Verify isFileDeleted returns false (file doesn't exist at all)
         expect(isFileDeleted(tree, fileToDelete)).toBe(false);
         
@@ -260,7 +251,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
         expect(tree.root?.nodeCount || 0).toBe(0);
-        expect(tree.sortedNodeRefs.length).toBe(0);
     });
 
     test('should persist hard deletion when saving and loading the tree', async () => {
@@ -345,7 +335,6 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
         expect(tree.root?.nodeCount || 0).toBe(0);
-        expect(tree.sortedNodeRefs.length).toBe(0);
         expect(getActiveFiles(tree).length).toBe(0);
     });
 
