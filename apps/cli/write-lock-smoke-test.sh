@@ -16,7 +16,6 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-TEST_DB_DIR="./test/tmp/write-lock-test-db"
 TEST_FILES_DIR="./test/tmp/write-lock-files"
 PROCESS_OUTPUT_DIR="./test/tmp/write-lock-outputs"
 
@@ -27,6 +26,7 @@ NUM_ITERATIONS=6
 SLEEP_MIN=0.1
 SLEEP_MAX=2.0
 SIMULATE_FAILURE=false
+USE_CLOUD=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -51,13 +51,25 @@ while [[ $# -gt 0 ]]; do
             SIMULATE_FAILURE=true
             shift
             ;;
+        --cloud)
+            USE_CLOUD=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX] [--simulate-failure]"
+            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX] [--simulate-failure] [--cloud]"
             echo "  --debug       Use bun run start instead of binary"
             echo "  --processes   Number of parallel processes (default: 4)"
             echo "  --iterations  Number of iterations per process (default: 6)"
             echo "  --sleep-range Sleep range in seconds as MIN-MAX (default: 0.1-2.0)"
             echo "  --simulate-failure Enable failure simulation (10% chance during add-file)"
+            echo "  --cloud       Use cloud storage (S3) for database instead of local filesystem"
+            echo ""
+            echo "Cloud Storage Requirements:"
+            echo "  When using --cloud, ensure S3 is configured with:"
+            echo "  - AWS credentials (via AWS CLI, environment variables, or IAM role)"
+            echo "  - S3 bucket 'photosphere-test-write-lock' exists and is accessible"
+            echo "  - Test will use path: s3:photosphere-test-write-lock/write-lock-test"
+            echo "  - Run 'psi config' to configure S3 credentials if needed"
             exit 0
             ;;
         *)
@@ -116,6 +128,17 @@ get_cli_command() {
     fi
 }
 
+# Get database directory based on cloud mode
+get_test_db_dir() {
+    if [ "$USE_CLOUD" = "true" ]; then
+        # Use consistent S3 path for write lock tests
+        # Format: s3:bucket-name/path (no double slash)
+        echo "s3:photosphere-test-write-lock/write-lock-test"
+    else
+        echo "./test/tmp/write-lock-test-db"
+    fi
+}
+
 # Helper functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -167,17 +190,87 @@ check_dependencies() {
         log_error "sha256sum is required but not installed"
         exit 1
     fi
+    
+    # Check S3 configuration if cloud mode is enabled
+    if [ "$USE_CLOUD" = "true" ]; then
+        log_info "Cloud mode enabled - checking S3 configuration..."
+        
+        # Check if AWS CLI is available (optional but helpful)
+        if ! command -v aws &> /dev/null; then
+            log_warning "AWS CLI not found - S3 access will use other credential methods"
+        fi
+        
+        # Check for AWS credentials
+        if [ -z "$AWS_ACCESS_KEY_ID" ] && [ -z "$AWS_PROFILE" ] && [ ! -f "$HOME/.aws/credentials" ]; then
+            log_warning "No AWS credentials found in environment or ~/.aws/credentials"
+            log_warning "Make sure S3 is configured with: psi config"
+        fi
+        
+        log_info "S3 bucket 'photosphere-test-write-lock' will be used for testing"
+    fi
+}
+
+# Clear S3 test directory
+clear_s3_test_directory() {
+    if [ "$USE_CLOUD" = "true" ]; then
+        log_info "Clearing S3 test directory..."
+        
+        # Extract bucket and path from S3 URL
+        local s3_path="photosphere-test-write-lock/write-lock-test"
+        local bucket_name="photosphere-test-write-lock"
+        local test_path="write-lock-test"
+        
+        # Use AWS CLI to clear the test directory
+        if command -v aws &> /dev/null; then
+            log_info "Using AWS CLI to clear S3 directory: s3://$s3_path"
+            
+            # List and delete all objects in the test path
+            local temp_file="/tmp/s3-objects-to-delete.txt"
+            aws s3api list-objects-v2 --bucket "$bucket_name" --prefix "$test_path/" --query 'Contents[].Key' --output text > "$temp_file" 2>/dev/null || true
+            
+            if [ -s "$temp_file" ]; then
+                # Delete objects in batches
+                while IFS= read -r object_key; do
+                    if [ -n "$object_key" ] && [ "$object_key" != "None" ]; then
+                        aws s3api delete-object --bucket "$bucket_name" --key "$object_key" >/dev/null 2>&1 || true
+                    fi
+                done < "$temp_file"
+                log_info "Cleared existing objects from S3 test directory"
+            else
+                log_info "S3 test directory is already empty"
+            fi
+            
+            rm -f "$temp_file"
+        else
+            log_warning "AWS CLI not available - cannot clear S3 directory"
+            log_warning "Make sure the S3 directory is empty before running the test"
+        fi
+    fi
 }
 
 # Setup test environment
 setup_test_environment() {
     log_info "Setting up test environment..."
     
-    # Clean up any existing test directories from previous runs
-    rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    # Get the test database directory (local or cloud)
+    TEST_DB_DIR=$(get_test_db_dir)
     
-    # Create directories
-    mkdir -p "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    # Clean up any existing test directories from previous runs
+    if [ "$USE_CLOUD" = "false" ]; then
+        rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    else
+        rm -rf "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+        log_info "Using cloud database: $TEST_DB_DIR"
+        # Clear S3 test directory
+        clear_s3_test_directory
+    fi
+    
+    # Create directories (only for local filesystem)
+    if [ "$USE_CLOUD" = "false" ]; then
+        mkdir -p "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    else
+        mkdir -p "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+    fi
     
     # Initialize database
     log_info "Initializing test database..."
@@ -566,6 +659,7 @@ main() {
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Sleep range: ${SLEEP_MIN}s - ${SLEEP_MAX}s"
     echo "  Debug mode: $DEBUG_MODE"
+    echo "  Cloud mode: $USE_CLOUD"
     echo "  CLI command: $(get_cli_command)"
     echo "============================================================================"
     
@@ -594,7 +688,12 @@ main() {
     fi
     
     
-    log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    if [ "$USE_CLOUD" = "true" ]; then
+        log_info "Cloud database: $TEST_DB_DIR"
+        log_info "Local test data preserved in: $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    else
+        log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    fi
     log_info "Process directories: $PROCESS_OUTPUT_DIR/process_*/"
     log_info "Individual iteration logs: $PROCESS_OUTPUT_DIR/process_*/iteration_*.log"
     
