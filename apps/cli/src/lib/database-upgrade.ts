@@ -202,7 +202,7 @@ export function removeLocalOnlyFiles(database: MediaFileDatabase): void {
 
     const filesToRemove: string[] = [];
 
-    traverseTreeAsync(merkleTree.root, async (node) => {
+    traverseTreeSync(merkleTree.root, (node) => {
         if (node.fileName && node.fileName.startsWith('metadata/')) {
             filesToRemove.push(node.fileName);
         }
