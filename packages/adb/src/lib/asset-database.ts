@@ -132,6 +132,10 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot add file to database. No database loaded.");
         }
+
+        if (filePath.startsWith("metadata/")) {
+            return;
+        }
         
         this.merkleTree = upsertFile(this.merkleTree, {
             fileName: filePath,
@@ -149,6 +153,10 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             throw new Error("Cannot upsert file to database. No database loaded.");
         }
 
+        if (filePath.startsWith("metadata/")) {
+            return;
+        }
+
         this.merkleTree = upsertFile(this.merkleTree, {
             fileName: filePath,
             hash: hashedFile.hash,
@@ -164,6 +172,11 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
+
+        if (filePath.startsWith("metadata/")) {
+            return;
+        }
+
         deleteFile<DatabaseMetadata>(this.merkleTree, filePath);
     }
 
