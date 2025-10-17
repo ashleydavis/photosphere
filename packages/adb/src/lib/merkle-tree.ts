@@ -197,6 +197,15 @@ export function combineHashes(leftHash: Buffer, rightHash: Buffer): Buffer {
         .digest();
 }
 
+//
+// Compare two file names for sorting in the merkle tree.
+// Returns negative if a < b, zero if equal, positive if a > b.
+// Uses natural/numeric-aware sorting for intuitive ordering of numbered files.
+//
+export function compareFileNames(a: string, b: string): number {
+    return a.localeCompare(b, undefined, { numeric: true });
+}
+
 /**
  * Create a new leaf node for a file
  */
@@ -442,7 +451,7 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     
     // If current node is a leaf, determine correct order and create parent
     if (node.nodeCount === 1) {
-        if (fileHash.fileName < node.fileName!) {
+        if (compareFileNames(fileHash.fileName, node.fileName!) < 0) {
             return createParentNode(newLeaf, node); // new file goes left
         } else {
             return createParentNode(node, newLeaf); // new file goes right
@@ -459,7 +468,7 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     let newLeft = left;
     let newRight = right;
 
-    if (fileHash.fileName < rightMin) {
+    if (compareFileNames(fileHash.fileName, rightMin) < 0) {
         // File should go in left subtree based on sorting
         newLeft = _addFile(left, fileHash);
     } else {
@@ -664,7 +673,7 @@ export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseM
         }
         
         // If target is less than the minimum of right subtree, search left
-        if (targetFileName < right.minFileName) {
+        if (compareFileNames(targetFileName, right.minFileName) < 0) {
             return searchNode(left, targetFileName);
         } else {
             // Otherwise search right
@@ -1331,7 +1340,7 @@ function _deleteNode(node: MerkleNode, fileName: string): MerkleNode | undefined
     let nodeDeleted = false;
     
     // Check if the target is in the left subtree
-    if (fileName < right.minFileName) {
+    if (compareFileNames(fileName, right.minFileName) < 0) {
         const result = _deleteNode(left, fileName);
         if (result === undefined) {
             // The left child was deleted, promote the right child
