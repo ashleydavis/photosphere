@@ -37,9 +37,9 @@ function manualSort(arr: string[], compareFn: (a: string, b: string) => boolean)
     return sorted;
 }
 
-// 1. Lexicographic comparison using < operator (what merkle tree uses)
+// 1. Lexicographic comparison using < operator (what merkle tree USED to use)
 console.log('\n================================================================================');
-console.log('1. LEXICOGRAPHIC (< operator) - CURRENTLY USED BY MERKLE TREE');
+console.log('1. LEXICOGRAPHIC (< operator) - PREVIOUSLY USED BY MERKLE TREE');
 console.log('================================================================================');
 console.log('How it works:');
 console.log('  - Uses JavaScript\'s < operator for string comparison');
@@ -123,9 +123,9 @@ sorted4.forEach((name, index) => {
     console.log(`  ${index + 1}. ${name}`);
 });
 
-// 5. Natural sort (numeric-aware)
+// 5. Natural sort (numeric-aware) - NOW USED BY MERKLE TREE
 console.log('\n================================================================================');
-console.log('5. NATURAL/NUMERIC-AWARE SORT (localeCompare numeric)');
+console.log('5. NATURAL/NUMERIC-AWARE SORT (localeCompare numeric) - CURRENTLY USED BY MERKLE TREE');
 console.log('================================================================================');
 console.log('How it works:');
 console.log('  - Treats consecutive digits as numbers, not individual characters');
@@ -146,5 +146,5 @@ sorted5.forEach((name, index) => {
 });
 
 console.log('\n=== SUMMARY ===');
-console.log('Merkle tree uses: Lexicographic (< operator)');
-console.log('This means uppercase letters sort before lowercase letters.');
+console.log('Merkle tree now uses: Natural/Numeric-aware sort (localeCompare with numeric: true)');
+console.log('This provides intuitive ordering for both alphabetic and numeric file names.');
