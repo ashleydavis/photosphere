@@ -1,108 +1,8 @@
 import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, createTree } from '../../../lib/merkle-tree';
+import { createFileHash, verifyTree, buildTree, visualizeTree } from './merkle-verify';
 
 describe('Merkle Tree', () => {
 
-    /**
-     * Helper function to create a file hash with a given name and length
-     */
-    function createFileHash(fileName: string): FileHash {
-        return {
-            fileName,
-            hash: Buffer.from(fileName),
-            length: 1,
-            lastModified: new Date(),
-        };
-    }
-
-    /**
-     * Helper function to build a tree with the given file names
-     */
-    function buildTree(fileNames: string[]): IMerkleTree<any> {
-        let merkleTree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
-        
-        for (const fileName of fileNames) {
-            const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
-        }
-
-        if (!merkleTree) {
-            throw new Error('Failed to build the tree');
-        }
-        
-        return merkleTree;
-    }
-
-    /**
-     * Helper function to verify a leaf node
-     */
-    function verifyLeafNode(nodeIndex: number, nodes: MerkleNode[], fileName: string) {
-        expect(nodes[nodeIndex].fileName).toEqual(fileName);
-        expect(nodes[nodeIndex].hash).toEqual(Buffer.from(fileName));
-        expect(nodes[nodeIndex].nodeCount).toBe(1);
-    }
-
-    //
-    // Verify that a node matches the expected structure by recursively walking the binary tree.
-    //
-    function verifyNode(node: MerkleNode | undefined, expectedStructure: any) {
-        expect(node).toBeDefined();
-        if (!node) return;
-        
-        expect(Buffer.isBuffer(node.hash)).toBe(true);
-
-        if (expectedStructure.fileName) {
-            expect(node.nodeCount).toBe(1);
-            expect(node.fileName).toEqual(expectedStructure.fileName);
-        }
-
-        if (expectedStructure.hash) {
-            expect(node.nodeCount).toBe(1);
-        }        
-
-        if (expectedStructure.left) {
-            expect(node.nodeCount).toBeGreaterThanOrEqual(3);
-            expect(node.left).toBeDefined();
-
-            if (typeof(expectedStructure.left) === 'string') {
-                expect(node.left!.fileName).toEqual(expectedStructure.left);
-                expect(node.left!.hash).toEqual(Buffer.from(expectedStructure.left));
-            }
-            else {
-                verifyNode(node.left, expectedStructure.left);
-            }
-        }
-
-        if (expectedStructure.right) {
-            expect(node.nodeCount).toBeGreaterThanOrEqual(3);
-            expect(node.right).toBeDefined();
-
-            if (typeof(expectedStructure.right) === 'string') {
-                expect(node.right!.fileName).toEqual(expectedStructure.right);
-                expect(node.right!.hash).toEqual(Buffer.from(expectedStructure.right));
-            }
-            else {
-                verifyNode(node.right, expectedStructure.right);
-            }
-        }
-
-        if (expectedStructure.left && expectedStructure.right) {
-            // Check that the hash is a combination of the left and right hashes.
-            expect(node.hash).toEqual(combineHashes(node.left!.hash, node.right!.hash));
-        }
-
-        if (!expectedStructure.left && !expectedStructure.right) {
-            // Leaf node
-            expect(node.nodeCount).toBe(1);
-        }
-    }
-
-    //
-    // Verify the entire tree structure matches the expected structure.
-    //
-    function verifyTree(tree: IMerkleTree<any>, expectedStructure: any) {
-        verifyNode(tree.root, expectedStructure);
-    }
-    
     describe('File Addition', () => {
 
         // Test 1: Create a tree with a single file
@@ -125,9 +25,9 @@ describe('Merkle Tree', () => {
         // Test 2: Add a second file to an existing tree
         // Tree before: A (single node)
         // Tree after:  
-        //    AB (root)
-        //    /  \
-        //   A    B
+        //     AB (root)
+        //    / \
+        //   A   B
         test('adds a second file to an existing tree', () => {
             const fileHashA = createFileHash('A');            
             const treeA = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHashA);
@@ -162,9 +62,9 @@ describe('Merkle Tree', () => {
         // Tree after:
         //       ABC (root)
         //      /    \
-        //    AB      C
-        //   /  \
-        //  A    B
+        //     A     BC
+        //          /  \
+        //         B    C
         test('adds a third file to an existing tree', () => {
             
             // Build tree with files A and B, then add C.
@@ -176,12 +76,12 @@ describe('Merkle Tree', () => {
 
             verifyTree(treeABC, {
                 tag: 'ABC',
-                left: {
-                    tag: 'AB',
-                    left: 'A',
-                    right: 'B',
+                left: 'A',
+                right: {
+                    tag: 'BC',
+                    left: 'B',
+                    right: 'C',
                 },
-                right: 'C',
             });
 
             expect(treeABC.sortedNodeRefs).toEqual([
@@ -267,12 +167,12 @@ describe('Merkle Tree', () => {
         //
         // Tree after:
         //          ABCDE (root)
-        //         /      \
-        //     ABCD        E
-        //    /    \
-        //   AB    CD
-        //  / \    / \
-        // A   B  C   D
+        //         /     \
+        //        AB     CDE
+        //       / \    / \
+        //      A   B  C   DE
+        //                / \
+        //               D   E
         test('adds a fifth file to an existing tree (balanced approach)', () => {
             
             // Build tree with A, B, C, and D.
@@ -285,17 +185,18 @@ describe('Merkle Tree', () => {
             verifyTree(treeABCDE, {
                 tag: 'ABCDE',
                 left: {
-                    tag: 'ABCD',
-                    left: {
-                        tag: 'AB',
-                        left: 'A',
-                        right: 'B',
-                    },
+                    tag: 'AB',
+                    left: 'A',
+                    right: 'B',
+                },
+                right: {
+                    tag: 'CDE',
+                    left: 'C',
                     right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
-                    },
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
+                    }
                 },
             });
 
@@ -415,9 +316,9 @@ describe('Merkle Tree', () => {
         //         /        \
         //     ABCD         EFG
         //    /    \       /   \
-        //   AB    CD     EF    G
-        //  / \    / \   / \
-        // A   B  C   D E   F
+        //   AB    CD     E    FG
+        //  / \    / \        / \
+        // A   B  C   D      F   G
         test('adds a seventh file to an existing tree (balanced approach)', () => {
             
             // Build tree with A through F.
@@ -444,12 +345,12 @@ describe('Merkle Tree', () => {
                 },
                 right: {
                     tag: 'EFG',
-                    left: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                    left: 'E',
+                    right: {
+                        tag: 'FG',
+                        left: 'F',
+                        right: 'G',
                     },
-                    right: 'G',
                 },
             });
 
@@ -504,8 +405,6 @@ describe('Merkle Tree', () => {
         //  / \    / \   / \    / \
         // A   B  C   D E   F  G   H
         //
-        // This test will intentionally fail because the actual implementation
-        // does not create a perfectly balanced tree for 8 nodes.
         test('adds an eighth file to an existing tree (perfectly balanced)', () => {
             
             // Build tree with A through G
@@ -592,15 +491,15 @@ describe('Merkle Tree', () => {
         // A   B  C   D E   F  G   H
         //
         // Expected tree after (balanced for 9 nodes):
-        //              ABCDEFGHI (root)
-        //             /        \
-        //          ABCDEFGH     I
+        //          ABCDEFGHI (root)
         //         /        \
-        //     ABCD         EFGH
+        //     ABCD         EFGHI
         //    /    \       /    \
-        //   AB    CD     EF     GH
+        //   AB    CD     EF     GHI
         //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        // A   B  C   D E   F  G   HI
+        //                        / \
+        //                       H   I
         test('adds a ninth file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through H, assuming the implementation gives a balanced tree
@@ -613,35 +512,35 @@ describe('Merkle Tree', () => {
             verifyTree(rootABCDEFGHI, {
                 tag: 'ABCDEFGHI',
                 left: {
-                    tag: 'ABCDEFGH',
+                    tag: 'ABCD',
                     left: {
-                        tag: 'ABCD',
-                        left: {
-                            tag: 'AB',
-                            left: 'A',
-                            right: 'B',
-                        },
-                        right: {
-                            tag: 'CD',
-                            left: 'C',
-                            right: 'D',
-                        },
+                        tag: 'AB',
+                        left: 'A',
+                        right: 'B',
                     },
                     right: {
-                        tag: 'EFGH',
-                        left: {
-                            tag: 'EF',
-                            left: 'E',
-                            right: 'F',
-                        },
-                        right: {
-                            tag: 'GH',
-                            left: 'G',
-                            right: 'H',
-                        },
+                        tag: 'CD',
+                        left: 'C',
+                        right: 'D',
                     },
                 },
-                right: 'I',
+                right: {
+                    tag: 'EFGH',
+                    left: {
+                        tag: 'EF',
+                        left: 'E',
+                        right: 'F',
+                    },
+                    right: {
+                        tag: 'GHI',
+                        left: 'G',
+                        right: { 
+                            tag: 'HI',
+                            left: 'H',
+                            right: 'I',
+                        }
+                    },
+                },
             });
 
             expect(rootABCDEFGHI.sortedNodeRefs).toEqual([
@@ -686,26 +585,26 @@ describe('Merkle Tree', () => {
         
         // Test 10: Add a tenth file to an existing tree with a balanced approach
         // Tree before:
-        //              ABCDEFGHI (root)
-        //             /        \
-        //          ABCDEFGH     I
+        //          ABCDEFGHI (root)
         //         /        \
-        //     ABCD         EFGH
+        //     ABCD         EFGHI
         //    /    \       /    \
-        //   AB    CD     EF     GH
+        //   AB    CD     EF     GHI
         //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        // A   B  C   D E   F  G   HI
+        //                        / \
+        //                       H   I
         //
         // Expected tree after:
-        //              ABCDEFGHIJ (root)
-        //             /          \
-        //          ABCDEFGH        IJ
-        //         /        \      |  \
-        //     ABCD         EFGH   I   J
-        //    /    \       /    \
-        //   AB    CD     EF     GH
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        //           ABCDEFGHIJ (root)
+        //          /        \
+        //      ABCDEF       GHIJ
+        //     /      \      /  \
+        //    ABCD    EF    GH   IJ
+        //   /   \    /\   / \  /  \
+        //  AB   CD  E F  G  H  I  J
+        //  /\   /\ 
+        // A B  C D 
         test('adds a tenth file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through I
@@ -718,7 +617,7 @@ describe('Merkle Tree', () => {
             verifyTree(treeABCDEFGHIJ, {
                 tag: 'ABCDEFGHIJ',
                 left: {
-                    tag: 'ABCDEFGH',
+                    tag: 'ABCDEF',
                     left: {
                         tag: 'ABCD',
                         left: {
@@ -726,30 +625,25 @@ describe('Merkle Tree', () => {
                             left: 'A',
                             right: 'B',
                         },
-                        right: {
-                            tag: 'CD',
-                            left: 'C',
-                            right: 'D',
-                        },
                     },
                     right: {
-                        tag: 'EFGH',
-                        left: {
-                            tag: 'EF',
-                            left: 'E',
-                            right: 'F',
-                        },
-                        right: {
-                            tag: 'GH',
-                            left: 'G',
-                            right: 'H',
-                        },
+                        tag: 'EF',
+                        left: 'E',
+                        right: 'F',
                     },
                 },
                 right: {
-                    tag: 'IJ',
-                    left: 'I',
-                    right: 'J',
+                    tag: 'GHIJ',
+                    left: {
+                        tag: 'GH',
+                        left: 'G',
+                        right: 'H',
+                    },
+                    right: {
+                        tag: 'IJ',
+                        left: 'I',
+                        right: 'J',
+                    },
                 },
             });
 
@@ -799,26 +693,26 @@ describe('Merkle Tree', () => {
         
         // Test 11: Add an eleventh file to an existing tree with a balanced approach
         // Tree before:
-        //              ABCDEFGHIJ (root)
-        //             /          \
-        //          ABCDEFGH        IJ
-        //         /        \      |  \
-        //     ABCD         EFGH   I   J
-        //    /    \       /    \
-        //   AB    CD     EF     GH
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        //           ABCDEFGHIJ (root)
+        //          /        \
+        //      ABCDEF       GHIJ
+        //     /      \      /  \
+        //    ABCD    EF    GH   IJ
+        //   /   \    /\   / \  /  \
+        //  AB   CD  E F  G  H  I  J
+        //  /\   /\ 
+        // A B  C D 
         //
         // Expected tree after (balanced for 11 nodes):
-        //               ABCDEFGHIJ (root)
-        //             /           \
-        //          ABCDEFGH         IJK
-        //         /        \        |  \
-        //     ABCD         EFGH     IJ  K
-        //    /    \       /    \    | \
-        //   AB    CD     EF     GH  I  J
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        //           ABCDEFGHIJK (root)
+        //          /        \
+        //      ABCDEF       GHIJK
+        //     /      \      /  \
+        //    ABCD    EF    GH   IJK
+        //   /   \    /\   / \  /  \
+        //  AB   CD  E F  G  H  I  JK
+        //  /\   /\                /\
+        // A B  C D               J K
         test('adds an eleventh file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through J
@@ -831,7 +725,7 @@ describe('Merkle Tree', () => {
             verifyTree(treeABCDEFGHIJK, {
                 tag: 'ABCDEFGHIJK',
                 left: {
-                    tag: 'ABCDEFGH',
+                    tag: 'ABCDEF',
                     left: {
                         tag: 'ABCD',
                         left: {
@@ -846,27 +740,27 @@ describe('Merkle Tree', () => {
                         },
                     },
                     right: {
-                        tag: 'EFGH',
-                        left: {
-                            tag: 'EF',
-                            left: 'E',
-                            right: 'F',
-                        },
-                        right: {
-                            tag: 'GH',
-                            left: 'G',
-                            right: 'H',
-                        },
+                        tag: 'EF',
+                        left: 'E',
+                        right: 'F',
                     },
                 },
                 right: {
-                    tag: 'IJK',
+                    tag: 'GHIJK',
                     left: {
-                        tag: 'IJ',
-                        left: 'I',
-                        right: 'J',
+                        tag: 'GH',
+                        left: 'G',
+                        right: 'H',
                     },
-                    right: 'K',
+                    right: {
+                        tag: 'IJK',
+                        left: 'I',
+                        right: {
+                            tag: 'JK',
+                            left: 'J',
+                            right: 'K',
+                        },
+                    },
                 },
             });
 
@@ -1022,16 +916,16 @@ describe('Merkle Tree', () => {
         // Tree before:
         //       ABC (root)
         //      /    \
-        //    AB      C
-        //   /  \
-        //  A    B    <- B will be updated
+        //    A     BC
+        //         /  \
+        //        B    C    <- B will be updated
         //
         // Tree after:
         //       ABC' (root)      <- hash changed due to B's update
-        //      /    \
-        //    AB'     C           <- AB's hash changed due to B's update
-        //   /  \
-        //  A    B'               <- B's hash changed to B' (B_modified)
+        //      /   \
+        //    A    BC'            <- BC's hash changed due to B's update
+        //        /  \
+        //       B'  C            <- B's hash changed to B' (B_modified)
         //
         test('updates a file in a small tree', () => {
             // Build a tree with files A, B, C
@@ -1051,15 +945,15 @@ describe('Merkle Tree', () => {
             // Verify the tree structure on the new hash.
             verifyTree(tree, {
                 tag: 'ABC',
-                left: {
-                    tag: 'AB',
-                    left: 'A',
-                    right: {
+                left: 'A',
+                right: {
+                    tag: 'BC',
+                    left: {
                         fileName: 'B',
                         hash: 'B_modified',
                     },
+                    right: 'C',
                 },
-                right: 'C',
             });         
         });
         
@@ -1069,18 +963,18 @@ describe('Merkle Tree', () => {
         //         /        \
         //     ABCD         EFG
         //    /    \       /   \
-        //   AB    CD     EF    G
-        //  / \    / \   / \
-        // A   B  C   D E   F            <- E will be updated
+        //   AB    CD     E    FG        <- E will be updated
+        //  / \    / \        / \
+        // A   B  C   D      F   G
         //
         // Tree after:
         //          ABCDEFG' (root)      <- hash changed due to E's update
         //         /         \
         //     ABCD          EFG'        <- EFG's hash changed due to E's update
         //    /    \        /   \
-        //   AB    CD     EF'    G       <- EF's hash changed due to E's update
-        //  / \    / \   /  \
-        // A   B  C   D E'   F           <- E's hash changed to E' (E_modified)
+        //   AB    CD     E'    FG       <- E's hash changed to E' (E_modified)
+        //  / \    / \         /  \
+        // A   B  C   D       F   G        
         //
         test('updates a file in a larger balanced tree', () => {
             // Build a tree with files A through G
@@ -1116,14 +1010,14 @@ describe('Merkle Tree', () => {
                 right: {
                     tag: 'EFG',
                     left: {
-                        tag: 'EF',
-                        left: {
-                            fileName: 'E',
-                            hash: 'E_modified',
-                        },
-                        right: 'F',
+                        fileName: 'E',
+                        hash: 'E_modified',
                     },
-                    right: 'G',
+                    right: {
+                        tag: 'FG',
+                        left: 'F',
+                        right: 'G',
+                    },
                 },
             });
         });
@@ -1157,33 +1051,33 @@ describe('Merkle Tree', () => {
         // Tree before (10 nodes):
         //              ABCDEFGHIJ (root)
         //             /          \
-        //          ABCDEFGH        IJ
-        //         /        \      |  \
-        //     ABCD         EFGH   I   J
-        //    /    \       /    \
-        //   AB    CD     EF     GH
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
+        //          ABCDEF       GHIJ
+        //         /     \      /    \
+        //     ABCD      EF    GH    IJ
+        //    /    \     /\    /\    /\
+        //   AB    CD   E F   G  H  I  J
+        //  / \    / \             
+        // A   B  C   D            
         //            ^
         //            D will be updated
         //
         // Tree after (same structure, only hashes change):
         //              ABCDEFGHIJ' (root)
-        //             /           \
-        //          ABCDEFGH'        IJ
-        //         /         \      |  \
-        //     ABCD'         EFGH   I   J
-        //    /    \        /    \
-        //   AB    CD'     EF     GH
-        //  / \    / \    / \    / \
-        // A   B  C   D' E   F  G   H
+        //             /          \
+        //          ABCDEF'      GHIJ
+        //         /     \      /    \
+        //     ABCD'     EF    GH    IJ
+        //    /    \     /\    /\    /\
+        //   AB    CD'  E F   G  H  I  J
+        //  / \    / \             
+        // A   B  C   D'            
         //            ^
         //            D's hash changed to D' (D_modified)
         //
         test('maintains tree structure after file update', () => {
             // Build a tree with files A through J
             const originalTree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']);
-            
+
             // Create modified version of file D
             const modifiedD = createModifiedFileHash('D', 'D_modified');
             
@@ -1200,7 +1094,7 @@ describe('Merkle Tree', () => {
             verifyTree(originalTree, {
                 tag: 'ABCDEFGHIJ',
                 left: {
-                    tag: 'ABCDEFGH',
+                    tag: 'ABCDEF',
                     left: {
                         tag: 'ABCD',
                         left: {
@@ -1208,33 +1102,25 @@ describe('Merkle Tree', () => {
                             left: 'A',
                             right: 'B',
                         },
-                        right: {
-                            tag: 'CD',
-                            left: 'C',
-                            right: {
-                                fileName: 'D',
-                                hash: 'D_modified',
-                            },
-                        },
                     },
                     right: {
-                        tag: 'EFGH',
-                        left: {
-                            tag: 'EF',
-                            left: 'E',
-                            right: 'F',
-                        },
-                        right: {
-                            tag: 'GH',
-                            left: 'G',
-                            right: 'H',
-                        },
+                        tag: 'EF',
+                        left: 'E',
+                        right: 'F',
                     },
                 },
                 right: {
-                    tag: 'IJ',
-                    left: 'I',
-                    right: 'J',
+                    tag: 'GHIJ',
+                    left: {
+                        tag: 'GH',
+                        left: 'G',
+                        right: 'H',
+                    },
+                    right: {
+                        tag: 'IJ',
+                        left: 'I',
+                        right: 'J',
+                    },
                 },
             });
         });

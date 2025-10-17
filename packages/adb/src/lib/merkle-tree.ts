@@ -19,7 +19,7 @@ export interface MerkleNode {
     isDeleted?: boolean; // Indicates if this file has been deleted (for leaf nodes only).
     size: number; // The size of the node and children in bytes.
     lastModified?: Date; // The last modified date of the original file (for leaf nodes only, version 3+).
-    // Binary tree structure
+    minFileName: string; // The minimum file name in this subtree (for efficient sorted insertion).
     left?: MerkleNode; // Left child node
     right?: MerkleNode; // Right child node
 }
@@ -118,9 +118,13 @@ export function findFileInTree(node: MerkleNode | undefined, targetFileName: str
  * The callback can return false to stop traversal early.
  */
 export function traverseTreeSync(node: MerkleNode | undefined, callback: (node: MerkleNode) => boolean): void {
-    if (!node) return;
+    if (!node) {
+        return;
+    }
     
-    if (!callback(node)) return; // Stop if callback returns false
+    if (!callback(node)) {
+        return; // Stop if callback returns false
+    }
     
     traverseTreeSync(node.left, callback);
     traverseTreeSync(node.right, callback);
@@ -207,6 +211,7 @@ export function createLeafNode(fileHash: FileHash): MerkleNode {
         leafCount: 1, // Leaf nodes have a leaf count of 1.
         size: fileHash.length, // Size is the length of the file.
         lastModified: fileHash.lastModified, // Include last modified date if provided.
+        minFileName: fileHash.fileName, // For leaf nodes, minFileName is the file name itself.
     };
 }
 
@@ -220,6 +225,7 @@ export function createParentNode(left: MerkleNode, right: MerkleNode): MerkleNod
         nodeCount: 1 + left.nodeCount + right.nodeCount, // Total node count is 1 (this node) + left + right
         leafCount: left.leafCount + right.leafCount, // Total leaf count is the sum of both subtrees.
         size: left.size + right.size, // Total size is the sum of both subtrees.
+        minFileName: left.minFileName, // Since we maintain sorted order, the min file name is always the min of the left subtree
         left: left,
         right: right,
     };
@@ -228,14 +234,13 @@ export function createParentNode(left: MerkleNode, right: MerkleNode): MerkleNod
 /**
  * Convert binary tree to flat array (for serialization)
  */
-export function binaryTreeToArray(root: MerkleNode | undefined): MerkleNode[] {
+export function binaryTreeToArray(root: MerkleNode | undefined): Omit<MerkleNode, 'minFileName'>[] {
     if (!root) return [];
     
-    const result: MerkleNode[] = [];
-    
-    function traverse(node: MerkleNode): void {
-        // Create node without left/right references for flat array
-        const flatNode: MerkleNode = {
+    const result: Omit<MerkleNode, 'minFileName'>[] = [];
+
+    traverseTreeSync(root, (node) => {
+        const flatNode: Omit<MerkleNode, 'minFileName'> = {
             hash: node.hash,
             fileName: node.fileName,
             nodeCount: node.nodeCount,
@@ -244,22 +249,17 @@ export function binaryTreeToArray(root: MerkleNode | undefined): MerkleNode[] {
             size: node.size,
             lastModified: node.lastModified,
         };
-        
         result.push(flatNode);
-        
-        // Depth-first traversal: process left subtree, then right subtree
-        if (node.left) traverse(node.left);
-        if (node.right) traverse(node.right);
-    }
+        return true;
+    });
     
-    traverse(root);
     return result;
 }
 
 /**
  * Convert flat array to binary tree (for loading)
  */
-export function arrayToBinaryTree(nodes: MerkleNode[]): MerkleNode | undefined {
+export function arrayToBinaryTree(nodes: Omit<MerkleNode, 'minFileName'>[]): MerkleNode | undefined {
     if (nodes.length === 0) return undefined;
     
     // For now, use a simple approach - rebuild tree structure based on the array
@@ -273,17 +273,166 @@ export function arrayToBinaryTree(nodes: MerkleNode[]): MerkleNode | undefined {
         
         if (node.nodeCount === 1) {
             // Leaf node - no children
-            return node;
+            return { 
+                ...node, 
+                minFileName: node.fileName!,
+            };
         }
         
         // Internal node - recursively build left and right
         node.left = buildNode();
         node.right = buildNode();
         
-        return node;
+        return { 
+            ...node, 
+            minFileName: node.right!.minFileName!,
+        };
     }
     
     return buildNode();
+}
+
+/**
+ * Rebalance a tree using AVL-like rotations to maintain both sorting and balance
+ * 
+ * This function checks if a tree is balanced and performs rotations if needed.
+ * A tree is considered balanced if the difference between left and right subtree
+ * node counts is 2 or less.
+ * 
+ * @param node - The node to potentially rebalance
+ * @returns The rebalanced node
+ */
+export function rebalanceTree(node: MerkleNode): MerkleNode {
+    const left = node.left;
+    const right = node.right;
+    if (!left || !right) {
+        throw new Error('Invalid tree structure');
+    }
+
+    const leftCount = left.nodeCount;
+    const rightCount = right.nodeCount;
+    const balance = leftCount - rightCount;    
+    if (Math.abs(balance) <= 2) {
+        // If tree is reasonably balanced (difference <= 2), no rotation needed.
+        return node;
+    }    
+
+    // Left-heavy tree (leftCount > rightCount + 1)
+    if (balance > 0) {
+        const leftLeftCount = left.left?.nodeCount || 0;
+        const leftRightCount = left.right?.nodeCount || 0;
+        
+        // Left-Left case: rotate right
+        if (leftLeftCount >= leftRightCount) {
+            return rotateRight(node);
+        }
+        // Left-Right case: rotate left then right
+        else {
+            const newLeft = rotateLeft(node.left!);
+            return rotateRight({ ...node, left: newLeft });
+        }
+    }
+    // Right-heavy tree (rightCount > leftCount + 1)
+    else {
+        const rightLeftCount = right.left?.nodeCount || 0;
+        const rightRightCount = right.right?.nodeCount || 0;
+        
+        // Right-Right case: rotate left
+        if (rightRightCount >= rightLeftCount) {
+            return rotateLeft(node);
+        }
+        // Right-Left case: rotate right then left
+        else {
+            const newRight = rotateRight(right);
+            return rotateLeft({ ...node, right: newRight });
+        }
+    }
+}
+
+/**
+ * Rotate right to balance the tree
+ * 
+ * This function performs a right rotation to rebalance the tree structure.
+ * The left child of the input node becomes the new root, and the original
+ * node becomes the right child of the new root.
+ * 
+ * @param node - The node to rotate
+ * @returns The rotated node
+ */
+export function rotateRight(node: MerkleNode): MerkleNode {
+    const left = node.left;
+    const right = node.right;
+    if (!left || !right) {
+        throw new Error('Invalid tree structure');
+    }
+
+    const newLeft = left.left;
+    const newCenter = left.right;
+    if (!newLeft || !newCenter) {
+        throw new Error('Invalid tree structure');
+    }
+    
+    return {
+        nodeCount: 1 + newLeft.nodeCount + 1 + newCenter.nodeCount + right.nodeCount,
+        leafCount: newLeft.leafCount + newCenter.leafCount + right.leafCount,
+        size: newLeft.size + newCenter.size + right.size,
+        minFileName: newLeft.minFileName,
+        hash: combineHashes(newLeft.hash, combineHashes(newCenter.hash, right.hash)),
+        left: newLeft,
+        right: {
+            ...node, //todo: Get rid of the spreads like this.
+            left: newCenter,
+            right: right,
+            nodeCount: 1 + newCenter.nodeCount + right.nodeCount,
+            leafCount: newCenter.leafCount + right.leafCount,
+            size: newCenter.size + right.size,
+            minFileName: newCenter.minFileName,
+            hash: combineHashes(newCenter.hash, right.hash),
+        },
+    };
+}
+
+/**
+ * Rotate left to balance the tree
+ * 
+ * This function performs a left rotation to rebalance the tree structure.
+ * The right child of the input node becomes the new root, and the original
+ * node becomes the left child of the new root.
+ * 
+ * @param node - The node to rotate
+ * @returns The rotated node
+ */
+export function rotateLeft(node: MerkleNode): MerkleNode {
+    const left = node.left;
+    const right = node.right;
+    if (!left || !right) {
+        throw new Error('Invalid tree structure');
+    }
+
+    const newRight = right.right;
+    const newCenter = right.left;    
+    if (!newRight || !newCenter) {
+        throw new Error('Invalid tree structure');
+    }
+    
+    return {
+        nodeCount: 1 + 1 + left.nodeCount + newCenter.nodeCount + newRight.nodeCount,
+        leafCount: left.leafCount + newCenter.leafCount + newRight.leafCount,
+        size: left.size + newCenter.size + newRight.size,
+        minFileName: left.minFileName,
+        hash: combineHashes(combineHashes(left.hash, newCenter.hash), newRight.hash),
+        left: {
+            ...node, //todo: Get rid of the spreads like this.
+            left: left,
+            right: newCenter,
+            nodeCount: 1 + left.nodeCount + newCenter.nodeCount,
+            leafCount: left.leafCount + newCenter.leafCount,
+            size: left.size + newCenter.size,
+            minFileName: left.minFileName,
+            hash: combineHashes(left.hash, newCenter.hash),
+        },
+        right: newRight,
+    };
 }
 
 /**
@@ -297,46 +446,53 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
         return newLeaf;
     }
     
-    // If current node is a leaf, create a new parent with current node and new leaf
+    // If current node is a leaf, determine correct order and create parent
     if (node.nodeCount === 1) {
-        return createParentNode(node, newLeaf);
+        if (fileHash.fileName < node.fileName!) {
+            return createParentNode(newLeaf, node); // new file goes left
+        } else {
+            return createParentNode(node, newLeaf); // new file goes right
+        }
+    }   
+
+    const left = node.left;
+    const right = node.right;
+    if (!left || !right) {
+        throw new Error('Invalid tree structure');
     }
 
-    // For internal nodes, recursively add to the smaller subtree and create new node
-    const leftCount = node.left?.nodeCount || 0;
-    const rightCount = node.right?.nodeCount || 0;
-    
-    let newLeft = node.left;
-    let newRight = node.right;
-    
-    if (leftCount > rightCount) {
-        // Left subtree has more nodes, add to right subtree to balance
-        newRight = _addFile(node.right, fileHash);
+    const rightMin = right.minFileName!; // If not a leaf node, there must always be a right child with a minFileName.
+    let newLeft = left;
+    let newRight = right;
+
+    if (fileHash.fileName < rightMin) {
+        // File should go in left subtree based on sorting
+        newLeft = _addFile(left, fileHash);
     } else {
-        // Right subtree has equal or more nodes, create new root with current tree on left and new leaf on right
-        return createParentNode(node, newLeaf);
+        // File should go in right subtree based on sorting
+        newRight = _addFile(right, fileHash);
     }
     
     // Create new node with updated children and recalculated properties
-    const newLeftCount = newLeft?.nodeCount || 0;
-    const newRightCount = newRight?.nodeCount || 0;
-    const newLeftLeafCount = newLeft?.leafCount || 0;
-    const newRightLeafCount = newRight?.leafCount || 0;
-    const newLeftSize = newLeft?.size || 0;
-    const newRightSize = newRight?.size || 0;
+    const newLeftCount = newLeft.nodeCount;
+    const newRightCount = newRight.nodeCount;
+    const newLeftLeafCount = newLeft.leafCount;
+    const newRightLeafCount = newRight.leafCount;
+    const newLeftSize = newLeft.size;
+    const newRightSize = newRight.size;
     
-    return {
+    const newNode = {
         ...node,  // Copy all existing properties
         left: newLeft,
         right: newRight,
         nodeCount: 1 + newLeftCount + newRightCount,
         leafCount: newLeftLeafCount + newRightLeafCount,
         size: newLeftSize + newRightSize,
-        hash: combineHashes(
-            newLeft?.hash || Buffer.alloc(0),
-            newRight?.hash || Buffer.alloc(0)
-        )
+        minFileName: newLeft.minFileName,
+        hash: combineHashes(newLeft.hash, newRight.hash),
     };
+   
+    return rebalanceTree(newNode);
 }
 
 /**
@@ -890,7 +1046,7 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
     };
     
     // Read all nodes
-    const nodes: MerkleNode[] = [];
+    const nodes: Omit<MerkleNode, 'minFileName'>[] = [];
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
@@ -1003,7 +1159,7 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
     };
     
     // Read all nodes
-    const nodes: MerkleNode[] = [];
+    const nodes: Omit<MerkleNode, 'minFileName'>[] = [];
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
@@ -1119,7 +1275,7 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
     };
     
     // Read all nodes
-    const nodes: MerkleNode[] = [];
+    const nodes: Omit<MerkleNode, 'minFileName'>[] = [];
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
