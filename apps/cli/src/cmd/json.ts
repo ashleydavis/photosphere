@@ -1,6 +1,6 @@
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
-import { serializeTreeToJSON } from "../../../../packages/adb/src/test/lib/merkle-tree/merkle-verify";
+import { serializeTreeToJSON } from "adb";
 
 export interface IJsonCommandOptions extends IBaseCommandOptions {
 }
