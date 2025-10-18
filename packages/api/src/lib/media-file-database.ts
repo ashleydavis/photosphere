@@ -1702,6 +1702,7 @@ export class MediaFileDatabase {
             const destFileInfo = getFileInfo(destMerkleTree, fileName);
             if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
                 // File already exists with correct hash, skip copying.
+                // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
                 result.existingFiles++;
                 if (progressCallback) {
                     progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
@@ -1775,6 +1776,10 @@ export class MediaFileDatabase {
                 }
                                 
                 await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
+
+                if (result.copiedFiles % 100 === 0) {
+                    await retry(() => destAssetDatabase.save());
+                }
             }
             return true; // Continue traversing.
         };
