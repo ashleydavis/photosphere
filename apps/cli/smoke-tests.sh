@@ -685,9 +685,9 @@ invoke_command() {
                 if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
                     echo ""
                     echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) debug root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
-                    echo ""
-                    echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
-                    $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
+                    # echo ""
+                    # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
+                    # $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
                 fi
             fi
         else
