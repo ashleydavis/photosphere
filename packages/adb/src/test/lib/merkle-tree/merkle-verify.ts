@@ -138,7 +138,7 @@ export function expectNode(test: string, node: MerkleNode, expectedStructure: an
         console.log(`========================================`);
         console.log(`Test: ${test}`);
         console.log('Actual:');
-        console.log(visualizeTree(node));
+        console.log(visualizeTreeSimple(node));
 
         console.log('Expected:');
         console.log(expectedStructure);
@@ -154,30 +154,34 @@ export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructu
 }
 
 // Helper function to visualize a Merkle tree as simple ASCII art
-export function visualizeTree(node: MerkleNode | undefined, prefix: string = '', isLast: boolean = true): string {
+export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string = '', isLast: boolean = true): string {
     if (!node) return '';
     
     let result = '';
     const connector = isLast ? '└── ' : '├── ';
     
-    // Display the node
+    const hashHex = node.hash.toString('hex');
+    const shortHash = hashHex.substring(0,4) + hashHex.substring(hashHex.length - 4);
+
+    result += prefix + connector;
+
     if (node.fileName) {
-        result += prefix + connector + node.fileName.substring(0, 4) + '\n';
-    } else {
-        // Interior node - show min name and hash
-        const hashHex = node.hash.toString('hex');
-        const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2) + '\n';
-        result += prefix + connector + shortHash;
+        result += ' ' + node.minFileName + ' -> ' + shortHash;
     }
+    else {
+        result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
+    }
+
+    result += '\n';
     
     // Add children
     const newPrefix = prefix + (isLast ? '    ' : '│   ');
     
     if (node.left) {
-        result += visualizeTree(node.left, newPrefix, !node.right);
+        result += visualizeTreeSimple(node.left, newPrefix, !node.right);
     }
     if (node.right) {
-        result += visualizeTree(node.right, newPrefix, true);
+        result += visualizeTreeSimple(node.right, newPrefix, true);
     }
     
     return result;
