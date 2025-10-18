@@ -290,7 +290,7 @@ export function arrayToBinaryTree(nodes: Omit<MerkleNode, 'minFileName'>[]): Mer
         
         return { 
             ...node, 
-            minFileName: node.right!.minFileName!,
+            minFileName: node.left!.minFileName!,
         };
     }
     
