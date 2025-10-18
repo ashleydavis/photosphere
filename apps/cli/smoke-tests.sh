@@ -76,6 +76,18 @@ log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
+# Print test header with double-line format
+print_test_header() {
+    local test_number="$1"
+    local test_name="$2"
+    echo ""
+    echo "============================================================================"
+    echo "============================================================================"
+    echo "=== TEST $test_number: $test_name ==="
+    echo "============================================================================"
+    echo "============================================================================"
+}
+
 log_success() {
     echo -e "${GREEN}[PASS]${NC} $1"
 }
@@ -935,9 +947,7 @@ check_tools() {
 }
 
 test_create_database() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 1: CREATE DATABASE ==="
+    print_test_header "1" "CREATE DATABASE"
     
     invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
     
@@ -952,9 +962,7 @@ test_create_database() {
 }
 
 test_view_media_files() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 2: VIEW LOCAL MEDIA FILES ==="
+    print_test_header "2" "VIEW LOCAL MEDIA FILES"
     
     # Capture the output to validate it
     local info_output
@@ -1010,9 +1018,7 @@ test_add_file_parameterized() {
 }
 
 test_add_png_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 3: ADD PNG FILE ==="
+    print_test_header "3" "ADD PNG FILE"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file" "image/png" "image"
     
@@ -1020,9 +1026,7 @@ test_add_png_file() {
 }
 
 test_add_jpg_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 4: ADD JPG FILE ==="
+    print_test_header "4" "ADD JPG FILE"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file" "image/jpeg" "image"
     
@@ -1030,9 +1034,7 @@ test_add_jpg_file() {
 }
 
 test_add_mp4_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 5: ADD MP4 FILE ==="
+    print_test_header "5" "ADD MP4 FILE"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
     
@@ -1040,9 +1042,7 @@ test_add_mp4_file() {
 }
 
 test_add_same_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 6: ADD SAME FILE (NO DUPLICATION) ==="
+    print_test_header "6" "ADD SAME FILE (NO DUPLICATION)"
     
     # Try to re-add the PNG file (should not add it again)
     invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
@@ -1052,9 +1052,7 @@ test_add_same_file() {
 }
 
 test_add_multiple_files() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 7: ADD MULTIPLE FILES ==="
+    print_test_header "7" "ADD MULTIPLE FILES"
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         local add_output
@@ -1072,9 +1070,7 @@ test_add_multiple_files() {
 }
 
 test_add_same_multiple_files() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 8: ADD SAME MULTIPLE FILES (NO DUPLICATION) ==="
+    print_test_header "8" "ADD SAME MULTIPLE FILES (NO DUPLICATION)"
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -1088,9 +1084,7 @@ test_add_same_multiple_files() {
 }
 
 test_database_summary() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 9: DATABASE SUMMARY ==="
+    print_test_header "9" "DATABASE SUMMARY"
     
     # Run summary command and capture output for verification
     local summary_output
@@ -1105,9 +1099,7 @@ test_database_summary() {
 }
 
 test_database_list() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 10: DATABASE LIST ==="
+    print_test_header "10" "DATABASE LIST"
     
     # Run list command and capture output for verification
     local list_output
@@ -1128,9 +1120,7 @@ test_database_list() {
 }
 
 test_export_assets() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 11: EXPORT ASSETS ==="
+    print_test_header "11" "EXPORT ASSETS"
     
     # Create export test directory
     local export_dir="./test/tmp/exports"
@@ -1216,9 +1206,7 @@ test_export_assets() {
 }
 
 test_database_verify() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 12: DATABASE VERIFICATION ==="
+    print_test_header "12" "DATABASE VERIFICATION"
     
     # Show database structure with tree command
     log_info "Showing database structure..."
@@ -1243,11 +1231,7 @@ test_database_verify() {
 }
 
 test_database_verify_full() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 13: DATABASE VERIFICATION (FULL MODE) ==="
-    
-    print_test_name "13" "DATABASE VERIFICATION (FULL MODE)"
+    print_test_header "13" "DATABASE VERIFICATION (FULL MODE)"
     
     # Run full verify command and capture output for checking
     local verify_output
@@ -1267,9 +1251,7 @@ test_database_verify_full() {
 }
 
 test_detect_deleted_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 15: DETECT DELETED FILE WITH VERIFY ==="
+    print_test_header "15" "DETECT DELETED FILE WITH VERIFY"
     
     local test_copy_dir="$TEST_DB_DIR-deleted-file-test"
     
@@ -1326,9 +1308,7 @@ test_detect_deleted_file() {
 }
 
 test_detect_modified_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 16: DETECT MODIFIED FILE WITH VERIFY ==="
+    print_test_header "16" "DETECT MODIFIED FILE WITH VERIFY"
     
     local test_copy_dir="$TEST_DB_DIR-modified-file-test"
     
@@ -1386,9 +1366,7 @@ test_detect_modified_file() {
 }
 
 test_database_replicate() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 17: DATABASE REPLICATION ==="
+    print_test_header "17" "DATABASE REPLICATION"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1419,9 +1397,7 @@ test_database_replicate() {
 }
 
 test_verify_replica() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 18: VERIFY REPLICA ==="
+    print_test_header "18" "VERIFY REPLICA"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1455,9 +1431,7 @@ test_verify_replica() {
 }
 
 test_database_replicate_second() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 19: SECOND DATABASE REPLICATION - NO CHANGES ==="
+    print_test_header "19" "SECOND DATABASE REPLICATION - NO CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1480,9 +1454,7 @@ test_database_replicate_second() {
 }
 
 test_database_compare() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 20: DATABASE COMPARISON ==="
+    print_test_header "20" "DATABASE COMPARISON"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1503,9 +1475,7 @@ test_database_compare() {
 }
 
 test_compare_with_changes() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 21: COMPARE WITH CHANGES ==="
+    print_test_header "21" "COMPARE WITH CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1530,9 +1500,7 @@ test_compare_with_changes() {
 }
 
 test_replicate_after_changes() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 22: REPLICATE AFTER CHANGES ==="
+    print_test_header "22" "REPLICATE AFTER CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1556,18 +1524,14 @@ test_replicate_after_changes() {
 }
 
 test_cannot_create_over_existing() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 23: CANNOT CREATE DATABASE OVER EXISTING ==="
+    print_test_header "23" "CANNOT CREATE DATABASE OVER EXISTING"
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
     test_passed
 }
 
 test_repair_ok_database() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 24: REPAIR OK DATABASE (NO CHANGES) ==="
+    print_test_header "24" "REPAIR OK DATABASE (NO CHANGES)"
     
     local replica_dir="$TEST_DB_DIR-replica"
     
@@ -1588,9 +1552,7 @@ test_repair_ok_database() {
 }
 
 test_remove_asset() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 25: REMOVE ASSET BY ID ==="
+    print_test_header "25" "REMOVE ASSET BY ID"
     
     # Find an asset ID to remove by listing the asset directory
     local assets_dir="$TEST_DB_DIR/asset"
@@ -1762,9 +1724,7 @@ test_remove_asset() {
 }
 
 test_repair_damaged_database() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 26: REPAIR DAMAGED DATABASE ==="
+    print_test_header "26" "REPAIR DAMAGED DATABASE"
     
     local replica_dir="$TEST_DB_DIR-replica"
     local damaged_dir="$TEST_DB_DIR-damaged"
@@ -1838,9 +1798,7 @@ test_repair_damaged_database() {
 
 
 test_v2_database_readonly_commands() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 27: V2 DATABASE READONLY COMMANDS ==="
+    print_test_header "27" "V2 DATABASE READONLY COMMANDS"
     
     local v2_db_dir="../../test/dbs/v2"
     
@@ -1865,9 +1823,7 @@ test_v2_database_readonly_commands() {
 }
 
 test_v2_database_write_commands_fail() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 28: V2 DATABASE WRITE COMMANDS FAIL ==="
+    print_test_header "28" "V2 DATABASE WRITE COMMANDS FAIL"
     
     local v2_db_dir="../../test/dbs/v2"
     
@@ -1894,9 +1850,7 @@ test_v2_database_write_commands_fail() {
 }
 
 test_v2_database_upgrade() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 29: V2 DATABASE UPGRADE TO V4 ==="
+    print_test_header "29" "V2 DATABASE UPGRADE TO V4"
     
     local v2_db_dir="../../test/dbs/v2"
     local temp_v2_dir="./test/tmp/test-v2-upgrade"
@@ -1935,9 +1889,7 @@ test_v2_database_upgrade() {
 }
 
 test_v3_database_upgrade() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 30: V3 DATABASE UPGRADE TO V4 ==="
+    print_test_header "30" "V3 DATABASE UPGRADE TO V4"
     
     local v3_db_dir="../../test/dbs/v3"
     local temp_v3_dir="./test/tmp/test-v3-upgrade"
@@ -1976,9 +1928,7 @@ test_v3_database_upgrade() {
 }
 
 test_v4_database_upgrade_no_effect() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 31: V4 DATABASE UPGRADE HAS NO EFFECT ==="
+    print_test_header "31" "V4 DATABASE UPGRADE HAS NO EFFECT"
     
     # Use the existing v4 database directly instead of upgrading from v3
     local v4_db_dir="../../test/dbs/v4"
@@ -2018,9 +1968,7 @@ test_v4_database_upgrade_no_effect() {
 }
 
 test_v4_database_add_file() {
-    echo ""
-    echo "============================================================================"
-    echo "=== TEST 32: V4 DATABASE ADD FILE AND VERIFY INTEGRITY ==="
+    print_test_header "32" "V4 DATABASE ADD FILE AND VERIFY INTEGRITY"
     
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
