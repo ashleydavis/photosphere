@@ -186,3 +186,66 @@ export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string
     
     return result;
 }
+
+//
+// Serializes a merkle tree to JSON for testing
+//
+export function serializeTreeToJSON(node: MerkleNode | undefined): any {
+    if (!node) {
+        return null;
+    }
+
+    if (node.fileName) {
+        // Leaf node
+        return {
+            f: node.fileName,
+            h: node.hash.toString('hex'),
+        };
+    }
+    else {
+        // Internal node
+        return {
+            h: node.hash.toString('hex'),
+            l: serializeTreeToJSON(node.left),
+            r: serializeTreeToJSON(node.right),
+        };
+    }
+}
+
+//
+// Deserializes a merkle tree from JSON for testing
+//
+export function deserializeTreeFromJSON(json: any): MerkleNode {
+    if (!json) {
+        throw new Error('Invalid JSON');
+    }
+
+    const hash = Buffer.from(json.h, 'hex');
+
+    if (json.f) {
+        // Leaf node
+        return {
+            hash,
+            fileName: json.f,
+            nodeCount: 1,
+            leafCount: 1,
+            size: 100,
+            minFileName: json.f,
+        };
+    }
+    else {
+        // Internal node
+        const left = deserializeTreeFromJSON(json.l);
+        const right = deserializeTreeFromJSON(json.r);
+
+        return {
+            hash,
+            nodeCount: 1 + left.nodeCount + right.nodeCount,
+            leafCount: left.leafCount + right.leafCount,
+            size: left.size + right.size ,
+            minFileName: left.minFileName,
+            left,
+            right,
+        };
+    }
+}
