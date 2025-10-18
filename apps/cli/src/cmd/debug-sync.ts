@@ -10,7 +10,6 @@ import { MerkleNode, traverseTree, getFileInfo, computeHash, addFile } from "adb
 //
 export interface IDebugSyncCommandOptions extends IBaseCommandOptions {
     dest: string;
-    destMeta?: string;
 }
 
 //
@@ -24,7 +23,7 @@ export async function debugSyncCommand(options: IDebugSyncCommandOptions): Promi
     log.info("");
 
     const { database: sourceDb } = await loadDatabase(options.db, options, false, false);
-    const targetOptions = { ...options, db: options.dest, meta: options.destMeta };
+    const targetOptions = { ...options, db: options.dest };
     const { database: targetDb } = await loadDatabase(targetOptions.db, targetOptions, false, false);
     await syncDatabases(sourceDb, targetDb);
         

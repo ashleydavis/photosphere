@@ -21,16 +21,6 @@ export interface ICompareCommandOptions {
     dest?: string;
 
     //
-    // Source metadata directory override.
-    //
-    srcMeta?: string;
-
-    //
-    // Destination metadata directory override.
-    //
-    destMeta?: string;
-
-    //
     // Enables verbose logging.
     //
     verbose?: boolean;
@@ -76,8 +66,8 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
         destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
     
-    const srcMetaPath = options.srcMeta || pathJoin(srcDir, '.db');
-    const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
+    const srcMetaPath = pathJoin(srcDir, '.db');
+    const destMetaPath = pathJoin(destDir, '.db');
 
     if (srcDir.startsWith("s3:")) {
         await configureIfNeeded(['s3'], nonInteractive);
