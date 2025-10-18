@@ -911,8 +911,7 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 //
 export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
 
-    let rebuiltTree = createTree<DatabaseMetadata>(tree.metadata.id);
-    rebuiltTree.databaseMetadata = tree.databaseMetadata;
+    const files: FileHash[] = [];
 
     traverseTreeSync(tree.root, (node) => {
         if (node.nodeCount === 1 && node.fileName && node.lastModified) {
@@ -923,7 +922,7 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
                 }
             }
 
-            rebuiltTree = addFile(rebuiltTree, {
+            files.push({
                 fileName: node.fileName,
                 hash: node.hash,
                 length: node.size,
@@ -932,6 +931,26 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
         }
         return true;
     });
+
+    //
+    // Sort by file name.
+    //
+    // TODO: In theory this sorting step shouldn't be required because addFile should
+    // put the file in sorted order in the tree. But something isn't quite write when
+    // trying to replicate a rebuilt tree.
+    //
+    files.sort((a, b) => compareFileNames(a.fileName, b.fileName));
+
+    //
+    // Add all files in sorted order to a new tree.
+    //
+    let rebuiltTree = createTree<DatabaseMetadata>(tree.metadata.id);
+    rebuiltTree.databaseMetadata = tree.databaseMetadata;
+    for (const file of files) {
+        console.log(`Adding file: ${file.fileName}`);
+        rebuiltTree = addFile(rebuiltTree, file);
+    }
+
 
     return rebuiltTree;
 }
