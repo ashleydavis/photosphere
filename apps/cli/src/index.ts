@@ -155,6 +155,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option('-s, --simple', 'Use simple visualization format')
         .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
         .action(merkleTreeCommand);
 

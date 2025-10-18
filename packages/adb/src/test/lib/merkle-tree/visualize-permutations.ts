@@ -1,5 +1,5 @@
 import { createLeafNode, createParentNode, addFile, createTree, visualizeTree as libVisualizeTree, MerkleNode, FileHash, IMerkleTree } from '../../../lib/merkle-tree';
-import { visualizeTree } from './merkle-verify';
+import { visualizeTreeSimple } from './merkle-verify';
 
 // Helper function to create a FileHash for testing
 function createTestFileHash(fileName: string): FileHash {
@@ -61,14 +61,14 @@ function testAllPermutations() {
             merkleTree = addFile(merkleTree, fileHash);
             
             console.log(`\n  Step ${stepIndex + 1}: Adding "${fileName}"`);
-            const treeVisualization = visualizeTree(merkleTree.root);
+            const treeVisualization = visualizeTreeSimple(merkleTree.root);
             const indentedTree = treeVisualization.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedTree);
             stepIndex++;
         }
         
         console.log(`\n  Final tree for permutation ${index + 1}:`);
-        const finalTreeVisualization = visualizeTree(merkleTree.root);
+        const finalTreeVisualization = visualizeTreeSimple(merkleTree.root);
         const indentedFinalTree = finalTreeVisualization.split('\n').map(line => '  ' + line).join('\n');
         console.log(indentedFinalTree);
         console.log('─'.repeat(50));
