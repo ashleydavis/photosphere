@@ -1,5 +1,5 @@
 import { FileHash, addFile, updateFile, findFileNode, createTree } from '../../../lib/merkle-tree';
-import { createFileHash, expectTree, buildTree } from './merkle-verify';
+import { createFileHash, expectTree, buildTree, deserializeTreeFromJSON, serializeTreeToJSON } from './merkle-verify';
 
 describe('Merkle Tree', () => {
 
@@ -569,6 +569,179 @@ describe('Merkle Tree', () => {
 
             // Verify the leaf nodes are in the same order as added
             expect(leafNodes).toEqual(fileNames);
+        });
+
+        test('deserializes JSON and rebuilds tree by walking leaf nodes in order', () => {
+            const jsonData = {
+                "h": "92e50c7f92bc24a5ab8b118df751d579ee5344e401a6935b0775d1c9bdb21614",
+                "l": {
+                    "h": "f90884c26c01f31897e884a7fb5aa9f6eb83ca8e634c1027bbe3c386993d2e42",
+                    "l": {
+                        "h": "91cb875dcbb40f3d0b1b61c2f6a561f4dd42a7cfc0d152ce37b74b70122393d3",
+                        "l": {
+                            "h": "6b7a3d067c04ec76f5be8d0bbde2a05d13a70ff78155d1701c82243db06dde91",
+                            "l": {
+                                "h": "010cd8cf32606be62ca2d680c167353a2ee7f95b0890a55048350bd0b8c7de5b",
+                                "l": {
+                                    "f": "asset/7b4f6865-26a5-4316-98ba-41e528594ec0",
+                                    "h": "426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c"
+                                },
+                                "r": {
+                                    "f": "asset/76e2090d-e4d2-479a-8cc8-c9b36178eddf",
+                                    "h": "ddf59c460a9ff0bcb90cceb02a6b62c3770a4146c611743f8392e3875febd141"
+                                }
+                            },
+                            "r": {
+                                "f": "asset/156b235c-602a-46c2-86e2-a019f3a94376",
+                                "h": "8dcb3ce7a5459621d9e84899fd8ded1b50e8acb8770a0930b0302f2962889012"
+                            }
+                        },
+                        "r": {
+                            "h": "fc03d693763ca3c1b8eba567642db9a12936134207f74837fee42ef6cc2f3867",
+                            "l": {
+                                "f": "asset/957e5fd7-2249-430b-b7ab-c9f3d6757d9e",
+                                "h": "3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9"
+                            },
+                            "r": {
+                                "f": "asset/86665993-0f16-4a64-8ce3-55ba5c025685",
+                                "h": "baa82d130ce3d49905841ae4132b27003ab1c172b3dcbeabc198c59e3b456ab7"
+                            }
+                        }
+                    },
+                    "r": {
+                        "h": "b509bd0e8a03974265b30d5da6da3036398fc606ee59575ef51a183d8ab25928",
+                        "l": {
+                            "h": "fda6f77c1a732835e9a64d5e0891646aafbcfde5376e3e0df6700fe15621d579",
+                            "l": {
+                                "f": "display/7b4f6865-26a5-4316-98ba-41e528594ec0",
+                                "h": "8a2205c424a91b8b643a11bc4c12529d56517198fa977243bbf26cfcd1a165d9"
+                            },
+                            "r": {
+                                "f": "display/76e2090d-e4d2-479a-8cc8-c9b36178eddf",
+                                "h": "fe3798ff6fecbe72b280f8a0d9624332e75093c90eb2ef639f08d317cbde3044"
+                            }
+                        },
+                        "r": {
+                            "h": "6efd01436f874360fbf80d7e87d905f4f06a2f6e6f1e76f3b4781514039f83ff",
+                            "l": {
+                                "f": "display/957e5fd7-2249-430b-b7ab-c9f3d6757d9e",
+                                "h": "ab8a2ae3d82dc4a2fd2ba9f06dd8f38b92e09d6a19c3700e9c2e0b0148a48167"
+                            },
+                            "r": {
+                                "f": "display/86665993-0f16-4a64-8ce3-55ba5c025685",
+                                "h": "3498516cc30e3bea6a2c2dbbdfaa9661d32948246f2859309efdea346c2f81dc"
+                            }
+                        }
+                    }
+                },
+                "r": {
+                    "h": "9913bb3b381801fadd0640cac14debbc328eb0f7f9efe007d5bbd061e7a564a6",
+                    "l": {
+                        "h": "a039fdddad8453876329c839c79bfc6133d3f50473ee31e8235195069799ee57",
+                        "l": {
+                            "h": "e089e94205e2f28ce8e07730ac147e86ffcaab6b5948a7df9546a63a2f7aee61",
+                            "l": {
+                                "f": "README.md",
+                                "h": "94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7"
+                            },
+                            "r": {
+                                "f": "thumb/7b4f6865-26a5-4316-98ba-41e528594ec0",
+                                "h": "9ecd6efc5383fbda3c1125ea06a1311aa6fa9906fb4c8c85362797b8240c36e6"
+                            }
+                        },
+                        "r": {
+                            "f": "thumb/76e2090d-e4d2-479a-8cc8-c9b36178eddf",
+                            "h": "baf8d77cc5411e2722360c032cd72bcb77dd89695220d014e4cb3d95fd8b8528"
+                        }
+                    },
+                    "r": {
+                        "h": "1869f3763a47fe16c078cb333b5f21a6d0edcbf8b47137ee66bcf7d20da7b473",
+                        "l": {
+                            "f": "thumb/156b235c-602a-46c2-86e2-a019f3a94376",
+                            "h": "b2aea11e2a885df25b0c718b52485d546e0fbe5647178ee145c513ba15d80fa6"
+                        },
+                        "r": {
+                            "h": "0c1440da3d6f85b9895bb75c9dbd6371c9b1e08952e59d6751daf4c7cb9b3834",
+                            "l": {
+                                "f": "thumb/957e5fd7-2249-430b-b7ab-c9f3d6757d9e",
+                                "h": "ceffcf6f12bd0d3dca121a8e134e53f02a6b0564ada72324b3da88da7a399f21"
+                            },
+                            "r": {
+                                "f": "thumb/86665993-0f16-4a64-8ce3-55ba5c025685",
+                                "h": "9e783b87290f2dd3edaf3a5489ee29fb2d88cf5997468e5bc3759e70a9bdde2f"
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Deserialize the JSON to a tree structure
+            const deserializedTree = deserializeTreeFromJSON(jsonData);
+
+            // Collect all leaf nodes in order from the deserialized tree
+            const leafFileHashes: FileHash[] = [];
+            function collectLeafHashes(node: any): void {
+                if (!node) {
+                    return;
+                }
+                if (node.fileName) {
+                    leafFileHashes.push({
+                        fileName: node.fileName,
+                        hash: node.hash,
+                        length: node.size,
+                        lastModified: new Date(),
+                    });
+                }
+                else {
+                    collectLeafHashes(node.left);
+                    collectLeafHashes(node.right);
+                }
+            }
+
+            collectLeafHashes(deserializedTree);
+
+            // Build a new tree by adding files in the order they appear
+            let rebuiltTree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
+            for (const fileHash of leafFileHashes) {
+                rebuiltTree = addFile(rebuiltTree, fileHash);
+            }
+
+            // Collect leaf nodes from the rebuilt tree
+            const rebuiltLeafNodes: string[] = [];
+            function collectRebuiltLeaves(node: any): void {
+                if (!node) {
+                    return;
+                }
+                if (node.fileName) {
+                    rebuiltLeafNodes.push(node.fileName);
+                }
+                else {
+                    collectRebuiltLeaves(node.left);
+                    collectRebuiltLeaves(node.right);
+                }
+            }
+
+            collectRebuiltLeaves(rebuiltTree.root);
+
+            // Collect leaf nodes from the original tree
+            const originalLeafNodes: string[] = [];
+            function collectOriginalLeaves(node: any): void {
+                if (!node) {
+                    return;
+                }
+                if (node.fileName) {
+                    originalLeafNodes.push(node.fileName);
+                }
+                else {
+                    collectOriginalLeaves(node.left);
+                    collectOriginalLeaves(node.right);
+                }
+            }
+
+            collectOriginalLeaves(deserializedTree);
+
+            // Verify that the leaf nodes are in the same order
+            expect(rebuiltLeafNodes).toEqual(originalLeafNodes);
         });
     });
 });
