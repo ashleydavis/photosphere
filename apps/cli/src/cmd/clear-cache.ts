@@ -5,7 +5,6 @@ import pc from "picocolors";
 
 export interface IClearCacheCommandOptions {
     db?: string;
-    meta?: string;
     key?: string;
     verbose?: boolean;
     yes?: boolean;

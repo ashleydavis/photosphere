@@ -16,11 +16,6 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
     dest?: string;
 
     //
-    // Destination metadata directory override.
-    //
-    destMeta?: string;
-
-    //
     // Path to destination encryption key file.
     //
     destKey?: string;
@@ -45,7 +40,6 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
 
     const { database: sourceDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
-        meta: options.meta,
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
@@ -56,7 +50,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
     
-    const destMetaPath = options.destMeta || pathJoin(destDir, '.db');
+    const destMetaPath = pathJoin(destDir, '.db');
 
     if (destDir.startsWith("s3:")) {
         await configureIfNeeded(['s3'], nonInteractive);

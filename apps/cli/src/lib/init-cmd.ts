@@ -184,11 +184,6 @@ export interface IBaseCommandOptions {
     db?: string;
 
     //
-    // Set the path to the database metadata.
-    //
-    meta?: string;
-
-    //
     // Sets the path to private key file for encryption.
     //
     key?: string;
@@ -289,7 +284,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
     
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    const metaPath = pathJoin(dbDir, '.db');
 
     if (dbDir.startsWith("s3:")) {
         await configureIfNeeded(['s3'], nonInteractive);
@@ -458,7 +453,7 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         }
     }
 
-    const metaPath = options.meta || pathJoin(dbDir, '.db');
+    const metaPath = pathJoin(dbDir, '.db');
 
     // Configure S3 if the paths require it
     if (dbDir.startsWith("s3:")) {

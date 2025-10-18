@@ -40,11 +40,6 @@ export interface IUiCommandOptions {
     db: string;
 
     //
-    // Set the path to the database metadata.
-    //
-    meta?: string;
-
-    //
     // Sets the path to private key file for encryption.
     //
     key?: string;
@@ -79,7 +74,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
         await configureIfNeeded(['s3'], false);
     }
     
-    const metaPath = options.meta || pathJoin(options.db, '.db');
+    const metaPath = pathJoin(options.db, '.db');
     if (metaPath.startsWith("s3:")) {
         await configureIfNeeded(['s3'], false);
     }

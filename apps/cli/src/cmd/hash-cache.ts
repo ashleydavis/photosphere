@@ -8,7 +8,6 @@ import { formatBytes } from "../lib/format";
 
 export interface IHashCacheCommandOptions {
     db?: string;
-    meta?: string;
     key?: string;
     verbose?: boolean;
     yes?: boolean;
@@ -57,7 +56,7 @@ export async function hashCacheCommand(options: IHashCacheCommandOptions): Promi
             console.log(pc.blue("\n=== Database Hash Cache ==="));
             
             // Set up metadata directory
-            const metadataDir = options.meta || path.join(databaseDir, ".db");
+            const metadataDir = path.join(databaseDir, ".db");
             
             // Check if metadata directory exists
             try {
