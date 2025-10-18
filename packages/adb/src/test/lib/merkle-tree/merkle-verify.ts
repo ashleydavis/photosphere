@@ -60,14 +60,10 @@ export function node(left: MerkleNode, right: MerkleNode): MerkleNode {
 }
 
 //
-// Verify that a node matches the expected structure by recursively walking the binary tree.
+// Checks that a node matches the expected structure by recursively walking the binary tree.
 //
-export function verifyNode(node: MerkleNode | undefined, expectedStructure: any) {
-    expect(node).toBeDefined();
-    if (!node) {
-        return;
-    }
-    
+function _expectNode(node: MerkleNode, expectedStructure: any): void {
+    expect(node).toBeDefined();    
     expect(Buffer.isBuffer(node.hash)).toBe(true);
 
     if (typeof(expectedStructure) === 'string') {
@@ -102,7 +98,7 @@ export function verifyNode(node: MerkleNode | undefined, expectedStructure: any)
                 expect(node.left!.hash).toEqual(Buffer.from(expectedStructure.left));
             }
             else {
-                verifyNode(node.left, expectedStructure.left);
+                _expectNode(node.left!, expectedStructure.left);
             }
         }
     
@@ -115,7 +111,7 @@ export function verifyNode(node: MerkleNode | undefined, expectedStructure: any)
                 expect(node.right!.hash).toEqual(Buffer.from(expectedStructure.right));
             }
             else {
-                verifyNode(node.right, expectedStructure.right);
+                _expectNode(node.right!, expectedStructure.right);
             }
         }
     
@@ -132,10 +128,29 @@ export function verifyNode(node: MerkleNode | undefined, expectedStructure: any)
 }
 
 //
+// Checks that a node matches the expected structure.
+//
+export function expectNode(test: string, node: MerkleNode, expectedStructure: any): void {
+    try {
+        _expectNode(node, expectedStructure);
+    }
+    catch (error) {
+        console.log(`========================================`);
+        console.log(`Test: ${test}`);
+        console.log('Actual:');
+        console.log(visualizeTree(node));
+
+        console.log('Expected:');
+        console.log(expectedStructure);
+        throw error;
+    }
+}
+
+//
 // Verify the entire tree structure matches the expected structure.
 //
-export function verifyTree(tree: IMerkleTree<any>, expectedStructure: any) {
-    verifyNode(tree.root, expectedStructure);
+export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructure: any): void {
+    expectNode(test, tree.root!, expectedStructure);
 }
 
 // Helper function to visualize a Merkle tree as simple ASCII art
@@ -147,13 +162,12 @@ export function visualizeTree(node: MerkleNode | undefined, prefix: string = '',
     
     // Display the node
     if (node.fileName) {
-        // Leaf node - show file name and hash
-        const hashStr = node.hash.toString('hex').substring(0, 8);
-        result += prefix + connector + `"${node.fileName}" (${hashStr})\n`;
+        result += prefix + connector + node.fileName.substring(0, 4) + '\n';
     } else {
         // Interior node - show min name and hash
-        const hashStr = node.hash.toString('hex').substring(0, 8);
-        result += prefix + connector + `Node (min: ${node.minFileName}, ${hashStr})\n`;
+        const hashHex = node.hash.toString('hex');
+        const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2) + '\n';
+        result += prefix + connector + shortHash;
     }
     
     // Add children

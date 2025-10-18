@@ -316,41 +316,52 @@ export function rebalanceTree(node: MerkleNode): MerkleNode {
 
     const leftCount = left.nodeCount;
     const rightCount = right.nodeCount;
-    const balance = leftCount - rightCount;    
-    if (Math.abs(balance) <= 2) {
-        // If tree is reasonably balanced (difference <= 2), no rotation needed.
-        return node;
-    }    
+    const balance = leftCount - rightCount;
 
-    // Left-heavy tree (leftCount > rightCount + 1)
-    if (balance > 0) {
+    if (balance > 2) { 
+        // Left-heavy tree (leftCount > rightCount + 1)
+        // Allows the tree to be slightly left-heavy.
+        //console.log(`Tree is left-heavy, performing right rotation`);
+
         const leftLeftCount = left.left?.nodeCount || 0;
         const leftRightCount = left.right?.nodeCount || 0;
         
         // Left-Left case: rotate right
         if (leftLeftCount >= leftRightCount) {
+            // console.log(`Left-Left case, performing right rotation`);
             return rotateRight(node);
         }
         // Left-Right case: rotate left then right
         else {
+            // console.log(`Left-Right case, performing left rotation then right rotation`);
             const newLeft = rotateLeft(node.left!);
             return rotateRight({ ...node, left: newLeft });
         }
     }
-    // Right-heavy tree (rightCount > leftCount + 1)
-    else {
+    else if (balance < 0) {
+        // Right-heavy tree (rightCount > leftCount + 1)
+        // We don't tollerate right heavy trees in the interest of producing 
+        // equivalent trees regardless of the order of insertion.
+        // console.log(`Tree is right-heavy, performing left rotation`);
         const rightLeftCount = right.left?.nodeCount || 0;
         const rightRightCount = right.right?.nodeCount || 0;
         
         // Right-Right case: rotate left
         if (rightRightCount >= rightLeftCount) {
+            // console.log(`Right-Right case, performing left rotation`);
             return rotateLeft(node);
         }
         // Right-Left case: rotate right then left
         else {
+            // console.log(`Right-Left case, performing right rotation then left rotation`);
             const newRight = rotateRight(right);
             return rotateLeft({ ...node, right: newRight });
         }
+    }
+    else {
+        // If tree is reasonably balanced (difference <= 2), no rotation needed.
+        // console.log(`Tree is reasonably balanced, no rotation needed`);
+        return node;
     }
 }
 
@@ -446,14 +457,17 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
 
     if (!node) {
         // If the tree is empty, return the new leaf as the root
+        // console.log(`Adding file ${fileHash.fileName} to empty tree`);
         return newLeaf;
     }
     
     // If current node is a leaf, determine correct order and create parent
     if (node.nodeCount === 1) {
         if (compareFileNames(fileHash.fileName, node.fileName!) < 0) {
+            // console.log(`Adding file ${fileHash.fileName} to left of ${node.fileName}`);
             return createParentNode(newLeaf, node); // new file goes left
         } else {
+            // console.log(`Adding file ${fileHash.fileName} to right of ${node.fileName}`);
             return createParentNode(node, newLeaf); // new file goes right
         }
     }   
@@ -469,9 +483,11 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     let newRight = right;
 
     if (compareFileNames(fileHash.fileName, rightMin) < 0) {
+        // console.log(`Adding file ${fileHash.fileName} to left of ${rightMin}`);
         // File should go in left subtree based on sorting
         newLeft = _addFile(left, fileHash);
     } else {
+        // console.log(`Adding file ${fileHash.fileName} to right of ${rightMin}`);
         // File should go in right subtree based on sorting
         newRight = _addFile(right, fileHash);
     }
@@ -484,8 +500,7 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     const newLeftSize = newLeft.size;
     const newRightSize = newRight.size;
     
-    const newNode = {
-        ...node,  // Copy all existing properties
+    const newNode: MerkleNode = {
         left: newLeft,
         right: newRight,
         nodeCount: 1 + newLeftCount + newRightCount,
@@ -947,7 +962,7 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
     let rebuiltTree = createTree<DatabaseMetadata>(tree.metadata.id);
     rebuiltTree.databaseMetadata = tree.databaseMetadata;
     for (const file of files) {
-        console.log(`Adding file: ${file.fileName}`);
+        // console.log(`Adding file: ${file.fileName}`);
         rebuiltTree = addFile(rebuiltTree, file);
     }
 
