@@ -1,7 +1,7 @@
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
-import { visualizeTreeSimple } from "../../../../packages/adb/src/test/lib/merkle-tree/merkle-verify";
+import { visualizeTreeSimple } from "adb";
 
 export interface IMerkleTreeCommandOptions extends IBaseCommandOptions {
     simple?: boolean;
