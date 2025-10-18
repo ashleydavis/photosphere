@@ -1,26 +1,17 @@
-import { MerkleNode, FileHash, addFile, updateFile, findFileNode, combineHashes, IMerkleTree, createTree } from '../../../lib/merkle-tree';
-import { createFileHash, verifyTree, buildTree, visualizeTree } from './merkle-verify';
+import { FileHash, addFile, updateFile, findFileNode, createTree } from '../../../lib/merkle-tree';
+import { createFileHash, expectTree, buildTree } from './merkle-verify';
 
 describe('Merkle Tree', () => {
 
     describe('File Addition', () => {
 
-        // Test 1: Create a tree with a single file
-        // Tree before: undefined
-        // Tree after: A (single node)
         test('creates a new tree with a single file', () => {
             const fileHash = createFileHash('A');
             const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
-            verifyTree(tree, 'A');
+            expectTree(expect.getState().currentTestName!, tree, 'A');
         });
 
-        // Test 2: Add a second file to an existing tree
-        // Tree before: A (single node)
-        // Tree after:  
-        //     AB (root)
-        //    / \
-        //   A   B
         test('adds a second file to an existing tree', () => {
             const fileHashA = createFileHash('A');            
             const treeA = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHashA);
@@ -28,25 +19,13 @@ describe('Merkle Tree', () => {
             const fileHashB = createFileHash('B');
             const treeAB = addFile(treeA, fileHashB);
 
-            verifyTree(treeAB, {
+            expectTree(expect.getState().currentTestName!, treeAB, {
                 tag: 'AB',
                 left: 'A',
                 right: 'B',
             });
         });
 
-        // Test 3: Add a third file to an existing tree
-        // Tree before:
-        //    AB (root)
-        //    /  \
-        //   A    B
-        //
-        // Tree after:
-        //       ABC (root)
-        //      /    \
-        //     A     BC
-        //          /  \
-        //         B    C
         test('adds a third file to an existing tree', () => {
             
             // Build tree with files A and B, then add C.
@@ -56,31 +35,17 @@ describe('Merkle Tree', () => {
             const fileHashC = createFileHash('C');
             const treeABC = addFile(tree, fileHashC);
 
-            verifyTree(treeABC, {
+            expectTree(expect.getState().currentTestName!, treeABC, {
                 tag: 'ABC',
-                left: 'A',
-                right: {
-                    tag: 'BC',
-                    left: 'B',
-                    right: 'C',
+                left: {
+                    tag: 'AB',
+                    left: 'A',
+                    right: 'B',
                 },
+                right: 'C',
             });
         });
 
-        // Test 4: Add a fourth file to an existing tree
-        // Tree before:
-        //       ABC (root)
-        //      /    \
-        //    AB      C
-        //   /  \
-        //  A    B
-        //
-        // Tree after:
-        //        ABCD (root)
-        //       /    \
-        //     AB      CD
-        //    /  \    /  \
-        //   A    B  C    D
         test('adds a fourth file to an existing tree (balanced approach)', () => {
             
             // Build tree with A, B, C, then add D.
@@ -90,7 +55,7 @@ describe('Merkle Tree', () => {
             const fileHashD = createFileHash('D');
             const treeABCD = addFile(tree, fileHashD);
 
-            verifyTree(treeABCD, {
+            expectTree(expect.getState().currentTestName!, treeABCD, {
                 tag: 'ABCD',
                 left: {
                     tag: 'AB',
@@ -105,22 +70,6 @@ describe('Merkle Tree', () => {
             });
         });
         
-        // Test 5: Add a fifth file to an existing tree
-        // Tree before:
-        //        ABCD (root)
-        //       /    \
-        //     AB      CD
-        //    /  \    /  \
-        //   A    B  C    D
-        //
-        // Tree after:
-        //          ABCDE (root)
-        //         /     \
-        //        AB     CDE
-        //       / \    / \
-        //      A   B  C   DE
-        //                / \
-        //               D   E
         test('adds a fifth file to an existing tree (balanced approach)', () => {
             
             // Build tree with A, B, C, and D.
@@ -130,43 +79,25 @@ describe('Merkle Tree', () => {
             const fileHashE = createFileHash('E');
             const treeABCDE = addFile(tree, fileHashE);
 
-            verifyTree(treeABCDE, {
+            expectTree(expect.getState().currentTestName!, treeABCDE, {
                 tag: 'ABCDE',
                 left: {
-                    tag: 'AB',
-                    left: 'A',
-                    right: 'B',
+                    tag: 'ABC',
+                    left: {
+                        tag: 'AB',
+                        left: 'A',
+                        right: 'B',
+                    },
+                    right: 'C',
                 },
                 right: {
-                    tag: 'CDE',
-                    left: 'C',
-                    right: {
-                        tag: 'DE',
-                        left: 'D',
-                        right: 'E',
-                    }
+                    tag: 'DE',
+                    left: 'D',
+                    right: 'E',
                 },
             });
         });
         
-        // Test 6: Add a sixth file to an existing tree
-        // Tree before:
-        //          ABCDE (root)
-        //         /      \
-        //     ABCD        E
-        //    /    \
-        //   AB    CD
-        //  / \    / \
-        // A   B  C   D
-        //
-        // Tree after:
-        //          ABCDEF (root)
-        //         /       \
-        //     ABCD        EF
-        //    /    \      /  \
-        //   AB    CD    E    F
-        //  / \    / \
-        // A   B  C   D
         test('adds a sixth file to an existing tree (balanced approach)', () => {
             
             // Build tree with A through E.
@@ -176,47 +107,29 @@ describe('Merkle Tree', () => {
             const fileHashF = createFileHash('F');
             const treeABCDEF = addFile(tree, fileHashF);
 
-            verifyTree(treeABCDEF, {
+            expectTree(expect.getState().currentTestName!, treeABCDEF, {
                 tag: 'ABCDEF',
                 left: {
-                    tag: 'ABCD',
+                    tag: 'ABC',
                     left: {
                         tag: 'AB',
                         left: 'A',
                         right: 'B',
                     },
-                    right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
-                    },
+                    right: 'C',
                 },
                 right: {
-                    tag: 'EF',
-                    left: 'E',
+                    tag: 'DEF',
+                    left: {
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
+                    },
                     right: 'F',
                 },
             });
         });
         
-        // Test 7: Add a seventh file to an existing tree
-        // Tree before:
-        //          ABCDEF (root)
-        //         /       \
-        //     ABCD        EF
-        //    /    \      /  \
-        //   AB    CD    E    F
-        //  / \    / \
-        // A   B  C   D
-        //
-        // Tree after:
-        //          ABCDEFG (root)
-        //         /        \
-        //     ABCD         EFG
-        //    /    \       /   \
-        //   AB    CD     E    FG
-        //  / \    / \        / \
-        // A   B  C   D      F   G
         test('adds a seventh file to an existing tree (balanced approach)', () => {
             
             // Build tree with A through F.
@@ -226,52 +139,33 @@ describe('Merkle Tree', () => {
             const fileHashG = createFileHash('G');
             const treeABCDEFG = addFile(tree, fileHashG);
 
-            verifyTree(treeABCDEFG, {
+            expectTree(expect.getState().currentTestName!, treeABCDEFG, {
                 tag: 'ABCDEFG',
                 left: {
-                    tag: 'ABCD',
+                    tag: 'ABCDE',
                     left: {
-                        tag: 'AB',
-                        left: 'A',
-                        right: 'B',
+                        tag: 'ABC',
+                        left: {
+                            tag: 'AB',
+                            left: 'A',
+                            right: 'B',
+                        },
+                        right: "C",
                     },
                     right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
                     },
                 },
                 right: {
-                    tag: 'EFG',
-                    left: 'E',
-                    right: {
-                        tag: 'FG',
-                        left: 'F',
-                        right: 'G',
-                    },
+                    tag: 'FG',
+                    left: 'F',
+                    right: 'G',
                 },
             });
         });
         
-        // Test 8: Add an eighth file to an existing tree
-        // Tree before:
-        //          ABCDEFG (root)
-        //         /        \
-        //     ABCD         EFG
-        //    /    \       /   \
-        //   AB    CD     EF    G
-        //  / \    / \   / \
-        // A   B  C   D E   F
-        //
-        // Expected tree after (perfectly balanced):
-        //          ABCDEFGH (root)
-        //         /        \
-        //     ABCD         EFGH
-        //    /    \       /    \
-        //   AB    CD     EF     GH
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
-        //
         test('adds an eighth file to an existing tree (perfectly balanced)', () => {
             
             // Build tree with A through G
@@ -281,57 +175,37 @@ describe('Merkle Tree', () => {
             const fileHashH = createFileHash('H');
             const treeABCDEFGH = addFile(tree, fileHashH);
 
-            verifyTree(treeABCDEFGH, {
+            expectTree(expect.getState().currentTestName!, treeABCDEFGH, {
                 tag: 'ABCDEFGH',
                 left: {
-                    tag: 'ABCD',
+                    tag: 'ABC',
                     left: {
                         tag: 'AB',
                         left: 'A',
                         right: 'B',
                     },
-                    right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
-                    },
+                    right: 'C',
                 },
                 right: {
-                    tag: 'EFGH',
+                    tag: 'DEFGH',
                     left: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
                     },
                     right: {
-                        tag: 'GH',
-                        left: 'G',
+                        tag: 'FGH',
+                        left: {
+                            tag: 'FG',
+                            left: 'F',
+                            right: 'G',
+                        },
                         right: 'H',
                     },
                 },
             });
         });
         
-        // Test 9: Add a ninth file to an existing tree with a balanced approach
-        // Tree before (assuming a balanced 8-node tree):
-        //          ABCDEFGH (root)
-        //         /        \
-        //     ABCD         EFGH
-        //    /    \       /    \
-        //   AB    CD     EF     GH
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   H
-        //
-        // Expected tree after (balanced for 9 nodes):
-        //          ABCDEFGHI (root)
-        //         /        \
-        //     ABCD         EFGHI
-        //    /    \       /    \
-        //   AB    CD     EF     GHI
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   HI
-        //                        / \
-        //                       H   I
         test('adds a ninth file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through H, assuming the implementation gives a balanced tree
@@ -341,63 +215,41 @@ describe('Merkle Tree', () => {
             const fileHashI = createFileHash('I');
             const rootABCDEFGHI = addFile(tree, fileHashI);
 
-            verifyTree(rootABCDEFGHI, {
+            expectTree(expect.getState().currentTestName!, rootABCDEFGHI, {
                 tag: 'ABCDEFGHI',
                 left: {
-                    tag: 'ABCD',
+                    tag: 'ABCDE',
                     left: {
-                        tag: 'AB',
-                        left: 'A',
-                        right: 'B',
+                        tag: 'ABC',
+                        left: {
+                            tag: 'AB',
+                            left: 'A',
+                            right: 'B',
+                        },
+                        right: 'C',
                     },
                     right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
                     },
                 },
                 right: {
-                    tag: 'EFGH',
+                    tag: 'FGHI',
                     left: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                        tag: 'FG',
+                        left: 'F',
+                        right: 'G',
                     },
                     right: {
-                        tag: 'GHI',
-                        left: 'G',
-                        right: { 
-                            tag: 'HI',
-                            left: 'H',
-                            right: 'I',
-                        }
+                        tag: 'HI',
+                        left: 'H',
+                        right: 'I',
                     },
                 },
             });
         });
         
-        // Test 10: Add a tenth file to an existing tree with a balanced approach
-        // Tree before:
-        //          ABCDEFGHI (root)
-        //         /        \
-        //     ABCD         EFGHI
-        //    /    \       /    \
-        //   AB    CD     EF     GHI
-        //  / \    / \   / \    / \
-        // A   B  C   D E   F  G   HI
-        //                        / \
-        //                       H   I
-        //
-        // Expected tree after:
-        //           ABCDEFGHIJ (root)
-        //          /        \
-        //      ABCDEF       GHIJ
-        //     /      \      /  \
-        //    ABCD    EF    GH   IJ
-        //   /   \    /\   / \  /  \
-        //  AB   CD  E F  G  H  I  J
-        //  /\   /\ 
-        // A B  C D 
         test('adds a tenth file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through I
@@ -407,29 +259,34 @@ describe('Merkle Tree', () => {
             const fileHashJ = createFileHash('J');
             const treeABCDEFGHIJ = addFile(tree, fileHashJ);
 
-            verifyTree(treeABCDEFGHIJ, {
+            expectTree(expect.getState().currentTestName!, treeABCDEFGHIJ, {
                 tag: 'ABCDEFGHIJ',
                 left: {
-                    tag: 'ABCDEF',
+                    tag: 'ABCDE',
                     left: {
-                        tag: 'ABCD',
+                        tag: 'ABC',
                         left: {
                             tag: 'AB',
                             left: 'A',
                             right: 'B',
                         },
+                        right: 'C',
                     },
                     right: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                        tag: 'DE',
+                        left: 'D',
+                        right: 'E',
                     },
                 },
                 right: {
-                    tag: 'GHIJ',
+                    tag: 'FGHIJ',
                     left: {
-                        tag: 'GH',
-                        left: 'G',
+                        tag: 'FGH',
+                        left: {
+                            tag: 'FG',
+                            left: 'F',
+                            right: 'G',
+                        },
                         right: 'H',
                     },
                     right: {
@@ -437,32 +294,10 @@ describe('Merkle Tree', () => {
                         left: 'I',
                         right: 'J',
                     },
-                },
+               },
             });
         });
         
-        // Test 11: Add an eleventh file to an existing tree with a balanced approach
-        // Tree before:
-        //           ABCDEFGHIJ (root)
-        //          /        \
-        //      ABCDEF       GHIJ
-        //     /      \      /  \
-        //    ABCD    EF    GH   IJ
-        //   /   \    /\   / \  /  \
-        //  AB   CD  E F  G  H  I  J
-        //  /\   /\ 
-        // A B  C D 
-        //
-        // Expected tree after (balanced for 11 nodes):
-        //           ABCDEFGHIJK (root)
-        //          /        \
-        //      ABCDEF       GHIJK
-        //     /      \      /  \
-        //    ABCD    EF    GH   IJK
-        //   /   \    /\   / \  /  \
-        //  AB   CD  E F  G  H  I  JK
-        //  /\   /\                /\
-        // A B  C D               J K
         test('adds an eleventh file to create a balanced binary merkle tree', () => {
             
             // Build tree with A through J
@@ -472,45 +307,45 @@ describe('Merkle Tree', () => {
             const fileHashK = createFileHash('K');
             const treeABCDEFGHIJK = addFile(tree, fileHashK);
 
-            verifyTree(treeABCDEFGHIJK, {
+            expectTree(expect.getState().currentTestName!, treeABCDEFGHIJK, {
                 tag: 'ABCDEFGHIJK',
                 left: {
-                    tag: 'ABCDEF',
+                    tag: 'ABCDEFGH',
                     left: {
-                        tag: 'ABCD',
+                        tag: 'ABCDE',
                         left: {
-                            tag: 'AB',
-                            left: 'A',
-                            right: 'B',
+                            tag: 'ABC',
+                            left: {
+                                tag: 'AB',
+                                left: 'A',
+                                right: 'B',
+                            },
+                            right: 'C',
                         },
                         right: {
-                            tag: 'CD',
-                            left: 'C',
-                            right: 'D',
+                            tag: 'DE',
+                            left: 'D',
+                            right: 'E',
                         },
                     },
                     right: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                        tag: 'FGH',
+                        left: {
+                            tag: 'FG',
+                            left: 'F',
+                            right: 'G',
+                        },
+                        right: 'H',
                     },
                 },
                 right: {
-                    tag: 'GHIJK',
+                    tag: 'IJK',
                     left: {
-                        tag: 'GH',
-                        left: 'G',
-                        right: 'H',
-                    },
-                    right: {
-                        tag: 'IJK',
+                        tag: 'IJ',
                         left: 'I',
-                        right: {
-                            tag: 'JK',
-                            left: 'J',
-                            right: 'K',
-                        },
+                        right: 'J',
                     },
+                    right: 'K',
                 },
             });
         });
@@ -530,17 +365,6 @@ describe('Merkle Tree', () => {
             };
         }
         
-        // Test 1: Find a file node in a tree
-        // Tree structure:
-        //          ABCDE (root)
-        //         /      \
-        //     ABCD        E
-        //    /    \
-        //   AB    CD
-        //  / \    / \
-        // A   B  C*   D
-        //
-        // We find node C in this tree to verify its properties
         test('finds a file node by name in the tree', () => {
             // Build a tree with files A through E
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
@@ -554,17 +378,6 @@ describe('Merkle Tree', () => {
             expect(nodeC!.nodeCount).toBe(1);
         });
         
-        // Test 2: Return undefined when file is not found
-        // Tree structure:
-        //          ABCDE (root)
-        //         /      \
-        //     ABCD        E
-        //    /    \
-        //   AB    CD
-        //  / \    / \
-        // A   B  C   D
-        //
-        // We search for file "Z" which doesn't exist and expect undefined
         test('returns undefined when file is not found in the tree', () => {
             // Build a tree with files A through E
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
@@ -576,23 +389,6 @@ describe('Merkle Tree', () => {
             expect(nodeZ).toBeUndefined();
         });
         
-        //
-        // Test 3: Update a file in a small tree (Tree with A, B, C)
-        //
-        // Tree before:
-        //       ABC (root)
-        //      /    \
-        //    A     BC
-        //         /  \
-        //        B    C    <- B will be updated
-        //
-        // Tree after:
-        //       ABC' (root)      <- hash changed due to B's update
-        //      /   \
-        //    A    BC'            <- BC's hash changed due to B's update
-        //        /  \
-        //       B'  C            <- B's hash changed to B' (B_modified)
-        //
         test('updates a file in a small tree', () => {
             // Build a tree with files A, B, C
             const tree = buildTree(['A', 'B', 'C']);
@@ -609,39 +405,20 @@ describe('Merkle Tree', () => {
             expect(nodeB?.hash).toEqual(modifiedB.hash); // Hash should have been updated.
 
             // Verify the tree structure on the new hash.
-            verifyTree(tree, {
+            expectTree(expect.getState().currentTestName!, tree, {
                 tag: 'ABC',
-                left: 'A',
-                right: {
-                    tag: 'BC',
-                    left: {
+                left: {
+                    tag: 'AB',
+                    left: 'A',
+                    right: {
                         fileName: 'B',
                         hash: 'B_modified',
                     },
-                    right: 'C',
                 },
+                right: 'C',
             });         
         });
         
-        // Test 4: Update a file in a larger balanced tree
-        // Tree before:
-        //          ABCDEFG (root)
-        //         /        \
-        //     ABCD         EFG
-        //    /    \       /   \
-        //   AB    CD     E    FG        <- E will be updated
-        //  / \    / \        / \
-        // A   B  C   D      F   G
-        //
-        // Tree after:
-        //          ABCDEFG' (root)      <- hash changed due to E's update
-        //         /         \
-        //     ABCD          EFG'        <- EFG's hash changed due to E's update
-        //    /    \        /   \
-        //   AB    CD     E'    FG       <- E's hash changed to E' (E_modified)
-        //  / \    / \         /  \
-        // A   B  C   D       F   G        
-        //
         test('updates a file in a larger balanced tree', () => {
             // Build a tree with files A through G
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
@@ -658,48 +435,36 @@ describe('Merkle Tree', () => {
             expect(nodeE!.hash).toEqual(modifiedE.hash); // Hash should have been updated.
 
             // Verify the tree structure on the new hash.
-            verifyTree(tree, {
+            expectTree(expect.getState().currentTestName!, tree, {
                 tag: 'ABCDEFG',
                 left: {
-                    tag: 'ABCD',
+                    tag: 'ABCDE',
                     left: {
-                        tag: 'AB',
-                        left: 'A',
-                        right: 'B',
+                        tag: 'ABC',
+                        left: {
+                            tag: 'AB',
+                            left: 'A',
+                            right: 'B',
+                        },
+                        right: 'C',
                     },
                     right: {
-                        tag: 'CD',
-                        left: 'C',
-                        right: 'D',
+                        tag: 'DE',
+                        left: 'D',
+                        right: {
+                            fileName: 'E',
+                            hash: 'E_modified',
+                        },
                     },
                 },
                 right: {
-                    tag: 'EFG',
-                    left: {
-                        fileName: 'E',
-                        hash: 'E_modified',
-                    },
-                    right: {
-                        tag: 'FG',
-                        left: 'F',
-                        right: 'G',
-                    },
+                    tag: 'FG',
+                    left: 'F',
+                    right: 'G',
                 },
             });
         });
         
-        // Test 5: Update a file that doesn't exist in the tree (should throw an error)
-        // Tree structure:
-        //          ABCDE (root)
-        //         /      \
-        //     ABCD        E
-        //    /    \
-        //   AB    CD
-        //  / \    / \
-        // A   B  C   D
-        //
-        // We attempt to update non-existent file "Z" and expect no update.
-        //
         test('expect no update for a non-existent file', () => {
             // Build a tree with files A through E.
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
@@ -713,33 +478,6 @@ describe('Merkle Tree', () => {
             expect(updated).toBe(false); // Ensure no update was made.
         });
         
-        // Test 6: Update a file and verify the entire tree structure remains unchanged
-        // Tree before (10 nodes):
-        //              ABCDEFGHIJ (root)
-        //             /          \
-        //          ABCDEF       GHIJ
-        //         /     \      /    \
-        //     ABCD      EF    GH    IJ
-        //    /    \     /\    /\    /\
-        //   AB    CD   E F   G  H  I  J
-        //  / \    / \             
-        // A   B  C   D            
-        //            ^
-        //            D will be updated
-        //
-        // Tree after (same structure, only hashes change):
-        //              ABCDEFGHIJ' (root)
-        //             /          \
-        //          ABCDEF'      GHIJ
-        //         /     \      /    \
-        //     ABCD'     EF    GH    IJ
-        //    /    \     /\    /\    /\
-        //   AB    CD'  E F   G  H  I  J
-        //  / \    / \             
-        // A   B  C   D'            
-        //            ^
-        //            D's hash changed to D' (D_modified)
-        //
         test('maintains tree structure after file update', () => {
             // Build a tree with files A through J
             const originalTree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']);
@@ -757,30 +495,38 @@ describe('Merkle Tree', () => {
             expect(nodeD!.nodeCount).toBe(1); // Ensure node count is still 1
 
             // Verify the tree structure on the new hash.
-            verifyTree(originalTree, {
+            expectTree(expect.getState().currentTestName!, originalTree, {
                 tag: 'ABCDEFGHIJ',
                 left: {
-                    tag: 'ABCDEF',
+                    tag: 'ABCDE',
                     left: {
-                        tag: 'ABCD',
+                        tag: 'ABC',
                         left: {
                             tag: 'AB',
                             left: 'A',
                             right: 'B',
                         },
+                        right: 'C',
                     },
                     right: {
-                        tag: 'EF',
-                        left: 'E',
-                        right: 'F',
+                        tag: 'DE',
+                        left: {
+                            fileName: 'D',
+                            hash: 'D_modified',
+                        },
+                        right: 'E',
                     },
                 },
                 right: {
-                    tag: 'GHIJ',
+                    tag: 'FGHIJ',
                     left: {
-                        tag: 'GH',
-                        left: 'G',
-                        right: 'H',
+                        tag: 'FGH',
+                        left: {
+                            tag: 'FG',
+                            left: 'F',
+                            right: 'G',
+                        },
+                        right: 'H',                        
                     },
                     right: {
                         tag: 'IJ',

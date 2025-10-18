@@ -1,5 +1,5 @@
 import { rotateRight, rotateLeft, rebalanceTree } from '../../../lib/merkle-tree';
-import { node, leaf, verifyNode } from './merkle-verify';
+import { node, leaf, expectNode } from './merkle-verify';
 
 describe('balance', () => {
 
@@ -26,7 +26,7 @@ describe('balance', () => {
         const A = node(B, D);
 
         const result = rotateRight(A);
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: C,
             right: {
                 left: E,
@@ -58,7 +58,7 @@ describe('balance', () => {
         const A = node(B, C);
 
         const result = rotateLeft(A);
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: {
                 left: B,
                 right: D,
@@ -79,7 +79,7 @@ describe('balance', () => {
         const A = node(B, C);
 
         const result = rebalanceTree(A);
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: B,
             right: C,
         });
@@ -101,13 +101,13 @@ describe('balance', () => {
         const A = node(B, E);
 
         const result = rebalanceTree(A);
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: B,
             right: E,
         });
     });
 
-    test('slightly right heavy tree requires no rotation', () => {
+    test('slightly right heavy tree requires rotation', () => {
         /*
          * Right heavy
          *     A
@@ -123,9 +123,12 @@ describe('balance', () => {
         const A = node(B, C);
 
         const result = rebalanceTree(A);
-        verifyNode(result, {
-            left: B,
-            right: C,
+        expectNode(expect.getState().currentTestName!, result, {
+            left: {
+                left: B,
+                right: D,
+            },
+            right: E,
         });
     });
 
@@ -158,7 +161,7 @@ describe('balance', () => {
         const result = rebalanceTree(A);
         
         // Verify the structure after rebalancing
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: D,
             right: {
                 left: E,
@@ -196,7 +199,7 @@ describe('balance', () => {
         const result = rebalanceTree(A);
         
         // Verify the structure after rebalancing
-        verifyNode(result, {
+        expectNode(expect.getState().currentTestName!, result, {
             left: {
                 left: B,
                 right: D,

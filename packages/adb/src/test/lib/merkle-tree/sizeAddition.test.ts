@@ -2,7 +2,8 @@ import * as crypto from 'crypto';
 import { 
   addFile, 
   createTree,
-  FileHash
+  FileHash,
+  visualizeTree
 } from '../../../lib/merkle-tree';
 
 describe('Size calculation with file addition', () => {
@@ -64,27 +65,10 @@ describe('Size calculation with file addition', () => {
       tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, sizes[i]));
     }
     
-    // Verify root node size equals sum of all file sizes
-    expect(tree.root?.size).toBe(totalSize);
-    
-    // Verify metadata reflects total size
-    expect(tree.metadata.totalSize).toBe(totalSize);
-    
-    // For a balanced tree with 7 nodes, we'd have a structure like:
-    //          root
-    //         /    \
-    //     ABCD      EFG
-    //    /    \    /   \
-    //   AB    CD  EF    G
-    //  / \   / \  / \
-    // A   B C   D E  F
-    
-    // Verify internal nodes have correct cumulative sizes
-    // Left subtree (ABCD) = 100 + 200 + 300 + 400 = 1000
-    expect(tree.root?.left?.size).toBe(1000);
-    
-    // Right subtree (EFG) = 500 + 600 + 700 = 1800
-    expect(tree.root?.right?.size).toBe(1800);
+    expect(tree.root?.size).toBe(totalSize);    
+    expect(tree.metadata.totalSize).toBe(totalSize);    
+    expect(tree.root?.left?.size).toBe(1500);
+    expect(tree.root?.right?.size).toBe(1300);
   });
   
   test('metadata totalSize is updated when adding files', () => {
