@@ -169,7 +169,7 @@ export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string
         result += ' ' + node.minFileName + ' -> ' + shortHash;
     }
     else {
-        result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
+        result += ' ' + shortHash; // + ' minFileName = ' + node.minFileName;
     }
 
     result += '\n';
