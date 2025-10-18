@@ -161,15 +161,35 @@ export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string
     const connector = isLast ? '└── ' : '├── ';
     
     const hashHex = node.hash.toString('hex');
-    const shortHash = hashHex.substring(0,4) + hashHex.substring(hashHex.length - 4);
+    const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
 
     result += prefix + connector;
 
     if (node.fileName) {
-        result += ' ' + node.minFileName + ' -> ' + shortHash;
+        // With short hash:
+        // result += ' ' + node.minFileName + ' -> ' + shortHash;
+
+        // Just the file name
+        // result += ' ' + node.minFileName;
+
+        if (node.fileName.includes("/")) {
+            const parts = node.fileName.split("/");
+            const lastPart = parts[parts.length - 1];
+            result += ' ' + lastPart.substring(0, 2) + lastPart.substring(lastPart.length - 2);
+        }
+        else {
+            result += ' ' + node.minFileName;
+        }
     }
     else {
-        result += ' ' + shortHash; // + ' minFileName = ' + node.minFileName;
+        // With minFileName:
+        // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
+
+        // With the node count:
+        result += ' ' + shortHash + ' (' + node.nodeCount + ')';
+
+        // Just the hash:
+        // result += ' ' + shortHash
     }
 
     result += '\n';
