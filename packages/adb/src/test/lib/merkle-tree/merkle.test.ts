@@ -537,4 +537,38 @@ describe('Merkle Tree', () => {
             });
         });
     });
+
+    describe('Specific File Order', () => {
+        test('adds files with UUIDs and verifies leaf order', () => {
+            const fileNames = [
+                'asset/3e4f1677-dfc1-4efe-be57-6969e0b1c9b6',
+                'asset/7b4f6865-26a5-4316-98ba-41e528594ec0',
+                'asset/7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7',
+                'asset/f7ef0545-219b-4bf0-92e6-62a79c1f24de',
+                'asset/fde1d531-1559-472f-9df9-878b7acec068',
+            ];
+
+            const tree = buildTree(fileNames);
+
+            // Collect all leaf nodes in order
+            const leafNodes: string[] = [];
+            function collectLeaves(node: any): void {
+                if (!node) {
+                    return;
+                }
+                if (node.fileName) {
+                    leafNodes.push(node.fileName);
+                }
+                else {
+                    collectLeaves(node.left);
+                    collectLeaves(node.right);
+                }
+            }
+
+            collectLeaves(tree.root);
+
+            // Verify the leaf nodes are in the same order as added
+            expect(leafNodes).toEqual(fileNames);
+        });
+    });
 });
