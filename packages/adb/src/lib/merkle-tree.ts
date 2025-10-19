@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { save, load, ISerializer, IDeserializer } from 'serialization';
+import { visualizeTreeSimple } from '../test/lib/merkle-tree/merkle-verify';
 
 //
 // Current database version
@@ -321,46 +322,106 @@ export function rebalanceTree(node: MerkleNode): MerkleNode {
     if (balance > 2) { 
         // Left-heavy tree (leftCount > rightCount + 1)
         // Allows the tree to be slightly left-heavy.
-        //console.log(`Tree is left-heavy, performing right rotation`);
+        // console.log(`! Tree is left-heavy, performing right rotation`);
+        // console.log(visualizeTreeSimple(node));
 
+        //
+        //TODO: Can I just choose the simple case here?
+        //
+
+        //
+        // Simple: Rotate the tree right.
+        //
+        // const rotated = rotateRight(node);
+        // console.log(`== Right rotation performed`);
+        // console.log(`After right rotation:`);
+        // console.log(visualizeTreeSimple(rotated));
+        // return rotated;
+
+        //
+        // More complex: Rotation cases.
+        //
         const leftLeftCount = left.left?.nodeCount || 0;
         const leftRightCount = left.right?.nodeCount || 0;
         
         // Left-Left case: rotate right
         if (leftLeftCount >= leftRightCount) {
-            // console.log(`Left-Left case, performing right rotation`);
-            return rotateRight(node);
+            const rotated = rotateRight(node);
+            // console.log(`== Left-Left case, performed right rotation`);
+            // console.log(`Before:`);
+            // console.log(visualizeTreeSimple(node));
+            // console.log(`After right rotation:`);
+            // console.log(visualizeTreeSimple(rotated));
+            return rotated;
         }
         // Left-Right case: rotate left then right
         else {
-            // console.log(`Left-Right case, performing left rotation then right rotation`);
             const newLeft = rotateLeft(node.left!);
-            return rotateRight({ ...node, left: newLeft });
+            // console.log(`== Left-Right case, performed left rotation then right rotation`);
+            // console.log(`Before:`)
+            // console.log(visualizeTreeSimple(node));
+            // console.log(`Left side after left rotation:`);
+            // console.log(visualizeTreeSimple(newLeft));
+            const rotated = rotateRight({ ...node, left: newLeft });
+            // console.log(`After right rotation:`);
+            // console.log(visualizeTreeSimple(rotated));
+            return rotated;
         }
     }
     else if (balance < 0) {
         // Right-heavy tree (rightCount > leftCount + 1)
         // We don't tollerate right heavy trees in the interest of producing 
         // equivalent trees regardless of the order of insertion.
-        // console.log(`Tree is right-heavy, performing left rotation`);
+        // console.log(`! Tree is right-heavy, performing left rotation`);
+        // console.log(visualizeTreeSimple(node));
+
+        //
+        //TODO: Can I just choose the simple case here?
+        //
+
+        //
+        // Simple: Rotate the tree left.
+        //
+        // const rotated = rotateLeft(node);
+        // console.log(`== Left rotation performed`);
+        // console.log(`After left rotation:`);
+        // console.log(visualizeTreeSimple(rotated));
+        // return rotated;
+
+        //
+        // More complex: Rotation cases.
+        //
         const rightLeftCount = right.left?.nodeCount || 0;
         const rightRightCount = right.right?.nodeCount || 0;
         
         // Right-Right case: rotate left
         if (rightRightCount >= rightLeftCount) {
-            // console.log(`Right-Right case, performing left rotation`);
-            return rotateLeft(node);
+            const rotated = rotateLeft(node);
+            // console.log(`== Right-Right case, performed left rotation`);
+            // console.log(`Before:`);
+            // console.log(visualizeTreeSimple(node));
+            // console.log(`After left rotation:`);
+            // console.log(visualizeTreeSimple(rotated));
+            return rotated;
         }
         // Right-Left case: rotate right then left
         else {
-            // console.log(`Right-Left case, performing right rotation then left rotation`);
             const newRight = rotateRight(right);
-            return rotateLeft({ ...node, right: newRight });
+            // console.log(`== Right-Left case, performed right rotation then left rotation`);
+            // console.log(`Before:`);
+            // console.log(visualizeTreeSimple(node));
+            // console.log(`Right side after right rotation:`);
+            // console.log(visualizeTreeSimple(newRight));
+            const rotated = rotateLeft({ ...node, right: newRight });
+            // console.log(`After left rotation:`);
+            // console.log(visualizeTreeSimple(rotated));
+            return rotated;
         }
     }
     else {
         // If tree is reasonably balanced (difference <= 2), no rotation needed.
         // console.log(`Tree is reasonably balanced, no rotation needed`);
+        // console.log(visualizeTreeSimple(node));
         return node;
     }
 }
@@ -449,6 +510,63 @@ export function rotateLeft(node: MerkleNode): MerkleNode {
     };
 }
 
+//
+// Migrates an odd node in the left subtree to the right subtree using a right rotation.
+//
+function migrateOddNode(node: MerkleNode): MerkleNode {
+    if (node.nodeCount === 1) {
+        return node;
+    }
+
+    if (!node.left || !node.right) {
+        throw new Error('Invalid tree structure');
+    }
+
+    const left = node.left;
+   
+    const right = node.right;
+
+    const leftMigrated = migrateOddNode(left);
+    const rightMigrated = migrateOddNode(right);
+    let thisNodeMigrated = node;
+    if (leftMigrated !== left || rightMigrated !== right) {
+        thisNodeMigrated = {
+            ...node,
+            left: leftMigrated,
+            right: rightMigrated,
+        };
+        // console.log(`>> Migrated node`);
+        // console.log(`Before:`);
+        // console.log(visualizeTreeSimple(node));
+        // console.log(`After:`);
+        // console.log(visualizeTreeSimple(thisNodeMigrated));
+    }   
+    else {
+        // console.log(`>> No migration needed for node`);
+    }
+
+    // If the left side has an odd leaf count, rotate right.
+    if (thisNodeMigrated.left!.leafCount > 1 && thisNodeMigrated.left!.leafCount % 2 === 1) {
+        thisNodeMigrated = rotateRight(thisNodeMigrated);
+
+        // console.log(`>> Rotated node for migration`);
+        // console.log(`Before:`);
+        // console.log(visualizeTreeSimple(thisNodeMigrated));
+        // console.log(`After:`);
+        // console.log(visualizeTreeSimple(thisNodeMigrated));
+
+        // Re-migrate the right side.
+        thisNodeMigrated.right = migrateOddNode(rebalanceTree(thisNodeMigrated.right!));
+    }
+    else {
+        // console.log(`>> No rotation needed for migration of node`);
+    }
+
+    thisNodeMigrated = rebalanceTree(thisNodeMigrated);
+
+    return thisNodeMigrated;
+}
+
 /**
  * Add a file to the Merkle tree using binary tree structure (avoids recursion)
  */
@@ -458,17 +576,22 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     if (!node) {
         // If the tree is empty, return the new leaf as the root
         // console.log(`Adding file ${fileHash.fileName} to empty tree`);
+        // console.log(visualizeTreeSimple(newLeaf));
         return newLeaf;
     }
     
     // If current node is a leaf, determine correct order and create parent
     if (node.nodeCount === 1) {
         if (compareFileNames(fileHash.fileName, node.fileName!) < 0) {
-            // console.log(`Adding file ${fileHash.fileName} to left of ${node.fileName}`);
-            return createParentNode(newLeaf, node); // new file goes left
+            const newNode = createParentNode(newLeaf, node); // new file goes left
+            // console.log(`Added file ${fileHash.fileName} to left of ${node.fileName}`);
+            // console.log(visualizeTreeSimple(newNode));
+            return newNode;
         } else {
-            // console.log(`Adding file ${fileHash.fileName} to right of ${node.fileName}`);
-            return createParentNode(node, newLeaf); // new file goes right
+            const newNode = createParentNode(node, newLeaf); // new file goes right
+            // console.log(`Added file ${fileHash.fileName} to right of ${node.fileName}`);
+            // console.log(visualizeTreeSimple(newNode));
+            return newNode;
         }
     }   
 
@@ -483,12 +606,12 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
     let newRight = right;
 
     if (compareFileNames(fileHash.fileName, rightMin) < 0) {
-        // console.log(`Adding file ${fileHash.fileName} to left of ${rightMin}`);
         // File should go in left subtree based on sorting
+        // console.log(`Added file ${fileHash.fileName} to left of ${rightMin}`);
         newLeft = _addFile(left, fileHash);
-    } else {
-        // console.log(`Adding file ${fileHash.fileName} to right of ${rightMin}`);
+   } else {
         // File should go in right subtree based on sorting
+        // console.log(`Added file ${fileHash.fileName} to right of ${rightMin}`);
         newRight = _addFile(right, fileHash);
     }
     
@@ -510,7 +633,7 @@ function _addFile(node: MerkleNode | undefined, fileHash: FileHash): MerkleNode 
         hash: combineHashes(newLeft.hash, newRight.hash),
     };
    
-    return rebalanceTree(newNode);
+    return migrateOddNode(rebalanceTree(newNode));
 }
 
 /**
@@ -564,6 +687,9 @@ export function addFile<DatabaseMetadata>(
 
     let root: MerkleNode | undefined;
     let metadata = merkleTree.metadata;
+
+    // console.log(`============ Adding file ${fileHash.fileName} to tree`);
+    // console.log(visualizeTreeSimple(merkleTree?.root));
     
     //
     // Adds the new leaf node to the merkle tree.
