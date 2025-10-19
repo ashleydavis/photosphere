@@ -56,7 +56,7 @@ function makePermutation(index: number, permutation: string[]) {
 
 // Test function to visualize all permutations
 function testAllPermutations() {
-    const numFiles = 5;
+    const numFiles = 6;
     // Generate file names based on number of files
     const files = Array.from({ length: numFiles }, (_, i) => String.fromCharCode(97 + i)); // 'a', 'b', 'c', etc.
     const permutations = generatePermutations(files);
@@ -82,6 +82,11 @@ function testAllPermutations() {
             const firstTreeViz = visualizeTreeSimple(firstPermutationTree.root);
             const indentedFirstTreeViz = firstTreeViz.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedFirstTreeViz);
+
+            console.log(`  Permutation ${index + 1}:`);
+            const permutationTreeViz = visualizeTreeSimple(permutationTree.root);
+            const indentedPermutationTreeViz = permutationTreeViz.split('\n').map(line => '  ' + line).join('\n');
+            console.log(indentedPermutationTreeViz);
 
             throw new Error(`Hash mismatch for permutation ${index + 1}`);
 
