@@ -56,7 +56,9 @@ function makePermutation(index: number, permutation: string[]) {
 
 // Test function to visualize all permutations
 function testAllPermutations() {
-    const files = ['a', 'b', 'c', 'd', 'e'];
+    const numFiles = 5;
+    // Generate file names based on number of files
+    const files = Array.from({ length: numFiles }, (_, i) => String.fromCharCode(97 + i)); // 'a', 'b', 'c', etc.
     const permutations = generatePermutations(files);
     
     console.log(`\n=== MERKLE TREE VISUALIZATION TEST ===`);
