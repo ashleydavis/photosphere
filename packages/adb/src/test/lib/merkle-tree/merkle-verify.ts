@@ -178,24 +178,18 @@ export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string
             result += ' ' + lastPart.substring(0, 2) + lastPart.substring(lastPart.length - 2);
         }
         else {
-            result += ' ' + node.fileName;
-        }        
+            result += ' ' + node.minFileName;
+        }
     }
     else {
         // With minFileName:
         // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
 
         // With the node count:
-        result += ' ' + shortHash + ' n:' + node.nodeCount;
+        result += ' ' + shortHash + ' (' + node.nodeCount + ')';
 
         // Just the hash:
         // result += ' ' + shortHash
-
-        // With the minFileName:
-        // result += ' ' + node.minFileName;
-
-        const balance = node.left!.nodeCount - node.right!.nodeCount;
-        result += ' b:' + balance;
     }
 
     result += '\n';
