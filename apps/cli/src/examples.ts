@@ -130,13 +130,6 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi debug update --db . --full", description: "Forces full verification and update, bypassing cached optimizations." }
     ],
     
-    "debug build-snapshot": [
-        { command: "psi debug build-snapshot --db .", description: "Build BSON database from block graph in current directory." },
-        { command: "psi debug build-snapshot --db ./photos", description: "Build BSON database from block graph in ./photos directory." },
-        { command: "psi debug build-snapshot --db . --force", description: "Force full rebuild from scratch, deleting existing metadata." },
-        { command: "psi debug build-snapshot --db ./photos -v", description: "Build with verbose output showing all actions." }
-    ],
-    
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },

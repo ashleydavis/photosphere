@@ -24,7 +24,6 @@ import { removeCommand } from './cmd/remove';
 import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
-import { debugBuildSnapshotCommand } from './cmd/debug-build-snapshot';
 import { debugSyncCommand } from './cmd/debug-sync';
 import { 
     debugShowCollectionsCommand,
@@ -223,19 +222,6 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash'))
         .action(debugHashCommand);
-
-    debugCommand
-        .command('build-snapshot')
-        .description('Build or update the BSON database and sort indexes from the block graph')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option('--force', 'Force full rebuild from scratch (delete existing metadata)')
-        .addHelpText('after', getCommandExamplesHelp('debug build-snapshot'))
-        .action(debugBuildSnapshotCommand);
 
     debugCommand
         .command('sync')

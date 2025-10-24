@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, BlockGraph, DatabaseUpdate, IBlock, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile } from "adb";
+import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -428,11 +428,6 @@ export class MediaFileDatabase {
     private readonly sessionId: string;
 
     //
-    // The block graph for managing database updates with device-specific metadata storage.
-    //
-    private blockGraph: BlockGraph<DatabaseUpdate> | undefined;
-
-    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -504,24 +499,6 @@ export class MediaFileDatabase {
     //
     getAssetDatabase(): AssetDatabase<IDatabaseMetadata> {
         return this.assetDatabase;
-    }
-
-    //
-    // Gets the block graph for managing database updates with device-specific metadata storage.
-    // The block graph is initialized during database create/load.
-    //
-    getBlockGraph(): BlockGraph<DatabaseUpdate> {
-        if (!this.blockGraph) {
-            throw new Error("BlockGraph not initialized. Make sure to call create() or load() first.");
-        }
-        return this.blockGraph;
-    }
-
-    //
-    // Initializes the block graph with device-specific metadata storage.
-    //
-    private async initializeBlockGraph(): Promise<void> {
-        this.blockGraph = new BlockGraph<DatabaseUpdate>(this.assetStorage, this.metadataStorage);
     }
 
     //
@@ -647,9 +624,6 @@ export class MediaFileDatabase {
 
         await retry(() => this.assetDatabase.save());
 
-        // Initialize block graph
-        await this.initializeBlockGraph();
-
         log.verbose(`Created new media file database.`);
     }
 
@@ -665,9 +639,6 @@ export class MediaFileDatabase {
         await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
 
-        // Initialize block graph
-        await this.initializeBlockGraph();
-
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
     }
 
@@ -677,185 +648,6 @@ export class MediaFileDatabase {
     async ensureSortIndex() {
         await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
-    }
-
-    //
-    // Updates the database to the latest blocks by processing incoming blocks.
-    // Finds all blocks in the incoming/ directory, loads them, finds minimum time,
-    // walks backward through block graph collecting relevant blocks, sorts updates by timestamp,
-    // applies them, moves files from incoming/ to blocks/, and updates head hashes.
-    //
-    async updateToLatestBlocks(rebuild: boolean = false): Promise<void> {
-        const blockGraph = this.getBlockGraph();
-        const metadataStorage = this.getMetadataStorage();
-
-        // Find all blocks in the incoming/ directory.
-        let incomingBlockIds: string[] = [];
-        let next: string | undefined = undefined;
-        const location = rebuild ? "blocks" : "incoming";
-
-        do {
-            const listResult = await metadataStorage.listFiles(location, 1000, next);
-            incomingBlockIds = incomingBlockIds.concat(incomingBlockIds);
-            next = listResult.next;
-        } while (next);
-
-        if (incomingBlockIds.length === 0) {
-            return;
-        }
-
-        // Load incoming blocks from their files.
-        const incomingBlocks: IBlock<DatabaseUpdate>[] = [];
-        for (const blockId of incomingBlockIds) {
-            const block = await blockGraph.getBlock(location, blockId);
-            if (block) {
-                incomingBlocks.push(block);
-            }
-        }
-
-        if (incomingBlocks.length === 0) {
-            return;
-        }
-
-        // Find the minimum time of those blocks (using the time of the first update in the block)
-        let minTime = Number.MAX_SAFE_INTEGER;
-        for (const block of incomingBlocks) {
-            if (block.data.length > 0) {
-                const firstUpdateTime = block.data[0].timestamp;
-                minTime = Math.min(minTime, firstUpdateTime);
-            }
-        }
-
-        // Start with current head hashes and walk backward through the block graph
-        const currentHeadBlockIds = await blockGraph.getHeadBlockIds();
-        const relevantBlocks: IBlock<DatabaseUpdate>[] = [...incomingBlocks];
-
-        // Collect blocks from the graph, stopping when we see a block where the last update time is less than minTime
-        const visited = new Set<string>();
-        const queue = [...currentHeadBlockIds];
-
-        while (queue.length > 0) {
-            const blockId = queue.shift()!;
-            
-            if (visited.has(blockId) || incomingBlockIds.includes(blockId)) {
-                continue;
-            }
-            visited.add(blockId);
-
-            const block = await blockGraph.getBlock(`blocks`, blockId);
-            if (!block || block.data.length === 0) {
-                continue;
-            }
-
-            // Check if the last update in this block is before our minimum time
-            const lastUpdateTime = block.data[block.data.length - 1].timestamp;
-            if (lastUpdateTime < minTime) {
-                continue; // Stop walking back from this branch
-            }
-
-            relevantBlocks.push(block);
-            
-            // Add parent blocks to the queue
-            if (block.prevBlocks) {
-                queue.push(...block.prevBlocks);
-            }
-        }
-
-        // Flatten all blocks into one list of updates
-        const allUpdates = relevantBlocks.map(block => block.data).flat();
-
-        // Sort updates by timestamp (database updates are idempotent)
-        allUpdates.sort((a, b) => a.timestamp - b.timestamp);
-
-        // Make sure the sort index is established
-        await this.ensureSortIndex();
-        
-        log.verbose(`Processing ${relevantBlocks.length} blocks with ${allUpdates.length} database updates`);
-        
-        // Apply the updates
-        if (allUpdates.length > 0) {
-            log.verbose("Applying database updates...");
-            await this.applyDatabaseUpdates(allUpdates);
-            log.verbose("Database updates applied successfully");
-        }
-
-        if (!rebuild) {
-            // Move block files from incoming/ to blocks/
-            for (const blockId of incomingBlockIds) {
-                const incomingFile = `incoming/${blockId}`;
-                const targetFile = `blocks/${blockId}`;            
-                const blockData = await metadataStorage.read(incomingFile);
-                if (blockData) {
-                    await metadataStorage.write(targetFile, undefined, blockData);
-                    await metadataStorage.deleteFile(incomingFile);
-                    log.verbose(`Moved block ${blockId} from incoming/ to blocks/`);
-                }
-            }
-        }
-
-        // Update head hashes to reflect the new structure of the block graph
-        // After integrating incoming blocks, we need to recalculate which blocks are now at the "end of the graph"
-        const newHeads = await this.determineNewHeadHashes(relevantBlocks);
-        await blockGraph.setHeadHashes(newHeads);
-        log.verbose(`Updated head hashes to new graph heads: ${newHeads.join(", ")}`);
-    }
-
-    //
-    // Calculates the new head hashes after integrating new blocks.
-    // Head blocks are those that have no successors pointing to them.
-    //
-    determineNewHeadHashes(relevantBlocks: IBlock<DatabaseUpdate>[]): string[] {
-        const prevBlocks = new Set<string>();
-        
-        for (const block of relevantBlocks) {
-            if (block.prevBlocks) {
-                for (const prevBlock of block.prevBlocks) {
-                    prevBlocks.add(prevBlock);
-                }
-            }
-        }
-        
-        // The new heads are blocks that are not referenced as predecessors
-        return relevantBlocks
-            .filter(block => !prevBlocks.has(block._id))
-            .map(block => block._id);
-    }
-
-    //
-    // Applies database updates to the BSON database.
-    //
-    public async applyDatabaseUpdates(updates: DatabaseUpdate[]): Promise<void> {
-        for (const update of updates) {
-            try {
-                const collection = this.bsonDatabase.collection(update.collection);
-                
-                switch (update.type) {
-                    case "upsert": {
-                        const upsertUpdate = update as IUpsertUpdate;
-                        await collection.replaceOne(upsertUpdate._id, upsertUpdate.document, { upsert: true });
-                        break;
-                    }
-                    
-                    case "field": {
-                        const fieldUpdate = update as IFieldUpdate;
-                        await collection.updateOne(fieldUpdate._id, { [fieldUpdate.field]: fieldUpdate.value }, { upsert: true });
-                        break;
-                    }
-                    
-                    case "delete": {
-                        const deleteUpdate = update as IDeleteUpdate;
-                        await collection.deleteOne(deleteUpdate._id);
-                        break;
-                    }
-                    
-                    default:
-                        const _exhaustiveCheck: never = update;
-                        log.warn(`Unknown update type: ${(_exhaustiveCheck as DatabaseUpdate).type}`);
-                }
-            } catch (error) {
-                log.warn(`Error applying update ${update.type} for ${update._id}: ${String(error)}`);
-            }
-        }
     }
 
     //
