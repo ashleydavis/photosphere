@@ -4,7 +4,6 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "adb";
-import { buildBlockGraph } from "../lib/database-upgrade";
 import { IDatabaseMetadata } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
@@ -69,10 +68,6 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // Reload the database for upgrade in readwrite mode.
         // The updated database is automatically saved.
         const { database: upgradedDatabase } = await loadDatabase(options.db, options, true, false);
-
-        // Build block graph automatically for database version 4
-        log.info("Building block graph for database version 4...");
-        await buildBlockGraph(upgradedDatabase);
 
         // Rebuild the merkle tree in sorted order with no metadata/
         const rebuiltTree = rebuildTree<IDatabaseMetadata>(upgradedDatabase.getAssetDatabase().getMerkleTree(), "metadata/");

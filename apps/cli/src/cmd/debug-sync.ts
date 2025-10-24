@@ -2,8 +2,7 @@ import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { MediaFileDatabase } from "api";
-import { IStorage } from "storage";
-import { MerkleNode, traverseTree, getFileInfo, computeHash, addFile } from "adb";
+import { MerkleNode, traverseTree, getFileInfo, computeHash } from "adb";
 
 //
 // Options for the debug sync command.
@@ -44,8 +43,6 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
         await pushFiles(targetDb, sourceDb);
-
-        await sourceDb.updateToLatestBlocks(); //todo: only really want to do this if the database has `metadata/` directory.
     }
     finally {
         await sourceDb.releaseWriteLock();
