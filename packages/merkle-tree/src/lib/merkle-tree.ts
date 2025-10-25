@@ -844,6 +844,69 @@ function combineBigNum(input: { low: number, high: number }): bigint {
     return BigInt(input.high) * (1n << 32n) + BigInt(input.low);
 }
 
+//
+// Serializes the sort tree metadata and nodes.
+//
+function serializeSortTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
+    if (!tree.sort) {
+        return;
+    }
+
+    // Write totalNodes
+    serializer.writeUInt32(tree.metadata.totalNodes);
+    
+    // Write totalFiles
+    serializer.writeUInt32(tree.metadata.totalFiles);
+
+    // Write totalSize
+    const splitTotalSize = splitBigNum(BigInt(tree.metadata.totalSize));
+    serializer.writeUInt32(splitTotalSize.low);
+    serializer.writeUInt32(splitTotalSize.high);
+
+    // Write all nodes
+    for (const node of iterateNodes<SortNode>(tree.sort)) {
+        
+        // Write nodeCount
+        serializer.writeUInt32(node.nodeCount);
+        
+        // Write leafCount
+        serializer.writeUInt32(node.leafCount);
+
+        // Write tree size
+        const splitSize = splitBigNum(BigInt(node.size));
+        serializer.writeUInt32(splitSize.low);
+        serializer.writeUInt32(splitSize.high);
+        
+        if (node.nodeCount === 1) {
+            if (!node.fileName) {
+                throw new Error(`Leaf node has no file name. This could be a bug.`);
+            }
+
+            if (!node.contentHash) {
+                throw new Error(`Leaf node has no content hash. This could be a bug.`);
+            }
+
+            const fileNameLength = Buffer.byteLength(node.fileName, 'utf8');
+            serializer.writeUInt32(fileNameLength);
+
+            // Create a buffer with exact length and write string into it
+            const fileNameBuffer = Buffer.alloc(fileNameLength);
+            fileNameBuffer.write(node.fileName, 0, 'utf8');
+            serializer.writeBytes(fileNameBuffer); //todo: Be good to use write string.
+
+            // Write content hash
+            serializer.writeBytes(node.contentHash);
+            
+            // Write file metadata for leaf nodes in version 3+
+            // Write lastModified timestamp (8 bytes)
+            const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
+            const splitLastModified = splitBigNum(BigInt(lastModified));
+            serializer.writeUInt32(splitLastModified.low);
+            serializer.writeUInt32(splitLastModified.high);
+        }        
+    }    
+}
+
 /**
  * Merkle tree file format.
  * 
@@ -887,59 +950,8 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     }
     serializer.writeBytes(idBuffer);
     
-    // Write totalNodes
-    serializer.writeUInt32(tree.metadata.totalNodes);
-    
-    // Write totalFiles
-    serializer.writeUInt32(tree.metadata.totalFiles);
-
-    // Write totalSize
-    const splitTotalSize = splitBigNum(BigInt(tree.metadata.totalSize));
-    serializer.writeUInt32(splitTotalSize.low);
-    serializer.writeUInt32(splitTotalSize.high);
-       
-    // Write all nodes
-    for (const node of iterateNodes<SortNode>(tree.sort)) {
-        
-        // Write nodeCount
-        serializer.writeUInt32(node.nodeCount);
-        
-        // Write leafCount
-        serializer.writeUInt32(node.leafCount);
-
-        // Write tree size
-        const splitSize = splitBigNum(BigInt(node.size));
-        serializer.writeUInt32(splitSize.low);
-        serializer.writeUInt32(splitSize.high);
-        
-        if (node.nodeCount === 1) {
-            if (!node.fileName) {
-                throw new Error(`Leaf node has no file name. This could be a bug.`);
-            }
-
-            if (!node.contentHash) {
-                throw new Error(`Leaf node has no content hash. This could be a bug.`);
-            }
-
-            const fileNameLength = Buffer.byteLength(node.fileName, 'utf8');
-            serializer.writeUInt32(fileNameLength);
-
-            // Create a buffer with exact length and write string into it
-            const fileNameBuffer = Buffer.alloc(fileNameLength);
-            fileNameBuffer.write(node.fileName, 0, 'utf8');
-            serializer.writeBytes(fileNameBuffer); //todo: Be good to use write string.
-
-            // Write content hash
-            serializer.writeBytes(node.contentHash);
-            
-            // Write file metadata for leaf nodes in version 3+
-            // Write lastModified timestamp (8 bytes)
-            const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
-            const splitLastModified = splitBigNum(BigInt(lastModified));
-            serializer.writeUInt32(splitLastModified.low);
-            serializer.writeUInt32(splitLastModified.high);
-        }        
-    }    
+    // Write sort tree metadata and nodes
+    serializeSortTree(tree, serializer);
 }
 
 //
