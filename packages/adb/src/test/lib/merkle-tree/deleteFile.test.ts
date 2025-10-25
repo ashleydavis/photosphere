@@ -9,7 +9,8 @@ import {
     deleteFiles,
     saveTree,
     loadTree,
-    createTree
+    createTree,
+    buildMerkleTree
 } from '../../../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
@@ -40,6 +41,8 @@ describe('File Deletion (deleteFile)', () => {
         if (!tree) {
             throw new Error('Failed to build test tree');
         }
+
+        tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         return tree;
     }
@@ -126,13 +129,15 @@ describe('File Deletion (deleteFile)', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.sort?.hash.toString('hex');
+        const originalRootHash = tree.merkle!.hash.toString('hex');
         
         // Delete a file
         deleteFile(tree, 'file3.txt');
+
+        tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         // Get new root hash
-        const newRootHash = tree.sort?.hash.toString('hex');
+        const newRootHash = tree.merkle!.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
@@ -189,6 +194,8 @@ describe('Hard File Deletion (deleteFiles)', () => {
         if (!tree) {
             throw new Error('Failed to build test tree');
         }
+
+        tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         return tree;
     }
@@ -294,13 +301,15 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.sort?.hash.toString('hex');
+        const originalRootHash = tree.merkle!.hash.toString('hex');
         
         // Delete a file
         deleteFiles(tree, ['file3.txt']);
+
+        tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         // Get new root hash
-        const newRootHash = tree.sort?.hash.toString('hex');
+        const newRootHash = tree.merkle!.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);

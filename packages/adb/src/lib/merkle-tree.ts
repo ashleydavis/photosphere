@@ -9,10 +9,18 @@ import { save, load, ISerializer, IDeserializer } from 'serialization';
 export const CURRENT_DATABASE_VERSION = 4;
 
 //
+// Generic node interface for traversal.
+//
+export interface INode<NodeT> {
+    left?: INode<NodeT>;
+    right?: INode<NodeT>;
+}
+
+//
 // Represents a node in the Merkle tree.
 //
 export interface SortNode { //todo: Would be nice to have SortLeaf and SortParent. They have different properties!
-    hash: Buffer; // The hash of this node.
+    contentHash?: Buffer; // The hash of the content, for leaf nodes only.
     fileName?: string; // The file this hash represents, for leaf nodes only.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
     leafCount: number; // Number of leaf nodes in the subtree rooted at this node. Set to 1 for leaf nodes.
@@ -133,31 +141,34 @@ export function findFileInTree(node: SortNode | undefined, targetFileName: strin
  * Generic tree traversal function that calls a callback for each node.
  * The callback can return false to stop traversal early.
  */
-export function traverseTreeSync(node: SortNode | undefined, callback: (node: SortNode) => boolean): void {
+export function traverseTreeSync<NodeT>(node: INode<NodeT> | undefined, callback: (node: NodeT) => boolean): void {
     if (!node) {
         return;
     }
     
-    if (!callback(node)) {
+    if (!callback(node as NodeT)) {
         return; // Stop if callback returns false
     }
     
-    traverseTreeSync(node.left, callback);
-    traverseTreeSync(node.right, callback);
+    traverseTreeSync<NodeT>(node.left, callback);
+    traverseTreeSync<NodeT>(node.right, callback);
 }
 
 /**
  * Generic async tree traversal function that calls an async callback for each node.
  * The callback can return false to stop traversal early.
  */
-export async function traverseTreeAsync(node: SortNode | undefined, callback: (node: SortNode) => Promise<boolean>): Promise<void> {
-    if (!node) return;
+export async function traverseTreeAsync<NodeT>(node: INode<NodeT> | undefined, callback: (node: NodeT) => Promise<boolean>): Promise<void> {
+    if (!node) {
+        return;
+    }
     
-    const shouldContinue = await callback(node);
-    if (!shouldContinue) return; // Stop if callback returns false
+    if (!await callback(node as NodeT)) {
+        return; // Stop if callback returns false
+    }
     
-    await traverseTreeAsync(node.left, callback);
-    await traverseTreeAsync(node.right, callback);
+    await traverseTreeAsync<NodeT>(node.left, callback);
+    await traverseTreeAsync<NodeT>(node.right, callback);
 }
 
 /**
@@ -194,13 +205,8 @@ export function updateNodeInTree<T>(
     // If a child was updated, recalculate this node's properties
     if (result !== undefined) {
         const leftSize = node.left?.size || 0;
-        const rightSize = node.right?.size || 0;
-        
+        const rightSize = node.right?.size || 0;        
         node.size = leftSize + rightSize;
-        node.hash = combineHashes(
-            node.left?.hash || Buffer.alloc(0),
-            node.right?.hash || Buffer.alloc(0)
-        );
     }
     
     return result;
@@ -230,7 +236,7 @@ export function compareFileNames(a: string, b: string): number {
  */
 export function createLeafNode(fileHash: FileHash): SortNode {
     return {
-        hash: fileHash.hash,
+        contentHash: fileHash.hash,
         fileName: fileHash.fileName,
         nodeCount: 1, // Leaf nodes have a node count of 1.
         leafCount: 1, // Leaf nodes have a leaf count of 1.
@@ -245,7 +251,6 @@ export function createLeafNode(fileHash: FileHash): SortNode {
  */
 export function createParentNode(left: SortNode, right: SortNode): SortNode {
     return {
-        hash: combineHashes(left.hash, right.hash),
         fileName: undefined, // Internal nodes don't represent a file
         nodeCount: 1 + left.nodeCount + right.nodeCount, // Total node count is 1 (this node) + left + right
         leafCount: left.leafCount + right.leafCount, // Total leaf count is the sum of both subtrees.
@@ -260,13 +265,15 @@ export function createParentNode(left: SortNode, right: SortNode): SortNode {
  * Convert binary tree to flat array (for serialization)
  */
 export function binaryTreeToArray(root: SortNode | undefined): Omit<SortNode, 'minFileName'>[] {
-    if (!root) return [];
+    if (!root) {
+        return [];
+    }
     
     const result: Omit<SortNode, 'minFileName'>[] = [];
 
-    traverseTreeSync(root, (node) => {
+    traverseTreeSync<SortNode>(root, (node) => {
         const flatNode: Omit<SortNode, 'minFileName'> = {
-            hash: node.hash,
+            contentHash: node.contentHash,
             fileName: node.fileName,
             nodeCount: node.nodeCount,
             leafCount: node.leafCount,
@@ -412,7 +419,6 @@ export function rotateRight(node: SortNode): SortNode {
         leafCount: newLeft.leafCount + newCenter.leafCount + right.leafCount,
         size: newLeft.size + newCenter.size + right.size,
         minFileName: newLeft.minFileName,
-        hash: combineHashes(newLeft.hash, combineHashes(newCenter.hash, right.hash)),
         left: newLeft,
         right: {
             left: newCenter,
@@ -421,7 +427,6 @@ export function rotateRight(node: SortNode): SortNode {
             leafCount: newCenter.leafCount + right.leafCount,
             size: newCenter.size + right.size,
             minFileName: newCenter.minFileName,
-            hash: combineHashes(newCenter.hash, right.hash),
         },
     };
 }
@@ -454,7 +459,6 @@ export function rotateLeft(node: SortNode): SortNode {
         leafCount: left.leafCount + newCenter.leafCount + newRight.leafCount,
         size: left.size + newCenter.size + newRight.size,
         minFileName: left.minFileName,
-        hash: combineHashes(combineHashes(left.hash, newCenter.hash), newRight.hash),
         left: {
             left: left,
             right: newCenter,
@@ -462,7 +466,6 @@ export function rotateLeft(node: SortNode): SortNode {
             leafCount: left.leafCount + newCenter.leafCount,
             size: left.size + newCenter.size,
             minFileName: left.minFileName,
-            hash: combineHashes(left.hash, newCenter.hash),
         },
         right: newRight,
     };
@@ -526,7 +529,6 @@ function _addFile(node: SortNode | undefined, fileHash: FileHash): SortNode {
         leafCount: newLeftLeafCount + newRightLeafCount,
         size: newLeftSize + newRightSize,
         minFileName: newLeft.minFileName,
-        hash: combineHashes(newLeft.hash, newRight.hash),
     };
    
     return rebalanceTree(newNode);
@@ -632,8 +634,12 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
 
     // Process each leaf node from the sort tree
     for (const leaf of traverseSortLeaves(sort)) {
+        if (!leaf.contentHash) {
+            throw new Error('Leaf node has no content hash');
+        }
+
         let node: MerkleNode = {
-            hash: leaf.hash,
+            hash: leaf.contentHash,
         };
 
         // Try to combine this node with nodes at each level going up
@@ -713,7 +719,7 @@ export function updateFile<DatabaseMetadata>(
     // Use the centralized updateNodeInTree function to find and update the file
     const wasUpdated = updateNodeInTree(merkleTree.sort, fileHash.fileName, (node, targetFileName) => {
         // Update the leaf node in place
-        node.hash = fileHash.hash;
+        node.contentHash = fileHash.hash;
         node.lastModified = fileHash.lastModified;
         node.size = fileHash.length; // Update the size with the new file length
         return true; // Found and updated
@@ -751,8 +757,12 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
         throw new Error(`File ${fileName} is missing lastModified date. This could be a bug.`);
     }
 
+    if (!leafNode.contentHash) {
+        throw new Error(`File ${fileName} is missing content hash. This could be a bug.`);
+    }
+
     return {
-        hash: leafNode.hash,
+        hash: leafNode.contentHash,
         length: leafNode.size,
         lastModified: leafNode.lastModified,
     };
@@ -836,8 +846,6 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
     
     // Recursive function to build the ASCII tree from binary tree structure
     function buildTreeString(node: SortNode, prefix: string, isLast: boolean): string {
-        const hashStr = node.hash.toString('hex');
-        const hashPreview = `${hashStr.slice(0, 4)}-${hashStr.slice(-4)}`;
         
         // Determine the branch character
         const branchChar = isLast ? "└── " : "├── ";
@@ -846,6 +854,13 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
         let treeStr = "";
         
         if (node.nodeCount === 1) {
+            if (!node.contentHash) {
+                throw new Error(`Leaf node has no content hash. This could be a bug.`);
+            }
+
+            const hashStr = node.contentHash.toString('hex');
+            const hashPreview = `${hashStr.slice(0, 4)}-${hashStr.slice(-4)}`;
+
             // Leaf node
             const detailPrefix = prefix + (isLast ? "    " : "│   ") + "    ";
             const leafHeader = `Leaf`;
@@ -874,10 +889,9 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
             
             // Add spacing line
             const spacingPrefix = prefix + "│   ";
-            treeStr += `${spacingPrefix}\n${nodeStr}${paddedNodeHeader} ${hashPreview}\n`;
+            treeStr += `${spacingPrefix}\n${nodeStr}${paddedNodeHeader}\n`;
             
             // Add node details
-            treeStr += `${detailPrefix}Full:   ${hashStr}\n`;
             treeStr += `${detailPrefix}Count:  ${node.nodeCount} nodes\n`;
             treeStr += `${detailPrefix}Leaves: ${node.leafCount} files\n`;
             treeStr += `${detailPrefix}Size:   ${node.size} bytes\n`;
@@ -980,12 +994,10 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     serializer.writeUInt32(splitTotalSize.high);
     
     // Convert binary tree to flat array for serialization
-    const nodes = binaryTreeToArray(tree.sort);
+    const nodes = binaryTreeToArray(tree.sort); //todo: Can just iterate over the sort tree here without building an array.
     
     // Write all nodes
     for (const node of nodes) {
-        // Write hash
-        serializer.writeBytes(node.hash);
         
         // Write nodeCount
         serializer.writeUInt32(node.nodeCount);
@@ -998,14 +1010,25 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
         serializer.writeUInt32(splitSize.low);
         serializer.writeUInt32(splitSize.high);
         
-        // Write fileName if present
-        if (node.fileName) {
+        if (node.nodeCount === 1) {
+            if (!node.fileName) {
+                throw new Error(`Leaf node has no file name. This could be a bug.`);
+            }
+
+            if (!node.contentHash) {
+                throw new Error(`Leaf node has no content hash. This could be a bug.`);
+            }
+
             const fileNameLength = Buffer.byteLength(node.fileName, 'utf8');
             serializer.writeUInt32(fileNameLength);
+
             // Create a buffer with exact length and write string into it
             const fileNameBuffer = Buffer.alloc(fileNameLength);
             fileNameBuffer.write(node.fileName, 0, 'utf8');
-            serializer.writeBytes(fileNameBuffer);
+            serializer.writeBytes(fileNameBuffer); //todo: Be good to use write string.
+
+            // Write content hash
+            serializer.writeBytes(node.contentHash);
             
             // Write file metadata for leaf nodes in version 3+
             // Write lastModified timestamp (8 bytes)
@@ -1013,13 +1036,8 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
             const splitLastModified = splitBigNum(BigInt(lastModified));
             serializer.writeUInt32(splitLastModified.low);
             serializer.writeUInt32(splitLastModified.high);
-        } else {
-            // No fileName
-            serializer.writeUInt32(0);
-        }
-        
-    }
-    
+        }        
+    }    
 }
 
 //
@@ -1030,8 +1048,20 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
 
     const files: FileHash[] = [];
 
-    traverseTreeSync(tree.sort, (node) => {
-        if (node.nodeCount === 1 && node.fileName && node.lastModified) {
+    traverseTreeSync<SortNode>(tree.sort, (node) => {
+        if (node.nodeCount === 1) {
+            if (!node.fileName) {
+                throw new Error(`Leaf node has no file name. This could be a bug.`);
+            }
+
+            if (!node.contentHash) {
+                throw new Error(`Leaf node has no content hash. This could be a bug.`);
+            }
+
+            if (!node.lastModified) {
+                throw new Error(`Leaf node has no last modified date. This could be a bug.`);
+            }
+
             if (pathRemove) {
                 if (node.fileName.startsWith(pathRemove)) {
                     // Don't add this file to the new tree.
@@ -1041,7 +1071,7 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
 
             files.push({
                 fileName: node.fileName,
-                hash: node.hash,
+                hash: node.contentHash!,
                 length: node.size,
                 lastModified: node.lastModified
             });
@@ -1102,10 +1132,7 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
     // Read all nodes
     const nodes: Omit<SortNode, 'minFileName'>[] = [];
     
-    for (let i = 0; i < totalNodes; i++) {
-        // Read hash
-        const hash = deserializer.readBytes(32);
-        
+    for (let i = 0; i < totalNodes; i++) {        
         // Read nodeCount
         const nodeCount = deserializer.readUInt32();
         
@@ -1116,18 +1143,20 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
         const sizeLow = deserializer.readUInt32();
         const sizeHigh = deserializer.readUInt32();
         const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
-
-        // Read fileName if present
-        const fileNameLength = deserializer.readUInt32();
         
         let fileName: string | undefined;
+        let contentHash: Buffer | undefined;
         let lastModified: Date | undefined;
         
-        if (fileNameLength > 0) {
+        if (nodeCount === 1) {
+            // Read fileName.
+            const fileNameLength = deserializer.readUInt32(); //todo: Use readString.
             const fileNameBytes = deserializer.readBytes(fileNameLength);
             fileName = fileNameBytes.toString('utf8');
             
-            // Read file metadata for leaf nodes in version 3+
+            // Read content hash
+            contentHash = deserializer.readBytes(32);
+            
             // Read lastModified timestamp (8 bytes)
             const lastModifiedLow = deserializer.readUInt32();
             const lastModifiedHigh = deserializer.readUInt32();
@@ -1139,7 +1168,7 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
         
         // Create node
         nodes.push({
-            hash,
+            contentHash,
             fileName,
             nodeCount,
             leafCount,
@@ -1228,7 +1257,7 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
         
         // Create node
         nodes.push({
-            hash,
+            contentHash: nodeCount === 1 ? hash : undefined,
             fileName,
             nodeCount,
             leafCount,
@@ -1311,7 +1340,7 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
         
         // Create node
         nodes.push({
-            hash,
+            contentHash: nodeCount === 1 ? hash : undefined,
             fileName,
             nodeCount,
             leafCount,
@@ -1521,7 +1550,6 @@ function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
         leafCount: newLeft.leafCount + newRight.leafCount,
         size: newLeft.size + newRight.size,
         minFileName: newLeft.minFileName,
-        hash: combineHashes(newLeft.hash, newRight.hash),
     };
     
     // Rebalance the tree after deletion
@@ -1559,13 +1587,13 @@ export function deleteFiles<DatabaseMetadata>(
     const allFiles: FileHash[] = [];
     const existingFiles = new Set<string>();
     
-    traverseTreeSync(merkleTree.sort, (node) => {
+    traverseTreeSync<SortNode>(merkleTree.sort, (node) => {
         if (node.nodeCount === 1 && node.fileName) {
             existingFiles.add(node.fileName);
             if (node.lastModified) {
                 allFiles.push({
                     fileName: node.fileName,
-                    hash: node.hash,
+                    hash: node.contentHash!,
                     length: node.size,
                     lastModified: node.lastModified
                 });
@@ -1656,7 +1684,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
     
     // Process files in tree A using traversal
     if (treeA.sort) {
-        traverseTreeSync(treeA.sort, (node) => {
+        traverseTreeSync<SortNode>(treeA.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
@@ -1664,7 +1692,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
                 }
                 
                 filesInA.set(node.fileName, { 
-                    hash: node.hash.toString('hex')
+                    hash: node.contentHash!.toString('hex')
                 });
             }
             return true;
@@ -1673,7 +1701,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
     
     // Process files in tree B using traversal
     if (treeB.sort) {
-        traverseTreeSync(treeB.sort, (node) => {
+        traverseTreeSync<SortNode>(treeB.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
@@ -1681,7 +1709,7 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
                 }
                 
                 filesInB.set(node.fileName, { 
-                    hash: node.hash.toString('hex')
+                    hash: node.contentHash!.toString('hex')
                 });
             }
             return true;

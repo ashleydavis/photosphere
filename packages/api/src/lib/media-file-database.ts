@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile, SortNode } from "adb";
+import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile, SortNode, buildMerkleTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -665,17 +665,21 @@ export class MediaFileDatabase {
         const merkleTree = this.assetDatabase.getMerkleTree();
         const metadata = merkleTree.metadata;
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+        if (merkleTree.dirty || !merkleTree.merkle) {
+            log.warn(`Merkle tree is dirty or missing, will rebuild.`);
+        }
+        const merkle = !merkleTree.dirty && merkleTree.merkle || buildMerkleTree(merkleTree.sort);
         
         // Get root hash (first node is always the root)
-        const rootHash = merkleTree.sort?.hash || Buffer.alloc(0);
-        const fullHash = rootHash.toString('hex');
+        const rootHash = merkle?.hash;
+        const fullHash = rootHash?.toString('hex');
         
         return {
             totalImports: filesImported,
             totalFiles: metadata.totalFiles,
             totalSize: metadata.totalSize,
             totalNodes: metadata.totalNodes,
-            fullHash,
+            fullHash: fullHash || 'empty',
             databaseVersion: merkleTree.version
         };
     }
@@ -1235,7 +1239,7 @@ export class MediaFileDatabase {
             if (sizeChanged || timestampChanged) {
                 // File metadata has changed - check if content actually changed by computing the hash.
                 const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
-                if (Buffer.compare(freshHash.hash, node.hash) !== 0) {
+                if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
                     // The file content has actually been modified.
                     result.modified.push(fileName);
                     
@@ -1264,7 +1268,7 @@ export class MediaFileDatabase {
             else if (options?.full) {
                 // The file doesn't seem to have changed, but the full verification is requested.
                 const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
-                if (Buffer.compare(freshHash.hash, node.hash) === 0) {
+                if (Buffer.compare(freshHash.hash, node.contentHash!) === 0) {
                     // The file is unmodified.
                     result.numUnmodified++;
                 } 
@@ -1395,7 +1399,7 @@ export class MediaFileDatabase {
                     progressCallback(`Repairing missing file: ${fileName}`);
                 }
 
-                const repaired = await repairFile(fileName, node.hash);
+                const repaired = await repairFile(fileName, node.contentHash!);
                 if (repaired) {
                     result.repaired.push(fileName);
                 } else {
@@ -1412,13 +1416,13 @@ export class MediaFileDatabase {
                 
                 // Verify the actual hash.
                 const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));                
-                if (Buffer.compare(freshHash.hash, node.hash) !== 0) {
+                if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
                     // File is corrupted - try to repair.
                     if (progressCallback) {
                         progressCallback(`Repairing corrupted file: ${fileName}`);
                     }
 
-                    const repaired = await repairFile(fileName, node.hash);
+                    const repaired = await repairFile(fileName, node.contentHash!);
                     if (repaired) {
                         result.repaired.push(fileName);
                     } else {
@@ -1567,7 +1571,7 @@ export class MediaFileDatabase {
                     }
                 }
                                 
-                await retry(() => copyAsset(srcNode.fileName!, srcNode.hash));
+                await retry(() => copyAsset(srcNode.fileName!, srcNode.contentHash!));
 
                 if (result.copiedFiles % 100 === 0) {
                     await retry(() => destAssetDatabase.save());
@@ -1576,7 +1580,7 @@ export class MediaFileDatabase {
             return true; // Continue traversing.
         };
 
-        await traverseTree(this.assetDatabase.getMerkleTree(), processSrcNode);
+        await traverseTree(merkleTree, processSrcNode);
 
         //
         // Saves the dest database.

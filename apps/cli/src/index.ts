@@ -12,7 +12,6 @@ import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { merkleTreeCommand } from './cmd/merkle-tree';
 import { hashCacheCommand } from './cmd/hash-cache';
-import { jsonCommand } from './cmd/json';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
 import { versionCommand } from './cmd/version';
@@ -197,20 +196,6 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
-
-    // Add json subcommand
-    debugCommand
-        .command('json')
-        .description('Serialize the merkle tree to JSON format')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('debug json'))
-        .action(jsonCommand);
-
     // Add hash subcommand
     debugCommand
         .command('hash')
