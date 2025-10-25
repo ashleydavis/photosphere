@@ -13,7 +13,7 @@ export async function jsonCommand(options: IJsonCommandOptions): Promise<void> {
     const { database } = await loadDatabase(options.db, options, true, true);
 
     const merkleTree = database.getAssetDatabase().getMerkleTree();
-    const json = serializeTreeToJSON(merkleTree.root);
+    const json = serializeTreeToJSON(merkleTree.sort);
 
     console.log(JSON.stringify(json, null, 2));
 

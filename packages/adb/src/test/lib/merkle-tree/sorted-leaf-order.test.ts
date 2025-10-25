@@ -71,7 +71,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
             }
             
             // Get the leaf nodes in order
-            const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
+            const leafNodes = getLeafNodesInOrder(merkleTree.sort);
             const isSorted = verifyLeafNodesAreSorted(leafNodes);
             
             // Log the result for this specific permutation
@@ -106,7 +106,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
                 merkleTree = addFile(merkleTree, fileHash);
             }
             
-            const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
+            const leafNodes = getLeafNodesInOrder(merkleTree.sort);
             const isSorted = verifyLeafNodesAreSorted(leafNodes);
             
             results.push({
@@ -163,7 +163,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
                     merkleTree = addFile(merkleTree, fileHash);
                 }
                 
-                const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
+                const leafNodes = getLeafNodesInOrder(merkleTree.sort);
                 const isSorted = verifyLeafNodesAreSorted(leafNodes);
                 
                 expect(isSorted).toBe(true);

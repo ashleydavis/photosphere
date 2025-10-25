@@ -9,7 +9,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile } from "adb";
+import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile, SortNode } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -667,7 +667,7 @@ export class MediaFileDatabase {
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
         
         // Get root hash (first node is always the root)
-        const rootHash = merkleTree.root?.hash || Buffer.alloc(0);
+        const rootHash = merkleTree.sort?.hash || Buffer.alloc(0);
         const fullHash = rootHash.toString('hex');
         
         return {
@@ -1206,7 +1206,7 @@ export class MediaFileDatabase {
         //
         // Checks that a file matches the merkle tree record.
         //
-        const verifyFile = async (node: MerkleNode): Promise<void> => {
+        const verifyFile = async (node: SortNode): Promise<void> => {
             
             const fileName = node.fileName!;
 
@@ -1379,7 +1379,7 @@ export class MediaFileDatabase {
         //
         // Check nodes in the merkle to find corrupted/missing files.
         //
-        const checkFile = async (node: MerkleNode, merkleTree: IMerkleTree<IDatabaseMetadata>): Promise<void> => {
+        const checkFile = async (node: SortNode, merkleTree: IMerkleTree<IDatabaseMetadata>): Promise<void> => {
 
             result.filesProcessed++;
 
@@ -1554,7 +1554,7 @@ export class MediaFileDatabase {
         //
         // Process a node in the soure merkle tree.
         //
-        const processSrcNode = async (srcNode: MerkleNode): Promise<boolean> => {
+        const processSrcNode = async (srcNode: SortNode): Promise<boolean> => {
             if (srcNode.fileName) {
                 // Skip files that don't match the path filter
                 if (options?.pathFilter) {

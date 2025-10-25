@@ -48,7 +48,7 @@ describe('File Deletion (deleteFile)', () => {
         // Build a test tree
         const tree = buildTestTree();
         const initialNumFiles = tree.metadata.totalFiles;
-        const initialNodeCount = tree.sortRoot?.nodeCount || 0;
+        const initialNodeCount = tree.sort?.nodeCount || 0;
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
@@ -66,7 +66,7 @@ describe('File Deletion (deleteFile)', () => {
         
         // Verify the tree structure has changed (fewer nodes and files)
         expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
-        expect(tree.sortRoot?.nodeCount || 0).toBeLessThan(initialNodeCount);
+        expect(tree.sort?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
         // Verify remaining files are still present
         expect(findFileNode(tree, 'file1.txt')).toBeDefined();
@@ -126,13 +126,13 @@ describe('File Deletion (deleteFile)', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.sortRoot?.hash.toString('hex');
+        const originalRootHash = tree.sort?.hash.toString('hex');
         
         // Delete a file
         deleteFile(tree, 'file3.txt');
         
         // Get new root hash
-        const newRootHash = tree.sortRoot?.hash.toString('hex');
+        const newRootHash = tree.sort?.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
@@ -144,7 +144,7 @@ describe('File Deletion (deleteFile)', () => {
         tree = addFile(tree, createFileHash('single-file.txt'));
         
         expect(tree.metadata.totalFiles).toBe(1);
-        expect(tree.sortRoot?.nodeCount || 0).toBe(1);
+        expect(tree.sort?.nodeCount || 0).toBe(1);
         
         // Delete the only file
         const result = deleteFile(tree, 'single-file.txt');
@@ -152,7 +152,7 @@ describe('File Deletion (deleteFile)', () => {
         
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
-        expect(tree.sortRoot?.nodeCount || 0).toBe(0);
+        expect(tree.sort?.nodeCount || 0).toBe(0);
     });
 
     test('should handle deleting from empty tree', () => {
@@ -197,7 +197,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Build a test tree
         const tree = buildTestTree();
         const initialNumFiles = tree.metadata.totalFiles;
-        const initialNodeCount = tree.sortRoot?.nodeCount || 0;
+        const initialNodeCount = tree.sort?.nodeCount || 0;
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
@@ -215,7 +215,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Verify the tree structure has changed (fewer nodes and files)
         expect(tree.metadata.totalFiles).toBe(initialNumFiles - 1);
-        expect(tree.sortRoot?.nodeCount || 0).toBeLessThan(initialNodeCount);
+        expect(tree.sort?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
         // Verify remaining files are still present
         expect(findFileNode(tree, 'file1.txt')).toBeDefined();
@@ -238,7 +238,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         tree = addFile(tree, createFileHash('single-file.txt'));
         
         expect(tree.metadata.totalFiles).toBe(1);
-        expect(tree.sortRoot?.nodeCount || 0).toBe(1);
+        expect(tree.sort?.nodeCount || 0).toBe(1);
         
         // Delete the only file
         const result = deleteFiles(tree, ['single-file.txt']);
@@ -246,7 +246,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
-        expect(tree.sortRoot?.nodeCount || 0).toBe(0);
+        expect(tree.sort?.nodeCount || 0).toBe(0);
     });
 
     test('should persist hard deletion when saving and loading the tree', async () => {
@@ -294,13 +294,13 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const tree = buildTestTree();
         
         // Save original root hash
-        const originalRootHash = tree.sortRoot?.hash.toString('hex');
+        const originalRootHash = tree.sort?.hash.toString('hex');
         
         // Delete a file
         deleteFiles(tree, ['file3.txt']);
         
         // Get new root hash
-        const newRootHash = tree.sortRoot?.hash.toString('hex');
+        const newRootHash = tree.sort?.hash.toString('hex');
         
         // The root hash should have changed
         expect(newRootHash).not.toBe(originalRootHash);
@@ -316,7 +316,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Tree should be empty
         expect(tree.metadata.totalFiles).toBe(0);
-        expect(tree.sortRoot?.nodeCount || 0).toBe(0);
+        expect(tree.sort?.nodeCount || 0).toBe(0);
     });
 
     test('should preserve metadata id and update counts correctly', () => {

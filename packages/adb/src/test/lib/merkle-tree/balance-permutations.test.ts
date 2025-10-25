@@ -68,10 +68,10 @@ describe('Merkle Tree Balance Verification for Permutations', () => {
         const permutation = threeFilePermutations[i];
         test(`3 files permutation ${i + 1}: ${permutation.join(' → ')} should result in balanced tree`, () => {
             const merkleTree = buildTree(permutation);
-            const isBalanced = isTreeBalanced(merkleTree.sortRoot);
+            const isBalanced = isTreeBalanced(merkleTree.sort);
             
             if (!isBalanced) {
-                const balanceInfo = getBalanceInfo(merkleTree.sortRoot);
+                const balanceInfo = getBalanceInfo(merkleTree.sort);
                 console.log(`\n=== UNBALANCED TREE DETAILS ===`);
                 console.log(`Permutation: ${permutation.join(' → ')}`);
                 console.log(`Balance info:`);
@@ -88,10 +88,10 @@ describe('Merkle Tree Balance Verification for Permutations', () => {
         const permutation = fourFilePermutations[i];
         test(`4 files permutation ${i + 1}: ${permutation.join(' → ')} should result in balanced tree`, () => {
             const merkleTree = buildTree(permutation);
-            const isBalanced = isTreeBalanced(merkleTree.sortRoot);
+            const isBalanced = isTreeBalanced(merkleTree.sort);
             
             if (!isBalanced) {
-                const balanceInfo = getBalanceInfo(merkleTree.sortRoot);
+                const balanceInfo = getBalanceInfo(merkleTree.sort);
                 console.log(`\n=== UNBALANCED TREE DETAILS ===`);
                 console.log(`Permutation: ${permutation.join(' → ')}`);
                 console.log(`Balance info:`);
@@ -108,10 +108,10 @@ describe('Merkle Tree Balance Verification for Permutations', () => {
         const permutation = fiveFilePermutations[i];
         test(`5 files permutation ${i + 1}: ${permutation.join(' → ')} should result in balanced tree`, () => {
             const merkleTree = buildTree(permutation);
-            const isBalanced = isTreeBalanced(merkleTree.sortRoot);
+            const isBalanced = isTreeBalanced(merkleTree.sort);
             
             if (!isBalanced) {
-                const balanceInfo = getBalanceInfo(merkleTree.sortRoot);
+                const balanceInfo = getBalanceInfo(merkleTree.sort);
                 console.log(`\n=== UNBALANCED TREE DETAILS ===`);
                 console.log(`Permutation: ${permutation.join(' → ')}`);
                 console.log(`Balance info:`);
@@ -133,13 +133,13 @@ describe('Merkle Tree Balance Verification for Permutations', () => {
         for (const permutation of permutations) {
             const merkleTree = buildTree(permutation);
             
-            if (merkleTree.sortRoot) {
+            if (merkleTree.sort) {
                 // Check if our balance function thinks it needs rebalancing
-                const isBalanced = isTreeBalanced(merkleTree.sortRoot);
+                const isBalanced = isTreeBalanced(merkleTree.sort);
                 
                 // Check if rebalanceTree would change the tree
-                const rebalanced = rebalanceTree(merkleTree.sortRoot);
-                const needsRebalancing = rebalanced !== merkleTree.sortRoot;
+                const rebalanced = rebalanceTree(merkleTree.sort);
+                const needsRebalancing = rebalanced !== merkleTree.sort;
                 
                 if (needsRebalancing) {
                     treesNeedingRebalancing++;

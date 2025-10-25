@@ -11,7 +11,7 @@ export const CURRENT_DATABASE_VERSION = 4;
 //
 // Represents a node in the Merkle tree.
 //
-export interface SortNode {
+export interface SortNode { //todo: Would be nice to have SortLeaf and SortParent. They have different properties!
     hash: Buffer; // The hash of this node.
     fileName?: string; // The file this hash represents, for leaf nodes only.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
@@ -21,6 +21,15 @@ export interface SortNode {
     minFileName: string; // The minimum file name in this subtree (for efficient sorted insertion).
     left?: SortNode; // Left child node
     right?: SortNode; // Right child node
+}
+
+//
+// Represents a merkle tree node.
+//
+export interface MerkleNode {
+    hash: Buffer; // The hash of this node.
+    left?: MerkleNode; // Left child node
+    right?: MerkleNode; // Right child node
 }
 
 //
@@ -74,9 +83,17 @@ export interface IMerkleTree<DatabaseMetadata> {
     // 
     // The root of the binary sort tree.
     //
-    sortRoot?: SortNode;
+    sort?: SortNode;
 
-    //todo: add root of merkle tree.
+    //
+    // Set to true if the tree is dirty and needs to be rebuilt.
+    //
+    dirty: boolean;
+
+    //
+    // The root of the Merkle tree.
+    //
+    merkle?: MerkleNode;
     
     //
     // Metadata for the tree
@@ -549,7 +566,9 @@ export function updateMetadata(
 //
 export function createTree<DatabaseMetadata>(uuid: string): IMerkleTree<DatabaseMetadata> {
     return {
-        sortRoot: undefined,
+        sort: undefined,
+        dirty: false,
+        merkle: undefined,
         metadata: createDefaultMetadata(uuid),
         version: CURRENT_DATABASE_VERSION,
     };
@@ -564,25 +583,103 @@ export function addFile<DatabaseMetadata>(
     fileHash: FileHash
 ): IMerkleTree<DatabaseMetadata> {
 
-    let root: SortNode | undefined;
     let metadata = merkleTree.metadata;
     
     //
     // Adds the new leaf node to the merkle tree.
     //
-    root = _addFile(merkleTree?.sortRoot, fileHash);
+    const sort = _addFile(merkleTree?.sort, fileHash);
 
     const numFiles = merkleTree ? merkleTree.metadata.totalFiles : 0;
    
     return {
-        sortRoot: root,
-        metadata: updateMetadata(metadata, root?.nodeCount || 0, numFiles + 1, root?.size || 0),
+        sort,
+        dirty: true, // Mark the tree as dirty so it will be rebuilt later.
+        merkle: merkleTree?.merkle,
+        metadata: updateMetadata(metadata, sort?.nodeCount || 0, numFiles + 1, sort?.size || 0),
         version: merkleTree?.version || CURRENT_DATABASE_VERSION,
         databaseMetadata: merkleTree?.databaseMetadata,
     };
 }
 
+// 
+// Traverses the sort tree and yields all leaf nodes.
+//
+export function* traverseSortLeaves(node: SortNode | undefined): Generator<SortNode> {
+    if (!node) {
+        return;
+    }
 
+    if (node.nodeCount === 1) {
+        yield node;
+    }
+
+    yield* traverseSortLeaves(node.left);
+    yield* traverseSortLeaves(node.right);
+}
+
+//
+// Builds a merkle tree from a sort tree.
+//
+export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefined {
+    if (!sort) {
+        return undefined;
+    }
+
+    // Stack to hold nodes at each level during construction
+    // Similar to binary addition with carries
+    const stack: (MerkleNode | undefined)[] = [];
+
+    // Process each leaf node from the sort tree
+    for (const leaf of traverseSortLeaves(sort)) {
+        let node: MerkleNode = {
+            hash: leaf.hash,
+        };
+
+        // Try to combine this node with nodes at each level going up
+        let level = 0;
+        while (level < stack.length && stack[level] !== undefined) {
+            // Combine with the node at this level
+            const left = stack[level]!;
+            const right = node;
+            
+            node = {
+                hash: combineHashes(left.hash, right.hash),
+                left: left,
+                right: right,
+            };
+            
+            // Clear this level and move up
+            stack[level] = undefined;
+            level++;
+        }
+
+        // Place the node at the current level
+        if (level >= stack.length) {
+            stack.push(node);
+        } else {
+            stack[level] = node;
+        }
+    }
+
+    // Combine any remaining nodes in the stack from bottom to top
+    let result: MerkleNode | undefined = undefined;
+    for (const node of stack) {
+        if (node !== undefined) {
+            if (result === undefined) {
+                result = node;
+            } else {
+                result = {
+                    hash: combineHashes(result.hash, node.hash),
+                    left: result,
+                    right: node,
+                };
+            }
+        }
+    }
+
+    return result;
+}
 
 //
 // Upsert a file in the Merkle tree, either adding it or updating it if it already exists.
@@ -592,7 +689,7 @@ export function upsertFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileHash: FileHash
 ): IMerkleTree<DatabaseMetadata> {
-    if (merkleTree && merkleTree.sortRoot) {
+    if (merkleTree && merkleTree.sort) {
         if (updateFile(merkleTree, fileHash)) {
             // File updated successfully in place.
             return merkleTree;
@@ -609,12 +706,12 @@ export function updateFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
     fileHash: FileHash
 ): boolean {
-    if (!merkleTree || !merkleTree.sortRoot) {
+    if (!merkleTree || !merkleTree.sort) {
         throw new Error(`Tree is empty, cannot update file '${fileHash.fileName}'`);
     }
     
     // Use the centralized updateNodeInTree function to find and update the file
-    const wasUpdated = updateNodeInTree(merkleTree.sortRoot, fileHash.fileName, (node, targetFileName) => {
+    const wasUpdated = updateNodeInTree(merkleTree.sort, fileHash.fileName, (node, targetFileName) => {
         // Update the leaf node in place
         node.hash = fileHash.hash;
         node.lastModified = fileHash.lastModified;
@@ -626,10 +723,12 @@ export function updateFile<DatabaseMetadata>(
         // Update metadata with new root size  
         merkleTree.metadata = updateMetadata(
             merkleTree.metadata,
-            merkleTree.sortRoot.nodeCount,
+            merkleTree.sort.nodeCount,
             merkleTree.metadata.totalFiles,
-            merkleTree.sortRoot.size
+            merkleTree.sort.size
         );
+
+        merkleTree.dirty = true; // Mark the tree as dirty so it will be rebuilt later.
     }
     
     return wasUpdated;
@@ -642,7 +741,7 @@ export function updateFile<DatabaseMetadata>(
 //
 export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): { hash: Buffer, length: number, lastModified: Date } | undefined {
     // Use the centralized findFileInTree function
-    const leafNode = findFileInTree(merkleTree.sortRoot, fileName);
+    const leafNode = findFileInTree(merkleTree.sort, fileName);
     
     if (!leafNode) {
         return undefined;
@@ -666,7 +765,7 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
  * Returns the node if found, or undefined if not found.
  */
 export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata> | undefined, fileName: string): SortNode | undefined {
-    if (!merkleTree || !merkleTree.sortRoot) {
+    if (!merkleTree || !merkleTree.sort) {
         return undefined;
     }
     
@@ -698,7 +797,7 @@ export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseM
         }
     }
     
-    return searchNode(merkleTree.sortRoot, fileName);
+    return searchNode(merkleTree.sort, fileName);
 }
 
 /**
@@ -708,7 +807,7 @@ export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseM
  * @returns A string representation of the tree
  */
 export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>): string {
-    if (!merkleTree || !merkleTree.sortRoot) {
+    if (!merkleTree || !merkleTree.sort) {
         return "Empty tree";
     }
 
@@ -801,7 +900,7 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
     }
     
     // Start building the tree from the root
-    result += buildTreeString(merkleTree.sortRoot, "", true);
+    result += buildTreeString(merkleTree.sort, "", true);
     
     return result;
 }
@@ -881,7 +980,7 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     serializer.writeUInt32(splitTotalSize.high);
     
     // Convert binary tree to flat array for serialization
-    const nodes = binaryTreeToArray(tree.sortRoot);
+    const nodes = binaryTreeToArray(tree.sort);
     
     // Write all nodes
     for (const node of nodes) {
@@ -925,12 +1024,13 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 
 //
 // Rebuild a merkle tree in sorted order and removes a path.
+//TODO: Should be able to remove this.
 //
 export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
 
     const files: FileHash[] = [];
 
-    traverseTreeSync(tree.sortRoot, (node) => {
+    traverseTreeSync(tree.sort, (node) => {
         if (node.nodeCount === 1 && node.fileName && node.lastModified) {
             if (pathRemove) {
                 if (node.fileName.startsWith(pathRemove)) {
@@ -1048,8 +1148,11 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
         });
     }
     
+    const sort = arrayToBinaryTree(nodes);    
     return {
-        sortRoot: arrayToBinaryTree(nodes),
+        sort,
+        dirty: false,
+        merkle: buildMerkleTree(sort), //TODO: Load the merkle tree from disk.
         metadata,
         databaseMetadata,
         version: 4,
@@ -1134,8 +1237,11 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
         });
     }
     
+    const sort = arrayToBinaryTree(nodes);
     return {
-        sortRoot: arrayToBinaryTree(nodes),
+        sort,
+        dirty: false,
+        merkle: buildMerkleTree(sort), //TODO: Load the merkle tree from disk.
         metadata,
         databaseMetadata,
         version: 3,
@@ -1214,8 +1320,11 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
         });
     }
     
+    const sort = arrayToBinaryTree(nodes);
     return {
-        sortRoot: arrayToBinaryTree(nodes),
+        sort,
+        dirty: false,
+        merkle: buildMerkleTree(sort), //TODO: Load the merkle tree from disk.
         metadata,
         databaseMetadata: undefined,
         version: 2,
@@ -1310,19 +1419,21 @@ export function deleteFile<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileName: string
 ): boolean {
-    if (!merkleTree || !merkleTree.sortRoot) {
+    if (!merkleTree || !merkleTree.sort) {
         return false;
     }
     
     // Check if the file exists
-    const existingNode = findFileInTree(merkleTree.sortRoot, fileName);
+    const existingNode = findFileInTree(merkleTree.sort, fileName);
     if (!existingNode) {
         return false;
     }
     
     // If this is the only node in the tree, clear the tree
-    if (merkleTree.sortRoot.nodeCount === 1) {
-        merkleTree.sortRoot = undefined;
+    if (merkleTree.sort?.nodeCount === 1) {
+        //TODO: This doesn't check if the file is actually in the tree.
+        merkleTree.sort = undefined;
+        merkleTree.merkle = undefined;
         merkleTree.metadata = {
             ...merkleTree.metadata,
             totalFiles: 0,
@@ -1333,22 +1444,24 @@ export function deleteFile<DatabaseMetadata>(
     }
     
     // Remove the node from the tree
-    const newRoot = _deleteNode(merkleTree.sortRoot, fileName);
+    const newRoot = _deleteNode(merkleTree.sort, fileName);
     if (!newRoot) {
         return false; // Node not found
     }
     
     // Update the tree
-    merkleTree.sortRoot = newRoot;
+    merkleTree.sort = newRoot;
     
     // Update metadata
     merkleTree.metadata = updateMetadata(
         merkleTree.metadata,
-        merkleTree.sortRoot.nodeCount,
+        merkleTree.sort.nodeCount,
         merkleTree.metadata.totalFiles - 1, // Decrease file count
-        merkleTree.sortRoot.size
+        merkleTree.sort.size
     );
-    
+
+    merkleTree.dirty = true; // Mark the tree as dirty so it will be rebuilt later.
+
     return true;
 }
 
@@ -1431,7 +1544,7 @@ export function deleteFiles<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
     fileNames: string[]
 ): number {
-    if (!merkleTree || !merkleTree.sortRoot) {
+    if (!merkleTree || !merkleTree.sort) {
         throw new Error("Cannot delete files from empty or invalid merkle tree");
     }
     
@@ -1446,7 +1559,7 @@ export function deleteFiles<DatabaseMetadata>(
     const allFiles: FileHash[] = [];
     const existingFiles = new Set<string>();
     
-    traverseTreeSync(merkleTree.sortRoot, (node) => {
+    traverseTreeSync(merkleTree.sort, (node) => {
         if (node.nodeCount === 1 && node.fileName) {
             existingFiles.add(node.fileName);
             if (node.lastModified) {
@@ -1482,7 +1595,8 @@ export function deleteFiles<DatabaseMetadata>(
     
     // If no files remain, create an empty tree
     if (remainingFiles.length === 0) {
-        merkleTree.sortRoot = undefined;
+        merkleTree.sort = undefined;
+        merkleTree.merkle = undefined;
         if (merkleTree.metadata) {
             merkleTree.metadata.totalFiles = 0;
             merkleTree.metadata.totalNodes = 0;
@@ -1502,13 +1616,14 @@ export function deleteFiles<DatabaseMetadata>(
         newTree.metadata = {
             ...merkleTree.metadata,
             totalFiles: remainingFiles.length,
-            totalNodes: newTree.sortRoot?.nodeCount || 0,
-            totalSize: newTree.sortRoot?.size || 0
+            totalNodes: newTree.sort?.nodeCount || 0,
+            totalSize: newTree.sort?.size || 0
         };
     }
     
     // Replace the tree contents
-    merkleTree.sortRoot = newTree.sortRoot;
+    merkleTree.sort = newTree.sort;
+    merkleTree.merkle = newTree.merkle;
     merkleTree.metadata = newTree.metadata;
     
     return filesRemoved;
@@ -1540,8 +1655,8 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
     let processedFiles = 0;
     
     // Process files in tree A using traversal
-    if (treeA.sortRoot) {
-        traverseTreeSync(treeA.sortRoot, (node) => {
+    if (treeA.sort) {
+        traverseTreeSync(treeA.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
@@ -1557,8 +1672,8 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
     }
     
     // Process files in tree B using traversal
-    if (treeB.sortRoot) {
-        traverseTreeSync(treeB.sortRoot, (node) => {
+    if (treeB.sort) {
+        traverseTreeSync(treeB.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
@@ -1690,7 +1805,7 @@ export function generateTreeDiffReport<DatabaseMetadata>(treeA: IMerkleTree<Data
 // If the callback returns false, the traversal stops.
 //
 export async function traverseTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, callback: (node: SortNode) => Promise<boolean>): Promise<void>  {
-    if (!tree || !tree.sortRoot) {
+    if (!tree || !tree.sort) {
         return;
     }
 
@@ -1713,5 +1828,5 @@ export async function traverseTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseM
         return true;
     }
 
-    await traverseBinaryTree(tree.sortRoot);
+    await traverseBinaryTree(tree.sort);
 }

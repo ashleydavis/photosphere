@@ -119,7 +119,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const destMerkleTree = destAssetDatabase.getMerkleTree();
 
     // Fast path: Compare root hashes first
-    if (Buffer.compare(srcMerkleTree!.root?.hash || Buffer.alloc(0), destMerkleTree!.root?.hash || Buffer.alloc(0)) === 0) {
+    if (Buffer.compare(srcMerkleTree!.sort?.hash || Buffer.alloc(0), destMerkleTree!.sort?.hash || Buffer.alloc(0)) === 0) {
         log.info('');
         log.info(pc.bold(pc.blue(`📊 Comparison Results`)));
         log.info('');
