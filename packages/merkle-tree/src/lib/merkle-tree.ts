@@ -605,15 +605,29 @@ export function addFile<DatabaseMetadata>(
 }
 
 // 
-// Traverses the sort tree and yields all leaf nodes.
+// Iterates all nodes in the tree.
 //
-export function* iterateLeaves(node: SortNode | undefined): Generator<SortNode> {
+export function* iterateNodes<NodeT>(node: INode<NodeT> | undefined): Generator<NodeT> {
     if (!node) {
         return;
     }
 
-    if (node.nodeCount === 1) {
-        yield node;
+    yield node as NodeT;
+
+    yield* iterateNodes(node.left);
+    yield* iterateNodes(node.right);
+}
+
+// 
+// Iterates all leaves in the tree.
+//
+export function* iterateLeaves<NodeT>(node: INode<NodeT> | undefined): Generator<NodeT> {
+    if (!node) {
+        return;
+    }
+
+    if (!node.left && !node.right) {
+        yield node as NodeT;
     }
 
     yield* iterateLeaves(node.left);
@@ -633,7 +647,7 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
     const stack: (MerkleNode | undefined)[] = [];
 
     // Process each leaf node from the sort tree
-    for (const leaf of iterateLeaves(sort)) {
+    for (const leaf of iterateLeaves<SortNode>(sort)) {
         if (!leaf.contentHash) {
             throw new Error('Leaf node has no content hash');
         }
@@ -883,12 +897,9 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     const splitTotalSize = splitBigNum(BigInt(tree.metadata.totalSize));
     serializer.writeUInt32(splitTotalSize.low);
     serializer.writeUInt32(splitTotalSize.high);
-    
-    // Convert binary tree to flat array for serialization
-    const nodes = binaryTreeToArray(tree.sort); //todo: Can just iterate over the sort tree here without building an array.
-    
+       
     // Write all nodes
-    for (const node of nodes) {
+    for (const node of iterateNodes<SortNode>(tree.sort)) {
         
         // Write nodeCount
         serializer.writeUInt32(node.nodeCount);
