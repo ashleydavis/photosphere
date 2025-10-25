@@ -2,7 +2,7 @@ import {
     buildMerkleTree, 
     MerkleNode, 
     combineHashes,
-    traverseSortLeaves,
+    iterateLeaves,
 } from '../lib/merkle-tree';
 import { buildTree, leaf, node } from './merkle-verify';
 
@@ -271,7 +271,7 @@ describe('buildMerkleTree', () => {
 
             // Collect leaves from sort tree
             const sortLeaves: string[] = [];
-            for (const leaf of traverseSortLeaves(tree.sort!)) {
+            for (const leaf of iterateLeaves(tree.sort!)) {
                 sortLeaves.push(leaf.fileName!);
             }
 
