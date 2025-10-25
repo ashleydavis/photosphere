@@ -565,7 +565,7 @@ describe('Merkle Tree', () => {
                 }
             }
 
-            collectLeaves(tree.root);
+            collectLeaves(tree.sortRoot);
 
             // Verify the leaf nodes are in the same order as added
             expect(leafNodes).toEqual(fileNames);
@@ -721,7 +721,7 @@ describe('Merkle Tree', () => {
                 }
             }
 
-            collectRebuiltLeaves(rebuiltTree.root);
+            collectRebuiltLeaves(rebuiltTree.sortRoot);
 
             // Collect leaf nodes from the original tree
             const originalLeafNodes: string[] = [];

@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import * as crypto from 'crypto';
 import { 
     IMerkleTree,
-    MerkleNode,
+    SortNode,
     FileHash,
     addFile,
     saveTree,
@@ -52,7 +52,7 @@ describe('Merkle Tree Save/Load', () => {
     /**
      * Helper function to compare two binary trees
      */
-    function compareTrees(original: MerkleNode | undefined, loaded: MerkleNode | undefined) {
+    function compareTrees(original: SortNode | undefined, loaded: SortNode | undefined) {
         if (!original && !loaded) return;
         if (!original || !loaded) throw new Error('Tree structure mismatch');
         
@@ -85,14 +85,14 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
-        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
+        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
         
         // Check that we have the expected file count
         expect(loadedTree.metadata.totalFiles).toBe(2);
         
         // Find leaf nodes to verify data integrity using binary tree traversal
-        const leafNodes: MerkleNode[] = [];
-        traverseTreeSync(loadedTree.root, (node) => {
+        const leafNodes: SortNode[] = [];
+        traverseTreeSync(loadedTree.sortRoot, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
             }
@@ -111,7 +111,7 @@ describe('Merkle Tree Save/Load', () => {
         }
         
         // Verify node counts and leaf counts are preserved using binary tree traversal
-        compareTrees(originalTree.root, loadedTree.root);
+        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
     });
     
     test('should save and load a complex tree correctly', async () => {
@@ -127,11 +127,11 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(fileNames.length);
-        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
+        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
         
         // Verify leaf nodes have correct file names using binary tree traversal
-        const leafNodes: MerkleNode[] = [];
-        traverseTreeSync(loadedTree.root, (node) => {
+        const leafNodes: SortNode[] = [];
+        traverseTreeSync(loadedTree.sortRoot, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
             }
@@ -143,10 +143,10 @@ describe('Merkle Tree Save/Load', () => {
         expect(loadedFileNames).toEqual(fileNames.sort());
         
         // Verify the structure using the existing compareTrees function
-        compareTrees(originalTree.root, loadedTree.root);
+        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
         
         // Verify hash integrity - the root hash should match
-        expect(loadedTree.root?.hash.toString('hex')).toBe(originalTree.root?.hash.toString('hex'));
+        expect(loadedTree.sortRoot?.hash.toString('hex')).toBe(originalTree.sortRoot?.hash.toString('hex'));
     });
        
     test('should handle trees with special characters in file names', async () => {
@@ -158,9 +158,9 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // the tree structure should be exactly the same
-        expect(loadedTree.root?.nodeCount || 0).toBe(tree.root?.nodeCount || 0);
-        expect(loadedTree.root?.fileName).toBe(specialChars);
-        expect(loadedTree.root?.hash.toString('hex')).toBe(tree.root?.hash.toString('hex'));        
+        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(tree.sortRoot?.nodeCount || 0);
+        expect(loadedTree.sortRoot?.fileName).toBe(specialChars);
+        expect(loadedTree.sortRoot?.hash.toString('hex')).toBe(tree.sortRoot?.hash.toString('hex'));        
     });
     
     test('should handle large trees efficiently', async () => {
@@ -176,10 +176,10 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify tree properties
         expect(loadedTree.metadata.totalFiles).toBe(100);
-        expect(loadedTree.root?.nodeCount || 0).toBe(originalTree.root?.nodeCount || 0);
+        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
                 
         // Check that the trees are structurally identical using the compareTrees function
-        compareTrees(originalTree.root, loadedTree.root);
+        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
     });
 });
 

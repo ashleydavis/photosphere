@@ -27,7 +27,7 @@ describe('Binary Tree Conversion Functions', () => {
             const fileHash = createFileHash("test1.txt", Buffer.from("content1"), new Date(), 8);
             const updatedTree = addFile(tree, fileHash);
             
-            const flatArray = binaryTreeToArray(updatedTree.root);
+            const flatArray = binaryTreeToArray(updatedTree.sortRoot);
             
             expect(flatArray).toHaveLength(1);
             expect(flatArray[0].fileName).toBe("test1.txt");
@@ -51,7 +51,7 @@ describe('Binary Tree Conversion Functions', () => {
                 tree = addFile(tree, file);
             }
             
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             
             // Should have 5 nodes (3 leaves + 2 internal nodes)
             expect(flatArray).toHaveLength(5);
@@ -72,7 +72,7 @@ describe('Binary Tree Conversion Functions', () => {
             const fileHash = createFileHash("test.txt", Buffer.from("content"), new Date(), 8);
             tree = addFile(tree, fileHash);
             
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             const node = flatArray[0];
             
             expect(node).toHaveProperty('hash');
@@ -100,7 +100,7 @@ describe('Binary Tree Conversion Functions', () => {
             const updatedTree = addFile(tree, fileHash);
             
             // Convert to array and back
-            const flatArray = binaryTreeToArray(updatedTree.root);
+            const flatArray = binaryTreeToArray(updatedTree.sortRoot);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             expect(reconstructed).toBeDefined();
@@ -126,7 +126,7 @@ describe('Binary Tree Conversion Functions', () => {
             }
             
             // Convert to array and back
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             expect(reconstructed).toBeDefined();
@@ -145,16 +145,16 @@ describe('Binary Tree Conversion Functions', () => {
             tree = addFile(tree, fileHash);
             
             // Convert to array and back
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             expect(reconstructed).toBeDefined();
-            expect(reconstructed!.hash).toEqual(tree.root!.hash);
-            expect(reconstructed!.fileName).toBe(tree.root!.fileName);
-            expect(reconstructed!.nodeCount).toBe(tree.root!.nodeCount);
-            expect(reconstructed!.leafCount).toBe(tree.root!.leafCount);
-            expect(reconstructed!.size).toBe(tree.root!.size);
-            expect(reconstructed!.lastModified).toEqual(tree.root!.lastModified);
+            expect(reconstructed!.hash).toEqual(tree.sortRoot!.hash);
+            expect(reconstructed!.fileName).toBe(tree.sortRoot!.fileName);
+            expect(reconstructed!.nodeCount).toBe(tree.sortRoot!.nodeCount);
+            expect(reconstructed!.leafCount).toBe(tree.sortRoot!.leafCount);
+            expect(reconstructed!.size).toBe(tree.sortRoot!.size);
+            expect(reconstructed!.lastModified).toEqual(tree.sortRoot!.lastModified);
         });
 
     });
@@ -174,7 +174,7 @@ describe('Binary Tree Conversion Functions', () => {
                 tree = addFile(tree, file);
             }
             
-            const originalRoot = tree.root;
+            const originalRoot = tree.sortRoot;
             
             // Round-trip: binary tree -> array -> binary tree
             const flatArray = binaryTreeToArray(originalRoot);
@@ -193,7 +193,7 @@ describe('Binary Tree Conversion Functions', () => {
             tree = addFile(tree, fileHash);
             
             // Round-trip conversion
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             // Should be identical for leaf nodes
@@ -214,7 +214,7 @@ describe('Binary Tree Conversion Functions', () => {
             }
             
             // Convert to flat array and back
-            const flatArray = binaryTreeToArray(tree.root);
+            const flatArray = binaryTreeToArray(tree.sortRoot);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             // Verify tree structure is maintained

@@ -1,4 +1,4 @@
-import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode } from "../../../lib/merkle-tree";
+import { addFile, combineHashes, createTree, FileHash, IMerkleTree, SortNode } from "../../../lib/merkle-tree";
 
 /**
  * Helper function to create a file hash with a given name and length
@@ -33,7 +33,7 @@ export function buildTree(fileNames: string[]): IMerkleTree<any> {
 /**
  * Helper function to create a leaf node
  */
-export function leaf(fileName: string, size: number = 100): MerkleNode {
+export function leaf(fileName: string, size: number = 100): SortNode {
     return {
         hash: Buffer.from(fileName),
         fileName,
@@ -47,7 +47,7 @@ export function leaf(fileName: string, size: number = 100): MerkleNode {
 /**
  * Helper function to create an internal node
  */
-export function node(left: MerkleNode, right: MerkleNode): MerkleNode {
+export function node(left: SortNode, right: SortNode): SortNode {
     return {
         hash: combineHashes(left.hash, right.hash),
         nodeCount: 1 + left.nodeCount + right.nodeCount,
@@ -62,7 +62,7 @@ export function node(left: MerkleNode, right: MerkleNode): MerkleNode {
 //
 // Checks that a node matches the expected structure by recursively walking the binary tree.
 //
-function _expectNode(node: MerkleNode, expectedStructure: any): void {
+function _expectNode(node: SortNode, expectedStructure: any): void {
     expect(node).toBeDefined();    
     expect(Buffer.isBuffer(node.hash)).toBe(true);
 
@@ -130,7 +130,7 @@ function _expectNode(node: MerkleNode, expectedStructure: any): void {
 //
 // Checks that a node matches the expected structure.
 //
-export function expectNode(test: string, node: MerkleNode, expectedStructure: any): void {
+export function expectNode(test: string, node: SortNode, expectedStructure: any): void {
     try {
         _expectNode(node, expectedStructure);
     }
@@ -150,11 +150,11 @@ export function expectNode(test: string, node: MerkleNode, expectedStructure: an
 // Verify the entire tree structure matches the expected structure.
 //
 export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructure: any): void {
-    expectNode(test, tree.root!, expectedStructure);
+    expectNode(test, tree.sortRoot!, expectedStructure);
 }
 
 // Helper function to visualize a Merkle tree as simple ASCII art
-export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string = '', isLast: boolean = true): string {
+export function visualizeTreeSimple(node: SortNode | undefined, prefix: string = '', isLast: boolean = true): string {
     if (!node) return '';
     
     let result = '';
@@ -210,7 +210,7 @@ export function visualizeTreeSimple(node: MerkleNode | undefined, prefix: string
 //
 // Serializes a merkle tree to JSON for testing
 //
-export function serializeTreeToJSON(node: MerkleNode | undefined): any {
+export function serializeTreeToJSON(node: SortNode | undefined): any {
     if (!node) {
         return null;
     }
@@ -235,7 +235,7 @@ export function serializeTreeToJSON(node: MerkleNode | undefined): any {
 //
 // Deserializes a merkle tree from JSON for testing
 //
-export function deserializeTreeFromJSON(json: any): MerkleNode {
+export function deserializeTreeFromJSON(json: any): SortNode {
     if (!json) {
         throw new Error('Invalid JSON');
     }

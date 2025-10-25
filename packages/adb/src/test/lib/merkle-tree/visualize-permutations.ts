@@ -1,4 +1,4 @@
-import { createLeafNode, createParentNode, addFile, createTree, visualizeTree as libVisualizeTree, MerkleNode, FileHash, IMerkleTree } from '../../../lib/merkle-tree';
+import { createLeafNode, createParentNode, addFile, createTree, visualizeTree as libVisualizeTree, SortNode, FileHash, IMerkleTree } from '../../../lib/merkle-tree';
 import { visualizeTreeSimple } from './merkle-verify';
 
 // Helper function to create a FileHash for testing
@@ -39,14 +39,14 @@ function makePermutation(index: number, permutation: string[]) {
         merkleTree = addFile(merkleTree, fileHash);
 
         console.log(`\n  Step ${stepIndex + 1}: Adding "${fileName}"`);
-        const treeVisualization = visualizeTreeSimple(merkleTree.root);
+        const treeVisualization = visualizeTreeSimple(merkleTree.sortRoot);
         const indentedTree = treeVisualization.split('\n').map(line => '  ' + line).join('\n');
         console.log(indentedTree);
         stepIndex++;
     }
 
     console.log(`\n  Final tree for permutation ${index + 1}:`);
-    const finalTreeVisualization = visualizeTreeSimple(merkleTree.root);
+    const finalTreeVisualization = visualizeTreeSimple(merkleTree.sortRoot);
     const indentedFinalTree = finalTreeVisualization.split('\n').map(line => '  ' + line).join('\n');
     console.log(indentedFinalTree);
     console.log('─'.repeat(50));
@@ -65,13 +65,13 @@ function testAllPermutations() {
     console.log(`Testing all ${permutations.length} permutations of adding files: ${files.join(', ')}\n`);
 
     const firstPermutationTree = makePermutation(0, permutations[0]);
-    const firstRootHash = firstPermutationTree.root?.hash.toString('hex');
+    const firstRootHash = firstPermutationTree.sortRoot?.hash.toString('hex');
     
     for (let index = 1; index < permutations.length; index++) {
         const permutation = permutations[index];
         const permutationTree = makePermutation(index, permutation);
         
-        const currentRootHash = permutationTree.root?.hash.toString('hex');
+        const currentRootHash = permutationTree.sortRoot?.hash.toString('hex');
         if (currentRootHash !== firstRootHash) {           
             console.error(`\n  ❌ HASH MISMATCH!`);
             console.error(`  Expected: ${firstRootHash}`);
@@ -79,12 +79,12 @@ function testAllPermutations() {
             console.error(`  Permutation: ${permutation.join(' → ')}`);
 
             console.log(`  First permutation:`);
-            const firstTreeViz = visualizeTreeSimple(firstPermutationTree.root);
+            const firstTreeViz = visualizeTreeSimple(firstPermutationTree.sortRoot);
             const indentedFirstTreeViz = firstTreeViz.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedFirstTreeViz);
 
             console.log(`  Permutation ${index + 1}:`);
-            const permutationTreeViz = visualizeTreeSimple(permutationTree.root);
+            const permutationTreeViz = visualizeTreeSimple(permutationTree.sortRoot);
             const indentedPermutationTreeViz = permutationTreeViz.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedPermutationTreeViz);
 

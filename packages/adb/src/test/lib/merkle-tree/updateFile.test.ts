@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { 
     FileHash, 
-    MerkleNode,
+    SortNode,
     addFile, 
     updateFile, 
     findFileNode,
@@ -39,7 +39,7 @@ describe('Merkle Tree UpdateFile', () => {
     tree = addFile(tree, file5);
     
     // Get the root hash before update
-    const originalRootHash = tree.root?.hash.toString('hex');
+    const originalRootHash = tree.sortRoot?.hash.toString('hex');
     
     // Now update file3
     const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
@@ -49,7 +49,7 @@ describe('Merkle Tree UpdateFile', () => {
     expect(updated).toBe(true);
     
     // Get the new root hash
-    const newRootHash = tree.root?.hash.toString('hex');
+    const newRootHash = tree.sortRoot?.hash.toString('hex');
     
     // The root hash should have changed
     expect(newRootHash).not.toBe(originalRootHash);
@@ -129,7 +129,7 @@ describe('Merkle Tree UpdateFile', () => {
     
     // Verify hash integrity by manually recalculating all parent hashes
     // Each internal node should have a hash equal to the combined hash of its children
-    function verifyNodeHash(node: MerkleNode | undefined): boolean {
+    function verifyNodeHash(node: SortNode | undefined): boolean {
       if (!node) return true;
       
       let allHashesValid = true;
@@ -165,7 +165,7 @@ describe('Merkle Tree UpdateFile', () => {
     }
     
     // Verify the entire tree starting from the root
-    const treeIntegrity = verifyNodeHash(tree!.root);
+    const treeIntegrity = verifyNodeHash(tree!.sortRoot);
     expect(treeIntegrity).toBe(true);
     
     // Verify all non-updated files still have their original hash
