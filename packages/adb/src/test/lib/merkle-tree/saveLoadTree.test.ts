@@ -85,14 +85,14 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
-        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
+        expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
         
         // Check that we have the expected file count
         expect(loadedTree.metadata.totalFiles).toBe(2);
         
         // Find leaf nodes to verify data integrity using binary tree traversal
         const leafNodes: SortNode[] = [];
-        traverseTreeSync(loadedTree.sortRoot, (node) => {
+        traverseTreeSync(loadedTree.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
             }
@@ -111,7 +111,7 @@ describe('Merkle Tree Save/Load', () => {
         }
         
         // Verify node counts and leaf counts are preserved using binary tree traversal
-        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
+        compareTrees(originalTree.sort, loadedTree.sort);
     });
     
     test('should save and load a complex tree correctly', async () => {
@@ -127,11 +127,11 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify basic tree properties
         expect(loadedTree.metadata.totalFiles).toBe(fileNames.length);
-        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
+        expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
         
         // Verify leaf nodes have correct file names using binary tree traversal
         const leafNodes: SortNode[] = [];
-        traverseTreeSync(loadedTree.sortRoot, (node) => {
+        traverseTreeSync(loadedTree.sort, (node) => {
             if (node.nodeCount === 1 && node.fileName) {
                 leafNodes.push(node);
             }
@@ -143,10 +143,10 @@ describe('Merkle Tree Save/Load', () => {
         expect(loadedFileNames).toEqual(fileNames.sort());
         
         // Verify the structure using the existing compareTrees function
-        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
+        compareTrees(originalTree.sort, loadedTree.sort);
         
         // Verify hash integrity - the root hash should match
-        expect(loadedTree.sortRoot?.hash.toString('hex')).toBe(originalTree.sortRoot?.hash.toString('hex'));
+        expect(loadedTree.sort?.hash.toString('hex')).toBe(originalTree.sort?.hash.toString('hex'));
     });
        
     test('should handle trees with special characters in file names', async () => {
@@ -158,9 +158,9 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // the tree structure should be exactly the same
-        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(tree.sortRoot?.nodeCount || 0);
-        expect(loadedTree.sortRoot?.fileName).toBe(specialChars);
-        expect(loadedTree.sortRoot?.hash.toString('hex')).toBe(tree.sortRoot?.hash.toString('hex'));        
+        expect(loadedTree.sort?.nodeCount || 0).toBe(tree.sort?.nodeCount || 0);
+        expect(loadedTree.sort?.fileName).toBe(specialChars);
+        expect(loadedTree.sort?.hash.toString('hex')).toBe(tree.sort?.hash.toString('hex'));        
     });
     
     test('should handle large trees efficiently', async () => {
@@ -176,10 +176,10 @@ describe('Merkle Tree Save/Load', () => {
         
         // Verify tree properties
         expect(loadedTree.metadata.totalFiles).toBe(100);
-        expect(loadedTree.sortRoot?.nodeCount || 0).toBe(originalTree.sortRoot?.nodeCount || 0);
+        expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
                 
         // Check that the trees are structurally identical using the compareTrees function
-        compareTrees(originalTree.sortRoot, loadedTree.sortRoot);
+        compareTrees(originalTree.sort, loadedTree.sort);
     });
 });
 

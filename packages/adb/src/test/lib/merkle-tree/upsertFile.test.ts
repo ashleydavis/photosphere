@@ -60,7 +60,7 @@ describe('Merkle Tree upsertFile', () => {
     expect(originalNode!.hash.toString('hex')).toBe(file.hash.toString('hex'));
     
     // Record original root hash
-    const originalRootHash = tree!.sortRoot?.hash.toString('hex');
+    const originalRootHash = tree!.sort?.hash.toString('hex');
     
     // Now try to add a file with the same name but different content
     const updatedContent = 'updated content';
@@ -76,7 +76,7 @@ describe('Merkle Tree upsertFile', () => {
     expect(updatedNode!.hash.toString('hex')).toBe(updatedFile.hash.toString('hex'));
     
     // Verify the root hash changed (indicating the tree was updated)
-    const newRootHash = tree!.sortRoot?.hash.toString('hex');
+    const newRootHash = tree!.sort?.hash.toString('hex');
     expect(newRootHash).not.toBe(originalRootHash);
   });
   
@@ -97,7 +97,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Verify initial state
     expect(tree!.metadata.totalFiles).toBe(4);
-    const initialNodeCount = tree!.sortRoot?.nodeCount || 0;
+    const initialNodeCount = tree!.sort?.nodeCount || 0;
         
     // Update an existing file
     const updatedFile2 = createFileHash('file2.txt', 'updated content 2');
@@ -105,7 +105,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Verify structure is maintained
     expect(tree!.metadata.totalFiles).toBe(4); // Still 4 files
-    expect(tree!.sortRoot?.nodeCount || 0).toBe(initialNodeCount); // Same node count
+    expect(tree!.sort?.nodeCount || 0).toBe(initialNodeCount); // Same node count
     
     // Verify all files are still present
     expect(findFileNode(tree, 'file1.txt')).toBeDefined();
@@ -135,7 +135,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Record original node hashes using depth-first traversal
     const originalHashes: string[] = [];
-    traverseTreeSync(tree!.sortRoot, (node) => {
+    traverseTreeSync(tree!.sort, (node) => {
         originalHashes.push(node.hash.toString('hex'));
         return true; // Continue traversal
     });
@@ -158,7 +158,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Collect new hashes using depth-first traversal
     const newHashes: string[] = [];
-    traverseTreeSync(tree!.sortRoot, (node) => {
+    traverseTreeSync(tree!.sort, (node) => {
         newHashes.push(node.hash.toString('hex'));
         return true; // Continue traversal
     });
@@ -185,7 +185,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, file);
     
     // Record the original root hash
-    const originalRootHash = tree!.sortRoot?.hash.toString('hex');
+    const originalRootHash = tree!.sort?.hash.toString('hex');
     
     // Try to update with identical content
     const sameFile = createFileHash('file1.txt', content);
@@ -193,7 +193,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Since the content is identical, the tree should be unchanged
     // Verify the root hash hasn't changed
-    const newRootHash = tree!.sortRoot?.hash.toString('hex');
+    const newRootHash = tree!.sort?.hash.toString('hex');
     expect(newRootHash).toBe(originalRootHash);
   });
   

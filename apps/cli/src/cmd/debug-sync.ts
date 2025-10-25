@@ -2,7 +2,7 @@ import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { MediaFileDatabase } from "api";
-import { MerkleNode, traverseTree, getFileInfo, computeHash } from "adb";
+import { MerkleNode, traverseTree, getFileInfo, computeHash, SortNode } from "adb";
 
 //
 // Options for the debug sync command.
@@ -125,7 +125,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     };
     
     // Walk the source merkle tree.
-    await traverseTree(sourceMerkleTree, async (node: MerkleNode): Promise<boolean> => {
+    await traverseTree(sourceMerkleTree, async (node: SortNode): Promise<boolean> => {
         if (!node.fileName) {
             // Skip intermediate nodes.
             return true;

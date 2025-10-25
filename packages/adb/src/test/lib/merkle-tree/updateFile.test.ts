@@ -39,7 +39,7 @@ describe('Merkle Tree UpdateFile', () => {
     tree = addFile(tree, file5);
     
     // Get the root hash before update
-    const originalRootHash = tree.sortRoot?.hash.toString('hex');
+    const originalRootHash = tree.sort?.hash.toString('hex');
     
     // Now update file3
     const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
@@ -49,7 +49,7 @@ describe('Merkle Tree UpdateFile', () => {
     expect(updated).toBe(true);
     
     // Get the new root hash
-    const newRootHash = tree.sortRoot?.hash.toString('hex');
+    const newRootHash = tree.sort?.hash.toString('hex');
     
     // The root hash should have changed
     expect(newRootHash).not.toBe(originalRootHash);
@@ -165,7 +165,7 @@ describe('Merkle Tree UpdateFile', () => {
     }
     
     // Verify the entire tree starting from the root
-    const treeIntegrity = verifyNodeHash(tree!.sortRoot);
+    const treeIntegrity = verifyNodeHash(tree!.sort);
     expect(treeIntegrity).toBe(true);
     
     // Verify all non-updated files still have their original hash

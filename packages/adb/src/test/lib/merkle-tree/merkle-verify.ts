@@ -150,7 +150,7 @@ export function expectNode(test: string, node: SortNode, expectedStructure: any)
 // Verify the entire tree structure matches the expected structure.
 //
 export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructure: any): void {
-    expectNode(test, tree.sortRoot!, expectedStructure);
+    expectNode(test, tree.sort!, expectedStructure);
 }
 
 // Helper function to visualize a Merkle tree as simple ASCII art

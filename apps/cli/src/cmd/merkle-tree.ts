@@ -21,7 +21,7 @@ export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Pro
     let visualization: string;
     if (options.simple) {
         const merkleTree = database.getAssetDatabase().getMerkleTree();
-        visualization = visualizeTreeSimple(merkleTree.root);
+        visualization = visualizeTreeSimple(merkleTree.sort);
     }
     else {
         visualization = database.visualizeMerkleTree();
