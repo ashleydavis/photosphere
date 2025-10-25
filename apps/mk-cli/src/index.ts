@@ -1,5 +1,6 @@
 import { program } from 'commander';
 import { showCommand } from './cmd/show';
+import { rootHashCommand } from './cmd/root-hash';
 import pc from "picocolors";
 
 async function main() {
@@ -12,6 +13,7 @@ async function main() {
 Examples:
   ${pc.bold("mk show ./path/to/tree")}                 Show merkle tree visualization
   ${pc.bold("mk show ./path/to/tree --simple")}       Show simple file structure view
+  ${pc.bold("mk root-hash ./path/to/tree")}           Print the root hash
 
 Resources:
   📖 Merkle Tree Package: packages/merkle-tree
@@ -31,6 +33,18 @@ Examples:
   ${pc.bold("mk show ./my-database/.db --simple")}
   ${pc.bold("mk show s3://my-bucket/database/.db")}`)
         .action(showCommand);
+
+    program
+        .command("root-hash")
+        .description("Print the root hash of the merkle tree")
+        .argument("<tree-path>", "Path to the directory containing the merkle tree file")
+        .option("-v, --verbose", "Enable verbose logging", false)
+        .addHelpText('after', `
+
+Examples:
+  ${pc.bold("mk root-hash ./my-database/.db")}
+  ${pc.bold("mk root-hash s3://my-bucket/database/.db")}`)
+        .action(rootHashCommand);
 
     // Parse the command line arguments
     try {

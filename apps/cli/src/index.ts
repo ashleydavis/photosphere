@@ -19,7 +19,6 @@ import { exportCommand } from './cmd/export';
 import { upgradeCommand } from './cmd/upgrade';
 import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
-import { rootHashCommand } from './cmd/root-hash';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
 import { debugSyncCommand } from './cmd/debug-sync';
@@ -156,18 +155,6 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
-
-    // Add root-hash subcommand
-    debugCommand
-        .command('root-hash')
-        .description('Print the root hash of the media file database')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(rootHashCommand);
 
     // Add clear-cache subcommand
     debugCommand
