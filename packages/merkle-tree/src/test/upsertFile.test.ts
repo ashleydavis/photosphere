@@ -7,7 +7,7 @@ import {
     createTree,
     MerkleNode,
     buildMerkleTree
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 
 // Helper to create a file hash
 function createFileHash(fileName: string, content: string): FileHash {

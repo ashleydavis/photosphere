@@ -1,4 +1,4 @@
-import { FileHash, addFile, updateFile, findFileNode, createTree } from '../../../lib/merkle-tree';
+import { FileHash, addFile, updateFile, findFileNode, createTree } from '../lib/merkle-tree';
 import { createFileHash, expectTree, buildTree } from './merkle-verify';
 
 describe('Merkle Tree', () => {

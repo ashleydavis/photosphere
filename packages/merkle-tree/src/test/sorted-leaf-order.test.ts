@@ -1,4 +1,4 @@
-import { addFile, createTree, SortNode, FileHash, IMerkleTree, compareFileNames } from '../../../lib/merkle-tree';
+import { addFile, createTree, SortNode, FileHash, IMerkleTree, compareFileNames } from '../lib/merkle-tree';
 
 // Helper function to create a FileHash for testing
 function createTestFileHash(fileName: string): FileHash {

@@ -11,7 +11,7 @@ import {
     createDefaultMetadata,
     updateMetadata,
     createTree
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
 describe('Merkle Tree Metadata', () => {

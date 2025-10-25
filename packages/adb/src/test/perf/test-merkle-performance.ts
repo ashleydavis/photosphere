@@ -6,7 +6,7 @@ import {
   addFile, 
   FileHash,
   createTree,
-} from '../../lib/merkle-tree';
+} from 'merkle-tree';
 
 /**
  * Configuration: Number of files to add to the merkle tree

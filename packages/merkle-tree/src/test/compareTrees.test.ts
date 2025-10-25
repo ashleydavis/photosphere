@@ -6,7 +6,7 @@ import {
     compareTrees,
     generateTreeDiffReport,
     createTree
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 
 describe('Tree Comparison', () => {
 

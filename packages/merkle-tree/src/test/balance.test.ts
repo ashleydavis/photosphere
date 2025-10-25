@@ -1,4 +1,4 @@
-import { rotateRight, rotateLeft, rebalanceTree } from '../../../lib/merkle-tree';
+import { rotateRight, rotateLeft, rebalanceTree } from '../lib/merkle-tree';
 import { node, leaf, expectNode } from './merkle-verify';
 
 describe('balance', () => {

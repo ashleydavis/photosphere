@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { createTree, addFile, binaryTreeToArray, arrayToBinaryTree, traverseTreeSync, FileHash } from "../../../lib/merkle-tree";
+import { createTree, addFile, binaryTreeToArray, arrayToBinaryTree, traverseTreeSync, FileHash } from "../lib/merkle-tree";
 
 describe('Binary Tree Conversion Functions', () => {
 

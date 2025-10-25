@@ -1,4 +1,4 @@
-import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode, SortNode } from "../../../lib/merkle-tree";
+import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode, SortNode } from "../lib/merkle-tree";
 
 /**
  * Helper function to create a file hash with a given name and length
