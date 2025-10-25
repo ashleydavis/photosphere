@@ -1,4 +1,4 @@
-import { addFile, createTree, FileHash, IMerkleTree, SortNode, rebalanceTree } from '../../../lib/merkle-tree';
+import { addFile, createTree, FileHash, IMerkleTree, SortNode, rebalanceTree } from '../lib/merkle-tree';
 import { buildTree, createFileHash } from './merkle-verify';
 
 // Helper function to generate all permutations of an array

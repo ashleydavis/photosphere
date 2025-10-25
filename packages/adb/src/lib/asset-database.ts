@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile, buildMerkleTree } from "./merkle-tree";
+import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile, buildMerkleTree } from "merkle-tree";
 import { IUuidGenerator, log } from "utils";
 
 //

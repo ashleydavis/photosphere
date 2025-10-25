@@ -3,7 +3,7 @@ import {
     MerkleNode, 
     combineHashes,
     traverseSortLeaves,
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 import { buildTree, leaf, node } from './merkle-verify';
 
 describe('buildMerkleTree', () => {

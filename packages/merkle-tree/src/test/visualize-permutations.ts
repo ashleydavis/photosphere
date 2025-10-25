@@ -1,4 +1,4 @@
-import { addFile, createTree, FileHash, IMerkleTree } from '../../../lib/merkle-tree';
+import { addFile, createTree, FileHash, IMerkleTree } from '../lib/merkle-tree';
 import { visualizeSortTreeSimple } from './merkle-verify';
 
 // Helper function to create a FileHash for testing

@@ -6,7 +6,7 @@ import {
   FileHash,
   findFileNode,
   createTree,
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 
 /**
  * Helper function to create a file hash with specified content

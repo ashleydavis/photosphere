@@ -1,4 +1,4 @@
-import { createTree, addFile, IMerkleTree, buildMerkleTree } from '../../../lib/merkle-tree';
+import { createTree, addFile, IMerkleTree, buildMerkleTree } from '../lib/merkle-tree';
 import { createFileHash, visualizeMerkleTreeSimple } from './merkle-verify';
 
 describe('Merkle Tree Permutation Tests', () => {

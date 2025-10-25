@@ -11,7 +11,7 @@ import {
     loadTree,
     createTree,
     buildMerkleTree
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
 describe('File Deletion (deleteFile)', () => {

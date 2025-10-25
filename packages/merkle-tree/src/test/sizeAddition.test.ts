@@ -4,7 +4,7 @@ import {
   createTree,
   FileHash,
   visualizeTree
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 
 describe('Size calculation with file addition', () => {
   

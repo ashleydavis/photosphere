@@ -6,7 +6,7 @@ import {
   findFileNode,
   createTree,
   FileHash
-} from '../../../lib/merkle-tree';
+} from '../lib/merkle-tree';
 
 describe('Size calculation with file deletion', () => {
   

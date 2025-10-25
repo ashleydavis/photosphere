@@ -1,7 +1,7 @@
 {
-  "name": "adb",
+  "name": "merkle-tree",
   "version": "1.0.0",
-  "description": "API for interacting with the asset database.",
+  "description": "Merkle tree implementation for asset database.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
@@ -22,22 +22,15 @@
   "devDependencies": {
     "@peculiar/webcrypto": "^1.4.1",
     "@types/jest": "^29.4.0",
-    "@types/lodash": "^4.17.5",
-    "@types/mime-types": "^2.1.1",
     "@types/node": "^22.9.1",
-    "fs-extra": "^11.1.0",
     "jest": "^29.0.1",
     "ts-jest": "^29.0.5",
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "axios": "^0.27.2",
-    "bson": "^6.10.3",
-    "dayjs": "^1.11.7",
-    "jszip": "^3.10.1",
-    "lodash": "^4.17.21",
-    "merkle-tree": "workspace:*",
-    "mime-types": "^2.1.35",
+    "serialization": "workspace:*",
+    "storage": "workspace:*",
     "uuid": "^11.1.0"
   }
 }
+
