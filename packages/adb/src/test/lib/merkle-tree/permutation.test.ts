@@ -50,16 +50,16 @@ describe('Merkle Tree Permutation Tests', () => {
       // console.log(`Creating tree ${index + 1} [${permutation.join('-')}]`);
       let permutationTree = createPermutationTree(permutation);
 
-      const root = permutationTree.root;
+      const root = permutationTree.sortRoot;
       expect(root).toBeDefined();
 
-      const same = Buffer.compare(root!.hash, comparisonTree.root!.hash) === 0;
+      const same = Buffer.compare(root!.hash, comparisonTree.sortRoot!.hash) === 0;
       if (!same) {
         const msg = `Permutation ${index + 1} [${permutation.join(', ')}] produces a different tree to permutation 1 [${comparisonPermutation.join(', ')}].`;
         console.log(msg);
-        console.log(`Comparison:  ${comparisonTree.root!.hash.toString('hex')}`);
+        console.log(`Comparison:  ${comparisonTree.sortRoot!.hash.toString('hex')}`);
         console.log(`Permutation: ${root!.hash.toString('hex')}`);
-        console.log(`Comparison:\n${visualizeTreeSimple(comparisonTree.root)}`);
+        console.log(`Comparison:\n${visualizeTreeSimple(comparisonTree.sortRoot)}`);
         console.log(`Permutation:\n${visualizeTreeSimple(root)}`);
 
         throw new Error(msg);

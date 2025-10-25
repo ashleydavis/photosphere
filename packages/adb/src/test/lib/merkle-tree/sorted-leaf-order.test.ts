@@ -1,4 +1,4 @@
-import { addFile, createTree, MerkleNode, FileHash, IMerkleTree, compareFileNames } from '../../../lib/merkle-tree';
+import { addFile, createTree, SortNode, FileHash, IMerkleTree, compareFileNames } from '../../../lib/merkle-tree';
 
 // Helper function to create a FileHash for testing
 function createTestFileHash(fileName: string): FileHash {
@@ -27,7 +27,7 @@ function generatePermutations<T>(arr: T[]): T[][] {
 }
 
 // Helper function to extract leaf nodes in order from a tree
-function getLeafNodesInOrder(node: MerkleNode | undefined): string[] {
+function getLeafNodesInOrder(node: SortNode | undefined): string[] {
     if (!node) return [];
     
     if (node.fileName) {
@@ -71,7 +71,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
             }
             
             // Get the leaf nodes in order
-            const leafNodes = getLeafNodesInOrder(merkleTree.root);
+            const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
             const isSorted = verifyLeafNodesAreSorted(leafNodes);
             
             // Log the result for this specific permutation
@@ -106,7 +106,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
                 merkleTree = addFile(merkleTree, fileHash);
             }
             
-            const leafNodes = getLeafNodesInOrder(merkleTree.root);
+            const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
             const isSorted = verifyLeafNodesAreSorted(leafNodes);
             
             results.push({
@@ -163,7 +163,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
                     merkleTree = addFile(merkleTree, fileHash);
                 }
                 
-                const leafNodes = getLeafNodesInOrder(merkleTree.root);
+                const leafNodes = getLeafNodesInOrder(merkleTree.sortRoot);
                 const isSorted = verifyLeafNodesAreSorted(leafNodes);
                 
                 expect(isSorted).toBe(true);

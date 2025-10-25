@@ -28,7 +28,7 @@ describe('Size calculation with file addition', () => {
     const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
     // Verify the leaf node has correct size
-    expect(tree.root?.size).toBe(fileSize);
+    expect(tree.sortRoot?.size).toBe(fileSize);
     expect(tree.metadata.totalSize).toBe(fileSize);
   });
 
@@ -42,13 +42,13 @@ describe('Size calculation with file addition', () => {
     tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size));
     
     // Verify root node has sum of all file sizes
-    expect(tree.root?.size).toBe(file1Size + file2Size);
+    expect(tree.sortRoot?.size).toBe(file1Size + file2Size);
     
     // Verify left child has correct size
-    expect(tree.root?.left?.size).toBe(file1Size);
+    expect(tree.sortRoot?.left?.size).toBe(file1Size);
     
     // Verify right child has correct size
-    expect(tree.root?.right?.size).toBe(file2Size);
+    expect(tree.sortRoot?.right?.size).toBe(file2Size);
     
     // Verify metadata reflects total size
     expect(tree.metadata.totalSize).toBe(file1Size + file2Size);
@@ -65,10 +65,10 @@ describe('Size calculation with file addition', () => {
       tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, sizes[i]));
     }
     
-    expect(tree.root?.size).toBe(totalSize);    
+    expect(tree.sortRoot?.size).toBe(totalSize);    
     expect(tree.metadata.totalSize).toBe(totalSize);    
-    expect(tree.root?.left?.size).toBe(1500);
-    expect(tree.root?.right?.size).toBe(1300);
+    expect(tree.sortRoot?.left?.size).toBe(1500);
+    expect(tree.sortRoot?.right?.size).toBe(1300);
   });
   
   test('metadata totalSize is updated when adding files', () => {
