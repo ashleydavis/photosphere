@@ -5,11 +5,8 @@ A command-line tool for inspecting and visualizing merkle trees.
 ## Usage
 
 ```bash
-# Show the merkle tree visualization
+# Show the merkle tree visualization (both sort tree and merkle tree)
 mk show <tree-file>
-
-# Show simple visualization format
-mk show <tree-file> --simple
 
 # Print just the root hash
 mk root-hash <tree-file>
@@ -20,12 +17,11 @@ mk show s3://my-bucket/database/.db/tree.dat
 
 ## Commands
 
-- `show <tree-file>` - Visualize the merkle tree structure from a saved tree file
+- `show <tree-file>` - Visualize the merkle tree structure from a saved tree file (displays both sort tree and merkle tree)
 - `root-hash <tree-file>` - Print the root hash of the merkle tree
 
 ## Options
 
-- `-s, --simple` - Use simple visualization format (shows only file names)
 - `-v, --verbose` - Enable verbose logging
 - `-h, --help` - Display help information
 - `-V, --version` - Display version information

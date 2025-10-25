@@ -1,4 +1,5 @@
 import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode, SortNode } from "../lib/merkle-tree";
+import { visualizeSortTree, visualizeMerkleTree } from "../lib/visualize";
 
 /**
  * Helper function to create a file hash with a given name and length
@@ -139,7 +140,7 @@ export function expectNode(test: string, node: SortNode, expectedStructure: any)
         console.log(`========================================`);
         console.log(`Test: ${test}`);
         console.log('Actual:');
-        console.log(visualizeSortTreeSimple(node));
+        console.log(visualizeSortTree(node));
 
         console.log('Expected:');
         console.log(expectedStructure);
@@ -152,113 +153,4 @@ export function expectNode(test: string, node: SortNode, expectedStructure: any)
 //
 export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructure: any): void {
     expectNode(test, tree.sort!, expectedStructure);
-}
-
-// Helper function to visualize a Merkle tree as simple ASCII art
-export function visualizeSortTreeSimple(node: SortNode | undefined, prefix: string = '', isLast: boolean = true): string {
-    if (!node) return '';
-    
-    let result = '';
-    const connector = isLast ? '└── ' : '├── ';
-    
-    result += prefix + connector;
-
-    if (node.nodeCount === 1) {
-        if (!node.fileName) {
-            throw new Error(`Leaf node has no file name. This could be a bug.`);
-        }
-
-        if (!node.contentHash) {
-            throw new Error(`Leaf node has no content hash. This could be a bug.`);
-        }
-
-        const hashHex = node.contentHash.toString('hex');
-        const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
-    
-        // With short hash:
-        // result += ' ' + node.minFileName + ' -> ' + shortHash;
-
-        // Just the file name
-        // result += ' ' + node.minFileName;
-
-        if (node.fileName.includes("/")) {
-            const parts = node.fileName.split("/");
-            const lastPart = parts[parts.length - 1];
-            result += ' ' + lastPart.substring(0, 2) + lastPart.substring(lastPart.length - 2);
-        }
-        else {
-            result += ' ' + node.minFileName;
-        }
-    }
-    else {
-        // With minFileName:
-        // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
-
-        // With the node count:
-        result += ' (' + node.nodeCount + ')';
-
-        // Just the hash:
-        // result += ' ' + shortHash
-    }
-
-    result += '\n';
-    
-    // Add children
-    const newPrefix = prefix + (isLast ? '    ' : '│   ');
-    
-    if (node.left) {
-        result += visualizeSortTreeSimple(node.left, newPrefix, !node.right);
-    }
-    if (node.right) {
-        result += visualizeSortTreeSimple(node.right, newPrefix, true);
-    }
-    
-    return result;
-}
-
-// Helper function to visualize a Merkle tree as simple ASCII art
-export function visualizeMerkleTreeSimple(node: MerkleNode | undefined, prefix: string = '', isLast: boolean = true): string {
-    if (!node) return '';
-    
-    let result = '';
-    const connector = isLast ? '└── ' : '├── ';
-    
-    const hashHex = node.hash.toString('hex');
-    const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
-
-    result += prefix + connector;
-
-    if (!node.left && !node.right) {
-        // With short hash:
-        // result += ' ' + node.minFileName + ' -> ' + shortHash;
-
-        // Just the file name
-        // result += ' ' + node.minFileName;
-
-        result += ' ' + shortHash;
-    }
-    else {
-        // With minFileName:
-        // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
-
-        // With the node count:
-        result += ' ' + shortHash;
-
-        // Just the hash:
-        // result += ' ' + shortHash
-    }
-
-    result += '\n';
-    
-    // Add children
-    const newPrefix = prefix + (isLast ? '    ' : '│   ');
-    
-    if (node.left) {
-        result += visualizeMerkleTreeSimple(node.left, newPrefix, !node.right);
-    }
-    if (node.right) {
-        result += visualizeMerkleTreeSimple(node.right, newPrefix, true);
-    }
-    
-    return result;
 }

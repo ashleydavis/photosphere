@@ -1,10 +1,9 @@
 import pc from "picocolors";
-import { loadTree, visualizeSortTreeSimple, visualizeTree } from "merkle-tree";
+import { loadTree, visualizeTree } from "merkle-tree";
 import { createStorage } from "storage";
 import path from "path";
 
 export interface IShowCommandOptions {
-    simple?: boolean;
     verbose?: boolean;
 }
 
@@ -31,28 +30,11 @@ export async function showCommand(treePath: string, options: IShowCommandOptions
     // Visualize the merkle tree
     console.log(pc.blue("\nMerkle Tree Visualization:"));
     console.log(pc.gray("=".repeat(50)));
+    console.log();
 
-    let visualization: string;
-    if (options.simple) {
-        // Simple visualization showing only file structure
-        visualization = visualizeSortTreeSimple(merkleTree.sort);
-    } else {
-        // Full visualization with hashes and metadata
-        visualization = visualizeTree(merkleTree);
-    }
-    
+    // Full visualization with both sort tree and merkle tree
+    const visualization = visualizeTree(merkleTree);
     console.log(visualization);
-
-    // Display tree metadata
-    console.log(pc.gray("=".repeat(50)));
-    console.log(pc.cyan(`Files: ${merkleTree.metadata.totalFiles}`));
-    console.log(pc.cyan(`Total Size: ${merkleTree.metadata.totalSize} bytes`));
-    console.log(pc.cyan(`Database Version: ${merkleTree.version}`));
-    console.log(pc.cyan(`ID: ${merkleTree.metadata.id}`));
-    
-    if (merkleTree.merkle) {
-        console.log(pc.cyan(`Root Hash: ${merkleTree.merkle.hash.toString('hex')}`));
-    }
 
     process.exit(0);
 }
