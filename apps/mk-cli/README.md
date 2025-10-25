@@ -6,22 +6,22 @@ A command-line tool for inspecting and visualizing merkle trees.
 
 ```bash
 # Show the merkle tree visualization
-mk show <tree-path>
+mk show <tree-file>
 
 # Show simple visualization format
-mk show <tree-path> --simple
+mk show <tree-file> --simple
 
 # Print just the root hash
-mk root-hash <tree-path>
+mk root-hash <tree-file>
 
 # Show merkle tree from S3
-mk show s3://my-bucket/database/.db
+mk show s3://my-bucket/database/.db/tree.dat
 ```
 
 ## Commands
 
-- `show <tree-path>` - Visualize the merkle tree structure from a saved tree file
-- `root-hash <tree-path>` - Print the root hash of the merkle tree
+- `show <tree-file>` - Visualize the merkle tree structure from a saved tree file
+- `root-hash <tree-file>` - Print the root hash of the merkle tree
 
 ## Options
 

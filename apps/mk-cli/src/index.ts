@@ -11,9 +11,9 @@ async function main() {
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk show ./path/to/tree")}                 Show merkle tree visualization
-  ${pc.bold("mk show ./path/to/tree --simple")}       Show simple file structure view
-  ${pc.bold("mk root-hash ./path/to/tree")}           Print the root hash
+  ${pc.bold("mk show ./path/to/tree.dat")}                 Show merkle tree visualization
+  ${pc.bold("mk show ./path/to/tree.dat --simple")}       Show simple file structure view
+  ${pc.bold("mk root-hash ./path/to/tree.dat")}           Print the root hash
 
 Resources:
   📖 Merkle Tree Package: packages/merkle-tree
@@ -23,27 +23,27 @@ Resources:
     program
         .command("show")
         .description("Visualize the merkle tree structure from a saved tree file")
-        .argument("<tree-path>", "Path to the directory containing the merkle tree file")
+        .argument("<tree-file>", "Path to the merkle tree file")
         .option("-s, --simple", "Use simple visualization format (shows only file names)", false)
         .option("-v, --verbose", "Enable verbose logging", false)
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk show ./my-database/.db")}
-  ${pc.bold("mk show ./my-database/.db --simple")}
-  ${pc.bold("mk show s3://my-bucket/database/.db")}`)
+  ${pc.bold("mk show ./my-database/.db/tree.dat")}
+  ${pc.bold("mk show ./my-database/.db/custom.dat --simple")}
+  ${pc.bold("mk show s3://my-bucket/database/.db/tree.dat")}`)
         .action(showCommand);
 
     program
         .command("root-hash")
         .description("Print the root hash of the merkle tree")
-        .argument("<tree-path>", "Path to the directory containing the merkle tree file")
+        .argument("<tree-file>", "Path to the merkle tree file")
         .option("-v, --verbose", "Enable verbose logging", false)
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk root-hash ./my-database/.db")}
-  ${pc.bold("mk root-hash s3://my-bucket/database/.db")}`)
+  ${pc.bold("mk root-hash ./my-database/.db/tree.dat")}
+  ${pc.bold("mk root-hash s3://my-bucket/database/.db/tree.dat")}`)
         .action(rootHashCommand);
 
     // Parse the command line arguments
