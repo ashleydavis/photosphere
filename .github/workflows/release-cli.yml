@@ -233,7 +233,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
-
       - name: Upload smoke test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -258,9 +257,9 @@ jobs:
           # Create hash capture directory
           mkdir -p hash-validation
           
-          # Get the database root hash from the smoke test database (debug mode uses bun run start)
+          # Get the database root hash from the smoke test database (debug mode uses bun run)
           if [ -d "./test/tmp/test-db" ]; then
-            DB_HASH=$(bun run start -- debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            DB_HASH=$(bun run ../mk-cli/src/index.ts root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
             echo "debug:$DB_HASH" > hash-validation/database-hash-debug.txt
             echo "Debug mode database hash: $DB_HASH"
           else
@@ -421,7 +420,7 @@ jobs:
           
           # Get the database root hash from the smoke test database
           if [ -d "./test/tmp/test-db" ]; then
-            DB_HASH=$(./bin/x64/linux/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            DB_HASH=$(../mk-cli/bin/x64/linux/mk root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
             echo "linux:$DB_HASH" > hash-validation/database-hash-linux.txt
             echo "Linux database hash: $DB_HASH"
           else
@@ -583,7 +582,7 @@ jobs:
           
           # Get the database root hash from the smoke test database
           if [ -d "./test/tmp/test-db" ]; then
-            DB_HASH=$(./bin/x64/win/psi.exe debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            DB_HASH=$(../mk-cli/bin/x64/win/mk.exe root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
             echo "windows:$DB_HASH" > hash-validation/database-hash-windows.txt
             echo "Windows database hash: $DB_HASH"
           else
@@ -833,7 +832,7 @@ jobs:
           
           # Get the database root hash from the smoke test database
           if [ -d "./test/tmp/test-db" ]; then
-            DB_HASH=$(./bin/x64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            DB_HASH=$(../mk-cli/bin/x64/mac/mk root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
             echo "macos-x64:$DB_HASH" > hash-validation/database-hash-macos-x64.txt
             echo "macOS x64 database hash: $DB_HASH"
           else
@@ -1000,7 +999,7 @@ jobs:
           
           # Get the database root hash from the smoke test database
           if [ -d "./test/tmp/test-db" ]; then
-            DB_HASH=$(./bin/arm64/mac/psi debug root-hash --db ./test/tmp/test-db --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+            DB_HASH=$(../mk-cli/bin/arm64/mac/mk root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
             echo "macos-arm64:$DB_HASH" > hash-validation/database-hash-macos-arm64.txt
             echo "macOS ARM64 database hash: $DB_HASH"
           else
