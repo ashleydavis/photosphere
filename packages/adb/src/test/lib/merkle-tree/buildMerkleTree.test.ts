@@ -1,14 +1,10 @@
 import { 
     buildMerkleTree, 
     MerkleNode, 
-    SortNode, 
     combineHashes,
-    createLeafNode,
-    createParentNode,
-    FileHash,
     traverseSortLeaves,
 } from '../../../lib/merkle-tree';
-import { createFileHash, buildTree, leaf, node } from './merkle-verify';
+import { buildTree, leaf, node } from './merkle-verify';
 
 describe('buildMerkleTree', () => {
     

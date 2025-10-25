@@ -1393,6 +1393,34 @@ test_database_replicate() {
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    
+    # Verify original and replica have the same root hash
+    log_info "Verifying original and replica have the same root hash"
+    local original_hash_output
+    local replica_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$replica_hash" ]; then
+        log_success "Original and replica databases have the same root hash: $original_hash"
+    else
+        log_error "Original and replica databases have different root hashes"
+        log_error "Original hash: $original_hash"
+        log_error "Replica hash: $replica_hash"
+        
+        # Show merkle trees for debugging
+        log_error "Showing merkle tree for original database:"
+        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        
+        log_error "Showing merkle tree for replica database:"
+        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        
+        exit 1
+    fi
+    
     test_passed
 }
 
@@ -1450,6 +1478,34 @@ test_database_replicate_second() {
     expect_output_value "$second_replication_output" "Total files considered:" "15" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
     expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"
+    
+    # Verify original and replica still have the same root hash after second replication
+    log_info "Verifying original and replica still have the same root hash after second replication"
+    local original_hash_output
+    local replica_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$replica_hash" ]; then
+        log_success "Original and replica databases still have the same root hash: $original_hash"
+    else
+        log_error "Original and replica databases have different root hashes after second replication"
+        log_error "Original hash: $original_hash"
+        log_error "Replica hash: $replica_hash"
+        
+        # Show merkle trees for debugging
+        log_error "Showing merkle tree for original database:"
+        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        
+        log_error "Showing merkle tree for replica database:"
+        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        
+        exit 1
+    fi
+    
     test_passed
 }
 
@@ -1466,8 +1522,7 @@ test_database_compare() {
     invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences for identical databases
-    expect_output_string "$compare_output" "Databases have 0 differences" "No differences detected between databases"
-    
+    expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
     
     # Test comparison with self (database vs itself)
     invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
@@ -1519,7 +1574,35 @@ test_replicate_after_changes() {
     invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences after replication
-    expect_output_string "$compare_output" "Databases have 0 differences" "No differences detected after replicating changes"
+    expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
+    
+    # Verify original and replica have the same root hash after replication
+    log_info "Verifying original and replica have the same root hash after replication"
+    local original_hash_output
+    local replica_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$replica_hash" ]; then
+        log_success "Original and replica databases have the same root hash after replication: $original_hash"
+    else
+        log_error "Original and replica databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Replica hash: $replica_hash"
+        
+        # Show merkle trees for debugging
+        log_error "Showing merkle tree for original database:"
+        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        
+        log_error "Showing merkle tree for replica database:"
+        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        
+        exit 1
+    fi
+    
     test_passed
 }
 

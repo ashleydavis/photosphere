@@ -6,7 +6,9 @@ import {
     updateFile, 
     findFileNode,
     traverseTreeSync,
-    createTree, 
+    createTree,
+    MerkleNode,
+    buildMerkleTree, 
 } from '../../../lib/merkle-tree';
 // Helper to create a file hash
 function createFileHash(fileName: string, content: string): FileHash {
@@ -37,19 +39,23 @@ describe('Merkle Tree UpdateFile', () => {
     tree = addFile(tree, file3);
     tree = addFile(tree, file4);
     tree = addFile(tree, file5);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Get the root hash before update
-    const originalRootHash = tree.sort?.hash.toString('hex');
+    const originalRootHash = tree.merkle!.hash.toString('hex');
     
     // Now update file3
     const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
     const updated = updateFile(tree, updatedFile3);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the update was successful
     expect(updated).toBe(true);
     
     // Get the new root hash
-    const newRootHash = tree.sort?.hash.toString('hex');
+    const newRootHash = tree.merkle!.hash.toString('hex');
     
     // The root hash should have changed
     expect(newRootHash).not.toBe(originalRootHash);
@@ -57,11 +63,11 @@ describe('Merkle Tree UpdateFile', () => {
     // Verify the file was actually updated
     const fileNode = findFileNode(tree, 'file3.txt');
     expect(fileNode).toBeDefined();
-    expect(fileNode?.hash.toString('hex')).toBe(updatedFile3.hash.toString('hex'));
+    expect(fileNode?.contentHash!.toString('hex')).toBe(updatedFile3.hash.toString('hex'));
     
     // All other files should remain unchanged
     const file1Node = findFileNode(tree, 'file1.txt');
-    expect(file1Node?.hash.toString('hex')).toBe(file1.hash.toString('hex'));
+    expect(file1Node?.contentHash!.toString('hex')).toBe(file1.hash.toString('hex'));
     
     // Update a non-existent file should return false
     const nonExistentUpdate = updateFile(tree, createFileHash('not-exists.txt', 'content'));
@@ -129,26 +135,22 @@ describe('Merkle Tree UpdateFile', () => {
     
     // Verify hash integrity by manually recalculating all parent hashes
     // Each internal node should have a hash equal to the combined hash of its children
-    function verifyNodeHash(node: SortNode | undefined): boolean {
+    function verifyNodeHash(node: MerkleNode | undefined): boolean {
       if (!node) return true;
       
       let allHashesValid = true;
       
-      traverseTreeSync(node, (currentNode) => {
+      traverseTreeSync<MerkleNode>(node, (currentNode) => {
         // Leaf nodes can't be verified this way
-        if (currentNode.nodeCount === 1) {
+        if (!currentNode.left && !currentNode.right) {
           return true; // Continue traversal
         }
         
-        // For internal nodes, recalculate hash from children
-        if (!currentNode.left || !currentNode.right) {
-          return true; // No children to verify, continue traversal
-        }
-        
+        // For internal nodes, recalculate hash from children        
         // Calculate the expected hash
         const expectedHash = crypto.createHash('sha256')
-          .update(currentNode.left.hash)
-          .update(currentNode.right.hash)
+          .update(currentNode.left!.hash)
+          .update(currentNode.right!.hash)
           .digest();
         
         // Compare with actual hash
@@ -165,7 +167,7 @@ describe('Merkle Tree UpdateFile', () => {
     }
     
     // Verify the entire tree starting from the root
-    const treeIntegrity = verifyNodeHash(tree!.sort);
+    const treeIntegrity = verifyNodeHash(tree!.merkle);
     expect(treeIntegrity).toBe(true);
     
     // Verify all non-updated files still have their original hash
@@ -173,12 +175,12 @@ describe('Merkle Tree UpdateFile', () => {
       if (fileName !== updateFileName) {
         const node = findFileNode(tree, fileName);
         const expectedHash = createFileHash(fileName, originalContents[fileName]).hash;
-        expect(node?.hash.toString('hex')).toBe(expectedHash.toString('hex'));
+        expect(node?.contentHash!.toString('hex')).toBe(expectedHash.toString('hex'));
       }
     }
     
     // Verify the updated file has the new hash
     const updatedNode = findFileNode(tree, updateFileName);
-    expect(updatedNode?.hash.toString('hex')).toBe(updatedFile.hash.toString('hex'));
+    expect(updatedNode?.contentHash!.toString('hex')).toBe(updatedFile.hash.toString('hex'));
   });
 });

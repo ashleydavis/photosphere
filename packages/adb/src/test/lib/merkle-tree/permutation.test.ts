@@ -1,5 +1,5 @@
-import { createTree, addFile, IMerkleTree } from '../../../lib/merkle-tree';
-import { createFileHash, visualizeTreeSimple } from './merkle-verify';
+import { createTree, addFile, IMerkleTree, buildMerkleTree } from '../../../lib/merkle-tree';
+import { createFileHash, visualizeMerkleTreeSimple } from './merkle-verify';
 
 describe('Merkle Tree Permutation Tests', () => {
   const testFiles = ['a', 'b', 'c', 'd', 'e'];
@@ -41,6 +41,8 @@ describe('Merkle Tree Permutation Tests', () => {
 
   // console.log(`Creating tree 1 [${comparisonPermutation.join('-')}]`);
   const comparisonTree = createPermutationTree(comparisonPermutation);
+
+  comparisonTree.merkle = buildMerkleTree(comparisonTree.sort); // Force tree rebuild.
   
   // Test that every other permutation produces the same tree as the first permutation.
   for (let index = 1; index < permutations.length; index++) {
@@ -48,19 +50,21 @@ describe('Merkle Tree Permutation Tests', () => {
   
     test(`should produce same tree for permutation 1 [${comparisonPermutation.join('-')}] and ${index + 1} [${permutation.join('-')}]`, () => {
       // console.log(`Creating tree ${index + 1} [${permutation.join('-')}]`);
-      let permutationTree = createPermutationTree(permutation);
+      const permutationTree = createPermutationTree(permutation);
 
-      const root = permutationTree.sort;
+      permutationTree.merkle = buildMerkleTree(permutationTree.sort); // Force tree rebuild.
+
+      const root = permutationTree.merkle;
       expect(root).toBeDefined();
 
-      const same = Buffer.compare(root!.hash, comparisonTree.sort!.hash) === 0;
+      const same = Buffer.compare(root!.hash, comparisonTree.merkle!.hash) === 0;
       if (!same) {
         const msg = `Permutation ${index + 1} [${permutation.join(', ')}] produces a different tree to permutation 1 [${comparisonPermutation.join(', ')}].`;
         console.log(msg);
-        console.log(`Comparison:  ${comparisonTree.sort!.hash.toString('hex')}`);
+        console.log(`Comparison:  ${comparisonTree.merkle!.hash.toString('hex')}`);
         console.log(`Permutation: ${root!.hash.toString('hex')}`);
-        console.log(`Comparison:\n${visualizeTreeSimple(comparisonTree.sort)}`);
-        console.log(`Permutation:\n${visualizeTreeSimple(root)}`);
+        console.log(`Comparison:\n${visualizeMerkleTreeSimple(comparisonTree.merkle)}`);
+        console.log(`Permutation:\n${visualizeMerkleTreeSimple(root)}`);
 
         throw new Error(msg);
       }

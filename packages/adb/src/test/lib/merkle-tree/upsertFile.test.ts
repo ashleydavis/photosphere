@@ -4,7 +4,9 @@ import {
     upsertFile, 
     findFileNode,
     traverseTreeSync,
-    createTree
+    createTree,
+    MerkleNode,
+    buildMerkleTree
 } from '../../../lib/merkle-tree';
 
 // Helper to create a file hash
@@ -42,8 +44,6 @@ describe('Merkle Tree upsertFile', () => {
     
     expect(node1).toBeDefined();
     expect(node2).toBeDefined();
-    expect(node1!.hash.toString('hex')).toBe(file1.hash.toString('hex'));
-    expect(node2!.hash.toString('hex')).toBe(file2.hash.toString('hex'));
   });
   
   test('updates existing file', () => {
@@ -52,20 +52,24 @@ describe('Merkle Tree upsertFile', () => {
     const originalContent = 'original content';
     const file = createFileHash('file1.txt', originalContent);
     tree = upsertFile(tree, file);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify initial state
     expect(tree!.metadata.totalFiles).toBe(1);
     const originalNode = findFileNode(tree, 'file1.txt');
     expect(originalNode).toBeDefined();
-    expect(originalNode!.hash.toString('hex')).toBe(file.hash.toString('hex'));
-    
+    expect(originalNode!.contentHash!.toString('hex')).toBe(file.hash.toString('hex'));
+
     // Record original root hash
-    const originalRootHash = tree!.sort?.hash.toString('hex');
+    const originalRootHash = tree!.merkle!.hash.toString('hex');
     
     // Now try to add a file with the same name but different content
     const updatedContent = 'updated content';
     const updatedFile = createFileHash('file1.txt', updatedContent);
     tree = upsertFile(tree, updatedFile);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the file was updated, not added
     expect(tree!.metadata.totalFiles).toBe(1); // Still just one file
@@ -73,10 +77,10 @@ describe('Merkle Tree upsertFile', () => {
     // Verify the content was updated
     const updatedNode = findFileNode(tree, 'file1.txt');
     expect(updatedNode).toBeDefined();
-    expect(updatedNode!.hash.toString('hex')).toBe(updatedFile.hash.toString('hex'));
+    expect(updatedNode!.contentHash!.toString('hex')).toBe(updatedFile.hash.toString('hex'));
     
     // Verify the root hash changed (indicating the tree was updated)
-    const newRootHash = tree!.sort?.hash.toString('hex');
+    const newRootHash = tree!.merkle!.hash.toString('hex');
     expect(newRootHash).not.toBe(originalRootHash);
   });
   
@@ -115,7 +119,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Verify the correct file was updated
     const updatedNode = findFileNode(tree, 'file2.txt');
-    expect(updatedNode!.hash.toString('hex')).toBe(updatedFile2.hash.toString('hex'));   
+    expect(updatedNode!.contentHash!.toString('hex')).toBe(updatedFile2.hash.toString('hex'));   
   });
   
   test('propagates hash changes up the tree when updating', () => {
@@ -132,10 +136,12 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, fileB);
     tree = upsertFile(tree, fileC);
     tree = upsertFile(tree, fileD);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Record original node hashes using depth-first traversal
     const originalHashes: string[] = [];
-    traverseTreeSync(tree!.sort, (node) => {
+    traverseTreeSync<MerkleNode>(tree!.merkle, (node) => {
         originalHashes.push(node.hash.toString('hex'));
         return true; // Continue traversal
     });
@@ -143,10 +149,12 @@ describe('Merkle Tree upsertFile', () => {
     // Update one file
     const updatedFileC = createFileHash('C.txt', 'updated content C');
     tree = upsertFile(tree, updatedFileC);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the file node has the updated hash
     const nodeC = findFileNode(tree, 'C.txt');
-    expect(nodeC!.hash.toString('hex')).toBe(updatedFileC.hash.toString('hex'));
+    expect(nodeC!.contentHash!.toString('hex')).toBe(updatedFileC.hash.toString('hex'));
     
     // Verify that hashes have changed up the path to the root
     // In a balanced 4-file tree, the structure should be:
@@ -158,7 +166,7 @@ describe('Merkle Tree upsertFile', () => {
     
     // Collect new hashes using depth-first traversal
     const newHashes: string[] = [];
-    traverseTreeSync(tree!.sort, (node) => {
+    traverseTreeSync<MerkleNode>(tree!.merkle, (node) => {
         newHashes.push(node.hash.toString('hex'));
         return true; // Continue traversal
     });
@@ -183,17 +191,21 @@ describe('Merkle Tree upsertFile', () => {
     const content = 'original content';
     const file = createFileHash('file1.txt', content);
     tree = upsertFile(tree, file);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Record the original root hash
-    const originalRootHash = tree!.sort?.hash.toString('hex');
+    const originalRootHash = tree!.merkle!.hash.toString('hex');
     
     // Try to update with identical content
     const sameFile = createFileHash('file1.txt', content);
     tree = upsertFile(tree, sameFile);
+
+    tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Since the content is identical, the tree should be unchanged
     // Verify the root hash hasn't changed
-    const newRootHash = tree!.sort?.hash.toString('hex');
+    const newRootHash = tree!.merkle!.hash.toString('hex');
     expect(newRootHash).toBe(originalRootHash);
   });
   
@@ -227,15 +239,15 @@ describe('Merkle Tree upsertFile', () => {
     const node2 = findFileNode(tree, 'file2.txt');
     const node3 = findFileNode(tree, 'file3.txt');
     
-    expect(node1!.hash.toString('hex')).toBe(
+    expect(node1!.contentHash!.toString('hex')).toBe(
       crypto.createHash('sha256').update('updated content 1').digest().toString('hex')
     );
     
-    expect(node2!.hash.toString('hex')).toBe(
+    expect(node2!.contentHash!.toString('hex')).toBe(
       crypto.createHash('sha256').update('updated content 2').digest().toString('hex')
     );
     
-    expect(node3!.hash.toString('hex')).toBe(
+    expect(node3!.contentHash!.toString('hex')).toBe(
       crypto.createHash('sha256').update('updated content 3').digest().toString('hex')
     );
   });

@@ -1,4 +1,4 @@
-import { addFile, combineHashes, createTree, FileHash, IMerkleTree, SortNode } from "../../../lib/merkle-tree";
+import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode, SortNode } from "../../../lib/merkle-tree";
 
 /**
  * Helper function to create a file hash with a given name and length
@@ -35,7 +35,7 @@ export function buildTree(fileNames: string[]): IMerkleTree<any> {
  */
 export function leaf(fileName: string, size: number = 100): SortNode {
     return {
-        hash: Buffer.from(fileName),
+        contentHash: Buffer.from(fileName),
         fileName,
         nodeCount: 1,
         leafCount: 1,
@@ -49,7 +49,6 @@ export function leaf(fileName: string, size: number = 100): SortNode {
  */
 export function node(left: SortNode, right: SortNode): SortNode {
     return {
-        hash: combineHashes(left.hash, right.hash),
         nodeCount: 1 + left.nodeCount + right.nodeCount,
         leafCount: left.leafCount + right.leafCount,
         size: left.size + right.size,
@@ -64,16 +63,19 @@ export function node(left: SortNode, right: SortNode): SortNode {
 //
 function _expectNode(node: SortNode, expectedStructure: any): void {
     expect(node).toBeDefined();    
-    expect(Buffer.isBuffer(node.hash)).toBe(true);
 
     if (typeof(expectedStructure) === 'string') {
         expect(node.nodeCount).toBe(1);
         expect(node?.fileName).toEqual(expectedStructure);
+        expect(node.contentHash).toBeDefined();
+        expect(Buffer.isBuffer(node.contentHash)).toBe(true);
     }
     else {
         if (expectedStructure.fileName) {
             expect(node.nodeCount).toBe(1);
             expect(node.fileName).toEqual(expectedStructure.fileName);
+            expect(node.contentHash).toBeDefined();
+            expect(Buffer.isBuffer(node.contentHash)).toBe(true);
         }
         else {
             expect(node.nodeCount).toBeGreaterThanOrEqual(3);
@@ -95,8 +97,9 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
     
             if (typeof(expectedStructure.left) === 'string') {
                 expect(node.left!.fileName).toEqual(expectedStructure.left);
-                expect(node.left!.hash).toEqual(Buffer.from(expectedStructure.left));
-            }
+                expect(node.left!.contentHash).toBeDefined();
+                expect(Buffer.isBuffer(node.left!.contentHash)).toBe(true);
+                }
             else {
                 _expectNode(node.left!, expectedStructure.left);
             }
@@ -108,21 +111,19 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
     
             if (typeof(expectedStructure.right) === 'string') {
                 expect(node.right!.fileName).toEqual(expectedStructure.right);
-                expect(node.right!.hash).toEqual(Buffer.from(expectedStructure.right));
+                expect(node.right!.contentHash).toBeDefined();
+                expect(Buffer.isBuffer(node.right!.contentHash)).toBe(true);
             }
             else {
                 _expectNode(node.right!, expectedStructure.right);
             }
         }
-    
-        if (expectedStructure.left && expectedStructure.right) {
-            // Check that the hash is a combination of the left and right hashes.
-            expect(node.hash).toEqual(combineHashes(node.left!.hash, node.right!.hash));
-        }
-    
+        
         if (!expectedStructure.left && !expectedStructure.right) {
             // Leaf node
             expect(node.nodeCount).toBe(1);
+            expect(node.contentHash).toBeDefined();
+            expect(Buffer.isBuffer(node.contentHash)).toBe(true);
         }
     }
 }
@@ -138,7 +139,7 @@ export function expectNode(test: string, node: SortNode, expectedStructure: any)
         console.log(`========================================`);
         console.log(`Test: ${test}`);
         console.log('Actual:');
-        console.log(visualizeTreeSimple(node));
+        console.log(visualizeSortTreeSimple(node));
 
         console.log('Expected:');
         console.log(expectedStructure);
@@ -154,18 +155,26 @@ export function expectTree(test: string, tree: IMerkleTree<any>, expectedStructu
 }
 
 // Helper function to visualize a Merkle tree as simple ASCII art
-export function visualizeTreeSimple(node: SortNode | undefined, prefix: string = '', isLast: boolean = true): string {
+export function visualizeSortTreeSimple(node: SortNode | undefined, prefix: string = '', isLast: boolean = true): string {
     if (!node) return '';
     
     let result = '';
     const connector = isLast ? '└── ' : '├── ';
     
-    const hashHex = node.hash.toString('hex');
-    const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
-
     result += prefix + connector;
 
-    if (node.fileName) {
+    if (node.nodeCount === 1) {
+        if (!node.fileName) {
+            throw new Error(`Leaf node has no file name. This could be a bug.`);
+        }
+
+        if (!node.contentHash) {
+            throw new Error(`Leaf node has no content hash. This could be a bug.`);
+        }
+
+        const hashHex = node.contentHash.toString('hex');
+        const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
+    
         // With short hash:
         // result += ' ' + node.minFileName + ' -> ' + shortHash;
 
@@ -186,7 +195,7 @@ export function visualizeTreeSimple(node: SortNode | undefined, prefix: string =
         // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
 
         // With the node count:
-        result += ' ' + shortHash + ' (' + node.nodeCount + ')';
+        result += ' (' + node.nodeCount + ')';
 
         // Just the hash:
         // result += ' ' + shortHash
@@ -198,74 +207,58 @@ export function visualizeTreeSimple(node: SortNode | undefined, prefix: string =
     const newPrefix = prefix + (isLast ? '    ' : '│   ');
     
     if (node.left) {
-        result += visualizeTreeSimple(node.left, newPrefix, !node.right);
+        result += visualizeSortTreeSimple(node.left, newPrefix, !node.right);
     }
     if (node.right) {
-        result += visualizeTreeSimple(node.right, newPrefix, true);
+        result += visualizeSortTreeSimple(node.right, newPrefix, true);
     }
     
     return result;
 }
 
-//
-// Serializes a merkle tree to JSON for testing
-//
-export function serializeTreeToJSON(node: SortNode | undefined): any {
-    if (!node) {
-        return null;
-    }
+// Helper function to visualize a Merkle tree as simple ASCII art
+export function visualizeMerkleTreeSimple(node: MerkleNode | undefined, prefix: string = '', isLast: boolean = true): string {
+    if (!node) return '';
+    
+    let result = '';
+    const connector = isLast ? '└── ' : '├── ';
+    
+    const hashHex = node.hash.toString('hex');
+    const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
 
-    if (node.fileName) {
-        // Leaf node
-        return {
-            f: node.fileName,
-            h: node.hash.toString('hex'),
-        };
+    result += prefix + connector;
+
+    if (!node.left && !node.right) {
+        // With short hash:
+        // result += ' ' + node.minFileName + ' -> ' + shortHash;
+
+        // Just the file name
+        // result += ' ' + node.minFileName;
+
+        result += ' ' + shortHash;
     }
     else {
-        // Internal node
-        return {
-            h: node.hash.toString('hex'),
-            l: serializeTreeToJSON(node.left),
-            r: serializeTreeToJSON(node.right),
-        };
-    }
-}
+        // With minFileName:
+        // result += ' ' + shortHash + ' minFileName = ' + node.minFileName;
 
-//
-// Deserializes a merkle tree from JSON for testing
-//
-export function deserializeTreeFromJSON(json: any): SortNode {
-    if (!json) {
-        throw new Error('Invalid JSON');
+        // With the node count:
+        result += ' ' + shortHash;
+
+        // Just the hash:
+        // result += ' ' + shortHash
     }
 
-    const hash = Buffer.from(json.h, 'hex');
-
-    if (json.f) {
-        // Leaf node
-        return {
-            hash,
-            fileName: json.f,
-            nodeCount: 1,
-            leafCount: 1,
-            size: 100,
-            minFileName: json.f,
-        };
+    result += '\n';
+    
+    // Add children
+    const newPrefix = prefix + (isLast ? '    ' : '│   ');
+    
+    if (node.left) {
+        result += visualizeMerkleTreeSimple(node.left, newPrefix, !node.right);
     }
-    else {
-        // Internal node
-        const left = deserializeTreeFromJSON(json.l);
-        const right = deserializeTreeFromJSON(json.r);
-
-        return {
-            hash,
-            nodeCount: 1 + left.nodeCount + right.nodeCount,
-            leafCount: left.leafCount + right.leafCount,
-            size: left.size + right.size ,
-            minFileName: left.minFileName,
-            left,
-            right,
-        };
+    if (node.right) {
+        result += visualizeMerkleTreeSimple(node.right, newPrefix, true);
     }
+    
+    return result;
 }

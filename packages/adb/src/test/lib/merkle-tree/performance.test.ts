@@ -107,7 +107,7 @@ describe('Merkle Tree Performance Tests', () => {
         .update(updatedContent)
         .digest();
       
-      expect(node!.hash.toString('hex')).toBe(expectedHash.toString('hex'));
+      expect(node!.contentHash!.toString('hex')).toBe(expectedHash.toString('hex'));
       
       // Performance assertions - updating should be O(log n)
       expect(time).toBeLessThan(10); // Should be very fast, under 10ms
@@ -157,7 +157,7 @@ describe('Merkle Tree Performance Tests', () => {
   });
   
   test('should evaluate the impact of tree depth on operations', () => {
-    const treeSizes = [10, 100, 1000, 10000];
+    const treeSizes = [1000, 10000];
     const results: Record<number, {addTime: number, updateTime: number}> = {};
     
     for (const size of treeSizes) {

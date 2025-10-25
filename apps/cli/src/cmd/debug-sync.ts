@@ -134,7 +134,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         filesProcessed++;
 
         // Copy file to target, if necessary.
-        await retry(() => copyFile(node.fileName!, node.hash, node.size, node.lastModified!));
+        await retry(() => copyFile(node.fileName!, node.contentHash!, node.size, node.lastModified!));
         
         // Save target merkle tree every 100 files.
         if (filesCopied % 100 === 0) {

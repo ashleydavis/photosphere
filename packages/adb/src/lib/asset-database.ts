@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile } from "./merkle-tree";
+import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile, buildMerkleTree } from "./merkle-tree";
 import { IUuidGenerator, log } from "utils";
 
 //
@@ -102,6 +102,11 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     async save(): Promise<void> {
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
+        }
+
+        if (this.merkleTree.dirty) {
+            this.merkleTree.merkle = buildMerkleTree(this.merkleTree.sort);
+            this.merkleTree.dirty = false;
         }
 
         await saveTree("tree.dat", this.merkleTree, this.metadataStorage);

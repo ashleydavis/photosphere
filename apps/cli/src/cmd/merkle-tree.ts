@@ -1,7 +1,7 @@
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
-import { visualizeTreeSimple } from "adb";
+import { visualizeSortTreeSimple } from "adb";
 
 export interface IMerkleTreeCommandOptions extends IBaseCommandOptions {
     simple?: boolean;
@@ -21,7 +21,7 @@ export async function merkleTreeCommand(options: IMerkleTreeCommandOptions): Pro
     let visualization: string;
     if (options.simple) {
         const merkleTree = database.getAssetDatabase().getMerkleTree();
-        visualization = visualizeTreeSimple(merkleTree.sort);
+        visualization = visualizeSortTreeSimple(merkleTree.sort);
     }
     else {
         visualization = database.visualizeMerkleTree();
