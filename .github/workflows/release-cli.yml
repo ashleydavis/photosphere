@@ -341,7 +341,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-bun-
 
-
       - name: Install dependencies
         run: bun install
 
@@ -373,6 +372,12 @@ jobs:
         run: |
           bun run build-linux
           chmod +x bin/x64/linux/psi
+          
+      - name: Build mk CLI executable
+        working-directory: ./apps/mk-cli
+        run: |
+          bun run build-linux
+          chmod +x bin/x64/linux/mk
           
       - name: Test version command
         working-directory: ./apps/cli
@@ -526,6 +531,11 @@ jobs:
 
       - name: Build Windows executable
         working-directory: ./apps/cli
+        run: |
+          bun run build-win
+          
+      - name: Build mk CLI executable
+        working-directory: ./apps/mk-cli
         run: |
           bun run build-win
           
@@ -774,6 +784,12 @@ jobs:
           bun run build-mac-x64
           chmod +x bin/x64/mac/psi
           
+      - name: Build mk CLI executable
+        working-directory: ./apps/mk-cli
+        run: |
+          bun run build-mac-x64
+          chmod +x bin/x64/mac/mk
+          
       - name: Test built version command
         working-directory: ./apps/cli
         run: |
@@ -934,6 +950,12 @@ jobs:
         run: |
           bun run build-mac-arm64
           chmod +x bin/arm64/mac/psi
+          
+      - name: Build mk CLI executable
+        working-directory: ./apps/mk-cli
+        run: |
+          bun run build-mac-arm64
+          chmod +x bin/arm64/mac/mk
           
       - name: Test version command
         working-directory: ./apps/cli
