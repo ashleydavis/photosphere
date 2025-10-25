@@ -596,8 +596,8 @@ jobs:
   build-windows-baseline:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
-    needs: [compile, smoke_test, unit-tests]
-    if: always() && needs.compile.result == 'success' && needs.smoke_test.result == 'success' && needs.unit-tests.result == 'success'
+    needs: [unit-tests, compile]
+    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
