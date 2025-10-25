@@ -1,5 +1,5 @@
 import { addFile, createTree, FileHash, IMerkleTree } from '../lib/merkle-tree';
-import { visualizeSortTreeSimple } from './merkle-verify';
+import { visualizeSortTree } from '../lib/visualize';
 
 // Helper function to create a FileHash for testing
 function createTestFileHash(fileName: string): FileHash {
@@ -39,14 +39,14 @@ function makePermutation(index: number, permutation: string[]) {
         merkleTree = addFile(merkleTree, fileHash);
 
         console.log(`\n  Step ${stepIndex + 1}: Adding "${fileName}"`);
-        const treeVisualization = visualizeSortTreeSimple(merkleTree.sort);
+        const treeVisualization = visualizeSortTree(merkleTree.sort);
         const indentedTree = treeVisualization.split('\n').map(line => '  ' + line).join('\n');
         console.log(indentedTree);
         stepIndex++;
     }
 
     console.log(`\n  Final tree for permutation ${index + 1}:`);
-    const finalTreeVisualization = visualizeSortTreeSimple(merkleTree.sort);
+    const finalTreeVisualization = visualizeSortTree(merkleTree.sort);
     const indentedFinalTree = finalTreeVisualization.split('\n').map(line => '  ' + line).join('\n');
     console.log(indentedFinalTree);
     console.log('─'.repeat(50));
@@ -79,12 +79,12 @@ function testAllPermutations() {
             console.error(`  Permutation: ${permutation.join(' → ')}`);
 
             console.log(`  First permutation:`);
-            const firstTreeViz = visualizeSortTreeSimple(firstPermutationTree.sort);
+            const firstTreeViz = visualizeSortTree(firstPermutationTree.sort);
             const indentedFirstTreeViz = firstTreeViz.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedFirstTreeViz);
 
             console.log(`  Permutation ${index + 1}:`);
-            const permutationTreeViz = visualizeSortTreeSimple(permutationTree.sort);
+            const permutationTreeViz = visualizeSortTree(permutationTree.sort);
             const indentedPermutationTreeViz = permutationTreeViz.split('\n').map(line => '  ' + line).join('\n');
             console.log(indentedPermutationTreeViz);
 

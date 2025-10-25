@@ -2,9 +2,9 @@ import * as crypto from 'crypto';
 import { 
   addFile, 
   createTree,
-  FileHash,
-  visualizeTree
+  FileHash
 } from '../lib/merkle-tree';
+import { visualizeTree } from '../lib/visualize';
 
 describe('Size calculation with file addition', () => {
   

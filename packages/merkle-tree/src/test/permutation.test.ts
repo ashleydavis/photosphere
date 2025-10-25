@@ -1,5 +1,6 @@
 import { createTree, addFile, IMerkleTree, buildMerkleTree } from '../lib/merkle-tree';
-import { createFileHash, visualizeMerkleTreeSimple } from './merkle-verify';
+import { visualizeMerkleTree } from '../lib/visualize';
+import { createFileHash } from './merkle-verify';
 
 describe('Merkle Tree Permutation Tests', () => {
   const testFiles = ['a', 'b', 'c', 'd', 'e'];
@@ -63,8 +64,8 @@ describe('Merkle Tree Permutation Tests', () => {
         console.log(msg);
         console.log(`Comparison:  ${comparisonTree.merkle!.hash.toString('hex')}`);
         console.log(`Permutation: ${root!.hash.toString('hex')}`);
-        console.log(`Comparison:\n${visualizeMerkleTreeSimple(comparisonTree.merkle)}`);
-        console.log(`Permutation:\n${visualizeMerkleTreeSimple(root)}`);
+        console.log(`Comparison:\n${visualizeMerkleTree(comparisonTree.merkle)}`);
+        console.log(`Permutation:\n${visualizeMerkleTree(root)}`);
 
         throw new Error(msg);
       }

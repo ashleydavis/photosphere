@@ -12,7 +12,6 @@ async function main() {
 
 Examples:
   ${pc.bold("mk show ./path/to/tree.dat")}                 Show merkle tree visualization
-  ${pc.bold("mk show ./path/to/tree.dat --simple")}       Show simple file structure view
   ${pc.bold("mk root-hash ./path/to/tree.dat")}           Print the root hash
 
 Resources:
@@ -24,13 +23,12 @@ Resources:
         .command("show")
         .description("Visualize the merkle tree structure from a saved tree file")
         .argument("<tree-file>", "Path to the merkle tree file")
-        .option("-s, --simple", "Use simple visualization format (shows only file names)", false)
         .option("-v, --verbose", "Enable verbose logging", false)
         .addHelpText('after', `
 
 Examples:
   ${pc.bold("mk show ./my-database/.db/tree.dat")}
-  ${pc.bold("mk show ./my-database/.db/custom.dat --simple")}
+  ${pc.bold("mk show ./my-database/.db/custom.dat")}
   ${pc.bold("mk show s3://my-bucket/database/.db/tree.dat")}`)
         .action(showCommand);
 
