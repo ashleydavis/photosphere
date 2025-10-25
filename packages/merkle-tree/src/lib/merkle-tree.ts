@@ -607,7 +607,7 @@ export function addFile<DatabaseMetadata>(
 // 
 // Traverses the sort tree and yields all leaf nodes.
 //
-export function* traverseSortLeaves(node: SortNode | undefined): Generator<SortNode> {
+export function* iterateLeaves(node: SortNode | undefined): Generator<SortNode> {
     if (!node) {
         return;
     }
@@ -616,8 +616,8 @@ export function* traverseSortLeaves(node: SortNode | undefined): Generator<SortN
         yield node;
     }
 
-    yield* traverseSortLeaves(node.left);
-    yield* traverseSortLeaves(node.right);
+    yield* iterateLeaves(node.left);
+    yield* iterateLeaves(node.right);
 }
 
 //
@@ -633,7 +633,7 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
     const stack: (MerkleNode | undefined)[] = [];
 
     // Process each leaf node from the sort tree
-    for (const leaf of traverseSortLeaves(sort)) {
+    for (const leaf of iterateLeaves(sort)) {
         if (!leaf.contentHash) {
             throw new Error('Leaf node has no content hash');
         }
