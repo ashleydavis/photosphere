@@ -54,6 +54,35 @@ get_cli_command() {
     fi
 }
 
+# Get mk command based on platform and debug mode
+get_mk_command() {
+    if [ "$DEBUG_MODE" = "true" ]; then
+        echo "cd ../mk-cli && bun run start --"
+    else
+        local platform=$(detect_platform)
+        local arch=$(detect_architecture)
+        
+        case "$platform" in
+            "linux")
+                echo "../mk-cli/bin/x64/linux/mk"
+                ;;
+            "mac")
+                if [ "$arch" = "arm64" ]; then
+                    echo "../mk-cli/bin/arm64/mac/mk"
+                else
+                    echo "../mk-cli/bin/x64/mac/mk"
+                fi
+                ;;
+            "win")
+                echo "../mk-cli/bin/x64/win/mk.exe"
+                ;;
+            *)
+                echo "../mk-cli/bin/x64/linux/mk"  # Default to linux
+                ;;
+        esac
+    fi
+}
+
 # Track test results
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -190,7 +219,7 @@ EOF
         # Get merkle tree
         echo "MERKLE TREE STRUCTURE:" >> "$report_file"
         echo "---------------------" >> "$report_file"
-        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
+        $(get_mk_command) show "$TEST_DB_DIR/.db" 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database summary
@@ -845,6 +874,25 @@ test_setup() {
             ;;
     esac
     
+    log_info "Building mk CLI executable for platform: $platform ($arch)"
+    cd ../mk-cli
+    case "$platform" in
+        "linux")
+            invoke_command "Build mk Linux executable" "bun run build-linux"
+            ;;
+        "mac")
+            if [ "$arch" = "arm64" ]; then
+                invoke_command "Build mk macOS ARM64 executable" "bun run build-mac-arm64"
+            else
+                invoke_command "Build mk macOS x64 executable" "bun run build-mac-x64"
+            fi
+            ;;
+        "win")
+            invoke_command "Build mk Windows executable" "bun run build-win"
+            ;;
+    esac
+    cd ../cli
+    
     log_info "Building frontend for platform: $platform"
     invoke_command "Build frontend" "bun run build-fe-$platform" || {
         log_warning "Frontend build failed, continuing anyway..."
@@ -1413,10 +1461,10 @@ test_database_replicate() {
         
         # Show merkle trees for debugging
         log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db"
         
         log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db"
         
         exit 1
     fi
@@ -1498,10 +1546,10 @@ test_database_replicate_second() {
         
         # Show merkle trees for debugging
         log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db"
         
         log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db"
         
         exit 1
     fi
@@ -1595,10 +1643,10 @@ test_replicate_after_changes() {
         
         # Show merkle trees for debugging
         log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_cli_command) debug merkle-tree --db $TEST_DB_DIR --yes"
+        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db"
         
         log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_cli_command) debug merkle-tree --db $replica_dir --yes"
+        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db"
         
         exit 1
     fi

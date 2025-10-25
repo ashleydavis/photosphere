@@ -36,6 +36,7 @@ tsconfig.tsbuildinfo
 apps/cli/psi
 apps/cli/pfe.zip
 apps/cli/bin/
+apps/mk-cli/bin/
 frontend/pfe.zip
 apps/frontend/pfe.zip
 # apps/cli/test/db

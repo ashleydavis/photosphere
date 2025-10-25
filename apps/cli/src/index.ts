@@ -10,7 +10,6 @@ import { summaryCommand } from './cmd/summary';
 import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
-import { merkleTreeCommand } from './cmd/merkle-tree';
 import { hashCacheCommand } from './cmd/hash-cache';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
@@ -143,20 +142,6 @@ Resources:
     const debugCommand = program
         .command('debug')
         .description('Debug utilities for inspecting the media file database internals');
-
-    // Add merkle-tree subcommand
-    debugCommand
-        .command('merkle-tree')
-        .description('Visualize the merkle tree structure of the media file database')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option('-s, --simple', 'Use simple visualization format')
-        .addHelpText('after', getCommandExamplesHelp('debug merkle-tree'))
-        .action(merkleTreeCommand);
 
     // Add hash-cache subcommand
     debugCommand
