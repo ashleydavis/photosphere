@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import { loadTree, visualizeSortTreeSimple, visualizeTree } from "merkle-tree";
 import { createStorage } from "storage";
+import path from "path";
 
 export interface IShowCommandOptions {
     simple?: boolean;
@@ -11,15 +12,16 @@ export interface IShowCommandOptions {
 // Command to visualize a merkle tree from a saved tree file
 //
 export async function showCommand(treePath: string, options: IShowCommandOptions): Promise<void> {
+    const dirPath = path.dirname(treePath);
+    const fileName = path.basename(treePath);
+    const { storage, normalizedPath } = createStorage(dirPath);
+
     if (options.verbose) {
-        console.log(pc.gray(`Loading merkle tree from: ${treePath}`));
+        console.log(pc.gray(`Loading merkle tree from: ${normalizedPath}/${fileName}`));
     }
 
-    // Create storage for loading the tree
-    const { storage } = createStorage(treePath);
-
     // Load the merkle tree
-    const merkleTree = await loadTree("tree.dat", storage);
+    const merkleTree = await loadTree(fileName, storage);
 
     if (!merkleTree) {
         console.error(pc.red("Failed to load merkle tree"));
