@@ -19,7 +19,7 @@
     "build-mac-arm64": "bun build --compile --minify --sourcemap --target=bun-darwin-arm64 --outfile bin/arm64/mac/mk ./src/index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

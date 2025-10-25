@@ -57,7 +57,7 @@ get_cli_command() {
 # Get mk command based on platform and debug mode
 get_mk_command() {
     if [ "$DEBUG_MODE" = "true" ]; then
-        echo "cd ../mk-cli && bun run start --"
+        echo "bun run ../mk-cli/src/index.ts --"
     else
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
@@ -135,7 +135,7 @@ test_passed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
-        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
         else
             TEST_RESULTS+=("PASS:hash_failed")
@@ -151,7 +151,7 @@ test_failed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
-        if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("FAIL:$test_name:$hash_output")
         else
             TEST_RESULTS+=("FAIL:$test_name:hash_failed")
@@ -213,7 +213,7 @@ EOF
         # Get root hash
         echo "ROOT HASH:" >> "$report_file"
         echo "----------" >> "$report_file"
-        $(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
+        $(get_mk_command) root-hash "$TEST_DB_DIR/.db" 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get merkle tree
@@ -376,7 +376,7 @@ write_github_step_summary() {
                 echo ""
                 echo "**Final database hash:**"
                 echo "\`\`\`"
-                if hash_output=$($(get_cli_command) debug root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null); then
+                if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db" 2>/dev/null); then
                     echo "$hash_output"
                 else
                     echo "Failed to get database hash"
@@ -713,7 +713,7 @@ invoke_command() {
                 # Check if database exists and print root hash
                 if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
                     echo ""
-                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) debug root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_mk_command) root-hash "$db_path/.db" 2>/dev/null || echo "N/A")"
                     # echo ""
                     # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
                     # $(get_cli_command) debug merkle-tree --db "$db_path" --yes 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
@@ -1446,8 +1446,8 @@ test_database_replicate() {
     log_info "Verifying original and replica have the same root hash"
     local original_hash_output
     local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db" 0 "replica_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -1531,8 +1531,8 @@ test_database_replicate_second() {
     log_info "Verifying original and replica still have the same root hash after second replication"
     local original_hash_output
     local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db" 0 "replica_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -1628,8 +1628,8 @@ test_replicate_after_changes() {
     log_info "Verifying original and replica have the same root hash after replication"
     local original_hash_output
     local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) debug root-hash --db $TEST_DB_DIR --yes" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_cli_command) debug root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db" 0 "original_hash_output"
+    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db" 0 "replica_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)

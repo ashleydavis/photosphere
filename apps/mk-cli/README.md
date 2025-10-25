@@ -11,6 +11,9 @@ mk show <tree-path>
 # Show simple visualization format
 mk show <tree-path> --simple
 
+# Print just the root hash
+mk root-hash <tree-path>
+
 # Show merkle tree from S3
 mk show s3://my-bucket/database/.db
 ```
@@ -18,6 +21,7 @@ mk show s3://my-bucket/database/.db
 ## Commands
 
 - `show <tree-path>` - Visualize the merkle tree structure from a saved tree file
+- `root-hash <tree-path>` - Print the root hash of the merkle tree
 
 ## Options
 
