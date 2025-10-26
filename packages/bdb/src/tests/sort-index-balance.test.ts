@@ -1,8 +1,8 @@
-import { SortIndex } from '../lib/bson-database/sort-index';
-import { IRecord } from '../lib/bson-database/collection';
+import { SortIndex } from 'bdb';
+import { IRecord } from 'bdb';
 import { expect, test, describe, beforeEach } from '@jest/globals';
-import { MockStorage } from './mock-storage';
-import { MockCollection } from './mock-collection';
+import { MockStorage } from 'storage';
+import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
 
 // Test interface

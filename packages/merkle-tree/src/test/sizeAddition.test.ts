@@ -71,9 +71,9 @@ describe('Size calculation with file addition', () => {
     expect(tree.sort?.right?.size).toBe(1300);
   });
   
-  test('metadata totalSize is updated when adding files', () => {
+  test('size is updated when adding files', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-    expect(tree.sort?.size).toBe(0);
+    expect(tree.sort).toBeUndefined();
     
     // Add first file
     const file1Size = 1000;

@@ -1,7 +1,9 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonDatabase, createStorage, FileStorage, IBsonCollection, IRecord, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper } from "storage";
+import { BsonDatabase, IBsonCollection, IRecord } from "bdb";
+import type { IBsonDatabase } from "bdb";
+import { createStorage, FileStorage, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";

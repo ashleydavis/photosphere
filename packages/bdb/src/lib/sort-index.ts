@@ -3,10 +3,12 @@
 //
 
 import { BSON } from 'bson';
-import { IRecord, IBsonCollection } from './collection';
-import { IStorage } from '../storage';
-import { retry, IUuidGenerator } from 'utils';
-import { save, load, IDeserializer, ISerializer } from 'serialization';
+import type { IRecord, IBsonCollection } from './collection';
+import type { IStorage } from 'storage';
+import { retry } from 'utils';
+import type { IUuidGenerator } from 'utils';
+import { save, load } from 'serialization';
+import type { IDeserializer, ISerializer } from 'serialization';
 
 export type SortDirection = 'asc' | 'desc';
 export type SortDataType = 'date' | 'string' | 'number';

@@ -1,5 +1,5 @@
-import { IBsonDatabase } from '../lib/bson-database/database';
-import { IBsonCollection, IRecord } from '../lib/bson-database/collection';
+import type { IBsonDatabase } from '../lib/database';
+import type { IBsonCollection, IRecord } from '../lib/collection';
 import { MockCollection } from './mock-collection';
 
 // Mock BsonDatabase for testing

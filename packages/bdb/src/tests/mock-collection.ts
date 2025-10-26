@@ -1,5 +1,5 @@
-import { IBsonCollection, IGetAllResult, IRecord, IShard } from '../lib/bson-database/collection';
-import { SortDirection, SortDataType, IRangeOptions } from '../lib/bson-database/sort-index';
+import type { IBsonCollection, IGetAllResult, IRecord, IShard } from '../lib/collection';
+import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {

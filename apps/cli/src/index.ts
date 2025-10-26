@@ -22,15 +22,6 @@ import { removeCommand } from './cmd/remove';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { debugHashCommand } from './cmd/debug-hash';
 import { debugSyncCommand } from './cmd/debug-sync';
-import { 
-    debugShowCollectionsCommand,
-    debugShowShardsCommand, 
-    debugShowShardCommand, 
-    debugShowRecordCommand, 
-    debugShowSortIndexesCommand, 
-    debugShowSortIndexCommand, 
-    debugShowSortIndexPageCommand 
-} from './cmd/debug-show';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -193,106 +184,6 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('debug sync'))
         .action(debugSyncCommand);
-
-    // Add collections subcommand
-    debugCommand
-        .command('collections')
-        .description('Lists the collections in the BSON database')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(debugShowCollectionsCommand);
-
-    // Add shards subcommand
-    debugCommand
-        .command('shards')
-        .description('Lists the shards in the BSON database')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(debugShowShardsCommand);
-
-    // Add shard subcommand
-    debugCommand
-        .command('shard')
-        .description('Deserializes and prints one shard')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .argument('<shard-id>', 'The ID of the shard to show')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option('--all', 'Display all object fields (no truncation)')
-        .option('--records', 'Only show record IDs, not full record data')
-        .action(debugShowShardCommand);
-
-    // Add record subcommand
-    debugCommand
-        .command('record')
-        .description('Deserialize and show one record')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .argument('<record-id>', 'The ID of the record to show')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option('--all', 'Display all object fields (no truncation)')
-        .action(debugShowRecordCommand);
-
-    // Add sort-indexes subcommand
-    debugCommand
-        .command('sort-indexes')
-        .description('Show a list of sort indexes')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(debugShowSortIndexesCommand);
-
-    // Add sort-index subcommand
-    debugCommand
-        .command('sort-index')
-        .description('Visualize the structure of a specific sort index')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .argument('<field-name>', 'The field name of the sort index')
-        .argument('<direction>', 'The direction of the sort index (asc or desc)')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(debugShowSortIndexCommand);
-
-    // Add sort-index-page subcommand
-    debugCommand
-        .command('sort-index-page')
-        .description('Deserialize and show one sort index page')
-        .argument('<collection-name>', 'The name of the collection to examine')
-        .argument('<field-name>', 'The field name of the sort index')
-        .argument('<direction>', 'The direction of the sort index (asc or desc)')
-        .argument('<page-id>', 'The ID of the page to show')
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(debugShowSortIndexPageCommand);
 
     program
         .command("examples")

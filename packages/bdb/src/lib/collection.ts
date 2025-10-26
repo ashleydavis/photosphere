@@ -4,11 +4,12 @@
 
 import crypto from 'crypto';
 import { BSON } from 'bson';
-import { IStorage } from '../storage';
-import { IUuidGenerator } from 'utils';
-import { save, load, ISerializer, IDeserializer } from 'serialization';
+import type { IStorage } from 'storage';
+import type { IUuidGenerator } from 'utils';
+import { save, load } from 'serialization';
+import type { ISerializer, IDeserializer } from 'serialization';
 import { SortManager } from './sort-manager';
-import { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
+import type { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
 
 //
 // Options when creating a BSON collection.

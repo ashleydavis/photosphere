@@ -2,10 +2,11 @@
 // Manages the creation and usage of sort indexes for collections
 //
 
-import { IStorage } from 'storage';
-import { IBsonCollection, IRecord } from './collection';
-import { SortIndex, ISortResult, SortDataType, SortDirection } from './sort-index';
-import { IUuidGenerator } from 'utils';
+import type { IStorage } from 'storage';
+import type { IBsonCollection, IRecord } from './collection';
+import { SortIndex } from './sort-index';
+import type { ISortResult, SortDataType, SortDirection } from './sort-index';
+import type { IUuidGenerator } from 'utils';
 
 export interface ISortManagerOptions {
     // Interface to the file storage system
