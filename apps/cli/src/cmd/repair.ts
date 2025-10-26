@@ -12,11 +12,6 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
     source: string;
     
     //
-    // The source metadata directory.
-    //
-    sourceMeta?: string;
-    
-    //
     // The source key file.
     //
     sourceKey?: string;
@@ -49,7 +44,6 @@ export async function repairCommand(options: IRepairCommandOptions): Promise<voi
 
     const result = await database.repair({
         source: options.source,
-        sourceMeta: options.sourceMeta,
         sourceKey: options.sourceKey,
         full: options.full,
     }, (progress) => {
