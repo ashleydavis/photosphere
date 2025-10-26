@@ -64,7 +64,8 @@ Resources:
   📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
   🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
   ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new`)
-        .exitOverride();  // Prevent commander from calling process.exit
+        .exitOverride()  // Prevent commander from calling process.exit
+        .addHelpCommand(false);  // Disable default help command so we can add it in alphabetical order
 
     program
         .command("add")
@@ -107,6 +108,17 @@ Resources:
         .action(checkCommand);
 
     program
+        .command("clear-cache")
+        .description("Clear the local hash cache to force re-hashing of files.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(clearCacheCommand);
+
+    program
         .command("compare")
         .alias("cmp")
         .description("Compares two asset databases by analyzing their Merkle trees.")
@@ -127,6 +139,29 @@ Resources:
         .option("-c, --clear", "Clear all configuration files")
         .addHelpText('after', getCommandExamplesHelp('config'))
         .action(configureCommand);
+
+    program
+        .command("examples")
+        .description("Shows usage examples for all CLI commands.")
+        .option(...yesOption)
+        .addHelpText('after', getCommandExamplesHelp('examples'))
+        .action(examplesCommand);
+
+    program
+        .command("export")
+        .alias("exp")
+        .description("Exports an asset by ID to a specified path.")
+        .argument("<asset-id>", "The ID of the asset to export.")
+        .argument("<output-path>", "The path where the asset should be exported.")
+        .option(...dbOption)
+        .option(...metadataDirOption)
+        .option(...keyOption)
+        .option("-t, --type <type>", "Type of asset to export: original, display, or thumb (default: original)", "original")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('export'))
+        .action(exportCommand);
 
     program
         .command("hash")
@@ -151,52 +186,21 @@ Resources:
         .action(hashCacheCommand);
 
     program
-        .command("clear-cache")
-        .description("Clear the local hash cache to force re-hashing of files.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(clearCacheCommand);
-
-    program
-        .command("sync")
-        .description("Synchronize a local database with a remote/shared database using merkle tree comparison.")
-        .option(...dbOption)
-        .option(...destDbOption)
-        .option(...metadataDirOption)
-        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('sync'))
-        .action(syncCommand);
-
-    program
-        .command("examples")
-        .description("Shows usage examples for all CLI commands.")
-        .option(...yesOption)
-        .addHelpText('after', getCommandExamplesHelp('examples'))
-        .action(examplesCommand);
-
-    program
-        .command("export")
-        .alias("exp")
-        .description("Exports an asset by ID to a specified path.")
-        .argument("<asset-id>", "The ID of the asset to export.")
-        .argument("<output-path>", "The path where the asset should be exported.")
-        .option(...dbOption)
-        .option(...metadataDirOption)
-        .option(...keyOption)
-        .option("-t, --type <type>", "Type of asset to export: original, display, or thumb (default: original)", "original")
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('export'))
-        .action(exportCommand);
+        .command("help [command]")
+        .description("Display help for command")
+        .action((command?: string) => {
+            if (command) {
+                const cmd = program.commands.find(c => c.name() === command || c.aliases().includes(command));
+                if (cmd) {
+                    cmd.help();
+                } else {
+                    console.error(`Unknown command: ${command}`);
+                    program.help();
+                }
+            } else {
+                program.help();
+            }
+        });
 
     program
         .command("info")
@@ -300,6 +304,20 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('summary'))
         .action(summaryCommand);
+
+    program
+        .command("sync")
+        .description("Synchronize a local database with a remote/shared database using merkle tree comparison.")
+        .option(...dbOption)
+        .option(...destDbOption)
+        .option(...metadataDirOption)
+        .option("-d, --dest-meta <dir>", "Destination metadata directory override")
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('sync'))
+        .action(syncCommand);
 
     program
         .command("tools")
