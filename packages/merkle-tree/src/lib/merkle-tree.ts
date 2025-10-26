@@ -36,6 +36,7 @@ export interface SortNode { //todo: Would be nice to have SortLeaf and SortParen
 //
 export interface MerkleNode {
     hash: Buffer; // The hash of this node.
+    nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
     left?: MerkleNode; // Left child node
     right?: MerkleNode; // Right child node
 }
@@ -654,6 +655,7 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
 
         let node: MerkleNode = {
             hash: leaf.contentHash,
+            nodeCount: 1,
         };
 
         // Try to combine this node with nodes at each level going up
@@ -665,6 +667,7 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
             
             node = {
                 hash: combineHashes(left.hash, right.hash),
+                nodeCount: left.nodeCount + right.nodeCount + 1,
                 left: left,
                 right: right,
             };
@@ -691,6 +694,7 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
             } else {
                 result = {
                     hash: combineHashes(result.hash, node.hash),
+                    nodeCount: result.nodeCount + node.nodeCount + 1,
                     left: result,
                     right: node,
                 };
@@ -845,6 +849,42 @@ function combineBigNum(input: { low: number, high: number }): bigint {
 }
 
 //
+// Recursively serializes a single merkle tree node and its children.
+//
+function serializeMerkleNode(node: MerkleNode, serializer: ISerializer): void {
+    // Write nodeCount
+    serializer.writeUInt32(node.nodeCount);
+    
+    // Write the hash (32 bytes)
+    if (node.hash.length !== 32) {
+        throw new Error(`Invalid hash length: ${node.hash.length}, expected 32 bytes`);
+    }
+    serializer.writeBytes(node.hash);
+    
+    // Recursively write children if this is not a leaf
+    if (node.left) {
+        serializeMerkleNode(node.left, serializer);
+    }
+    if (node.right) {
+        serializeMerkleNode(node.right, serializer);
+    }
+}
+
+//
+// Serializes the merkle tree nodes.
+//
+function serializeMerkle<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
+    if (!tree.merkle) {
+        // Write 0 to indicate no merkle tree
+        serializer.writeUInt32(0);
+        return;
+    }
+
+    // Recursively serialize the merkle tree (root nodeCount will indicate total nodes)
+    serializeMerkleNode(tree.merkle, serializer);
+}
+
+//
 // Serializes the sort tree metadata and nodes.
 //
 function serializeSortTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
@@ -908,42 +948,40 @@ function serializeSortTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>
 }
 
 /**
- * Merkle tree file format.
+ * Serializes a merkle tree to storage.
  * 
- * Version 2 format:
- * - 4 bytes: Format version (uint32, value = 2)
- * - Tree metadata and nodes (as in version 1)
+ * File format (version 4):
  * 
- * Version 3 format (new):
- * - 4 bytes: Format version (uint32, value = 3)
- * - 4 bytes: Database metadata BSON length (uint32)
- * - X bytes: Database metadata as BSON (replaces metadata.json)
- * - Tree metadata:
- *   - 16 bytes: UUID bytes
- *   - 4 bytes: Total nodes (uint32)
- *   - 4 bytes: Total files (uint32)
- *   - 8 bytes: Total size (uint64)
- *   - 8 bytes: Creation timestamp (uint64)
- *   - 8 bytes: Last modified timestamp (uint64)
- * - For each node:
- *   - 32 bytes: Hash
+ * Database metadata:
+ * - X bytes: Database metadata as BSON
+ * 
+ * Tree metadata:
+ * - 16 bytes: UUID
+ * 
+ * Sort tree:
+ * - 4 bytes: Total nodes (uint32)
+ * - 4 bytes: Total files (uint32)
+ * - 8 bytes: Total size (uint64 split into low/high uint32s)
+ * - For each node (pre-order traversal):
  *   - 4 bytes: nodeCount (uint32)
  *   - 4 bytes: leafCount (uint32)
- *   - 8 bytes: size (uint64)
- *   - 4 bytes: fileNameLength (uint32)
- *   - X bytes: fileName (if fileNameLength > 0)
- * - 4 bytes: Number of nodeRefs (uint32)
- * - For each nodeRef:
- *   - 4 bytes: fileNameLength (uint32)
- *   - X bytes: fileName
- *   - 4 bytes: fileIndex (uint32)
+ *   - 8 bytes: size (uint64 split into low/high uint32s)
+ *   - If leaf node (nodeCount == 1):
+ *     - 4 bytes: fileName length (uint32)
+ *     - X bytes: fileName (UTF-8)
+ *     - 32 bytes: content hash (SHA-256)
+ *     - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
+ * 
+ * Merkle tree:
+ * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
+ *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 for no tree)
+ *   - 32 bytes: hash (SHA-256) - only if nodeCount > 0
  */
 function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
-    // Write database metadata BSON (always present in version 3+)
+    // Write database metadata BSON
     serializer.writeBSON(tree.databaseMetadata);
         
-    // Write tree metadata.
-    // Write UUID
+    // Write tree UUID
     const idBuffer = Buffer.from(parseUuid(tree.metadata.id));
     if (idBuffer.length !== 16) {
         throw new Error(`Invalid UUID length: ${idBuffer.length}`);
@@ -952,6 +990,9 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     
     // Write sort tree metadata and nodes
     serializeSortTree(tree, serializer);
+    
+    // Write merkle tree nodes
+    serializeMerkle(tree, serializer);
 }
 
 //
@@ -1017,23 +1058,155 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
 }
 
 //
-// Deserializer function for merkle tree (version 4+)
+// Recursively deserializes a single merkle tree node and its children.
 //
-function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
-    // Read database metadata BSON for version 3+
-    const databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
+function deserializeMerkleNode(deserializer: IDeserializer): MerkleNode {
+    // Read nodeCount
+    const nodeCount = deserializer.readUInt32();
     
-    // Read tree metadata fields
-    const uuidBytes = deserializer.readBytes(16);
-    const uuid = stringifyUuid(uuidBytes);
+    // Read this node's hash
+    const hash = deserializer.readBytes(32);
     
-    const totalNodes = deserializer.readUInt32();
-    
-    const totalFiles = deserializer.readUInt32();
+    if (nodeCount === 1) {
+        // Leaf node - no children
+        return { hash, nodeCount };
+    } else {
+        // Internal node - recursively deserialize children
+        const left = deserializeMerkleNode(deserializer);
+        const right = deserializeMerkleNode(deserializer);
+        
+        return {
+            hash,
+            nodeCount,
+            left,
+            right,
+        };
+    }
+}
 
+//
+// Deserializes the merkle tree nodes.
+//
+function deserializeMerkle(deserializer: IDeserializer): MerkleNode | undefined {
+    // Read the root node's nodeCount (0 means no merkle tree)
+    const nodeCount = deserializer.readUInt32();    
+    if (nodeCount === 0) {
+        // No merkle tree was serialized
+        return undefined;
+    }
+    
+    // Read the root node's hash
+    const hash = deserializer.readBytes(32);
+    
+    if (nodeCount === 1) {
+        // Root is a leaf node
+        return { hash, nodeCount };
+    } else {
+        // Root is an internal node - recursively deserialize children
+        const left = deserializeMerkleNode(deserializer);
+        const right = deserializeMerkleNode(deserializer);
+        
+        return {
+            hash,
+            nodeCount,
+            left,
+            right,
+        };
+    }
+}
+
+//
+// Recursively deserializes a single sort tree node and its children.
+//
+function deserializeSortNode(deserializer: IDeserializer): SortNode {
+    // Read node metadata
+    const nodeCount = deserializer.readUInt32();
+    const leafCount = deserializer.readUInt32();
+    const sizeLow = deserializer.readUInt32();
+    const sizeHigh = deserializer.readUInt32();
+    const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
+    
+    if (nodeCount === 1) {
+        // This is a leaf node
+        const fileNameLength = deserializer.readUInt32(); //todo: Use readString.
+        const fileNameBytes = deserializer.readBytes(fileNameLength);
+        const fileName = fileNameBytes.toString('utf8');
+        
+        const contentHash = deserializer.readBytes(32);
+        
+        const lastModifiedLow = deserializer.readUInt32();
+        const lastModifiedHigh = deserializer.readUInt32();
+        const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
+        const lastModified = lastModifiedTimestamp > 0 ? new Date(lastModifiedTimestamp) : undefined;
+        
+        return {
+            contentHash,
+            fileName,
+            nodeCount,
+            leafCount,
+            size,
+            lastModified,
+            minFileName: fileName,
+        };
+    } else {
+        // This is an internal node - recursively read children
+        const left = deserializeSortNode(deserializer);
+        const right = deserializeSortNode(deserializer);
+        
+        return {
+            nodeCount,
+            leafCount,
+            size,
+            minFileName: left.minFileName,
+            left,
+            right,
+        };
+    }
+}
+
+//
+// Deserializes the sort tree metadata and nodes.
+//
+function deserializeSortTree(deserializer: IDeserializer): {
+    sort: SortNode | undefined;
+    totalNodes: number;
+    totalFiles: number;
+    totalSize: number;
+} {
+    // Read sort tree metadata
+    const totalNodes = deserializer.readUInt32();
+    const totalFiles = deserializer.readUInt32();
     const totalSizeLow = deserializer.readUInt32();
     const totalSizeHigh = deserializer.readUInt32();
     const totalSize = Number(combineBigNum({ low: totalSizeLow, high: totalSizeHigh }));
+    
+    // Recursively build the sort tree
+    const sort = totalNodes > 0 ? deserializeSortNode(deserializer) : undefined;
+    
+    return {
+        sort,
+        totalNodes,
+        totalFiles,
+        totalSize,
+    };
+}
+
+//
+// Deserializer function for merkle tree (version 4+)
+//
+function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
+    // Read database metadata BSON
+    const databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
+    
+    // Read tree UUID
+    const uuidBytes = deserializer.readBytes(16);
+    const uuid = stringifyUuid(uuidBytes);
+    
+    // Read sort tree metadata and nodes
+    const { sort, totalNodes, totalFiles, totalSize } = deserializeSortTree(deserializer);
+    
+    // Read merkle tree nodes
+    const merkle = deserializeMerkle(deserializer);
     
     // Create metadata object
     const metadata: TreeMetadata = {
@@ -1043,59 +1216,10 @@ function deserializeMerkleTreeV4<DatabaseMetadata>(deserializer: IDeserializer):
         totalSize,
     };
     
-    // Read all nodes
-    const nodes: Omit<SortNode, 'minFileName'>[] = [];
-    
-    for (let i = 0; i < totalNodes; i++) {        
-        // Read nodeCount
-        const nodeCount = deserializer.readUInt32();
-        
-        // Read leafCount
-        const leafCount = deserializer.readUInt32();
-
-        // Read tree size.
-        const sizeLow = deserializer.readUInt32();
-        const sizeHigh = deserializer.readUInt32();
-        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
-        
-        let fileName: string | undefined;
-        let contentHash: Buffer | undefined;
-        let lastModified: Date | undefined;
-        
-        if (nodeCount === 1) {
-            // Read fileName.
-            const fileNameLength = deserializer.readUInt32(); //todo: Use readString.
-            const fileNameBytes = deserializer.readBytes(fileNameLength);
-            fileName = fileNameBytes.toString('utf8');
-            
-            // Read content hash
-            contentHash = deserializer.readBytes(32);
-            
-            // Read lastModified timestamp (8 bytes)
-            const lastModifiedLow = deserializer.readUInt32();
-            const lastModifiedHigh = deserializer.readUInt32();
-            const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
-            if (lastModifiedTimestamp > 0) {
-                lastModified = new Date(lastModifiedTimestamp);
-            }
-        }        
-        
-        // Create node
-        nodes.push({
-            contentHash,
-            fileName,
-            nodeCount,
-            leafCount,
-            size,
-            lastModified
-        });
-    }
-    
-    const sort = arrayToBinaryTree(nodes);    
     return {
         sort,
         dirty: false,
-        merkle: buildMerkleTree(sort), //TODO: Load the merkle tree from disk.
+        merkle,
         metadata,
         databaseMetadata,
         version: 4,
