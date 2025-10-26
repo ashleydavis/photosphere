@@ -10,7 +10,8 @@ import {
     loadTree,
     createDefaultMetadata,
     updateMetadata,
-    createTree
+    createTree,
+    buildMerkleTree
 } from '../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
@@ -49,6 +50,9 @@ describe('Merkle Tree Metadata', () => {
         if (!merkleTree) {
             throw new Error('Failed to build the tree');
         }
+
+        merkleTree.dirty = false;
+        merkleTree.merkle = buildMerkleTree(merkleTree.sort);
         
         return merkleTree;
     }

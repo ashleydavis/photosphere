@@ -46,6 +46,9 @@ describe('Merkle Tree Save/Load', () => {
         if (!merkleTree) {
             throw new Error('Failed to build the tree');
         }
+
+        merkleTree.dirty = false;
+        merkleTree.merkle = buildMerkleTree(merkleTree.sort);
         
         return merkleTree;
     }
@@ -120,6 +123,7 @@ describe('Merkle Tree Save/Load', () => {
         const fileNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
         const originalTree = buildTree(fileNames);
 
+        originalTree.dirty = false;
         originalTree.merkle = buildMerkleTree(originalTree.sort); // Force tree rebuild.
         
         // Save the tree to a file
@@ -292,6 +296,9 @@ describe('loadTreeVersion', () => {
             };
             originalTree = addFile(originalTree, fileHash);
         }
+
+        originalTree.dirty = false;
+        originalTree.merkle = buildMerkleTree(originalTree.sort);
         
         await saveTree(TEST_VERSION_FILE_PATH, originalTree, storage);
         
