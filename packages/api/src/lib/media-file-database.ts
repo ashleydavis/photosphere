@@ -273,11 +273,6 @@ export interface IRepairOptions {
     source: string;
     
     //
-    // The source metadata directory.
-    //
-    sourceMeta?: string;
-    
-    //
     // The source key file.
     //
     sourceKey?: string;
@@ -1310,7 +1305,7 @@ export class MediaFileDatabase {
     async repair(options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {        
         const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
         const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
-        const { storage: sourceMetadataStorage } = createStorage(options.sourceMeta || pathJoin(options.source, '.db'));
+        const { storage: sourceMetadataStorage } = createStorage(pathJoin(options.source, '.db'));
 
         const summary = await this.getDatabaseSummary();
         const result: IRepairResult = {

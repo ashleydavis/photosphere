@@ -14,7 +14,6 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     init: [
         { command: "psi init --db .", description: "Creates a database in current directory." },
         { command: "psi init --db ./photos", description: "Creates a database in ./photos directory." },
-        { command: "psi init --db ./photos -m ./photos-meta", description: "Creates with custom metadata directory." }
     ],
     
     add: [
@@ -69,13 +68,11 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     replicate: [
         { command: "psi replicate --db ./photos --dest ./backup", description: "Replicates a database to a backup location." },
         { command: "psi replicate --db . --dest s3:bucket/photos", description: "Replicates the current database to S3." },
-        { command: "psi replicate --db ./photos --dest ./remote --dest-meta ./remote-meta", description: "Uses a custom destination metadata directory." }
     ],
     
     compare: [
         { command: "psi compare --db ./photos --dest ./backup", description: "Compares an original database with a backup." },
         { command: "psi compare --db . --dest s3:bucket/photos", description: "Compares a local database with an S3 replica." },
-        { command: "psi compare --db ./photos --dest ./mirror -s ./photos-meta", description: "Uses custom metadata directories." }
     ],
     
     "bug": [
@@ -98,38 +95,6 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
     ],
     
-    "debug merkle-tree": [
-        { command: "psi debug merkle-tree --db .", description: "Shows the merkle tree for current directory." },
-        { command: "psi debug merkle-tree --db ./photos", description: "Shows the merkle tree for ./photos database." }
-    ],
-    
-    "debug hash-cache": [
-        { command: "psi debug hash-cache --db .", description: "Shows both the local and database hash caches." },
-        { command: "psi debug hash-cache --db . -t local", description: "Shows only the local hash cache information." },
-        { command: "psi debug hash-cache --db ./photos -t database", description: "Shows the database cache for ./photos." }
-    ],
-    
-    "debug clear-cache": [
-        { command: "psi debug clear-cache --db .", description: "Clears both the local and database hash caches." },
-        { command: "psi debug clear-cache --db . -t local", description: "Clears only the local hash cache." },
-        { command: "psi debug clear-cache --db ./photos -t database", description: "Clears the database cache for ./photos." }
-    ],
-    
-    "debug hash": [
-        { command: "psi debug hash /path/to/file.jpg", description: "Hashes a local file using SHA-256." },
-        { command: "psi debug hash fs:/path/to/file.jpg", description: "Hashes a file using filesystem storage prefix." },
-        { command: "psi debug hash s3:bucket/path/to/file.jpg", description: "Hashes a file stored in S3." },
-        { command: "psi debug hash /encrypted/file.jpg --key ./my-key.pem", description: "Hashes an encrypted file using a private key." }
-    ],
-
-    "debug update": [
-        { command: "psi debug update --db .", description: "Updates file hashes in current directory database when files have changed." },
-        { command: "psi debug update --db ./photos", description: "Updates file hashes in ./photos database." },
-        { command: "psi debug update --db . --dry-run", description: "Shows what files would be updated without making changes." },
-        { command: "psi debug update --db . --path asset/12345", description: "Updates only a specific file by path." },
-        { command: "psi debug update --db . --full", description: "Forces full verification and update, bypassing cached optimizations." }
-    ],
-    
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
@@ -137,15 +102,13 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     ],
     
     upgrade: [
-        { command: "psi upgrade --db .", description: "Upgrades the database in current directory to latest format." },
+        { command: "psi upgrade --db .", description: "Upgrades the database in current directory to latest version." },
         { command: "psi upgrade --db ./photos", description: "Upgrades the database in ./photos directory." },
-        { command: "psi upgrade --db ./photos -v", description: "Upgrades with verbose output showing all actions." }
     ],
     
     remove: [
         { command: "psi remove --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890", description: "Removes asset with ID from the database." },
         { command: "psi remove --db . f1e2d3c4-b5a6-7890-cdef-ab1234567890", description: "Removes asset from current directory database." },
-        { command: "psi remove --db ./photos 12345678-9abc-def0-1234-567890abcdef -v", description: "Removes asset with verbose output showing all actions." }
     ],
     
     hash: [
@@ -156,10 +119,8 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     ],
     
     sync: [
-        { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes databases using merkle tree comparison." },
-        { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with S3 replica." },
-        { command: "psi sync --db ./photos --dest ./remote -d ./remote-meta", description: "Uses custom destination metadata directory." },
-        { command: "psi sync --db ./primary --dest ./secondary -v", description: "Synchronizes with verbose output showing all changes." }
+        { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes changes between two databases." },
+        { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with an S3 replica." },
     ]
 };
 
@@ -172,7 +133,7 @@ export const MAIN_EXAMPLES: ICommandExample[] = [
     { command: "psi summary --db ./photos", description: "Shows the database summary (file count, size, etc.)." },
     { command: "psi verify --db ./photos", description: "Verifies the database integrity." },
     { command: "psi replicate --db ./photos --dest ./backup", description: "Replicates one database to a backup location." },
-    { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes databases using merkle tree comparison." },
+    { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes changes between two databases." },
     { command: "psi compare --db ./photos --dest ./backup", description: "Compares two databases for differences." }
 ];
 
