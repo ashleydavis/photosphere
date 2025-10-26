@@ -2,10 +2,12 @@
 // Loads a BSON fixture into the database.
 //
 //TODO: There should be a separate tool that does this.
+//      Maybe this can be subsumed into the bdb-cli tool.
 
+import { BsonDatabase } from 'bdb';
 import fs from 'fs';
 import path from 'path';
-import { BsonDatabase, createStorage, FileStorage } from 'storage';
+import { createStorage } from 'storage';
 import { RandomUuidGenerator } from 'utils';
 
 async function main(): Promise<void> {

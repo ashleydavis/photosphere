@@ -1,8 +1,8 @@
-import { SortIndex, ISortedIndexEntry } from '../lib/bson-database/sort-index';
-import { IBsonCollection, IRecord, IShard } from '../lib/bson-database/collection';
+import { SortIndex, ISortedIndexEntry } from 'bdb';
+import { IBsonCollection, IRecord, IShard } from 'bdb';
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
-import { MockStorage } from './mock-storage';
-import { MockCollection } from './mock-collection';
+import { MockStorage } from 'storage';
+import { MockCollection } from 'bdb';
 import { BSON } from 'bson';
 import fs from 'fs-extra';
 import path from 'path';

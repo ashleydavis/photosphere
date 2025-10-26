@@ -1,11 +1,12 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
-import { BsonDatabase, IStorage, StoragePrefixWrapper } from "storage";
+import { IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
+import { BsonDatabase } from "bdb";
 
 interface IUser extends IMediaFileDatabases {
     _id: string;

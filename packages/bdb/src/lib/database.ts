@@ -2,9 +2,10 @@
 // Implements a BSON-based database that can store multiple collections of documents.
 //
 
-import { IStorage } from "../storage";
-import { BsonCollection, IRecord, type IBsonCollection } from "./collection";
-import { IUuidGenerator } from "utils";
+import type { IStorage } from "storage";
+import { BsonCollection } from "./collection";
+import type { IRecord, IBsonCollection } from "./collection";
+import type { IUuidGenerator } from "utils";
 
 export interface IBsonDatabase {
 
