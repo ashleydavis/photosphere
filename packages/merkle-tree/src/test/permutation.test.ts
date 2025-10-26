@@ -43,6 +43,7 @@ describe('Merkle Tree Permutation Tests', () => {
   // console.log(`Creating tree 1 [${comparisonPermutation.join('-')}]`);
   const comparisonTree = createPermutationTree(comparisonPermutation);
 
+  comparisonTree.dirty = false;
   comparisonTree.merkle = buildMerkleTree(comparisonTree.sort); // Force tree rebuild.
   
   // Test that every other permutation produces the same tree as the first permutation.
@@ -53,6 +54,7 @@ describe('Merkle Tree Permutation Tests', () => {
       // console.log(`Creating tree ${index + 1} [${permutation.join('-')}]`);
       const permutationTree = createPermutationTree(permutation);
 
+      permutationTree.dirty = false;
       permutationTree.merkle = buildMerkleTree(permutationTree.sort); // Force tree rebuild.
 
       const root = permutationTree.merkle;

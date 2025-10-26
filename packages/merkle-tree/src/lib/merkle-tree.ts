@@ -997,7 +997,6 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 
 //
 // Rebuild a merkle tree in sorted order and removes a path.
-//TODO: Should be able to remove this.
 //
 export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
 
@@ -1053,6 +1052,8 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
         rebuiltTree = addFile(rebuiltTree, file);
     }
 
+    rebuiltTree.dirty = false;
+    rebuiltTree.merkle = buildMerkleTree(rebuiltTree.sort);
 
     return rebuiltTree;
 }
@@ -1402,6 +1403,11 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
 // Saves a merkle tree to storage.
 //
 export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
+
+    if (tree.dirty) {
+        throw new Error('Tree is dirty. Cannot save. Make sure to rebuild the tree before saving.');
+    }
+
     await save(
         storage,
         filePath,

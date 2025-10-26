@@ -42,6 +42,7 @@ describe('File Deletion (deleteFile)', () => {
             throw new Error('Failed to build test tree');
         }
 
+        tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         return tree;
@@ -90,6 +91,9 @@ describe('File Deletion (deleteFile)', () => {
         const fileToDelete = 'file2.txt';
         
         deleteFile(tree, fileToDelete);
+
+        tree.dirty = false;
+        tree.merkle = buildMerkleTree(tree.sort);
         
         // Save the tree to a temporary file
         const tempFile = '/tmp/merkle-tree-delete-test.bin';
@@ -134,6 +138,7 @@ describe('File Deletion (deleteFile)', () => {
         // Delete a file
         deleteFile(tree, 'file3.txt');
 
+        tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         // Get new root hash
@@ -195,6 +200,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
             throw new Error('Failed to build test tree');
         }
 
+        tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         return tree;
@@ -260,9 +266,11 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Create a test tree and delete a file
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
-        const initialFiles = tree.metadata.totalFiles;
         
         deleteFiles(tree, [fileToDelete]);
+
+        tree.dirty = false;
+        tree.merkle = buildMerkleTree(tree.sort);
         
         // Save the tree to a temporary file
         const tempFile = '/tmp/merkle-tree-hard-delete-test.bin';
@@ -306,6 +314,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         // Delete a file
         deleteFiles(tree, ['file3.txt']);
 
+        tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
         
         // Get new root hash

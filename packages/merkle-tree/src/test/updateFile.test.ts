@@ -40,6 +40,7 @@ describe('Merkle Tree UpdateFile', () => {
     tree = addFile(tree, file4);
     tree = addFile(tree, file5);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Get the root hash before update
@@ -49,6 +50,7 @@ describe('Merkle Tree UpdateFile', () => {
     const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
     const updated = updateFile(tree, updatedFile3);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the update was successful

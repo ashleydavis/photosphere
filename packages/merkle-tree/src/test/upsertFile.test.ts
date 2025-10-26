@@ -53,6 +53,7 @@ describe('Merkle Tree upsertFile', () => {
     const file = createFileHash('file1.txt', originalContent);
     tree = upsertFile(tree, file);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify initial state
@@ -69,6 +70,7 @@ describe('Merkle Tree upsertFile', () => {
     const updatedFile = createFileHash('file1.txt', updatedContent);
     tree = upsertFile(tree, updatedFile);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the file was updated, not added
@@ -137,6 +139,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, fileC);
     tree = upsertFile(tree, fileD);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Record original node hashes using depth-first traversal
@@ -150,6 +153,7 @@ describe('Merkle Tree upsertFile', () => {
     const updatedFileC = createFileHash('C.txt', 'updated content C');
     tree = upsertFile(tree, updatedFileC);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the file node has the updated hash
@@ -192,6 +196,7 @@ describe('Merkle Tree upsertFile', () => {
     const file = createFileHash('file1.txt', content);
     tree = upsertFile(tree, file);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Record the original root hash
@@ -201,6 +206,7 @@ describe('Merkle Tree upsertFile', () => {
     const sameFile = createFileHash('file1.txt', content);
     tree = upsertFile(tree, sameFile);
 
+    tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Since the content is identical, the tree should be unchanged
