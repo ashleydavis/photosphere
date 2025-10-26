@@ -8,8 +8,6 @@ import {
     deleteFile,
     saveTree,
     loadTree,
-    createDefaultMetadata,
-    updateMetadata,
     createTree,
     buildMerkleTree
 } from '../lib/merkle-tree';
@@ -71,22 +69,18 @@ describe('Merkle Tree Metadata', () => {
         const originalTree = buildTree(['A', 'B']);
         
         // Check that the metadata exists
-        expect(originalTree.metadata).toBeDefined();
+        // Verify UUID is properly formatted
+        expect(originalTree.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
         
-        if (originalTree.metadata) {
-            // Verify UUID is properly formatted
-            expect(originalTree.metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-            
-            // Verify node and file counts
-            expect(originalTree.metadata.totalNodes).toBe(originalTree.sort?.nodeCount || 0);
-            expect(originalTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);            
-        }
+        // Verify node and file counts
+        expect(originalTree.sort?.nodeCount).toBe(originalTree.sort?.nodeCount || 0);
+        expect(originalTree.sort?.leafCount).toBeGreaterThan(0);
     });
     
     test('should update metadata when modifying the tree', () => {
         // Create initial tree
         let tree = buildTree(['A', 'B']);
-        const originalMetadata = { ...tree.metadata! };
+        const originalMetadata = { id: tree.id, nodeCount: tree.sort?.nodeCount, leafCount: tree.sort?.leafCount };
         
         // Let time pass
         jest.advanceTimersByTime(1000);
@@ -96,22 +90,18 @@ describe('Merkle Tree Metadata', () => {
         tree = addFile(tree, fileHashC);
         
         // Check that metadata was updated
-        expect(tree.metadata).toBeDefined();
+        // UUID should remain the same
+        expect(tree.id).toEqual(originalMetadata.id);
         
-        if (tree.metadata) {
-            // UUID should remain the same
-            expect(tree.metadata.id).toEqual(originalMetadata.id);
-            
-            // Counts should be updated
-            expect(tree.metadata.totalNodes).toBe(tree.sort?.nodeCount || 0);
-            expect(tree.metadata.totalFiles).toBe(tree.metadata.totalFiles);
-        }
+        // Counts should be updated
+        expect(tree.sort?.nodeCount).toBe(tree.sort?.nodeCount || 0);
+        expect(tree.sort?.leafCount).toBeGreaterThan(0);
     });
     
     test('should update metadata when updating a file', () => {
         // Create initial tree
         let tree = buildTree(['A', 'B']);
-        const originalMetadata = { ...tree.metadata! };
+        const originalMetadata = { id: tree.id, nodeCount: tree.sort?.nodeCount, leafCount: tree.sort?.leafCount };
         
         // Let time pass
         jest.advanceTimersByTime(1000);
@@ -121,22 +111,18 @@ describe('Merkle Tree Metadata', () => {
         updateFile(tree, updatedFileHashA);
         
         // Check that metadata was updated
-        expect(tree.metadata).toBeDefined();
+        // UUID should remain the same
+        expect(tree.id).toEqual(originalMetadata.id);
         
-        if (tree.metadata) {
-            // UUID should remain the same
-            expect(tree.metadata.id).toEqual(originalMetadata.id);
-            
-            // Counts should remain the same (updating doesn't add nodes)
-            expect(tree.metadata.totalNodes).toBe(originalMetadata.totalNodes);
-            expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles);
-        }
+        // Counts should remain the same (updating doesn't add nodes)
+        expect(tree.sort?.nodeCount).toBe(originalMetadata.nodeCount);
+        expect(tree.sort?.leafCount).toBe(originalMetadata.leafCount);
     });
     
     test('should update metadata when deleting a file', () => {
         // Create initial tree
         let tree = buildTree(['A', 'B', 'C']);
-        const originalMetadata = { ...tree.metadata! };
+        const originalMetadata = { id: tree.id, nodeCount: tree.sort?.nodeCount, leafCount: tree.sort?.leafCount };
         
         // Let time pass
         jest.advanceTimersByTime(1000);
@@ -145,66 +131,29 @@ describe('Merkle Tree Metadata', () => {
         deleteFile(tree, 'B');
         
         // Check that metadata was updated
-        expect(tree.metadata).toBeDefined();
+        // UUID should remain the same
+        expect(tree.id).toEqual(originalMetadata.id);
         
-        if (tree.metadata) {
-            // UUID should remain the same
-            expect(tree.metadata.id).toEqual(originalMetadata.id);
-            
-            // Counts should decrease (hard delete removes nodes)
-            expect(tree.metadata.totalNodes).toBeLessThan(originalMetadata.totalNodes);
-            expect(tree.metadata.totalFiles).toBe(originalMetadata.totalFiles - 1);
-        }
+        // Counts should decrease (hard delete removes nodes)
+        expect(tree.sort?.nodeCount || 0).toBeLessThan(originalMetadata.nodeCount || 0);
+        expect(tree.sort?.leafCount).toBe((originalMetadata.leafCount || 0) - 1);
     });
     
     test('should save and load metadata with V2 format', async () => {
         // Create a tree with metadata
         const originalTree = buildTree(['A', 'B', 'C']);
-        expect(originalTree.metadata).toBeDefined();
-        
         // Save the tree to a file
         await saveTree(TEST_FILE_PATH, originalTree, new FileStorage(""));
         
         // Load the tree from the file
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
-        // Check that metadata was preserved
-        expect(loadedTree.metadata).toBeDefined();
-        
-        if (loadedTree.metadata && originalTree.metadata) {
-            // All metadata fields should match
-            expect(loadedTree.metadata.id).toEqual(originalTree.metadata.id);
-            expect(loadedTree.metadata.totalNodes).toEqual(originalTree.metadata.totalNodes);
-            expect(loadedTree.metadata.totalFiles).toEqual(originalTree.metadata.totalFiles);
-        }
+        // All metadata fields should match
+        expect(loadedTree.id).toEqual(originalTree.id);
+        expect(loadedTree.sort?.nodeCount).toEqual(originalTree.sort?.nodeCount);
+        expect(loadedTree.sort?.leafCount).toEqual(originalTree.sort?.leafCount);
     });
     
-    test('createDefaultMetadata should generate valid metadata', () => {
-        const metadata = createDefaultMetadata("12345678-1234-5678-9abc-123456789abc");
-        
-        // UUID should be properly formatted
-        expect(metadata.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-        
-        // Initial counts should be zero
-        expect(metadata.totalNodes).toBe(0);
-        expect(metadata.totalFiles).toBe(0);
-    });
-    
-    test('updateMetadata should update counts and modified time', () => {
-        const original = createDefaultMetadata("12345678-1234-5678-9abc-123456789abc");
-        
-        // Let time pass
-        jest.advanceTimersByTime(1000);
-        
-        // Update metadata
-        const updated = updateMetadata(original, 10, 5, 3);
-        
-        // UUID should remain the same
-        expect(updated.id).toEqual(original.id);
-        
-        // Counts should be updated
-        expect(updated.totalNodes).toBe(10);
-        expect(updated.totalFiles).toBe(5);
-        expect(updated.totalSize).toBe(3);
-    });
+    // Tests removed - createDefaultMetadata and updateMetadata no longer exist
+    // Metadata (totalNodes, totalFiles, totalSize) now comes directly from the sort tree root
 });

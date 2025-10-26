@@ -30,7 +30,7 @@ describe('Size calculation with file updates', () => {
     
     // Verify initial size
     expect(tree.sort?.size).toBe(initialSize);
-    expect(tree.metadata.totalSize).toBe(initialSize);
+    expect(tree.sort?.size).toBe(initialSize);
     
     // Update the file with a different size
     const updatedSize = 2000;
@@ -43,7 +43,7 @@ describe('Size calculation with file updates', () => {
     
     // Verify root node and metadata were updated
     expect(tree.sort?.size).toBe(updatedSize);
-    expect(tree.metadata.totalSize).toBe(updatedSize);
+    expect(tree.sort?.size).toBe(updatedSize);
   });
 
   test('updating file propagates size changes up the tree', () => {
@@ -60,7 +60,7 @@ describe('Size calculation with file updates', () => {
     // Initial total size
     const initialTotalSize = file1Size + file2Size + file3Size;
     expect(tree.sort?.size).toBe(initialTotalSize);
-    expect(tree.metadata.totalSize).toBe(initialTotalSize);
+    expect(tree.sort?.size).toBe(initialTotalSize);
     
     // Update the second file with a larger size
     const newFile2Size = 5000;
@@ -75,7 +75,7 @@ describe('Size calculation with file updates', () => {
     expect(tree.sort?.size).toBe(initialTotalSize + sizeDifference);
     
     // Verify metadata was updated
-    expect(tree.metadata.totalSize).toBe(initialTotalSize + sizeDifference);
+    expect(tree.sort?.size).toBe(initialTotalSize + sizeDifference);
   });
 
   test('updating file to smaller size properly reduces tree size', () => {
@@ -93,7 +93,7 @@ describe('Size calculation with file updates', () => {
     
     // Expected new total size: 1000 + 2000 + 1500 = 4500
     expect(tree.sort?.size).toBe(4500);
-    expect(tree.metadata.totalSize).toBe(4500);
+    expect(tree.sort?.size).toBe(4500);
   });
 
   test('size is correctly maintained in a complex tree with multiple updates', () => {
@@ -109,7 +109,7 @@ describe('Size calculation with file updates', () => {
     
     // Verify initial total size
     expect(tree.sort?.size).toBe(totalInitialSize);
-    expect(tree.metadata.totalSize).toBe(totalInitialSize);
+    expect(tree.sort?.size).toBe(totalInitialSize);
     
     // Update multiple files
     updateFile(tree, createFileHash('file1.txt', 'updated content 1', 250)); // +50
@@ -121,7 +121,7 @@ describe('Size calculation with file updates', () => {
     
     // Verify root size is updated correctly
     expect(tree.sort?.size).toBe(expectedNewTotal);
-    expect(tree.metadata.totalSize).toBe(expectedNewTotal);
+    expect(tree.sort?.size).toBe(expectedNewTotal);
     
     // Verify individual nodes
     expect(findFileNode(tree, 'file1.txt')?.size).toBe(250);

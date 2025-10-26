@@ -663,7 +663,6 @@ export class MediaFileDatabase {
     //
     async getDatabaseSummary(): Promise<IDatabaseSummary> {
         const merkleTree = this.assetDatabase.getMerkleTree();
-        const metadata = merkleTree.metadata;
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
         if (merkleTree.dirty || !merkleTree.merkle) {
             log.warn(`Merkle tree is dirty or missing, will rebuild.`);
@@ -676,9 +675,9 @@ export class MediaFileDatabase {
         
         return {
             totalImports: filesImported,
-            totalFiles: metadata.totalFiles,
-            totalSize: metadata.totalSize,
-            totalNodes: metadata.totalNodes,
+            totalFiles: merkleTree.sort?.leafCount || 0,
+            totalSize: merkleTree.sort?.size || 0,
+            totalNodes: merkleTree.sort?.nodeCount || 0,
             fullHash: fullHash || 'empty',
             databaseVersion: merkleTree.version
         };

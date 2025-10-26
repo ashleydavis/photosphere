@@ -94,14 +94,12 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
 
     let result = "";
     
-    // Add metadata if available
-    if (merkleTree.metadata) {
-        result += "Tree Metadata:\n";
-        result += `  UUID: ${merkleTree.metadata.id}\n`;
-        result += `  Total Nodes: ${merkleTree.metadata.totalNodes}\n`;
-        result += `  Total Files: ${merkleTree.metadata.totalFiles}\n`;
-        result += `  Total Size: ${merkleTree.metadata.totalSize} bytes\n`;
-    }
+    // Add metadata
+    result += "Tree Metadata:\n";
+    result += `  UUID: ${merkleTree.id}\n`;
+    result += `  Total Nodes: ${merkleTree.sort?.nodeCount || 0}\n`;
+    result += `  Total Files: ${merkleTree.sort?.leafCount || 0}\n`;
+    result += `  Total Size: ${merkleTree.sort?.size || 0} bytes\n`;
     
     // Add database metadata if available (version 3+)
     if (merkleTree.databaseMetadata) {
