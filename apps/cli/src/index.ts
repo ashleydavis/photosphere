@@ -20,8 +20,8 @@ import { upgradeCommand } from './cmd/upgrade';
 import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
 import { clearCacheCommand } from './cmd/clear-cache';
-import { debugHashCommand } from './cmd/debug-hash';
-import { debugSyncCommand } from './cmd/debug-sync';
+import { hashCommand } from './cmd/hash';
+import { syncCommand } from './cmd/sync';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -128,52 +128,42 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('config'))
         .action(configureCommand);
 
-    // Add debug commands with shared options
-    const debugCommand = program
-        .command('debug')
-        .description('Debug utilities for inspecting the media file database internals');
+    program
+        .command("hash")
+        .description("Compute the hash of a file using the same algorithm as the database.")
+        .argument("<file-path>", "The file path to hash (supports fs:, s3:, and encrypted storage)")
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('hash'))
+        .action(hashCommand);
 
-    // Add hash-cache subcommand
-    debugCommand
-        .command('hash-cache')
-        .description('Display information about the local and database hash caches')
+    program
+        .command("hash-cache")
+        .description("Display information about the local hash cache.")
         .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
-        .option('-t, --type <type>', 'Cache type to display: \'local\', \'database\', or \'both\' (default: \'both\')')
         .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('debug hash-cache'))
         .action(hashCacheCommand);
 
-    // Add clear-cache subcommand
-    debugCommand
-        .command('clear-cache')
-        .description('Clear the local and/or database hash caches')
+    program
+        .command("clear-cache")
+        .description("Clear the local hash cache to force re-hashing of files.")
         .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('debug clear-cache'))
         .action(clearCacheCommand);
-    // Add hash subcommand
-    debugCommand
-        .command('hash')
-        .description('Hash a file through the storage abstraction')
-        .argument('<file-path>', 'The file path to hash (supports fs:, s3:, and encrypted storage)')
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('debug hash'))
-        .action(debugHashCommand);
 
-    debugCommand
-        .command('sync')
-        .description('Synchronize the local database with a remote/shared database')
+    program
+        .command("sync")
+        .description("Synchronize a local database with a remote/shared database using merkle tree comparison.")
         .option(...dbOption)
         .option(...destDbOption)
         .option(...metadataDirOption)
@@ -182,8 +172,8 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('debug sync'))
-        .action(debugSyncCommand);
+        .addHelpText('after', getCommandExamplesHelp('sync'))
+        .action(syncCommand);
 
     program
         .command("examples")
@@ -331,7 +321,7 @@ Resources:
 
     program
         .command("upgrade")
-        .description("Upgrades a media file database to the latest format by adding missing metadata files.")
+        .description("Upgrades a media file database to the latest version.")
         .option(...dbOption)
         .option(...metadataDirOption)
         .option(...keyOption)

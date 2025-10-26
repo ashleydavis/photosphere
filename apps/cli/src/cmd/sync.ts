@@ -5,16 +5,16 @@ import { MediaFileDatabase } from "api";
 import { MerkleNode, traverseTree, getFileInfo, computeHash, SortNode } from "adb";
 
 //
-// Options for the debug sync command.
+// Options for the sync command.
 //
-export interface IDebugSyncCommandOptions extends IBaseCommandOptions {
+export interface ISyncCommandOptions extends IBaseCommandOptions {
     dest: string;
 }
 
 //
-// Debug sync command implementation - synchronizes databases according to the sync specification.
+// Sync command implementation - synchronizes databases according to the sync specification.
 //
-export async function debugSyncCommand(options: IDebugSyncCommandOptions): Promise<void> {
+export async function syncCommand(options: ISyncCommandOptions): Promise<void> {
 
     log.info("Starting database sync operation...");
     log.info(`  Source:    ${pc.cyan(options.db || ".")}`);

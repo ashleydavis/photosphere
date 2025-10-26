@@ -7,7 +7,7 @@ import { loadEncryptionKeys } from "storage";
 import { resolveKeyPath } from "../lib/init-cmd";
 import path from 'node:path';
 
-export interface IDebugHashCommandOptions {
+export interface IHashCommandOptions {
     verbose?: boolean;
     yes?: boolean;
     key?: string;
@@ -16,7 +16,7 @@ export interface IDebugHashCommandOptions {
 //
 // Command to hash a file through the storage abstraction
 //
-export async function debugHashCommand(filePath: string, options: IDebugHashCommandOptions): Promise<void> {
+export async function hashCommand(filePath: string, options: IHashCommandOptions): Promise<void> {
     
     if (!filePath) {
         console.error(pc.red("File path is required."));
