@@ -2262,7 +2262,7 @@ run_all_tests() {
     
     # Clear local cache before running tests
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+    invoke_command "Clear local cache" "$(get_cli_command) clear-cache --yes" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
