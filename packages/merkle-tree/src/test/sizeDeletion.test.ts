@@ -63,14 +63,14 @@ describe('Size calculation with file deletion', () => {
     
     // Verify initial total size
     expect(tree.sort?.size).toBe(initialTotalSize);
-    expect(tree.metadata.totalSize).toBe(initialTotalSize);
+    expect(tree.sort?.size).toBe(initialTotalSize);
     
     // Delete a file of size 3000
     deleteFile(tree, 'file3.txt');
     
     // Expected new total: 15000 - 3000 = 12000
     expect(tree.sort?.size).toBe(12000);
-    expect(tree.metadata.totalSize).toBe(12000);
+    expect(tree.sort?.size).toBe(12000);
   });
 
   test('deleting multiple files correctly updates size throughout the tree', () => {
@@ -78,7 +78,7 @@ describe('Size calculation with file deletion', () => {
     const initialTotalSize = 15000;
     
     // Verify initial state
-    expect(tree.metadata.totalSize).toBe(initialTotalSize);
+    expect(tree.sort?.size).toBe(initialTotalSize);
     
     // Delete multiple files
     deleteFile(tree, 'file1.txt'); // -1000
@@ -86,14 +86,14 @@ describe('Size calculation with file deletion', () => {
     
     // Expected new size: 15000 - (1000 + 4000) = 10000
     expect(tree.sort?.size).toBe(10000);
-    expect(tree.metadata.totalSize).toBe(10000);
+    expect(tree.sort?.size).toBe(10000);
     
     // Delete one more file
     deleteFile(tree, 'file5.txt'); // -5000
     
     // Expected final size: 10000 - 5000 = 5000
     expect(tree.sort?.size).toBe(5000);
-    expect(tree.metadata.totalSize).toBe(5000);
+    expect(tree.sort?.size).toBe(5000);
   });
 
   test('sizes are correctly propagated up through all parent nodes', () => {
@@ -127,7 +127,7 @@ describe('Size calculation with file deletion', () => {
     
     // Verify root node size is updated
     expect(tree.sort?.size).toBe(totalSize - fileSizes[2]);
-    expect(tree.metadata.totalSize).toBe(totalSize - fileSizes[2]);
+    expect(tree.sort?.size).toBe(totalSize - fileSizes[2]);
   });
 
   test('totalSize in metadata correctly reflects all deletions', () => {
@@ -136,15 +136,15 @@ describe('Size calculation with file deletion', () => {
     
     // Delete files one by one and verify metadata is updated each time
     deleteFile(tree, 'file1.txt'); // -1000
-    expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000);
+    expect(tree.sort?.size).toBe(initialTotalSize - 1000);
     
     deleteFile(tree, 'file3.txt'); // -3000
-    expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000 - 3000);
+    expect(tree.sort?.size).toBe(initialTotalSize - 1000 - 3000);
     
     deleteFile(tree, 'file5.txt'); // -5000
-    expect(tree.metadata.totalSize).toBe(initialTotalSize - 1000 - 3000 - 5000);
+    expect(tree.sort?.size).toBe(initialTotalSize - 1000 - 3000 - 5000);
     
     // Final size should be 2000 + 4000 = 6000
-    expect(tree.metadata.totalSize).toBe(6000);
+    expect(tree.sort?.size).toBe(6000);
   });
 });

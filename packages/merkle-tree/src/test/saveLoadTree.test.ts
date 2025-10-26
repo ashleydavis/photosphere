@@ -88,11 +88,11 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify basic tree properties
-        expect(loadedTree.metadata.totalFiles).toBe(originalTree.metadata.totalFiles);
+        expect(loadedTree.sort?.leafCount).toBe(originalTree.sort?.leafCount);
         expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
         
         // Check that we have the expected file count
-        expect(loadedTree.metadata.totalFiles).toBe(2);
+        expect(loadedTree.sort?.leafCount).toBe(2);
         
         // Find leaf nodes to verify data integrity using binary tree traversal
         const leafNodes: SortNode[] = [];
@@ -133,7 +133,7 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify basic tree properties
-        expect(loadedTree.metadata.totalFiles).toBe(fileNames.length);
+        expect(loadedTree.sort?.leafCount).toBe(fileNames.length);
         expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
         
         // Verify leaf nodes have correct file names using binary tree traversal
@@ -182,7 +182,7 @@ describe('Merkle Tree Save/Load', () => {
         const loadedTree = (await loadTree(TEST_FILE_PATH, new FileStorage("")))!;
         
         // Verify tree properties
-        expect(loadedTree.metadata.totalFiles).toBe(100);
+        expect(loadedTree.sort?.leafCount).toBe(100);
         expect(loadedTree.sort?.nodeCount || 0).toBe(originalTree.sort?.nodeCount || 0);
                 
         // Check that the trees are structurally identical using the compareTrees function
@@ -314,6 +314,6 @@ describe('loadTreeVersion', () => {
         expect(version).toBe(fullTree?.version);
         
         // Verify the tree has the expected number of files
-        expect(fullTree?.metadata.totalFiles).toBe(100);
+        expect(fullTree?.sort?.leafCount).toBe(100);
     });
 });

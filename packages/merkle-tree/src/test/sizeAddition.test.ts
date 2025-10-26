@@ -29,7 +29,7 @@ describe('Size calculation with file addition', () => {
 
     // Verify the leaf node has correct size
     expect(tree.sort?.size).toBe(fileSize);
-    expect(tree.metadata.totalSize).toBe(fileSize);
+    expect(tree.sort?.size).toBe(fileSize);
   });
 
   test('parent node should have size equal to sum of children', () => {
@@ -51,7 +51,7 @@ describe('Size calculation with file addition', () => {
     expect(tree.sort?.right?.size).toBe(file2Size);
     
     // Verify metadata reflects total size
-    expect(tree.metadata.totalSize).toBe(file1Size + file2Size);
+    expect(tree.sort?.size).toBe(file1Size + file2Size);
   });
 
   test('sizes are propagated correctly in a multi-level tree', () => {
@@ -66,28 +66,28 @@ describe('Size calculation with file addition', () => {
     }
     
     expect(tree.sort?.size).toBe(totalSize);    
-    expect(tree.metadata.totalSize).toBe(totalSize);    
+    expect(tree.sort?.size).toBe(totalSize);    
     expect(tree.sort?.left?.size).toBe(1500);
     expect(tree.sort?.right?.size).toBe(1300);
   });
   
   test('metadata totalSize is updated when adding files', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-    expect(tree.metadata.totalSize).toBe(0);
+    expect(tree.sort?.size).toBe(0);
     
     // Add first file
     const file1Size = 1000;
     tree = addFile(tree, createFileHash('file1.txt', 'content 1', file1Size));
-    expect(tree.metadata.totalSize).toBe(file1Size);
+    expect(tree.sort?.size).toBe(file1Size);
     
     // Add second file
     const file2Size = 2000;
     tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size));
-    expect(tree.metadata.totalSize).toBe(file1Size + file2Size);
+    expect(tree.sort?.size).toBe(file1Size + file2Size);
     
     // Add third file
     const file3Size = 3000;
     tree = addFile(tree, createFileHash('file3.txt', 'content 3', file3Size));
-    expect(tree.metadata.totalSize).toBe(file1Size + file2Size + file3Size);
+    expect(tree.sort?.size).toBe(file1Size + file2Size + file3Size);
   });
 });

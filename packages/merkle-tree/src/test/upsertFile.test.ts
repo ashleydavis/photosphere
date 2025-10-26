@@ -30,14 +30,14 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, file1);
     
     // Verify file was added
-    expect(tree!.metadata.totalFiles).toBe(1);
+    expect(tree!.sort?.leafCount).toBe(1);
     
     // Add another file
     const file2 = createFileHash('file2.txt', 'second file');
     tree = upsertFile(tree, file2);
     
     // Verify both files exist
-    expect(tree!.metadata.totalFiles).toBe(2);
+    expect(tree!.sort?.leafCount).toBe(2);
     
     const node1 = findFileNode(tree, 'file1.txt');
     const node2 = findFileNode(tree, 'file2.txt');
@@ -57,7 +57,7 @@ describe('Merkle Tree upsertFile', () => {
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify initial state
-    expect(tree!.metadata.totalFiles).toBe(1);
+    expect(tree!.sort?.leafCount).toBe(1);
     const originalNode = findFileNode(tree, 'file1.txt');
     expect(originalNode).toBeDefined();
     expect(originalNode!.contentHash!.toString('hex')).toBe(file.hash.toString('hex'));
@@ -74,7 +74,7 @@ describe('Merkle Tree upsertFile', () => {
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
     
     // Verify the file was updated, not added
-    expect(tree!.metadata.totalFiles).toBe(1); // Still just one file
+    expect(tree!.sort?.leafCount).toBe(1); // Still just one file
     
     // Verify the content was updated
     const updatedNode = findFileNode(tree, 'file1.txt');
@@ -102,7 +102,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, file4);
     
     // Verify initial state
-    expect(tree!.metadata.totalFiles).toBe(4);
+    expect(tree!.sort?.leafCount).toBe(4);
     const initialNodeCount = tree!.sort?.nodeCount || 0;
         
     // Update an existing file
@@ -110,7 +110,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, updatedFile2);
     
     // Verify structure is maintained
-    expect(tree!.metadata.totalFiles).toBe(4); // Still 4 files
+    expect(tree!.sort?.leafCount).toBe(4); // Still 4 files
     expect(tree!.sort?.nodeCount || 0).toBe(initialNodeCount); // Same node count
     
     // Verify all files are still present
@@ -223,7 +223,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, createFileHash('file2.txt', 'content 2'));
     
     // Verify initial state
-    expect(tree!.metadata.totalFiles).toBe(2);
+    expect(tree!.sort?.leafCount).toBe(2);
     
     // Update first file
     tree = upsertFile(tree, createFileHash('file1.txt', 'updated content 1'));
@@ -238,7 +238,7 @@ describe('Merkle Tree upsertFile', () => {
     tree = upsertFile(tree, createFileHash('file3.txt', 'updated content 3'));
     
     // Verify final state
-    expect(tree!.metadata.totalFiles).toBe(3);
+    expect(tree!.sort?.leafCount).toBe(3);
     
     // Verify all files have the updated content
     const node1 = findFileNode(tree, 'file1.txt');

@@ -65,7 +65,7 @@ describe('Merkle Tree Performance Tests', () => {
       
       // Basic assertions to verify the tree was built properly
       expect(resultTree).toBeDefined();
-      expect(resultTree!.metadata.totalFiles).toBe(size);
+      expect(resultTree!.sort?.leafCount).toBe(size);
       
       // Time should be roughly O(n log n)
       const timePerFile = time / size;
@@ -125,7 +125,7 @@ describe('Merkle Tree Performance Tests', () => {
     }
     
     // File count before deletions
-    const filesBefore = tree!.metadata.totalFiles;
+    const filesBefore = tree!.sort?.leafCount || 0;
     expect(filesBefore).toBe(fileCount);
     
     // Test the performance of deleting files at different positions
@@ -152,7 +152,7 @@ describe('Merkle Tree Performance Tests', () => {
     }
     
     // Make sure file count is reduced by the number of deletions
-    const filesAfter = tree!.metadata.totalFiles;
+    const filesAfter = tree!.sort?.leafCount || 0;
     expect(filesAfter).toBe(filesBefore - indicesToTest.length);
   });
   
@@ -238,7 +238,7 @@ describe('Merkle Tree Performance Tests', () => {
     // console.log(`Bulk adding ${addBatchSize} files to a tree with ${baselineCount} existing files: ${addBatchTime.toFixed(2)}ms`);
     
     // Verify adds worked
-    expect(treeAfterAdd!.metadata.totalFiles).toBe(baselineCount + addBatchSize);
+    expect(treeAfterAdd!.sort?.leafCount).toBe(baselineCount + addBatchSize);
     
     // 2. Bulk update 100 files
     const updateBatchSize = 100;
@@ -250,7 +250,7 @@ describe('Merkle Tree Performance Tests', () => {
       );
     });
     
-    // console.log(`Bulk updating ${updateBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${updateBatchTime.toFixed(2)}ms`);
+    // console.log(`Bulk updating ${updateBatchSize} files in a tree with ${treeAfterAdd!.sort?.leafCount} total files: ${updateBatchTime.toFixed(2)}ms`);
     
     // 3. Bulk delete 100 files
     const deleteBatchSize = 100;
@@ -260,7 +260,7 @@ describe('Merkle Tree Performance Tests', () => {
       return filesToDelete.map(fileName => deleteFile(treeAfterAdd!, fileName));
     });
     
-    // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.metadata.totalFiles} total files: ${deleteBatchTime.toFixed(2)}ms`);
+    // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.sort?.leafCount} total files: ${deleteBatchTime.toFixed(2)}ms`);
     
     // Verify both operations completed successfully
     expect(updateResults.every(success => success === true)).toBe(true);
