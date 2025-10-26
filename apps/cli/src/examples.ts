@@ -146,6 +146,20 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi remove --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890", description: "Removes asset with ID from the database." },
         { command: "psi remove --db . f1e2d3c4-b5a6-7890-cdef-ab1234567890", description: "Removes asset from current directory database." },
         { command: "psi remove --db ./photos 12345678-9abc-def0-1234-567890abcdef -v", description: "Removes asset with verbose output showing all actions." }
+    ],
+    
+    hash: [
+        { command: "psi hash photo.jpg", description: "Computes hash of a local file using the same algorithm as the database." },
+        { command: "psi hash s3://my-bucket/photo.jpg", description: "Computes hash of file stored in S3." },
+        { command: "psi hash fs:/path/to/photo.jpg", description: "Computes hash with explicit filesystem prefix." },
+        { command: "psi hash --key ./key encrypted:photo.jpg", description: "Computes hash of an encrypted file." }
+    ],
+    
+    sync: [
+        { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes databases using merkle tree comparison." },
+        { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with S3 replica." },
+        { command: "psi sync --db ./photos --dest ./remote -d ./remote-meta", description: "Uses custom destination metadata directory." },
+        { command: "psi sync --db ./primary --dest ./secondary -v", description: "Synchronizes with verbose output showing all changes." }
     ]
 };
 
@@ -158,6 +172,7 @@ export const MAIN_EXAMPLES: ICommandExample[] = [
     { command: "psi summary --db ./photos", description: "Shows the database summary (file count, size, etc.)." },
     { command: "psi verify --db ./photos", description: "Verifies the database integrity." },
     { command: "psi replicate --db ./photos --dest ./backup", description: "Replicates one database to a backup location." },
+    { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes databases using merkle tree comparison." },
     { command: "psi compare --db ./photos --dest ./backup", description: "Compares two databases for differences." }
 ];
 

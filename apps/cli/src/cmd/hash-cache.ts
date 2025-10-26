@@ -11,73 +11,29 @@ export interface IHashCacheCommandOptions {
     key?: string;
     verbose?: boolean;
     yes?: boolean;
-    type?: string;
 }
 
 //
-// Command to display hash cache entries
+// Command to display local hash cache entries
 //
 export async function hashCacheCommand(options: IHashCacheCommandOptions): Promise<void> {
     
-    const databaseDir = options.db || process.cwd();
-    
-    // Determine which hash cache to show
-    const cacheType = options.type || "both";
-    
-    if (!["local", "database", "both"].includes(cacheType)) {
-        console.error(pc.red(`Invalid cache type: ${cacheType}. Must be 'local', 'database', or 'both'.`));
-        await exit(1);
-    }
-    
     try {
-        // Show local hash cache
-        if (cacheType === "local" || cacheType === "both") {
-            console.log(pc.blue("\n=== Local Hash Cache ==="));
-            const localHashCachePath = path.join(os.tmpdir(), "photosphere");
-            const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
-            
-            const loaded = await localHashCache.load();
-            if (!loaded) {
-                console.log(pc.yellow("Local hash cache not found or empty."));
-            } else {
-                const entryCount = localHashCache.getEntryCount();
-                console.log(`Location: ${localHashCachePath}`);
-                console.log(`Entries: ${entryCount}`);
-                
-                if (entryCount > 0) {
-                    console.log("\nCache entries:");
-                    displayHashCacheEntries(localHashCache);
-                }
-            }
-        }
+        console.log(pc.blue("\n=== Local Hash Cache ==="));
+        const localHashCachePath = path.join(os.tmpdir(), "photosphere");
+        const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
         
-        // Show database hash cache
-        if (cacheType === "database" || cacheType === "both") {
-            console.log(pc.blue("\n=== Database Hash Cache ==="));
+        const loaded = await localHashCache.load();
+        if (!loaded) {
+            console.log(pc.yellow("Local hash cache not found or empty."));
+        } else {
+            const entryCount = localHashCache.getEntryCount();
+            console.log(`Location: ${localHashCachePath}`);
+            console.log(`Entries: ${entryCount}`);
             
-            // Set up metadata directory
-            const metadataDir = path.join(databaseDir, ".db");
-            
-            // Check if metadata directory exists
-            try {
-                const { storage: metadataStorage } = createStorage(metadataDir);
-                const databaseHashCache = new HashCache(metadataStorage, "");
-                
-                const loaded = await databaseHashCache.load();
-                if (!loaded) {
-                    console.log(pc.yellow("Database hash cache not found or empty."));
-                } else {
-                    const entryCount = databaseHashCache.getEntryCount();
-                    console.log(`Location: ${path.join(metadataDir, "hash-cache-x.dat")}`);
-                    console.log(`Entries: ${entryCount}`);
-                    
-                    if (entryCount > 0) {
-                        console.log("\nCache entries:");
-                        displayHashCacheEntries(databaseHashCache);
-                    }
-                }
-            } catch (err: any) {
-                console.log(pc.yellow(`Could not access database hash cache: ${err.message}`));
+            if (entryCount > 0) {
+                console.log("\nCache entries:");
+                displayHashCacheEntries(localHashCache);
             }
         }
         
