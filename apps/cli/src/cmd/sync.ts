@@ -3,6 +3,7 @@ import { log, retry } from "utils";
 import pc from "picocolors";
 import { MediaFileDatabase } from "api";
 import { MerkleNode, traverseTree, getFileInfo, computeHash, SortNode } from "adb";
+import { exit } from "node-utils";
 
 //
 // Options for the sync command.
@@ -27,6 +28,8 @@ export async function syncCommand(options: ISyncCommandOptions): Promise<void> {
     await syncDatabases(sourceDb, targetDb);
         
     log.info("Sync completed successfully!");       
+
+    await exit(0);
 }
 
 //
@@ -37,8 +40,8 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
     //
     // Pull incoming files.
     //
-    
-    await sourceDb.acquireWriteLock(); //todo: Two write locks here in turn, deadlocks? todo: Don't need write lock if nothing to pull.
+    //todo: If the write lock can't be acquired, exit with with code 1 and error.
+    await sourceDb.acquireWriteLock(); //todo: Don't need write lock if nothing to pull.
     try {
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
@@ -51,7 +54,7 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
     //
     // Push outgoing files.
     //
-
+    //todo: If the write lock can't be acquired, exit with with code 1 and error.
     await targetDb.acquireWriteLock(); //todo: Don't need write lock if nothing to push.
     try {
         // Push files from source to target.

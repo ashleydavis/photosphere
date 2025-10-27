@@ -2179,6 +2179,243 @@ test_v4_database_add_file() {
     test_passed
 }
 
+test_sync_original_to_copy() {
+    print_test_header "33" "SYNC DATABASE - ORIGINAL TO COPY"
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local original_dir="./test/tmp/test-sync-original"
+    local copy_dir="./test/tmp/test-sync-copy"
+    local test_file="../../test/test.png"
+    
+    # Check that v4 database and test file exist
+    check_exists "$v4_db_dir" "V4 test database directory"
+    check_exists "$test_file" "Test image file"
+    
+    # Create the original database from v4
+    log_info "Creating original database from v4"
+    rm -rf "$original_dir"
+    cp -r "$v4_db_dir" "$original_dir"
+    
+    # Create the copy database using replicate command
+    log_info "Creating copy database using replicate command"
+    rm -rf "$copy_dir"
+    local replicate_output
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    
+    # Verify both databases exist
+    check_exists "$original_dir" "Original database directory"
+    check_exists "$copy_dir" "Copy database directory"
+    
+    # Get root hashes and verify they are the same
+    log_info "Verifying original and copy have the same root hash"
+    local original_hash_output
+    local copy_hash_output
+    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$copy_hash" ]; then
+        log_success "Original and copy databases have the same root hash: $original_hash"
+    else
+        log_error "Original and copy databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Copy hash: $copy_hash"
+        exit 1
+    fi
+    
+    # Add a new file to the original database
+    log_info "Adding new file to original database"
+    local add_output
+    invoke_command "Add test file to original database" "$(get_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
+    
+    # Verify file was added
+    expect_output_string "$add_output" "Added" "File was added successfully to original"
+    
+    # Get root hashes and verify they are now different
+    log_info "Verifying original and copy now have different root hashes"
+    invoke_command "Get original database root hash after add" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash (unchanged)" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
+        log_success "Original and copy databases have different root hashes after adding file"
+        log_info "Original hash: $original_hash_after"
+        log_info "Copy hash: $copy_hash_before_sync"
+    else
+        log_error "Original and copy databases should have different root hashes but they are the same"
+        exit 1
+    fi
+    
+    # Use sync command to update the copy
+    log_info "Using sync command to synchronize databases"
+    local sync_output
+    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    
+    # Verify sync completed
+    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
+    
+    # Get root hashes and verify they are now the same again
+    log_info "Verifying original and copy have the same root hash after sync"
+    invoke_command "Get original database root hash after sync" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_final" = "$copy_hash_final" ]; then
+        log_success "Original and copy databases have the same root hash after sync: $original_hash_final"
+    else
+        log_error "Original and copy databases have different root hashes after sync"
+        log_error "Original hash: $original_hash_final"
+        log_error "Copy hash: $copy_hash_final"
+        exit 1
+    fi
+    
+    # Verify both databases pass integrity check
+    local verify_original_output
+    local verify_copy_output
+    invoke_command "Verify original database after sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
+    invoke_command "Verify copy database after sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
+    
+    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
+    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
+    
+    # Clean up temporary databases
+    rm -rf "$original_dir"
+    rm -rf "$copy_dir"
+    log_success "Cleaned up temporary sync test databases"
+    test_passed
+}
+
+test_sync_copy_to_original() {
+    print_test_header "34" "SYNC DATABASE - COPY TO ORIGINAL (REVERSE)"
+    
+    # TODO: This test is temporarily disabled in automatic runs until sync bidirectional functionality is working
+    # It can still be run individually with: ./smoke-tests.sh 34 or ./smoke-tests.sh sync-copy-to-original
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local original_dir="./test/tmp/test-sync-reverse-original"
+    local copy_dir="./test/tmp/test-sync-reverse-copy"
+    local test_file="../../test/test.jpg"
+    
+    # Check that v4 database and test file exist
+    check_exists "$v4_db_dir" "V4 test database directory"
+    check_exists "$test_file" "Test image file for reverse sync"
+    
+    # Create the original database from v4
+    log_info "Creating original database from v4"
+    rm -rf "$original_dir"
+    cp -r "$v4_db_dir" "$original_dir"
+    
+    # Create the copy database using replicate command
+    log_info "Creating copy database using replicate command"
+    rm -rf "$copy_dir"
+    local replicate_output
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    
+    # Verify both databases exist
+    check_exists "$original_dir" "Original database directory"
+    check_exists "$copy_dir" "Copy database directory"
+    
+    # Get root hashes and verify they are the same
+    log_info "Verifying original and copy have the same root hash"
+    local original_hash_output
+    local copy_hash_output
+    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$copy_hash" ]; then
+        log_success "Original and copy databases have the same root hash: $original_hash"
+    else
+        log_error "Original and copy databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Copy hash: $copy_hash"
+        exit 1
+    fi
+    
+    # Add a new file to the COPY database (reverse direction)
+    log_info "Adding new file to copy database (reverse sync test)"
+    local add_output
+    invoke_command "Add test file to copy database" "$(get_cli_command) add --db $copy_dir $test_file --yes" 0 "add_output"
+    
+    # Verify file was added
+    expect_output_string "$add_output" "Added" "File was added successfully to copy"
+    
+    # Get root hashes and verify they are now different
+    log_info "Verifying original and copy now have different root hashes"
+    invoke_command "Get original database root hash (unchanged)" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after add" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_before_sync" != "$copy_hash_after" ]; then
+        log_success "Original and copy databases have different root hashes after adding file to copy"
+        log_info "Original hash: $original_hash_before_sync"
+        log_info "Copy hash: $copy_hash_after"
+    else
+        log_error "Original and copy databases should have different root hashes but they are the same"
+        exit 1
+    fi
+    
+    # Use sync command to sync from original (which will pull changes from copy)
+    # The sync command is bidirectional, so it should sync the file from copy to original
+    log_info "Using sync command to synchronize databases (bidirectional)"
+    local sync_output
+    invoke_command "Sync databases (copy changes to original)" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    
+    # Verify sync completed
+    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
+    
+    # Get root hashes and verify they are now the same again
+    log_info "Verifying original and copy have the same root hash after reverse sync"
+    invoke_command "Get original database root hash after sync" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    
+    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_final" = "$copy_hash_final" ]; then
+        log_success "Original and copy databases have the same root hash after reverse sync: $original_hash_final"
+    else
+        log_error "Original and copy databases have different root hashes after sync"
+        log_error "Original hash: $original_hash_final"
+        log_error "Copy hash: $copy_hash_final"
+        exit 1
+    fi
+    
+    # Verify that the original database now has the file that was added to the copy
+    log_info "Verifying the original database received the file from copy"
+    local original_list_output
+    invoke_command "List assets in original database" "$(get_cli_command) list --db $original_dir --yes" 0 "original_list_output"
+    
+    expect_output_string "$original_list_output" "test.jpg" "Test file from copy appears in original database"
+    
+    # Verify both databases pass integrity check
+    local verify_original_output
+    local verify_copy_output
+    invoke_command "Verify original database after reverse sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
+    invoke_command "Verify copy database after reverse sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
+    
+    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
+    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
+    
+    # Clean up temporary databases
+    rm -rf "$original_dir"
+    rm -rf "$copy_dir"
+    log_success "Cleaned up temporary reverse sync test databases"
+    test_passed
+}
+
 
 
 
@@ -2302,6 +2539,8 @@ run_all_tests() {
     test_v3_database_upgrade
     test_v4_database_upgrade_no_effect
     test_v4_database_add_file
+    test_sync_original_to_copy
+    # test_sync_copy_to_original  # TODO: Temporarily disabled until sync bidirectional functionality is working
     
     # If we get here, all tests passed
     echo ""
@@ -2437,6 +2676,12 @@ run_test() {
         "v4-add-file"|"32")
             test_v4_database_add_file
             ;;
+        "sync-original-to-copy"|"33")
+            test_sync_original_to_copy
+            ;;
+        "sync-copy-to-original"|"34")
+            test_sync_copy_to_original
+            ;;
         *)
             log_error "Unknown test: $test_name"
             echo ""
@@ -2461,7 +2706,7 @@ run_multiple_commands() {
     
     # Clear local cache before running tests
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+    invoke_command "Clear local cache" "$(get_cli_command) clear-cache --yes" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
@@ -2511,6 +2756,14 @@ run_multiple_commands() {
                 test_repair_ok_database
                 test_remove_asset
                 test_repair_damaged_database
+                test_v2_database_readonly_commands
+                test_v2_database_write_commands_fail
+                test_v2_database_upgrade
+                test_v3_database_upgrade
+                test_v4_database_upgrade_no_effect
+                test_v4_database_add_file
+                test_sync_original_to_copy
+                # test_sync_copy_to_original  # TODO: Temporarily disabled until sync bidirectional functionality is working
                 ;;
             "setup")
                 test_setup
@@ -2596,6 +2849,30 @@ run_multiple_commands() {
             "repair-damaged"|"26")
                 test_repair_damaged_database
                 ;;
+            "v2-readonly"|"27")
+                test_v2_database_readonly_commands
+                ;;
+            "v2-write-fail"|"28")
+                test_v2_database_write_commands_fail
+                ;;
+            "v2-upgrade"|"29")
+                test_v2_database_upgrade
+                ;;
+            "v3-upgrade"|"30")
+                test_v3_database_upgrade
+                ;;
+            "v4-upgrade-no-effect"|"31")
+                test_v4_database_upgrade_no_effect
+                ;;
+            "v4-add-file"|"32")
+                test_v4_database_add_file
+                ;;
+            "sync-original-to-copy"|"33")
+                test_sync_original_to_copy
+                ;;
+            "sync-copy-to-original"|"34")
+                test_sync_copy_to_original
+                ;;
             *)
                 log_error "Unknown command in sequence: $command"
                 echo ""
@@ -2650,7 +2927,7 @@ show_usage() {
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
-    echo "  to <number>         - Run tests 1 through <number> (1-32, preserves database for inspection)"
+    echo "  to <number>         - Run tests 1 through <number> (1-34, preserves database for inspection)"
     echo "  setup               - Build executable and frontend"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
@@ -2688,6 +2965,9 @@ show_usage() {
     echo "  v2-upgrade (29)     - Upgrade v2 database to v4"
     echo "  v3-upgrade (30)     - Upgrade v3 database to v4"
     echo "  v4-upgrade-no-effect (31) - Test v4 upgrade has no effect"
+    echo "  v4-add-file (32)    - Test adding file to v4 database"
+    echo "  sync-original-to-copy (33) - Test sync from original to copy"
+    echo "  sync-copy-to-original (34) - Test sync from copy to original (DISABLED - run individually)"
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -2742,8 +3022,8 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 32
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 32 ]; then
+        # Validate that end_test is a number between 1 and 34
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 34 ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -2773,14 +3053,14 @@ main() {
             
             # Clear local cache before running tests
             log_info "Clearing local cache before running tests"
-            invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+            invoke_command "Clear local cache" "$(get_cli_command) clear-cache --yes" || {
                 log_warning "Failed to clear cache, continuing anyway..."
             }
             
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-32)"
+            log_error "Invalid test number: $end_test (must be 1-34)"
             show_usage
             exit 1
         fi
@@ -2825,7 +3105,7 @@ main() {
     
     # Clear local cache before running tests
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) debug clear-cache --yes" || {
+    invoke_command "Clear local cache" "$(get_cli_command) clear-cache --yes" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
