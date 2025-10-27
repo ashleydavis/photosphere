@@ -1,8 +1,8 @@
 import * as crypto from 'crypto';
 import { 
-    addFile, 
+    addItem, 
     IMerkleTree,
-    deleteFile,
+    deleteItem,
     compareTrees,
     generateTreeDiffReport,
     createTree
@@ -11,12 +11,12 @@ import {
 describe('Tree Comparison', () => {
 
     // Helper function to create a file hash
-    function createFileHash(fileName: string, content: string = fileName) {
+    function createHashedItem(name: string, content: string = name) {
         const hash = crypto.createHash('sha256')
             .update(content)
             .digest();
         return {
-            fileName,
+            name,
             hash,
             length: content.length,
             lastModified: new Date(),
@@ -27,13 +27,13 @@ describe('Tree Comparison', () => {
     function buildTestTrees() {
         // Create first tree
         let treeA = buildTree(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt']);
-        deleteFile(treeA, 'file3.txt');
+        deleteItem(treeA, 'file3.txt');
 
         // Create second tree with differences
         let treeB = buildTree(['file1.txt']);
-        treeB = addFile(treeB, createFileHash('file4.txt', 'Modified content')); // Modified
-        treeB = addFile(treeB, createFileHash('file5.txt'));
-        treeB = addFile(treeB, createFileHash('file6.txt')); // New file
+        treeB = addItem(treeB, createHashedItem('file4.txt', 'Modified content')); // Modified
+        treeB = addItem(treeB, createHashedItem('file5.txt'));
+        treeB = addItem(treeB, createHashedItem('file6.txt')); // New file
 
         return { treeA, treeB };
     }
@@ -42,7 +42,7 @@ describe('Tree Comparison', () => {
         let tree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName));
+            tree = addItem(tree, createHashedItem(fileName));
         }
         
         if (!tree) {
@@ -92,7 +92,7 @@ describe('Tree Comparison', () => {
         let treeB = buildTree(['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt']);
         
         // Delete file3 from treeA
-        deleteFile(treeA, 'file3.txt');
+        deleteItem(treeA, 'file3.txt');
         
         const diff = compareTrees(treeA, treeB);
         

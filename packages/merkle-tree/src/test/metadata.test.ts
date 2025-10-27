@@ -2,10 +2,10 @@ import fs from 'fs/promises';
 import * as crypto from 'crypto';
 import { 
     IMerkleTree,
-    FileHash,
-    addFile,
-    updateFile,
-    deleteFile,
+    HashedItem,
+    addItem,
+    updateItem,
+    deleteItem,
     saveTree,
     loadTree,
     createTree,
@@ -23,11 +23,11 @@ describe('Merkle Tree Metadata', () => {
     /**
      * Helper function to create a file hash with a given name and content
      */
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createHashedItem(name: string, content: string = name): HashedItem {
         // Create a proper 32-byte SHA-256 hash
         const hash = crypto.createHash('sha256').update(content).digest();
         return {
-            fileName,
+            name,
             hash,
             length: content.length,
             lastModified: new Date(),
@@ -41,8 +41,8 @@ describe('Merkle Tree Metadata', () => {
         let merkleTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
+            const fileHash = createHashedItem(fileName);
+            merkleTree = addItem(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -86,8 +86,8 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Add a new file
-        const fileHashC = createFileHash('C');
-        tree = addFile(tree, fileHashC);
+        const fileHashC = createHashedItem('C');
+        tree = addItem(tree, fileHashC);
         
         // Check that metadata was updated
         // UUID should remain the same
@@ -107,8 +107,8 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Update file A
-        const updatedFileHashA = createFileHash('A', 'modified content');
-        updateFile(tree, updatedFileHashA);
+        const updatedHashedItemA = createHashedItem('A', 'modified content');
+        updateItem(tree, updatedHashedItemA);
         
         // Check that metadata was updated
         // UUID should remain the same
@@ -128,7 +128,7 @@ describe('Merkle Tree Metadata', () => {
         jest.advanceTimersByTime(1000);
         
         // Delete file B
-        deleteFile(tree, 'B');
+        deleteItem(tree, 'B');
         
         // Check that metadata was updated
         // UUID should remain the same

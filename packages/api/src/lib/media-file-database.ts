@@ -11,7 +11,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getFileInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedFile, SortNode, buildMerkleTree } from "adb";
+import { computeHash, getItemInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedData, SortNode, buildMerkleTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -1082,7 +1082,7 @@ export class MediaFileDatabase {
     //
     // Gets the hash of a file from the hash cache or returns undefined if the file is not in the cache.
     //
-    async getHash(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedFile | undefined> {
+    async getHash(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedData | undefined> {
         const cacheEntry = hashCache.getHash(filePath);
         if (cacheEntry) {
             if (cacheEntry.length === fileStat.length && cacheEntry.lastModified.getTime() === fileStat.lastModified.getTime()) {
@@ -1121,7 +1121,7 @@ export class MediaFileDatabase {
         assetTempDir: string, 
         openStream: (() => NodeJS.ReadableStream) | undefined,
         progressCallback: ProgressCallback
-    ): Promise<IHashedFile | undefined> {
+    ): Promise<IHashedData | undefined> {
 
         if (openStream === undefined) {
             openStream = () => fs.createReadStream(filePath);
@@ -1143,7 +1143,7 @@ export class MediaFileDatabase {
         // Compute the hash of the file.
         //
         const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
-        const hashedFile: IHashedFile = {
+        const hashedFile: IHashedData = {
             hash,
             lastModified: fileStat.lastModified,
             length: fileStat.length,
@@ -1160,7 +1160,7 @@ export class MediaFileDatabase {
     //
     // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
     //
-    async computeAssetHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<IHashedFile> {
+    async computeAssetHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<IHashedData> {
         //
         // Compute the hash of the file.
         //
@@ -1208,7 +1208,7 @@ export class MediaFileDatabase {
         //
         const verifyFile = async (node: SortNode): Promise<void> => {
             
-            const fileName = node.fileName!;
+            const fileName = node.name!;
 
              if (pathFilter) {
                 if (!fileName.startsWith(pathFilter)) {
@@ -1253,7 +1253,7 @@ export class MediaFileDatabase {
                             reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
                         }
                         reasons.push('content hash changed');
-                        log.verbose(`Modified file: ${node.fileName} - ${reasons.join(', ')}`);
+                        log.verbose(`Modified file: ${node.name} - ${reasons.join(', ')}`);
                     }
                 } 
                 else {
@@ -1274,7 +1274,7 @@ export class MediaFileDatabase {
                     
                     // Log detailed reason for modification only if verbose logging is enabled
                     if (log.verboseEnabled) {
-                        log.verbose(`Modified file: ${node.fileName} - content hash changed`);
+                        log.verbose(`Modified file: ${node.name} - content hash changed`);
                     }
                 }
             }
@@ -1287,7 +1287,7 @@ export class MediaFileDatabase {
         await traverseTree(merkleTree, async (node) => {
             result.nodesProcessed++;
 
-            if (node.fileName) {
+            if (node.name) {
                 await verifyFile(node);
             }
 
@@ -1387,7 +1387,7 @@ export class MediaFileDatabase {
                 progressCallback(`Checking file ${result.filesProcessed} of ${summary.totalFiles}`);
             }
 
-            const fileName = node.fileName!;
+            const fileName = node.name!;
             const fileInfo = await this.assetStorage.info(fileName);
             if (!fileInfo) {
                 // File is missing - try to repair.
@@ -1441,7 +1441,7 @@ export class MediaFileDatabase {
         await traverseTree(merkleTree, async (node) => {
             result.nodesProcessed++;
         
-            if (node.fileName) {
+            if (node.name) {
                 await checkFile(node, merkleTree);
             }
 
@@ -1491,7 +1491,7 @@ export class MediaFileDatabase {
             result.filesConsidered++;
             
             // Check if file already exists in destination tree with matching hash.
-            const destFileInfo = getFileInfo(destMerkleTree, fileName);
+            const destFileInfo = getItemInfo(destMerkleTree, fileName);
             if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
                 // File already exists with correct hash, skip copying.
                 // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
@@ -1555,11 +1555,11 @@ export class MediaFileDatabase {
         // Process a node in the soure merkle tree.
         //
         const processSrcNode = async (srcNode: SortNode): Promise<boolean> => {
-            if (srcNode.fileName) {
+            if (srcNode.name) {
                 // Skip files that don't match the path filter
                 if (options?.pathFilter) {
                     const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
-                    const fileName = srcNode.fileName.replace(/\\/g, '/');
+                    const fileName = srcNode.name.replace(/\\/g, '/');
                     
                     // Check if the file matches the filter (exact match or starts with filter + '/')
                     if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
@@ -1567,7 +1567,7 @@ export class MediaFileDatabase {
                     }
                 }
                                 
-                await retry(() => copyAsset(srcNode.fileName!, srcNode.contentHash!));
+                await retry(() => copyAsset(srcNode.name!, srcNode.contentHash!));
 
                 if (result.copiedFiles % 100 === 0) {
                     await retry(() => destAssetDatabase.save());

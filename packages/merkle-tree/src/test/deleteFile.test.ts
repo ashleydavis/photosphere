@@ -1,12 +1,12 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import { 
-    addFile, 
-    FileHash, 
+    addItem, 
+    HashedItem, 
     IMerkleTree,
-    findFileNode,
-    deleteFile,
-    deleteFiles,
+    findItemNode,
+    deleteItem,
+    deleteItems,
     saveTree,
     loadTree,
     createTree,
@@ -14,15 +14,15 @@ import {
 } from '../lib/merkle-tree';
 import { FileStorage } from 'storage';
 
-describe('File Deletion (deleteFile)', () => {
+describe('File Deletion (deleteItem)', () => {
 
     // Helper function to create a file hash
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createHashedItem(name: string, content: string = name): HashedItem {
         const hash = crypto.createHash('sha256')
             .update(content)
             .digest();
         return {
-            fileName,
+            name,
             hash,
             length: content.length,
             lastModified: new Date(),
@@ -35,7 +35,7 @@ describe('File Deletion (deleteFile)', () => {
         const fileNames = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName));
+            tree = addItem(tree, createHashedItem(fileName));
         }
         
         if (!tree) {
@@ -56,16 +56,16 @@ describe('File Deletion (deleteFile)', () => {
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
-        const nodeBeforeDeletion = findFileNode(tree, fileToDelete);
+        const nodeBeforeDeletion = findItemNode(tree, fileToDelete);
         expect(nodeBeforeDeletion).toBeDefined();
-        expect(nodeBeforeDeletion?.fileName).toBe(fileToDelete);
+        expect(nodeBeforeDeletion?.name).toBe(fileToDelete);
         
         // Delete the file completely
-        const result = deleteFile(tree, fileToDelete);
+        const result = deleteItem(tree, fileToDelete);
         expect(result).toBe(true);
         
         // Verify the file is completely gone
-        const nodeAfterDeletion = findFileNode(tree, fileToDelete);
+        const nodeAfterDeletion = findItemNode(tree, fileToDelete);
         expect(nodeAfterDeletion).toBeUndefined();
         
         // Verify the tree structure has changed (fewer nodes and files)
@@ -73,15 +73,15 @@ describe('File Deletion (deleteFile)', () => {
         expect(tree.sort?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
         // Verify remaining files are still present
-        expect(findFileNode(tree, 'file1.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeDefined();
     });
 
     test('should handle deleting a non-existent file', () => {
         const tree = buildTestTree();
-        const result = deleteFile(tree, 'non-existent-file.txt');
+        const result = deleteItem(tree, 'non-existent-file.txt');
         expect(result).toBe(false);
     });
 
@@ -90,7 +90,7 @@ describe('File Deletion (deleteFile)', () => {
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
         
-        deleteFile(tree, fileToDelete);
+        deleteItem(tree, fileToDelete);
 
         tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort);
@@ -103,7 +103,7 @@ describe('File Deletion (deleteFile)', () => {
         const loadedTree = (await loadTree(tempFile, new FileStorage("")))!;
         
         // Verify the file is completely gone
-        expect(findFileNode(loadedTree, fileToDelete)).toBeUndefined();
+        expect(findItemNode(loadedTree, fileToDelete)).toBeUndefined();
         
         // Clean up
         await fs.unlink(tempFile).catch(() => {/* ignore error */});
@@ -114,16 +114,16 @@ describe('File Deletion (deleteFile)', () => {
         const initialFiles = tree.sort?.leafCount || 0;
         
         // Delete multiple files
-        deleteFile(tree, 'file1.txt');
-        deleteFile(tree, 'file3.txt');
-        deleteFile(tree, 'file5.txt');
+        deleteItem(tree, 'file1.txt');
+        deleteItem(tree, 'file3.txt');
+        deleteItem(tree, 'file5.txt');
         
         // Check that all files are completely gone
-        expect(findFileNode(tree, 'file1.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file3.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file3.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeUndefined();
         
         // Verify metadata is correct
         expect(tree.sort?.leafCount).toBe(initialFiles - 3);
@@ -136,7 +136,7 @@ describe('File Deletion (deleteFile)', () => {
         const originalRootHash = tree.merkle!.hash.toString('hex');
         
         // Delete a file
-        deleteFile(tree, 'file3.txt');
+        deleteItem(tree, 'file3.txt');
 
         tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
@@ -151,13 +151,13 @@ describe('File Deletion (deleteFile)', () => {
     test('should handle deleting the only file in a tree', () => {
         // Create a tree with just one file
         let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-        tree = addFile(tree, createFileHash('single-file.txt'));
+        tree = addItem(tree, createHashedItem('single-file.txt'));
         
         expect(tree.sort?.leafCount).toBe(1);
         expect(tree.sort?.nodeCount || 0).toBe(1);
         
         // Delete the only file
-        const result = deleteFile(tree, 'single-file.txt');
+        const result = deleteItem(tree, 'single-file.txt');
         expect(result).toBe(true);
         
         // Tree should be empty
@@ -167,20 +167,20 @@ describe('File Deletion (deleteFile)', () => {
 
     test('should handle deleting from empty tree', () => {
         const emptyTree = createTree("12345678-1234-5678-9abc-123456789abc");
-        const result = deleteFile(emptyTree, 'any-file.txt');
+        const result = deleteItem(emptyTree, 'any-file.txt');
         expect(result).toBe(false);
     });
 });
 
-describe('Hard File Deletion (deleteFiles)', () => {
+describe('Hard File Deletion (deleteItems)', () => {
 
     // Helper function to create a file hash
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createHashedItem(name: string, content: string = name): HashedItem {
         const hash = crypto.createHash('sha256')
             .update(content)
             .digest();
         return {
-            fileName,
+            name,
             hash,
             length: content.length,
             lastModified: new Date(),
@@ -193,7 +193,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const fileNames = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         for (const fileName of fileNames) {
-            tree = addFile(tree, createFileHash(fileName));
+            tree = addItem(tree, createHashedItem(fileName));
         }
         
         if (!tree) {
@@ -214,16 +214,16 @@ describe('Hard File Deletion (deleteFiles)', () => {
         
         // Verify the file exists before deletion
         const fileToDelete = 'file3.txt';
-        const nodeBeforeDeletion = findFileNode(tree, fileToDelete);
+        const nodeBeforeDeletion = findItemNode(tree, fileToDelete);
         expect(nodeBeforeDeletion).toBeDefined();
-        expect(nodeBeforeDeletion?.fileName).toBe(fileToDelete);
+        expect(nodeBeforeDeletion?.name).toBe(fileToDelete);
         
         // Delete the file completely
-        const result = deleteFiles(tree, [fileToDelete]);
+        const result = deleteItems(tree, [fileToDelete]);
         expect(result).toBe(1);
         
         // Verify the file is completely gone
-        const nodeAfterDeletion = findFileNode(tree, fileToDelete);
+        const nodeAfterDeletion = findItemNode(tree, fileToDelete);
         expect(nodeAfterDeletion).toBeUndefined();
         
         // Verify the tree structure has changed (fewer nodes and files)
@@ -231,30 +231,30 @@ describe('Hard File Deletion (deleteFiles)', () => {
         expect(tree.sort?.nodeCount || 0).toBeLessThan(initialNodeCount);
         
         // Verify remaining files are still present
-        expect(findFileNode(tree, 'file1.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeDefined();
     });
 
     test('should throw when trying to delete a non-existent file', () => {
         const tree = buildTestTree();
         
         expect(() => {
-            deleteFiles(tree, ['non-existent-file.txt']);
-        }).toThrow('Cannot delete files: the following files do not exist: non-existent-file.txt');
+            deleteItems(tree, ['non-existent-file.txt']);
+        }).toThrow('Cannot delete items: the following items do not exist: non-existent-file.txt');
     });
 
     test('should handle deleting the only file in a tree', () => {
         // Create a tree with just one file
         let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-        tree = addFile(tree, createFileHash('single-file.txt'));
+        tree = addItem(tree, createHashedItem('single-file.txt'));
         
         expect(tree.sort?.leafCount).toBe(1);
         expect(tree.sort?.nodeCount || 0).toBe(1);
         
         // Delete the only file
-        const result = deleteFiles(tree, ['single-file.txt']);
+        const result = deleteItems(tree, ['single-file.txt']);
         expect(result).toBe(1);
         
         // Tree should be empty
@@ -267,7 +267,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const tree = buildTestTree();
         const fileToDelete = 'file2.txt';
         
-        deleteFiles(tree, [fileToDelete]);
+        deleteItems(tree, [fileToDelete]);
 
         tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort);
@@ -280,7 +280,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const loadedTree = (await loadTree(tempFile, new FileStorage("")))!;
         
         // Verify the file is completely gone
-        expect(findFileNode(loadedTree, fileToDelete)).toBeUndefined();
+        expect(findItemNode(loadedTree, fileToDelete)).toBeUndefined();
         
         // Clean up
         await fs.unlink(tempFile).catch(() => {/* ignore error */});
@@ -291,15 +291,15 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const initialFiles = tree.sort?.leafCount || 0;
         
         // Delete multiple files
-        const result = deleteFiles(tree, ['file1.txt', 'file3.txt', 'file5.txt']);
+        const result = deleteItems(tree, ['file1.txt', 'file3.txt', 'file5.txt']);
         expect(result).toBe(3);
         
         // Check that all files are completely gone
-        expect(findFileNode(tree, 'file1.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file3.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file3.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeUndefined();
         
         // Verify metadata is correct
         expect(tree.sort?.leafCount).toBe(initialFiles - 3);
@@ -312,7 +312,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const originalRootHash = tree.merkle!.hash.toString('hex');
         
         // Delete a file
-        deleteFiles(tree, ['file3.txt']);
+        deleteItems(tree, ['file3.txt']);
 
         tree.dirty = false;
         tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
@@ -329,7 +329,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const allFiles = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
         
         // Delete all files
-        const result = deleteFiles(tree, allFiles);
+        const result = deleteItems(tree, allFiles);
         expect(result).toBe(allFiles.length);
         
         // Tree should be empty
@@ -342,7 +342,7 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const originalMetadata = { id: tree.id, leafCount: tree.sort?.leafCount, nodeCount: tree.sort?.nodeCount, size: tree.sort?.size };
         
         // Delete a file
-        deleteFiles(tree, ['file3.txt']);
+        deleteItems(tree, ['file3.txt']);
         
         // Check that metadata is preserved but counts are updated
         expect(tree.id).toBe(originalMetadata.id);
@@ -355,69 +355,69 @@ describe('Hard File Deletion (deleteFiles)', () => {
         const emptyTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         expect(() => {
-            deleteFiles(emptyTree, ['any-file.txt']);
-        }).toThrow('Cannot delete files from empty or invalid merkle tree');
+            deleteItems(emptyTree, ['any-file.txt']);
+        }).toThrow('Cannot delete items from empty or invalid merkle tree');
     });
 
     test('should throw when trying to delete 0 files (empty array)', () => {
         const tree = buildTestTree();
         
         expect(() => {
-            deleteFiles(tree, []);
-        }).toThrow('Cannot delete files: no file names provided');
+            deleteItems(tree, []);
+        }).toThrow('Cannot delete items: no names provided');
     });
 
     test('should handle deleting 1 file', () => {
         const tree = buildTestTree();
         const initialFiles = tree.sort?.leafCount || 0;
         
-        const result = deleteFiles(tree, ['file2.txt']);
+        const result = deleteItems(tree, ['file2.txt']);
         expect(result).toBe(1);
         
         // Tree should have one less file
         expect(tree.sort?.leafCount).toBe(initialFiles - 1);
-        expect(findFileNode(tree, 'file2.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file1.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file3.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file3.txt')).toBeDefined();
     });
 
     test('should handle deleting 2 files', () => {
         const tree = buildTestTree();
         const initialFiles = tree.sort?.leafCount || 0;
         
-        const result = deleteFiles(tree, ['file1.txt', 'file4.txt']);
+        const result = deleteItems(tree, ['file1.txt', 'file4.txt']);
         expect(result).toBe(2);
         
         // Tree should have two less files
         expect(tree.sort?.leafCount).toBe(initialFiles - 2);
-        expect(findFileNode(tree, 'file1.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file2.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file3.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file3.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeDefined();
     });
 
     test('should handle deleting 3 files', () => {
         const tree = buildTestTree();
         const initialFiles = tree.sort?.leafCount || 0;
         
-        const result = deleteFiles(tree, ['file2.txt', 'file3.txt', 'file5.txt']);
+        const result = deleteItems(tree, ['file2.txt', 'file3.txt', 'file5.txt']);
         expect(result).toBe(3);
         
         // Tree should have three less files
         expect(tree.sort?.leafCount).toBe(initialFiles - 3);
-        expect(findFileNode(tree, 'file2.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file3.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file5.txt')).toBeUndefined();
-        expect(findFileNode(tree, 'file1.txt')).toBeDefined();
-        expect(findFileNode(tree, 'file4.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file2.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file3.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file5.txt')).toBeUndefined();
+        expect(findItemNode(tree, 'file1.txt')).toBeDefined();
+        expect(findItemNode(tree, 'file4.txt')).toBeDefined();
     });
 
     test('should throw when trying to delete mix of existing and non-existing files', () => {
         const tree = buildTestTree();
         
         expect(() => {
-            deleteFiles(tree, ['file1.txt', 'non-existent.txt', 'file3.txt', 'another-missing.txt']);
-        }).toThrow('Cannot delete files: the following files do not exist: non-existent.txt, another-missing.txt');
+            deleteItems(tree, ['file1.txt', 'non-existent.txt', 'file3.txt', 'another-missing.txt']);
+        }).toThrow('Cannot delete items: the following items do not exist: non-existent.txt, another-missing.txt');
     });
 });

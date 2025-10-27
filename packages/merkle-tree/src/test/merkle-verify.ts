@@ -1,13 +1,13 @@
-import { addFile, combineHashes, createTree, FileHash, IMerkleTree, MerkleNode, SortNode } from "../lib/merkle-tree";
+import { addItem, combineHashes, createTree, HashedItem, IMerkleTree, MerkleNode, SortNode } from "../lib/merkle-tree";
 import { visualizeSortTree, visualizeMerkleTree } from "../lib/visualize";
 
 /**
  * Helper function to create a file hash with a given name and length
  */
-export function createFileHash(fileName: string): FileHash {
+export function createHashedItem(name: string): HashedItem {
     return {
-        fileName,
-        hash: Buffer.from(fileName),
+        name,
+        hash: Buffer.from(name),
         length: 1,
         lastModified: new Date(),
     };
@@ -20,8 +20,8 @@ export function buildTree(fileNames: string[]): IMerkleTree<any> {
     let merkleTree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of fileNames) {
-        const fileHash = createFileHash(fileName);
-        merkleTree = addFile(merkleTree, fileHash);
+        const fileHash = createHashedItem(fileName);
+        merkleTree = addItem(merkleTree, fileHash);
     }
 
     if (!merkleTree) {
@@ -34,14 +34,14 @@ export function buildTree(fileNames: string[]): IMerkleTree<any> {
 /**
  * Helper function to create a leaf node
  */
-export function leaf(fileName: string, size: number = 100): SortNode {
+export function leaf(name: string, size: number = 100): SortNode {
     return {
-        contentHash: Buffer.from(fileName),
-        fileName,
+        contentHash: Buffer.from(name),
+        name,
         nodeCount: 1,
         leafCount: 1,
         size,
-        minFileName: fileName,
+        minName: name,
     };
 }
 
@@ -53,7 +53,7 @@ export function node(left: SortNode, right: SortNode): SortNode {
         nodeCount: 1 + left.nodeCount + right.nodeCount,
         leafCount: left.leafCount + right.leafCount,
         size: left.size + right.size,
-        minFileName: left.minFileName,
+        minName: left.minName,
         left,
         right,
     };
@@ -67,14 +67,14 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
 
     if (typeof(expectedStructure) === 'string') {
         expect(node.nodeCount).toBe(1);
-        expect(node?.fileName).toEqual(expectedStructure);
+        expect(node?.name).toEqual(expectedStructure);
         expect(node.contentHash).toBeDefined();
         expect(Buffer.isBuffer(node.contentHash)).toBe(true);
     }
     else {
-        if (expectedStructure.fileName) {
+        if (expectedStructure.name) {
             expect(node.nodeCount).toBe(1);
-            expect(node.fileName).toEqual(expectedStructure.fileName);
+            expect(node.name).toEqual(expectedStructure.name);
             expect(node.contentHash).toBeDefined();
             expect(Buffer.isBuffer(node.contentHash)).toBe(true);
         }
@@ -82,14 +82,14 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
             expect(node.nodeCount).toBeGreaterThanOrEqual(3);
         }
 
-        if (expectedStructure.minFileName) {
-            expect(node.minFileName).toEqual(expectedStructure.minFileName);
+        if (expectedStructure.minName) {
+            expect(node.minName).toEqual(expectedStructure.minName);
         }
-        else if (expectedStructure.fileName) {
-            expect(node.minFileName).toEqual(expectedStructure.fileName);
+        else if (expectedStructure.name) {
+            expect(node.minName).toEqual(expectedStructure.name);
         }
         else if (node.left) {
-            expect(node.minFileName).toEqual(node.left.minFileName);
+            expect(node.minName).toEqual(node.left.minName);
         }
     
         if (expectedStructure.left) {
@@ -97,7 +97,7 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
             expect(node.left).toBeDefined();
     
             if (typeof(expectedStructure.left) === 'string') {
-                expect(node.left!.fileName).toEqual(expectedStructure.left);
+                expect(node.left!.name).toEqual(expectedStructure.left);
                 expect(node.left!.contentHash).toBeDefined();
                 expect(Buffer.isBuffer(node.left!.contentHash)).toBe(true);
                 }
@@ -111,7 +111,7 @@ function _expectNode(node: SortNode, expectedStructure: any): void {
             expect(node.right).toBeDefined();
     
             if (typeof(expectedStructure.right) === 'string') {
-                expect(node.right!.fileName).toEqual(expectedStructure.right);
+                expect(node.right!.name).toEqual(expectedStructure.right);
                 expect(node.right!.contentHash).toBeDefined();
                 expect(Buffer.isBuffer(node.right!.contentHash)).toBe(true);
             }

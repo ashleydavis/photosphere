@@ -1,20 +1,20 @@
 import * as crypto from 'crypto';
 import { 
-  addFile, 
+  addItem, 
   createTree,
-  FileHash
+  HashedItem
 } from '../lib/merkle-tree';
 import { visualizeTree } from '../lib/visualize';
 
 describe('Size calculation with file addition', () => {
   
   // Helper function to create a file hash with specific size
-  function createFileHash(fileName: string, content: string, size: number): FileHash {
+  function createHashedItem(name: string, content: string, size: number): HashedItem {
     const hash = crypto.createHash('sha256')
       .update(content)
       .digest();
     return {
-      fileName,
+      name,
       hash,
       length: size,
       lastModified: new Date(),
@@ -24,8 +24,8 @@ describe('Size calculation with file addition', () => {
   test('leaf node should have size equal to file length', () => {
     // Create a tree with one file
     const fileSize = 1024;
-    const fileHash = createFileHash('test.txt', 'test content', fileSize);
-    const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
+    const fileHash = createHashedItem('test.txt', 'test content', fileSize);
+    const tree = addItem(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
     // Verify the leaf node has correct size
     expect(tree.sort?.size).toBe(fileSize);
@@ -38,8 +38,8 @@ describe('Size calculation with file addition', () => {
     const file2Size = 1000;
     
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
-    tree = addFile(tree, createFileHash('file1.txt', 'content 1', file1Size));
-    tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size));
+    tree = addItem(tree, createHashedItem('file1.txt', 'content 1', file1Size));
+    tree = addItem(tree, createHashedItem('file2.txt', 'content 2', file2Size));
     
     // Verify root node has sum of all file sizes
     expect(tree.sort?.size).toBe(file1Size + file2Size);
@@ -62,7 +62,7 @@ describe('Size calculation with file addition', () => {
     
     // Add files with different sizes
     for (let i = 0; i < sizes.length; i++) {
-      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, sizes[i]));
+      tree = addItem(tree, createHashedItem(`file${i}.txt`, `content ${i}`, sizes[i]));
     }
     
     expect(tree.sort?.size).toBe(totalSize);    
@@ -77,17 +77,17 @@ describe('Size calculation with file addition', () => {
     
     // Add first file
     const file1Size = 1000;
-    tree = addFile(tree, createFileHash('file1.txt', 'content 1', file1Size));
+    tree = addItem(tree, createHashedItem('file1.txt', 'content 1', file1Size));
     expect(tree.sort?.size).toBe(file1Size);
     
     // Add second file
     const file2Size = 2000;
-    tree = addFile(tree, createFileHash('file2.txt', 'content 2', file2Size));
+    tree = addItem(tree, createHashedItem('file2.txt', 'content 2', file2Size));
     expect(tree.sort?.size).toBe(file1Size + file2Size);
     
     // Add third file
     const file3Size = 3000;
-    tree = addFile(tree, createFileHash('file3.txt', 'content 3', file3Size));
+    tree = addItem(tree, createHashedItem('file3.txt', 'content 3', file3Size));
     expect(tree.sort?.size).toBe(file1Size + file2Size + file3Size);
   });
 });

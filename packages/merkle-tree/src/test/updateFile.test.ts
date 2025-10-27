@@ -1,20 +1,20 @@
 import * as crypto from 'crypto';
 import { 
-    FileHash, 
+    HashedItem, 
     SortNode,
-    addFile, 
-    updateFile, 
-    findFileNode,
+    addItem, 
+    updateItem, 
+    findItemNode,
     traverseTreeSync,
     createTree,
     MerkleNode,
     buildMerkleTree, 
 } from '../lib/merkle-tree';
 // Helper to create a file hash
-function createFileHash(fileName: string, content: string): FileHash {
+function createHashedItem(name: string, content: string): HashedItem {
   const hash = crypto.createHash('sha256').update(content).digest();
   return {
-    fileName,
+    name,
     hash,
     length: content.length,
     lastModified: new Date(),
@@ -27,18 +27,18 @@ describe('Merkle Tree UpdateFile', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     // Add several files to create a multi-level tree
-    const file1 = createFileHash('file1.txt', 'original content 1');
-    const file2 = createFileHash('file2.txt', 'original content 2');
-    const file3 = createFileHash('file3.txt', 'original content 3');
-    const file4 = createFileHash('file4.txt', 'original content 4');
-    const file5 = createFileHash('file5.txt', 'original content 5');
+    const file1 = createHashedItem('file1.txt', 'original content 1');
+    const file2 = createHashedItem('file2.txt', 'original content 2');
+    const file3 = createHashedItem('file3.txt', 'original content 3');
+    const file4 = createHashedItem('file4.txt', 'original content 4');
+    const file5 = createHashedItem('file5.txt', 'original content 5');
     
     // Build the tree
-    tree = addFile(tree, file1);
-    tree = addFile(tree, file2);
-    tree = addFile(tree, file3);
-    tree = addFile(tree, file4);
-    tree = addFile(tree, file5);
+    tree = addItem(tree, file1);
+    tree = addItem(tree, file2);
+    tree = addItem(tree, file3);
+    tree = addItem(tree, file4);
+    tree = addItem(tree, file5);
 
     tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
@@ -47,8 +47,8 @@ describe('Merkle Tree UpdateFile', () => {
     const originalRootHash = tree.merkle!.hash.toString('hex');
     
     // Now update file3
-    const updatedFile3 = createFileHash('file3.txt', 'UPDATED content 3');
-    const updated = updateFile(tree, updatedFile3);
+    const updatedFile3 = createHashedItem('file3.txt', 'UPDATED content 3');
+    const updated = updateItem(tree, updatedFile3);
 
     tree.dirty = false;
     tree.merkle = buildMerkleTree(tree.sort); // Force tree rebuild.
@@ -63,16 +63,16 @@ describe('Merkle Tree UpdateFile', () => {
     expect(newRootHash).not.toBe(originalRootHash);
     
     // Verify the file was actually updated
-    const fileNode = findFileNode(tree, 'file3.txt');
+    const fileNode = findItemNode(tree, 'file3.txt');
     expect(fileNode).toBeDefined();
     expect(fileNode?.contentHash!.toString('hex')).toBe(updatedFile3.hash.toString('hex'));
     
     // All other files should remain unchanged
-    const file1Node = findFileNode(tree, 'file1.txt');
+    const file1Node = findItemNode(tree, 'file1.txt');
     expect(file1Node?.contentHash!.toString('hex')).toBe(file1.hash.toString('hex'));
     
     // Update a non-existent file should return false
-    const nonExistentUpdate = updateFile(tree, createFileHash('not-exists.txt', 'content'));
+    const nonExistentUpdate = updateItem(tree, createHashedItem('not-exists.txt', 'content'));
     expect(nonExistentUpdate).toBe(false);
   });
 
@@ -116,8 +116,8 @@ describe('Merkle Tree UpdateFile', () => {
     for (const fileName of fileNames) {
       const content = `Original content of ${fileName}`;
       originalContents[fileName] = content;
-      const fileHash = createFileHash(fileName, content);
-      tree = addFile(tree, fileHash);
+      const fileHash = createHashedItem(fileName, content);
+      tree = addItem(tree, fileHash);
     }
     
     // Store the original tree structure for comparison
@@ -127,9 +127,9 @@ describe('Merkle Tree UpdateFile', () => {
     // Update one of the files
     const updateFileName = 'D.txt';
     const updatedContent = 'UPDATED CONTENT!';
-    const updatedFile = createFileHash(updateFileName, updatedContent);
+    const updatedFile = createHashedItem(updateFileName, updatedContent);
     
-    const updated = updateFile(tree, updatedFile);
+    const updated = updateItem(tree, updatedFile);
     expect(updated).toBe(true);
     
     // console.log("Updated Tree:");
@@ -175,14 +175,14 @@ describe('Merkle Tree UpdateFile', () => {
     // Verify all non-updated files still have their original hash
     for (const fileName of fileNames) {
       if (fileName !== updateFileName) {
-        const node = findFileNode(tree, fileName);
-        const expectedHash = createFileHash(fileName, originalContents[fileName]).hash;
+        const node = findItemNode(tree, fileName);
+        const expectedHash = createHashedItem(fileName, originalContents[fileName]).hash;
         expect(node?.contentHash!.toString('hex')).toBe(expectedHash.toString('hex'));
       }
     }
     
     // Verify the updated file has the new hash
-    const updatedNode = findFileNode(tree, updateFileName);
+    const updatedNode = findItemNode(tree, updateFileName);
     expect(updatedNode?.contentHash!.toString('hex')).toBe(updatedFile.hash.toString('hex'));
   });
 });

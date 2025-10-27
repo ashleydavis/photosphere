@@ -1,5 +1,5 @@
 import { IStorage, pathJoin } from "storage";
-import { createTree, IMerkleTree, loadTree, saveTree, upsertFile, IHashedFile, deleteFile, buildMerkleTree } from "merkle-tree";
+import { createTree, IMerkleTree, loadTree, saveTree, upsertItem, IHashedData, deleteItem, buildMerkleTree } from "merkle-tree";
 import { IUuidGenerator, log } from "utils";
 
 //
@@ -19,12 +19,12 @@ export interface IAssetDatabase {
     //
     // Adds a file or directory to the merkle tree.
     //
-    addFile(filePath: string, hashedFile: IHashedFile): void;
+    addFile(filePath: string, hashedFile: IHashedData): void;
 
     //
     // Updates or inserts a file in the merkle tree.
     //
-    upsertFile(filePath: string, hashedFile: IHashedFile): void;
+    upsertFile(filePath: string, hashedFile: IHashedData): void;
 
     //
     // Deletes a file from the merkle tree.
@@ -115,7 +115,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     //
     // Adds a file or directory to the merkle tree.
     //
-    addFile(filePath: string, hashedFile: IHashedFile): void {
+    addFile(filePath: string, hashedFile: IHashedData): void {
         if (!this.merkleTree) {
             throw new Error("Cannot add file to database. No database loaded.");
         }
@@ -124,8 +124,8 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             return;
         }
         
-        this.merkleTree = upsertFile(this.merkleTree, {
-            fileName: filePath,
+        this.merkleTree = upsertItem(this.merkleTree, {
+            name: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
@@ -135,7 +135,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     //
     // Updates or inserts a file in the merkle tree.
     //
-    upsertFile(filePath: string, hashedFile: IHashedFile): void {
+    upsertFile(filePath: string, hashedFile: IHashedData): void {
         if (!this.merkleTree) {
             throw new Error("Cannot upsert file to database. No database loaded.");
         }
@@ -144,8 +144,8 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             return;
         }
 
-        this.merkleTree = upsertFile(this.merkleTree, {
-            fileName: filePath,
+        this.merkleTree = upsertItem(this.merkleTree, {
+            name: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
             lastModified: hashedFile.lastModified,
@@ -164,7 +164,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             return;
         }
 
-        deleteFile<DatabaseMetadata>(this.merkleTree, filePath);
+        deleteItem<DatabaseMetadata>(this.merkleTree, filePath);
     }
 
     //

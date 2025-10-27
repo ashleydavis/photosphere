@@ -3,8 +3,8 @@ import * as crypto from 'crypto';
 import { 
     IMerkleTree,
     SortNode,
-    FileHash,
-    addFile,
+    HashedItem,
+    addItem,
     saveTree,
     loadTree,
     loadTreeVersion,
@@ -21,11 +21,11 @@ describe('Merkle Tree Save/Load', () => {
     /**
      * Helper function to create a file hash with a given name and content
      */
-    function createFileHash(fileName: string, content: string = fileName): FileHash {
+    function createHashedItem(name: string, content: string = name): HashedItem {
         // Create a proper 32-byte SHA-256 hash
         const hash = crypto.createHash('sha256').update(content).digest();
         return {
-            fileName,
+            name,
             hash,
             length: content.length,
             lastModified: new Date(),
@@ -39,8 +39,8 @@ describe('Merkle Tree Save/Load', () => {
         let merkleTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            const fileHash = createFileHash(fileName);
-            merkleTree = addFile(merkleTree, fileHash);
+            const fileHash = createHashedItem(fileName);
+            merkleTree = addItem(merkleTree, fileHash);
         }
 
         if (!merkleTree) {
@@ -97,7 +97,7 @@ describe('Merkle Tree Save/Load', () => {
         // Find leaf nodes to verify data integrity using binary tree traversal
         const leafNodes: SortNode[] = [];
         traverseTreeSync<SortNode>(loadedTree.sort, (node) => {
-            if (node.nodeCount === 1 && node.fileName) {
+            if (node.nodeCount === 1 && node.name) {
                 leafNodes.push(node);
             }
             return true; // Continue traversal
@@ -105,7 +105,7 @@ describe('Merkle Tree Save/Load', () => {
         expect(leafNodes.length).toBe(2);
         
         // They should have filenames 'A' and 'B' (in some order)
-        const fileNames = leafNodes.map(node => node.fileName).sort();
+        const fileNames = leafNodes.map(node => node.name).sort();
         expect(fileNames).toEqual(['A', 'B']);
         
         // Check that leaf nodes have proper hash properties
@@ -139,14 +139,14 @@ describe('Merkle Tree Save/Load', () => {
         // Verify leaf nodes have correct file names using binary tree traversal
         const leafNodes: SortNode[] = [];
         traverseTreeSync<SortNode>(loadedTree.sort, (node) => {
-            if (node.nodeCount === 1 && node.fileName) {
+            if (node.nodeCount === 1 && node.name) {
                 leafNodes.push(node);
             }
             return true; // Continue traversal
         });
         expect(leafNodes.length).toBe(fileNames.length);
         
-        const loadedFileNames = leafNodes.map(node => node.fileName).sort();
+        const loadedFileNames = leafNodes.map(node => node.name).sort();
         expect(loadedFileNames).toEqual(fileNames.sort());
         
         // Verify the structure using the existing compareTrees function
@@ -166,7 +166,7 @@ describe('Merkle Tree Save/Load', () => {
         
         // the tree structure should be exactly the same
         expect(loadedTree.sort?.nodeCount || 0).toBe(tree.sort?.nodeCount || 0);
-        expect(loadedTree.sort?.fileName).toBe(specialChars);
+        expect(loadedTree.sort?.name).toBe(specialChars);
         expect(loadedTree.sort?.contentHash!.toString('hex')).toBe(tree.sort?.contentHash!.toString('hex'));        
     });
     
@@ -288,13 +288,13 @@ describe('loadTreeVersion', () => {
         let originalTree = createTree("12345678-1234-5678-9abc-123456789abc");
         
         for (const fileName of fileNames) {
-            const fileHash: FileHash = {
-                fileName,
+            const fileHash: HashedItem = {
+                name: fileName,
                 hash: crypto.createHash('sha256').update(fileName).digest(),
                 length: fileName.length,
                 lastModified: new Date(),
             };
-            originalTree = addFile(originalTree, fileHash);
+            originalTree = addItem(originalTree, fileHash);
         }
 
         originalTree.dirty = false;

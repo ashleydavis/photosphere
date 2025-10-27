@@ -1,6 +1,6 @@
-import { createTree, addFile, IMerkleTree, buildMerkleTree } from '../lib/merkle-tree';
+import { createTree, addItem, IMerkleTree, buildMerkleTree } from '../lib/merkle-tree';
 import { visualizeMerkleTree } from '../lib/visualize';
-import { createFileHash } from './merkle-verify';
+import { createHashedItem } from './merkle-verify';
 
 describe('Merkle Tree Permutation Tests', () => {
   const testFiles = ['a', 'b', 'c', 'd', 'e'];
@@ -28,8 +28,8 @@ describe('Merkle Tree Permutation Tests', () => {
   
     // Add files in the permutation order
     for (const file of permutation) {
-      const fileHash = createFileHash(file);
-      tree = addFile(tree, fileHash);
+      const fileHash = createHashedItem(file);
+      tree = addItem(tree, fileHash);
 
       // console.log(`Added file ${file} to tree:`);
       // console.log(`Tree:\n${visualizeTree(tree.root)}`);

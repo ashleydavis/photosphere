@@ -1,11 +1,11 @@
-import { addFile, createTree, SortNode, FileHash, IMerkleTree, compareFileNames } from '../lib/merkle-tree';
+import { addItem, createTree, SortNode, HashedItem, IMerkleTree, compareNames } from '../lib/merkle-tree';
 
-// Helper function to create a FileHash for testing
-function createTestFileHash(fileName: string): FileHash {
+// Helper function to create a HashedItem for testing
+function createTestHashedItem(name: string): HashedItem {
     return {
-        fileName,
-        hash: Buffer.from(fileName, 'utf8'), // Simple hash for testing
-        length: fileName.length,
+        name,
+        hash: Buffer.from(name, 'utf8'), // Simple hash for testing
+        length: name.length,
         lastModified: new Date()
     };
 }
@@ -30,9 +30,9 @@ function generatePermutations<T>(arr: T[]): T[][] {
 function getLeafNodesInOrder(node: SortNode | undefined): string[] {
     if (!node) return [];
     
-    if (node.fileName) {
+    if (node.name) {
         // This is a leaf node
-        return [node.fileName];
+        return [node.name];
     }
     
     // This is an internal node, recursively get leaves from children
@@ -45,7 +45,7 @@ function getLeafNodesInOrder(node: SortNode | undefined): string[] {
 // Helper function to verify that leaf nodes are sorted using natural/numeric sorting
 function verifyLeafNodesAreSorted(leafNodes: string[]): boolean {
     for (let i = 1; i < leafNodes.length; i++) {
-        if (compareFileNames(leafNodes[i - 1], leafNodes[i]) > 0) {
+        if (compareNames(leafNodes[i - 1], leafNodes[i]) > 0) {
             return false;
         }
     }
@@ -55,7 +55,7 @@ function verifyLeafNodesAreSorted(leafNodes: string[]): boolean {
 describe('Merkle Tree Sorted Leaf Order', () => {
     const files = ['a', 'b', 'c', 'd', 'e'];
     const permutations = generatePermutations(files);
-    const expectedSortedOrder = [...files].sort(compareFileNames); // ['a', 'b', 'c', 'd', 'e']
+    const expectedSortedOrder = [...files].sort(compareNames); // ['a', 'b', 'c', 'd', 'e']
     
     // Generate individual tests for each permutation
     let index = 0;
@@ -66,8 +66,8 @@ describe('Merkle Tree Sorted Leaf Order', () => {
             
             // Add each file in the permutation order
             for (const fileName of permutation) {
-                const fileHash = createTestFileHash(fileName);
-                merkleTree = addFile(merkleTree, fileHash);
+                const fileHash = createTestHashedItem(fileName);
+                merkleTree = addItem(merkleTree, fileHash);
             }
             
             // Get the leaf nodes in order
@@ -102,8 +102,8 @@ describe('Merkle Tree Sorted Leaf Order', () => {
             let merkleTree: IMerkleTree<{}> = createTree('test-tree');
             
             for (const fileName of permutation) {
-                const fileHash = createTestFileHash(fileName);
-                merkleTree = addFile(merkleTree, fileHash);
+                const fileHash = createTestHashedItem(fileName);
+                merkleTree = addItem(merkleTree, fileHash);
             }
             
             const leafNodes = getLeafNodesInOrder(merkleTree.sort);
@@ -149,7 +149,7 @@ describe('Merkle Tree Sorted Leaf Order', () => {
         let testIndex = 0;
         for (const files of testCases) {
             const permutations = generatePermutations(files);
-            const expectedSortedOrder = [...files].sort(compareFileNames);
+            const expectedSortedOrder = [...files].sort(compareNames);
             
             // console.log(`\nTest case ${testIndex + 1}: ${files.join(', ')}`);
             // console.log(`Expected sorted order: ${expectedSortedOrder.join(', ')}`);
@@ -159,8 +159,8 @@ describe('Merkle Tree Sorted Leaf Order', () => {
                 let merkleTree: IMerkleTree<{}> = createTree('test-tree');
                 
                 for (const fileName of permutation) {
-                    const fileHash = createTestFileHash(fileName);
-                    merkleTree = addFile(merkleTree, fileHash);
+                    const fileHash = createTestHashedItem(fileName);
+                    merkleTree = addItem(merkleTree, fileHash);
                 }
                 
                 const leafNodes = getLeafNodesInOrder(merkleTree.sort);

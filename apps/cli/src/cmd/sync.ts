@@ -2,7 +2,7 @@ import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { MediaFileDatabase } from "api";
-import { MerkleNode, traverseTree, getFileInfo, computeHash, SortNode } from "adb";
+import { MerkleNode, traverseTree, getItemInfo, computeHash, SortNode } from "adb";
 import { exit } from "node-utils";
 
 //
@@ -86,7 +86,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     // Copies a single file if necessary.
     //
     const copyFile = async (fileName: string, sourceHash: Buffer, sourceSize: number, sourceModified: Date): Promise<void> => {
-        const targetFileInfo = getFileInfo(targetMerkleTree!, fileName);        
+        const targetFileInfo = getItemInfo(targetMerkleTree!, fileName);        
         if (targetFileInfo) {
             // File exists and so there is no need to copy it.
             // Just assume the target file is the same and ok. 
@@ -129,7 +129,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     
     // Walk the source merkle tree.
     await traverseTree(sourceMerkleTree, async (node: SortNode): Promise<boolean> => {
-        if (!node.fileName) {
+        if (!node.name) {
             // Skip intermediate nodes.
             return true;
         }
@@ -137,7 +137,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         filesProcessed++;
 
         // Copy file to target, if necessary.
-        await retry(() => copyFile(node.fileName!, node.contentHash!, node.size, node.lastModified!));
+        await retry(() => copyFile(node.name!, node.contentHash!, node.size, node.lastModified!));
         
         // Save target merkle tree every 100 files.
         if (filesCopied % 100 === 0) {
