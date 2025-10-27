@@ -20,7 +20,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     // Load the database in readonly mode to check version without modifications.
     const { database, databaseDir } = await loadDatabase(options.db, options, true, true);
 
-    const merkleTree = database.getAssetDatabase().getMerkleTree();
+    const merkleTree = database.getMerkleTree();
     const currentVersion = merkleTree.version;
 
     log.info(`✓ Found database version ${currentVersion}`);
@@ -70,7 +70,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         const { database: upgradedDatabase } = await loadDatabase(options.db, options, true, false);
 
         // Rebuild the merkle tree in sorted order with no metadata/
-        const rebuiltTree = rebuildTree<IDatabaseMetadata>(upgradedDatabase.getAssetDatabase().getMerkleTree(), "metadata/");
+        const rebuiltTree = rebuildTree<IDatabaseMetadata>(upgradedDatabase.getMerkleTree(), "metadata/");
 
         // Save the rebuilt tree.
         await retry(() => saveTree("tree.dat", rebuiltTree, upgradedDatabase.getMetadataStorage()));
