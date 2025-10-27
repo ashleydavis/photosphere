@@ -11,7 +11,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getItemInfo, HashCache, MerkleNode, traverseTree, DatabaseUpdate, IUpsertUpdate, IFieldUpdate, IDeleteUpdate, IMerkleTree, AssetDatabase, AssetDatabaseStorage, visualizeTree, IHashedData, SortNode, buildMerkleTree } from "adb";
+import { computeHash, getItemInfo, HashCache, traverseTree, IMerkleTree, AssetDatabase, visualizeTree, IHashedData, SortNode, buildMerkleTree } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -384,11 +384,6 @@ export interface IReplicateOptions {
 export class MediaFileDatabase {
 
     //
-    // The storage for the asset files.
-    //
-    private readonly assetStorage: IStorage;
-
-    //
     // For interacting with the asset database.
     //
     private readonly assetDatabase: AssetDatabase<IDatabaseMetadata>;
@@ -437,7 +432,7 @@ export class MediaFileDatabase {
     };
 
     constructor(
-        assetStorage: IStorage,
+        private readonly assetStorage: IStorage,
         private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
@@ -449,9 +444,6 @@ export class MediaFileDatabase {
 
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
         this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
-
-        // Anything that goes through this.assetStorage automatically updates the merkle tree.
-        this.assetStorage = new AssetDatabaseStorage(assetStorage, this.assetDatabase); 
 
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
@@ -565,12 +557,6 @@ export class MediaFileDatabase {
     async releaseWriteLock(): Promise<void> {
         await retry(() => this.assetDatabase.save()); // Ensure the tree is saved before releasing the lock.
 
-        //fio:
-        // if (this.writeLock) {
-        //     await retry(() => this.writeLock!.release());
-        //     this.writeLock = undefined;
-        // }
-
         await retry(() => this.assetStorage.releaseWriteLock(".db/write.lock"));
     }
 
@@ -612,12 +598,18 @@ export class MediaFileDatabase {
         await this.ensureSortIndex();
 
         // Create README.md file with warning about manual modifications
-        try {
-            await retry(() => this.assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
-        } catch (error) {
-            // Don't fail database creation if README write fails
-            log.warn(`Warning: Could not create README.md: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        await retry(() => this.assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
+
+        const readmeInfo = await retry(() => this.assetStorage.info('README.md'));
+        if (!readmeInfo) {
+            throw new Error('README.md file not found after creation.');
         }
+
+        this.assetDatabase.addFile('README.md', {
+            hash: await retry(() => computeHash(this.assetStorage.readStream('README.md'))),
+            length: readmeInfo.length,
+            lastModified: readmeInfo.lastModified,
+        });
 
         await retry(() => this.assetDatabase.save());
 
@@ -1001,6 +993,13 @@ export class MediaFileDatabase {
                 await retry(() => this.assetStorage.deleteFile(assetPath));
                 await retry(() => this.assetStorage.deleteFile(thumbPath));
                 await retry(() => this.assetStorage.deleteFile(displayPath));
+
+                //
+                // Remove files from the merkle tree.
+                //
+                this.assetDatabase.deleteFile(assetPath);
+                this.assetDatabase.deleteFile(thumbPath);
+                this.assetDatabase.deleteFile(displayPath);
 
                 this.addSummary.filesFailed++;
                 if (progressCallback) {
@@ -1614,6 +1613,13 @@ export class MediaFileDatabase {
             await this.assetStorage.deleteFile(pathJoin("asset", assetId));
             await this.assetStorage.deleteFile(pathJoin("display", assetId));
             await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
+
+            //
+            // Remove files from the merkle tree.
+            //
+            this.assetDatabase.deleteFile(pathJoin("asset", assetId));
+            this.assetDatabase.deleteFile(pathJoin("display", assetId));
+            this.assetDatabase.deleteFile(pathJoin("thumb", assetId));
         }
         finally {
             //

@@ -124,7 +124,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
             return;
         }
         
-        this.merkleTree = upsertItem(this.merkleTree, {
+        this.merkleTree = upsertItem(this.merkleTree, { //todo: This should do an add file. We never update files in the merkle tree.
             name: filePath,
             hash: hashedFile.hash,
             length: hashedFile.length,
@@ -135,7 +135,7 @@ export class AssetDatabase<DatabaseMetadata> implements IAssetDatabase {
     //
     // Updates or inserts a file in the merkle tree.
     //
-    upsertFile(filePath: string, hashedFile: IHashedData): void {
+    upsertFile(filePath: string, hashedFile: IHashedData): void { //todo: Probably not needed!
         if (!this.merkleTree) {
             throw new Error("Cannot upsert file to database. No database loaded.");
         }
