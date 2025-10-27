@@ -18,7 +18,7 @@ describe('iterateNodes', () => {
             const nodes = Array.from(iterateNodes<SortNode>(sortTree));
             
             expect(nodes.length).toBe(1);
-            expect(nodes[0].fileName).toBe('A');
+            expect(nodes[0].name).toBe('A');
             expect(nodes[0].contentHash).toEqual(Buffer.from('A'));
         });
 
@@ -28,9 +28,9 @@ describe('iterateNodes', () => {
             
             // Should return parent node, then left child, then right child
             expect(nodes.length).toBe(3);
-            expect(nodes[0].minFileName).toBe('A'); // Parent node
-            expect(nodes[1].fileName).toBe('A'); // Left leaf
-            expect(nodes[2].fileName).toBe('B'); // Right leaf
+            expect(nodes[0].minName).toBe('A'); // Parent node
+            expect(nodes[1].name).toBe('A'); // Left leaf
+            expect(nodes[2].name).toBe('B'); // Right leaf
         });
     });
 
@@ -44,21 +44,21 @@ describe('iterateNodes', () => {
             expect(nodes.length).toBe(5);
             
             // First node is root
-            expect(nodes[0].minFileName).toBe('A');
+            expect(nodes[0].minName).toBe('A');
             expect(nodes[0].nodeCount).toBe(5);
             
             // Second node is left child (parent of A and B)
-            expect(nodes[1].minFileName).toBe('A');
+            expect(nodes[1].minName).toBe('A');
             expect(nodes[1].nodeCount).toBe(3);
             
             // Third node is leaf A
-            expect(nodes[2].fileName).toBe('A');
+            expect(nodes[2].name).toBe('A');
             
             // Fourth node is leaf B
-            expect(nodes[3].fileName).toBe('B');
+            expect(nodes[3].name).toBe('B');
             
             // Fifth node is leaf C
-            expect(nodes[4].fileName).toBe('C');
+            expect(nodes[4].name).toBe('C');
         });
 
         test('visits all nodes in correct order for balanced tree', () => {
@@ -70,9 +70,9 @@ describe('iterateNodes', () => {
             expect(nodes.length).toBe(7);
             
             // Verify all nodes are present
-            const leafNodes = nodes.filter(n => n.fileName !== undefined);
+            const leafNodes = nodes.filter(n => n.name !== undefined);
             expect(leafNodes.length).toBe(4);
-            expect(leafNodes.map(n => n.fileName)).toEqual(['A', 'B', 'C', 'D']);
+            expect(leafNodes.map(n => n.name)).toEqual(['A', 'B', 'C', 'D']);
         });
     });
 
@@ -118,16 +118,16 @@ describe('iterateNodes', () => {
             const nodes = Array.from(iterateNodes<SortNode>(tree.sort!));
             
             for (const node of nodes) {
-                expect(node.minFileName).toBeDefined();
-                expect(typeof node.minFileName).toBe('string');
+                expect(node.minName).toBeDefined();
+                expect(typeof node.minName).toBe('string');
             }
         });
 
-        test('leaf nodes have fileName property', () => {
+        test('leaf nodes have name property', () => {
             const tree = buildTree(['A', 'B', 'C']);
             const nodes = Array.from(iterateNodes<SortNode>(tree.sort!));
             
-            const leafNodes = nodes.filter(n => n.fileName !== undefined);
+            const leafNodes = nodes.filter(n => n.name !== undefined);
             expect(leafNodes.length).toBe(3);
             
             for (const leaf of leafNodes) {
@@ -149,7 +149,7 @@ describe('iterateNodes', () => {
             expect(nodes.length).toBeGreaterThanOrEqual(100);
             
             // All 100 files should be present
-            const leafNodes = nodes.filter(n => n.fileName !== undefined);
+            const leafNodes = nodes.filter(n => n.name !== undefined);
             expect(leafNodes.length).toBe(100);
         });
     });
@@ -160,7 +160,7 @@ describe('iterateNodes', () => {
             const nodeNames: string[] = [];
             
             for (const node of iterateNodes<SortNode>(tree.sort!)) {
-                nodeNames.push(node.minFileName);
+                nodeNames.push(node.minName);
             }
             
             expect(nodeNames.length).toBeGreaterThan(0);
@@ -202,7 +202,7 @@ describe('iterateLeaves', () => {
             const leaves = Array.from(iterateLeaves<SortNode>(sortTree));
             
             expect(leaves.length).toBe(1);
-            expect(leaves[0].fileName).toBe('A');
+            expect(leaves[0].name).toBe('A');
             expect(leaves[0].contentHash).toEqual(Buffer.from('A'));
         });
 
@@ -211,8 +211,8 @@ describe('iterateLeaves', () => {
             const leaves = Array.from(iterateLeaves<SortNode>(sortTree));
             
             expect(leaves.length).toBe(2);
-            expect(leaves[0].fileName).toBe('A');
-            expect(leaves[1].fileName).toBe('B');
+            expect(leaves[0].name).toBe('A');
+            expect(leaves[1].name).toBe('B');
         });
     });
 
@@ -226,7 +226,7 @@ describe('iterateLeaves', () => {
             
             // All should have fileName property (leaf indicator)
             for (const leaf of leaves) {
-                expect(leaf.fileName).toBeDefined();
+                expect(leaf.name).toBeDefined();
                 expect(leaf.contentHash).toBeDefined();
                 expect(leaf.nodeCount).toBe(1);
             }
@@ -248,7 +248,7 @@ describe('iterateLeaves', () => {
             const tree = buildTree(['A', 'B', 'C', 'D']);
             const leaves = Array.from(iterateLeaves<SortNode>(tree.sort!));
             
-            const fileNames = leaves.map(l => l.fileName);
+            const fileNames = leaves.map(l => l.name);
             expect(fileNames).toEqual(['A', 'B', 'C', 'D']);
         });
 
@@ -256,7 +256,7 @@ describe('iterateLeaves', () => {
             const tree = buildTree(['D', 'A', 'C', 'B', 'E']);
             const leaves = Array.from(iterateLeaves<SortNode>(tree.sort!));
             
-            const fileNames = leaves.map(l => l.fileName);
+            const fileNames = leaves.map(l => l.name);
             // Should be sorted because buildTree creates a sorted tree
             expect(fileNames).toEqual(['A', 'B', 'C', 'D', 'E']);
         });
@@ -271,7 +271,7 @@ describe('iterateLeaves', () => {
             const tree = buildTree(fileNames);
             const leaves = Array.from(iterateLeaves<SortNode>(tree.sort!));
             
-            expect(leaves.map(l => l.fileName)).toEqual(fileNames);
+            expect(leaves.map(l => l.name)).toEqual(fileNames);
         });
     });
 
@@ -309,13 +309,13 @@ describe('iterateLeaves', () => {
             }
         });
 
-        test('all leaves have fileName', () => {
+        test('all leaves have name', () => {
             const tree = buildTree(['A', 'B', 'C', 'D']);
             const leaves = Array.from(iterateLeaves<SortNode>(tree.sort!));
             
             for (const leaf of leaves) {
-                expect(leaf.fileName).toBeDefined();
-                expect(typeof leaf.fileName).toBe('string');
+                expect(leaf.name).toBeDefined();
+                expect(typeof leaf.name).toBe('string');
             }
         });
 
@@ -359,7 +359,7 @@ describe('iterateLeaves', () => {
             expect(leaves.length).toBe(100);
             
             // Verify all files are present
-            const leafFileNames = leaves.map(l => l.fileName);
+            const leafFileNames = leaves.map(l => l.name);
             expect(leafFileNames).toEqual(fileNames);
         });
 
@@ -380,7 +380,7 @@ describe('iterateLeaves', () => {
             const fileNames: string[] = [];
             
             for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
-                fileNames.push(leaf.fileName!);
+                fileNames.push(leaf.name!);
             }
             
             expect(fileNames).toEqual(['A', 'B', 'C']);
@@ -393,7 +393,7 @@ describe('iterateLeaves', () => {
             const leaves2 = Array.from(iterateLeaves<SortNode>(tree.sort!));
             
             expect(leaves1.length).toBe(leaves2.length);
-            expect(leaves1.map(l => l.fileName)).toEqual(leaves2.map(l => l.fileName));
+            expect(leaves1.map(l => l.name)).toEqual(leaves2.map(l => l.name));
         });
 
         test('is lazy and does not iterate until consumed', () => {
@@ -406,7 +406,7 @@ describe('iterateLeaves', () => {
             const firstLeaf = generator.next();
             expect(firstLeaf.done).toBe(false);
             expect(firstLeaf.value).toBeDefined();
-            expect(firstLeaf.value.fileName).toBe('A');
+            expect(firstLeaf.value.name).toBe('A');
         });
 
         test('can be partially consumed', () => {
@@ -418,17 +418,17 @@ describe('iterateLeaves', () => {
             const leaf2 = generator.next();
             const leaf3 = generator.next();
             
-            expect(leaf1.value.fileName).toBe('A');
-            expect(leaf2.value.fileName).toBe('B');
-            expect(leaf3.value.fileName).toBe('C');
+            expect(leaf1.value.name).toBe('A');
+            expect(leaf2.value.name).toBe('B');
+            expect(leaf3.value.name).toBe('C');
             
             // Can still get remaining leaves
             const leaf4 = generator.next();
             const leaf5 = generator.next();
             const done = generator.next();
             
-            expect(leaf4.value.fileName).toBe('D');
-            expect(leaf5.value.fileName).toBe('E');
+            expect(leaf4.value.name).toBe('D');
+            expect(leaf5.value.name).toBe('E');
             expect(done.done).toBe(true);
         });
     });
@@ -455,7 +455,7 @@ describe('iterateLeaves', () => {
             
             // Both should produce the same results
             expect(iteratorLeaves.length).toBe(manualLeaves.length);
-            expect(iteratorLeaves.map(l => l.fileName)).toEqual(manualLeaves.map(l => l.fileName));
+            expect(iteratorLeaves.map(l => l.name)).toEqual(manualLeaves.map(l => l.name));
         });
     });
 
@@ -467,14 +467,14 @@ describe('iterateLeaves', () => {
                 nodeCount: 2,
                 leafCount: 1,
                 size: leftLeaf.size,
-                minFileName: 'A',
+                minName: 'A',
                 left: leftLeaf,
                 // right is undefined
             };
             
             const leaves = Array.from(iterateLeaves<SortNode>(parent));
             expect(leaves.length).toBe(1);
-            expect(leaves[0].fileName).toBe('A');
+            expect(leaves[0].name).toBe('A');
         });
 
         test('handles nodes with only right child', () => {
@@ -484,14 +484,14 @@ describe('iterateLeaves', () => {
                 nodeCount: 2,
                 leafCount: 1,
                 size: rightLeaf.size,
-                minFileName: 'B',
+                minName: 'B',
                 right: rightLeaf,
                 // left is undefined
             };
             
             const leaves = Array.from(iterateLeaves<SortNode>(parent));
             expect(leaves.length).toBe(1);
-            expect(leaves[0].fileName).toBe('B');
+            expect(leaves[0].name).toBe('B');
         });
     });
 });
@@ -512,9 +512,9 @@ describe('iterateNodes vs iterateLeaves', () => {
         const allNodes = Array.from(iterateNodes<SortNode>(tree.sort!));
         const leaves = Array.from(iterateLeaves<SortNode>(tree.sort!));
         
-        const leafFileNames = leaves.map(l => l.fileName);
-        const nodesWithFiles = allNodes.filter(n => n.fileName !== undefined);
-        const nodeFileNames = nodesWithFiles.map(n => n.fileName);
+        const leafFileNames = leaves.map(l => l.name);
+        const nodesWithFiles = allNodes.filter(n => n.name !== undefined);
+        const nodeFileNames = nodesWithFiles.map(n => n.name);
         
         expect(leafFileNames).toEqual(nodeFileNames);
     });

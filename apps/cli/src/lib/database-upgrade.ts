@@ -31,8 +31,8 @@ export async function performDatabaseUpgrade(
             
             // Update leaf nodes with lastModified from hash cache using binary tree traversal
             traverseTreeSync<SortNode>(merkleTree.sort, (node) => {
-                if (node.fileName) { // This is a leaf node
-                    const cacheEntry = hashCache.getHash(node.fileName);
+                if (node.name) { // This is a leaf node
+                    const cacheEntry = hashCache.getHash(node.name);
                     if (cacheEntry) {
                         node.lastModified = cacheEntry.lastModified;
                         filesUpdated++;
@@ -46,8 +46,8 @@ export async function performDatabaseUpgrade(
 
         // Fill in missing lastModified from file info using async binary tree traversal
         await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
-            if (node.fileName && !node.lastModified) {
-                const fileInfo = await assetStorage.info(node.fileName);
+            if (node.name && !node.lastModified) {
+                const fileInfo = await assetStorage.info(node.name);
                 if (fileInfo) {
                     // Fill in missing lastModified from file info
                     node.lastModified = fileInfo.lastModified;

@@ -1,17 +1,17 @@
 import { describe, it, expect } from "@jest/globals";
-import { createTree, addFile, binaryTreeToArray, arrayToBinaryTree, traverseTreeSync, FileHash } from "../lib/merkle-tree";
+import { createTree, addItem, binaryTreeToArray, arrayToBinaryTree, traverseTreeSync, HashedItem } from "../lib/merkle-tree";
 
 describe('Binary Tree Conversion Functions', () => {
 
     /**
      * Helper function to create a file hash with a given name and content
      */
-    function createFileHash(fileName: string, content?: Buffer, lastModified?: Date, size?: number): FileHash {
+    function createHashedItem(name: string, content?: Buffer, lastModified?: Date, size?: number): HashedItem {
         return {
-            fileName,
-            hash: Buffer.from(fileName + (content || "default content")),
+            name,
+            hash: Buffer.from(name + (content || "default content")),
             lastModified: lastModified || new Date('2023-01-01'),
-            length: size || (content?.length || fileName.length),
+            length: size || (content?.length || name.length),
         };
     }
     
@@ -24,13 +24,13 @@ describe('Binary Tree Conversion Functions', () => {
 
         it('should convert single node tree correctly', () => {
             const tree = createTree("test-tree");
-            const fileHash = createFileHash("test1.txt", Buffer.from("content1"), new Date(), 8);
-            const updatedTree = addFile(tree, fileHash);
+            const fileHash = createHashedItem("test1.txt", Buffer.from("content1"), new Date(), 8);
+            const updatedTree = addItem(tree, fileHash);
             
             const flatArray = binaryTreeToArray(updatedTree.sort);
             
             expect(flatArray).toHaveLength(1);
-            expect(flatArray[0].fileName).toBe("test1.txt");
+            expect(flatArray[0].name).toBe("test1.txt");
             expect(flatArray[0].nodeCount).toBe(1);
             expect(flatArray[0].leafCount).toBe(1);
             expect(flatArray[0]).not.toHaveProperty('left');
@@ -42,13 +42,13 @@ describe('Binary Tree Conversion Functions', () => {
             
             // Add 3 files to create a small tree
             const files = [
-                createFileHash("file1.txt", Buffer.from("content1"), new Date(), 8),
-                createFileHash("file2.txt", Buffer.from("content2"), new Date(), 8),
-                createFileHash("file3.txt", Buffer.from("content3"), new Date(), 8)
+                createHashedItem("file1.txt", Buffer.from("content1"), new Date(), 8),
+                createHashedItem("file2.txt", Buffer.from("content2"), new Date(), 8),
+                createHashedItem("file3.txt", Buffer.from("content3"), new Date(), 8)
             ];
             
             for (const file of files) {
-                tree = addFile(tree, file);
+                tree = addItem(tree, file);
             }
             
             const flatArray = binaryTreeToArray(tree.sort);
@@ -69,14 +69,14 @@ describe('Binary Tree Conversion Functions', () => {
 
         it('should preserve all node properties except left/right', () => {
             let tree = createTree("test-tree");
-            const fileHash = createFileHash("test.txt", Buffer.from("content"), new Date(), 8);
-            tree = addFile(tree, fileHash);
+            const fileHash = createHashedItem("test.txt", Buffer.from("content"), new Date(), 8);
+            tree = addItem(tree, fileHash);
             
             const flatArray = binaryTreeToArray(tree.sort);
             const node = flatArray[0];
             
             expect(node).toHaveProperty('contentHash');
-            expect(node).toHaveProperty('fileName', 'test.txt');
+            expect(node).toHaveProperty('name', 'test.txt');
             expect(node).toHaveProperty('nodeCount', 1);
             expect(node).toHaveProperty('leafCount', 1);
             expect(node).toHaveProperty('size');
@@ -96,15 +96,15 @@ describe('Binary Tree Conversion Functions', () => {
 
         it('should convert single node array correctly', () => {
             const tree = createTree("test-tree");
-            const fileHash = createFileHash("test1.txt", Buffer.from("content1"), new Date(), 8);
-            const updatedTree = addFile(tree, fileHash);
+            const fileHash = createHashedItem("test1.txt", Buffer.from("content1"), new Date(), 8);
+            const updatedTree = addItem(tree, fileHash);
             
             // Convert to array and back
             const flatArray = binaryTreeToArray(updatedTree.sort);
             const reconstructed = arrayToBinaryTree(flatArray);
             
             expect(reconstructed).toBeDefined();
-            expect(reconstructed!.fileName).toBe("test1.txt");
+            expect(reconstructed!.name).toBe("test1.txt");
             expect(reconstructed!.nodeCount).toBe(1);
             expect(reconstructed!.leafCount).toBe(1);
             expect(reconstructed!.left).toBeUndefined();
@@ -116,13 +116,13 @@ describe('Binary Tree Conversion Functions', () => {
             
             // Add files to create a tree structure
             const files = [
-                createFileHash("file1.txt", Buffer.from("content1"), new Date(), 8),
-                createFileHash("file2.txt", Buffer.from("content2"), new Date(), 8),
-                createFileHash("file3.txt", Buffer.from("content3"), new Date(), 8)
+                createHashedItem("file1.txt", Buffer.from("content1"), new Date(), 8),
+                createHashedItem("file2.txt", Buffer.from("content2"), new Date(), 8),
+                createHashedItem("file3.txt", Buffer.from("content3"), new Date(), 8)
             ];
             
             for (const file of files) {
-                tree = addFile(tree, file);
+                tree = addItem(tree, file);
             }
             
             // Convert to array and back
@@ -141,8 +141,8 @@ describe('Binary Tree Conversion Functions', () => {
 
         it('should preserve all node properties', () => {
             let tree = createTree("test-tree");
-            const fileHash = createFileHash("test.txt", Buffer.from("content"), new Date(), 8);
-            tree = addFile(tree, fileHash);
+            const fileHash = createHashedItem("test.txt", Buffer.from("content"), new Date(), 8);
+            tree = addItem(tree, fileHash);
             
             // Convert to array and back
             const flatArray = binaryTreeToArray(tree.sort);
@@ -151,7 +151,7 @@ describe('Binary Tree Conversion Functions', () => {
             expect(reconstructed).toBeDefined();
             //TODO: Should this test be on the merkle tree instead of the sort tree?
             // expect(reconstructed!.hash).toEqual(tree.sort!.hash);
-            expect(reconstructed!.fileName).toBe(tree.sort!.fileName);
+            expect(reconstructed!.name).toBe(tree.sort!.name);
             expect(reconstructed!.nodeCount).toBe(tree.sort!.nodeCount);
             expect(reconstructed!.leafCount).toBe(tree.sort!.leafCount);
             expect(reconstructed!.size).toBe(tree.sort!.size);
@@ -168,11 +168,11 @@ describe('Binary Tree Conversion Functions', () => {
             // Create a larger tree for comprehensive testing
             const files = [];
             for (let i = 1; i <= 7; i++) {
-                files.push(createFileHash(`file${i}.txt`, Buffer.from(`content${i}`), new Date(), 8));
+                files.push(createHashedItem(`file${i}.txt`, Buffer.from(`content${i}`), new Date(), 8));
             }
             
             for (const file of files) {
-                tree = addFile(tree, file);
+                tree = addItem(tree, file);
             }
             
             const originalRoot = tree.sort;
@@ -191,8 +191,8 @@ describe('Binary Tree Conversion Functions', () => {
 
         it('should handle leaf nodes correctly in round-trip', () => {
             let tree = createTree("test-tree");
-            const fileHash = createFileHash("single.txt", Buffer.from("content"), new Date(), 8);
-            tree = addFile(tree, fileHash);
+            const fileHash = createHashedItem("single.txt", Buffer.from("content"), new Date(), 8);
+            tree = addItem(tree, fileHash);
             
             // Round-trip conversion
             const flatArray = binaryTreeToArray(tree.sort);
@@ -200,7 +200,7 @@ describe('Binary Tree Conversion Functions', () => {
             
             // Should be identical for leaf nodes
             expect(reconstructed).toBeDefined();
-            expect(reconstructed!.fileName).toBe("single.txt");
+            expect(reconstructed!.name).toBe("single.txt");
             expect(reconstructed!.nodeCount).toBe(1);
             expect(reconstructed!.left).toBeUndefined();
             expect(reconstructed!.right).toBeUndefined();
@@ -211,8 +211,8 @@ describe('Binary Tree Conversion Functions', () => {
             
             // Add enough files to create a multi-level tree
             for (let i = 1; i <= 4; i++) {
-                const fileHash = createFileHash(`file${i}.txt`, Buffer.from(`content${i}`), new Date(), 8);
-                tree = addFile(tree, fileHash);
+                const fileHash = createHashedItem(`file${i}.txt`, Buffer.from(`content${i}`), new Date(), 8);
+                tree = addItem(tree, fileHash);
             }
             
             // Convert to flat array and back
@@ -227,10 +227,10 @@ describe('Binary Tree Conversion Functions', () => {
                     // Leaf node - should have no children and fileName
                     expect(node.left).toBeUndefined();
                     expect(node.right).toBeUndefined();
-                    expect(node.fileName).toBeDefined();
+                    expect(node.name).toBeDefined();
                 } else {
                     // Internal node - should have children, no fileName
-                    expect(node.fileName).toBeUndefined();
+                    expect(node.name).toBeUndefined();
                     
                     // Verify that node count matches actual structure
                     let expectedCount = 1; // Count this node

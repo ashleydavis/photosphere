@@ -21,12 +21,12 @@ export interface INode<NodeT> {
 //
 export interface SortNode { //todo: Would be nice to have SortLeaf and SortParent. They have different properties!
     contentHash?: Buffer; // The hash of the content, for leaf nodes only.
-    fileName?: string; // The file this hash represents, for leaf nodes only.
+    name?: string; // The name/identifier this hash represents, for leaf nodes only.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
     leafCount: number; // Number of leaf nodes in the subtree rooted at this node. Set to 1 for leaf nodes.
     size: number; // The size of the node and children in bytes.
-    lastModified?: Date; // The last modified date of the original file (for leaf nodes only, version 3+).
-    minFileName: string; // The minimum file name in this subtree (for efficient sorted insertion).
+    lastModified?: Date; // The last modified date (for leaf nodes only, version 3+).
+    minName: string; // The minimum name in this subtree (for efficient sorted insertion).
     left?: SortNode; // Left child node
     right?: SortNode; // Right child node
 }
@@ -42,30 +42,30 @@ export interface MerkleNode {
 }
 
 //
-// The hash and other information about a file.
+// The hash and other information about an item.
 //
-export interface IHashedFile {
+export interface IHashedData {
     //
-    // The sha256 hash of the file.
+    // The sha256 hash of the item.
     //
     hash: Buffer;
 
     //
-    // The length of the file in bytes.
+    // The length/size of the item in bytes.
     //
     length: number;
 
     //
-    // The last modified date of the file.
+    // The last modified date of the item.
     //
     lastModified: Date;
 }
 
 //
-// Represents a hashed file to add to the Merkle tree.
+// Represents a hashed item to add to the Merkle tree.
 //
-export interface FileHash extends IHashedFile {
-    fileName: string; // The file this hash represents. This is relative to the asset database directory.
+export interface HashedItem extends IHashedData {
+    name: string; // The name/identifier of the item.
 }
 
 //
@@ -105,20 +105,20 @@ export interface IMerkleTree<DatabaseMetadata> {
 }
 
 /**
- * Find a file node in the binary tree by file name.
+ * Find an item node in the binary tree by name.
  * This is the core tree traversal function that should be reused everywhere.
  */
-export function findFileInTree(node: SortNode | undefined, targetFileName: string): SortNode | undefined {
+export function findItemInTree(node: SortNode | undefined, targetName: string): SortNode | undefined {
     if (!node) return undefined;
     
     if (node.nodeCount === 1) {
-        return node.fileName === targetFileName ? node : undefined;
+        return node.name === targetName ? node : undefined;
     }
     
-    const leftResult = findFileInTree(node.left, targetFileName);
+    const leftResult = findItemInTree(node.left, targetName);
     if (leftResult) return leftResult;
     
-    return findFileInTree(node.right, targetFileName);
+    return findItemInTree(node.right, targetName);
 }
 
 /**
@@ -162,13 +162,13 @@ export async function traverseTreeAsync<NodeT>(node: INode<NodeT> | undefined, c
  */
 export function updateNodeInTree<T>(
     node: SortNode, 
-    targetFileName: string, 
-    updater: (node: SortNode, targetFileName: string) => T
+    targetName: string, 
+    updater: (node: SortNode, targetName: string) => T
 ): T | undefined {
     // If this is a leaf node, check if it's the target
     if (node.nodeCount === 1) {
-        if (node.fileName === targetFileName) {
-            return updater(node, targetFileName);
+        if (node.name === targetName) {
+            return updater(node, targetName);
         }
         return undefined; // Not the target
     }
@@ -178,12 +178,12 @@ export function updateNodeInTree<T>(
     
     // Check left subtree
     if (node.left) {
-        result = updateNodeInTree(node.left, targetFileName, updater);
+        result = updateNodeInTree(node.left, targetName, updater);
     }
     
     // Check right subtree (only if not found in left)
     if (!result && node.right) {
-        result = updateNodeInTree(node.right, targetFileName, updater);
+        result = updateNodeInTree(node.right, targetName, updater);
     }
     
     // If a child was updated, recalculate this node's properties
@@ -207,26 +207,26 @@ export function combineHashes(leftHash: Buffer, rightHash: Buffer): Buffer {
 }
 
 //
-// Compare two file names for sorting in the merkle tree.
+// Compare two names for sorting in the merkle tree.
 // Returns negative if a < b, zero if equal, positive if a > b.
-// Uses natural/numeric-aware sorting for intuitive ordering of numbered files.
+// Uses natural/numeric-aware sorting for intuitive ordering.
 //
-export function compareFileNames(a: string, b: string): number {
+export function compareNames(a: string, b: string): number {
     return a.localeCompare(b, undefined, { numeric: true });
 }
 
 /**
- * Create a new leaf node for a file
+ * Create a new leaf node for an item
  */
-export function createLeafNode(fileHash: FileHash): SortNode {
+export function createLeafNode(item: HashedItem): SortNode {
     return {
-        contentHash: fileHash.hash,
-        fileName: fileHash.fileName,
+        contentHash: item.hash,
+        name: item.name,
         nodeCount: 1, // Leaf nodes have a node count of 1.
         leafCount: 1, // Leaf nodes have a leaf count of 1.
-        size: fileHash.length, // Size is the length of the file.
-        lastModified: fileHash.lastModified, // Include last modified date if provided.
-        minFileName: fileHash.fileName, // For leaf nodes, minFileName is the file name itself.
+        size: item.length, // Size is the length of the item.
+        lastModified: item.lastModified, // Include last modified date if provided.
+        minName: item.name, // For leaf nodes, minName is the name itself.
     };
 }
 
@@ -235,11 +235,11 @@ export function createLeafNode(fileHash: FileHash): SortNode {
  */
 export function createParentNode(left: SortNode, right: SortNode): SortNode {
     return {
-        fileName: undefined, // Internal nodes don't represent a file
+        name: undefined, // Internal nodes don't represent an item
         nodeCount: 1 + left.nodeCount + right.nodeCount, // Total node count is 1 (this node) + left + right
         leafCount: left.leafCount + right.leafCount, // Total leaf count is the sum of both subtrees.
         size: left.size + right.size, // Total size is the sum of both subtrees.
-        minFileName: left.minFileName, // Since we maintain sorted order, the min file name is always the min of the left subtree
+        minName: left.minName, // Since we maintain sorted order, the min name is always the min of the left subtree
         left: left,
         right: right,
     };
@@ -248,17 +248,17 @@ export function createParentNode(left: SortNode, right: SortNode): SortNode {
 /**
  * Convert binary tree to flat array (for serialization)
  */
-export function binaryTreeToArray(root: SortNode | undefined): Omit<SortNode, 'minFileName'>[] {
+export function binaryTreeToArray(root: SortNode | undefined): Omit<SortNode, 'minName'>[] {
     if (!root) {
         return [];
     }
     
-    const result: Omit<SortNode, 'minFileName'>[] = [];
+    const result: Omit<SortNode, 'minName'>[] = [];
 
     traverseTreeSync<SortNode>(root, (node) => {
-        const flatNode: Omit<SortNode, 'minFileName'> = {
+        const flatNode: Omit<SortNode, 'minName'> = {
             contentHash: node.contentHash,
-            fileName: node.fileName,
+            name: node.name,
             nodeCount: node.nodeCount,
             leafCount: node.leafCount,
             size: node.size,
@@ -274,7 +274,7 @@ export function binaryTreeToArray(root: SortNode | undefined): Omit<SortNode, 'm
 /**
  * Convert flat array to binary tree (for loading)
  */
-export function arrayToBinaryTree(nodes: Omit<SortNode, 'minFileName'>[]): SortNode | undefined {
+export function arrayToBinaryTree(nodes: Omit<SortNode, 'minName'>[]): SortNode | undefined {
     if (nodes.length === 0) return undefined;
     
     // For now, use a simple approach - rebuild tree structure based on the array
@@ -290,7 +290,7 @@ export function arrayToBinaryTree(nodes: Omit<SortNode, 'minFileName'>[]): SortN
             // Leaf node - no children
             return { 
                 ...node, 
-                minFileName: node.fileName!,
+                minName: node.name!,
             };
         }
         
@@ -300,7 +300,7 @@ export function arrayToBinaryTree(nodes: Omit<SortNode, 'minFileName'>[]): SortN
         
         return { 
             ...node, 
-            minFileName: node.left!.minFileName!,
+            minName: node.left!.minName!,
         };
     }
     
@@ -402,7 +402,7 @@ export function rotateRight(node: SortNode): SortNode {
         nodeCount: 1 + newLeft.nodeCount + 1 + newCenter.nodeCount + right.nodeCount,
         leafCount: newLeft.leafCount + newCenter.leafCount + right.leafCount,
         size: newLeft.size + newCenter.size + right.size,
-        minFileName: newLeft.minFileName,
+        minName: newLeft.minName,
         left: newLeft,
         right: {
             left: newCenter,
@@ -410,7 +410,7 @@ export function rotateRight(node: SortNode): SortNode {
             nodeCount: 1 + newCenter.nodeCount + right.nodeCount,
             leafCount: newCenter.leafCount + right.leafCount,
             size: newCenter.size + right.size,
-            minFileName: newCenter.minFileName,
+            minName: newCenter.minName,
         },
     };
 }
@@ -442,39 +442,39 @@ export function rotateLeft(node: SortNode): SortNode {
         nodeCount: 1 + 1 + left.nodeCount + newCenter.nodeCount + newRight.nodeCount,
         leafCount: left.leafCount + newCenter.leafCount + newRight.leafCount,
         size: left.size + newCenter.size + newRight.size,
-        minFileName: left.minFileName,
+        minName: left.minName,
         left: {
             left: left,
             right: newCenter,
             nodeCount: 1 + left.nodeCount + newCenter.nodeCount,
             leafCount: left.leafCount + newCenter.leafCount,
             size: left.size + newCenter.size,
-            minFileName: left.minFileName,
+            minName: left.minName,
         },
         right: newRight,
     };
 }
 
 /**
- * Add a file to the Merkle tree using binary tree structure (avoids recursion)
+ * Add an item to the Merkle tree using binary tree structure (avoids recursion)
  */
-function _addFile(node: SortNode | undefined, fileHash: FileHash): SortNode {
-    const newLeaf = createLeafNode(fileHash);
+function _addItem(node: SortNode | undefined, item: HashedItem): SortNode {
+    const newLeaf = createLeafNode(item);
 
     if (!node) {
         // If the tree is empty, return the new leaf as the root
-        // console.log(`Adding file ${fileHash.fileName} to empty tree`);
+        // console.log(`Adding item ${item.name} to empty tree`);
         return newLeaf;
     }
     
     // If current node is a leaf, determine correct order and create parent
     if (node.nodeCount === 1) {
-        if (compareFileNames(fileHash.fileName, node.fileName!) < 0) {
-            // console.log(`Adding file ${fileHash.fileName} to left of ${node.fileName}`);
-            return createParentNode(newLeaf, node); // new file goes left
+        if (compareNames(item.name, node.name!) < 0) {
+            // console.log(`Adding item ${item.name} to left of ${node.name}`);
+            return createParentNode(newLeaf, node); // new item goes left
         } else {
-            // console.log(`Adding file ${fileHash.fileName} to right of ${node.fileName}`);
-            return createParentNode(node, newLeaf); // new file goes right
+            // console.log(`Adding item ${item.name} to right of ${node.name}`);
+            return createParentNode(node, newLeaf); // new item goes right
         }
     }   
 
@@ -484,18 +484,18 @@ function _addFile(node: SortNode | undefined, fileHash: FileHash): SortNode {
         throw new Error('Invalid tree structure');
     }
 
-    const rightMin = right.minFileName!; // If not a leaf node, there must always be a right child with a minFileName.
+    const rightMin = right.minName!; // If not a leaf node, there must always be a right child with a minName.
     let newLeft = left;
     let newRight = right;
 
-    if (compareFileNames(fileHash.fileName, rightMin) < 0) {
-        // console.log(`Adding file ${fileHash.fileName} to left of ${rightMin}`);
-        // File should go in left subtree based on sorting
-        newLeft = _addFile(left, fileHash);
+    if (compareNames(item.name, rightMin) < 0) {
+        // console.log(`Adding item ${item.name} to left of ${rightMin}`);
+        // Item should go in left subtree based on sorting
+        newLeft = _addItem(left, item);
     } else {
-        // console.log(`Adding file ${fileHash.fileName} to right of ${rightMin}`);
-        // File should go in right subtree based on sorting
-        newRight = _addFile(right, fileHash);
+        // console.log(`Adding item ${item.name} to right of ${rightMin}`);
+        // Item should go in right subtree based on sorting
+        newRight = _addItem(right, item);
     }
     
     // Create new node with updated children and recalculated properties
@@ -512,7 +512,7 @@ function _addFile(node: SortNode | undefined, fileHash: FileHash): SortNode {
         nodeCount: 1 + newLeftCount + newRightCount,
         leafCount: newLeftLeafCount + newRightLeafCount,
         size: newLeftSize + newRightSize,
-        minFileName: newLeft.minFileName,
+        minName: newLeft.minName,
     };
    
     return rebalanceTree(newNode);
@@ -532,18 +532,18 @@ export function createTree<DatabaseMetadata>(uuid: string): IMerkleTree<Database
 }
 
 /**
- * Add a file to the Merkle tree, efficiently creating a balanced structure
+ * Add an item to the Merkle tree, efficiently creating a balanced structure
  * without rebuilding the entire tree
  */
-export function addFile<DatabaseMetadata>(
+export function addItem<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash
+    item: HashedItem
 ): IMerkleTree<DatabaseMetadata> {
 
     //
     // Adds the new leaf node to the merkle tree.
     //
-    const sort = _addFile(merkleTree?.sort, fileHash);
+    const sort = _addItem(merkleTree?.sort, item);
    
     return {
         id: merkleTree.id,
@@ -656,40 +656,40 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
 }
 
 //
-// Upsert a file in the Merkle tree, either adding it or updating it if it already exists.
+// Upsert an item in the Merkle tree, either adding it or updating it if it already exists.
 // Updates the tree in place.
 //
-export function upsertFile<DatabaseMetadata>(
+export function upsertItem<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileHash: FileHash
+    item: HashedItem
 ): IMerkleTree<DatabaseMetadata> {
     if (merkleTree && merkleTree.sort) {
-        if (updateFile(merkleTree, fileHash)) {
-            // File updated successfully in place.
+        if (updateItem(merkleTree, item)) {
+            // Item updated successfully in place.
             return merkleTree;
         }
     }
 
-    return addFile(merkleTree, fileHash);
+    return addItem(merkleTree, item);
 }
 
 /**
- * Update a file in the Merkle tree with new content, maintaining the same tree structure.
+ * Update an item in the Merkle tree with new content, maintaining the same tree structure.
  */
-export function updateFile<DatabaseMetadata>(
+export function updateItem<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata> | undefined, 
-    fileHash: FileHash
+    item: HashedItem
 ): boolean {
     if (!merkleTree || !merkleTree.sort) {
-        throw new Error(`Tree is empty, cannot update file '${fileHash.fileName}'`);
+        throw new Error(`Tree is empty, cannot update item '${item.name}'`);
     }
     
-    // Use the centralized updateNodeInTree function to find and update the file
-    const wasUpdated = updateNodeInTree(merkleTree.sort, fileHash.fileName, (node, targetFileName) => {
+    // Use the centralized updateNodeInTree function to find and update the item
+    const wasUpdated = updateNodeInTree(merkleTree.sort, item.name, (node, targetName) => {
         // Update the leaf node in place
-        node.contentHash = fileHash.hash;
-        node.lastModified = fileHash.lastModified;
-        node.size = fileHash.length; // Update the size with the new file length
+        node.contentHash = item.hash;
+        node.lastModified = item.lastModified;
+        node.size = item.length; // Update the size with the new item length
         return true; // Found and updated
     }) ?? false;
     
@@ -702,23 +702,23 @@ export function updateFile<DatabaseMetadata>(
 
 
 //
-// Get file information from merkle tree (hash, size, lastModified)
+// Get item information from merkle tree (hash, size, lastModified)
 // This replaces the need for database hash cache lookups
 //
-export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, fileName: string): { hash: Buffer, length: number, lastModified: Date } | undefined {
-    // Use the centralized findFileInTree function
-    const leafNode = findFileInTree(merkleTree.sort, fileName);
+export function getItemInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata>, name: string): { hash: Buffer, length: number, lastModified: Date } | undefined {
+    // Use the centralized findItemInTree function
+    const leafNode = findItemInTree(merkleTree.sort, name);
     
     if (!leafNode) {
         return undefined;
     }
 
     if (!leafNode.lastModified) {
-        throw new Error(`File ${fileName} is missing lastModified date. This could be a bug.`);
+        throw new Error(`Item ${name} is missing lastModified date. This could be a bug.`);
     }
 
     if (!leafNode.contentHash) {
-        throw new Error(`File ${fileName} is missing content hash. This could be a bug.`);
+        throw new Error(`Item ${name} is missing content hash. This could be a bug.`);
     }
 
     return {
@@ -729,28 +729,28 @@ export function getFileInfo<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMe
 }
 
 /**
- * Find a file node in the tree by file name
+ * Find an item node in the tree by name
  * 
- * This function uses tree traversal to find a node by file name.
+ * This function uses tree traversal to find a node by name.
  * Returns the node if found, or undefined if not found.
  */
-export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata> | undefined, fileName: string): SortNode | undefined {
+export function findItemNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseMetadata> | undefined, name: string): SortNode | undefined {
     if (!merkleTree || !merkleTree.sort) {
         return undefined;
     }
     
     // Recursive binary search through the tree
-    function searchNode(node: SortNode | undefined, targetFileName: string): SortNode | undefined {
+    function searchNode(node: SortNode | undefined, targetName: string): SortNode | undefined {
         if (!node) {
             return undefined;
         }
         
         // If this is a leaf node, check if it matches
         if (node.nodeCount === 1) {
-            return node.fileName === targetFileName ? node : undefined;
+            return node.name === targetName ? node : undefined;
         }
         
-        // Internal node - use binary search based on minFileName
+        // Internal node - use binary search based on minName
         const left = node.left;
         const right = node.right;
         
@@ -759,15 +759,15 @@ export function findFileNode<DatabaseMetadata>(merkleTree: IMerkleTree<DatabaseM
         }
         
         // If target is less than the minimum of right subtree, search left
-        if (compareFileNames(targetFileName, right.minFileName) < 0) {
-            return searchNode(left, targetFileName);
+        if (compareNames(targetName, right.minName) < 0) {
+            return searchNode(left, targetName);
         } else {
             // Otherwise search right
-            return searchNode(right, targetFileName);
+            return searchNode(right, targetName);
         }
     }
     
-    return searchNode(merkleTree.sort, fileName);
+    return searchNode(merkleTree.sort, name);
 }
 
 //
@@ -857,26 +857,26 @@ function serializeSortNode(node: SortNode, serializer: ISerializer): void {
     
     if (node.nodeCount === 1) {
         // Leaf node
-        if (!node.fileName) {
-            throw new Error(`Leaf node has no file name. This could be a bug.`);
+        if (!node.name) {
+            throw new Error(`Leaf node has no name. This could be a bug.`);
         }
 
         if (!node.contentHash) {
             throw new Error(`Leaf node has no content hash. This could be a bug.`);
         }
 
-        const fileNameLength = Buffer.byteLength(node.fileName, 'utf8');
-        serializer.writeUInt32(fileNameLength);
+        const nameLength = Buffer.byteLength(node.name, 'utf8');
+        serializer.writeUInt32(nameLength);
 
         // Create a buffer with exact length and write string into it
-        const fileNameBuffer = Buffer.alloc(fileNameLength);
-        fileNameBuffer.write(node.fileName, 0, 'utf8');
-        serializer.writeBytes(fileNameBuffer); //todo: Be good to use write string.
+        const nameBuffer = Buffer.alloc(nameLength);
+        nameBuffer.write(node.name, 0, 'utf8');
+        serializer.writeBytes(nameBuffer); //todo: Be good to use write string.
 
         // Write content hash
         serializer.writeBytes(node.contentHash);
         
-        // Write file metadata for leaf nodes in version 3+
+        // Write item metadata for leaf nodes in version 3+
         // Write lastModified timestamp (8 bytes)
         const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
         const splitLastModified = splitBigNum(BigInt(lastModified));
@@ -943,12 +943,12 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 //
 export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
 
-    const files: FileHash[] = [];
+    const items: HashedItem[] = [];
 
     traverseTreeSync<SortNode>(tree.sort, (node) => {
         if (node.nodeCount === 1) {
-            if (!node.fileName) {
-                throw new Error(`Leaf node has no file name. This could be a bug.`);
+            if (!node.name) {
+                throw new Error(`Leaf node has no name. This could be a bug.`);
             }
 
             if (!node.contentHash) {
@@ -960,14 +960,14 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
             }
 
             if (pathRemove) {
-                if (node.fileName.startsWith(pathRemove)) {
-                    // Don't add this file to the new tree.
+                if (node.name.startsWith(pathRemove)) {
+                    // Don't add this item to the new tree.
                     return true;
                 }
             }
 
-            files.push({
-                fileName: node.fileName,
+            items.push({
+                name: node.name,
                 hash: node.contentHash!,
                 length: node.size,
                 lastModified: node.lastModified
@@ -977,22 +977,22 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
     });
 
     //
-    // Sort by file name.
+    // Sort by name.
     //
-    // TODO: In theory this sorting step shouldn't be required because addFile should
-    // put the file in sorted order in the tree. But something isn't quite write when
+    // TODO: In theory this sorting step shouldn't be required because addItem should
+    // put the item in sorted order in the tree. But something isn't quite right when
     // trying to replicate a rebuilt tree.
     //
-    files.sort((a, b) => compareFileNames(a.fileName, b.fileName));
+    items.sort((a, b) => compareNames(a.name, b.name));
 
     //
-    // Add all files in sorted order to a new tree.
+    // Add all items in sorted order to a new tree.
     //
     let rebuiltTree = createTree<DatabaseMetadata>(tree.id);
     rebuiltTree.databaseMetadata = tree.databaseMetadata;
-    for (const file of files) {
-        // console.log(`Adding file: ${file.fileName}`);
-        rebuiltTree = addFile(rebuiltTree, file);
+    for (const item of items) {
+        // console.log(`Adding item: ${item.name}`);
+        rebuiltTree = addItem(rebuiltTree, item);
     }
 
     rebuiltTree.dirty = false;
@@ -1077,9 +1077,9 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
     
     if (nodeCount === 1) {
         // This is a leaf node
-        const fileNameLength = deserializer.readUInt32(); //todo: Use readString.
-        const fileNameBytes = deserializer.readBytes(fileNameLength);
-        const fileName = fileNameBytes.toString('utf8');
+        const nameLength = deserializer.readUInt32(); //todo: Use readString.
+        const nameBytes = deserializer.readBytes(nameLength);
+        const name = nameBytes.toString('utf8');
         
         const contentHash = deserializer.readBytes(32);
         
@@ -1090,12 +1090,12 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
         
         return {
             contentHash,
-            fileName,
+            name,
             nodeCount,
             leafCount,
             size,
             lastModified,
-            minFileName: fileName,
+            minName: name,
         };
     } else {
         // This is an internal node - recursively read children
@@ -1105,7 +1105,7 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
             nodeCount,
             leafCount,
             size,
-            minFileName: left!.minFileName,
+            minName: left!.minName,
             left,
             right,
         };
@@ -1165,7 +1165,7 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
     deserializer.readUInt32();
     
     // Read all nodes
-    const nodes: Omit<SortNode, 'minFileName'>[] = [];
+    const nodes: Omit<SortNode, 'minName'>[] = [];
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
@@ -1182,17 +1182,17 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
         const sizeHigh = deserializer.readUInt32();
         const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
 
-        // Read fileName if present
-        const fileNameLength = deserializer.readUInt32();
+        // Read name if present
+        const nameLength = deserializer.readUInt32();
         
-        let fileName: string | undefined;
+        let name: string | undefined;
         let lastModified: Date | undefined;
         
-        if (fileNameLength > 0) {
-            const fileNameBytes = deserializer.readBytes(fileNameLength);
-            fileName = fileNameBytes.toString('utf8');
+        if (nameLength > 0) {
+            const nameBytes = deserializer.readBytes(nameLength);
+            name = nameBytes.toString('utf8');
             
-            // Read file metadata for leaf nodes in version 3+
+            // Read item metadata for leaf nodes in version 3+
             // Read lastModified timestamp (8 bytes)
             const lastModifiedLow = deserializer.readUInt32();
             const lastModifiedHigh = deserializer.readUInt32();
@@ -1207,11 +1207,13 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
         // Create node
         nodes.push({
             contentHash: nodeCount === 1 ? hash : undefined,
-            fileName,
+            name,
             nodeCount,
             leafCount,
             size,
-            lastModified
+            lastModified,
+            left: undefined,
+            right: undefined
         });
     }
     
@@ -1246,7 +1248,7 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
     deserializer.readUInt32(); // Modified at high removed in v3.
 
     // Read all nodes
-    const nodes: Omit<SortNode, 'minFileName'>[] = [];
+    const nodes: Omit<SortNode, 'minName'>[] = [];
     
     for (let i = 0; i < totalNodes; i++) {
         // Read hash
@@ -1263,15 +1265,15 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
         const sizeHigh = deserializer.readUInt32();
         const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
 
-        // Read fileName if present
-        const fileNameLength = deserializer.readUInt32();
+        // Read name if present
+        const nameLength = deserializer.readUInt32();
         
-        let fileName: string | undefined;
+        let name: string | undefined;
         let lastModified: Date | undefined;
         
-        if (fileNameLength > 0) {
-            const fileNameBytes = deserializer.readBytes(fileNameLength);
-            fileName = fileNameBytes.toString('utf8');            
+        if (nameLength > 0) {
+            const nameBytes = deserializer.readBytes(nameLength);
+            name = nameBytes.toString('utf8');            
         }
         
         deserializer.readUInt8(); // Discard isDeleted flag.
@@ -1279,11 +1281,13 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
         // Create node
         nodes.push({
             contentHash: nodeCount === 1 ? hash : undefined,
-            fileName,
+            name,
             nodeCount,
             leafCount,
             size,
-            lastModified
+            lastModified,
+            left: undefined,
+            right: undefined
         });
     }
     
@@ -1380,37 +1384,37 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
 }
 
 /**
- * Delete a file node from the Merkle tree, actually removing it from the tree structure
+ * Delete an item node from the Merkle tree, actually removing it from the tree structure
  * This function properly removes the node and rebalances the tree
  * 
- * @param merkleTree The Merkle tree containing the file
- * @param fileName The name of the file to delete
- * @returns true if the file was found and deleted, false otherwise
+ * @param merkleTree The Merkle tree containing the item
+ * @param name The name of the item to delete
+ * @returns true if the item was found and deleted, false otherwise
  */
-export function deleteFile<DatabaseMetadata>(
+export function deleteItem<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileName: string
+    name: string
 ): boolean {
     if (!merkleTree || !merkleTree.sort) {
         return false;
     }
     
-    // Check if the file exists
-    const existingNode = findFileInTree(merkleTree.sort, fileName);
+    // Check if the item exists
+    const existingNode = findItemInTree(merkleTree.sort, name);
     if (!existingNode) {
         return false;
     }
     
     // If this is the only node in the tree, clear the tree
     if (merkleTree.sort?.nodeCount === 1) {
-        //TODO: This doesn't check if the file is actually in the tree.
+        //TODO: This doesn't check if the item is actually in the tree.
         merkleTree.sort = undefined;
         merkleTree.merkle = undefined;
         return true;
     }
     
     // Remove the node from the tree
-    const newRoot = _deleteNode(merkleTree.sort, fileName);
+    const newRoot = _deleteNode(merkleTree.sort, name);
     if (!newRoot) {
         return false; // Node not found
     }
@@ -1427,10 +1431,10 @@ export function deleteFile<DatabaseMetadata>(
  * Internal function to delete a node from the tree and return the new root
  * This handles the complex logic of removing a node while maintaining tree structure
  */
-function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
+function _deleteNode(node: SortNode, name: string): SortNode | undefined {
     // If this is a leaf node, check if it's the target
     if (node.nodeCount === 1) {
-        if (node.fileName === fileName) {
+        if (node.name === name) {
             return undefined; // Signal to parent that this node should be removed
         }
         return node; // Not the target, return unchanged
@@ -1447,8 +1451,8 @@ function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
     let nodeDeleted = false;
     
     // Check if the target is in the left subtree
-    if (compareFileNames(fileName, right.minFileName) < 0) {
-        const result = _deleteNode(left, fileName);
+    if (compareNames(name, right.minName) < 0) {
+        const result = _deleteNode(left, name);
         if (result === undefined) {
             // The left child was deleted, promote the right child
             return right;
@@ -1457,7 +1461,7 @@ function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
         nodeDeleted = true;
     } else {
         // Check if the target is in the right subtree
-        const result = _deleteNode(right, fileName);
+        const result = _deleteNode(right, name);
         if (result === undefined) {
             // The right child was deleted, promote the left child
             return left;
@@ -1478,7 +1482,7 @@ function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
         nodeCount: 1 + newLeft.nodeCount + newRight.nodeCount,
         leafCount: newLeft.leafCount + newRight.leafCount,
         size: newLeft.size + newRight.size,
-        minFileName: newLeft.minFileName,
+        minName: newLeft.minName,
     };
     
     // Rebalance the tree after deletion
@@ -1486,42 +1490,40 @@ function _deleteNode(node: SortNode, fileName: string): SortNode | undefined {
 }
 
 /**
- * Completely removes multiple files from the merkle tree by rebuilding the tree without those files.
- * This is different from markFileAsDeleted which only marks files as deleted but keeps the nodes.
+ * Completely removes multiple items from the merkle tree by rebuilding the tree without those items.
  * 
- * WARNING: This function is inefficient as it rebuilds the entire tree. Use sparingly and prefer
- * markFileAsDeleted for most use cases. This function is intended for cleanup operations like
- * database upgrades where a complete rebuild is acceptable.
+ * WARNING: This function is inefficient as it rebuilds the entire tree. Use sparingly.
+ * This function is intended for cleanup operations like database upgrades where a complete rebuild is acceptable.
  * 
- * @param merkleTree The merkle tree to remove the files from
- * @param fileNames Array of file names to completely remove
- * @returns number of files that were found and removed
+ * @param merkleTree The merkle tree to remove the items from
+ * @param names Array of item names to completely remove
+ * @returns number of items that were found and removed
  */
-export function deleteFiles<DatabaseMetadata>(
+export function deleteItems<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
-    fileNames: string[]
+    names: string[]
 ): number {
     if (!merkleTree || !merkleTree.sort) {
-        throw new Error("Cannot delete files from empty or invalid merkle tree");
+        throw new Error("Cannot delete items from empty or invalid merkle tree");
     }
     
-    if (fileNames.length === 0) {
-        throw new Error("Cannot delete files: no file names provided");
+    if (names.length === 0) {
+        throw new Error("Cannot delete items: no names provided");
     }
     
     // Create a set for efficient lookup
-    const filesToDelete = new Set(fileNames);
+    const itemsToDelete = new Set(names);
     
-    // Get all files from the tree using traversal
-    const allFiles: FileHash[] = [];
-    const existingFiles = new Set<string>();
+    // Get all items from the tree using traversal
+    const allItems: HashedItem[] = [];
+    const existingItems = new Set<string>();
     
     traverseTreeSync<SortNode>(merkleTree.sort, (node) => {
-        if (node.nodeCount === 1 && node.fileName) {
-            existingFiles.add(node.fileName);
+        if (node.nodeCount === 1 && node.name) {
+            existingItems.add(node.name);
             if (node.lastModified) {
-                allFiles.push({
-                    fileName: node.fileName,
+                allItems.push({
+                    name: node.name,
                     hash: node.contentHash!,
                     length: node.size,
                     lastModified: node.lastModified
@@ -1531,43 +1533,43 @@ export function deleteFiles<DatabaseMetadata>(
         return true;
     });
     
-    // Check if any files don't exist
-    const nonExistentFiles = fileNames.filter(fileName => !existingFiles.has(fileName));
-    if (nonExistentFiles.length > 0) {
-        throw new Error(`Cannot delete files: the following files do not exist: ${nonExistentFiles.join(', ')}`);
+    // Check if any items don't exist
+    const nonExistentItems = names.filter(name => !existingItems.has(name));
+    if (nonExistentItems.length > 0) {
+        throw new Error(`Cannot delete items: the following items do not exist: ${nonExistentItems.join(', ')}`);
     }
     
-    let filesRemoved = 0;
+    let itemsRemoved = 0;
     
-    // Get all remaining files (excluding the ones to delete)
-    const remainingFiles: FileHash[] = [];
+    // Get all remaining items (excluding the ones to delete)
+    const remainingItems: HashedItem[] = [];
     
-    for (const file of allFiles) {
-        if (filesToDelete.has(file.fileName)) {
-            filesRemoved++;
+    for (const item of allItems) {
+        if (itemsToDelete.has(item.name)) {
+            itemsRemoved++;
         } else {
-            remainingFiles.push(file);
+            remainingItems.push(item);
         }
     }
     
-    // If no files remain, create an empty tree
-    if (remainingFiles.length === 0) {
+    // If no items remain, create an empty tree
+    if (remainingItems.length === 0) {
         merkleTree.sort = undefined;
         merkleTree.merkle = undefined;
-        return filesRemoved;
+        return itemsRemoved;
     }
     
-    // Rebuild the tree with the remaining files
+    // Rebuild the tree with the remaining items
     let newTree = createTree<DatabaseMetadata>(merkleTree.id);
-    for (const fileHash of remainingFiles) {
-        newTree = addFile(newTree, fileHash);
+    for (const item of remainingItems) {
+        newTree = addItem(newTree, item);
     }
     
     // Replace the tree contents
     merkleTree.sort = newTree.sort;
     merkleTree.merkle = newTree.merkle;
     
-    return filesRemoved;
+    return itemsRemoved;
 }
 
 
@@ -1595,16 +1597,16 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
     
     let processedFiles = 0;
     
-    // Process files in tree A using traversal
+    // Process items in tree A using traversal
     if (treeA.sort) {
         traverseTreeSync<SortNode>(treeA.sort, (node) => {
-            if (node.nodeCount === 1 && node.fileName) {
+            if (node.nodeCount === 1 && node.name) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
                     progressCallback(`Indexing sources files | ${processedFiles} files`);
                 }
                 
-                filesInA.set(node.fileName, { 
+                filesInA.set(node.name, { 
                     hash: node.contentHash!.toString('hex')
                 });
             }
@@ -1612,16 +1614,16 @@ export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetada
         });
     }
     
-    // Process files in tree B using traversal
+    // Process items in tree B using traversal
     if (treeB.sort) {
         traverseTreeSync<SortNode>(treeB.sort, (node) => {
-            if (node.nodeCount === 1 && node.fileName) {
+            if (node.nodeCount === 1 && node.name) {
                 processedFiles++;
                 if (progressCallback && processedFiles % 1000 === 0) {
                     progressCallback(`Indexing dest files | ${processedFiles} files`);
                 }
                 
-                filesInB.set(node.fileName, { 
+                filesInB.set(node.name, { 
                     hash: node.contentHash!.toString('hex')
                 });
             }

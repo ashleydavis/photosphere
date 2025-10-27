@@ -1,23 +1,23 @@
-import { FileHash, addFile, updateFile, findFileNode, createTree } from '../lib/merkle-tree';
-import { createFileHash, expectTree, buildTree } from './merkle-verify';
+import { HashedItem, addItem, updateItem, findItemNode, createTree } from '../lib/merkle-tree';
+import { createHashedItem, expectTree, buildTree } from './merkle-verify';
 
 describe('Merkle Tree', () => {
 
     describe('File Addition', () => {
 
         test('creates a new tree with a single file', () => {
-            const fileHash = createFileHash('A');
-            const tree = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
+            const fileHash = createHashedItem('A');
+            const tree = addItem(createTree("12345678-1234-5678-9abc-123456789abc"), fileHash);
 
             expectTree(expect.getState().currentTestName!, tree, 'A');
         });
 
         test('adds a second file to an existing tree', () => {
-            const fileHashA = createFileHash('A');            
-            const treeA = addFile(createTree("12345678-1234-5678-9abc-123456789abc"), fileHashA);
+            const fileHashA = createHashedItem('A');            
+            const treeA = addItem(createTree("12345678-1234-5678-9abc-123456789abc"), fileHashA);
 
-            const fileHashB = createFileHash('B');
-            const treeAB = addFile(treeA, fileHashB);
+            const fileHashB = createHashedItem('B');
+            const treeAB = addItem(treeA, fileHashB);
 
             expectTree(expect.getState().currentTestName!, treeAB, {
                 tag: 'AB',
@@ -32,8 +32,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B']);
             
             // Add C to the tree.
-            const fileHashC = createFileHash('C');
-            const treeABC = addFile(tree, fileHashC);
+            const fileHashC = createHashedItem('C');
+            const treeABC = addItem(tree, fileHashC);
 
             expectTree(expect.getState().currentTestName!, treeABC, {
                 tag: 'ABC',
@@ -52,8 +52,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C']);
             
             // Add D to the tree.
-            const fileHashD = createFileHash('D');
-            const treeABCD = addFile(tree, fileHashD);
+            const fileHashD = createHashedItem('D');
+            const treeABCD = addItem(tree, fileHashD);
 
             expectTree(expect.getState().currentTestName!, treeABCD, {
                 tag: 'ABCD',
@@ -76,8 +76,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D']);
             
             // Add E to the tree.
-            const fileHashE = createFileHash('E');
-            const treeABCDE = addFile(tree, fileHashE);
+            const fileHashE = createHashedItem('E');
+            const treeABCDE = addItem(tree, fileHashE);
 
             expectTree(expect.getState().currentTestName!, treeABCDE, {
                 tag: 'ABCDE',
@@ -104,8 +104,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
 
             // Add F to the tree.
-            const fileHashF = createFileHash('F');
-            const treeABCDEF = addFile(tree, fileHashF);
+            const fileHashF = createHashedItem('F');
+            const treeABCDEF = addItem(tree, fileHashF);
 
             expectTree(expect.getState().currentTestName!, treeABCDEF, {
                 tag: 'ABCDEF',
@@ -136,8 +136,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F']);
             
             // Add G to the tree.
-            const fileHashG = createFileHash('G');
-            const treeABCDEFG = addFile(tree, fileHashG);
+            const fileHashG = createHashedItem('G');
+            const treeABCDEFG = addItem(tree, fileHashG);
 
             expectTree(expect.getState().currentTestName!, treeABCDEFG, {
                 tag: 'ABCDEFG',
@@ -172,8 +172,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
 
             // Add H to the tree.
-            const fileHashH = createFileHash('H');
-            const treeABCDEFGH = addFile(tree, fileHashH);
+            const fileHashH = createHashedItem('H');
+            const treeABCDEFGH = addItem(tree, fileHashH);
 
             expectTree(expect.getState().currentTestName!, treeABCDEFGH, {
                 tag: 'ABCDEFGH',
@@ -212,8 +212,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 
             // Add I to the tree.
-            const fileHashI = createFileHash('I');
-            const rootABCDEFGHI = addFile(tree, fileHashI);
+            const fileHashI = createHashedItem('I');
+            const rootABCDEFGHI = addItem(tree, fileHashI);
 
             expectTree(expect.getState().currentTestName!, rootABCDEFGHI, {
                 tag: 'ABCDEFGHI',
@@ -256,8 +256,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
 
             // Add J to the tree.
-            const fileHashJ = createFileHash('J');
-            const treeABCDEFGHIJ = addFile(tree, fileHashJ);
+            const fileHashJ = createHashedItem('J');
+            const treeABCDEFGHIJ = addItem(tree, fileHashJ);
 
             expectTree(expect.getState().currentTestName!, treeABCDEFGHIJ, {
                 tag: 'ABCDEFGHIJ',
@@ -304,8 +304,8 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']);
 
             // Add K to the tree.
-            const fileHashK = createFileHash('K');
-            const treeABCDEFGHIJK = addFile(tree, fileHashK);
+            const fileHashK = createHashedItem('K');
+            const treeABCDEFGHIJK = addItem(tree, fileHashK);
 
             expectTree(expect.getState().currentTestName!, treeABCDEFGHIJK, {
                 tag: 'ABCDEFGHIJK',
@@ -356,11 +356,11 @@ describe('Merkle Tree', () => {
         /**
          * Helper function to create a modified file hash with different content
          */
-        function createModifiedFileHash(fileName: string, content: string): FileHash {
+        function createModifiedHashedItem(name: string, content: string): HashedItem {
             return {
-                fileName,
+                name,
                 hash: Buffer.from(content),
-                length: 200 * fileName.charCodeAt(0), // Different size than original
+                length: 200 * name.charCodeAt(0), // Different size than original
                 lastModified: new Date(),
             };
         }
@@ -370,7 +370,7 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
             
             // Find node with file C
-            const nodeC = findFileNode(tree, 'C');
+            const nodeC = findItemNode(tree, 'C');
 
             // Verify it's the correct node
             expect(nodeC).toBeDefined();
@@ -383,7 +383,7 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
             
             // Try to find a non-existent file
-            const nodeZ = findFileNode(tree, 'Z');
+            const nodeZ = findItemNode(tree, 'Z');
             
             // Verify it returns undefined
             expect(nodeZ).toBeUndefined();
@@ -394,13 +394,13 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C']);
             
             // Create modified version of file B
-            const modifiedB = createModifiedFileHash('B', 'B_modified');
+            const modifiedB = createModifiedHashedItem('B', 'B_modified');
             
             // Update file B in the tree
-            const updated = updateFile(tree, modifiedB);
+            const updated = updateItem(tree, modifiedB);
             expect(updated).toBe(true); // Ensure the update was successful.
 
-            const nodeB = findFileNode(tree, 'B'); // Verify B is still in the tree.
+            const nodeB = findItemNode(tree, 'B'); // Verify B is still in the tree.
             expect(nodeB).toBeDefined();
             expect(nodeB?.contentHash).toEqual(modifiedB.hash); // Hash should have been updated.
 
@@ -411,7 +411,7 @@ describe('Merkle Tree', () => {
                     tag: 'AB',
                     left: 'A',
                     right: {
-                        fileName: 'B',
+                        name: 'B',
                         hash: 'B_modified',
                     },
                 },
@@ -424,13 +424,13 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
             
             // Create modified version of file E
-            const modifiedE = createModifiedFileHash('E', 'E_modified');
+            const modifiedE = createModifiedHashedItem('E', 'E_modified');
             
             // Update file E in the tree
-            const updated = updateFile(tree, modifiedE);
+            const updated = updateItem(tree, modifiedE);
             expect(updated).toBe(true); // Ensure the update was successful.
 
-            const nodeE = findFileNode(tree, 'E'); // Verify E is still in the tree.
+            const nodeE = findItemNode(tree, 'E'); // Verify E is still in the tree.
             expect(nodeE).toBeDefined();
             expect(nodeE!.contentHash).toEqual(modifiedE.hash); // Hash should have been updated.
 
@@ -452,7 +452,7 @@ describe('Merkle Tree', () => {
                         tag: 'DE',
                         left: 'D',
                         right: {
-                            fileName: 'E',
+                            name: 'E',
                             hash: 'E_modified',
                         },
                     },
@@ -470,10 +470,10 @@ describe('Merkle Tree', () => {
             const tree = buildTree(['A', 'B', 'C', 'D', 'E']);
             
             // Create a hash for a file that doesn't exist in the tree.
-            const nonExistentFile = createFileHash('Z');
+            const nonExistentFile = createHashedItem('Z');
             
             // Attempt to update the non-existent file should throw an error.
-            const updated = updateFile(tree, nonExistentFile);
+            const updated = updateItem(tree, nonExistentFile);
 
             expect(updated).toBe(false); // Ensure no update was made.
         });
@@ -483,13 +483,13 @@ describe('Merkle Tree', () => {
             const originalTree = buildTree(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']);
 
             // Create modified version of file D
-            const modifiedD = createModifiedFileHash('D', 'D_modified');
+            const modifiedD = createModifiedHashedItem('D', 'D_modified');
             
             // Update file D in the tree
-            const updated = updateFile(originalTree, modifiedD);
+            const updated = updateItem(originalTree, modifiedD);
             expect(updated).toBe(true); // Ensure the update was successful.
 
-            const nodeD = findFileNode(originalTree, 'D'); // Verify D is still in the tree.
+            const nodeD = findItemNode(originalTree, 'D'); // Verify D is still in the tree.
             expect(nodeD).toBeDefined();
             expect(nodeD!.contentHash).toEqual(modifiedD.hash); // Hash should have been updated.
             expect(nodeD!.nodeCount).toBe(1); // Ensure node count is still 1
@@ -511,7 +511,7 @@ describe('Merkle Tree', () => {
                     right: {
                         tag: 'DE',
                         left: {
-                            fileName: 'D',
+                            name: 'D',
                             hash: 'D_modified',
                         },
                         right: 'E',
@@ -556,8 +556,8 @@ describe('Merkle Tree', () => {
                 if (!node) {
                     return;
                 }
-                if (node.fileName) {
-                    leafNodes.push(node.fileName);
+                if (node.name) {
+                    leafNodes.push(node.name);
                 }
                 else {
                     collectLeaves(node.left);

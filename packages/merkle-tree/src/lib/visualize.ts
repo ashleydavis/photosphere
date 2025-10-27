@@ -1,7 +1,7 @@
 import { IMerkleTree, SortNode, MerkleNode } from "./merkle-tree";
 
 /**
- * Visualize a sort tree in simple ASCII format showing file names
+ * Visualize a sort tree in simple ASCII format showing item names
  */
 export function visualizeSortTree(node: SortNode | undefined, prefix: string = '', isLast: boolean = true): string {
     if (!node) return '';
@@ -12,8 +12,8 @@ export function visualizeSortTree(node: SortNode | undefined, prefix: string = '
     result += prefix + connector;
 
     if (node.nodeCount === 1) {
-        if (!node.fileName) {
-            throw new Error(`Leaf node has no file name. This could be a bug.`);
+        if (!node.name) {
+            throw new Error(`Leaf node has no name. This could be a bug.`);
         }
 
         if (!node.contentHash) {
@@ -24,10 +24,10 @@ export function visualizeSortTree(node: SortNode | undefined, prefix: string = '
         const hashHex = node.contentHash.toString('hex');
         const shortHash = hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2);
 
-        result += `${node.fileName} (${shortHash})`;
+        result += `${node.name} (${shortHash})`;
     }
     else {
-        result += `${node.minFileName} (${node.nodeCount})`;
+        result += `${node.minName} (${node.nodeCount})`;
     }
 
     result += '\n';
@@ -98,7 +98,7 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
     result += "Tree Metadata:\n";
     result += `  UUID: ${merkleTree.id}\n`;
     result += `  Total Nodes: ${merkleTree.sort?.nodeCount || 0}\n`;
-    result += `  Total Files: ${merkleTree.sort?.leafCount || 0}\n`;
+    result += `  Total Items: ${merkleTree.sort?.leafCount || 0}\n`;
     result += `  Total Size: ${merkleTree.sort?.size || 0} bytes\n`;
     
     // Add database metadata if available (version 3+)
@@ -115,7 +115,7 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
     
     // Visualize the sort tree
     result += "\n" + "=".repeat(50) + "\n";
-    result += "Sort Tree (File Organization):\n";
+    result += "Sort Tree (Item Organization):\n";
     result += "=".repeat(50) + "\n\n";
     result += visualizeSortTree(merkleTree.sort);
     

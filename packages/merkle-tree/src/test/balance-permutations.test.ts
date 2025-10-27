@@ -1,5 +1,5 @@
-import { addFile, createTree, FileHash, IMerkleTree, SortNode, rebalanceTree } from '../lib/merkle-tree';
-import { buildTree, createFileHash } from './merkle-verify';
+import { addItem, createTree, HashedItem, IMerkleTree, SortNode, rebalanceTree } from '../lib/merkle-tree';
+import { buildTree, createHashedItem } from './merkle-verify';
 
 // Helper function to generate all permutations of an array
 function generatePermutations<T>(arr: T[]): T[][] {
@@ -42,7 +42,7 @@ function getBalanceInfo(node: SortNode | undefined, depth: number = 0): string {
     if (!node) return '';
     
     const indent = '  '.repeat(depth);
-    let info = `${indent}Node: ${node.fileName || 'internal'} (nodeCount: ${node.nodeCount})\n`;
+    let info = `${indent}Node: ${node.name || 'internal'} (nodeCount: ${node.nodeCount})\n`;
     
     if (node.left || node.right) {
         const leftCount = node.left?.nodeCount || 0;

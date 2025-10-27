@@ -3,8 +3,8 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import * as fs from 'fs';
 import { 
-  addFile, 
-  FileHash,
+  addItem, 
+  HashedItem,
   createTree,
 } from 'merkle-tree';
 
@@ -16,7 +16,7 @@ const TOTAL_FILES = 100_000;
 /**
  * Helper function to create a file hash with random content
  */
-function createRandomFileHash(fileName: string): FileHash {
+function createRandomFileHash(fileName: string): HashedItem {
   // Generate random content of varying sizes (1KB to 100KB)
   const contentSize = Math.floor(Math.random() * 99 * 1024) + 1024;
   const content = crypto.randomBytes(contentSize);
@@ -26,7 +26,7 @@ function createRandomFileHash(fileName: string): FileHash {
     .digest();
     
   return {
-    fileName,
+    name: fileName,
     hash,
     length: content.length,
     lastModified: new Date(),
@@ -95,7 +95,7 @@ export function testMerkleTreePerformance() {
     const fileHash = createRandomFileHash(fileName);
     
     const [newTree, addTime] = measureTime(() => {
-      return addFile(tree, fileHash);
+      return addItem(tree, fileHash);
     });
     
     tree = newTree;

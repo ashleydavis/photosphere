@@ -273,7 +273,7 @@ describe('buildMerkleTree', () => {
             // Collect leaves from sort tree
             const sortLeaves: string[] = [];
             for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
-                sortLeaves.push(leaf.fileName!);
+                sortLeaves.push(leaf.name!);
             }
 
             // Collect leaves from merkle tree

@@ -1,12 +1,12 @@
-import { addFile, createTree, FileHash, IMerkleTree } from '../lib/merkle-tree';
+import { addItem, createTree, HashedItem, IMerkleTree } from '../lib/merkle-tree';
 import { visualizeSortTree } from '../lib/visualize';
 
-// Helper function to create a FileHash for testing
-function createTestFileHash(fileName: string): FileHash {
+// Helper function to create a HashedItem for testing
+function createTestHashedItem(name: string): HashedItem {
     return {
-        fileName,
-        hash: Buffer.from(fileName, 'utf8'), // Simple hash for testing
-        length: fileName.length,
+        name,
+        hash: Buffer.from(name, 'utf8'), // Simple hash for testing
+        length: name.length,
         lastModified: new Date()
     };
 }
@@ -35,8 +35,8 @@ function makePermutation(index: number, permutation: string[]) {
     // Add each file in the permutation order
     let stepIndex = 0;
     for (const fileName of permutation) {
-        const fileHash = createTestFileHash(fileName);
-        merkleTree = addFile(merkleTree, fileHash);
+        const fileHash = createTestHashedItem(fileName);
+        merkleTree = addItem(merkleTree, fileHash);
 
         console.log(`\n  Step ${stepIndex + 1}: Adding "${fileName}"`);
         const treeVisualization = visualizeSortTree(merkleTree.sort);

@@ -1,22 +1,22 @@
 import * as crypto from 'crypto';
 import { 
   IMerkleTree, 
-  addFile, 
-  deleteFile,
-  findFileNode,
+  addItem, 
+  deleteItem,
+  findItemNode,
   createTree,
-  FileHash
+  HashedItem
 } from '../lib/merkle-tree';
 
 describe('Size calculation with file deletion', () => {
   
   // Helper function to create a file hash with specific size
-  function createFileHash(fileName: string, content: string, size: number): FileHash {
+  function createHashedItem(name: string, content: string, size: number): HashedItem {
     const hash = crypto.createHash('sha256')
       .update(content)
       .digest();
     return {
-      fileName,
+      name,
       hash,
       length: size,
       lastModified: new Date(),
@@ -35,7 +35,7 @@ describe('Size calculation with file deletion', () => {
     ];
     
     for (const file of files) {
-      tree = addFile(tree, createFileHash(file.name, file.content, file.size));
+      tree = addItem(tree, createHashedItem(file.name, file.content, file.size));
     }
     
     return tree;
@@ -46,14 +46,14 @@ describe('Size calculation with file deletion', () => {
     const fileToDelete = 'file3.txt';
     
     // Verify initial state
-    const initialNode = findFileNode(tree, fileToDelete);
+    const initialNode = findItemNode(tree, fileToDelete);
     expect(initialNode?.size).toBe(3000);
     
     // Delete the file completely
-    deleteFile(tree, fileToDelete);
+    deleteItem(tree, fileToDelete);
     
     // Verify the file is completely gone
-    const deletedNode = findFileNode(tree, fileToDelete);
+    const deletedNode = findItemNode(tree, fileToDelete);
     expect(deletedNode).toBeUndefined();
   });
 
@@ -66,7 +66,7 @@ describe('Size calculation with file deletion', () => {
     expect(tree.sort?.size).toBe(initialTotalSize);
     
     // Delete a file of size 3000
-    deleteFile(tree, 'file3.txt');
+    deleteItem(tree, 'file3.txt');
     
     // Expected new total: 15000 - 3000 = 12000
     expect(tree.sort?.size).toBe(12000);
@@ -81,15 +81,15 @@ describe('Size calculation with file deletion', () => {
     expect(tree.sort?.size).toBe(initialTotalSize);
     
     // Delete multiple files
-    deleteFile(tree, 'file1.txt'); // -1000
-    deleteFile(tree, 'file4.txt'); // -4000
+    deleteItem(tree, 'file1.txt'); // -1000
+    deleteItem(tree, 'file4.txt'); // -4000
     
     // Expected new size: 15000 - (1000 + 4000) = 10000
     expect(tree.sort?.size).toBe(10000);
     expect(tree.sort?.size).toBe(10000);
     
     // Delete one more file
-    deleteFile(tree, 'file5.txt'); // -5000
+    deleteItem(tree, 'file5.txt'); // -5000
     
     // Expected final size: 10000 - 5000 = 5000
     expect(tree.sort?.size).toBe(5000);
@@ -102,7 +102,7 @@ describe('Size calculation with file deletion', () => {
     const fileSizes = [100, 200, 300, 400, 500, 600, 700];
     
     for (let i = 0; i < fileSizes.length; i++) {
-      tree = addFile(tree, createFileHash(`file${i}.txt`, `content ${i}`, fileSizes[i]));
+      tree = addItem(tree, createHashedItem(`file${i}.txt`, `content ${i}`, fileSizes[i]));
     }
     
     // A 7-file tree will have a structure like:
@@ -119,10 +119,10 @@ describe('Size calculation with file deletion', () => {
     expect(tree.sort?.size).toBe(totalSize);
     
     // Delete file C (index 2, size 300)
-    deleteFile(tree, 'file2.txt');
+    deleteItem(tree, 'file2.txt');
     
     // Verify file C is completely gone
-    const nodeC = findFileNode(tree, 'file2.txt');
+    const nodeC = findItemNode(tree, 'file2.txt');
     expect(nodeC).toBeUndefined();
     
     // Verify root node size is updated
@@ -135,13 +135,13 @@ describe('Size calculation with file deletion', () => {
     const initialTotalSize = 15000;
     
     // Delete files one by one and verify metadata is updated each time
-    deleteFile(tree, 'file1.txt'); // -1000
+    deleteItem(tree, 'file1.txt'); // -1000
     expect(tree.sort?.size).toBe(initialTotalSize - 1000);
     
-    deleteFile(tree, 'file3.txt'); // -3000
+    deleteItem(tree, 'file3.txt'); // -3000
     expect(tree.sort?.size).toBe(initialTotalSize - 1000 - 3000);
     
-    deleteFile(tree, 'file5.txt'); // -5000
+    deleteItem(tree, 'file5.txt'); // -5000
     expect(tree.sort?.size).toBe(initialTotalSize - 1000 - 3000 - 5000);
     
     // Final size should be 2000 + 4000 = 6000

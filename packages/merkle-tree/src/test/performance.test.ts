@@ -1,22 +1,22 @@
 import * as crypto from 'crypto';
 import { 
-  addFile, 
-  updateFile, 
-  deleteFile,
-  FileHash,
-  findFileNode,
+  addItem, 
+  updateItem, 
+  deleteItem,
+  HashedItem,
+  findItemNode,
   createTree,
 } from '../lib/merkle-tree';
 
 /**
  * Helper function to create a file hash with specified content
  */
-function createFileHash(fileName: string, content: string = fileName): FileHash {
+function createHashedItem(name: string, content: string = name): HashedItem {
   const hash = crypto.createHash('sha256')
     .update(content)
     .digest();
   return {
-    fileName,
+    name,
     hash,
     length: content.length,
     lastModified: new Date(),
@@ -56,7 +56,7 @@ describe('Merkle Tree Performance Tests', () => {
       
       const [resultTree, time] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName));
+          tree = addItem(tree, createHashedItem(fileName));
         }
         return tree;
       });
@@ -80,7 +80,7 @@ describe('Merkle Tree Performance Tests', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName));
+      tree = addItem(tree, createHashedItem(fileName));
     }
     
     // Test the performance of updating files at different positions
@@ -91,7 +91,7 @@ describe('Merkle Tree Performance Tests', () => {
       const updatedContent = `Updated content for ${fileName}`;
       
       const [success, time] = measureTime(() => {
-        return updateFile(tree, createFileHash(fileName, updatedContent));
+        return updateItem(tree, createHashedItem(fileName, updatedContent));
       });
       
       // console.log(`Updating file at index ${index} took ${time.toFixed(2)}ms`);
@@ -100,7 +100,7 @@ describe('Merkle Tree Performance Tests', () => {
       expect(success).toBe(true);
       
       // Verify the hash was actually updated
-      const node = findFileNode(tree, fileName);
+      const node = findItemNode(tree, fileName);
       expect(node).toBeDefined();
       
       const expectedHash = crypto.createHash('sha256')
@@ -121,7 +121,7 @@ describe('Merkle Tree Performance Tests', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of fileNames) {
-      tree = addFile(tree, createFileHash(fileName));
+      tree = addItem(tree, createHashedItem(fileName));
     }
     
     // File count before deletions
@@ -135,7 +135,7 @@ describe('Merkle Tree Performance Tests', () => {
       const fileName = fileNames[index];
       
       const [success, time] = measureTime(() => {
-        return deleteFile(tree!, fileName);
+        return deleteItem(tree!, fileName);
       });
       
       // console.log(`Deleting file ${fileName} took ${time.toFixed(2)}ms`);
@@ -144,7 +144,7 @@ describe('Merkle Tree Performance Tests', () => {
       expect(success).toBe(true);
       
       // Verify the file is completely gone
-      const node = findFileNode(tree, fileName);
+      const node = findItemNode(tree, fileName);
       expect(node).toBeUndefined(); // Should not be found
       
       // Performance assertions - deletion should be O(log n)
@@ -168,7 +168,7 @@ describe('Merkle Tree Performance Tests', () => {
       // Measure time to build entire tree
       const [resultTree, addTime] = measureTime(() => {
         for (const fileName of fileNames) {
-          tree = addFile(tree, createFileHash(fileName));
+          tree = addItem(tree, createHashedItem(fileName));
         }
         return tree;
       });
@@ -176,7 +176,7 @@ describe('Merkle Tree Performance Tests', () => {
       // Measure time to update a file in the middle of the tree
       const middleFileName = fileNames[Math.floor(size / 2)];
       const [, updateTime] = measureTime(() => {
-        return updateFile(resultTree, createFileHash(middleFileName, 'updated content'));
+        return updateItem(resultTree, createHashedItem(middleFileName, 'updated content'));
       });
       
       results[size] = { addTime, updateTime };
@@ -218,7 +218,7 @@ describe('Merkle Tree Performance Tests', () => {
     let tree = createTree("12345678-1234-5678-9abc-123456789abc");
     
     for (const fileName of baseFileNames) {
-      tree = addFile(tree, createFileHash(fileName));
+      tree = addItem(tree, createHashedItem(fileName));
     }
     
     // Now measure bulk operations on this tree
@@ -230,7 +230,7 @@ describe('Merkle Tree Performance Tests', () => {
     const [treeAfterAdd, addBatchTime] = measureTime(() => {
       let currentTree = tree;
       for (const fileName of newFileNames) {
-        currentTree = addFile(currentTree, createFileHash(fileName));
+        currentTree = addItem(currentTree, createHashedItem(fileName));
       }
       return currentTree;
     });
@@ -246,7 +246,7 @@ describe('Merkle Tree Performance Tests', () => {
     
     const [updateResults, updateBatchTime] = measureTime(() => {
       return filesToUpdate.map(fileName => 
-        updateFile(treeAfterAdd, createFileHash(fileName, `updated-${fileName}`))
+        updateItem(treeAfterAdd, createHashedItem(fileName, `updated-${fileName}`))
       );
     });
     
@@ -257,7 +257,7 @@ describe('Merkle Tree Performance Tests', () => {
     const filesToDelete = baseFileNames.slice(updateBatchSize, updateBatchSize + deleteBatchSize);
     
     const [deleteResults, deleteBatchTime] = measureTime(() => {
-      return filesToDelete.map(fileName => deleteFile(treeAfterAdd!, fileName));
+      return filesToDelete.map(fileName => deleteItem(treeAfterAdd!, fileName));
     });
     
     // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.sort?.leafCount} total files: ${deleteBatchTime.toFixed(2)}ms`);
