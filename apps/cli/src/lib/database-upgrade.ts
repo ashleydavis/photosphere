@@ -13,7 +13,7 @@ export async function performDatabaseUpgrade(
     readonly: boolean
 ): Promise<void> {
 
-    const merkleTree = database.getAssetDatabase().getMerkleTree();
+    const merkleTree = database.getMerkleTree();
     const currentVersion = merkleTree.version;
    
     // For any upgrade from version 2, copy file metadata from hash cache to merkle tree
@@ -23,8 +23,7 @@ export async function performDatabaseUpgrade(
         const cacheLoaded = await hashCache.load();        
         if (cacheLoaded) {
             // Get the merkle tree and update leaf nodes with file metadata
-            const assetDb = database.getAssetDatabase();
-            const merkleTree = assetDb.getMerkleTree();
+            const merkleTree = database.getMerkleTree();
             
             // Track how many files we updated
             let filesUpdated = 0;
@@ -58,8 +57,7 @@ export async function performDatabaseUpgrade(
     }
 
     // Initialize database metadata for any version upgrade
-    const assetDb = database.getAssetDatabase();
-    const updatedMerkleTree = assetDb.getMerkleTree();
+    const updatedMerkleTree = database.getMerkleTree();
     
     // Move files from "assets" directory to "asset" directory if they exist
     const assetStorage = database.getAssetStorage();
@@ -123,7 +121,7 @@ export async function performDatabaseUpgrade(
     
     if (!readonly) {
         // Save the database - this will write in the latest format
-        await database.getAssetDatabase().save();
+        await database.save();
 
         // Delete old files after successful upgrade.
         await metadataStorage.deleteFile("hash-cache-x.dat");

@@ -390,7 +390,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         //
         // This is the fast path for readonly database access. We only load the database once.
         //
-        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        const merkleTree = database.getMerkleTree();
         if (merkleTree.version < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${merkleTree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
@@ -398,7 +398,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     }
 
     if (allowOlderVersions) {
-        const merkleTree = database.getAssetDatabase().getMerkleTree();
+        const merkleTree = database.getMerkleTree();
         if (merkleTree.version < CURRENT_DATABASE_VERSION) {
             //
             // When loading an older database, upgrade it.

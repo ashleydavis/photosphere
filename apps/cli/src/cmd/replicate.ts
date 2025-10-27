@@ -7,7 +7,6 @@ import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption,
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { AssetDatabase } from "adb";
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //

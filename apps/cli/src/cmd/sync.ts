@@ -73,9 +73,8 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
 // TODO: Need a faster algorithm to traverse each tree comparing nodes and trying to make them the same.
 //
 async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
-    const sourceMerkleTree = sourceDb.getAssetDatabase().getMerkleTree();
-    const targetAssetDatabase = targetDb.getAssetDatabase();
-    const targetMerkleTree = targetAssetDatabase.getMerkleTree();
+    const sourceMerkleTree = sourceDb.getMerkleTree();
+    const targetMerkleTree = targetDb.getMerkleTree();
     const sourceStorage = sourceDb.getAssetStorage();
     const targetStorage = targetDb.getAssetStorage();
    
@@ -116,7 +115,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         }
         
         // Add file to target merkle tree.
-        targetDb.getAssetDatabase().addFile(fileName, {
+        targetDb.addFile(fileName, {
             hash: copiedFileHash,
             length: copiedFileInfo.length,
             lastModified: copiedFileInfo.lastModified,
@@ -141,14 +140,14 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         
         // Save target merkle tree every 100 files.
         if (filesCopied % 100 === 0) {
-            await retry(()  => targetAssetDatabase.save());
+            await retry(()  => targetDb.save());
         }
         
         return true;
     });
     
     // Save the target merkle tree one final time.
-    await retry(()  => targetAssetDatabase.save());
+    await retry(()  => targetDb.save());
     
     log.info(`Push completed: ${filesCopied} files copied out of ${filesProcessed} processed`);
 }
