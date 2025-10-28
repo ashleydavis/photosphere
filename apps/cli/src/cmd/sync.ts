@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { MediaFileDatabase } from "api";
 import { MerkleNode, traverseTree, getItemInfo, computeHash, SortNode } from "adb";
 import { exit } from "node-utils";
+import { acquireWriteLock, releaseWriteLock } from "api/src/lib/write-lock";
 
 //
 // Options for the sync command.
@@ -41,28 +42,58 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
     // Pull incoming files.
     //
     //todo: If the write lock can't be acquired, exit with with code 1 and error.
-    await sourceDb.acquireWriteLock(); //todo: Don't need write lock if nothing to pull.
+    if (!await acquireWriteLock(sourceDb.getAssetStorage(), sourceDb.sessionId)) { //todo: Don't need write lock if nothing to pull.
+        throw new Error(`Failed to acquire write lock for source database.`);
+    }
+
     try {
+        //
+        // Always reload the database after acquiring the write lock to ensure we have the latest tree.
+        //
+        if (!await sourceDb.loadMerkleTree()) {
+            throw new Error(`Failed to load source merkle tree after acquiring write lock.`);
+        }
+
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
         await pushFiles(targetDb, sourceDb);
+
+        //
+        // Ensure the tree is saved before releasing the lock.
+        //
+        await retry(() => sourceDb.save()); 
     }
     finally {
-        await sourceDb.releaseWriteLock();
+        await releaseWriteLock(sourceDb.getAssetStorage());
     }
 
     //
     // Push outgoing files.
     //
     //todo: If the write lock can't be acquired, exit with with code 1 and error.
-    await targetDb.acquireWriteLock(); //todo: Don't need write lock if nothing to push.
+    if (!await acquireWriteLock(targetDb.getAssetStorage(), targetDb.sessionId)) { //todo: Don't need write lock if nothing to push.
+        throw new Error(`Failed to acquire write lock for target database.`);
+    }
+
     try {
+        //
+        // Always reload the database after acquiring the write lock to ensure we have the latest tree.
+        //
+        if (!await targetDb.loadMerkleTree()) {
+            throw new Error(`Failed to load target merkle tree after acquiring write lock.`);
+        }
+
         // Push files from source to target.
         // Need the write lock in the target database.
         await pushFiles(sourceDb, targetDb);
+
+        //
+        // Ensure the tree is saved before releasing the lock.
+        //
+        await retry(() => targetDb.save());
     } 
     finally {
-        await targetDb.releaseWriteLock();
+        await releaseWriteLock(targetDb.getAssetStorage());
     }
 }
 
