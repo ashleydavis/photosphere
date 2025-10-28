@@ -2,9 +2,10 @@ import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { MediaFileDatabase } from "api";
-import { MerkleNode, traverseTree, getItemInfo, computeHash, SortNode } from "adb";
+import { computeHash } from "adb";
 import { exit } from "node-utils";
 import { acquireWriteLock, releaseWriteLock } from "api/src/lib/write-lock";
+import { getItemInfo, SortNode, traverseTreeAsync } from "merkle-tree";
 
 //
 // Options for the sync command.
@@ -158,7 +159,8 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     };
     
     // Walk the source merkle tree.
-    await traverseTree(sourceMerkleTree, async (node: SortNode): Promise<boolean> => {
+    //todo: This should traverse the merkle tree, not the sort tree. It can use the efficient algorithm to deliver differences.
+    await traverseTreeAsync<SortNode>(sourceMerkleTree.sort, async (node: SortNode): Promise<boolean> => {
         if (!node.name) {
             // Skip intermediate nodes.
             return true;

@@ -1,8 +1,9 @@
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { computeHash, SortNode, IMerkleTree, traverseTree } from "adb";
+import { computeHash } from "adb";
 import { computeAssetHash } from "./hash";
 import { log } from "utils";
+import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 
 //
 // Options for repairing the media file database.
@@ -225,7 +226,7 @@ export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRep
     }
 
     let merkleTree = mediaFileDatabase.getMerkleTree();
-    await traverseTree(merkleTree, async (node) => {
+    await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
         result.nodesProcessed++;
     
         if (node.name) {

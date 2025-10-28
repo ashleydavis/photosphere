@@ -1,6 +1,5 @@
 import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
-import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "adb";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -13,6 +12,7 @@ import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
 import { performDatabaseUpgrade } from "./database-upgrade";
+import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 
 //
 // Helper function to resolve encryption key path

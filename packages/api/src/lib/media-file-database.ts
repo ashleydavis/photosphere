@@ -11,7 +11,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, HashCache, IMerkleTree, visualizeTree, IHashedData, SortNode, buildMerkleTree, createTree, upsertItem, deleteItem } from "adb";
+import { computeHash, HashCache } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -22,6 +22,7 @@ import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { buildMerkleTree, createTree, deleteItem, IHashedData, IMerkleTree, upsertItem, visualizeTree } from "merkle-tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick

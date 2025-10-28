@@ -1,4 +1,4 @@
-import { buildMerkleTree, saveTree, IMerkleTree, loadTree } from "adb";
+import { buildMerkleTree, saveTree, IMerkleTree, loadTree } from "merkle-tree";
 import { IDatabaseMetadata } from "./media-file-database";
 import { IStorage } from "storage";
 

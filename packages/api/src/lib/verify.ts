@@ -1,7 +1,7 @@
-import { SortNode, traverseTree } from "adb";
 import { formatFileSize, log } from "utils";
 import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
 import { computeAssetHash } from "./hash";
+import { SortNode, traverseTreeAsync } from "merkle-tree";
 
 //
 // Options for verifying the media file database.
@@ -183,7 +183,7 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
     }
 
     const merkleTree = mediaFileDatabase.getMerkleTree();
-    await traverseTree(merkleTree, async (node) => {
+    await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
         result.nodesProcessed++;
 
         if (node.name) {

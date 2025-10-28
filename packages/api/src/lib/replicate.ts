@@ -1,11 +1,11 @@
 //
 // Result of the replication process.
 
-import { IMerkleTree, loadTree, createTree, getItemInfo, computeHash, upsertItem, SortNode, buildMerkleTree, saveTree, traverseTree } from "adb";
-import { result } from "lodash";
+import { computeHash } from "adb";
 import { IStorage } from "storage";
 import { IUuidGenerator, retry } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
+import { buildMerkleTree, createTree, getItemInfo, IMerkleTree, loadTree, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
 
 //
 export interface IReplicationResult {
@@ -182,7 +182,7 @@ Copied hash: ${copiedHash.toString("hex")}
         return true; // Continue traversing.
     };
 
-    await traverseTree(merkleTree, processSrcNode);
+    await traverseTreeAsync<SortNode>(merkleTree.sort, processSrcNode);
 
     //
     // Saves the dest database.

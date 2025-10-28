@@ -262,7 +262,7 @@
       "name": "api",
       "version": "1.0.0",
       "dependencies": {
-        "adb": "workspace:adb",
+        "adb": "workspace:*",
         "axios": "^0.27.2",
         "bdb": "workspace:*",
         "dayjs": "^1.11.7",
@@ -270,6 +270,7 @@
         "exif-parser": "^0.1.12",
         "jszip": "^3.10.1",
         "lodash": "^4.17.21",
+        "merkle-tree": "workspace:*",
         "mime-types": "^2.1.35",
         "tools": "workspace:*",
         "utils": "workspace:*",
