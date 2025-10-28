@@ -3,10 +3,9 @@ import {
     addItem, 
     IMerkleTree,
     deleteItem,
-    compareTrees,
-    generateTreeDiffReport,
     createTree
 } from '../lib/merkle-tree';
+import { compareTrees, generateTreeDiffReport } from '../lib/compare';
 
 describe('Tree Comparison', () => {
 
