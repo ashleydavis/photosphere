@@ -495,7 +495,20 @@ export class MediaFileDatabase {
     // Adds a file to the merkle tree (public method for external use like sync).
     //
     addFile(filePath: string, hashedFile: IHashedData): void {
-        this.addFileToMerkleTree(filePath, hashedFile);
+        if (!this.merkleTree) {
+            throw new Error("Cannot add file to database. No database loaded.");
+        }
+
+        if (filePath.startsWith("metadata/")) {
+            return;
+        }
+        
+        this.merkleTree = upsertItem(this.merkleTree, {
+            name: filePath,
+            hash: hashedFile.hash,
+            length: hashedFile.length,
+            lastModified: hashedFile.lastModified,
+        });
     }
 
     //
@@ -534,60 +547,9 @@ export class MediaFileDatabase {
     }
 
     //
-    // Creates a new merkle tree.
-    //
-    private async createMerkleTree(): Promise<void> {
-        if (!await this.assetStorage.isEmpty("./")) {
-            throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
-        }
-
-        this.merkleTree = createTree(this.uuidGenerator.generate());
-    }
-
-    //
-    // Adds a file or directory to the merkle tree.
-    //
-    private addFileToMerkleTree(filePath: string, hashedFile: IHashedData): void {
-        if (!this.merkleTree) {
-            throw new Error("Cannot add file to database. No database loaded.");
-        }
-
-        if (filePath.startsWith("metadata/")) {
-            return;
-        }
-        
-        this.merkleTree = upsertItem(this.merkleTree, {
-            name: filePath,
-            hash: hashedFile.hash,
-            length: hashedFile.length,
-            lastModified: hashedFile.lastModified,
-        });
-    }
-
-    //
-    // Updates or inserts a file in the merkle tree.
-    //
-    private upsertFileInMerkleTree(filePath: string, hashedFile: IHashedData): void {
-        if (!this.merkleTree) {
-            throw new Error("Cannot upsert file to database. No database loaded.");
-        }
-
-        if (filePath.startsWith("metadata/")) {
-            return;
-        }
-
-        this.merkleTree = upsertItem(this.merkleTree, {
-            name: filePath,
-            hash: hashedFile.hash,
-            length: hashedFile.length,
-            lastModified: hashedFile.lastModified,
-        });
-    }
-
-    //
     // Deletes a file from the merkle tree.
     //
-    private deleteFileFromMerkleTree(filePath: string): void {
+    private deleteFile(filePath: string): void {
         if (!this.merkleTree) {
             throw new Error("Cannot delete file from database. No database loaded.");
         }
@@ -597,29 +559,6 @@ export class MediaFileDatabase {
         }
 
         deleteItem<IDatabaseMetadata>(this.merkleTree, filePath);
-    }
-
-    //
-    // Deletes a directory from the merkle tree.
-    //
-    private async deleteDirFromMerkleTree(dirPath: string): Promise<void> {
-        let next: string | undefined = undefined;
-        do {
-            const result = await this.assetStorage.listFiles(dirPath, 1000, next);
-            for (const fileName of result.names) {
-                this.deleteFileFromMerkleTree(pathJoin(dirPath, fileName));
-            }
-            next = result.next;
-        } while (next);
-
-        next = undefined;
-        do {
-            const result = await this.assetStorage.listDirs(dirPath, 1000, next);
-            for (const dirName of result.names) {
-                await this.deleteDirFromMerkleTree(pathJoin(dirPath, dirName));
-            }
-            next = result.next;
-        } while (next);    
     }
 
     //
@@ -722,10 +661,12 @@ export class MediaFileDatabase {
     async create(): Promise<void> {
         await retry(() => this.localHashCache.load());
 
-        await retry(() => this.createMerkleTree());
+        if (!await this.assetStorage.isEmpty("./")) {
+            throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
+        }
 
-        const merkleTree = this.getMerkleTree();
-        merkleTree.databaseMetadata = { filesImported: 0 };
+        this.merkleTree = createTree(this.uuidGenerator.generate());
+        this.merkleTree.databaseMetadata = { filesImported: 0 };
 
         await this.ensureSortIndex();
 
@@ -737,7 +678,7 @@ export class MediaFileDatabase {
             throw new Error('README.md file not found after creation.');
         }
 
-        this.addFileToMerkleTree('README.md', {
+        this.addFile('README.md', {
             hash: await retry(() => computeHash(this.assetStorage.readStream('README.md'))),
             length: readmeInfo.length,
             lastModified: readmeInfo.lastModified,
@@ -971,7 +912,7 @@ export class MediaFileDatabase {
                 //
                 // Write lock is needed to update the merkle tree and BSON database.
                 //
-                this.addFileToMerkleTree(assetPath, hashedAsset);
+                this.addFile(assetPath, hashedAsset);
 
                 if (assetDetails?.thumbnailPath) {
                     //
@@ -995,7 +936,7 @@ export class MediaFileDatabase {
                     //
                     // Write lock is needed to update the merkle tree and BSON database.
                     //
-                    this.addFileToMerkleTree(thumbPath, hashedThumb);
+                    this.addFile(thumbPath, hashedThumb);
                 }
 
                 if (assetDetails?.displayPath) {
@@ -1019,7 +960,7 @@ export class MediaFileDatabase {
                     //
                     // Write lock is needed to update the merkle tree and BSON database.
                     //
-                    this.addFileToMerkleTree(displayPath, hashedDisplay);
+                    this.addFile(displayPath, hashedDisplay);
                 }
 
                 const properties: any = {};
@@ -1129,9 +1070,9 @@ export class MediaFileDatabase {
                 //
                 // Remove files from the merkle tree.
                 //
-                this.deleteFileFromMerkleTree(assetPath);
-                this.deleteFileFromMerkleTree(thumbPath);
-                this.deleteFileFromMerkleTree(displayPath);
+                this.deleteFile(assetPath);
+                this.deleteFile(thumbPath);
+                this.deleteFile(displayPath);
 
                 this.addSummary.filesFailed++;
                 if (progressCallback) {
@@ -1771,9 +1712,9 @@ export class MediaFileDatabase {
             //
             // Remove files from the merkle tree.
             //
-            this.deleteFileFromMerkleTree(pathJoin("asset", assetId));
-            this.deleteFileFromMerkleTree(pathJoin("display", assetId));
-            this.deleteFileFromMerkleTree(pathJoin("thumb", assetId));
+            this.deleteFile(pathJoin("asset", assetId));
+            this.deleteFile(pathJoin("display", assetId));
+            this.deleteFile(pathJoin("thumb", assetId));
         }
         finally {
             //
