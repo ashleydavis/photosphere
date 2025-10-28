@@ -20,6 +20,7 @@ dayjs.extend(customParseFormat);
 import { Image } from "tools";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
+import { computeAssetHash } from "./hash";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -197,71 +198,6 @@ export interface IAssetDetails {
     // Duration of the video, if known.
     //
     duration?: number;
-}
-
-//
-// Options for verifying the media file database.
-//
-export interface IVerifyOptions {
-    //
-    // Enables full verification where all files are re-hashed.
-    //
-    full?: boolean;
-
-    //
-    // Path filter to only verify files matching this path (file or directory).
-    //
-    pathFilter?: string;
-}
-
-//
-// Result of the verification process.
-//
-export interface IVerifyResult {
-    //
-    // The total number of files imported into the database.
-    //
-    totalImports: number;
-
-    //
-    // The total number of files verified (including thumbnails, display, BSON, etc.).
-    //
-    totalFiles: number;
-
-    //
-    // The total database size.
-    //
-    totalSize: number;
-
-    //
-    // The number of files that were unmodified.
-    //
-    numUnmodified: number;
-
-    //
-    // The list of files that were modified.
-    //
-    modified: string[];
-
-    //
-    // The list of new files that were added to the database.
-    //
-    new: string[];
-
-    //
-    // The list of files that were removed from the database.
-    //
-    removed: string[];
-
-    //
-    // The number of files that were processed from the file system.
-    // 
-    filesProcessed: number;
-
-    //
-    // The number of nodes processed in the merkle tree.
-    //
-    nodesProcessed: number;
 }
 
 //
@@ -840,7 +776,7 @@ export class MediaFileDatabase {
                     throw new Error(`Failed to get info for file "${assetPath}"`);
                 }
 
-                const hashedAsset = await retry(() => this.computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
+                const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
                 if (hashedAsset.hash.toString("hex") !== localHashStr) {
                     throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
@@ -867,7 +803,7 @@ export class MediaFileDatabase {
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                     }
-                    const hashedThumb = await retry(() => this.computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
+                    const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
 
                     //
                     // Refresh the timeout of the write lock.
@@ -891,7 +827,7 @@ export class MediaFileDatabase {
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display "${displayPath}"`);
                     }
-                    const hashedDisplay = await retry(() => this.computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
+                    const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
 
                     //
                     // Refresh the timeout of the write lock.
@@ -1112,18 +1048,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Formats file size in bytes to human readable string.
-    //
-    private formatFileSize(bytes: number): string {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        const value = bytes / Math.pow(k, i);
-        return `${Math.round(value * 100) / 100} ${sizes[i]}`;
-    }
-
-    //
     // Computes the hash of a local file and stores it in the local hash cache.
     //
     async computeLocalHash(
@@ -1169,147 +1093,6 @@ export class MediaFileDatabase {
         return hashedFile;
     }
 
-    //
-    // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
-    //
-    async computeAssetHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<IHashedData> {
-        //
-        // Compute the hash of the file.
-        //
-        const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
-        return {
-            hash,
-            lastModified: fileStat.lastModified,
-            length: fileStat.length,
-        };
-    }
-
-    //
-    // Verifies the media file database.
-    // Checks for missing files, modified files, and new files.
-    // If any files are corrupted, this will pick them up as modified.
-    //
-    async verify(options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
-
-        let pathFilter = options?.pathFilter 
-            ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
-            : undefined;
-
-        const summary = await this.getDatabaseSummary();
-        const result: IVerifyResult = {
-            totalImports: summary.totalImports,
-            totalFiles: summary.totalFiles,
-            totalSize: summary.totalSize,
-            numUnmodified: 0,
-            modified: [],
-            new: [],
-            removed: [],
-            filesProcessed: 0,
-            nodesProcessed: 0,
-        };
-
-        //
-        // Check the merkle tree to find files that have been removed.
-        //
-        if (progressCallback) {
-            progressCallback(`Checking for modified/removed files...`);
-        }
-
-        //
-        // Checks that a file matches the merkle tree record.
-        //
-        const verifyFile = async (node: SortNode): Promise<void> => {
-            
-            const fileName = node.name!;
-
-             if (pathFilter) {
-                if (!fileName.startsWith(pathFilter)) {
-                    return; // Skips files that don't match the path filter.
-                }
-            }
-
-            result.filesProcessed++;
-
-            if (progressCallback) {
-                progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
-            }
-
-            const fileInfo = await this.assetStorage.info(fileName);
-            if (!fileInfo) {
-                // The file doesn't exist in the storage.
-                log.warn(`File "${fileName}" is missing, even though we just found it by walking the directory.`);
-                result.removed.push(fileName);
-                return;
-            }
-
-            const sizeChanged = node.size !== fileInfo.length;
-            const timestampChanged = node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
-            if (sizeChanged || timestampChanged) {
-                // File metadata has changed - check if content actually changed by computing the hash.
-                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
-                if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
-                    // The file content has actually been modified.
-                    result.modified.push(fileName);
-                    
-                    // Log detailed reasons for modification only if verbose logging is enabled.
-                    if (log.verboseEnabled) {
-                        const reasons: string[] = [];
-                        if (sizeChanged) {
-                            const oldSize = this.formatFileSize(node.size);
-                            const newSize = this.formatFileSize(fileInfo.length);
-                            reasons.push(`size changed (${oldSize} → ${newSize})`);
-                        }
-                        if (timestampChanged) {
-                            const oldTime = node.lastModified!.toLocaleString();
-                            const newTime = fileInfo.lastModified.toLocaleString();
-                            reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
-                        }
-                        reasons.push('content hash changed');
-                        log.verbose(`Modified file: ${node.name} - ${reasons.join(', ')}`);
-                    }
-                } 
-                else {
-                    // Content is the same, just metadata changed - cache is already updated by computeHash.
-                    result.numUnmodified++;
-                }
-            }
-            else if (options?.full) {
-                // The file doesn't seem to have changed, but the full verification is requested.
-                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));
-                if (Buffer.compare(freshHash.hash, node.contentHash!) === 0) {
-                    // The file is unmodified.
-                    result.numUnmodified++;
-                } 
-                else {
-                    // The file has been modified (content only, since metadata matched).
-                    result.modified.push(fileName);
-                    
-                    // Log detailed reason for modification only if verbose logging is enabled
-                    if (log.verboseEnabled) {
-                        log.verbose(`Modified file: ${node.name} - content hash changed`);
-                    }
-                }
-            }
-            else {
-                result.numUnmodified++;
-            }
-        }
-
-        const merkleTree = this.getMerkleTree();
-        await traverseTree(merkleTree, async (node) => {
-            result.nodesProcessed++;
-
-            if (node.name) {
-                await verifyFile(node);
-            }
-
-            return true;
-        });
-       
-        result.nodesProcessed = result.nodesProcessed;
-
-        return result;
-    }
 
     //
     // Repairs the media file database by restoring corrupted or missing files from a source database.
@@ -1375,7 +1158,7 @@ export class MediaFileDatabase {
                     return false;
                 }
 
-                const copiedHash = await this.computeAssetHash(fileName, copiedFileInfo, () => this.assetStorage.readStream(fileName));
+                const copiedHash = await computeAssetHash(fileName, copiedFileInfo, () => this.assetStorage.readStream(fileName));
                 if (Buffer.compare(copiedHash.hash, expectedHash) !== 0) {
                     log.warn(`Repaired file hash mismatch: ${fileName}`);
                     return false;
@@ -1423,7 +1206,7 @@ export class MediaFileDatabase {
                 || options.full) {
                 
                 // Verify the actual hash.
-                const freshHash = await this.computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));                
+                const freshHash = await computeAssetHash(fileName, fileInfo, () => this.assetStorage.readStream(fileName));                
                 if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
                     // File is corrupted - try to repair.
                     if (progressCallback) {

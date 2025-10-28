@@ -8,3 +8,4 @@ export * from "./lib/wrapped-error";
 export * from "./lib/log";
 export * from "./lib/timestamp-provider";
 export * from "./lib/random-generator";
+export * from "./lib/format";
