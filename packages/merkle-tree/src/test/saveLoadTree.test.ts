@@ -8,11 +8,11 @@ import {
     saveTree,
     loadTree,
     loadTreeVersion,
-    traverseTreeSync,
     createTree,
     CURRENT_DATABASE_VERSION,
     buildMerkleTree
 } from '../lib/merkle-tree';
+import { traverseTreeSync } from '../lib/traverse';
 import { FileStorage } from 'storage';
 
 describe('Merkle Tree Save/Load', () => {

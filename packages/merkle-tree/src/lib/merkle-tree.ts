@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { save, load, ISerializer, IDeserializer } from 'serialization';
+import { traverseTreeSync } from './traverse';
 
 //
 // Current database version
@@ -119,40 +120,6 @@ export function findItemInTree(node: SortNode | undefined, targetName: string): 
     if (leftResult) return leftResult;
     
     return findItemInTree(node.right, targetName);
-}
-
-/**
- * Generic tree traversal function that calls a callback for each node.
- * The callback can return false to stop traversal early.
- */
-export function traverseTreeSync<NodeT>(node: INode<NodeT> | undefined, callback: (node: NodeT) => boolean): void {
-    if (!node) {
-        return;
-    }
-    
-    if (!callback(node as NodeT)) {
-        return; // Stop if callback returns false
-    }
-    
-    traverseTreeSync<NodeT>(node.left, callback);
-    traverseTreeSync<NodeT>(node.right, callback);
-}
-
-/**
- * Generic async tree traversal function that calls an async callback for each node.
- * The callback can return false to stop traversal early.
- */
-export async function traverseTreeAsync<NodeT>(node: INode<NodeT> | undefined, callback: (node: NodeT) => Promise<boolean>): Promise<void> {
-    if (!node) {
-        return;
-    }
-    
-    if (!await callback(node as NodeT)) {
-        return; // Stop if callback returns false
-    }
-    
-    await traverseTreeAsync<NodeT>(node.left, callback);
-    await traverseTreeAsync<NodeT>(node.right, callback);
 }
 
 /**
@@ -1743,33 +1710,3 @@ export function generateTreeDiffReport<DatabaseMetadata>(treeA: IMerkleTree<Data
     return report;
 }
 
-//
-// Traverse the tree and call the callback function for each node.
-// If the callback returns false, the traversal stops.
-//
-export async function traverseTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, callback: (node: SortNode) => Promise<boolean>): Promise<void>  {
-    if (!tree || !tree.sort) {
-        return;
-    }
-
-    async function traverseBinaryTree(node: SortNode | undefined): Promise<boolean> {
-        if (!node) return true;
-        
-        const shouldContinue = await callback(node);
-        if (!shouldContinue) return false;
-        
-        if (node.left) {
-            const leftContinue = await traverseBinaryTree(node.left);
-            if (!leftContinue) return false;
-        }
-        
-        if (node.right) {
-            const rightContinue = await traverseBinaryTree(node.right);
-            if (!rightContinue) return false;
-        }
-        
-        return true;
-    }
-
-    await traverseBinaryTree(tree.sort);
-}

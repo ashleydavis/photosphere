@@ -5,11 +5,11 @@ import {
     addItem, 
     updateItem, 
     findItemNode,
-    traverseTreeSync,
     createTree,
     MerkleNode,
     buildMerkleTree, 
 } from '../lib/merkle-tree';
+import { traverseTreeSync } from '../lib/traverse';
 // Helper to create a file hash
 function createHashedItem(name: string, content: string): HashedItem {
   const hash = crypto.createHash('sha256').update(content).digest();

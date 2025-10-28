@@ -1,6 +1,7 @@
-import { computeHash, IHashedData } from "adb";
+import { computeHash } from "adb";
 import { IFileStat } from "./file-scanner";
 import fs from "fs-extra";
+import { IHashedData } from "merkle-tree";
 
 //
 // Computes the hash of an asset storage file (no caching since data is already in merkle tree).

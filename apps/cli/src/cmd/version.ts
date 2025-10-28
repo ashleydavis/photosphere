@@ -6,7 +6,7 @@ import { version } from "../lib/version";
 import { buildMetadata } from "../lib/build-metadata";
 import { join } from "path";
 import * as os from "os";
-import { CURRENT_DATABASE_VERSION } from "adb";
+import { CURRENT_DATABASE_VERSION } from "merkle-tree";
 
 //
 // Command that displays version information for psi and its dependencies.

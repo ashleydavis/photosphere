@@ -1,12 +1,12 @@
-import { log, RandomUuidGenerator } from "utils";
+import { log } from "utils";
 import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
-import { exit, TestUuidGenerator } from "node-utils";
+import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
-import { compareTrees, loadTree } from "adb";
+import { compareTrees, loadTree } from "merkle-tree";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 
 export interface ICompareCommandOptions { 

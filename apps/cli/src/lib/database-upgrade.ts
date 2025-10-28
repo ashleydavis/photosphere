@@ -1,8 +1,9 @@
 import { log } from "utils";
-import { HashCache, SortNode, computeHash, traverseTreeAsync, traverseTreeSync } from "adb";
+import { HashCache, computeHash } from "adb";
 import { pathJoin } from "storage";
 import type { MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
+import { SortNode, traverseTreeAsync, traverseTreeSync } from "merkle-tree";
 
 //
 // Performs the actual database upgrade logic for a database from a given version to the current version.

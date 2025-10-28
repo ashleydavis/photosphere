@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
-import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "adb";
+import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "merkle-tree";
 import { IDatabaseMetadata } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
