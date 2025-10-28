@@ -4,6 +4,7 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
+import { repair } from "api";
 
 export interface IRepairCommandOptions extends IBaseCommandOptions {
     //
@@ -42,7 +43,7 @@ export async function repairCommand(options: IRepairCommandOptions): Promise<voi
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await database.repair({
+    const result = await repair(database, {
         source: options.source,
         sourceKey: options.sourceKey,
         full: options.full,
