@@ -7,6 +7,7 @@ import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption,
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
+import { replicate } from "api";
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -143,7 +144,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await sourceDatabase.replicate(destAssetStorage, destMetadataStorageFinal, { 
+    const result = await replicate(sourceDatabase,destAssetStorage, destMetadataStorageFinal, { 
         pathFilter: options.path 
     }, (progress) => {
         const progressMessage = `🔄 ${progress}`;
