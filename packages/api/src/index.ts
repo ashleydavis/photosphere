@@ -6,3 +6,4 @@ export * from "./lib/file-scanner";
 export * from "./lib/verify";
 export * from "./lib/repair";
 export * from "./lib/replicate";
+export * from "./lib/tree";

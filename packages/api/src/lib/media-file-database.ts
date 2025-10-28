@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { BsonDatabase, IBsonCollection, IRecord } from "bdb";
 import type { IBsonDatabase } from "bdb";
-import { createStorage, FileStorage, IStorage, loadEncryptionKeys, pathJoin, StoragePrefixWrapper } from "storage";
+import { FileStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
 import dayjs from "dayjs";
@@ -11,7 +11,7 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, getItemInfo, HashCache, traverseTree, IMerkleTree, visualizeTree, IHashedData, SortNode, buildMerkleTree, createTree, loadTree, saveTree, upsertItem, deleteItem } from "adb";
+import { computeHash, HashCache, IMerkleTree, visualizeTree, IHashedData, SortNode, buildMerkleTree, createTree, upsertItem, deleteItem } from "adb";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -21,6 +21,7 @@ import { Image } from "tools";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
+import { loadMerkleTree, saveMerkleTree } from "./tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -337,30 +338,18 @@ export class MediaFileDatabase {
     // Saves the merkle tree (public method for external use like sync).
     //
     async save(): Promise<void> {
-        await this.saveMerkleTree();
-    }
-
-    //
-    // Saves the merkle tree to disk.
-    //
-    private async saveMerkleTree(): Promise<void> {
         if (!this.merkleTree) {
             throw new Error("Cannot save database. No database loaded.");
         }
 
-        if (this.merkleTree.dirty) {
-            this.merkleTree.merkle = buildMerkleTree(this.merkleTree.sort);
-            this.merkleTree.dirty = false;
-        }
-
-        await saveTree("tree.dat", this.merkleTree, this.metadataStorage);
+        await saveMerkleTree(this.merkleTree, this.metadataStorage);
     }
 
     //
     // Loads the merkle tree from disk.
     //
     async loadMerkleTree(): Promise<boolean> {
-        this.merkleTree = await loadTree("tree.dat", this.metadataStorage);
+        this.merkleTree = await loadMerkleTree(this.metadataStorage);
         if (!this.merkleTree) {
             return false;
         }
@@ -436,7 +425,7 @@ export class MediaFileDatabase {
             lastModified: readmeInfo.lastModified,
         });
 
-        await retry(() => this.saveMerkleTree());
+        await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage));
 
         log.verbose(`Created new media file database.`);
     }
@@ -819,7 +808,7 @@ export class MediaFileDatabase {
                 //
                 // Ensure the tree is saved before releasing the lock.
                 //
-                await retry(() => this.saveMerkleTree()); 
+                await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage)); 
             }
             catch (err: any) {
                 log.exception(`Failed to upload asset data for file "${filePath}"`, err);
@@ -1025,7 +1014,7 @@ export class MediaFileDatabase {
             //
             // Ensure the tree is saved before releasing the lock.
             //
-            await retry(() => this.saveMerkleTree()); 
+            await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage)); 
         }
         finally {
             //
