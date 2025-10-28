@@ -4,6 +4,7 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
+import { verify } from "api";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -28,7 +29,7 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
         ? `🔍 Verifying files matching: ${options.path}` 
         : `🔍 Verifying database integrity`);
 
-    const result = await database.verify({ 
+    const result = await verify(database, { 
         full: options.full,
         pathFilter: options.path
     }, (progress) => {
