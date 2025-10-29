@@ -4,16 +4,12 @@ import { KeyObject } from "node:crypto";
 import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
 import { createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
 
-
+//
 // A type of storage that wraps another storage and encrypts it.
 //
 export class EncryptedStorage implements IStorage {
 
     constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {        
-    }
-
-    get isReadonly(): boolean {
-        return this.storage.isReadonly;
     }
 
     //

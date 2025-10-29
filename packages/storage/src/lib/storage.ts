@@ -54,26 +54,12 @@ export interface IWriteLockInfo {
     timestamp: number;
 }
 
-//
-// Helper function for storage classes to check readonly mode and throw appropriate errors.
-//
-export function checkReadonly(isReadonly: boolean, operation: string): void {
-    if (isReadonly) {
-        throw new Error(`Cannot perform ${operation} operation: storage is in readonly mode`);
-    }
-}
-
 export interface IStorage {
 
     //
     // Gets the location of the storage.
     //
     readonly location: string;
-
-    //
-    // Gets whether the storage is in readonly mode.
-    //
-    readonly isReadonly: boolean;
 
     //
     // Returns true if the specified directory is empty.
