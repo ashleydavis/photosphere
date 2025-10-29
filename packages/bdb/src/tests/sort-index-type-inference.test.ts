@@ -14,7 +14,6 @@ interface TestRecord extends IRecord {
     eventDate?: Date;
 }
 
-
 describe('SortIndex type inference', () => {
     let storage: MockStorage;
 
@@ -32,7 +31,7 @@ describe('SortIndex type inference', () => {
         const collection = new MockCollection<TestRecord>(records);
         
         // Create sort index without specifying type
-        const index = new SortIndex<TestRecord>(
+        const index = new SortIndex(
             {
                 storage,
                 baseDirectory: 'test',
@@ -42,21 +41,20 @@ describe('SortIndex type inference', () => {
                 pageSize: 10,
                 uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
-            },
-            collection
+            }
         );
         
         // Initialize the index
-        await index.build();
+        await index.build(collection);
         
         // Get sorted results
         const results = await index.getPage();
         
         // Should be sorted alphabetically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].name).toBe('Apple');
-        expect(results.records[1].name).toBe('Banana');
-        expect(results.records[2].name).toBe('Cherry');
+        expect(results.records[0].fields.name).toBe('Apple');
+        expect(results.records[1].fields.name).toBe('Banana');
+        expect(results.records[2].fields.name).toBe('Cherry');
     });
 
     test('should infer number type when no type is specified', async () => {
@@ -69,7 +67,7 @@ describe('SortIndex type inference', () => {
         const collection = new MockCollection<TestRecord>(records);
         
         // Create sort index without specifying type
-        const index = new SortIndex<TestRecord>(
+        const index = new SortIndex(
             {
                 storage,
                 baseDirectory: 'test',
@@ -79,21 +77,20 @@ describe('SortIndex type inference', () => {
                 pageSize: 10,
                 uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
-            },
-            collection
+            }
         );
         
         // Initialize the index
-        await index.build();
+        await index.build(collection);
         
         // Get sorted results
         const results = await index.getPage();
         
         // Should be sorted numerically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].score).toBe(50);
-        expect(results.records[1].score).toBe(100);
-        expect(results.records[2].score).toBe(200);
+        expect(results.records[0].fields.score).toBe(50);
+        expect(results.records[1].fields.score).toBe(100);
+        expect(results.records[2].fields.score).toBe(200);
     });
 
     test('should infer date type when no type is specified', async () => {
@@ -110,7 +107,7 @@ describe('SortIndex type inference', () => {
         const collection = new MockCollection<TestRecord>(records);
         
         // Create sort index without specifying type
-        const index = new SortIndex<TestRecord>(
+        const index = new SortIndex(
             {
                 storage,
                 baseDirectory: 'test',
@@ -120,21 +117,20 @@ describe('SortIndex type inference', () => {
                 pageSize: 10,
                 uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
-            },
-            collection
+            }
         );
         
         // Initialize the index
-        await index.build();
+        await index.build(collection);
         
         // Get sorted results
         const results = await index.getPage();
         
         // Should be sorted chronologically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].eventDate).toEqual(date1);
-        expect(results.records[1].eventDate).toEqual(date3);
-        expect(results.records[2].eventDate).toEqual(date2);
+        expect(results.records[0].fields.eventDate).toEqual(date1);
+        expect(results.records[1].fields.eventDate).toEqual(date3);
+        expect(results.records[2].fields.eventDate).toEqual(date2);
     });
 
     test('should throw error when comparing incompatible types', async () => {
@@ -147,7 +143,7 @@ describe('SortIndex type inference', () => {
         const collection = new MockCollection<TestRecord>(mixedRecords);
         
         // Create sort index without specifying type
-        const index = new SortIndex<TestRecord>(
+        const index = new SortIndex(
             {
                 storage,
                 baseDirectory: 'test',
@@ -157,12 +153,11 @@ describe('SortIndex type inference', () => {
                 pageSize: 1,  // Small page size to force comparison
                 uuidGenerator: new RandomUuidGenerator()
                 // Note: no type specified, should be inferred
-            },
-            collection
+            }
         );
         
         // This should throw an error during initialization when comparing values
-        await expect(index.build()).rejects.toThrow(/Type mismatch/);
+        await expect(index.build(collection)).rejects.toThrow(/Type mismatch/);
     });
     
     test('should work correctly when all values are the same inferred type', async () => {
@@ -175,7 +170,7 @@ describe('SortIndex type inference', () => {
         const collection = new MockCollection<TestRecord>(records);
         
         // Create sort index without specifying type - should infer string
-        const index = new SortIndex<TestRecord>(
+        const index = new SortIndex(
             {
                 storage,
                 baseDirectory: 'test',
@@ -184,12 +179,11 @@ describe('SortIndex type inference', () => {
                 direction: 'asc',
                 pageSize: 10,
                 uuidGenerator: new RandomUuidGenerator()
-            },
-            collection
+            }
         );
         
         // Should work fine since all values are strings
-        await index.build();
+        await index.build(collection);
         const results = await index.getPage();
         
         expect(results.records.length).toBe(3);

@@ -8,6 +8,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { RandomUuidGenerator } from 'utils';
+import { toExternal, toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -21,8 +22,8 @@ interface TestRecord extends IRecord {
 
 describe('SortIndex with string type', () => {
     let storage: MockStorage;
-    let sortIndexAsc: SortIndex<TestRecord>;
-    let sortIndexDesc: SortIndex<TestRecord>;
+    let sortIndexAsc: SortIndex;
+    let sortIndexDesc: SortIndex;
     let collection: MockCollection<TestRecord>;
     
     const testRecords: TestRecord[] = [
@@ -91,7 +92,7 @@ describe('SortIndex with string type', () => {
             pageSize: 3,
             type: 'string', // Specify string type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Create descending index on status field
         sortIndexDesc = new SortIndex({
@@ -103,13 +104,13 @@ describe('SortIndex with string type', () => {
             pageSize: 3,
             type: 'string', // Specify string type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
     });
     
     test('should initialize the string sort indexes with records', async () => {
         // Initialize both indexes
-        await sortIndexAsc.build();
-        await sortIndexDesc.build();
+        await sortIndexAsc.build(collection);
+        await sortIndexDesc.build(collection);
         
         // Check that tree files have been written
         expect(await storage.fileExists('db/sort_indexes/test_collection/name_asc/tree.dat')).toBe(true);
@@ -118,10 +119,10 @@ describe('SortIndex with string type', () => {
     
     test('should retrieve records in ascending string order', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -136,14 +137,14 @@ describe('SortIndex with string type', () => {
         
         // Verify records are in ascending string order using localeCompare
         for (let i = 1; i < allRecords.length; i++) {
-            const prevName = String(allRecords[i-1].name);
-            const currName = String(allRecords[i].name);
+            const prevName = String(allRecords[i-1].fields.name);
+            const currName = String(allRecords[i].fields.name);
             expect(prevName.localeCompare(currName)).toBeLessThanOrEqual(0);
         }
         
         // Check specific ordering - locale-aware string comparison
         // Using localeCompare, case differences are typically ignored for primary sorting
-        const actualNames = allRecords.map(r => r.name);
+        const actualNames = allRecords.map(r => r.fields.name);
         
         // With locale comparison, 'apple' and 'Apple' should be grouped together
         // and 'zebra' and 'Zebra' should be grouped together
@@ -157,10 +158,10 @@ describe('SortIndex with string type', () => {
     
     test('should retrieve records in descending string order', async () => {
         // Initialize the index
-        await sortIndexDesc.build();
+        await sortIndexDesc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexDesc.getPage('');
         
         // Add records from first page
@@ -174,20 +175,20 @@ describe('SortIndex with string type', () => {
         
         // Verify records are in descending string order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevStatus = String(allRecords[i-1].status);
-            const currStatus = String(allRecords[i].status);
+            const prevStatus = String(allRecords[i-1].fields.status);
+            const currStatus = String(allRecords[i].fields.status);
             expect(prevStatus.localeCompare(currStatus)).toBeGreaterThanOrEqual(0);
         }
         
         // Check specific ordering - descending alphabetical
         // Expected order: "pending", "pending", "inactive", "completed", "active", "active", "active"
-        expect(allRecords[0].status).toBe('pending');
-        expect(allRecords[allRecords.length - 1].status).toBe('active');
+        expect(allRecords[0].fields.status).toBe('pending');
+        expect(allRecords[allRecords.length - 1].fields.status).toBe('active');
     });
     
     test('should find records by exact string value', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find records with exact string match
         const result = await sortIndexAsc.findByValue('apple');
@@ -195,7 +196,7 @@ describe('SortIndex with string type', () => {
         // Should find exactly one record with lowercase 'apple'
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174002');
-        expect(result[0].name).toBe('apple');
+        expect(result[0].fields.name).toBe('apple');
         
         // Find records with exact string match for 'Apple' (different case)
         const resultCaps = await sortIndexAsc.findByValue('Apple');
@@ -203,7 +204,7 @@ describe('SortIndex with string type', () => {
         // Should find exactly one record with uppercase 'Apple'
         expect(resultCaps.length).toBe(1);
         expect(resultCaps[0]._id).toBe('123e4567-e89b-12d3-a456-426614174006');
-        expect(resultCaps[0].name).toBe('Apple');
+        expect(resultCaps[0].fields.name).toBe('Apple');
         
         // Find a non-existent string
         const noResult = await sortIndexAsc.findByValue('nonexistent');
@@ -214,7 +215,7 @@ describe('SortIndex with string type', () => {
     
     test('should find records by string range', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find records with names between 'b' and 'o' (inclusive)
         const result = await sortIndexAsc.findByRange({
@@ -226,7 +227,7 @@ describe('SortIndex with string type', () => {
         
         // Should find records: "banana", "cat"
         expect(result.length).toBe(2);
-        const names = result.map(r => r.name).sort();
+        const names = result.map(r => r.fields.name).sort();
         expect(names).toEqual(['banana', 'cat']);
         
         // Test exclusive range (between 'a' and 'z', non-inclusive)
@@ -241,19 +242,19 @@ describe('SortIndex with string type', () => {
         // With localeCompare, both 'Apple' and 'apple' are > 'a', and both 'Zebra' and 'zebra' are > 'z'
         // So this will include: "Apple", "apple", "banana", "cat", "orange"
         expect(exclusiveResult.length).toBe(5);
-        const exclusiveNames = exclusiveResult.map(r => r.name).sort();
+        const exclusiveNames = exclusiveResult.map(r => r.fields.name).sort();
         expect(exclusiveNames).toEqual(['Apple', 'apple', 'banana', 'cat', 'orange']);
         
         // Verify all results are properly within range
         for (const record of exclusiveResult) {
-            expect(record.name.localeCompare('a')).toBeGreaterThan(0);
-            expect(record.name.localeCompare('z')).toBeLessThan(0);
+            expect(record.fields.name.localeCompare('a')).toBeGreaterThan(0);
+            expect(record.fields.name.localeCompare('z')).toBeLessThan(0);
         }
     });
     
     test('should update records with new string values in the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Update a record with a new name
         const updatedRecord: TestRecord = {
@@ -261,7 +262,7 @@ describe('SortIndex with string type', () => {
             name: 'kiwi' // Change name from 'banana' to 'kiwi'
         };
         
-        await sortIndexAsc.updateRecord(updatedRecord, testRecords[2]);
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
         
         // Find records by the new name
         const result = await sortIndexAsc.findByValue('kiwi');
@@ -269,14 +270,14 @@ describe('SortIndex with string type', () => {
         // Should find the updated record with the new name
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174003');
-        expect(result[0].name).toBe('kiwi');
+        expect(result[0].fields.name).toBe('kiwi');
         
         // Original name should no longer have this record
         const oldNameResult = await sortIndexAsc.findByValue('banana');
         expect(oldNameResult.length).toBe(0);
         
         // Get all records and verify proper sorting
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -291,19 +292,19 @@ describe('SortIndex with string type', () => {
         // Verify the updated record is in the correct position
         const updatedRecordIndex = allRecords.findIndex(r => r._id === '123e4567-e89b-12d3-a456-426614174003');
         expect(updatedRecordIndex).toBeGreaterThan(-1);
-        expect(allRecords[updatedRecordIndex].name).toBe('kiwi');
+        expect(allRecords[updatedRecordIndex].fields.name).toBe('kiwi');
         
         // Verify sorting is still correct
         for (let i = 1; i < allRecords.length; i++) {
-            const prevName = String(allRecords[i-1].name);
-            const currName = String(allRecords[i].name);
+            const prevName = String(allRecords[i-1].fields.name);
+            const currName = String(allRecords[i].fields.name);
             expect(prevName.localeCompare(currName)).toBeLessThanOrEqual(0);
         }
     });
     
     test('should add a new record with a string value to the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Add a new record with a specific name
         const newRecord: TestRecord = {
@@ -314,7 +315,7 @@ describe('SortIndex with string type', () => {
             title: 'Purple Grape'
         };
         
-        await sortIndexAsc.addRecord(newRecord);
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
         
         // Find the record by its name
         const result = await sortIndexAsc.findByValue('grape');
@@ -324,7 +325,7 @@ describe('SortIndex with string type', () => {
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174008');
         
         // Get all records and verify the new record is in the correct position
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -337,7 +338,7 @@ describe('SortIndex with string type', () => {
         }
         
         // Verify the new record is in the correct alphabetical position
-        const grapeIndex = allRecords.findIndex(r => r.name === 'grape');
+        const grapeIndex = allRecords.findIndex(r => r.fields.name === 'grape');
         expect(grapeIndex).toBeGreaterThan(-1);
         
         // Verify the total record count has increased
@@ -345,18 +346,18 @@ describe('SortIndex with string type', () => {
         
         // Verify sorting is still correct
         for (let i = 1; i < allRecords.length; i++) {
-            const prevName = String(allRecords[i-1].name);
-            const currName = String(allRecords[i].name);
+            const prevName = String(allRecords[i-1].fields.name);
+            const currName = String(allRecords[i].fields.name);
             expect(prevName.localeCompare(currName)).toBeLessThanOrEqual(0);
         }
     });
     
     test('should handle mixed case string comparisons correctly', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Get all records sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -367,7 +368,7 @@ describe('SortIndex with string type', () => {
         }
         
         // Extract just the names in order
-        const sortedNames = allRecords.map(r => r.name);
+        const sortedNames = allRecords.map(r => r.fields.name);
         
         // Verify that locale-aware sorting groups similar words together
         // With localeCompare, case differences are secondary to alphabetical order
@@ -417,12 +418,12 @@ describe('SortIndex with string type', () => {
             pageSize: 3,
             type: 'string',
             uuidGenerator: new RandomUuidGenerator()
-        }, numericCollection);
+        });
         
-        await numericSortIndex.build();
+        await numericSortIndex.build(numericCollection);
         
         // Get all records sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await numericSortIndex.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -433,7 +434,7 @@ describe('SortIndex with string type', () => {
         }
         
         // Extract names in order
-        const sortedNames = allRecords.map(r => r.name);
+        const sortedNames = allRecords.map(r => r.fields.name);
         
         // As strings with localeCompare, they should be sorted lexicographically: "10", "100", "2", "20"
         // NOT numerically which would be: "2", "10", "20", "100"

@@ -1,9 +1,10 @@
 import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { IRecord} from 'bdb';
+import { IRecord, ISortedIndexEntry} from 'bdb';
 import { SortIndex } from 'bdb';
 import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
+import { toExternal, toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -16,7 +17,7 @@ interface TestRecord extends IRecord {
 
 describe('SortIndex Page Split', () => {
     let storage: MockStorage;
-    let sortIndex: SortIndex<TestRecord>;
+    let sortIndex: SortIndex;
     let collection: MockCollection<TestRecord>;
     
     // Create test data with sequential scores to easily verify sort order
@@ -41,12 +42,12 @@ describe('SortIndex Page Split', () => {
             direction: 'asc',
             pageSize: 2, // Small page size to trigger splits easily
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
     });
     
     test('should verify logical sort order is maintained after page split', async () => {
         // Initialize the index with initial records
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Force metadata save
         await sortIndex.saveTree();
@@ -70,14 +71,14 @@ describe('SortIndex Page Split', () => {
         };
         
         // Add records that will trigger page splits
-        await sortIndex.addRecord(recordToSplit1); // Add score 25 (should go in middle)
-        await sortIndex.addRecord(recordToSplit2); // Add score 15 (should go near beginning)
+        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit1)); // Add score 25 (should go in middle)
+        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit2)); // Add score 15 (should go near beginning)
         
         // After adding these records, the tree file should still exist
         expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // Now request records in order and verify they come back sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndex.getPage('');
         
         // Check total record count and page count
@@ -97,7 +98,7 @@ describe('SortIndex Page Split', () => {
         const expectedScoreOrder = [10, 15, 20, 25, 30, 40, 50];
         
         // Extract scores in the order they were returned
-        const actualScores = allRecords.map(r => r.score).sort((a, b) => a - b);
+        const actualScores = allRecords.map(r => r.fields.score).sort((a, b) => a - b);
         
         // Scores should be in correct order (sorted)
         expect(actualScores).toEqual(expectedScoreOrder);
@@ -112,12 +113,12 @@ describe('SortIndex Page Split', () => {
         
         // Should get 4 records with scores 15, 20, 25, 30
         expect(rangeResults.length).toBe(4);
-        expect(rangeResults.map(r => r.score).sort((a, b) => a - b)).toEqual([15, 20, 25, 30]);
+        expect(rangeResults.map(r => r.fields.score).sort((a, b) => a - b)).toEqual([15, 20, 25, 30]);
     });
     
     test('should maintain correct page ordering when multiple pages are split', async () => {
         // Initialize the index with initial records
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Add many records to cause multiple page splits
         const additionalRecords = [
@@ -135,7 +136,7 @@ describe('SortIndex Page Split', () => {
         
         // Add records that will cause multiple page splits
         for (const record of additionalRecords) {
-            await sortIndex.addRecord(record);
+            await sortIndex.addRecord(toInternal<TestRecord>(record));
         }
         
         // Now we should have multiple pages
@@ -143,7 +144,7 @@ describe('SortIndex Page Split', () => {
         await sortIndex.saveTree();
                         
         // Get all records across all pages
-        const allRecords: TestRecord[] = [];
+        const allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndex.getPage('');
         
         expect(currentPage.totalPages).toBeGreaterThanOrEqual(5);
@@ -164,7 +165,7 @@ describe('SortIndex Page Split', () => {
         ];
         
         // Extract scores in the order they were returned
-        const actualScores = allRecords.map(r => r.score);
+        const actualScores = allRecords.map(r => r.fields.score);
         
         // Scores should be in order
         expect(actualScores.sort((a, b) => a - b)).toEqual(expectedScores.sort((a, b) => a - b));
@@ -175,7 +176,7 @@ describe('SortIndex Page Split', () => {
         for (const score of [31, 21, 11, 41, 51]) {
             const result = await sortIndex.findByValue(score);
             if (result.length > 0) {
-                expect(result[0].score).toBe(score);
+                expect(result[0].fields.score).toBe(score);
                 foundScore = true;
                 break;
             }
@@ -194,7 +195,7 @@ describe('SortIndex Page Split', () => {
         expect(rangeResults.length).toBeGreaterThan(0);
         
         // All returned scores should be within the specified range
-        const rangeScores = rangeResults.map(r => r.score);
+        const rangeScores = rangeResults.map(r => r.fields.score);
         expect(rangeScores.every(score => score >= 20 && score <= 52)).toBe(true);
     });
 });

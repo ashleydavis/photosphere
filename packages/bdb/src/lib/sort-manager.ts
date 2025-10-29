@@ -3,9 +3,9 @@
 //
 
 import type { IStorage } from 'storage';
-import type { IBsonCollection, IRecord } from './collection';
+import type { IBsonCollection, IInternalRecord } from './collection';
 import { SortIndex } from './sort-index';
-import type { ISortResult, SortDataType, SortDirection } from './sort-index';
+import type { ISortIndexResult, SortDataType, SortDirection } from './sort-index';
 import type { IUuidGenerator } from 'utils';
 
 export interface ISortManagerOptions {
@@ -22,14 +22,14 @@ export interface ISortManagerOptions {
     defaultPageSize?: number;
 }
 
-export class SortManager<RecordT extends IRecord> {
+export class SortManager {
     private storage: IStorage;
     private baseDirectory: string;
     private sortIndexes: Map<string, any> = new Map();
     private defaultPageSize: number;
     private readonly uuidGenerator: IUuidGenerator;
     
-    constructor(options: ISortManagerOptions, private readonly collection: IBsonCollection<RecordT>, private readonly collectionName: string) {
+    constructor(options: ISortManagerOptions, private readonly collectionName: string) {
         this.storage = options.storage;
         this.baseDirectory = options.baseDirectory;
         this.defaultPageSize = options.defaultPageSize || 1000;
@@ -62,7 +62,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Gets a sort index by field name and direction.
     //
-    async getSortIndex( fieldName: string, direction: SortDirection): Promise<SortIndex<RecordT> | undefined> {
+    async getSortIndex( fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
         const key = this.getSortIndexKey(fieldName, direction);
         return this.sortIndexes.get(key);
     }
@@ -70,7 +70,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Create a existing sort index.
     //
-    private async createSortIndex(fieldName: string, direction: SortDirection, type?: SortDataType, pageSize?: number): Promise<SortIndex<RecordT>> {
+    private async createSortIndex(fieldName: string, direction: SortDirection, type?: SortDataType, pageSize?: number): Promise<SortIndex> {
         const key = this.getSortIndexKey(fieldName, direction);
         
         let sortIndex = this.sortIndexes.get(key);
@@ -82,7 +82,7 @@ export class SortManager<RecordT extends IRecord> {
             return sortIndex;
         }
         
-        sortIndex = new SortIndex<RecordT>({
+        sortIndex = new SortIndex({
             storage: this.storage,
             baseDirectory: this.baseDirectory,
             collectionName: this.collectionName,
@@ -91,7 +91,7 @@ export class SortManager<RecordT extends IRecord> {
             uuidGenerator: this.uuidGenerator,
             pageSize: pageSize || this.defaultPageSize,
             type
-        },  this.collection);
+        });
                
         this.sortIndexes.set(key, sortIndex);
         
@@ -101,7 +101,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Get sorted records with pagination.
     //
-    async getSortedRecords(fieldName: string, direction: SortDirection, pageId?: string): Promise<ISortResult<RecordT>> {
+    async getSortedRecords(fieldName: string, direction: SortDirection, pageId?: string): Promise<ISortIndexResult> {
         const sortIndex = await this.getSortIndex(fieldName, direction);
         if (!sortIndex) {
             throw new Error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist.`);
@@ -113,10 +113,10 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Builds the sort index if it doesn't exist.
     //
-    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, collection: IBsonCollection<any>): Promise<void> {
         const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
         if (!await sortIndex.load()) {
-            await sortIndex.build();
+            await sortIndex.build(collection);
         }
     }
     
@@ -209,7 +209,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Adds a record to all sort indexes for this collection.
     //    
-    async addRecord(record: RecordT): Promise<void> {
+    async addRecord(record: IInternalRecord): Promise<void> {
         for (const sortIndex of this.sortIndexes.values()) {
             await sortIndex.addRecord(record);
         }
@@ -218,7 +218,7 @@ export class SortManager<RecordT extends IRecord> {
     // 
     // Updates a record in all sort indexes.
     //
-    async updateRecord(updatedRecord: RecordT, oldRecord: RecordT | undefined): Promise<void> {
+    async updateRecord(updatedRecord: IInternalRecord, oldRecord: IInternalRecord | undefined): Promise<void> {
         for (const sortIndex of this.sortIndexes.values()) {
             await sortIndex.updateRecord(updatedRecord, oldRecord);
         }
@@ -227,7 +227,7 @@ export class SortManager<RecordT extends IRecord> {
     //
     // Deletes a record from all existing sort indexes.
     //
-    async deleteRecord(recordId: string, record: RecordT): Promise<void> {                
+    async deleteRecord(recordId: string, record: IInternalRecord): Promise<void> {                
         for (const sortIndex of this.sortIndexes.values()) {
             await sortIndex.deleteRecord(recordId, record);
         }

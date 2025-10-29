@@ -4,6 +4,7 @@ import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
+import { toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -30,7 +31,7 @@ describe('SortIndex Key Constraints', () => {
     }
 
     // Helper function to verify key constraints across all nodes
-    async function verifyKeyConstraints(index: SortIndex<TestRecord>, keySize: number): Promise<{
+    async function verifyKeyConstraints(index: SortIndex, keySize: number): Promise<{
         allConstraintsMet: boolean;
         violations: Array<{
             nodeId: string;
@@ -167,10 +168,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 5,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify key constraints
         const constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -210,10 +211,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 6,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
-        
+        });
+            
         // Build empty index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Add records incrementally and check constraints after each batch
         for (let batch = 1; batch <= 10; batch++) {
@@ -221,7 +222,7 @@ describe('SortIndex Key Constraints', () => {
             for (let i = 1; i <= 15; i++) {
                 const recordNum = (batch - 1) * 15 + i;
                 const record = createRecord(recordNum, recordNum);
-                await sortIndex.addRecord(record);
+                await sortIndex.addRecord(toInternal<TestRecord>(record));
             }
             
             // Verify constraints after each batch
@@ -255,10 +256,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 4,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify key constraints
         const constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -296,10 +297,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 8,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify initial constraints
         let constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -307,7 +308,7 @@ describe('SortIndex Key Constraints', () => {
         
         // Delete every 4th record
         for (let i = 4; i <= 80; i += 4) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, { value: i } as any);
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
             
             // Check constraints after each deletion
             constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -335,27 +336,27 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 7,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Perform random operations
         for (let i = 1; i <= 20; i++) {
             // Add new records with odd values
             const newRecord = createRecord(100 + i, i * 2 - 1);
-            await sortIndex.addRecord(newRecord);
+            await sortIndex.addRecord(toInternal<TestRecord>(newRecord));
             
             // Update some existing records
             if (i <= 10) {
                 const updatedRecord = createRecord(i, i * 2 + 1000);
                 const oldRecord = records[i - 1];
-                await sortIndex.updateRecord(updatedRecord, oldRecord);
+                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(oldRecord));
             }
             
             // Delete some records
             if (i <= 8) {
-                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, { value: (i + 20) * 2 } as any);
+                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
             }
             
             // Verify constraints after each set of operations
@@ -390,10 +391,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 6,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify key constraints
         const constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -426,10 +427,10 @@ describe('SortIndex Key Constraints', () => {
             pageSize: 15,
             keySize,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify key constraints
         const constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -477,11 +478,11 @@ describe('SortIndex Key Constraints', () => {
                 direction: 'asc',
                 pageSize: 8,
                 keySize,
-            uuidGenerator: new RandomUuidGenerator()
-            }, collection);
+                uuidGenerator: new RandomUuidGenerator()
+            });
             
             // Build the index
-            await sortIndex.build();
+            await sortIndex.build(collection);
             
             // Verify key constraints
             const constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -494,7 +495,6 @@ describe('SortIndex Key Constraints', () => {
             for (const internal of internalNodes) {
                 expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
             }
-            
-            }
+        }
     });
 });

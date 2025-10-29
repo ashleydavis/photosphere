@@ -1,23 +1,24 @@
-import type { IBsonCollection, IGetAllResult, IRecord, IShard } from '../lib/collection';
+import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord } from '../lib/collection';
 import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
-    private records: T[] = [];
+    private records: IInternalRecord[] = [];
 
     constructor(records: T[] = []) {
-        this.records = [...records];
+        this.records = records.map(records => toInternal<T>(records));
     }
 
     async insertOne(record: T): Promise<void> {
-        this.records.push(record);
+        this.records.push(toInternal<T>(record));
     }
 
     async getOne(id: string): Promise<T | undefined> {
-        return this.records.find(r => r._id === id);
+        const internal = this.records.find(r => r._id === id);
+        return internal ? toExternal<T>(internal) : undefined;
     }
 
-    async *iterateRecords(): AsyncGenerator<T, void, unknown> {
+    async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
         for (const record of this.records) {
             yield record;
         }
@@ -29,14 +30,14 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return Array.from({ length: numShards }, (_, i) => i);
     }
 
-    async *iterateShards(): AsyncGenerator<Iterable<T>, void, unknown> {
+    async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let i = 0; i < this.records.length; i += 2) {
             yield this.records.slice(i, i + 2);
         }
     }
 
     async getAll(next?: string): Promise<IGetAllResult<T>> {
-        return { records: this.records, next: undefined };
+        return { records: this.records.map(internal => toExternal<T>(internal)), next: undefined };
     }
 
     async getSorted(
@@ -74,12 +75,12 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         const index = this.records.findIndex(r => r._id === id);
         if (index === -1) {
             if (options?.upsert) {
-                this.records.push({ _id: id, ...updates } as T);
+                this.records.push(toInternal<any>({ _id: id, ...updates }));
                 return true;
             }
             return false;
         }
-        this.records[index] = { ...this.records[index], ...updates };
+        this.records[index] = toInternal<any>({ ...this.records[index], ...updates });
         return true;
     }
 
@@ -87,12 +88,12 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         const index = this.records.findIndex(r => r._id === id);
         if (index === -1) {
             if (options?.upsert) {
-                this.records.push(record);
+                this.records.push(toInternal<T>(record));
                 return true;
             }
             return false;
         }
-        this.records[index] = record;
+        this.records[index] = toInternal<T>(record);
         return true;
     }
 
@@ -118,13 +119,13 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
     }
 
     async findByIndex(fieldName: string, value: any): Promise<T[]> {
-        return this.records.filter(r => r[fieldName] === value);
+        return this.records.filter(r => r.fields[fieldName] === value).map(internal => toExternal<T>(internal));
     }
 
     async findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<T[]> {
         // Mock implementation for testing - filter records based on range
         let filteredRecords = this.records.filter(record => {
-            const fieldValue = record[fieldName];
+            const fieldValue = record.fields[fieldName];
             if (fieldValue === undefined || fieldValue === null) {
                 return false;
             }
@@ -152,8 +153,8 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
 
         // Sort the results according to direction
         filteredRecords.sort((a, b) => {
-            const aValue = a[fieldName];
-            const bValue = b[fieldName];
+            const aValue = a.fields[fieldName];
+            const bValue = b.fields[fieldName];
             
             if (aValue < bValue) {
                 return direction === 'asc' ? -1 : 1;
@@ -164,7 +165,7 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
             return 0;
         });
 
-        return filteredRecords;
+        return filteredRecords.map(internal => toExternal<T>(internal));
     }
 
     async deleteIndex(fieldName: string): Promise<boolean> {
@@ -183,13 +184,7 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return Math.ceil(this.records.length / 2);
     }
 
-    async loadShard(shardIndex: number): Promise<IShard<T>> {
-        const start = shardIndex * 2;
-        const end = start + 2;
-        const shardRecords = this.records.slice(start, end);
-        return {
-            id: shardIndex,
-            records: new Map(shardRecords.map(record => [record._id, record])),
-        };
+    loadShard(shardId: number): Promise<IShard> {
+        throw new Error('Method not implemented.');
     }
 }

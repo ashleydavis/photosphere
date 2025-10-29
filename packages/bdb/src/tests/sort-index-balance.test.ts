@@ -4,6 +4,7 @@ import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
+import { toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -30,7 +31,7 @@ describe('SortIndex Tree Balance', () => {
     }
 
     // Helper function to check if tree is balanced
-    async function verifyTreeBalance(index: SortIndex<TestRecord>): Promise<{
+    async function verifyTreeBalance(index: SortIndex): Promise<{
         isBalanced: boolean;
         treeHeight: number;
         leafDepths: number[];
@@ -101,10 +102,10 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 10,
             keySize: 5,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify tree balance
         const balance = await verifyTreeBalance(sortIndex);
@@ -145,10 +146,10 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 8,
             keySize: 4,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify tree balance
         const balance = await verifyTreeBalance(sortIndex);
@@ -174,10 +175,10 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 5,
             keySize: 3,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build empty index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Add records one by one and check balance after each batch
         for (let batch = 1; batch <= 5; batch++) {
@@ -185,7 +186,7 @@ describe('SortIndex Tree Balance', () => {
             for (let i = 1; i <= 10; i++) {
                 const recordNum = (batch - 1) * 10 + i;
                 const record = createRecord(recordNum, recordNum);
-                await sortIndex.addRecord(record);
+                await sortIndex.addRecord(toInternal<TestRecord>(record));
             }
             
             // Verify balance after each batch
@@ -217,10 +218,10 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 6,
             keySize: 4,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify tree balance
         const balance = await verifyTreeBalance(sortIndex);
@@ -252,14 +253,14 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 8,
             keySize: 4,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Delete every 3rd record
         for (let i = 3; i <= 60; i += 3) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, { value: i } as any);
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
         }
         
         // Verify tree balance after deletions
@@ -294,27 +295,27 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 6,
             keySize: 3,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Perform mixed operations
         for (let i = 1; i <= 15; i++) {
             // Add odd values
             const newRecord = createRecord(100 + i, i * 2 - 1);
-            await sortIndex.addRecord(newRecord);
+            await sortIndex.addRecord(toInternal<TestRecord>(newRecord));
             
             // Update some existing records
             if (i <= 10) {
                 const updatedRecord = createRecord(i, i * 2 + 100);
                 const oldRecord = records[i - 1];
-                await sortIndex.updateRecord(updatedRecord, oldRecord);
+                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(oldRecord));
             }
             
             // Delete some records
             if (i <= 5) {
-                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, { value: (i + 15) * 2 } as any);
+                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
             }
         }
         
@@ -347,10 +348,10 @@ describe('SortIndex Tree Balance', () => {
             pageSize: 20,
             keySize: 10,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Build the index
-        await sortIndex.build();
+        await sortIndex.build(collection);
         
         // Verify tree balance
         const balance = await verifyTreeBalance(sortIndex);
