@@ -1,7 +1,8 @@
-import { formatFileSize, log } from "utils";
+import { formatFileSize, log, retry } from "utils";
 import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
 import { computeAssetHash } from "./hash";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
+import { loadMerkleTree } from "./tree";
 
 //
 // Options for verifying the media file database.
@@ -130,7 +131,7 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
         }
 
         const sizeChanged = node.size !== fileInfo.length;
-        const timestampChanged = node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
+        const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
         if (sizeChanged || timestampChanged) {
             // File metadata has changed - check if content actually changed by computing the hash.
             const freshHash = await computeAssetHash(fileName, fileInfo, () => assetStorage.readStream(fileName));
@@ -182,7 +183,11 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
         }
     }
 
-    const merkleTree = mediaFileDatabase.getMerkleTree();
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree`);
+    }
+
     await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
         result.nodesProcessed++;
 

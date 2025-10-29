@@ -1,8 +1,8 @@
-import { MediaFileDatabase } from "api";
+import { loadMerkleTree, MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { log, RandomUuidGenerator, TimestampProvider } from "utils";
+import { log, RandomUuidGenerator, retry, TimestampProvider } from "utils";
 import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
@@ -390,7 +390,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         //
         // This is the fast path for readonly database access. We only load the database once.
         //
-        const merkleTree = database.getMerkleTree();
+        const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
+        if (!merkleTree) {
+            throw new Error(`Failed to load merkle tree.`);
+        }
         if (merkleTree.version < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${merkleTree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
@@ -398,7 +401,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     }
 
     if (allowOlderVersions) {
-        const merkleTree = database.getMerkleTree();
+        const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
+        if (!merkleTree) {
+            throw new Error(`Failed to load merkle tree.`);
+        }
         if (merkleTree.version < CURRENT_DATABASE_VERSION) {
             //
             // When loading an older database, upgrade it.

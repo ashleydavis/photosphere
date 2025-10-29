@@ -5,7 +5,7 @@ import { BsonDatabase, IBsonCollection, IRecord } from "bdb";
 import type { IBsonDatabase } from "bdb";
 import { FileStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
-import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider, sleep } from "utils";
+import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { Readable } from "stream";
@@ -22,7 +22,7 @@ import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { buildMerkleTree, createTree, deleteItem, IHashedData, IMerkleTree, upsertItem, visualizeTree } from "merkle-tree";
+import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData } from "merkle-tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -208,11 +208,6 @@ export interface IAssetDetails {
 export class MediaFileDatabase {
 
     //
-    // The merkle tree that helps protect against corruption.
-    //
-    private merkleTree: IMerkleTree<IDatabaseMetadata> | undefined = undefined;
-
-    //
     // For interacting with the bson database.
     //
     private readonly bsonDatabase: BsonDatabase;
@@ -306,98 +301,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Gets the merkle tree.
-    //
-    getMerkleTree(): IMerkleTree<IDatabaseMetadata> {
-        if (!this.merkleTree) {
-            throw new Error("Cannot access merkle tree. No database loaded.");
-        }
-        return this.merkleTree;
-    }
-
-    //
-    // Adds a file to the merkle tree (public method for external use like sync).
-    //
-    addFile(filePath: string, hashedFile: IHashedData): void {
-        if (!this.merkleTree) {
-            throw new Error("Cannot add file to database. No database loaded.");
-        }
-
-        if (filePath.startsWith("metadata/")) {
-            return;
-        }
-        
-        this.merkleTree = upsertItem(this.merkleTree, {
-            name: filePath,
-            hash: hashedFile.hash,
-            length: hashedFile.length,
-            lastModified: hashedFile.lastModified,
-        });
-    }
-
-    //
-    // Saves the merkle tree (public method for external use like sync).
-    //
-    async save(): Promise<void> {
-        if (!this.merkleTree) {
-            throw new Error("Cannot save database. No database loaded.");
-        }
-
-        await saveMerkleTree(this.merkleTree, this.metadataStorage);
-    }
-
-    //
-    // Loads the merkle tree from disk.
-    //
-    async loadMerkleTree(): Promise<boolean> {
-        this.merkleTree = await loadMerkleTree(this.metadataStorage);
-        if (!this.merkleTree) {
-            return false;
-        }
-
-        return true;
-    }
-
-    //
-    // Deletes a file from the merkle tree.
-    //
-    private deleteFile(filePath: string): void {
-        if (!this.merkleTree) {
-            throw new Error("Cannot delete file from database. No database loaded.");
-        }
-
-        if (filePath.startsWith("metadata/")) {
-            return;
-        }
-
-        deleteItem<IDatabaseMetadata>(this.merkleTree, filePath);
-    }
-
-    //
-    // Increments the asset count.
-    //
-    private incrementAssetCount(): void {
-        const merkleTree = this.getMerkleTree();
-        if (!merkleTree.databaseMetadata) {
-            merkleTree.databaseMetadata = { filesImported: 0 };
-        }
-        merkleTree.databaseMetadata.filesImported++;
-    }
-
-    //
-    // Decrements the asset count.
-    //
-    private decrementAssetCount(): void {
-        const merkleTree = this.getMerkleTree();
-        if (!merkleTree.databaseMetadata) {
-            merkleTree.databaseMetadata = { filesImported: 0 };
-        }
-        if (merkleTree.databaseMetadata.filesImported > 0) {
-            merkleTree.databaseMetadata.filesImported--;
-        }
-    }
-
-    //
     // Creates a new media file database.
     //
     async create(): Promise<void> {
@@ -407,8 +310,8 @@ export class MediaFileDatabase {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        this.merkleTree = createTree(this.uuidGenerator.generate());
-        this.merkleTree.databaseMetadata = { filesImported: 0 };
+        let merkleTree = createTree<IDatabaseMetadata>(this.uuidGenerator.generate());
+        merkleTree.databaseMetadata = { filesImported: 0 };
 
         await this.ensureSortIndex();
 
@@ -420,13 +323,14 @@ export class MediaFileDatabase {
             throw new Error('README.md file not found after creation.');
         }
 
-        this.addFile('README.md', {
+        merkleTree = addItem(merkleTree, {
+            name: 'README.md',
             hash: await retry(() => computeHash(this.assetStorage.readStream('README.md'))),
             length: readmeInfo.length,
             lastModified: readmeInfo.lastModified,
         });
 
-        await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage));
+        await retry(() => saveMerkleTree(merkleTree, this.metadataStorage));
 
         log.verbose(`Created new media file database.`);
     }
@@ -436,9 +340,6 @@ export class MediaFileDatabase {
     //
     async load(): Promise<void> {
         await retry(() => this.localHashCache.load());
-        if (!await retry(() => this.loadMerkleTree())) {
-            throw new Error(`Failed to load media file database.`);
-        }
 
         await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
@@ -466,7 +367,10 @@ export class MediaFileDatabase {
     // Gets a summary of the entire database.
     //
     async getDatabaseSummary(): Promise<IDatabaseSummary> {
-        const merkleTree = this.getMerkleTree();
+        const merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+        if (!merkleTree) {
+            throw new Error(`Failed to load merkle tree.`);
+        }
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
         if (merkleTree.dirty || !merkleTree.merkle) {
             log.warn(`Merkle tree is dirty or missing, will rebuild.`);
@@ -485,13 +389,6 @@ export class MediaFileDatabase {
             fullHash: fullHash || 'empty',
             databaseVersion: merkleTree.version
         };
-    }
-
-    //
-    // Visualizes the merkle tree structure
-    //
-    visualizeMerkleTree(): string {
-        return visualizeTree(this.getMerkleTree());
     }
 
     //
@@ -625,13 +522,6 @@ export class MediaFileDatabase {
                 throw new Error(`Failed to acquire write lock.`);
             }
 
-            //
-            // Always reload the database after acquiring the write lock to ensure we have the latest tree.
-            //
-            if (!await this.loadMerkleTree()) {
-                throw new Error(`Failed to load asset database after acquiring write lock.`);
-            }
-
             // Simulate failure for testing (10% chance when SIMULATE_FAILURE=add-file)
             // This occurs while holding the write lock to test lock recovery scenarios
             if (process.env.SIMULATE_FAILURE === "add-file" && Math.random() < 0.1) {
@@ -639,6 +529,14 @@ export class MediaFileDatabase {
             }
 
             try {
+                //
+                // Always load the database after acquiring the write lock to ensure we have the latest tree.
+                //
+                let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+                if (!merkleTree) {
+                    throw new Error(`Failed to load media file database.`);
+                }
+
                 //
                 // Uploads the full asset.
                 // No write lock is needed to write new assets as the asset UUID is unique.
@@ -663,7 +561,12 @@ export class MediaFileDatabase {
                 //
                 // Write lock is needed to update the merkle tree and BSON database.
                 //
-                this.addFile(assetPath, hashedAsset);
+                merkleTree = addItem(merkleTree, {
+                    name: assetPath,
+                    hash: hashedAsset.hash,
+                    length: hashedAsset.length,
+                    lastModified: hashedAsset.lastModified,
+                });
 
                 if (assetDetails?.thumbnailPath) {
                     //
@@ -687,7 +590,12 @@ export class MediaFileDatabase {
                     //
                     // Write lock is needed to update the merkle tree and BSON database.
                     //
-                    this.addFile(thumbPath, hashedThumb);
+                    merkleTree = addItem(merkleTree, {
+                        name: thumbPath,
+                        hash: hashedThumb.hash,
+                        length: hashedThumb.length,
+                        lastModified: hashedThumb.lastModified,
+                    });    
                 }
 
                 if (assetDetails?.displayPath) {
@@ -711,7 +619,12 @@ export class MediaFileDatabase {
                     //
                     // Write lock is needed to update the merkle tree and BSON database.
                     //
-                    this.addFile(displayPath, hashedDisplay);
+                    merkleTree = addItem(merkleTree, {
+                        name: displayPath,
+                        hash: hashedDisplay.hash,
+                        length: hashedDisplay.length,
+                        lastModified: hashedDisplay.lastModified,
+                    });
                 }
 
                 const properties: any = {};
@@ -798,7 +711,10 @@ export class MediaFileDatabase {
                 // Increment the imported files count.
                 // Write lock is needed to update the merkle tree and BSON database.
                 //
-                this.incrementAssetCount();
+                if (!merkleTree.databaseMetadata) {
+                    merkleTree.databaseMetadata = { filesImported: 0 };
+                }
+                merkleTree.databaseMetadata.filesImported++;
 
                 this.addSummary.filesAdded++;
                 this.addSummary.totalSize += fileStat.length;
@@ -809,7 +725,7 @@ export class MediaFileDatabase {
                 //
                 // Ensure the tree is saved before releasing the lock.
                 //
-                await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage)); 
+                await retry(() => saveMerkleTree(merkleTree, this.metadataStorage)); 
             }
             catch (err: any) {
                 log.exception(`Failed to upload asset data for file "${filePath}"`, err);
@@ -980,20 +896,26 @@ export class MediaFileDatabase {
             throw new Error(`Failed to acquire write lock.`);
         }
 
-        //
-        // Always reload the database after acquiring the write lock to ensure we have the latest tree.
-        //
-        if (!await this.loadMerkleTree()) {
-            throw new Error(`Failed to load asset database after acquiring write lock.`);
-        }
-
         try {
+            //
+            // Always reload the database after acquiring the write lock to ensure we have the latest tree.
+            //
+            let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+            if (!merkleTree) {
+                throw new Error(`Failed to load media file database.`);
+            }
+
             //
             // Remove the asset from the metadata collection and decrement the count.
             //
             const removed = await this.metadataCollection.deleteOne(assetId);
             if (removed) {
-                this.decrementAssetCount();
+                if (!merkleTree.databaseMetadata) {
+                    merkleTree.databaseMetadata = { filesImported: 0 };
+                }
+                if (merkleTree.databaseMetadata.filesImported > 0) {
+                    merkleTree.databaseMetadata.filesImported--;
+                }
             }
 
             //
@@ -1005,17 +927,14 @@ export class MediaFileDatabase {
             await this.assetStorage.deleteFile(pathJoin("display", assetId));
             await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
 
-            //
-            // Remove files from the merkle tree.
-            //
-            this.deleteFile(pathJoin("asset", assetId));
-            this.deleteFile(pathJoin("display", assetId));
-            this.deleteFile(pathJoin("thumb", assetId));
+            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
+            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
+            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
 
             //
             // Ensure the tree is saved before releasing the lock.
             //
-            await retry(() => saveMerkleTree(this.merkleTree!, this.metadataStorage)); 
+            await retry(() => saveMerkleTree(merkleTree, this.metadataStorage)); 
         }
         finally {
             //

@@ -1,11 +1,11 @@
 import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
 import { log, retry } from "utils";
 import pc from "picocolors";
-import { MediaFileDatabase } from "api";
+import { loadMerkleTree, loadOrCreateMerkleTree, MediaFileDatabase, saveMerkleTree } from "api";
 import { computeHash } from "adb";
 import { exit } from "node-utils";
 import { acquireWriteLock, releaseWriteLock } from "api/src/lib/write-lock";
-import { getItemInfo, SortNode, traverseTreeAsync } from "merkle-tree";
+import { addItem, getItemInfo, SortNode, traverseTreeAsync } from "merkle-tree";
 
 //
 // Options for the sync command.
@@ -42,27 +42,14 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
     //
     // Pull incoming files.
     //
-    //todo: If the write lock can't be acquired, exit with with code 1 and error.
     if (!await acquireWriteLock(sourceDb.getAssetStorage(), sourceDb.sessionId)) { //todo: Don't need write lock if nothing to pull.
         throw new Error(`Failed to acquire write lock for source database.`);
     }
 
     try {
-        //
-        // Always reload the database after acquiring the write lock to ensure we have the latest tree.
-        //
-        if (!await sourceDb.loadMerkleTree()) {
-            throw new Error(`Failed to load source merkle tree after acquiring write lock.`);
-        }
-
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
         await pushFiles(targetDb, sourceDb);
-
-        //
-        // Ensure the tree is saved before releasing the lock.
-        //
-        await retry(() => sourceDb.save()); 
     }
     finally {
         await releaseWriteLock(sourceDb.getAssetStorage());
@@ -71,27 +58,14 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
     //
     // Push outgoing files.
     //
-    //todo: If the write lock can't be acquired, exit with with code 1 and error.
     if (!await acquireWriteLock(targetDb.getAssetStorage(), targetDb.sessionId)) { //todo: Don't need write lock if nothing to push.
         throw new Error(`Failed to acquire write lock for target database.`);
     }
 
     try {
-        //
-        // Always reload the database after acquiring the write lock to ensure we have the latest tree.
-        //
-        if (!await targetDb.loadMerkleTree()) {
-            throw new Error(`Failed to load target merkle tree after acquiring write lock.`);
-        }
-
         // Push files from source to target.
         // Need the write lock in the target database.
         await pushFiles(sourceDb, targetDb);
-
-        //
-        // Ensure the tree is saved before releasing the lock.
-        //
-        await retry(() => targetDb.save());
     } 
     finally {
         await releaseWriteLock(targetDb.getAssetStorage());
@@ -105,10 +79,18 @@ async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDat
 // TODO: Need a faster algorithm to traverse each tree comparing nodes and trying to make them the same.
 //
 async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
-    const sourceMerkleTree = sourceDb.getMerkleTree();
-    const targetMerkleTree = targetDb.getMerkleTree();
     const sourceStorage = sourceDb.getAssetStorage();
     const targetStorage = targetDb.getAssetStorage();
+
+    //
+    // Load the merkle tree.
+    //
+    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceDb.getMetadataStorage()));
+    if (!sourceMerkleTree) {
+        throw new Error("Failed to load source merkle tree.");
+    }
+
+    let targetMerkleTree = await retry(() => loadOrCreateMerkleTree(targetDb.getMetadataStorage(), targetDb.uuidGenerator));
    
     let filesCopied = 0;
     let filesProcessed = 0;
@@ -147,7 +129,8 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         }
         
         // Add file to target merkle tree.
-        targetDb.addFile(fileName, {
+        targetMerkleTree = addItem(targetMerkleTree, {
+            name: fileName,
             hash: copiedFileHash,
             length: copiedFileInfo.length,
             lastModified: copiedFileInfo.lastModified,
@@ -173,14 +156,14 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         
         // Save target merkle tree every 100 files.
         if (filesCopied % 100 === 0) {
-            await retry(()  => targetDb.save());
+            await retry(() => saveMerkleTree(targetMerkleTree, targetDb.getMetadataStorage()))
         }
         
         return true;
     });
     
     // Save the target merkle tree one final time.
-    await retry(()  => targetDb.save());
+    await retry(() => saveMerkleTree(targetMerkleTree, targetDb.getMetadataStorage()))
     
     log.info(`Push completed: ${filesCopied} files copied out of ${filesProcessed} processed`);
 }

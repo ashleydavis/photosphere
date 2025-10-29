@@ -3,9 +3,10 @@
 
 import { computeHash } from "adb";
 import { IStorage } from "storage";
-import { IUuidGenerator, retry } from "utils";
-import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, createTree, getItemInfo, IMerkleTree, loadTree, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
+import { retry } from "utils";
+import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
+import { buildMerkleTree, getItemInfo, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
+import { loadMerkleTree, loadOrCreateMerkleTree } from "./tree";
 
 //
 export interface IReplicationResult {
@@ -41,22 +42,15 @@ export interface IReplicateOptions {
 }
 
 //
-// Loads or creates the merkle tree.
-//
-async function loadOrCreateMerkleTree(metadataStorage: IStorage, uuidGenerator: IUuidGenerator): Promise<IMerkleTree<IDatabaseMetadata>> {
-    let merkleTree = await retry(() => loadTree<IDatabaseMetadata>("tree.dat", metadataStorage));
-    if (!merkleTree) {
-        merkleTree = createTree(uuidGenerator.generate());
-    }
-    return merkleTree;
-}
-
-//
 // Replicates the media file database to another storage.
 //
 export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
 
-    const merkleTree = mediaFileDatabase.getMerkleTree();
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree`);
+    }
+
     const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
 
     const result: IReplicationResult = {
