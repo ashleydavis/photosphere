@@ -43,6 +43,7 @@ export async function performDatabaseUpgrade(
     }
 
     // Move files from "assets" directory to "asset" directory if they exist
+    //TODO: this should be at the command level.
     const assetStorage = database.getAssetStorage();
     if (await assetStorage.fileExists("assets")) {
         log.info("Moving files from 'assets' directory to 'asset' directory...");
@@ -107,7 +108,7 @@ export async function performDatabaseUpgrade(
         merkleTree.databaseMetadata.filesImported = filesImported;
     }
     
-    if (!readonly) {
+    if (!readonly) { //todo: This is a bit useless because it doesn't achieve anything for readonly commands.
         // Save the database - this will write in the latest format
         await saveMerkleTree(merkleTree, database.getMetadataStorage());
 

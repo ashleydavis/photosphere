@@ -267,7 +267,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean, readonly: boolean): Promise<IInitResult> {
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean, readonly: boolean): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
     
@@ -297,16 +297,9 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     let resolvedKeyPath = await resolveKeyPath(options.key);
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
-    // Add readonly flag to storage options
-    if (storageOptions) {
-        storageOptions.readonly = readonly;
-    } else {
-        storageOptions = { readonly };
-    }
-
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
-    const { storage: metadataStorage } = createStorage(metaPath, s3Config, { readonly });
+    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
 
     //
     // Check that tree.dat exists.
@@ -337,13 +330,6 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
                 const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
                 storageOptions = newStorageOptions;
                 
-                // Add readonly flag to storage options
-                if (storageOptions) {
-                    storageOptions.readonly = readonly;
-                } else {
-                    storageOptions = { readonly };
-                }
-                
                 // Recreate storage with the new encryption options
                 const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
                 assetStorage = newAssetStorage;
@@ -362,12 +348,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
 
-    if (!readonly && !allowOlderVersions) {
+    if (!allowOlderVersions) {
         //
-        // When trying to load the database in write mode and we don't allow older versions,
+        // When trying to load the database and we don't allow older versions,
         // quickly load the version from the database and reject if the database is old.
-        //
-        // This is the slow path because it loads the database twice. Once in readonly mode and again in write mode.
         //
         
         let databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);        
@@ -383,24 +367,10 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     // Load the database
     await database.load();
 
-    if (readonly && !allowOlderVersions) {
-        // 
-        // When trying to load the database in readonly mode and we don't allow older versions,
-        // reject if the database is old.
-        //
-        // This is the fast path for readonly database access. We only load the database once.
-        //
-        const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
-        if (!merkleTree) {
-            throw new Error(`Failed to load merkle tree.`);
-        }
-        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
-            outro(pc.red(`✗ Database version ${merkleTree.version} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
-            await exit(1);
-        }
-    }
-
     if (allowOlderVersions) {
+        //
+        // Upgrade the database.
+        // 
         const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
         if (!merkleTree) {
             throw new Error(`Failed to load merkle tree.`);
@@ -409,7 +379,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
             //
             // When loading an older database, upgrade it.
             //
-            await performDatabaseUpgrade(database, metadataStorage, readonly);
+            await performDatabaseUpgrade(database, metadataStorage, readonly); //todo: this doesn't actually achieve very much! It only actually saves the db if readonly is false!
         }
     }
 
@@ -427,7 +397,7 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 // This handles creating a new database with similar setup to loadDatabase
 // but uses 'init' directory type and calls database.create() instead of load()
 //
-export async function createDatabase(dbDir: string | undefined, options: ICreateCommandOptions): Promise<IInitResult> {
+export async function createDatabase(dbDir: string | undefined, options: ICreateCommandOptions): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
     

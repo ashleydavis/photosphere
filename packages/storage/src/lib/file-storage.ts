@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Readable } from "stream";
-import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { log } from "utils";
 
 // Write lock timeout in milliseconds (10 seconds)
@@ -9,7 +9,7 @@ const WRITE_LOCK_TIMEOUT_MS = 10000;
 
 export class FileStorage implements IStorage {
 
-    constructor(public readonly location: string, public readonly isReadonly: boolean = false) {
+    constructor(public readonly location: string) {
     }
 
     //
@@ -139,7 +139,7 @@ export class FileStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
-        checkReadonly(this.isReadonly, 'write file');
+
         await fs.ensureDir(path.dirname(filePath));
         await fs.writeFile(filePath, data);
     }
@@ -155,7 +155,7 @@ export class FileStorage implements IStorage {
     // Writes an input stream to storage.
     //
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
-        checkReadonly(this.isReadonly, 'write stream');
+
         return new Promise<void>((resolve, reject) => {
             fs.ensureDir(path.dirname(filePath))
                 .then(() => {
@@ -178,7 +178,7 @@ export class FileStorage implements IStorage {
     // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'delete file');
+
         try {
             await fs.unlink(filePath);
         } catch (err) {
@@ -190,7 +190,7 @@ export class FileStorage implements IStorage {
     // Deletes a directory and all its contents from storage.
     //
     async deleteDir(dirPath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'delete directory');
+
         try {
             await fs.rm(dirPath, { recursive: true, force: true });
         } catch (err) {
@@ -233,7 +233,6 @@ export class FileStorage implements IStorage {
     // Returns true if the lock was acquired, false if it already exists.
     //
     async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
-        checkReadonly(this.isReadonly, 'acquire write lock');
         
         const timestamp = Date.now();
         const processId = process.pid;
@@ -305,7 +304,6 @@ export class FileStorage implements IStorage {
     // Releases a write lock for the specified file.
     //
     async releaseWriteLock(filePath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'release write lock');
         
         if (log.verboseEnabled) {
             log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
@@ -323,7 +321,6 @@ export class FileStorage implements IStorage {
     // Throws an error if the lock is no longer owned by the specified owner.
     //
     async refreshWriteLock(filePath: string, owner: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'refresh write lock');
         
         const timestamp = Date.now();
         const processId = process.pid;

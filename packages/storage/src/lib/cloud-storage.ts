@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import aws from "aws-sdk";
-import { IFileInfo, IListResult, IStorage, IWriteLockInfo, checkReadonly } from "./storage";
+import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { WrappedError } from "utils";
 import { log } from "utils";
 
@@ -38,7 +38,7 @@ export class CloudStorage implements IStorage {
     //
     private s3!: aws.S3;
 
-    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials, public readonly isReadonly: boolean = false) {
+    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
         const s3Config: aws.S3.ClientConfiguration = {
             endpoint: credentials?.endpoint || process.env.AWS_ENDPOINT,
         };
@@ -348,7 +348,6 @@ export class CloudStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
-        checkReadonly(this.isReadonly, 'write file');
 
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
@@ -422,7 +421,6 @@ export class CloudStorage implements IStorage {
     // Writes an input stream to storage.
     //
     async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {
-        checkReadonly(this.isReadonly, 'write stream');
 
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
@@ -471,7 +469,7 @@ export class CloudStorage implements IStorage {
     // Deletes a file from storage.
     //
     async deleteFile(filePath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'delete file');
+
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
@@ -494,7 +492,7 @@ export class CloudStorage implements IStorage {
     // Deletes a directory and all its contents from storage.
     //
     async deleteDir(dirPath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'delete directory');
+
         let { bucket, key } = this.parsePath(dirPath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
@@ -620,7 +618,6 @@ export class CloudStorage implements IStorage {
     // Returns true if the lock was acquired, false if it already exists.
     //
     async acquireWriteLock(filePath: string, owner: string): Promise<boolean> {
-        checkReadonly(this.isReadonly, 'acquire write lock');
         
         const timestamp = Date.now();
         const processId = process.pid;
@@ -747,7 +744,6 @@ export class CloudStorage implements IStorage {
     // Releases a write lock for the specified file.
     //
     async releaseWriteLock(filePath: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'release write lock');
         
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
@@ -777,7 +773,6 @@ export class CloudStorage implements IStorage {
     // Throws an error if the lock is no longer owned by the specified owner.
     //
     async refreshWriteLock(filePath: string, owner: string): Promise<void> {
-        checkReadonly(this.isReadonly, 'refresh write lock');
         
         const timestamp = Date.now();
         const processId = process.pid;

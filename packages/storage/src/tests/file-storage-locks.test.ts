@@ -260,14 +260,6 @@ describe('FileStorage Write Locks', () => {
             expect(lockData.owner).toBe('first-user');
         });
 
-        it('should fail on readonly storage', async () => {
-            const readonlyStorage = new FileStorage(tempDir, true);
-            const lockFilePath = path.join(tempDir, 'test-file-9.txt.lock');
-            
-            await expect(readonlyStorage.acquireWriteLock(lockFilePath, 'user123'))
-                .rejects.toThrow('Cannot perform acquire write lock operation: storage is in readonly mode');
-        });
-
         it('should store timestamp accurately', async () => {
             const lockFilePath = path.join(tempDir, 'test-file-10.txt.lock');
             const owner = 'user123';
@@ -307,14 +299,6 @@ describe('FileStorage Write Locks', () => {
             // Should not throw error
             await expect(storage.releaseWriteLock(lockFilePath))
                 .resolves.toBeUndefined();
-        });
-
-        it('should fail on readonly storage', async () => {
-            const readonlyStorage = new FileStorage(tempDir, true);
-            const lockFilePath = path.join(tempDir, 'test-file-13.txt.lock');
-            
-            await expect(readonlyStorage.releaseWriteLock(lockFilePath))
-                .rejects.toThrow('Cannot perform release write lock operation: storage is in readonly mode');
         });
 
         it('should allow reacquisition after release', async () => {
