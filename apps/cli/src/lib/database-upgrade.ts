@@ -1,9 +1,9 @@
-import { log } from "utils";
+import { log, retry } from "utils";
 import { HashCache, computeHash } from "adb";
 import { pathJoin } from "storage";
-import type { MediaFileDatabase } from "api";
+import { IDatabaseMetadata, loadMerkleTree, saveMerkleTree, type MediaFileDatabase } from "api";
 import type { IStorage } from "storage";
-import { SortNode, traverseTreeAsync, traverseTreeSync } from "merkle-tree";
+import { rebuildTree, SortNode, traverseTreeAsync } from "merkle-tree";
 
 //
 // Performs the actual database upgrade logic for a database from a given version to the current version.
@@ -14,52 +14,34 @@ export async function performDatabaseUpgrade(
     readonly: boolean
 ): Promise<void> {
 
-    const merkleTree = database.getMerkleTree();
+    //todo: Need the write lock!
+
+    let merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree.`);
+    }
     const currentVersion = merkleTree.version;
    
     // For any upgrade from version 2, copy file metadata from hash cache to merkle tree
     if (currentVersion === 2) {        
-        // Load the hash cache
-        const hashCache = new HashCache(metadataStorage, "", false);
-        const cacheLoaded = await hashCache.load();        
-        if (cacheLoaded) {
-            // Get the merkle tree and update leaf nodes with file metadata
-            const merkleTree = database.getMerkleTree();
-            
-            // Track how many files we updated
-            let filesUpdated = 0;
-            
-            // Update leaf nodes with lastModified from hash cache using binary tree traversal
-            traverseTreeSync<SortNode>(merkleTree.sort, (node) => {
-                if (node.name) { // This is a leaf node
-                    const cacheEntry = hashCache.getHash(node.name);
-                    if (cacheEntry) {
-                        node.lastModified = cacheEntry.lastModified;
-                        filesUpdated++;
-                    }
-                }
-                return true; // Continue traversal
-            });
-        }
                
         const assetStorage = database.getAssetStorage();
 
         // Fill in missing lastModified from file info using async binary tree traversal
         await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
-            if (node.name && !node.lastModified) {
-                const fileInfo = await assetStorage.info(node.name);
-                if (fileInfo) {
-                    // Fill in missing lastModified from file info
-                    node.lastModified = fileInfo.lastModified;
+            if (node.name) {
+                if (!node.lastModified) {
+                    const fileInfo = await assetStorage.info(node.name);
+                    if (fileInfo) {
+                        // Fill in missing lastModified from file info
+                        node.lastModified = fileInfo.lastModified;
+                    }
                 }
             }
             return true; // Continue traversal
         });        
     }
 
-    // Initialize database metadata for any version upgrade
-    const updatedMerkleTree = database.getMerkleTree();
-    
     // Move files from "assets" directory to "asset" directory if they exist
     const assetStorage = database.getAssetStorage();
     if (await assetStorage.fileExists("assets")) {
@@ -103,6 +85,11 @@ export async function performDatabaseUpgrade(
         log.info(`✓ Moved ${filesMoved} files from 'assets' to 'asset' directory`);
     }
 
+    //
+    // Remove metadata files.
+    //
+    merkleTree = rebuildTree<IDatabaseMetadata>(merkleTree, "metadata/");
+
     // Count files in the asset directory to get the actual number of imported files
     let filesImported = 0;
     let next: string | undefined = undefined;
@@ -113,16 +100,16 @@ export async function performDatabaseUpgrade(
         next = assetFiles.next;
     } while (next);
     
-    if (!updatedMerkleTree.databaseMetadata) {
-        updatedMerkleTree.databaseMetadata = { filesImported };
+    if (!merkleTree.databaseMetadata) {
+        merkleTree.databaseMetadata = { filesImported };
     }
     else {
-        updatedMerkleTree.databaseMetadata.filesImported = filesImported;
+        merkleTree.databaseMetadata.filesImported = filesImported;
     }
     
     if (!readonly) {
         // Save the database - this will write in the latest format
-        await database.save();
+        await saveMerkleTree(merkleTree, database.getMetadataStorage());
 
         // Delete old files after successful upgrade.
         await metadataStorage.deleteFile("hash-cache-x.dat");

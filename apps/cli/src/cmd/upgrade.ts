@@ -4,7 +4,7 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "merkle-tree";
-import { IDatabaseMetadata } from "api";
+import { IDatabaseMetadata, loadMerkleTree } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -20,7 +20,11 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     // Load the database in readonly mode to check version without modifications.
     const { database, databaseDir } = await loadDatabase(options.db, options, true, true);
 
-    const merkleTree = database.getMerkleTree();
+    const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree`);
+    }
+
     const currentVersion = merkleTree.version;
 
     log.info(`✓ Found database version ${currentVersion}`);
@@ -69,8 +73,13 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // The updated database is automatically saved.
         const { database: upgradedDatabase } = await loadDatabase(options.db, options, true, false);
 
+        const merkleTree = await retry(() => loadMerkleTree(upgradedDatabase.getMetadataStorage()));
+        if (!merkleTree) {
+            throw new Error(`Failed to load merkle tree`);
+        }
+    
         // Rebuild the merkle tree in sorted order with no metadata/
-        const rebuiltTree = rebuildTree<IDatabaseMetadata>(upgradedDatabase.getMerkleTree(), "metadata/");
+        const rebuiltTree = rebuildTree<IDatabaseMetadata>(merkleTree, "metadata/");
 
         // Save the rebuilt tree.
         await retry(() => saveTree("tree.dat", rebuiltTree, upgradedDatabase.getMetadataStorage()));
