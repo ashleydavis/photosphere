@@ -1,6 +1,6 @@
 import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { IRecord } from 'bdb';
+import { IRecord, ISortedIndexEntry, toExternal } from 'bdb';
 import { SortManager } from 'bdb';
 import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
@@ -16,7 +16,7 @@ interface TestProduct extends IRecord {
 
 describe('SortManager', () => {
     let storage: MockStorage;
-    let sortManager: SortManager<TestProduct>;
+    let sortManager: SortManager;
     let collection: MockCollection<TestProduct>;
     
     const testProducts: TestProduct[] = [
@@ -30,17 +30,17 @@ describe('SortManager', () => {
     beforeEach(() => {
         storage = new MockStorage();
         collection = new MockCollection<TestProduct>(testProducts);
-        sortManager = new SortManager<TestProduct>({
+        sortManager = new SortManager({
             storage,
             baseDirectory: 'db',
             defaultPageSize: 2,
             uuidGenerator: new RandomUuidGenerator()
-        }, collection, 'products');
+        }, 'products');
     });
     
     test('should create and return a sort index', async () => {
         // Ensure the sort index exists
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', collection);
         
         // Get sort index for price (ascending)
         const result = await sortManager.getSortedRecords('price', 'asc');
@@ -56,9 +56,9 @@ describe('SortManager', () => {
         // Check that records are sorted correctly - there may be a different number of records per page
         // with page ID-based approach compared to page number-based approach
         expect(result.records.length).toBeGreaterThan(0);
-        expect(result.records[0].price).toBe(9.99); // Product 4
+        expect(result.records[0].fields.price).toBe(9.99); // Product 4
         if (result.records.length > 1) {
-            expect(result.records[1].price).toBe(15.50); // Product 2
+            expect(result.records[1].fields.price).toBe(15.50); // Product 2
         }
         
         // Get next page using the nextPageId
@@ -75,19 +75,19 @@ describe('SortManager', () => {
             // Based on the test data, if we have a first element it should be one of these products
             // (depending on how records are split across pages)
             const validFirstItems = [15.50, 25.99]; // Product 2 or Product 1
-            expect(validFirstItems).toContain(page2Result.records[0].price);
+            expect(validFirstItems).toContain(page2Result.records[0].fields.price);
         }
         
         if (page2Result.records.length >= 2) {
             // For second element, it could be one of these products
             const validSecondItems = [25.99, 35.50]; // Product 1 or Product 5
-            expect(validSecondItems).toContain(page2Result.records[1].price);
+            expect(validSecondItems).toContain(page2Result.records[1].fields.price);
         }
     });
     
     test('should get existing sort index if already created', async () => {
         // Create the index first
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', collection);
         await sortManager.getSortedRecords('price', 'asc');
         
         // Get the same index again
@@ -100,13 +100,13 @@ describe('SortManager', () => {
     
     test('should support descending order', async () => {
         // Ensure the sort index exists
-        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        await sortManager.ensureSortIndex('price', 'desc', 'number', collection);
         
         // Get sort index for price (descending)
         const result = await sortManager.getSortedRecords('price', 'desc');
         
         // Collect all records across pages
-        let allRecords: TestProduct[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = result;
         
         // Add records from first page
@@ -122,7 +122,7 @@ describe('SortManager', () => {
         expect(allRecords.length).toBe(5);
         
         // Verify the range of values
-        const prices = allRecords.map(p => p.price);
+        const prices = allRecords.map(p => p.fields.price);
         expect(Math.max(...prices)).toBe(45.00);
         expect(Math.min(...prices)).toBe(9.99);
         
@@ -136,13 +136,13 @@ describe('SortManager', () => {
     
     test('should list all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', collection);
         await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.ensureSortIndex('price', 'desc', 'number');
+        await sortManager.ensureSortIndex('price', 'desc', 'number', collection);
         await sortManager.getSortedRecords('price', 'desc');
         
-        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.ensureSortIndex('category', 'asc', 'string', collection);
         await sortManager.getSortedRecords('category', 'asc');
         
         // List the indexes
@@ -163,7 +163,7 @@ describe('SortManager', () => {
     
     test('should delete a sort index', async () => {
         // Create an index
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', collection);
         await sortManager.getSortedRecords('price', 'asc');
         
         // Delete the index
@@ -182,10 +182,10 @@ describe('SortManager', () => {
     
     test('should delete all sort indexes for a collection', async () => {
         // Create several indexes
-        await sortManager.ensureSortIndex('price', 'asc', 'number');
+        await sortManager.ensureSortIndex('price', 'asc', 'number', collection);
         await sortManager.getSortedRecords('price', 'asc');
         
-        await sortManager.ensureSortIndex('category', 'asc', 'string');
+        await sortManager.ensureSortIndex('category', 'asc', 'string', collection);
         await sortManager.getSortedRecords('category', 'asc');
         
         // Delete all indexes for the collection

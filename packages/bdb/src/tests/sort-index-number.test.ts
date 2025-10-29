@@ -1,13 +1,11 @@
-import { SortIndex, ISortedIndexEntry } from 'bdb';
-import { IBsonCollection, IRecord, IShard } from 'bdb';
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
+import { ISortedIndexEntry, SortIndex } from 'bdb';
+import { IRecord } from 'bdb';
+import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { MockCollection } from 'bdb';
 import { BSON } from 'bson';
-import fs from 'fs-extra';
-import path from 'path';
-import os from 'os';
 import { RandomUuidGenerator } from 'utils';
+import { toExternal, toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -19,11 +17,10 @@ interface TestRecord extends IRecord {
     rating: number;
 }
 
-
 describe('SortIndex with number type', () => {
     let storage: MockStorage;
-    let sortIndexAsc: SortIndex<TestRecord>;
-    let sortIndexDesc: SortIndex<TestRecord>;
+    let sortIndexAsc: SortIndex;
+    let sortIndexDesc: SortIndex;
     let collection: MockCollection<TestRecord>;
     
     const testRecords: TestRecord[] = [
@@ -91,7 +88,7 @@ describe('SortIndex with number type', () => {
             pageSize: 3,
             type: 'number', // Specify number type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Create descending index on price field
         sortIndexDesc = new SortIndex({
@@ -103,13 +100,13 @@ describe('SortIndex with number type', () => {
             pageSize: 3,
             type: 'number', // Specify number type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
     });
     
     test('should initialize the number sort indexes with records', async () => {
         // Initialize both indexes
-        await sortIndexAsc.build();
-        await sortIndexDesc.build();
+        await sortIndexAsc.build(collection);
+        await sortIndexDesc.build(collection);
         
         // Check that tree files have been written
         expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
@@ -118,10 +115,10 @@ describe('SortIndex with number type', () => {
     
     test('should retrieve records in ascending numeric order', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -135,27 +132,27 @@ describe('SortIndex with number type', () => {
         
         // Verify records are in ascending numeric order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevScore = Number(allRecords[i-1].score);
-            const currScore = Number(allRecords[i].score);
+            const prevScore = Number(allRecords[i-1].fields.score);
+            const currScore = Number(allRecords[i].fields.score);
             expect(prevScore).toBeLessThanOrEqual(currScore);
         }
         
         // Check specific ordering
         // Expected order by score: 78.3, 82.0, 85.5, 88.7, 92.1, 95.2
-        expect(allRecords[0].score).toBe(78.3); // Product C
-        expect(allRecords[1].score).toBe(82.0); // Product F
-        expect(allRecords[2].score).toBe(85.5); // Product A
-        expect(allRecords[3].score).toBe(88.7); // Product D
-        expect(allRecords[4].score).toBe(92.1); // Product B
-        expect(allRecords[5].score).toBe(95.2); // Product E
+        expect(allRecords[0].fields.score).toBe(78.3); // Product C
+        expect(allRecords[1].fields.score).toBe(82.0); // Product F
+        expect(allRecords[2].fields.score).toBe(85.5); // Product A
+        expect(allRecords[3].fields.score).toBe(88.7); // Product D
+        expect(allRecords[4].fields.score).toBe(92.1); // Product B
+        expect(allRecords[5].fields.score).toBe(95.2); // Product E
     });
     
     test('should retrieve records in descending numeric order', async () => {
         // Initialize the index
-        await sortIndexDesc.build();
+        await sortIndexDesc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexDesc.getPage('');
         
         // Add records from first page
@@ -169,24 +166,24 @@ describe('SortIndex with number type', () => {
         
         // Verify records are in descending numeric order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevPrice = Number(allRecords[i-1].price);
-            const currPrice = Number(allRecords[i].price);
+            const prevPrice = Number(allRecords[i-1].fields.price);
+            const currPrice = Number(allRecords[i].fields.price);
             expect(prevPrice).toBeGreaterThanOrEqual(currPrice);
         }
         
         // Check specific ordering
         // Expected order by price: 99.99, 45.00, 35.75, 29.99, 15.50, 12.99
-        expect(allRecords[0].price).toBe(99.99); // Product C
-        expect(allRecords[1].price).toBe(45.00); // Product D
-        expect(allRecords[2].price).toBe(35.75); // Product F
-        expect(allRecords[3].price).toBe(29.99); // Product A
-        expect(allRecords[4].price).toBe(15.50); // Product B
-        expect(allRecords[5].price).toBe(12.99); // Product E
+        expect(allRecords[0].fields.price).toBe(99.99); // Product C
+        expect(allRecords[1].fields.price).toBe(45.00); // Product D
+        expect(allRecords[2].fields.price).toBe(35.75); // Product F
+        expect(allRecords[3].fields.price).toBe(29.99); // Product A
+        expect(allRecords[4].fields.price).toBe(15.50); // Product B
+        expect(allRecords[5].fields.price).toBe(12.99); // Product E
     });
     
     test('should find records by exact numeric value', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find records with exact numeric match
         const result = await sortIndexAsc.findByValue(85.5);
@@ -194,7 +191,7 @@ describe('SortIndex with number type', () => {
         // Should find exactly one record with score 85.5
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174001');
-        expect(result[0].score).toBe(85.5);
+        expect(result[0].fields.score).toBe(85.5);
         
         // Find a non-existent score
         const noResult = await sortIndexAsc.findByValue(90.0);
@@ -205,7 +202,7 @@ describe('SortIndex with number type', () => {
     
     test('should find records by numeric range', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find records with scores between 80 and 90 (inclusive)
         const result = await sortIndexAsc.findByRange({
@@ -217,7 +214,7 @@ describe('SortIndex with number type', () => {
         
         // Should find records with scores: 82.0, 85.5, 88.7
         expect(result.length).toBe(3);
-        const scores = result.map(r => r.score).sort((a, b) => a - b);
+        const scores = result.map(r => r.fields.score).sort((a, b) => a - b);
         expect(scores).toEqual([82.0, 85.5, 88.7]);
         
         // Test exclusive range (between 78 and 95, non-inclusive)
@@ -232,19 +229,19 @@ describe('SortIndex with number type', () => {
         // Should find records that are greater than 78 and less than 95
         // Since 78.3 > 78, it should be included: 78.3, 82.0, 85.5, 88.7, 92.1
         expect(exclusiveResult.length).toBe(5);
-        const exclusiveScores = exclusiveResult.map(r => r.score).sort((a, b) => a - b);
+        const exclusiveScores = exclusiveResult.map(r => r.fields.score).sort((a, b) => a - b);
         expect(exclusiveScores).toEqual([78.3, 82.0, 85.5, 88.7, 92.1]);
         
         // Should not include 95.2 (which equals or exceeds max)
         for (const record of exclusiveResult) {
-            expect(record.score).toBeGreaterThan(78);
-            expect(record.score).toBeLessThan(95);
+            expect(record.fields.score).toBeGreaterThan(78);
+            expect(record.fields.score).toBeLessThan(95);
         }
     });
     
     test('should update records with new numeric values in the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Update a record with a new score
         const updatedRecord: TestRecord = {
@@ -252,7 +249,7 @@ describe('SortIndex with number type', () => {
             score: 90.5 // Change score from 78.3 to 90.5
         };
         
-        await sortIndexAsc.updateRecord(updatedRecord, testRecords[2]);
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
         
         // Find records by the new score
         const result = await sortIndexAsc.findByValue(90.5);
@@ -260,14 +257,15 @@ describe('SortIndex with number type', () => {
         // Should find the updated record with the new score
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174003');
-        expect(result[0].score).toBe(90.5);
+        console.log(result); //fio:
+        expect(result[0].fields.score).toBe(90.5);
         
         // Original score should no longer have this record
         const oldScoreResult = await sortIndexAsc.findByValue(78.3);
         expect(oldScoreResult.length).toBe(0);
         
         // Get all records and verify proper sorting
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -282,19 +280,19 @@ describe('SortIndex with number type', () => {
         // Verify the updated record is in the correct position
         const updatedRecordIndex = allRecords.findIndex(r => r._id === '123e4567-e89b-12d3-a456-426614174003');
         expect(updatedRecordIndex).toBeGreaterThan(-1);
-        expect(allRecords[updatedRecordIndex].score).toBe(90.5);
+        expect(allRecords[updatedRecordIndex].fields.score).toBe(90.5);
         
         // Verify sorting is still correct
         for (let i = 1; i < allRecords.length; i++) {
-            const prevScore = Number(allRecords[i-1].score);
-            const currScore = Number(allRecords[i].score);
+            const prevScore = Number(allRecords[i-1].fields.score);
+            const currScore = Number(allRecords[i].fields.score);
             expect(prevScore).toBeLessThanOrEqual(currScore);
         }
     });
     
     test('should add a new record with a numeric value to the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Add a new record with a specific score
         const newRecord: TestRecord = {
@@ -306,7 +304,7 @@ describe('SortIndex with number type', () => {
             rating: 4.3
         };
         
-        await sortIndexAsc.addRecord(newRecord);
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
         
         // Find the record by its score
         const result = await sortIndexAsc.findByValue(89.0);
@@ -316,7 +314,7 @@ describe('SortIndex with number type', () => {
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174007');
         
         // Get all records and verify the new record is in the correct position
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -329,7 +327,7 @@ describe('SortIndex with number type', () => {
         }
         
         // Verify the new record is in the correct numeric position
-        const newRecordIndex = allRecords.findIndex(r => r.score === 89.0);
+        const newRecordIndex = allRecords.findIndex(r => r.fields.score === 89.0);
         expect(newRecordIndex).toBeGreaterThan(-1);
         
         // Verify the total record count has increased
@@ -337,18 +335,18 @@ describe('SortIndex with number type', () => {
         
         // Verify sorting is still correct
         for (let i = 1; i < allRecords.length; i++) {
-            const prevScore = Number(allRecords[i-1].score);
-            const currScore = Number(allRecords[i].score);
+            const prevScore = Number(allRecords[i-1].fields.score);
+            const currScore = Number(allRecords[i].fields.score);
             expect(prevScore).toBeLessThanOrEqual(currScore);
         }
     });
     
     test('should handle integer and floating point numbers correctly', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Get all records sorted by score
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -359,16 +357,16 @@ describe('SortIndex with number type', () => {
         }
         
         // Extract scores in order
-        const sortedScores = allRecords.map(r => r.score);
+        const sortedScores = allRecords.map(r => r.fields.score);
         
         // Verify mixed integer and floating point sorting
         // Expected: [78.3, 82.0, 85.5, 88.7, 92.1, 95.2]
         expect(sortedScores).toEqual([78.3, 82.0, 85.5, 88.7, 92.1, 95.2]);
         
         // Verify that integer 82.0 is treated as a number, not string
-        const integerRecord = allRecords.find(r => r.score === 82.0);
+        const integerRecord = allRecords.find(r => r.fields.score === 82.0);
         expect(integerRecord).toBeDefined();
-        expect(typeof integerRecord!.score).toBe('number');
+        expect(typeof integerRecord!.fields.score).toBe('number');
     });
     
     test('should handle string numbers correctly when type is number', async () => {
@@ -390,12 +388,12 @@ describe('SortIndex with number type', () => {
             pageSize: 3,
             type: 'number',
             uuidGenerator: new RandomUuidGenerator()
-        }, stringNumericCollection);
+        });
         
-        await stringNumericSortIndex.build();
+        await stringNumericSortIndex.build(stringNumericCollection);
         
         // Get all records sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await stringNumericSortIndex.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -406,7 +404,7 @@ describe('SortIndex with number type', () => {
         }
         
         // Extract scores in order
-        const sortedScores = allRecords.map(r => Number(r.score));
+        const sortedScores = allRecords.map(r => Number(r.fields.score));
         
         // As numbers, they should be sorted numerically: 2, 10, 20, 100
         // NOT lexicographically which would be: "10", "100", "2", "20"
@@ -432,12 +430,12 @@ describe('SortIndex with number type', () => {
             pageSize: 3,
             type: 'number',
             uuidGenerator: new RandomUuidGenerator()
-        }, nanCollection);
+        });
         
-        await nanSortIndex.build();
+        await nanSortIndex.build(nanCollection);
         
         // Get all records sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await nanSortIndex.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -450,10 +448,10 @@ describe('SortIndex with number type', () => {
         // NaN values should be sorted to the beginning (treated as smallest)
         // Expected order: NaN, NaN, 25, 50
         expect(allRecords.length).toBe(4);
-        expect(isNaN(Number(allRecords[0].score))).toBe(true); // NaN or invalid
-        expect(isNaN(Number(allRecords[1].score))).toBe(true); // NaN or invalid
-        expect(Number(allRecords[2].score)).toBe(25);
-        expect(Number(allRecords[3].score)).toBe(50);
+        expect(isNaN(Number(allRecords[0].fields.score))).toBe(true); // NaN or invalid
+        expect(isNaN(Number(allRecords[1].fields.score))).toBe(true); // NaN or invalid
+        expect(Number(allRecords[2].fields.score)).toBe(25);
+        expect(Number(allRecords[3].fields.score)).toBe(50);
     });
     
     test('should handle zero and negative numbers correctly', async () => {
@@ -475,12 +473,12 @@ describe('SortIndex with number type', () => {
             pageSize: 3,
             type: 'number',
             uuidGenerator: new RandomUuidGenerator()
-        }, zeroNegativeCollection);
+        });
         
-        await zeroNegativeSortIndex.build();
+        await zeroNegativeSortIndex.build(zeroNegativeCollection);
         
         // Get all records sorted
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await zeroNegativeSortIndex.getPage('');
         
         allRecords = [...allRecords, ...currentPage.records];
@@ -491,7 +489,7 @@ describe('SortIndex with number type', () => {
         }
         
         // Extract scores in order
-        const sortedScores = allRecords.map(r => r.score);
+        const sortedScores = allRecords.map(r => r.fields.score);
         
         // Expected order: -15, -5, 0, 10
         expect(sortedScores).toEqual([-15, -5, 0, 10]);

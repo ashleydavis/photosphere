@@ -1,7 +1,7 @@
 import { expect, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { BsonCollection } from 'bdb';
-import type { IRecord } from 'bdb';
+import type { IRecord, IInternalRecord } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
 
 // Test interfaces
@@ -198,7 +198,7 @@ describe('BsonCollection', () => {
         }
                 
         // Collect all records from the iterator
-        const retrievedUsers: TestUser[] = [];
+        const retrievedUsers: IInternalRecord[] = [];
         for await (const user of collection.iterateRecords()) {
             retrievedUsers.push(user);
         }

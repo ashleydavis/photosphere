@@ -8,6 +8,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { RandomUuidGenerator } from 'utils';
+import { toExternal, toInternal } from '../lib/collection';
 
 // Test interface
 interface TestRecord extends IRecord {
@@ -18,11 +19,10 @@ interface TestRecord extends IRecord {
     category: string;
 }
 
-
 describe('SortIndex with date type', () => {
     let storage: MockStorage;
-    let sortIndexAsc: SortIndex<TestRecord>;
-    let sortIndexDesc: SortIndex<TestRecord>;
+    let sortIndexAsc: SortIndex;
+    let sortIndexDesc: SortIndex;
     let collection: MockCollection<TestRecord>;
     
     const now = new Date();
@@ -78,7 +78,7 @@ describe('SortIndex with date type', () => {
             pageSize: 2,
             type: 'date', // Specify date type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
         
         // Create descending index on updatedAt field
         sortIndexDesc = new SortIndex({
@@ -90,13 +90,13 @@ describe('SortIndex with date type', () => {
             pageSize: 2,
             type: 'date', // Specify date type for proper comparison
             uuidGenerator: new RandomUuidGenerator()
-        }, collection);
+        });
     });
     
     test('should initialize the date sort indexes with records', async () => {
         // Initialize both indexes
-        await sortIndexAsc.build();
-        await sortIndexDesc.build();
+        await sortIndexAsc.build(collection);
+        await sortIndexDesc.build(collection);
         
         // Check that tree files have been written
         expect(await storage.fileExists('db/sort_indexes/test_collection/createdAt_asc/tree.dat')).toBe(true);
@@ -105,10 +105,10 @@ describe('SortIndex with date type', () => {
     
     test('should retrieve records in ascending date order', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -122,8 +122,8 @@ describe('SortIndex with date type', () => {
         
         // Verify records are in ascending date order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevDate = new Date(allRecords[i-1].createdAt);
-            const currDate = new Date(allRecords[i].createdAt);
+            const prevDate = new Date(allRecords[i-1].fields.createdAt);
+            const currDate = new Date(allRecords[i].fields.createdAt);
             expect(prevDate.getTime()).toBeLessThanOrEqual(currDate.getTime());
         }
         
@@ -136,10 +136,10 @@ describe('SortIndex with date type', () => {
     
     test('should retrieve records in descending date order', async () => {
         // Initialize the index
-        await sortIndexDesc.build();
+        await sortIndexDesc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexDesc.getPage('');
         
         // Add records from first page
@@ -153,8 +153,8 @@ describe('SortIndex with date type', () => {
         
         // Verify records are in descending date order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevDate = new Date(allRecords[i-1].updatedAt);
-            const currDate = new Date(allRecords[i].updatedAt);
+            const prevDate = new Date(allRecords[i-1].fields.updatedAt);
+            const currDate = new Date(allRecords[i].fields.updatedAt);
             expect(prevDate.getTime()).toBeGreaterThanOrEqual(currDate.getTime());
         }
         
@@ -167,7 +167,7 @@ describe('SortIndex with date type', () => {
     
     test('should find records by exact date value', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find a record with a specific createdAt date
         const result = await sortIndexAsc.findByValue(testRecords[2].createdAt); // Record 3 (1 day ago)
@@ -186,7 +186,7 @@ describe('SortIndex with date type', () => {
     
     test('should find records by date range', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Find records created between 3 days ago and 1 day ago (inclusive)
         const threeDay = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -204,7 +204,7 @@ describe('SortIndex with date type', () => {
         
         // All records should have createdAt between 3 days ago and 1 day ago
         for (const record of result) {
-            const date = new Date(record.createdAt).getTime();
+            const date = new Date(record.fields.createdAt).getTime();
             const minDate = new Date(threeDay).getTime();
             const maxDate = new Date(oneDay).getTime();
             expect(date).toBeGreaterThanOrEqual(minDate);
@@ -233,7 +233,7 @@ describe('SortIndex with date type', () => {
     
     test('should update records with new dates in the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Update a record with a new createdAt date
         const newDate = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(); // 5 days ago
@@ -242,7 +242,7 @@ describe('SortIndex with date type', () => {
             createdAt: newDate // Change date to 5 days ago (was 1 day ago)
         };
         
-        await sortIndexAsc.updateRecord(updatedRecord, testRecords[2]);
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
         
         // Find records by the new date
         const result = await sortIndexAsc.findByValue(newDate);
@@ -250,14 +250,14 @@ describe('SortIndex with date type', () => {
         // Should find the updated record with the new date
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174003');
-        expect(result[0].createdAt).toBe(newDate);
+        expect(result[0].fields.createdAt).toBe(newDate);
         
         // Original date should no longer have this record
         const oldDateResult = await sortIndexAsc.findByValue(testRecords[2].createdAt);
         expect(oldDateResult.length).toBe(0);
         
         // Get all records and verify proper sorting
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -275,7 +275,7 @@ describe('SortIndex with date type', () => {
     
     test('should add a new record with a date to the index', async () => {
         // Initialize the index
-        await sortIndexAsc.build();
+        await sortIndexAsc.build(collection);
         
         // Add a new record with a specific date
         const newRecordDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString(); // 6 days ago
@@ -287,7 +287,7 @@ describe('SortIndex with date type', () => {
             category: 'A'
         };
         
-        await sortIndexAsc.addRecord(newRecord);
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
         
         // Find the record by its date
         const result = await sortIndexAsc.findByValue(newRecordDate);
@@ -297,7 +297,7 @@ describe('SortIndex with date type', () => {
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174006');
         
         // Get all records and verify the new record is in the correct position
-        let allRecords: TestRecord[] = [];
+        let allRecords: ISortedIndexEntry[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page

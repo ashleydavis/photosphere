@@ -9,7 +9,27 @@ import type { IUuidGenerator } from 'utils';
 import { save, load } from 'serialization';
 import type { ISerializer, IDeserializer } from 'serialization';
 import { SortManager } from './sort-manager';
-import type { IRangeOptions, ISortResult, SortDataType, SortDirection } from './sort-index';
+import type { IRangeOptions, SortDataType, SortDirection } from './sort-index';
+
+export interface ISortResult<RecordT extends IRecord> {
+    // Records for the requested page
+    records: RecordT[];
+
+    // Total number of records in the collection
+    totalRecords: number;
+    
+    // Current page ID
+    currentPageId: string;
+    
+    // Total number of leaf pages (navigable data pages)
+    totalPages: number;
+    
+    // Next page ID or undefined if this is the last page
+    nextPageId?: string;
+    
+    // Previous page ID or undefined if this is the first page
+    previousPageId?: string;
+}
 
 //
 // Options when creating a BSON collection.
@@ -46,9 +66,44 @@ export interface IRecord {
     [key: string]: any;
 }
 
-export interface IShard<RecordT extends IRecord> {
+//
+// Internal record structure with fields separated into a subobject.
+// Used internally for storage, but converted to/from IRecord at API boundaries.
+//
+export interface IInternalRecord {
+    _id: string;
+    fields: {
+        [key: string]: any;
+    };
+}
+
+//
+// Convert external IRecord to internal IInternalRecord format
+//
+export function toInternal<RecordT extends IRecord>(record: RecordT): IInternalRecord {
+    const { _id, ...fields } = record;
+    return {
+        _id,
+        fields
+    };
+}
+
+//
+// Convert internal IInternalRecord to external IRecord format
+//
+export function toExternal<RecordT extends IRecord>(internal: IInternalRecord): RecordT {
+    return {
+        _id: internal._id,
+        ...internal.fields
+    } as RecordT;
+}
+
+//
+// Internal shard - stores records in internal format
+//
+export interface IShard {
     id: number;
-    records: Map<string, RecordT>;
+    records: Map<string, IInternalRecord>;
 }
 
 export interface IGetAllResult<RecordT extends IRecord> {
@@ -72,7 +127,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Iterate all records in the collection without loading all into memory.
     //
-    iterateRecords(): AsyncGenerator<RecordT, void, unknown>;
+    iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown>;
 
     //
     // Lists the shard IDs that actually exist as files on disk.
@@ -82,7 +137,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Iterate each shared in the collection without loading all into memory.
     //
-    iterateShards(): AsyncGenerator<Iterable<RecordT>, void, unknown>;
+    iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown>;
 
     //
     // Gets records from the collection with pagination and continuation support.
@@ -189,19 +244,24 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Loads the requested shard from cache or from storage.
     //
-    loadShard(shardId: number): Promise<IShard<RecordT>>;    
+    loadShard(shardId: number): Promise<IShard>;    
 }
 
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
     private storage: IStorage;
     private directory: string;
     private numShards: number;
-    private sortManager: SortManager<RecordT>;
+    private sortManager: SortManager;
 
     //
     // UUID generator for creating unique identifiers.
     //
     private readonly uuidGenerator: IUuidGenerator;
+
+    //
+    // Current version for shard file format
+    //
+    private static readonly SHARD_FILE_VERSION = 2;
 
     constructor(private readonly name: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
@@ -213,7 +273,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             storage: this.storage,
             baseDirectory: this.directory.split('/').slice(0, -1).join('/'), // Parent directory
             uuidGenerator: this.uuidGenerator
-        }, this, this.name);
+        }, this.name);
     }
     
     //
@@ -244,7 +304,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Saves the shard.
     //
-    private async saveShard(shard: IShard<any>): Promise<void> {
+    private async saveShard(shard: IShard): Promise<void> {
         const filePath = `${this.directory}/${shard.id}`;
         await this.saveShardFile(filePath, shard);
     }
@@ -252,7 +312,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Adds a record to the shard cache.
     //
-    private async setRecord(id: string, record: RecordT, shard: IShard<any>): Promise<void> {
+    private async setRecord(id: string, record: IInternalRecord, shard: IShard): Promise<void> {
         const normalizedId = this.normalizeId(id);
         shard.records.set(normalizedId, record);
     }
@@ -260,7 +320,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Gets a record from the shard cache.
     //
-    private getRecord(id: string, shard: IShard<any>): RecordT | undefined {
+    private getRecord(id: string, shard: IShard): IInternalRecord | undefined {
         const normalizedId = this.normalizeId(id);
         return shard.records.get(normalizedId);
     }
@@ -268,7 +328,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Deletes a record from the shard cache.
     //
-    private deleteRecord(id: string, shard: IShard<any>): void {
+    private deleteRecord(id: string, shard: IShard): void {
         const normalizedId = this.normalizeId(id);
         shard.records.delete(normalizedId);
     }
@@ -290,7 +350,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Saves the shard file to storage.
     //
-    private async saveShardFile(shardFilePath: string, shard: IShard<RecordT>): Promise<void> {
+    private async saveShardFile(shardFilePath: string, shard: IShard): Promise<void> {
         if (shard.records.size === 0) {
             if (await this.storage.fileExists(shardFilePath)) {
                 //
@@ -310,7 +370,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Serializer function for shard data (without version, as save() handles that)
     //
-    private serializeShard(shard: IShard<RecordT>, serializer: ISerializer): void {
+    private serializeShard(shard: IShard, serializer: ISerializer): void {
         // Write record count (4 bytes LE)
         serializer.writeUInt32(shard.records.size);
 
@@ -325,28 +385,26 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             // Write record ID (16 bytes raw, no length prefix)
             serializer.writeBytes(recordIdBuffer);
 
-            const recordNoId: any = { ...record };
-            delete recordNoId._id; // Remove the id, no need to store it twice.
-
-            // Write record BSON data with length prefix
-            serializer.writeBSON(recordNoId);
+            // Write only the fields (not _id) - record is already in internal format
+            serializer.writeBSON(record.fields);
         }
     }
 
-    private async writeBsonFile(filePath: string, shard: IShard<RecordT>): Promise<void> {
+    private async writeBsonFile(filePath: string, shard: IShard): Promise<void> {
         await save(
             this.storage,
             filePath,
             shard,
-            1,
+            BsonCollection.SHARD_FILE_VERSION,
             (shardData, serializer) => this.serializeShard(shardData, serializer)
         );
     }
 
     //
     // Reads a single record from the file data and returns the new offset.
+    // Both version 1 and 2 store fields identically (without _id), so no version-specific logic needed.
     //
-    private readRecord(fileData: Buffer<ArrayBufferLike>, offset: number): { record: RecordT, offset: number } {
+    private readRecord(fileData: Buffer<ArrayBufferLike>, offset: number): { record: IInternalRecord, offset: number } {
 
         //
         // Read 16 byte uuid.
@@ -369,20 +427,27 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         offset += 4;
 
         //
-        // Read and deserialize the record.
+        // Read and deserialize the record fields.
         //
         const recordData = fileData.subarray(offset, offset + recordLength);
-        const record = BSON.deserialize(recordData) as RecordT;
-        record._id = recordId;
+        const fields = BSON.deserialize(recordData);
+        
         offset += recordLength;
-        return { record, offset };
+        return { 
+            record: {
+                _id: recordId,
+                fields,
+            },
+            offset,
+        };
     }
 
     //
-    // Deserializer function for shard data
+    // Migrates old flat format to new format with fields subobject
+    // Deserializer function for version 1 shard data
     //
-    private deserializeShard(deserializer: IDeserializer): RecordT[] {
-        const records: RecordT[] = [];
+    private deserializeShardV1(deserializer: IDeserializer): IInternalRecord[] {
+        const records: IInternalRecord[] = [];
 
         // Read record count (4 bytes LE)
         const recordCount = deserializer.readUInt32();
@@ -400,9 +465,52 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             ].join('-');
 
             // Read record BSON data with length prefix
-            const record = deserializer.readBSON<RecordT>();
-            record._id = recordId;
-            records.push(record);
+            const fields = deserializer.readBSON<any>();
+            
+            // Create internal record
+            const internal: IInternalRecord = {
+                _id: recordId,
+                fields: fields
+            };
+            
+            records.push(internal);
+        }
+
+        return records;
+    }
+
+    //
+    // Deserializer function for version 2 shard data
+    // Returns records in internal format.
+    //
+    private deserializeShardV2(deserializer: IDeserializer): IInternalRecord[] {
+        const records: IInternalRecord[] = [];
+
+        // Read record count (4 bytes LE)
+        const recordCount = deserializer.readUInt32();
+
+        for (let i = 0; i < recordCount; i++) {
+            // Read record ID (16 bytes raw, no length prefix)
+            const recordIdBuffer = deserializer.readBytes(16);
+            const hexString = recordIdBuffer.toString('hex');
+            const recordId = [
+                hexString.substring(0, 8),
+                hexString.substring(8, 12),
+                hexString.substring(12, 16),
+                hexString.substring(16, 20),
+                hexString.substring(20)
+            ].join('-');
+
+            // Read record BSON data with length prefix (new format - fields only)
+            const fields = deserializer.readBSON<any>();
+            
+            // Create internal record
+            const internal: IInternalRecord = {
+                _id: recordId,
+                fields: fields
+            };
+            
+            records.push(internal);
         }
 
         return records;
@@ -410,13 +518,16 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
     //
     // Loads all records from a shard file.
+    // Supports both version 1 and 2.
+    // Returns records in internal format.
     //
-    private async loadRecords(shardFilePath: string): Promise<RecordT[]> {
-        const records = await load<RecordT[]>(
+    private async loadRecords(shardFilePath: string): Promise<IInternalRecord[]> {
+        const records = await load<IInternalRecord[]>(
             this.storage,
             shardFilePath,
             {
-                1: (deserializer) => this.deserializeShard(deserializer)
+                1: (deserializer) => this.deserializeShardV1(deserializer),
+                2: (deserializer) => this.deserializeShardV2(deserializer)
             }
         );
         
@@ -434,16 +545,17 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Loads the requested shard from cache or from storage.
     //
-    async loadShard(shardId: number): Promise<IShard<RecordT>> {
+    async loadShard(shardId: number): Promise<IShard> {
         const filePath = `${this.directory}/${shardId}`;
         const records = await this.loadRecords(filePath);
-        let shard = {
+        const shard: IShard = {
             id: shardId,
-            records: new Map<string, RecordT>(),
+            records: new Map<string, IInternalRecord>(),
         };
 
         for (const record of records) {
-            await this.setRecord(record._id, record, shard);
+            const normalizedId = this.normalizeId(record._id);
+            shard.records.set(normalizedId, record);
         }
 
         return shard;
@@ -465,10 +577,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error(`Document with ID ${record._id} already exists in shard ${shardId}`);
         }
 
-        await this.setRecord(record._id, record, shard);
+        const internalRecord = toInternal<RecordT>(record);
+        await this.setRecord(record._id, internalRecord, shard);
         await this.saveShard(shard);
 
-        await this.sortManager.addRecord(record);
+        await this.sortManager.addRecord(internalRecord);
     }
 
     //
@@ -487,13 +600,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             return undefined; // Record not found
         }
 
-        return record;
+        return toExternal<RecordT>(record);
     }
 
     //
     // Iterate all records in the collection without loading all into memory.
     //
-    async *iterateRecords(): AsyncGenerator<RecordT, void, unknown> {
+    async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
 
         for (let shardId = 0; shardId < this.numShards; shardId++) {
              const buffer = await this.storage.read(`${this.directory}/${shardId}`);
@@ -534,7 +647,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Iterate each shard in the collection without loading all into memory.
     //
-    async *iterateShards(): AsyncGenerator<Iterable<RecordT>, void, unknown> {
+    async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
             const buffer = await this.storage.read(`${this.directory}/${shardId}`);
             if (!buffer || buffer.length === 0) {
@@ -546,7 +659,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
             let offset = 8; // Skip the version and record count.
 
-            const records: RecordT[] = [];
+            const records: IInternalRecord[] = [];
             for (let i = 0; i < recordCount; i++) {
                 const { record, offset: newOffset } = this.readRecord(buffer, offset);
                 records.push(record);
@@ -567,8 +680,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         while (shardId < this.numShards) {
             // Load records from storage
             const filePath = `${this.directory}/${shardId}`;
-            const records = await this.loadRecords(filePath);
-            if (records.length > 0) {
+            const internalRecords = await this.loadRecords(filePath);
+            if (internalRecords.length > 0) {
+                // Convert to external format
+                const records = internalRecords.map(internal => toExternal<RecordT>(internal));
                 return { records, next: `${shardId + 1}` };
             }
 
@@ -634,10 +749,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Replaces the record.
         //
-        await this.setRecord(id, record, shard);
+        const internalRecord = toInternal<RecordT>(record);
+        await this.setRecord(id, internalRecord, shard);
         await this.saveShard(shard);
 
-        await this.sortManager.updateRecord(record, existingRecord);
+        await this.sortManager.updateRecord(internalRecord, existingRecord);
 
         return true;
     }
@@ -702,13 +818,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const ascIndex = await this.sortManager.getSortIndex(fieldName, 'asc');
         if (ascIndex) {
             // Use the sort index for faster search with binary search
-            return await ascIndex.findByValue(value);
+            return (await ascIndex.findByValue(value)).map(sortIndexEntry => toExternal<RecordT>(sortIndexEntry));
         }
         
         const descIndex = await this.sortManager.getSortIndex(fieldName, 'desc');
         if (descIndex) {
             // Use the sort index for faster search with binary search
-            return await descIndex.findByValue(value);
+            return (await descIndex.findByValue(value)).map(internal => toExternal<RecordT>(internal));
         }
         
         throw new Error(`No sort index found for field "${fieldName}" in either direction`);
@@ -723,7 +839,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error(`Failed to create sort index for field '${fieldName}'`);
         }
         
-        return await sortIndex.findByRange(options);
+        return (await sortIndex.findByRange(options)).map(internal => toExternal<RecordT>(internal));
     }
     
     //
@@ -739,14 +855,25 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Get records sorted by a specified field
     //
     async getSorted(fieldName: string, direction: SortDirection, pageId?: string): Promise<ISortResult<RecordT>> {
-        return await this.sortManager.getSortedRecords(fieldName, direction, pageId);
+        const sortedRecords = await this.sortManager.getSortedRecords(fieldName, direction, pageId);
+        return {
+            records: sortedRecords.records.map(sortEntry => ({
+                _id: sortEntry._id,
+                ...sortEntry.fields
+            }) as RecordT),
+            totalRecords: sortedRecords.totalRecords,
+            currentPageId: sortedRecords.currentPageId,
+            totalPages: sortedRecords.totalPages,
+            nextPageId: sortedRecords.nextPageId,
+            previousPageId: sortedRecords.previousPageId
+        };
     }
 
     //
     // Create or rebuild a sort index for the specified field
     //
     async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {       
-        await this.sortManager.ensureSortIndex(fieldName, direction, type);
+        await this.sortManager.ensureSortIndex(fieldName, direction, type, this);
     }
 
     //

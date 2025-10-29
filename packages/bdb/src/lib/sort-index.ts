@@ -3,7 +3,7 @@
 //
 
 import { BSON } from 'bson';
-import type { IRecord, IBsonCollection } from './collection';
+import type { IInternalRecord, IBsonCollection } from './collection';
 import type { IStorage } from 'storage';
 import { retry } from 'utils';
 import type { IUuidGenerator } from 'utils';
@@ -43,15 +43,9 @@ const splitKeysThreshold = 1.2;
 //
 const leafSplitThreshold = 1.5;
 
-export interface ISortedIndexEntry<RecordT> {
-    // The ID of the record
-    recordId: string; //TODO: this should be a UUID buffer type.
-
+export interface ISortedIndexEntry extends IInternalRecord {
     // The value used for sorting
     value: any;
-    
-    // The complete record - for faster retrieval without loading from collection
-    record: RecordT;
 }
 
 export interface ISortIndexOptions {
@@ -85,9 +79,9 @@ export interface ISortIndexOptions {
     type?: SortDataType;
 }
 
-export interface ISortResult<RecordT> {
+export interface ISortIndexResult {
     // Records for the requested page
-    records: RecordT[];
+    records: ISortedIndexEntry[];
 
     // Total number of records in the collection
     totalRecords: number;
@@ -105,7 +99,7 @@ export interface ISortResult<RecordT> {
     previousPageId?: string;
 }
 
-export interface ISortIndex<RecordT extends IRecord> {
+export interface ISortIndex {
     //
     // Loads the sort index metadata and tree nodes from disk.
     //
@@ -114,12 +108,12 @@ export interface ISortIndex<RecordT extends IRecord> {
     //
     // Builds the sort index from the collection.
     //
-    build(): Promise<void>;
+    build(collection: IBsonCollection<any>): Promise<void>;
 
     //
     // Get a page of records from the collection using the sort index.
     //
-    getPage(pageId?: string): Promise<ISortResult<RecordT>>;
+    getPage(pageId?: string): Promise<ISortIndexResult>;
     
     //
     // Delete the entire index
@@ -130,29 +124,29 @@ export interface ISortIndex<RecordT extends IRecord> {
     // Updates a record in the index without rebuilding the entire index
     // If the indexed field value has changed, the record will be removed and added again
     //
-    updateRecord(record: RecordT, oldRecord: RecordT | undefined): Promise<void>;
+    updateRecord(record: IInternalRecord, oldRecord: IInternalRecord | undefined): Promise<void>;
     
     //
     // Deletes a record from the index without rebuilding the entire index
     // @param recordId The ID of the record to delete
     // @param value The value of the indexed field, used to help locate the record
     //
-    deleteRecord(recordId: string, oldRecord: RecordT): Promise<void>;
+    deleteRecord(recordId: string, oldRecord: IInternalRecord): Promise<void>;
     
     //
     // Adds a new record to the index without rebuilding the entire index
     //
-    addRecord(record: RecordT): Promise<void>;
+    addRecord(record: IInternalRecord): Promise<void>;
     
     //
     // Find records by exact value using binary search on the sorted index
     //
-    findByValue(value: any): Promise<RecordT[]>;
+    findByValue(value: any): Promise<ISortedIndexEntry[]>;
     
     //
     // Find records by range query using optimized leaf traversal.
     //
-    findByRange(options: IRangeOptions): Promise<RecordT[]>;
+    findByRange(options: IRangeOptions): Promise<ISortedIndexEntry[]>;
         
     //
     // Visualizes the B-tree structure for debugging purposes
@@ -194,7 +188,7 @@ interface IBTreeNode {
     // A node is a leaf if children.length === 0, and NOT a leaf if children.length > 0
 }
 
-export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
+export class SortIndex implements ISortIndex {
     private storage: IStorage;
     private indexDirectory: string;
     private fieldName: string;
@@ -216,7 +210,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     // UUID generator for creating unique identifiers
     private readonly uuidGenerator: IUuidGenerator;
     
-    constructor(options: ISortIndexOptions, private readonly collection: IBsonCollection<RecordT>) {
+    constructor(options: ISortIndexOptions) {
         this.storage = options.storage;
         this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
         this.fieldName = options.fieldName;
@@ -576,7 +570,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     //
     // Builds the sort index by directly inserting records from the collection.
     //
-    async build(): Promise<void> {
+    async build(collection: IBsonCollection<any>): Promise<void> {
         if (this.loaded) {
             return;
         }
@@ -596,7 +590,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         this.treeNodes.set(this.rootPageId, emptyRoot);
         
         // Create empty leaf records array
-        const emptyLeafRecords: ISortedIndexEntry<RecordT>[] = [];
+        const emptyLeafRecords: ISortedIndexEntry[] = [];
         await this.saveLeafRecords(this.rootPageId, emptyLeafRecords);
         
         this.totalEntries = 0;
@@ -606,8 +600,8 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         let recordsAdded = 0;
        
         // Iterate through all records and add them directly to the B-tree
-        for await (const record of this.collection.iterateRecords()) {
-            const value = record[this.fieldName];
+        for await (const record of collection.iterateRecords()) {
+            const value = record.fields[this.fieldName];
             if (value !== undefined) {
                 // Add each record directly to the index
                 await this.addRecord(record);
@@ -753,25 +747,25 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     //
     // Serializer function for leaf records (without version, as save() handles that)
     //
-    private serializeLeafRecords(records: ISortedIndexEntry<RecordT>[], serializer: ISerializer): void {
+    private serializeLeafRecords(records: ISortedIndexEntry[], serializer: ISerializer): void {
         // Write record count (4 bytes LE)
         serializer.writeUInt32(records.length);
         
         // Write each record
         for (const entry of records) {
             // Write record ID with length prefix
-            const idBuffer = Buffer.from(entry.recordId, 'utf8');
+            const idBuffer = Buffer.from(entry._id, 'utf8');
             serializer.writeBuffer(idBuffer);
             
             // Write value as BSON with length prefix
             serializer.writeBSON({ value: entry.value });
             
             // Write record as BSON with length prefix
-            serializer.writeBSON(entry.record);
+            serializer.writeBSON(entry.fields);
         }
     }
 
-    private async saveLeafRecords(pageId: string, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
+    private async saveLeafRecords(pageId: string, records: ISortedIndexEntry[]): Promise<void> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
         // Use the new save function with version 1
@@ -787,11 +781,11 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     //
     // Deserializer function for leaf records
     //
-    private deserializeLeafRecords(deserializer: IDeserializer): ISortedIndexEntry<RecordT>[] {
+    private deserializeLeafRecords(deserializer: IDeserializer): ISortedIndexEntry[] {
         // Read record count (4 bytes LE)
         const recordCount = deserializer.readUInt32();
         
-        const records: ISortedIndexEntry<RecordT>[] = [];
+        const records: ISortedIndexEntry[] = [];
         
         // Read each record
         for (let i = 0; i < recordCount; i++) {
@@ -804,12 +798,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             const value = valueObj.value;
             
             // Read record BSON with length prefix
-            const record = deserializer.readBSON<RecordT>();
+            const fields = deserializer.readBSON<any>();
             
             records.push({
-                recordId,
+                _id: recordId,
                 value,
-                record
+                fields,
             });
         }
         
@@ -817,12 +811,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
 
     // Load leaf records from file using serialization library while preserving exact binary format
-    private async loadLeafRecords(pageId: string): Promise<ISortedIndexEntry<RecordT>[] | undefined> {
+    private async loadLeafRecords(pageId: string): Promise<ISortedIndexEntry[] | undefined> {
         const filePath = `${this.indexDirectory}/${pageId}`;
         
         try {
             // Use the new load function with deserializer for version 1
-            const records = await load<ISortedIndexEntry<RecordT>[]>(
+            const records = await load<ISortedIndexEntry[]>(
                 this.storage,
                 filePath,
                 {
@@ -842,7 +836,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                     // Try old BSON array format (backward compatibility)
                     const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
                     const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
-                    const records = leafRecordsObj.records as ISortedIndexEntry<RecordT>[];
+                    const records = leafRecordsObj.records as ISortedIndexEntry[];
                     return records;
                 } catch (bsonError) {
                     console.error(`Failed to load leaf records: ${error}`);
@@ -862,7 +856,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     //
     // Get a page of records from the collection using the sort index.
     //
-    async getPage(pageId?: string): Promise<ISortResult<RecordT>> {
+    async getPage(pageId?: string): Promise<ISortIndexResult> {
         if (!this.loaded) {
             throw new Error('Sort index is not loaded. Call load/build first.');
         }
@@ -908,9 +902,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             };
         }
         
-        // Get the records from this page
-        const pageRecords = leafRecords.map(entry => entry.record);
-        
+       
         // Get next page ID from the node's nextLeaf property
         const nextPageId = node.nextLeaf;
         
@@ -919,7 +911,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Return the result with pagination info
         return {
-            records: pageRecords,
+            records: leafRecords,
             totalRecords: this.totalEntries,
             currentPageId: pageId,
             totalPages: this.totalPages,
@@ -944,13 +936,13 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
      * Updates a record in the index without rebuilding the entire index
      * If the indexed field value has changed, the record will be removed and added again
      */
-    async updateRecord(record: RecordT, oldRecord: RecordT | undefined): Promise<void> {
+    async updateRecord(record: IInternalRecord, oldRecord: IInternalRecord | undefined): Promise<void> {
         if (!this.loaded) {
             throw new Error('Sort index is not loaded. Call load/build first.');
         }
 
         const recordId = record._id;
-        const oldValue = oldRecord && oldRecord[this.fieldName];
+        const oldValue = oldRecord && oldRecord.fields[this.fieldName];
         
         // First remove old record completely
         let recordRemoved = false;
@@ -964,7 +956,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 if (leafNode && leafNode.children.length === 0 && leafRecords) {
                     // Find the entry with matching ID
                     const entryIndex = leafRecords.findIndex(
-                        entry => entry.recordId === recordId
+                        entry => entry._id === recordId
                     );
                     
                     if (entryIndex !== -1) {
@@ -1060,7 +1052,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                             if (leafRecords) {
                                 // Find the entry with matching ID
                                 const entryIndex = leafRecords.findIndex(
-                                    entry => entry.recordId === recordId
+                                    entry => entry._id === recordId
                                 );
                                 
                                 if (entryIndex !== -1) {
@@ -1128,12 +1120,13 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
      * @param recordId The ID of the record to delete
      * @param value The value of the indexed field, used to help locate the record
      */
-    async deleteRecord(recordId: string, oldRecord: RecordT): Promise<void> {
+    async deleteRecord(recordId: string, oldRecord: IInternalRecord): Promise<void> {
+
         if (!this.loaded) {
             throw new Error('Sort index is not loaded. Call load/build first.');
         }
 
-        const value = oldRecord[this.fieldName];
+        const value = oldRecord.fields[this.fieldName];
         if (value === undefined) {
             // Just assume the record is not indexed.
             return;
@@ -1150,7 +1143,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             if (leafNode && leafNode.children.length === 0 && leafRecords) {
                 // Find the entry with matching ID
                 const entryIndex = leafRecords.findIndex(
-                    entry => entry.recordId === recordId
+                    entry => entry._id === recordId
                 );
                 
                 if (entryIndex !== -1) {
@@ -1253,7 +1246,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                         if (leafRecords) {
                             // Find the entry with matching ID
                             const entryIndex = leafRecords.findIndex(
-                                entry => entry.recordId === recordId
+                                entry => entry._id === recordId
                             );
                             
                             if (entryIndex !== -1) {
@@ -1408,10 +1401,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     /**
      * Adds a new record to the index without rebuilding the entire index
      */
-    async addRecord(record: RecordT): Promise<void> {       
+    async addRecord(record: IInternalRecord): Promise<void> {       
         
         const recordId = record._id;
-        const value = record[this.fieldName];
+        const value = record.fields[this.fieldName];
         
         // If the field doesn't exist in the record, don't add it to the index
         if (value === undefined) {
@@ -1419,10 +1412,10 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         }
         
         // Create the new entry
-        const newEntry: ISortedIndexEntry<RecordT> = {
-            recordId,
+        const newEntry: ISortedIndexEntry = {
+            _id: recordId,
             value,
-            record
+            fields: record.fields,
         };
         
         // Find the leaf node where this record belongs
@@ -1487,7 +1480,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     /**
      * Splits a leaf node when it gets too large
      */
-    private async splitLeafNode(nodeId: string, node: IBTreeNode, records: ISortedIndexEntry<RecordT>[]): Promise<void> {
+    private async splitLeafNode(nodeId: string, node: IBTreeNode, records: ISortedIndexEntry[]): Promise<void> {
         if (node.children.length > 0) {
             return;
         }
@@ -1578,12 +1571,12 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
     }
     
     // Find records by exact value using binary search on the sorted index
-    async findByValue(value: any): Promise<RecordT[]> {
+    async findByValue(value: any): Promise<ISortedIndexEntry[]> {
         if (!this.loaded) {
             throw new Error('Sort index is not loaded. Call load/build first.');
         }
         
-        const matchingEntries: ISortedIndexEntry<RecordT>[] = [];
+        const matchingEntries: ISortedIndexEntry[] = [];
         
         // First try to find the specific leaf that should contain this value
         const leafId = this.findLeafForValue(value);
@@ -1684,11 +1677,11 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         }
         
         // Return the matching records
-        return matchingEntries.map(entry => entry.record);
+        return matchingEntries;
     }
     
     // Find records by range query using optimized leaf traversal.
-    async findByRange(options: IRangeOptions): Promise<RecordT[]> {
+    async findByRange(options: IRangeOptions): Promise<ISortedIndexEntry[]> {
         const {
             min = null,
             max = null,
@@ -1705,7 +1698,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
             throw new Error('Sort index is not loaded. Call load/build first.');
         }
         
-        const matchingRecords: RecordT[] = [];
+        const matchingRecords: ISortedIndexEntry[] = [];
         
         // Find the leaf node where we should start the traversal
         // If min is specified, start from the leaf that would contain min
@@ -1769,7 +1762,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
                 }
                 
                 // If we reach here, the entry is within the range
-                matchingRecords.push(entry.record);
+                matchingRecords.push(entry);
                 foundMatchInLeaf = true;
             }
             
@@ -1799,7 +1792,7 @@ export class SortIndex<RecordT extends IRecord> implements ISortIndex<RecordT> {
         
         // Results should already be in correct order due to in-order traversal
         // but sort them to be absolutely certain
-        matchingRecords.sort((a, b) => this.compareValues(a[this.fieldName], b[this.fieldName]));
+        matchingRecords.sort((a, b) => this.compareValues(a.fields[this.fieldName], b.fields[this.fieldName]));
         
         return matchingRecords;
     }

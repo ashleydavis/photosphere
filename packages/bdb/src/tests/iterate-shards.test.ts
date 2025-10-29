@@ -1,7 +1,7 @@
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { BsonCollection } from 'bdb';
-import type { IRecord } from 'bdb';
+import type { IRecord, IInternalRecord } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
 import crypto from 'crypto';
 
@@ -29,7 +29,7 @@ describe('BsonCollection.iterateShards', () => {
     });
         
     test('should iterate through empty collection shards', async () => {
-        const shards: Array<Iterable<TestUser>> = [];
+        const shards: Array<Iterable<IInternalRecord>> = [];
         
         for await (const shard of collection.iterateShards()) {
             shards.push(shard);
@@ -70,7 +70,7 @@ describe('BsonCollection.iterateShards', () => {
         }
                 
         // Collect all shards from the iterator
-        const shards: Array<Iterable<TestUser>> = [];
+        const shards: Array<Iterable<IInternalRecord>> = [];
         for await (const shard of collection.iterateShards()) {
             shards.push(shard);
         }
@@ -126,13 +126,14 @@ describe('BsonCollection.iterateShards', () => {
             const shardRecords = Array.from(shard);
             
             // Calculate average age per shard
-            const totalAge = shardRecords.reduce((sum, user) => sum + user.age, 0);
+            const totalAge = shardRecords.reduce((sum, user) => sum + (user.fields.age as number), 0);
             const avgAge = shardRecords.length > 0 ? totalAge / shardRecords.length : 0;
             
             // Count roles per shard
             const roles: Record<string, number> = {};
             for (const record of shardRecords) {
-                roles[record.role] = (roles[record.role] || 0) + 1;
+                const role = record.fields.role as string;
+                roles[role] = (roles[role] || 0) + 1;
             }
             
             shardStats.push({
