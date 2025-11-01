@@ -135,8 +135,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     const totalDifferences = 
         compareResult.onlyInA.length + 
         compareResult.onlyInB.length + 
-        compareResult.modified.length + 
-        compareResult.deleted.length;
+        compareResult.modified.length;
 
     const summaryParts = [];
     if (compareResult.onlyInA.length > 0) {
@@ -147,9 +146,6 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     }
     if (compareResult.modified.length > 0) {
         summaryParts.push(`${compareResult.modified.length} modified files`);
-    }
-    if (compareResult.deleted.length > 0) {
-        summaryParts.push(`${compareResult.deleted.length} deleted files`);
     }
     
     log.info(pc.yellow(`Found differences: ${summaryParts.join(', ')}`));
@@ -190,19 +186,6 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
         });
         if (compareResult.modified.length > 10) {
             log.info(pc.gray(`  ... and ${compareResult.modified.length - 10} more`));
-        }
-        log.info('');
-    }
-
-    // Deleted files
-    if (compareResult.deleted.length > 0) {
-        log.info(pc.red(`Deleted files:`));
-        const filesToShow = compareResult.deleted.slice(0, 10);
-        filesToShow.forEach(file => {
-            log.info(`  ${pc.red('-')} ${file}`);
-        });
-        if (compareResult.deleted.length > 10) {
-            log.info(pc.gray(`  ... and ${compareResult.deleted.length - 10} more`));
         }
         log.info('');
     }

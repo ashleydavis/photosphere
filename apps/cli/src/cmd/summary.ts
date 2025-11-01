@@ -23,7 +23,13 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     log.info(`Total files:      ${pc.green(summary.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);
     log.info(`Database version: ${pc.green(summary.databaseVersion.toString())}`);
-    log.info(`Tree root hash:   ${pc.gray(summary.fullHash)}`);
+    if (summary.filesHash) {
+        log.info(`Files hash:       ${pc.gray(summary.filesHash)}`);
+    }
+    if (summary.databaseHash) {
+        log.info(`Database hash:    ${pc.gray(summary.databaseHash)}`);
+    }
+    log.info(`Full root hash:   ${pc.gray(summary.fullHash)}`);
 
     // Show follow-up commands
     log.info('');

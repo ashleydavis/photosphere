@@ -1,7 +1,18 @@
 {
   "name": "photosphere-monorepo",
   "version": "1.0.0",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rapid-Fullstack-Development/photosphere-monorepo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo/issues"
+  },
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
+  "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
+  "keywords": [],
+  "license": "MIT",
   "scripts": {
     "c": "bun run compile",
     "compile": "bun --filter '*' compile",
@@ -11,17 +22,6 @@
     "t": "bun run test",
     "tw": "bun run test:watch"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Rapid-Fullstack-Development/photosphere-monorepo.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo/issues"
-  },
-  "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
   "workspaces": [
     "apps/*",
     "apps/electron/frontend",

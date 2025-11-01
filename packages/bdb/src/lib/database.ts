@@ -6,6 +6,7 @@ import type { IStorage } from "storage";
 import { BsonCollection } from "./collection";
 import type { IRecord, IBsonCollection } from "./collection";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
+import { IMerkleTree } from "merkle-tree";
 
 export interface IBsonDatabase {
 
@@ -40,7 +41,7 @@ export interface IBsonDatabaseOptions {
     timestampProvider: ITimestampProvider;
 }
 
-export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
+export class BsonDatabase implements IBsonDatabase {
 
     //
     // Caches created collections.

@@ -11,6 +11,7 @@ import { verifyCommand } from './cmd/verify';
 import { replicateCommand } from './cmd/replicate';
 import { compareCommand } from './cmd/compare';
 import { hashCacheCommand } from './cmd/hash-cache';
+import { debugMerkleTreeCommand } from './cmd/debug';
 import { bugReportCommand } from './cmd/bug';
 import { examplesCommand } from './cmd/examples';
 import { versionCommand } from './cmd/version';
@@ -21,6 +22,7 @@ import { repairCommand } from './cmd/repair';
 import { removeCommand } from './cmd/remove';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { hashCommand } from './cmd/hash';
+import { rootHashCommand } from './cmd/root-hash';
 import { syncCommand } from './cmd/sync';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
@@ -40,6 +42,8 @@ async function main() {
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
     const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts. Defaults to the current directory from your shell/terminal. This is mostly for testing/debugging."];
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
+    const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
+    const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
 
     program
         .name("psi")
@@ -177,6 +181,22 @@ Resources:
         .option(...cwdOption)
         .action(hashCacheCommand);
 
+    const debugCommand = program
+        .command("debug")
+        .description("Debug commands for inspecting database internals.");
+
+    debugCommand
+        .command("merkle-tree")
+        .description("Visualize all merkle trees in a media file database.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option(...recordsOption)
+        .option(...allOption)
+        .action(debugMerkleTreeCommand);
+
     program
         .command("help [command]")
         .description("Display help for command")
@@ -259,6 +279,16 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('repair'))
         .action(repairCommand);
+
+    program
+        .command("root-hash")
+        .description("Displays the aggregate root hash of the database.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(rootHashCommand);
 
     program
         .command("replicate")

@@ -7,3 +7,4 @@ export * from "./lib/verify";
 export * from "./lib/repair";
 export * from "./lib/replicate";
 export * from "./lib/tree";
+export * from "./lib/write-lock";

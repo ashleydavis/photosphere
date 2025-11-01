@@ -37,3 +37,13 @@ export async function loadOrCreateMerkleTree(metadataStorage: IStorage, uuidGene
 
     return merkleTree;
 }
+
+//
+// Gets the root hash for the files merkle tree.
+// Returns undefined if the merkle tree doesn't exist or has no root hash.
+//
+export async function getFilesRootHash(metadataStorage: IStorage): Promise<Buffer | undefined> {
+    const tree = await loadMerkleTree(metadataStorage);
+    return tree?.merkle?.hash;
+}
+

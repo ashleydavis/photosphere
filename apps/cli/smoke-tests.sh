@@ -25,6 +25,110 @@ MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 # Debug mode flag (can be set via environment variable or command line)
 DEBUG_MODE=${DEBUG_MODE:-false}
 
+# ============================================================================
+# Test Table Definition
+# ============================================================================
+# This table defines all tests in order. Tests are automatically numbered
+# by their position in this array (starting from 1).
+# Format: "name:function:description"
+# ============================================================================
+declare -a TEST_TABLE=(
+    "create-database:test_create_database:Create new database"
+    "view-media:test_view_media_files:View local media files"
+    "add-png:test_add_png_file:Add PNG file to database"
+    "add-jpg:test_add_jpg_file:Add JPG file to database"
+    "add-mp4:test_add_mp4_file:Add MP4 file to database"
+    "add-same:test_add_same_file:Add same file again (no duplication)"
+    "add-multiple:test_add_multiple_files:Add multiple files"
+    "add-same-multiple:test_add_same_multiple_files:Add same multiple files again"
+    "summary:test_database_summary:Display database summary"
+    "list:test_database_list:List files in database"
+    "export:test_export_assets:Export assets by ID"
+    "verify:test_database_verify:Verify database integrity"
+    "verify-full:test_database_verify_full:Verify database integrity (full mode)"
+    "detect-deleted:test_detect_deleted_file:Detect deleted file with verify"
+    "detect-modified:test_detect_modified_file:Detect modified file with verify"
+    "replicate:test_database_replicate:Replicate database to new location"
+    "verify-replica:test_verify_replica:Verify replica integrity and match with source"
+    "replicate-second:test_database_replicate_second:Second replication (no changes)"
+    "compare:test_database_compare:Compare two databases"
+    "compare-changes:test_compare_with_changes:Compare databases after adding changes"
+    "replicate-changes:test_replicate_after_changes:Replicate changes and verify sync"
+    "no-overwrite:test_cannot_create_over_existing:Cannot create database over existing"
+    "repair-ok:test_repair_ok_database:Repair OK database (no changes)"
+    "remove:test_remove_asset:Remove asset by ID from database"
+    "repair-damaged:test_repair_damaged_database:Repair damaged database from replica"
+    "v2-readonly:test_v2_database_readonly_commands:Test readonly commands work on v2 database (summary, verify)"
+    "v2-write-fail:test_v2_database_write_commands_fail:Test write commands fail on v2 database (add, remove)"
+    "v2-upgrade:test_v2_database_upgrade:Upgrade v2 database to v4"
+    "v3-upgrade:test_v3_database_upgrade:Upgrade v3 database to v4"
+    "v4-upgrade-no-effect:test_v4_database_upgrade_no_effect:Test v4 upgrade has no effect"
+    "v4-add-file:test_v4_database_add_file:Test adding file to v4 database"
+    "sync-original-to-copy:test_sync_original_to_copy:Test sync from original to copy"
+    # TODO: Get this working asap.
+    # "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
+    "sync-edit-field:test_sync_edit_field:Test sync after editing field with bdb-cli"
+)
+
+# Test table helper functions
+# Get test name by index (1-based)
+get_test_name() {
+    local index=$1
+    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
+        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f1
+    fi
+}
+
+# Get test function by index (1-based)
+get_test_function() {
+    local index=$1
+    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
+        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f2
+    fi
+}
+
+# Get test description by index (1-based)
+get_test_description() {
+    local index=$1
+    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
+        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f3-
+    fi
+}
+
+# Get test index by name (returns 1-based index, or 0 if not found)
+get_test_index_by_name() {
+    local name=$1
+    local index=1
+    for test_entry in "${TEST_TABLE[@]}"; do
+        local test_name=$(echo "$test_entry" | cut -d: -f1)
+        if [ "$test_name" = "$name" ]; then
+            echo "$index"
+            return 0
+        fi
+        index=$((index + 1))
+    done
+    echo "0"
+    return 1
+}
+
+# Get test function by name
+get_test_function_by_name() {
+    local name=$1
+    for test_entry in "${TEST_TABLE[@]}"; do
+        local test_name=$(echo "$test_entry" | cut -d: -f1)
+        if [ "$test_name" = "$name" ]; then
+            echo "$test_entry" | cut -d: -f2
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Get total number of tests
+get_test_count() {
+    echo "${#TEST_TABLE[@]}"
+}
+
 # Get CLI command based on platform and debug mode
 get_cli_command() {
     if [ "$DEBUG_MODE" = "true" ]; then
@@ -83,6 +187,35 @@ get_mk_command() {
     fi
 }
 
+# Get bdb command based on platform and debug mode
+get_bdb_command() {
+    if [ "$DEBUG_MODE" = "true" ]; then
+        echo "bun run ../bdb-cli/src/index.ts"
+    else
+        local platform=$(detect_platform)
+        local arch=$(detect_architecture)
+        
+        case "$platform" in
+            "linux")
+                echo "../bdb-cli/bin/x64/linux/bdb"
+                ;;
+            "mac")
+                if [ "$arch" = "arm64" ]; then
+                    echo "../bdb-cli/bin/arm64/mac/bdb"
+                else
+                    echo "../bdb-cli/bin/x64/mac/bdb"
+                fi
+                ;;
+            "win")
+                echo "../bdb-cli/bin/x64/win/bdb.exe"
+                ;;
+            *)
+                echo "../bdb-cli/bin/x64/linux/bdb"  # Default to linux
+                ;;
+        esac
+    fi
+}
+
 # Track test results
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -90,9 +223,41 @@ FAILED_TESTS=()
 
 # Trap to show summary on exit (including failures)
 cleanup_and_show_summary() {
+    local exit_code=$?
     echo ""
     show_test_hash_summary
     write_github_step_summary
+    
+    # Show final status message - this should be the last thing printed
+    echo ""
+    echo "============================================================================"
+    echo "============================================================================"
+    if [ $TESTS_FAILED -eq 0 ] && [ $exit_code -eq 0 ]; then
+        echo -e "${GREEN}✓✓✓ ALL SMOKE TESTS PASSED ✓✓✓${NC}"
+        echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+    else
+        echo -e "${RED}✗✗✗ SMOKE TESTS FAILED ✗✗✗${NC}"
+        echo -e "${RED}Exit Code: $exit_code${NC}"
+        if [ $TESTS_FAILED -gt 0 ]; then
+            echo -e "${RED}Tests Failed: $TESTS_FAILED${NC}"
+            if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+                echo -e "${RED}Failed Tests:${NC}"
+                for failed_test in "${FAILED_TESTS[@]}"; do
+                    echo -e "${RED}  - $failed_test${NC}"
+                done
+            fi
+        else
+            echo -e "${RED}Test execution was aborted (likely due to an assertion failure)${NC}"
+        fi
+        if [ $TESTS_PASSED -gt 0 ]; then
+            echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+        fi
+    fi
+    echo "============================================================================"
+    echo "============================================================================"
+    
+    # Exit with the appropriate code
+    exit $exit_code
 }
 
 trap cleanup_and_show_summary EXIT
@@ -128,6 +293,106 @@ log_error() {
 # Array to store test results with hashes
 TEST_RESULTS=()
 
+# Check that merkle tree leaf nodes are in sorted order
+check_merkle_tree_order() {
+    local tree_file="$1"
+    local description="${2:-merkle tree}"
+    
+    if [ ! -f "$tree_file" ]; then
+        return 0  # Tree doesn't exist, skip check
+    fi
+    
+    local mk_cmd=$(get_mk_command)
+    local check_cmd="$mk_cmd check \"$tree_file\""
+    local check_output
+    local exit_code
+    
+    # Run the check command and capture output and exit code
+    check_output=$($mk_cmd check "$tree_file" 2>&1)
+    exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        log_error "Leaf nodes are not in sorted order for $description"
+        log_error "Tree file: $tree_file"
+        log_error "Command: $check_cmd"
+        log_error "Exit code: $exit_code"
+        echo "$check_output"
+        exit 1
+    fi
+}
+
+# Verify that both file and BSON database merkle tree root hashes match between original and replica
+verify_both_merkle_tree_hashes() {
+    local original_dir="$1"
+    local replica_dir="$2"
+    local description="${3:-databases}"
+    
+    log_info "Verifying both merkle tree root hashes match for $description"
+    
+    # Check files merkle tree (.db/tree.dat)
+    local original_files_hash_output
+    local replica_files_hash_output
+    invoke_command "Get original files merkle tree root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_files_hash_output"
+    invoke_command "Get replica files merkle tree root hash" "$(get_mk_command) root-hash $replica_dir/.db/tree.dat" 0 "replica_files_hash_output"
+    
+    local original_files_hash=$(echo "$original_files_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_files_hash=$(echo "$replica_files_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_files_hash" = "$replica_files_hash" ]; then
+        log_success "Files merkle tree root hashes match: $original_files_hash"
+    else
+        log_error "Files merkle tree root hashes do not match"
+        log_error "Original files hash: $original_files_hash"
+        log_error "Replica files hash: $replica_files_hash"
+        
+        # Show merkle trees for debugging
+        log_info "Showing merkle trees for original database:"
+        $(get_cli_command) debug merkle-tree --db "$original_dir" --yes --records
+        
+        log_info "Showing merkle trees for replica database:"
+        $(get_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
+        
+        exit 1
+    fi
+    
+    # Check BSON database merkle tree (metadata/db.dat) if it exists
+    if [ -f "$original_dir/metadata/db.dat" ] && [ -f "$replica_dir/metadata/db.dat" ]; then
+        local original_db_hash_output
+        local replica_db_hash_output
+        invoke_command "Get original BSON database merkle tree root hash" "$(get_mk_command) root-hash $original_dir/metadata/db.dat" 0 "original_db_hash_output"
+        invoke_command "Get replica BSON database merkle tree root hash" "$(get_mk_command) root-hash $replica_dir/metadata/db.dat" 0 "replica_db_hash_output"
+        
+        local original_db_hash=$(echo "$original_db_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        local replica_db_hash=$(echo "$replica_db_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        
+        if [ "$original_db_hash" = "$replica_db_hash" ]; then
+            log_success "BSON database merkle tree root hashes match: $original_db_hash"
+        else
+            log_error "BSON database merkle tree root hashes do not match"
+            log_error "Original database hash: $original_db_hash"
+            log_error "Replica database hash: $replica_db_hash"
+            
+            # Show merkle trees for debugging
+            log_info "Showing merkle trees for original database:"
+            $(get_cli_command) debug merkle-tree --db "$original_dir" --yes --records
+            
+            log_info "Showing merkle trees for replica database:"
+            $(get_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
+            
+            exit 1
+        fi
+    elif [ -f "$original_dir/metadata/db.dat" ] || [ -f "$replica_dir/metadata/db.dat" ]; then
+        # One exists but not the other - this is an error
+        log_error "BSON database merkle tree exists in one database but not the other"
+        log_error "Original has db.dat: $([ -f "$original_dir/metadata/db.dat" ] && echo "yes" || echo "no")"
+        log_error "Replica has db.dat: $([ -f "$replica_dir/metadata/db.dat" ] && echo "yes" || echo "no")"
+        exit 1
+    else
+        # Neither exists - this is fine (database might not have BSON collections yet)
+        log_info "BSON database merkle tree not present in either database (database may not have BSON collections yet)"
+    fi
+}
+
 # Test counting functions - only increment once per test function
 test_passed() {
     ((TESTS_PASSED++))
@@ -140,6 +405,9 @@ test_passed() {
         else
             TEST_RESULTS+=("PASS:hash_failed")
         fi
+        
+        # Check that merkle tree leaf nodes are in sorted order
+        check_merkle_tree_order "$TEST_DB_DIR/.db/tree.dat" "main database"
     fi
 }
 
@@ -219,7 +487,7 @@ EOF
         # Get merkle tree
         echo "MERKLE TREE STRUCTURE:" >> "$report_file"
         echo "---------------------" >> "$report_file"
-        $(get_mk_command) show "$TEST_DB_DIR/.db/tree.dat" 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
+        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes --records 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get database summary
@@ -991,11 +1259,13 @@ check_tools() {
     fi
     
     log_success "All tools verified and working correctly"
-    test_passed
 }
 
 test_create_database() {
-    print_test_header "1" "CREATE DATABASE"
+    local test_number="$1"
+    print_test_header "$test_number" "CREATE DATABASE"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
     
@@ -1010,7 +1280,8 @@ test_create_database() {
 }
 
 test_view_media_files() {
-    print_test_header "2" "VIEW LOCAL MEDIA FILES"
+    local test_number="$1"
+    print_test_header "$test_number" "VIEW LOCAL MEDIA FILES"
     
     # Capture the output to validate it
     local info_output
@@ -1066,7 +1337,10 @@ test_add_file_parameterized() {
 }
 
 test_add_png_file() {
-    print_test_header "3" "ADD PNG FILE"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD PNG FILE"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file" "image/png" "image"
     
@@ -1074,7 +1348,10 @@ test_add_png_file() {
 }
 
 test_add_jpg_file() {
-    print_test_header "4" "ADD JPG FILE"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD JPG FILE"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file" "image/jpeg" "image"
     
@@ -1082,7 +1359,10 @@ test_add_jpg_file() {
 }
 
 test_add_mp4_file() {
-    print_test_header "5" "ADD MP4 FILE"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD MP4 FILE"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
     
@@ -1090,7 +1370,10 @@ test_add_mp4_file() {
 }
 
 test_add_same_file() {
-    print_test_header "6" "ADD SAME FILE (NO DUPLICATION)"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD SAME FILE (NO DUPLICATION)"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Try to re-add the PNG file (should not add it again)
     invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
@@ -1100,7 +1383,10 @@ test_add_same_file() {
 }
 
 test_add_multiple_files() {
-    print_test_header "7" "ADD MULTIPLE FILES"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD MULTIPLE FILES"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         local add_output
@@ -1118,7 +1404,10 @@ test_add_multiple_files() {
 }
 
 test_add_same_multiple_files() {
-    print_test_header "8" "ADD SAME MULTIPLE FILES (NO DUPLICATION)"
+    local test_number="$1"
+    print_test_header "$test_number" "ADD SAME MULTIPLE FILES (NO DUPLICATION)"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
@@ -1132,7 +1421,10 @@ test_add_same_multiple_files() {
 }
 
 test_database_summary() {
-    print_test_header "9" "DATABASE SUMMARY"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE SUMMARY"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Run summary command and capture output for verification
     local summary_output
@@ -1142,12 +1434,15 @@ test_database_summary() {
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"
-    expect_output_string "$summary_output" "Tree root hash:" "Summary contains hash"
+    expect_output_string "$summary_output" "Full root hash:" "Summary contains full root hash"
     test_passed
 }
 
 test_database_list() {
-    print_test_header "10" "DATABASE LIST"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE LIST"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Run list command and capture output for verification
     local list_output
@@ -1168,7 +1463,10 @@ test_database_list() {
 }
 
 test_export_assets() {
-    print_test_header "11" "EXPORT ASSETS"
+    local test_number="$1"
+    print_test_header "$test_number" "EXPORT ASSETS"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Create export test directory
     local export_dir="./test/tmp/exports"
@@ -1254,7 +1552,10 @@ test_export_assets() {
 }
 
 test_database_verify() {
-    print_test_header "12" "DATABASE VERIFICATION"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE VERIFICATION"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Show database structure with tree command
     log_info "Showing database structure..."
@@ -1279,7 +1580,10 @@ test_database_verify() {
 }
 
 test_database_verify_full() {
-    print_test_header "13" "DATABASE VERIFICATION (FULL MODE)"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE VERIFICATION (FULL MODE)"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Run full verify command and capture output for checking
     local verify_output
@@ -1299,9 +1603,12 @@ test_database_verify_full() {
 }
 
 test_detect_deleted_file() {
-    print_test_header "15" "DETECT DELETED FILE WITH VERIFY"
+    local test_number="$1"
+    print_test_header "$test_number" "DETECT DELETED FILE WITH VERIFY"
     
     local test_copy_dir="$TEST_DB_DIR-deleted-file-test"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Test copy database path: $test_copy_dir"
     
     # Ensure source database exists before copying
     if [ ! -d "$TEST_DB_DIR" ]; then
@@ -1356,9 +1663,12 @@ test_detect_deleted_file() {
 }
 
 test_detect_modified_file() {
-    print_test_header "16" "DETECT MODIFIED FILE WITH VERIFY"
+    local test_number="$1"
+    print_test_header "$test_number" "DETECT MODIFIED FILE WITH VERIFY"
     
     local test_copy_dir="$TEST_DB_DIR-modified-file-test"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Test copy database path: $test_copy_dir"
     
     # Ensure source database exists before copying
     if [ ! -d "$TEST_DB_DIR" ]; then
@@ -1414,9 +1724,12 @@ test_detect_modified_file() {
 }
 
 test_database_replicate() {
-    print_test_header "17" "DATABASE REPLICATION"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE REPLICATION"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Clean up any existing replica
     if [ -d "$replica_dir" ]; then
@@ -1434,48 +1747,30 @@ test_database_replicate() {
     # Check expected values from replication output
     expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
     expect_output_value "$replicate_output" "Total files considered:" "15" "Total files considered"
-    expect_output_value "$replicate_output" "Total files copied:" "15" "Files copied"
-    expect_output_value "$replicate_output" "Skipped (unchanged):" "0" "Files skipped (first run)"
+    expect_output_value "$replicate_output" "Total files copied:" "14" "Files copied"
+    expect_output_value "$replicate_output" "Skipped (unchanged):" "1" "Files skipped (first run - the README file is always there!)"
     
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
     
-    # Verify original and replica have the same root hash
-    log_info "Verifying original and replica have the same root hash"
-    local original_hash_output
-    local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db/tree.dat" 0 "replica_hash_output"
+    # Verify original and replica have the same root hash for both merkle trees
+    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica"
     
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$replica_hash" ]; then
-        log_success "Original and replica databases have the same root hash: $original_hash"
-    else
-        log_error "Original and replica databases have different root hashes"
-        log_error "Original hash: $original_hash"
-        log_error "Replica hash: $replica_hash"
-        
-        # Show merkle trees for debugging
-        log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db/tree.dat"
-        
-        log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db/tree.dat"
-        
-        exit 1
-    fi
+    # Check merkle tree order for both original and replica
+    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
     
     test_passed
 }
 
 test_verify_replica() {
-    print_test_header "18" "VERIFY REPLICA"
+    local test_number="$1"
+    print_test_header "$test_number" "VERIFY REPLICA"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Check that replica exists from previous test
     check_exists "$replica_dir" "Replica directory from previous test"
@@ -1507,9 +1802,12 @@ test_verify_replica() {
 }
 
 test_database_replicate_second() {
-    print_test_header "19" "SECOND DATABASE REPLICATION - NO CHANGES"
+    local test_number="$1"
+    print_test_header "$test_number" "SECOND DATABASE REPLICATION - NO CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Check that replica exists from previous test
     check_exists "$replica_dir" "Replica directory from previous test"
@@ -1527,40 +1825,23 @@ test_database_replicate_second() {
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
     expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"
     
-    # Verify original and replica still have the same root hash after second replication
+    # Verify original and replica still have the same root hash for both merkle trees after second replication
     log_info "Verifying original and replica still have the same root hash after second replication"
-    local original_hash_output
-    local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db/tree.dat" 0 "replica_hash_output"
+    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica after second replication"
     
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$replica_hash" ]; then
-        log_success "Original and replica databases still have the same root hash: $original_hash"
-    else
-        log_error "Original and replica databases have different root hashes after second replication"
-        log_error "Original hash: $original_hash"
-        log_error "Replica hash: $replica_hash"
-        
-        # Show merkle trees for debugging
-        log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db/tree.dat"
-        
-        log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db/tree.dat"
-        
-        exit 1
-    fi
+    # Check merkle tree order for replica
+    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
     
     test_passed
 }
 
 test_database_compare() {
-    print_test_header "20" "DATABASE COMPARISON"
+    local test_number="$1"
+    print_test_header "$test_number" "DATABASE COMPARISON"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Check that replica exists from previous tests
     check_exists "$replica_dir" "Replica directory from previous tests"
@@ -1578,9 +1859,12 @@ test_database_compare() {
 }
 
 test_compare_with_changes() {
-    print_test_header "21" "COMPARE WITH CHANGES"
+    local test_number="$1"
+    print_test_header "$test_number" "COMPARE WITH CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Check that replica exists from previous tests
     check_exists "$replica_dir" "Replica directory from previous tests"
@@ -1603,9 +1887,12 @@ test_compare_with_changes() {
 }
 
 test_replicate_after_changes() {
-    print_test_header "22" "REPLICATE AFTER CHANGES"
+    local test_number="$1"
+    print_test_header "$test_number" "REPLICATE AFTER CHANGES"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Replica database path: $replica_dir"
     
     # Check that replica exists from previous tests
     check_exists "$replica_dir" "Replica directory from previous tests"
@@ -1624,47 +1911,33 @@ test_replicate_after_changes() {
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
     
-    # Verify original and replica have the same root hash after replication
+    # Verify original and replica have the same root hash for both merkle trees after replication
     log_info "Verifying original and replica have the same root hash after replication"
-    local original_hash_output
-    local replica_hash_output
-    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $TEST_DB_DIR/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get replica database root hash" "$(get_mk_command) root-hash $replica_dir/.db/tree.dat" 0 "replica_hash_output"
+    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica after replication"
     
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$replica_hash" ]; then
-        log_success "Original and replica databases have the same root hash after replication: $original_hash"
-    else
-        log_error "Original and replica databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Replica hash: $replica_hash"
-        
-        # Show merkle trees for debugging
-        log_error "Showing merkle tree for original database:"
-        invoke_command "Show original database merkle tree" "$(get_mk_command) show $TEST_DB_DIR/.db/tree.dat"
-        
-        log_error "Showing merkle tree for replica database:"
-        invoke_command "Show replica database merkle tree" "$(get_mk_command) show $replica_dir/.db/tree.dat"
-        
-        exit 1
-    fi
+    # Check merkle tree order for replica
+    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
     
     test_passed
 }
 
 test_cannot_create_over_existing() {
-    print_test_header "23" "CANNOT CREATE DATABASE OVER EXISTING"
+    local test_number="$1"
+    print_test_header "$test_number" "CANNOT CREATE DATABASE OVER EXISTING"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
     test_passed
 }
 
 test_repair_ok_database() {
-    print_test_header "24" "REPAIR OK DATABASE (NO CHANGES)"
+    local test_number="$1"
+    print_test_header "$test_number" "REPAIR OK DATABASE (NO CHANGES)"
     
     local replica_dir="$TEST_DB_DIR-replica"
+    log_info "Database path: $TEST_DB_DIR"
+    log_info "Source database path (for repair): $replica_dir"
     
     # Check that replica exists from previous tests
     check_exists "$replica_dir" "Replica directory from previous tests"
@@ -1683,7 +1956,10 @@ test_repair_ok_database() {
 }
 
 test_remove_asset() {
-    print_test_header "25" "REMOVE ASSET BY ID"
+    local test_number="$1"
+    print_test_header "$test_number" "REMOVE ASSET BY ID"
+    
+    log_info "Database path: $TEST_DB_DIR"
     
     # Find an asset ID to remove by listing the asset directory
     local assets_dir="$TEST_DB_DIR/asset"
@@ -1855,10 +2131,13 @@ test_remove_asset() {
 }
 
 test_repair_damaged_database() {
-    print_test_header "26" "REPAIR DAMAGED DATABASE"
+    local test_number="$1"
+    print_test_header "$test_number" "REPAIR DAMAGED DATABASE"
     
     local replica_dir="$TEST_DB_DIR-replica"
     local damaged_dir="$TEST_DB_DIR-damaged"
+    log_info "Damaged database path: $damaged_dir"
+    log_info "Source database path (for repair): $replica_dir"
     
     # Check that replica exists from previous tests
     check_exists "$replica_dir" "Replica directory from previous tests"
@@ -1920,6 +2199,9 @@ test_repair_damaged_database() {
     
     expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
     
+    # Check merkle tree order for repaired database
+    check_merkle_tree_order "$damaged_dir/.db/tree.dat" "repaired database"
+    
     # Clean up damaged database copy
     rm -rf "$damaged_dir"
     log_success "Cleaned up damaged database copy"
@@ -1929,9 +2211,11 @@ test_repair_damaged_database() {
 
 
 test_v2_database_readonly_commands() {
-    print_test_header "27" "V2 DATABASE READONLY COMMANDS"
+    local test_number="$1"
+    print_test_header "$test_number" "V2 DATABASE READONLY COMMANDS"
     
     local v2_db_dir="../../test/dbs/v2"
+    log_info "Database path: $v2_db_dir"
     
     # Check that v2 database exists
     check_exists "$v2_db_dir" "V2 test database directory"
@@ -1954,9 +2238,11 @@ test_v2_database_readonly_commands() {
 }
 
 test_v2_database_write_commands_fail() {
-    print_test_header "28" "V2 DATABASE WRITE COMMANDS FAIL"
+    local test_number="$1"
+    print_test_header "$test_number" "V2 DATABASE WRITE COMMANDS FAIL"
     
     local v2_db_dir="../../test/dbs/v2"
+    log_info "Database path: $v2_db_dir"
     
     # Check that v2 database exists
     check_exists "$v2_db_dir" "V2 test database directory"
@@ -1981,10 +2267,13 @@ test_v2_database_write_commands_fail() {
 }
 
 test_v2_database_upgrade() {
-    print_test_header "29" "V2 DATABASE UPGRADE TO V4"
+    local test_number="$1"
+    print_test_header "$test_number" "V2 DATABASE UPGRADE TO V4"
     
     local v2_db_dir="../../test/dbs/v2"
     local temp_v2_dir="./test/tmp/test-v2-upgrade"
+    log_info "Source database path: $v2_db_dir"
+    log_info "Temporary upgrade database path: $temp_v2_dir"
     
     # Check that v2 database exists
     check_exists "$v2_db_dir" "V2 test database directory"
@@ -2013,6 +2302,9 @@ test_v2_database_upgrade() {
     
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
+    # Check merkle tree order for upgraded database
+    check_merkle_tree_order "$temp_v2_dir/.db/tree.dat" "upgraded v2 database"
+    
     # Clean up temporary database
     rm -rf "$temp_v2_dir"
     log_success "Cleaned up temporary v2 upgrade database"
@@ -2020,10 +2312,13 @@ test_v2_database_upgrade() {
 }
 
 test_v3_database_upgrade() {
-    print_test_header "30" "V3 DATABASE UPGRADE TO V4"
+    local test_number="$1"
+    print_test_header "$test_number" "V3 DATABASE UPGRADE TO V4"
     
     local v3_db_dir="../../test/dbs/v3"
     local temp_v3_dir="./test/tmp/test-v3-upgrade"
+    log_info "Source database path: $v3_db_dir"
+    log_info "Temporary upgrade database path: $temp_v3_dir"
     
     # Check that v3 database exists
     check_exists "$v3_db_dir" "V3 test database directory"
@@ -2052,6 +2347,9 @@ test_v3_database_upgrade() {
     
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
+    # Check merkle tree order for upgraded database
+    check_merkle_tree_order "$temp_v3_dir/.db/tree.dat" "upgraded v3 database"
+    
     # Clean up temporary database
     rm -rf "$temp_v3_dir"
     log_success "Cleaned up temporary v3 upgrade database"
@@ -2059,11 +2357,14 @@ test_v3_database_upgrade() {
 }
 
 test_v4_database_upgrade_no_effect() {
-    print_test_header "31" "V4 DATABASE UPGRADE HAS NO EFFECT"
+    local test_number="$1"
+    print_test_header "$test_number" "V4 DATABASE UPGRADE HAS NO EFFECT"
     
     # Use the existing v4 database directly instead of upgrading from v3
     local v4_db_dir="../../test/dbs/v4"
     local temp_v4_dir="./test/tmp/test-v4-upgrade"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Temporary upgrade database path: $temp_v4_dir"
     
     # Check that v4 database exists
     check_exists "$v4_db_dir" "V4 test database directory"
@@ -2092,6 +2393,9 @@ test_v4_database_upgrade_no_effect() {
     
     expect_output_string "$verify_output" "Database verification passed" "V4 database verifies successfully after upgrade"
     
+    # Check merkle tree order for v4 database
+    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "v4 upgrade test database"
+    
     # Clean up temporary database
     rm -rf "$temp_v4_dir"
     log_success "Cleaned up temporary v4 upgrade database"
@@ -2099,12 +2403,15 @@ test_v4_database_upgrade_no_effect() {
 }
 
 test_v4_database_add_file() {
-    print_test_header "32" "V4 DATABASE ADD FILE AND VERIFY INTEGRITY"
+    local test_number="$1"
+    print_test_header "$test_number" "V4 DATABASE ADD FILE AND VERIFY INTEGRITY"
     
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
     local temp_v4_dir="./test/tmp/test-v4-add-file"
     local test_file="../../test/test.png"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Temporary test database path: $temp_v4_dir"
     
     # Check that v4 database and test file exist
     check_exists "$v4_db_dir" "V4 test database directory"
@@ -2173,6 +2480,9 @@ test_v4_database_add_file() {
     # Check that the test file appears in the listing
     expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
     
+    # Check merkle tree order for v4 database
+    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "v4 add-file test database"
+    
     # Clean up temporary database
     rm -rf "$temp_v4_dir"
     log_success "Cleaned up temporary v4 add-file database"
@@ -2180,25 +2490,29 @@ test_v4_database_add_file() {
 }
 
 test_sync_original_to_copy() {
-    print_test_header "33" "SYNC DATABASE - ORIGINAL TO COPY"
+    local test_number="$1"
+    print_test_header "$test_number" "SYNC DATABASE - ORIGINAL TO COPY"
     
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
     local original_dir="./test/tmp/test-sync-original"
     local copy_dir="./test/tmp/test-sync-copy"
     local test_file="../../test/test.png"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Original database path: $original_dir"
+    log_info "Copy database path: $copy_dir"
     
     # Check that v4 database and test file exist
     check_exists "$v4_db_dir" "V4 test database directory"
     check_exists "$test_file" "Test image file"
     
     # Create the original database from v4
-    log_info "Creating original database from v4"
+    log_info "Creating original database from v4 to $original_dir"
     rm -rf "$original_dir"
     cp -r "$v4_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command"
+    log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
@@ -2211,8 +2525,8 @@ test_sync_original_to_copy() {
     log_info "Verifying original and copy have the same root hash"
     local original_hash_output
     local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2236,8 +2550,8 @@ test_sync_original_to_copy() {
     
     # Get root hashes and verify they are now different
     log_info "Verifying original and copy now have different root hashes"
-    invoke_command "Get original database root hash after add" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash (unchanged)" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash after add" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2261,8 +2575,8 @@ test_sync_original_to_copy() {
     
     # Get root hashes and verify they are now the same again
     log_info "Verifying original and copy have the same root hash after sync"
-    invoke_command "Get original database root hash after sync" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2285,6 +2599,10 @@ test_sync_original_to_copy() {
     expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync original database"
+    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync copy database"
+    
     # Clean up temporary databases
     rm -rf "$original_dir"
     rm -rf "$copy_dir"
@@ -2293,7 +2611,8 @@ test_sync_original_to_copy() {
 }
 
 test_sync_copy_to_original() {
-    print_test_header "34" "SYNC DATABASE - COPY TO ORIGINAL (REVERSE)"
+    local test_number="$1"
+    print_test_header "$test_number" "SYNC DATABASE - COPY TO ORIGINAL (REVERSE)"
     
     # TODO: This test is temporarily disabled in automatic runs until sync bidirectional functionality is working
     # It can still be run individually with: ./smoke-tests.sh 34 or ./smoke-tests.sh sync-copy-to-original
@@ -2303,18 +2622,21 @@ test_sync_copy_to_original() {
     local original_dir="./test/tmp/test-sync-reverse-original"
     local copy_dir="./test/tmp/test-sync-reverse-copy"
     local test_file="../../test/test.jpg"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Original database path: $original_dir"
+    log_info "Copy database path: $copy_dir"
     
     # Check that v4 database and test file exist
     check_exists "$v4_db_dir" "V4 test database directory"
     check_exists "$test_file" "Test image file for reverse sync"
     
     # Create the original database from v4
-    log_info "Creating original database from v4"
+    log_info "Creating original database from v4 to $original_dir"
     rm -rf "$original_dir"
     cp -r "$v4_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command"
+    log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
@@ -2327,8 +2649,8 @@ test_sync_copy_to_original() {
     log_info "Verifying original and copy have the same root hash"
     local original_hash_output
     local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2352,8 +2674,8 @@ test_sync_copy_to_original() {
     
     # Get root hashes and verify they are now different
     log_info "Verifying original and copy now have different root hashes"
-    invoke_command "Get original database root hash (unchanged)" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after add" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash (unchanged)" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after add" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2378,8 +2700,8 @@ test_sync_copy_to_original() {
     
     # Get root hashes and verify they are now the same again
     log_info "Verifying original and copy have the same root hash after reverse sync"
-    invoke_command "Get original database root hash after sync" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_mk_command) root-hash $copy_dir/.db/tree.dat" 0 "copy_hash_output"
+    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -2409,10 +2731,209 @@ test_sync_copy_to_original() {
     expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$original_dir/.db/tree.dat" "reverse sync original database"
+    check_merkle_tree_order "$copy_dir/.db/tree.dat" "reverse sync copy database"
+    
     # Clean up temporary databases
     rm -rf "$original_dir"
     rm -rf "$copy_dir"
     log_success "Cleaned up temporary reverse sync test databases"
+    test_passed
+}
+
+test_sync_edit_field() {
+    local test_number="$1"
+    print_test_header "$test_number" "SYNC DATABASE - EDIT FIELD WITH BDB-CLI"
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local original_dir="./test/tmp/test-sync-edit-original"
+    local copy_dir="./test/tmp/test-sync-edit-copy"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Original database path: $original_dir"
+    log_info "Copy database path: $copy_dir"
+    
+    # Hardcoded values from inspecting the v4 database
+    local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
+    local field_name="description"
+    local field_type="string"
+    local new_field_value="Test description edited by bdb-cli"
+    
+    # Check that v4 database exists
+    check_exists "$v4_db_dir" "V4 test database directory"
+    
+    # Create the original database from v4
+    log_info "Creating original database from v4 to $original_dir"
+    rm -rf "$original_dir"
+    cp -r "$v4_db_dir" "$original_dir"
+    
+    # Create the copy database using replicate command
+    log_info "Creating copy database using replicate command to $copy_dir"
+    rm -rf "$copy_dir"
+    local replicate_output
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    
+    # Verify both databases exist
+    check_exists "$original_dir" "Original database directory"
+    check_exists "$copy_dir" "Copy database directory"
+    
+    # Get root hashes and verify they are the same
+    log_info "Verifying original and copy have the same root hash"
+    local original_hash_output
+    local copy_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$copy_hash" ]; then
+        log_success "Original and copy databases have the same root hash: $original_hash"
+    else
+        log_error "Original and copy databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Copy hash: $copy_hash"
+        exit 1
+    fi
+    
+    # Edit a field in the original database using bdb-cli
+    log_info "Editing field '$field_name' in record '$record_id' using bdb-cli"
+    local edit_output
+    invoke_command "Edit field using bdb-cli" "$(get_bdb_command) edit $original_dir/metadata metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
+    
+    # Verify the edit was successful
+    expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
+    
+    # Verify the field was actually changed by reading it back
+    log_info "Verifying field was changed by reading record back"
+    local verify_record_output
+    verify_record_output=$($(get_bdb_command) record $original_dir/metadata metadata $record_id --all 2>&1)
+    local record_exit_code=$?
+    
+    if [ $record_exit_code -ne 0 ]; then
+        log_error "Failed to read record to verify edit"
+        echo "$verify_record_output"
+        exit 1
+    fi
+    
+    if echo "$verify_record_output" | grep -q "$new_field_value"; then
+        log_success "Record contains the new field value"
+    else
+        log_error "Record does not contain the new field value: $new_field_value"
+        echo "Record output:"
+        echo "$verify_record_output"
+        exit 1
+    fi
+    
+    # Get root hashes and verify they are now different
+    log_info "Verifying original and copy now have different root hashes after edit"
+    invoke_command "Get original database root hash after edit" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    # Verify the original database root hash changed after the edit
+    if [ "$original_hash" != "$original_hash_after" ]; then
+        log_success "Original database root hash changed after edit"
+        log_info "Original hash before edit: $original_hash"
+        log_info "Original hash after edit: $original_hash_after"
+    else
+        log_error "Original database root hash should have changed after edit but it did not"
+        log_error "Hash before edit: $original_hash"
+        log_error "Hash after edit: $original_hash_after"
+        exit 1
+    fi
+    
+    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
+        log_success "Original and copy databases have different root hashes after editing field"
+        log_info "Original hash: $original_hash_after"
+        log_info "Copy hash: $copy_hash_before_sync"
+    else
+        log_error "Original and copy databases should have different root hashes but they are the same"
+        exit 1
+    fi
+    
+    # Compare databases to detect the difference
+    log_info "Comparing databases to detect differences"
+    local compare_output
+    invoke_command "Compare databases before sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output"
+    
+    # Check that comparison detects differences (should show at least 1 difference)
+    expect_output_string "$compare_output" "differences" "Comparison detects differences between databases"
+    
+    # Use sync command to update the copy
+    log_info "Using sync command to synchronize databases"
+    local sync_output
+    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    
+    # Verify sync completed
+    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
+    
+    # Verify the copy database now has the edited field
+    log_info "Verifying copy database now has the edited field"
+    local copy_record_output
+    copy_record_output=$($(get_bdb_command) record $copy_dir/metadata metadata $record_id --all 2>&1)
+    local copy_record_exit_code=$?
+    
+    if [ $copy_record_exit_code -ne 0 ]; then
+        log_error "Failed to read record from copy to verify sync"
+        echo "$copy_record_output"
+        exit 1
+    fi
+    
+    if echo "$copy_record_output" | grep -q "$new_field_value"; then
+        log_success "Copy database contains the new field value"
+    else
+        log_error "Copy database does not contain the new field value: $new_field_value"
+        echo "Record output:"
+        echo "$copy_record_output"
+        exit 1
+    fi
+    
+    # Get root hashes and verify they are now the same again
+    log_info "Verifying original and copy have the same root hash after sync"
+    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_final" = "$copy_hash_final" ]; then
+        log_success "Original and copy databases have the same root hash after sync: $original_hash_final"
+    else
+        log_error "Original and copy databases have different root hashes after sync"
+        log_error "Original hash: $original_hash_final"
+        log_error "Copy hash: $copy_hash_final"
+        exit 1
+    fi
+    
+    # Compare databases again to verify no differences
+    log_info "Comparing databases again to verify no differences"
+    local compare_output_final
+    invoke_command "Compare databases after sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output_final"
+    
+    # Check that comparison shows no differences
+    expect_output_string "$compare_output_final" "No differences detected" "No differences detected after sync"
+    
+    # Verify both databases pass integrity check
+    local verify_original_output
+    local verify_copy_output
+    invoke_command "Verify original database after sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
+    invoke_command "Verify copy database after sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
+    
+    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
+    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
+    
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync edit original database"
+    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync edit copy database"
+    
+    # Clean up temporary databases
+    rm -rf "$original_dir"
+    rm -rf "$copy_dir"
+    log_success "Cleaned up temporary sync edit test databases"
     test_passed
 }
 
@@ -2507,40 +3028,23 @@ run_all_tests() {
     # Check tools first
     check_tools
     
-    # Run all tests in sequence 
-    test_create_database
-    test_view_media_files
-    test_add_png_file
-    test_add_jpg_file
-    test_add_mp4_file
-    test_add_same_file
-    test_add_multiple_files
-    test_add_same_multiple_files
-    test_database_summary
-    test_database_list
-    test_export_assets
-    test_database_verify
-    test_database_verify_full
-    test_detect_deleted_file
-    test_detect_modified_file
-    test_database_replicate
-    test_verify_replica
-    test_database_replicate_second
-    test_database_compare
-    test_compare_with_changes
-    test_replicate_after_changes
-    test_cannot_create_over_existing
-    test_repair_ok_database
-    test_remove_asset
-    test_repair_damaged_database
-    test_v2_database_readonly_commands
-    test_v2_database_write_commands_fail
-    test_v2_database_upgrade
-    test_v3_database_upgrade
-    test_v4_database_upgrade_no_effect
-    test_v4_database_add_file
-    test_sync_original_to_copy
-    # test_sync_copy_to_original  # TODO: Temporarily disabled until sync bidirectional functionality is working
+    # Run all tests in sequence from the test table
+    local total_tests=$(get_test_count)
+    local test_number=1
+    for test_entry in "${TEST_TABLE[@]}"; do
+        local test_name=$(echo "$test_entry" | cut -d: -f1)
+        local test_function=$(echo "$test_entry" | cut -d: -f2)
+        local test_description=$(echo "$test_entry" | cut -d: -f3-)
+        
+        echo ""
+        echo "--- Test $test_number/$total_tests: $test_name ---"
+        log_info "Running: $test_description"
+        
+        # Execute the test function, passing the test number
+        "$test_function" "$test_number"
+        
+        test_number=$((test_number + 1))
+    done
     
     # If we get here, all tests passed
     echo ""
@@ -2569,126 +3073,54 @@ run_all_tests() {
 run_test() {
     local test_name="$1"
     
+    # Handle special commands
     case "$test_name" in
         "all")
             run_all_tests
+            return
             ;;
         "reset")
             reset_environment
+            return
             ;;
         "setup")
             # This is handled as a command in main(), but keeping here for completeness
             test_setup
+            return
             ;;
         "check-tools")
             check_tools
+            return
             ;;
-        "create-database"|"1")
-            test_create_database
-            ;;
-        "view-media"|"2")
-            test_view_media_files
-            ;;
-        "add-png"|"3")
-            test_add_png_file
-            ;;
-        "add-jpg"|"4")
-            test_add_jpg_file
-            ;;
-        "add-mp4"|"5")
-            test_add_mp4_file
-            ;;
-        "add-same"|"6")
-            test_add_same_file
-            ;;
-        "add-multiple"|"7")
-            test_add_multiple_files
-            ;;
-        "add-same-multiple"|"8")
-            test_add_same_multiple_files
-            ;;
-        "summary"|"9")
-            test_database_summary
-            ;;
-        "list"|"10")
-            test_database_list
-            ;;
-        "export"|"11")
-            test_export_assets
-            ;;
-        "verify"|"12")
-            test_database_verify
-            ;;
-        "verify-full"|"13")
-            test_database_verify_full
-            ;;
-        "detect-deleted"|"14")
-            test_detect_deleted_file
-            ;;
-        "detect-modified"|"15")
-            test_detect_modified_file
-            ;;
-        "replicate"|"17")
-            test_database_replicate
-            ;;
-        "verify-replica"|"18")
-            test_verify_replica
-            ;;
-        "replicate-second"|"19")
-            test_database_replicate_second
-            ;;
-        "compare"|"20")
-            test_database_compare
-            ;;
-        "compare-changes"|"21")
-            test_compare_with_changes
-            ;;
-        "replicate-changes"|"22")
-            test_replicate_after_changes
-            ;;
-        "no-overwrite"|"23")
-            test_cannot_create_over_existing
-            ;;
-        "repair-ok"|"24")
-            test_repair_ok_database
-            ;;
-        "remove"|"25")
-            test_remove_asset
-            ;;
-        "repair-damaged"|"26")
-            test_repair_damaged_database
-            ;;
-        "v2-readonly"|"27")
-            test_v2_database_readonly_commands
-            ;;
-        "v2-write-fail"|"28")
-            test_v2_database_write_commands_fail
-            ;;
-        "v2-upgrade"|"29")
-            test_v2_database_upgrade
-            ;;
-        "v3-upgrade"|"30")
-            test_v3_database_upgrade
-            ;;
-        "v4-upgrade-no-effect"|"31")
-            test_v4_database_upgrade_no_effect
-            ;;
-        "v4-add-file"|"32")
-            test_v4_database_add_file
-            ;;
-        "sync-original-to-copy"|"33")
-            test_sync_original_to_copy
-            ;;
-        "sync-copy-to-original"|"34")
-            test_sync_copy_to_original
-            ;;
-        *)
-            log_error "Unknown test: $test_name"
+    esac
+    
+    # Check if it's a numeric test index
+    if [[ "$test_name" =~ ^[0-9]+$ ]]; then
+        local test_function=$(get_test_function "$test_name")
+        if [ -n "$test_function" ]; then
+            "$test_function" "$test_name"
+            return
+        else
+            log_error "Invalid test number: $test_name (must be 1-$(get_test_count))"
             echo ""
             show_usage
             exit 1
-            ;;
-    esac
+        fi
+    fi
+    
+    # Look up test by name
+    local test_function=$(get_test_function_by_name "$test_name")
+    if [ -n "$test_function" ]; then
+        local test_number=$(get_test_index_by_name "$test_name")
+        "$test_function" "$test_number"
+        return
+    fi
+    
+    # Test not found
+    log_error "Unknown test: $test_name"
+    echo ""
+    show_usage
+    exit 1
 }
 
 # Function to run multiple commands in sequence
@@ -2725,162 +3157,9 @@ run_multiple_commands() {
         echo ""
         echo "--- Command $command_number/$total_commands: $command ---"
         
-        # Execute command with error handling
+        # Execute command using run_test() which handles all lookups
         # Keep set -e enabled to fail immediately
-        case "$command" in
-            "all")
-                # Run all tests within the multiple command sequence
-                # Each test will exit immediately on failure due to set -e
-                test_create_database
-                test_view_media_files
-                test_add_png_file
-                test_add_jpg_file
-                test_add_mp4_file
-                test_add_same_file
-                test_add_multiple_files
-                test_add_same_multiple_files
-                test_database_summary
-                test_database_list
-                test_export_assets
-                test_database_verify
-                test_database_verify_full
-                test_detect_deleted_file
-                test_detect_modified_file
-                test_database_replicate
-                test_verify_replica
-                test_database_replicate_second
-                test_database_compare
-                test_compare_with_changes
-                test_replicate_after_changes
-                test_cannot_create_over_existing
-                test_repair_ok_database
-                test_remove_asset
-                test_repair_damaged_database
-                test_v2_database_readonly_commands
-                test_v2_database_write_commands_fail
-                test_v2_database_upgrade
-                test_v3_database_upgrade
-                test_v4_database_upgrade_no_effect
-                test_v4_database_add_file
-                test_sync_original_to_copy
-                # test_sync_copy_to_original  # TODO: Temporarily disabled until sync bidirectional functionality is working
-                ;;
-            "setup")
-                test_setup
-                ;;
-            "check-tools")
-                check_tools
-                ;;
-            "reset")
-                reset_environment
-                ;;
-            "create-database"|"1")
-                test_create_database
-                ;;
-            "view-media"|"2")
-                test_view_media_files
-                ;;
-            "add-png"|"3")
-                test_add_png_file
-                ;;
-            "add-jpg"|"4")
-                test_add_jpg_file
-                ;;
-            "add-mp4"|"5")
-                test_add_mp4_file
-                ;;
-            "add-same"|"6")
-                test_add_same_file
-                ;;
-            "add-multiple"|"7")
-                test_add_multiple_files
-                ;;
-            "add-same-multiple"|"8")
-                test_add_same_multiple_files
-                ;;
-            "summary"|"9")
-                test_database_summary
-                ;;
-            "list"|"10")
-                test_database_list
-                ;;
-            "export"|"11")
-                test_export_assets
-                ;;
-            "verify"|"12")
-                test_database_verify
-                ;;
-            "verify-full"|"13")
-                test_database_verify_full
-                ;;
-            "detect-deleted"|"14")
-                test_detect_deleted_file
-                ;;
-            "detect-modified"|"15")
-                test_detect_modified_file
-                ;;
-            "replicate"|"17")
-                test_database_replicate
-                ;;
-            "verify-replica"|"18")
-                test_verify_replica
-                ;;
-            "replicate-second"|"19")
-                test_database_replicate_second
-                ;;
-            "compare"|"20")
-                test_database_compare
-                ;;
-            "compare-changes"|"21")
-                test_compare_with_changes
-                ;;
-            "replicate-changes"|"22")
-                test_replicate_after_changes
-                ;;
-            "no-overwrite"|"23")
-                test_cannot_create_over_existing
-                ;;
-            "repair-ok"|"24")
-                test_repair_ok_database
-                ;;
-            "remove"|"25")
-                test_remove_asset
-                ;;
-            "repair-damaged"|"26")
-                test_repair_damaged_database
-                ;;
-            "v2-readonly"|"27")
-                test_v2_database_readonly_commands
-                ;;
-            "v2-write-fail"|"28")
-                test_v2_database_write_commands_fail
-                ;;
-            "v2-upgrade"|"29")
-                test_v2_database_upgrade
-                ;;
-            "v3-upgrade"|"30")
-                test_v3_database_upgrade
-                ;;
-            "v4-upgrade-no-effect"|"31")
-                test_v4_database_upgrade_no_effect
-                ;;
-            "v4-add-file"|"32")
-                test_v4_database_add_file
-                ;;
-            "sync-original-to-copy"|"33")
-                test_sync_original_to_copy
-                ;;
-            "sync-copy-to-original"|"34")
-                test_sync_copy_to_original
-                ;;
-            *)
-                log_error "Unknown command in sequence: $command"
-                echo ""
-                show_usage
-                set -e
-                exit 1
-                ;;
-        esac
+        run_test "$command"
         
         # If we get here, the command succeeded (otherwise it would have exited)
         log_success "Completed command $command_number/$total_commands: $command"
@@ -2927,47 +3206,23 @@ show_usage() {
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
-    echo "  to <number>         - Run tests 1 through <number> (1-34, preserves database for inspection)"
+    local test_count=$(get_test_count)
+    echo "  to <number>         - Run tests 1 through <number> (1-$test_count, preserves database for inspection)"
     echo "  setup               - Build executable and frontend"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
     echo ""
     echo "Individual tests:"
-    echo "  create-database (1) - Create new database"
-    echo "  view-media (2)      - View local media files"
-    echo "  add-png (3)         - Add PNG file to database"
-    echo "  add-jpg (4)         - Add JPG file to database"
-    echo "  add-mp4 (5)         - Add MP4 file to database"
-    echo "  add-same (6)        - Add same file again (no duplication)"
-    echo "  add-multiple (7)    - Add multiple files"
-    echo "  add-same-multiple (8) - Add same multiple files again"
-    echo "  summary (9)         - Display database summary"
-    echo "  list (10)           - List files in database"
-    echo "  export (11)         - Export assets by ID"
-    echo "  verify (12)         - Verify database integrity"
-    echo "  verify-full (13)    - Verify database integrity (full mode)"
-    echo "  detect-new (14)     - Detect new file with verify"
-    echo "  detect-deleted (15) - Detect deleted file with verify"
-    echo "  detect-modified (16) - Detect modified file with verify"
-    echo "  replicate (17)      - Replicate database to new location"
-    echo "  verify-replica (18) - Verify replica integrity and match with source"
-    echo "  replicate-second (19) - Second replication (no changes)"
-    echo "  compare (20)        - Compare two databases"
-    echo "  compare-changes (21) - Compare databases after adding changes"
-    echo "  replicate-changes (22) - Replicate changes and verify sync"
-    echo "  no-overwrite (23)   - Cannot create database over existing"
-    echo "  repair-ok (24)      - Repair OK database (no changes)"
-    echo "  remove (25)         - Remove asset by ID from database"
-    echo "  repair-damaged (26) - Repair damaged database from replica"
-    echo "  v2-readonly (27)    - Test readonly commands work on v2 database (summary, verify)"
-    echo "  v2-write-fail (28)  - Test write commands fail on v2 database (add, remove)"
-    echo "  v2-upgrade (29)     - Upgrade v2 database to v4"
-    echo "  v3-upgrade (30)     - Upgrade v3 database to v4"
-    echo "  v4-upgrade-no-effect (31) - Test v4 upgrade has no effect"
-    echo "  v4-add-file (32)    - Test adding file to v4 database"
-    echo "  sync-original-to-copy (33) - Test sync from original to copy"
-    echo "  sync-copy-to-original (34) - Test sync from copy to original (DISABLED - run individually)"
+    # Generate test list from test table
+    local index=1
+    for test_entry in "${TEST_TABLE[@]}"; do
+        local test_name=$(echo "$test_entry" | cut -d: -f1)
+        local test_description=$(echo "$test_entry" | cut -d: -f3-)
+        # Format: "  name (index) - description"
+        printf "  %-25s (%d) - %s\n" "$test_name" "$index" "$test_description"
+        index=$((index + 1))
+    done
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
@@ -3022,8 +3277,9 @@ main() {
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
-        # Validate that end_test is a number between 1 and 34
-        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le 34 ]; then
+        local max_test=$(get_test_count)
+        # Validate that end_test is a number between 1 and max_test
+        if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le "$max_test" ]; then
             # Build command list from 1 to end_test
             local commands="1"
             for ((i=2; i<=end_test; i++)); do
@@ -3060,7 +3316,7 @@ main() {
             run_multiple_commands "$commands"
             return
         else
-            log_error "Invalid test number: $end_test (must be 1-34)"
+            log_error "Invalid test number: $end_test (must be 1-$max_test)"
             show_usage
             exit 1
         fi

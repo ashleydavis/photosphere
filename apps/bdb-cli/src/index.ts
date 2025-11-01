@@ -4,6 +4,7 @@ import { collectionCommand } from './cmd/collection';
 import { shardsCommand } from './cmd/shards';
 import { shardCommand } from './cmd/shard';
 import { recordCommand } from './cmd/record';
+import { editCommand } from './cmd/edit';
 import { sortIndexesCommand } from './cmd/sort-indexes';
 import { sortIndexCommand } from './cmd/sort-index';
 import { sortPageCommand } from './cmd/sort-page';
@@ -21,6 +22,7 @@ Examples:
   ${pc.bold("bdb shards <db-path> <collection>")}                 List shards in a collection
   ${pc.bold("bdb shard <db-path> <collection> <shard-id>")}       Show shard contents
   ${pc.bold("bdb record <db-path> <collection> <record-id>")}     Show a specific record
+  ${pc.bold("bdb edit <db-path> <collection> <record-id> <field> <type> <value>")}  Edit a field in a record
   ${pc.bold("bdb sort-indexes <db-path> <collection>")}           List sort indexes
 
 Resources:
@@ -99,6 +101,26 @@ Examples:
   ${pc.bold("bdb record ./my-database metadata abc-123-def")}
   ${pc.bold("bdb record ./my-database users user-456 --all")}`)
         .action(recordCommand);
+
+    program
+        .command("edit")
+        .description("Edits a field in a record from a collection")
+        .argument("<db-path>", "Path to the database directory")
+        .argument("<collection-name>", "Name of the collection")
+        .argument("<record-id>", "ID of the record to edit")
+        .argument("<field-name>", "Name of the field to edit (can be nested, e.g., 'user.name')")
+        .argument("<field-type>", "Type of the field: number, string, date, boolean, string-array, or json")
+        .argument("<field-value>", "Value to set for the field")
+        .option("-v, --verbose", "Enable verbose logging", false)
+        .addHelpText('after', `
+
+Examples:
+  ${pc.bold("bdb edit ./my-database metadata abc-123-def name string \"John Doe\"")}
+  ${pc.bold("bdb edit ./my-database users user-456 age number 30")}
+  ${pc.bold("bdb edit ./my-database users user-456 user.name string \"Jane Smith\"")}
+  ${pc.bold("bdb edit ./my-database metadata abc-123 tags string-array \"tag1,tag2,tag3\"")}
+  ${pc.bold("bdb edit ./my-database metadata abc-123 config json '{\"key\":\"value\"}'")}`)
+        .action(editCommand);
 
     program
         .command("sort-indexes")
