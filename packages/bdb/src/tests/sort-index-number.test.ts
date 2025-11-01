@@ -249,7 +249,7 @@ describe('SortIndex with number type', () => {
             score: 90.5 // Change score from 78.3 to 90.5
         };
         
-        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(testRecords[2], 1000));
         
         // Find records by the new score
         const result = await sortIndexAsc.findByValue(90.5);
@@ -257,7 +257,6 @@ describe('SortIndex with number type', () => {
         // Should find the updated record with the new score
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174003');
-        console.log(result); //fio:
         expect(result[0].fields.score).toBe(90.5);
         
         // Original score should no longer have this record
@@ -304,7 +303,7 @@ describe('SortIndex with number type', () => {
             rating: 4.3
         };
         
-        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord, 1000));
         
         // Find the record by its score
         const result = await sortIndexAsc.findByValue(89.0);

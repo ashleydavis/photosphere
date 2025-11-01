@@ -2,7 +2,7 @@ import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globa
 import { MockStorage } from 'storage';
 import { BsonCollection } from 'bdb';
 import type { IRecord, IInternalRecord } from 'bdb';
-import { RandomUuidGenerator } from 'utils';
+import { RandomUuidGenerator, TimestampProvider } from 'utils';
 import crypto from 'crypto';
 
 // Test interfaces
@@ -24,6 +24,7 @@ describe('BsonCollection.iterateShards', () => {
             storage,
             directory: 'users',
             uuidGenerator: new RandomUuidGenerator(),
+            timestampProvider: new TimestampProvider(),
             numShards: 10
         });
     });

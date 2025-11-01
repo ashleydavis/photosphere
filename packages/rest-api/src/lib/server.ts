@@ -4,7 +4,7 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { MediaFileDatabase } from "api";
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { ITimestampProvider, RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { BsonDatabase } from "bdb";
 
@@ -244,9 +244,9 @@ export interface IServerOptions {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
+export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, timestampProvider: ITimestampProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
 
-    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator() }) : undefined;
+    let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator(), timestampProvider }) : undefined;
     
     const app = express();
     app.use(cors());

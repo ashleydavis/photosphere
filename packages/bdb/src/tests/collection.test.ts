@@ -2,7 +2,7 @@ import { expect, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { BsonCollection } from 'bdb';
 import type { IRecord, IInternalRecord } from 'bdb';
-import { RandomUuidGenerator } from 'utils';
+import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 // Test interfaces
 interface TestUser extends IRecord {
@@ -23,6 +23,7 @@ describe('BsonCollection', () => {
             storage,
             directory: 'users',
             uuidGenerator: new RandomUuidGenerator(),
+            timestampProvider: new TimestampProvider(),
             numShards: 10
         });
     });

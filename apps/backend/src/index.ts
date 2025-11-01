@@ -3,6 +3,7 @@ import express from "express";
 import { createServer, IAuth0Options, MultipleMediaFileDatabaseProvider, SingleMediaFileDatabaseProvider } from "rest-api";
 import { createStorage, IStorageOptions, loadPrivateKey, pathJoin } from "storage";
 import { exit, registerTerminationCallback } from "node-utils";
+import { TimestampProvider } from "utils";
 
 async function main() {
 
@@ -131,7 +132,7 @@ async function main() {
         console.warn("Google API key not set. Reverse geocoding will not work.");
     }
 
-    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, dbStorage, {
+    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, new TimestampProvider(), dbStorage, {
         appMode: APP_MODE,
         authType: AUTH_TYPE,
         staticMiddleware: FRONTEND_STATIC_PATH ? express.static(FRONTEND_STATIC_PATH) : undefined,

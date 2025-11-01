@@ -43,7 +43,15 @@ const splitKeysThreshold = 1.2;
 //
 const leafSplitThreshold = 1.5;
 
-export interface ISortedIndexEntry extends IInternalRecord {
+export interface ISortedIndexEntry {
+    // The record ID.
+    _id: string;
+
+    // The record fields.
+    fields: {
+        [key: string]: any;
+    };
+
     // The value used for sorting
     value: any;
 }

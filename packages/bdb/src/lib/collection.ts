@@ -3,13 +3,14 @@
 //
 
 import crypto from 'crypto';
-import { BSON } from 'bson';
 import type { IStorage } from 'storage';
-import type { IUuidGenerator } from 'utils';
-import { save, load } from 'serialization';
+import type { IUuidGenerator, ITimestampProvider } from 'utils';
+import { save, load, BinaryDeserializer } from 'serialization';
 import type { ISerializer, IDeserializer } from 'serialization';
 import { SortManager } from './sort-manager';
 import type { IRangeOptions, SortDataType, SortDirection } from './sort-index';
+import { updateMetadata } from './update-metadata';
+import { updateFields } from './update-fields';
 
 export interface ISortResult<RecordT extends IRecord> {
     // Records for the requested page
@@ -51,6 +52,11 @@ export interface IBsonCollectionOptions {
     uuidGenerator: IUuidGenerator;
 
     //
+    // Timestamp provider for generating timestamps.
+    //
+    timestampProvider: ITimestampProvider;
+
+    //
     // The number of shards to use for the collection.
     //
     numShards?: number;
@@ -67,25 +73,51 @@ export interface IRecord {
 }
 
 //
+// Records the metadata for a primitive value.
+//
+export type Metadata = {
+    // Timestamp that shows the last time the value was modified.
+    timestamp?: number; 
+
+    // Metadata for nested fields.
+    fields?: {
+        [key: string]: Metadata;
+    }
+}
+
+//
 // Internal record structure with fields separated into a subobject.
 // Used internally for storage, but converted to/from IRecord at API boundaries.
 //
 export interface IInternalRecord {
+    // The record ID.
     _id: string;
+
+    // The record fields.
     fields: {
         [key: string]: any;
     };
+
+    // The metadata for the record.
+    metadata: Metadata;
 }
 
 //
 // Convert external IRecord to internal IInternalRecord format
 //
-export function toInternal<RecordT extends IRecord>(record: RecordT): IInternalRecord {
+export function toInternal<RecordT extends IRecord>(record: RecordT, timestamp?: number): IInternalRecord {
     const { _id, ...fields } = record;
-    return {
+    
+    // Initialize metadata as ObjectMetadata (records have no timestamp)
+    const internal: IInternalRecord = {
         _id,
-        fields
+        fields,
+        metadata: {
+            timestamp,
+        },
     };
+
+    return internal;
 }
 
 //
@@ -117,7 +149,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // Insert a new record into the collection.
     // Throws an error if a document with the same ID already exists.
     //
-    insertOne(record: RecordT): Promise<void>;
+    insertOne(record: RecordT, options?: { timestamp?: number }): Promise<void>;
 
     //
     // Gets one record by ID.
@@ -193,13 +225,15 @@ export interface IBsonCollection<RecordT extends IRecord> {
 
     //
     // Updates a record.
+    // @param timestamp Optional unix timestamp for field metadata (defaults to current time)
     //
-    updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean>;
+    updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean>;
 
     //
     // Replaces a record with completely new data.
+    // @param timestamp Optional unix timestamp for field metadata (defaults to current time)
     //
-    replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean>;
+    replaceOne(id: string, record: RecordT, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean>;
 
     //
     // Deletes a record.
@@ -259,6 +293,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private readonly uuidGenerator: IUuidGenerator;
 
     //
+    // Timestamp provider for generating timestamps.
+    //
+    private readonly timestampProvider: ITimestampProvider;
+
+    //
     // Current version for shard file format
     //
     private static readonly SHARD_FILE_VERSION = 2;
@@ -268,6 +307,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         this.directory = options.directory;
         this.numShards = options.numShards || 100;
         this.uuidGenerator = options.uuidGenerator;
+        this.timestampProvider = options.timestampProvider;
 
         this.sortManager = new SortManager({
             storage: this.storage,
@@ -365,10 +405,25 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
+    // Serializes a single record to the serializer
+    //
+    private serializeRecord(record: IInternalRecord, serializer: ISerializer): void {
+        const recordIdBuffer = Buffer.from(record._id.replace(/-/g, ''), 'hex');
+        if (recordIdBuffer.length !== 16) {
+            throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
+        }
+        // Write record ID (16 bytes raw, no length prefix)
+        serializer.writeBytes(recordIdBuffer);
+
+        // Write the fields (not _id) - record is already in internal format
+        serializer.writeBSON(record.fields);
+        
+        // Write metadata (version 2+)
+        serializer.writeBSON(record.metadata);
+    }
+
+    //
     // Writes a shard to disk.
-    //
-    //
-    // Serializer function for shard data (without version, as save() handles that)
     //
     private serializeShard(shard: IShard, serializer: ISerializer): void {
         // Write record count (4 bytes LE)
@@ -378,15 +433,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const sortedRecords = Array.from(shard.records.values()).sort((a, b) => a._id.localeCompare(b._id));
         
         for (const record of sortedRecords) {
-            const recordIdBuffer = Buffer.from(record._id.replace(/-/g, ''), 'hex');
-            if (recordIdBuffer.length !== 16) {
-                throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
-            }
-            // Write record ID (16 bytes raw, no length prefix)
-            serializer.writeBytes(recordIdBuffer);
-
-            // Write only the fields (not _id) - record is already in internal format
-            serializer.writeBSON(record.fields);
+            this.serializeRecord(record, serializer);
         }
     }
 
@@ -401,15 +448,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Reads a single record from the file data and returns the new offset.
-    // Both version 1 and 2 store fields identically (without _id), so no version-specific logic needed.
+    // Deserializes a version 1 record (fields only, no metadata)
     //
-    private readRecord(fileData: Buffer<ArrayBufferLike>, offset: number): { record: IInternalRecord, offset: number } {
-
-        //
-        // Read 16 byte uuid.
-        //
-        const recordIdBuffer = fileData.subarray(offset, offset + 16);
+    private deserializeRecordV1(deserializer: IDeserializer): IInternalRecord {
+        // Read 16 byte uuid
+        const recordIdBuffer = deserializer.readBytes(16);
         const hexString = recordIdBuffer.toString('hex');
         const recordId = [
             hexString.substring(0, 8),
@@ -418,28 +461,57 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             hexString.substring(16, 20),
             hexString.substring(20)
         ].join('-');
-        offset += 16;
 
-        //
-        // Read the record length.
-        //
-        const recordLength = fileData.readUInt32LE(offset);
-        offset += 4;
-
-        //
-        // Read and deserialize the record fields.
-        //
-        const recordData = fileData.subarray(offset, offset + recordLength);
-        const fields = BSON.deserialize(recordData);
+        // Read and deserialize the record fields
+        const fields = deserializer.readBSON<any>();
         
-        offset += recordLength;
         return { 
-            record: {
-                _id: recordId,
-                fields,
-            },
-            offset,
+            _id: recordId,
+            fields,
+            metadata: {},
         };
+    }
+
+    //
+    // Deserializes a version 2 record (fields and metadata)
+    //
+    private deserializeRecordV2(deserializer: IDeserializer): IInternalRecord {
+        // Read 16 byte uuid
+        const recordIdBuffer = deserializer.readBytes(16);
+        const hexString = recordIdBuffer.toString('hex');
+        const recordId = [
+            hexString.substring(0, 8),
+            hexString.substring(8, 12),
+            hexString.substring(12, 16),
+            hexString.substring(16, 20),
+            hexString.substring(20)
+        ].join('-');
+
+        // Read and deserialize the record fields
+        const fields = deserializer.readBSON<any>();
+
+        // Read and deserialize metadata
+        const metadata = deserializer.readBSON<Metadata>();
+        
+        return { 
+            _id: recordId,
+            fields,
+            metadata,
+        };
+    }
+
+    //
+    // Deserializes a single record from the deserializer.
+    // Delegates to version-specific deserialization functions.
+    //
+    private deserializeRecord(deserializer: IDeserializer, fileVersion: number): IInternalRecord {
+        if (fileVersion === 2) {
+            return this.deserializeRecordV2(deserializer);
+        } else if (fileVersion === 1) {
+            return this.deserializeRecordV1(deserializer);
+        } else {
+            throw new Error(`Invalid file version: ${fileVersion}`);
+        }
     }
 
     //
@@ -453,27 +525,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const recordCount = deserializer.readUInt32();
 
         for (let i = 0; i < recordCount; i++) {
-            // Read record ID (16 bytes raw, no length prefix)
-            const recordIdBuffer = deserializer.readBytes(16);
-            const hexString = recordIdBuffer.toString('hex');
-            const recordId = [
-                hexString.substring(0, 8),
-                hexString.substring(8, 12),
-                hexString.substring(12, 16),
-                hexString.substring(16, 20),
-                hexString.substring(20)
-            ].join('-');
-
-            // Read record BSON data with length prefix
-            const fields = deserializer.readBSON<any>();
-            
-            // Create internal record
-            const internal: IInternalRecord = {
-                _id: recordId,
-                fields: fields
-            };
-            
-            records.push(internal);
+            records.push(this.deserializeRecordV1(deserializer));
         }
 
         return records;
@@ -490,27 +542,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const recordCount = deserializer.readUInt32();
 
         for (let i = 0; i < recordCount; i++) {
-            // Read record ID (16 bytes raw, no length prefix)
-            const recordIdBuffer = deserializer.readBytes(16);
-            const hexString = recordIdBuffer.toString('hex');
-            const recordId = [
-                hexString.substring(0, 8),
-                hexString.substring(8, 12),
-                hexString.substring(12, 16),
-                hexString.substring(16, 20),
-                hexString.substring(20)
-            ].join('-');
-
-            // Read record BSON data with length prefix (new format - fields only)
-            const fields = deserializer.readBSON<any>();
-            
-            // Create internal record
-            const internal: IInternalRecord = {
-                _id: recordId,
-                fields: fields
-            };
-            
-            records.push(internal);
+            records.push(this.deserializeRecordV2(deserializer));
         }
 
         return records;
@@ -518,7 +550,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
     //
     // Loads all records from a shard file.
-    // Supports both version 1 and 2.
+    // Supports version 1 and 2.
     // Returns records in internal format.
     //
     private async loadRecords(shardFilePath: string): Promise<IInternalRecord[]> {
@@ -565,7 +597,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Insert a new record into the collection.
     // Throws an error if a document with the same ID already exists.
     //
-    async insertOne(record: RecordT): Promise<void> {
+    async insertOne(record: RecordT, options?: { timestamp?: number }): Promise<void> {
         if (!record._id) {
             record._id = this.uuidGenerator.generate();
         }
@@ -577,7 +609,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error(`Document with ID ${record._id} already exists in shard ${shardId}`);
         }
 
-        const internalRecord = toInternal<RecordT>(record);
+        // Use provided timestamp or current time
+        const versionTimestamp = options?.timestamp ?? this.timestampProvider.now();
+        const internalRecord = toInternal<RecordT>(record, versionTimestamp);
         await this.setRecord(record._id, internalRecord, shard);
         await this.saveShard(shard);
 
@@ -614,15 +648,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                  continue;
              }
 
-            const version = buffer.readUInt32LE(0); // Version
-            const recordCount = buffer.readUInt32LE(4); // Record count
-
-            let offset = 8; // Skip the version and record count.
+            const deserializer = new BinaryDeserializer(buffer);
+            const fileVersion = deserializer.readUInt32(); // Version
+            const recordCount = deserializer.readUInt32(); // Record count
 
             for (let i = 0; i < recordCount; i++) {
-                const { record, offset: newOffset } = this.readRecord(buffer, offset);
+                const record = this.deserializeRecord(deserializer, fileVersion);
                 yield record;
-                offset = newOffset;
             }
         }
     }
@@ -654,16 +686,14 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 continue;
             }
 
-            const version = buffer.readUInt32LE(0); // Version
-            const recordCount = buffer.readUInt32LE(4); // Record count
-
-            let offset = 8; // Skip the version and record count.
+            const deserializer = new BinaryDeserializer(buffer);
+            const fileVersion = deserializer.readUInt32(); // Version
+            const recordCount = deserializer.readUInt32(); // Record count
 
             const records: IInternalRecord[] = [];
             for (let i = 0; i < recordCount; i++) {
-                const { record, offset: newOffset } = this.readRecord(buffer, offset);
+                const record = this.deserializeRecord(deserializer, fileVersion);
                 records.push(record);
-                offset = newOffset;
             }
             yield records;
         }
@@ -696,32 +726,41 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Updates a record.
     //
-    async updateOne(id: string, updates: Partial<RecordT>, options?: { upsert?: boolean }): Promise<boolean> {
+    async updateOne(id: string, updates: Partial<Omit<RecordT, '_id'>>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
-        let existingRecord: any = this.getRecord(id, shard);
+        let existingRecord = this.getRecord(id, shard);
 
         if (!options?.upsert) {
             //
-            // If not upserting, finds the record to update.
-            //
-            
+            // If not upserting, the record must exist.
+            //            
             if (!existingRecord) {
-                return false; // Record not found
+                return false; // Record not found.
             }
         }
 
         if (!existingRecord) {
+            // Creating new record via upsert.
             existingRecord = {
                 _id: id,
+                fields: {},
+                metadata: {}
             };
         }
 
         //
-        // Updates the record.
+        // Updates the record fields.
         //
-        const updatedRecord: any = { ...existingRecord, ...updates };
+
+        const timestamp = options?.timestamp ?? this.timestampProvider.now();        
+        const updatedRecord: IInternalRecord = {
+            _id: id,
+            fields: updateFields(existingRecord.fields, updates),
+            metadata: updateMetadata(existingRecord.fields, updates, existingRecord.metadata, timestamp),
+        };
+
         await this.setRecord(id, updatedRecord, shard);
         await this.saveShard(shard);
 
@@ -733,7 +772,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Replaces a record with completely new data.
     //
-    async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean }): Promise<boolean> {
+    async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
         const shardId = this.generateShardId(id);
         const shard = await this.loadShard(shardId);
 
@@ -749,7 +788,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Replaces the record.
         //
-        const internalRecord = toInternal<RecordT>(record);
+        const versionTimestamp = options?.timestamp ?? Date.now();
+        const internalRecord = toInternal<RecordT>(record, versionTimestamp);
         await this.setRecord(id, internalRecord, shard);
         await this.saveShard(shard);
 
@@ -818,13 +858,19 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const ascIndex = await this.sortManager.getSortIndex(fieldName, 'asc');
         if (ascIndex) {
             // Use the sort index for faster search with binary search
-            return (await ascIndex.findByValue(value)).map(sortIndexEntry => toExternal<RecordT>(sortIndexEntry));
+            return (await ascIndex.findByValue(value)).map(sortIndexEntry => ({
+                _id: sortIndexEntry._id,
+                ...sortIndexEntry.fields
+            } as RecordT));
         }
         
         const descIndex = await this.sortManager.getSortIndex(fieldName, 'desc');
         if (descIndex) {
             // Use the sort index for faster search with binary search
-            return (await descIndex.findByValue(value)).map(internal => toExternal<RecordT>(internal));
+            return (await descIndex.findByValue(value)).map(sortIndexEntry => ({
+                _id: sortIndexEntry._id,
+                ...sortIndexEntry.fields
+            } as RecordT));
         }
         
         throw new Error(`No sort index found for field "${fieldName}" in either direction`);
@@ -839,7 +885,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             throw new Error(`Failed to create sort index for field '${fieldName}'`);
         }
         
-        return (await sortIndex.findByRange(options)).map(internal => toExternal<RecordT>(internal));
+        return (await sortIndex.findByRange(options)).map(sortIndexEntry => ({
+            _id: sortIndexEntry._id,
+            ...sortIndexEntry.fields
+        } as RecordT));
     }
     
     //

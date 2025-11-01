@@ -264,7 +264,8 @@ export class MediaFileDatabase {
 
         this.bsonDatabase = new BsonDatabase({
             storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
-            uuidGenerator: uuidGenerator
+            uuidGenerator: uuidGenerator,
+            timestampProvider: timestampProvider
         });
 
         this.metadataCollection = this.bsonDatabase.collection("metadata");

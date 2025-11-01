@@ -242,7 +242,7 @@ describe('SortIndex with date type', () => {
             createdAt: newDate // Change date to 5 days ago (was 1 day ago)
         };
         
-        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(testRecords[2], 1000));
         
         // Find records by the new date
         const result = await sortIndexAsc.findByValue(newDate);
@@ -287,7 +287,7 @@ describe('SortIndex with date type', () => {
             category: 'A'
         };
         
-        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord, 1000));
         
         // Find the record by its date
         const result = await sortIndexAsc.findByValue(newRecordDate);

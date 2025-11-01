@@ -3,7 +3,7 @@ import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { exit, registerTerminationCallback } from "node-utils";
 import open from "open";
-import { log } from "utils";
+import { log, TimestampProvider } from "utils";
 import pc from "picocolors";
 import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 import { configureIfNeeded, getS3Config } from '../lib/config';
@@ -101,7 +101,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     //
     // Start the Photosphere REST API.
     //
-    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, undefined, {
+    const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, new TimestampProvider(), undefined, {
         appMode: "readwrite", 
         authType: "no-auth",
         staticMiddleware,

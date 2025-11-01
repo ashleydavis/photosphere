@@ -177,7 +177,7 @@ describe('SortIndex', () => {
             category: 'A'
         };
         
-        await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[0]));
+        await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(testRecords[0], 1000));
         
         // Find records with the new score
         const result = await sortIndex.findByValue(95);
@@ -192,7 +192,7 @@ describe('SortIndex', () => {
         expect(oldScoreResult.length).toBe(1); // Now just Record 5
         
         // Delete a record
-        await sortIndex.deleteRecord('123e4567-e89b-12d3-a456-426614174005', toInternal<TestRecord>(testRecords[4]));
+        await sortIndex.deleteRecord('123e4567-e89b-12d3-a456-426614174005', toInternal<TestRecord>(testRecords[4], 1000));
         
         // Check that the record is gone
         const afterDeleteResult = await sortIndex.findByValue(85);
@@ -211,7 +211,7 @@ describe('SortIndex', () => {
             category: 'A'
         };
         
-        await sortIndex.addRecord(toInternal<TestRecord>(newRecord));
+        await sortIndex.addRecord(toInternal<TestRecord>(newRecord, 1000));
         
         // In the B-tree implementation, we need to verify the record was added
         // by checking if it exists in the collection through the index methods
