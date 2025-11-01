@@ -1,3 +1,4 @@
+import { IMerkleTree } from 'merkle-tree';
 import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord } from '../lib/collection';
 import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
 
@@ -25,11 +26,6 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         }
     }
 
-    async listExistingShards(): Promise<number[]> {
-        // Mock implementation - return sequential shard IDs based on number of records
-        const numShards = Math.ceil(this.records.length / 2);
-        return Array.from({ length: numShards }, (_, i) => i);
-    }
 
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let i = 0; i < this.records.length; i += 2) {
@@ -196,7 +192,7 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return Math.ceil(this.records.length / 2);
     }
 
-    loadShard(shardId: number): Promise<IShard> {
+    loadShard(shardId: string): Promise<IShard> {
         throw new Error('Method not implemented.');
     }
 }

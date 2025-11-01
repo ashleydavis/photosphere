@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonCollection, IRecord } from "bdb";
+import { BsonDatabase, IBsonCollection, IRecord, databaseMerkleTreeExists, getDatabaseRootHash } from "bdb";
 import type { IBsonDatabase } from "bdb";
 import { FileStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
@@ -21,8 +21,8 @@ import { Image } from "tools";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData } from "merkle-tree";
+import { loadMerkleTree, saveMerkleTree, getFilesRootHash } from "./tree";
+import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData, combineHashes } from "merkle-tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -72,6 +72,23 @@ export const DISPLAY_MIN_SIZE = 1000;
 //
 export const DISPLAY_QUALITY = 95;
 
+export interface IDatabaseHashes {
+    //
+    // Full aggregate hash of the tree root (combines files and database hashes).
+    //
+    fullHash: string;
+
+    //
+    // Root hash of the files merkle tree.
+    //
+    filesHash: string | undefined;
+
+    //
+    // Root hash of the BSON database merkle tree.
+    //
+    databaseHash: string | undefined;
+}
+
 export interface IDatabaseSummary {
     //
     // Total number of files imported into the database.
@@ -97,6 +114,16 @@ export interface IDatabaseSummary {
     // Full hash of the tree root.
     //
     fullHash: string;
+
+    //
+    // Root hash of the files merkle tree.
+    //
+    filesHash: string | undefined;
+
+    //
+    // Root hash of the BSON database merkle tree.
+    //
+    databaseHash: string | undefined;
 
     //
     // Database version from merkle tree.
@@ -288,6 +315,13 @@ export class MediaFileDatabase {
     }
 
     //
+    // Gets the timestamp provider.
+    //
+    getTimestampProvider(): ITimestampProvider {
+        return this.timestampProvider;
+    }
+
+    //
     // Gets the metadata storage for reading and writing metadata.
     //
     getMetadataStorage(): IStorage {
@@ -349,6 +383,18 @@ export class MediaFileDatabase {
     }
 
     //
+    // Loads the existing media file database, or creates it if it doesn't exist.
+    //
+    async loadOrCreate(): Promise<void> {
+        const treeExists = await retry(() => this.metadataStorage.fileExists("tree.dat"));
+        if (treeExists) {
+            await this.load();
+        } else {
+            await this.create();
+        }
+    }
+
+    //
     // Ensures the sort index exists.
     //
     async ensureSortIndex() {
@@ -365,6 +411,34 @@ export class MediaFileDatabase {
     }
 
     //
+    // Gets the database hashes (files hash, database hash, and aggregate hash).
+    //
+    async getDatabaseHashes(): Promise<IDatabaseHashes> {
+        // Get root hashes from both merkle trees
+        const filesRootHash = await retry(() => getFilesRootHash(this.metadataStorage));
+        const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(this.assetStorage, "metadata")));
+        
+        // Compute aggregate root hash
+        let fullHash: string;
+        if (filesRootHash && databaseRootHash) {
+            const aggregateHash = combineHashes(filesRootHash, databaseRootHash);
+            fullHash = aggregateHash.toString('hex');
+        } else if (filesRootHash) {
+            fullHash = filesRootHash.toString('hex');
+        } else if (databaseRootHash) {
+            fullHash = databaseRootHash.toString('hex');
+        } else {
+            fullHash = 'empty';
+        }
+        
+        return {
+            fullHash,
+            filesHash: filesRootHash?.toString('hex'),
+            databaseHash: databaseRootHash?.toString('hex'),
+        };
+    }
+
+    //
     // Gets a summary of the entire database.
     //
     async getDatabaseSummary(): Promise<IDatabaseSummary> {
@@ -373,21 +447,18 @@ export class MediaFileDatabase {
             throw new Error(`Failed to load merkle tree.`);
         }
         const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
-        if (merkleTree.dirty || !merkleTree.merkle) {
-            log.warn(`Merkle tree is dirty or missing, will rebuild.`);
-        }
-        const merkle = !merkleTree.dirty && merkleTree.merkle || buildMerkleTree(merkleTree.sort);
         
-        // Get root hash (first node is always the root)
-        const rootHash = merkle?.hash;
-        const fullHash = rootHash?.toString('hex');
+        // Get database hashes
+        const hashes = await this.getDatabaseHashes();
         
         return {
             totalImports: filesImported,
             totalFiles: merkleTree.sort?.leafCount || 0,
             totalSize: merkleTree.sort?.size || 0,
             totalNodes: merkleTree.sort?.nodeCount || 0,
-            fullHash: fullHash || 'empty',
+            fullHash: hashes.fullHash,
+            filesHash: hashes.filesHash,
+            databaseHash: hashes.databaseHash,
             databaseVersion: merkleTree.version
         };
     }

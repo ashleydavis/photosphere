@@ -1,5 +1,5 @@
-import { IMerkleTree, SortNode } from "./merkle-tree";
-import { traverseTreeSync } from "./traverse";
+import { IMerkleTree, MerkleNode } from "./merkle-tree";
+import { findMerkleTreeDifferences } from "./merkle-diff";
 
 //
 // The result of a comparison between two Merkle trees.
@@ -8,7 +8,28 @@ export interface ICompareResult {
     onlyInA: string[];
     onlyInB: string[];
     modified: string[];
-    deleted: string[];
+}
+
+//
+// Helper function to extract leaf node names from MerkleNode arrays.
+//
+function extractLeafNames(nodes: MerkleNode[]): string[] {
+    const names: string[] = [];
+    for (const node of nodes) {
+        if (!node.left && !node.right && node.name) {
+            // Leaf node
+            names.push(node.name);
+        } else {
+            // Internal node - recursively extract leaf names
+            if (node.left) {
+                names.push(...extractLeafNames([node.left]));
+            }
+            if (node.right) {
+                names.push(...extractLeafNames([node.right]));
+            }
+        }
+    }
+    return names;
 }
 
 /**
@@ -19,92 +40,44 @@ export interface ICompareResult {
  * @returns An object containing the differences between the trees
  */
 export function compareTrees<DatabaseMetadata>(treeA: IMerkleTree<DatabaseMetadata>, treeB: IMerkleTree<DatabaseMetadata>, progressCallback?: (progress: string) => void): ICompareResult {
-    // Get all files from both trees
-    const filesInA = new Map<string, { hash: string }>();
-    const filesInB = new Map<string, { hash: string }>();
-    
-    let processedFiles = 0;
-    
-    // Process items in tree A using traversal
-    if (treeA.sort) {
-        traverseTreeSync<SortNode>(treeA.sort, (node) => {
-            if (node.nodeCount === 1 && node.name) {
-                processedFiles++;
-                if (progressCallback && processedFiles % 1000 === 0) {
-                    progressCallback(`Indexing sources files | ${processedFiles} files`);
-                }
-                
-                filesInA.set(node.name, { 
-                    hash: node.contentHash!.toString('hex')
-                });
-            }
-            return true;
-        });
+    if (progressCallback) {
+        progressCallback("Comparing merkle trees...");
     }
     
-    // Process items in tree B using traversal
-    if (treeB.sort) {
-        traverseTreeSync<SortNode>(treeB.sort, (node) => {
-            if (node.nodeCount === 1 && node.name) {
-                processedFiles++;
-                if (progressCallback && processedFiles % 1000 === 0) {
-                    progressCallback(`Indexing dest files | ${processedFiles} files`);
-                }
-                
-                filesInB.set(node.name, { 
-                    hash: node.contentHash!.toString('hex')
-                });
-            }
-            return true;
-        });
-    }
+    // Use findMerkleTreeDifferences to find differences in merkle trees
+    const diff = findMerkleTreeDifferences(treeA.merkle, treeB.merkle);
     
-    // Find differences
+    // Extract leaf node names from the differing nodes
+    const namesOnlyInA = extractLeafNames(diff.onlyInTree1);
+    const namesOnlyInB = extractLeafNames(diff.onlyInTree2);
+    
+    // Files that appear in both arrays are modified (same name, different hash)
+    const namesInA = new Set(namesOnlyInA);
+    const namesInB = new Set(namesOnlyInB);
+    const modified: string[] = [];
     const onlyInA: string[] = [];
     const onlyInB: string[] = [];
-    const modified: string[] = [];
-    const deleted: string[] = [];
     
-    let comparedFiles = 0;
-    
-    // Files only in A or modified
-    for (const [fileName, fileInfoA] of filesInA) {
-        comparedFiles++;
-        if (progressCallback && comparedFiles % 1000 === 0) {
-            progressCallback(`Comparing source files | ${comparedFiles} of ${filesInA.size} files`);
-        }
-        
-        const fileInfoB = filesInB.get(fileName);
-        if (!fileInfoB) {
-            // File exists in A but not in B
-            onlyInA.push(fileName);
-        } else if (fileInfoA.hash !== fileInfoB.hash) {
-            // File exists in both but has different hash (modified)
-            modified.push(fileName);
+    // Find modified files (present in both with different hashes)
+    for (const name of namesOnlyInA) {
+        if (namesInB.has(name)) {
+            modified.push(name);
+        } else {
+            onlyInA.push(name);
         }
     }
     
-    comparedFiles = 0;
-    
-    // Files only in B
-    for (const [fileName, fileInfoB] of filesInB) {
-        comparedFiles++;
-        if (progressCallback && comparedFiles % 1000 === 0) {
-            progressCallback(`Comparing destination files | ${comparedFiles} of ${filesInB.size} files`);
-        }
-        
-        const fileInfoA = filesInA.get(fileName);
-        if (!fileInfoA) {
-            // File exists in B but not in A
-            onlyInB.push(fileName);
+    // Find files only in B (not in modified)
+    for (const name of namesOnlyInB) {
+        if (!namesInA.has(name)) {
+            onlyInB.push(name);
         }
     }
     
     return {
         onlyInA,
         onlyInB,
-        modified,
-        deleted
+        modified
     };
 }
 
@@ -151,23 +124,13 @@ export function generateTreeDiffReport<DatabaseMetadata>(treeA: IMerkleTree<Data
         });
     }
     
-    // Deleted files (deleted in A, present in B)
-    report += "\nDeleted files (marked as deleted in first tree, present in second):\n";
-    if (diff.deleted.length === 0) {
-        report += "  (None)\n";
-    } else {
-        diff.deleted.forEach(file => {
-            report += `  - ${file}\n`;
-        });
-    }
-    
     // Summary
     report += "\nSummary:\n";
     report += `  ${diff.onlyInA.length} files only in first tree\n`;
     report += `  ${diff.onlyInB.length} files only in second tree\n`;
     report += `  ${diff.modified.length} modified files\n`;
-    report += `  ${diff.deleted.length} deleted files\n`;
     
     return report;
 }
+
 

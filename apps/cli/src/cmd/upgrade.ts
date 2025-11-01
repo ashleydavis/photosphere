@@ -5,6 +5,8 @@ import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { CURRENT_DATABASE_VERSION, rebuildTree, saveTree } from "merkle-tree";
 import { IDatabaseMetadata, loadMerkleTree } from "api";
+import { buildDatabaseMerkleTree, databaseMerkleTreeExists, saveDatabaseMerkleTree } from "bdb";
+import { StoragePrefixWrapper } from "storage";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -83,6 +85,21 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
 
         // Save the rebuilt tree.
         await retry(() => saveTree("tree.dat", rebuiltTree, upgradedDatabase.getMetadataStorage()));
+
+        const bsonDatabaseStorage = new StoragePrefixWrapper(upgradedDatabase.getAssetStorage(), "metadata");
+
+        log.info(pc.blue(`Rebuilding BSON database merkle tree not found.`));
+            
+        const bsonDatabaseTree = await buildDatabaseMerkleTree(
+            bsonDatabaseStorage,
+            upgradedDatabase.uuidGenerator,
+            "", // The storage wraps the metadata directory already.
+            undefined,
+            undefined,
+            true
+        );
+        await saveDatabaseMerkleTree(bsonDatabaseStorage, bsonDatabaseTree);
+        log.info(pc.green(`✓ BSON database merkle tree built successfully`));
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     } 

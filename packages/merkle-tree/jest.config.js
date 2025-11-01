@@ -1,7 +1,8 @@
 export default {
     preset: 'ts-jest',
     modulePathIgnorePatterns: [
-        "dist",
-        "build",
+        "/node_modules/",
+        "/dist/",
+        "/build/",
     ],
 };

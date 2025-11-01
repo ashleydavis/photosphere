@@ -305,14 +305,14 @@ export class FileStorage implements IStorage {
     //
     async releaseWriteLock(filePath: string): Promise<void> {
         
-        if (log.verboseEnabled) {
-            log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
-        }
-        
         try {
             await fs.unlink(filePath);
         } catch (err) {
             // Ignore errors if the lock file doesn't exist
+        }
+
+        if (log.verboseEnabled) {
+            log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
         }
     }
 

@@ -60,7 +60,7 @@ export function visualizeMerkleTree(node: MerkleNode | undefined, prefix: string
     result += prefix + connector;
 
     if (!node.left && !node.right) {
-        result += ' ' + shortHash;
+        result += ' ' + shortHash + ' ' + node.name;
     }
     else {
         result += ' ' + shortHash;
@@ -115,14 +115,14 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
     
     // Visualize the sort tree
     result += "\n" + "=".repeat(50) + "\n";
-    result += "Sort Tree (Item Organization):\n";
+    result += "Sort Tree:\n";
     result += "=".repeat(50) + "\n\n";
     result += visualizeSortTree(merkleTree.sort);
     
     // Visualize the merkle tree
     if (merkleTree.merkle) {
         result += "\n" + "=".repeat(50) + "\n";
-        result += "Merkle Tree (Hash Structure):\n";
+        result += "Merkle Tree:\n";
         result += "=".repeat(50) + "\n\n";
         result += visualizeMerkleTree(merkleTree.merkle);
         

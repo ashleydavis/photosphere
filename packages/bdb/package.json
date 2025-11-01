@@ -29,10 +29,10 @@
   },
   "dependencies": {
     "bson": "^6.10.3",
-    "storage": "workspace:*",
+    "json-stable-stringify": "^1.3.0",
+    "merkle-tree": "workspace:*",
     "serialization": "workspace:*",
+    "storage": "workspace:*",
     "utils": "workspace:*"
   }
 }
-
-

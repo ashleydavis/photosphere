@@ -2,7 +2,6 @@
 // A collection in a database that stores BSON records in a sharded format.
 //
 
-import crypto from 'crypto';
 import type { IStorage } from 'storage';
 import type { IUuidGenerator, ITimestampProvider } from 'utils';
 import { save, load, BinaryDeserializer } from 'serialization';
@@ -11,6 +10,21 @@ import { SortManager } from './sort-manager';
 import type { IRangeOptions, SortDataType, SortDirection } from './sort-index';
 import { updateMetadata } from './update-metadata';
 import { updateFields } from './update-fields';
+import {
+    buildShardMerkleTree,
+    saveShardMerkleTree,
+    loadShardMerkleTree,
+    buildCollectionMerkleTree,
+    saveCollectionMerkleTree,
+    loadCollectionMerkleTree,
+    buildDatabaseMerkleTree,
+    loadDatabaseMerkleTree,
+    saveDatabaseMerkleTree,
+    hashRecord,
+} from './merkle-tree';
+import { addItem, deleteItem, upsertItem, buildMerkleTree, IMerkleTree } from 'merkle-tree';
+import * as crypto from 'crypto';
+import path from 'path';
 
 export interface ISortResult<RecordT extends IRecord> {
     // Records for the requested page
@@ -134,7 +148,7 @@ export function toExternal<RecordT extends IRecord>(internal: IInternalRecord): 
 // Internal shard - stores records in internal format
 //
 export interface IShard {
-    id: number;
+    id: string;
     records: Map<string, IInternalRecord>;
 }
 
@@ -161,10 +175,6 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown>;
 
-    //
-    // Lists the shard IDs that actually exist as files on disk.
-    //
-    listExistingShards(): Promise<number[]>;
 
     //
     // Iterate each shared in the collection without loading all into memory.
@@ -278,7 +288,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Loads the requested shard from cache or from storage.
     //
-    loadShard(shardId: number): Promise<IShard>;    
+    loadShard(shardId: string): Promise<IShard>;    
 }
 
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
@@ -376,7 +386,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Determines the shard ID for a record based on its ID.
     //
-    private generateShardId(recordId: string): number {
+    private generateShardId(recordId: string): string {
         const recordIdBuffer = Buffer.from(recordId.replace(/-/g, ''), 'hex');
         if (recordIdBuffer.length !== 16) {
             throw new Error(`Invalid record ID ${recordId} with length ${recordIdBuffer.length}`);
@@ -384,7 +394,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         const hash = crypto.createHash('md5').update(recordIdBuffer).digest('hex');
         const decimal = parseInt(hash.substring(0, 8), 16);
-        return decimal % this.numShards;
+        return (decimal % this.numShards).toString();
     }
 
     //
@@ -402,6 +412,132 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         else {
             await this.writeBsonFile(shardFilePath, shard);
         }
+    }
+
+    //
+    // Updates the shard merkle tree by adding a record hash.
+    //
+    private async addRecordToShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
+        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
+        if (!shardTree) {
+            // Tree doesn't exist, build it from the shard.
+            const records = Array.from(shard.records.values());
+            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+        }
+        else {
+            // Add the record hash to the existing tree
+            shardTree = addItem(shardTree, hashRecord(record));
+        }
+        
+        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);        
+        await this.updateCollectionTree(shardId, shardTree);
+    }
+
+    //
+    // Updates the shard merkle tree by updating a record hash.
+    //
+    private async updateRecordInShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
+        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
+        if (!shardTree) {
+            // Tree doesn't exist, build it from the shard.
+            const records = Array.from(shard.records.values());
+            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+        }
+        else {
+            // Update the record hash in the existing tree (or add if it doesn't exist)
+            shardTree = upsertItem(shardTree, hashRecord(record));
+        }
+        
+        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);        
+        await this.updateCollectionTree(shardId, shardTree);
+    }
+
+    //
+    // Updates the shard merkle tree by deleting a record hash.
+    //
+    private async deleteRecordFromShardTree(shardId: string, recordId: string, shard: IShard): Promise<void> {
+        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
+        if (!shardTree) {
+            // Tree doesn't exist, but if shard still has records, rebuild it
+            const records = Array.from(shard.records.values());
+            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+        }
+        else {
+            // Delete the record hash from the tree
+            deleteItem(shardTree, recordId);
+        }
+        
+        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);
+        await this.updateCollectionTree(shardId, shardTree);
+    }
+
+    //
+    // Updates the collection merkle tree with the updated shard hash.
+    //
+    private async updateCollectionTree(shardId: string, shardTree: IMerkleTree<undefined>): Promise<void> {
+        
+        let collectionTree = await loadCollectionMerkleTree(this.storage, this.directory);        
+        if (!collectionTree) {
+            // Collection tree doesn't exist, build it.
+            collectionTree = await buildCollectionMerkleTree(this.storage, this.name, this.directory, this.uuidGenerator, false);
+        }
+        else {
+            if (shardTree.merkle) {
+                // Update the shard hash in the collection tree.
+                const hashedItem = {
+                    name: shardId.toString(),
+                    hash: shardTree.merkle.hash,
+                    length: shardTree.merkle.nodeCount,
+                    lastModified: new Date(),
+                };
+                
+                collectionTree = upsertItem(collectionTree, hashedItem);
+            } 
+            else {
+                // Shard tree is empty or missing, remove shard from collection tree
+                deleteItem(collectionTree, shardId.toString());
+            }
+        }
+        
+        await saveCollectionMerkleTree(this.storage, this.directory, collectionTree);
+        await this.updateDatabaseTree(collectionTree);
+    }
+
+    //
+    // Updates the database merkle tree with the updated collection hash.
+    //
+    private async updateDatabaseTree(collectionTree: IMerkleTree<undefined>): Promise<void> {
+        let databaseTree = await loadDatabaseMerkleTree(this.storage);
+        
+        if (!databaseTree) {
+            // Database tree doesn't exist, rebuild it from all collections
+            databaseTree = await buildDatabaseMerkleTree(
+                this.storage,
+                this.uuidGenerator,
+                path.dirname(this.directory),
+                this.name,
+                collectionTree,
+                false
+            );            
+        }
+        else {
+            // Update the collection hash in the database tree.
+            if (collectionTree.merkle) {
+                const hashedItem = {
+                    name: this.name,
+                    hash: collectionTree.merkle.hash,
+                    length: collectionTree.merkle.nodeCount,
+                    lastModified: new Date(),
+                };
+                databaseTree = upsertItem(databaseTree, hashedItem);
+            } 
+            else {
+                // Collection tree is empty or missing, remove collection from database tree.
+                deleteItem(databaseTree, this.name);
+            }
+        }         
+
+        await saveDatabaseMerkleTree(this.storage, databaseTree);
     }
 
     //
@@ -553,7 +689,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Supports version 1 and 2.
     // Returns records in internal format.
     //
-    private async loadRecords(shardFilePath: string): Promise<IInternalRecord[]> {
+    async loadRecords(shardFilePath: string): Promise<IInternalRecord[]> {
         const records = await load<IInternalRecord[]>(
             this.storage,
             shardFilePath,
@@ -577,7 +713,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Loads the requested shard from cache or from storage.
     //
-    async loadShard(shardId: number): Promise<IShard> {
+    async loadShard(shardId: string): Promise<IShard> {
         const filePath = `${this.directory}/${shardId}`;
         const records = await this.loadRecords(filePath);
         const shard: IShard = {
@@ -616,6 +752,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         await this.saveShard(shard);
 
         await this.sortManager.addRecord(internalRecord);
+        
+        // Update merkle trees
+        await this.addRecordToShardTree(shardId, internalRecord, shard);
     }
 
     //
@@ -657,23 +796,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 yield record;
             }
         }
-    }
-
-    //
-    // Lists the shard IDs that actually exist as files on disk.
-    //
-    async listExistingShards(): Promise<number[]> {
-        const shardIds: number[] = [];
-        
-        for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const filePath = `${this.directory}/${shardId}`;
-            const exists = await this.storage.fileExists(filePath);
-            if (exists) {
-                shardIds.push(shardId);
-            }
-        }
-        
-        return shardIds;
     }
 
     //
@@ -766,6 +888,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         await this.sortManager.updateRecord(updatedRecord, existingRecord);
 
+        //
+        // Update merkle trees.
+        //
+        await this.updateRecordInShardTree(shardId, updatedRecord, shard);
+
         return true;
     }
 
@@ -795,6 +922,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         await this.sortManager.updateRecord(internalRecord, existingRecord);
 
+        //
+        // Update merkle trees.
+        //
+        await this.updateRecordInShardTree(shardId, internalRecord, shard);
+
         return true;
     }
  
@@ -821,6 +953,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         await this.saveShard(shard);
 
         await this.sortManager.deleteRecord(id, existingRecord);
+
+        // Update merkle trees
+        await this.deleteRecordFromShardTree(shardId, id, shard);
 
         return true;
     }   
@@ -959,7 +1094,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             await this.storage.deleteFile(indexDirPath);
         }
         
-        // Delete the collection directory
+        // Delete the collection directory (which includes merkle trees)
         await this.storage.deleteDir(this.directory); 
     }
 }

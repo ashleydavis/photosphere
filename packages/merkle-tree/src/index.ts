@@ -3,3 +3,6 @@ export * from "./lib/visualize";
 export * from "./lib/traverse";
 export * from "./test/merkle-verify";
 export * from "./lib/compare";
+export * from "./lib/merkle-diff";
+export * from "./lib/buffer-set";
+export * from "./lib/buffer-map";

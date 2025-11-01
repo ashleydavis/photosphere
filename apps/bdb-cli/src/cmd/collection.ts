@@ -1,4 +1,6 @@
 import { loadDatabase } from './database-loader';
+import { listShards } from 'bdb';
+import { createStorage } from 'storage';
 import pc from "picocolors";
 
 interface ICollectionCommandOptions {
@@ -16,7 +18,8 @@ export async function collectionCommand(dbPath: string, collectionName: string, 
         console.log(pc.green(`Collection: ${collectionName}`));
         
         // Get existing shards
-        const existingShards = await collection.listExistingShards();
+        const storageResult = createStorage(dbPath);
+        const existingShards = await listShards(storageResult.storage, collectionName);
         console.log(pc.cyan(`Number of shards: ${existingShards.length}`));
         
         // Get sort indexes

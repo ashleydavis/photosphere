@@ -295,6 +295,127 @@ describe('buildMerkleTree', () => {
                 expect(merkleLeaves[i]).toEqual(Buffer.from(sortLeaves[i]));
             }
         });
+
+        test('merkle tree leaf names appear in same order as sort tree when using iterateLeaves', () => {
+            const tree = buildTree(['E', 'B', 'A', 'D', 'C']); // Unsorted input
+            const merkleTree = buildMerkleTree(tree.sort!);
+
+            // Collect leaf names from sort tree using iterateLeaves
+            const sortLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
+                if (leaf.name) {
+                    sortLeafNames.push(leaf.name);
+                }
+            }
+
+            // Collect leaf names from merkle tree using iterateLeaves
+            const merkleLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<MerkleNode>(merkleTree)) {
+                if (leaf.name) {
+                    merkleLeafNames.push(leaf.name);
+                }
+            }
+
+            // Leaves should appear in the same order
+            expect(merkleLeafNames.length).toBe(sortLeafNames.length);
+            expect(merkleLeafNames).toEqual(sortLeafNames);
+        });
+
+        test('merkle tree leaf order matches sort tree leaf order - FAILS: buildMerkleTree does not preserve order', () => {
+            // This test demonstrates that buildMerkleTree does not preserve the leaf order
+            // from the sort tree when using iterateLeaves to traverse both trees.
+            
+            const fileNames = ['A', 'B', 'C'];
+            const tree = buildTree(fileNames);
+            const merkleTree = buildMerkleTree(tree.sort!);
+
+            // Collect leaf names from sort tree using iterateLeaves
+            const sortLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
+                if (leaf.name) {
+                    sortLeafNames.push(leaf.name);
+                }
+            }
+
+            // Collect leaf names from merkle tree using iterateLeaves
+            const merkleLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<MerkleNode>(merkleTree)) {
+                if (leaf.name) {
+                    merkleLeafNames.push(leaf.name);
+                }
+            }
+
+            // Expected: ["A", "B", "C"] (same as sort tree)
+            // Actual: ["C", "A", "B"] (reordered by buildMerkleTree)
+            // This proves buildMerkleTree does not preserve leaf order
+            expect(merkleLeafNames).toEqual(sortLeafNames);
+        });
+
+        test('merkle tree leaf order matches sort tree for 5 leaves - FAILS: demonstrates ordering bug', () => {
+            // This test demonstrates that buildMerkleTree does not preserve the leaf order
+            // for trees with odd numbers of leaves (non-power-of-2).
+            
+            const fileNames = ['E', 'B', 'A', 'D', 'C'];
+            const tree = buildTree(fileNames);
+            const merkleTree = buildMerkleTree(tree.sort!);
+
+            // Collect leaf names from sort tree using iterateLeaves
+            const sortLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
+                if (leaf.name) {
+                    sortLeafNames.push(leaf.name);
+                }
+            }
+
+            // Collect leaf names from merkle tree using iterateLeaves
+            const merkleLeafNames: string[] = [];
+            for (const leaf of iterateLeaves<MerkleNode>(merkleTree)) {
+                if (leaf.name) {
+                    merkleLeafNames.push(leaf.name);
+                }
+            }
+
+            // Expected: ["E", "A", "B", "C", "D"] (same as sort tree)
+            // Actual: ["E", "A", "B", "C", "D"] with "E" moved to wrong position
+            // This proves buildMerkleTree does not preserve leaf order
+            expect(merkleLeafNames).toEqual(sortLeafNames);
+        });
+
+        test('merkle tree preserves leaf order for various tree sizes', () => {
+            const testCases = [
+                ['A'],
+                ['A', 'B'],
+                ['A', 'B', 'C'],
+                ['A', 'B', 'C', 'D'],
+                ['A', 'B', 'C', 'D', 'E'],
+                ['A', 'B', 'C', 'D', 'E', 'F'],
+                ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+            ];
+
+            for (const fileNames of testCases) {
+                const tree = buildTree(fileNames);
+                const merkleTree = buildMerkleTree(tree.sort!);
+
+                // Collect leaf names from sort tree using iterateLeaves
+                const sortLeafNames: string[] = [];
+                for (const leaf of iterateLeaves<SortNode>(tree.sort!)) {
+                    if (leaf.name) {
+                        sortLeafNames.push(leaf.name);
+                    }
+                }
+
+                // Collect leaf names from merkle tree using iterateLeaves
+                const merkleLeafNames: string[] = [];
+                for (const leaf of iterateLeaves<MerkleNode>(merkleTree)) {
+                    if (leaf.name) {
+                        merkleLeafNames.push(leaf.name);
+                    }
+                }
+
+                // Leaves should appear in the same order
+                expect(merkleLeafNames).toEqual(sortLeafNames);
+            }
+        });
     });
 
     describe('Large Trees', () => {

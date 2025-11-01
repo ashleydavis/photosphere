@@ -1,6 +1,7 @@
 import { program } from 'commander';
 import { showCommand } from './cmd/show';
 import { rootHashCommand } from './cmd/root-hash';
+import { checkCommand } from './cmd/check';
 import pc from "picocolors";
 
 async function main() {
@@ -13,6 +14,7 @@ async function main() {
 Examples:
   ${pc.bold("mk show ./path/to/tree.dat")}                 Show merkle tree visualization
   ${pc.bold("mk root-hash ./path/to/tree.dat")}           Print the root hash
+  ${pc.bold("mk check ./path/to/tree.dat")}               Check leaf nodes are sorted
 
 Resources:
   📖 Merkle Tree Package: packages/merkle-tree
@@ -43,6 +45,18 @@ Examples:
   ${pc.bold("mk root-hash ./my-database/.db/tree.dat")}
   ${pc.bold("mk root-hash s3://my-bucket/database/.db/tree.dat")}`)
         .action(rootHashCommand);
+
+    program
+        .command("check")
+        .description("Verify that leaf nodes of the merkle tree are in sorted order")
+        .argument("<tree-file>", "Path to the merkle tree file")
+        .option("-v, --verbose", "Enable verbose logging", false)
+        .addHelpText('after', `
+
+Examples:
+  ${pc.bold("mk check ./my-database/.db/tree.dat")}
+  ${pc.bold("mk check s3://my-bucket/database/.db/tree.dat")}`)
+        .action(checkCommand);
 
     // Parse the command line arguments
     try {

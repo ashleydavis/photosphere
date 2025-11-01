@@ -12,21 +12,14 @@ interface IShardCommandOptions {
 //
 export async function shardCommand(dbPath: string, collectionName: string, shardId: string, options: IShardCommandOptions): Promise<void> {
     try {
-        const shardIdNum = parseInt(shardId, 10);
-        if (isNaN(shardIdNum)) {
-            console.error(pc.red("Shard ID must be a number."));
-            process.exit(1);
-            return;
-        }
-
         const database = await loadDatabase(dbPath, options.verbose);
         const collection = database.collection(collectionName);
         
         // Load the specific shard
-        const shard = await collection.loadShard(shardIdNum);
+        const shard = await collection.loadShard(shardId);
         
         console.log(pc.green(`Collection: ${collectionName}`));
-        console.log(pc.green(`Shard ID: ${shardIdNum}`));
+        console.log(pc.green(`Shard ID: ${shardId}`));
         console.log(pc.green(`Records in shard: ${shard.records.size}`));
         
         if (shard.records.size > 0) {

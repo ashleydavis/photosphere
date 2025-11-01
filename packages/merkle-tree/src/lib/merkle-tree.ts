@@ -38,6 +38,7 @@ export interface SortNode { //todo: Would be nice to have SortLeaf and SortParen
 export interface MerkleNode {
     hash: Buffer; // The hash of this node.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
+    name?: string; // The name/identifier of the item (only set for leaf nodes).
     left?: MerkleNode; // Left child node
     right?: MerkleNode; // Right child node
 }
@@ -570,9 +571,14 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
             throw new Error('Leaf node has no content hash');
         }
 
+        if (!leaf.name) {
+            throw new Error('Leaf node has no name');
+        }
+
         let node: MerkleNode = {
             hash: leaf.contentHash,
             nodeCount: 1,
+            name: leaf.name,
         };
 
         // Try to combine this node with nodes at each level going up
@@ -602,21 +608,33 @@ export function buildMerkleTree(sort: SortNode | undefined): MerkleNode | undefi
         }
     }
 
-    // Combine any remaining nodes in the stack from bottom to top
-    let result: MerkleNode | undefined = undefined;
+    // Combine any remaining nodes in the stack to preserve order
+    // The stack is organized by tree level: lower indices are deeper (processed later, rightmost),
+    // higher indices are higher (processed earlier, leftmost)
+    // To preserve leaf order, we need to combine from high index to low index
+    // (earlier/leftmost on left, later/rightmost on right)
+    const stackNodes: MerkleNode[] = [];
     for (const node of stack) {
         if (node !== undefined) {
-            if (result === undefined) {
-                result = node;
-            } else {
-                result = {
-                    hash: combineHashes(result.hash, node.hash),
-                    nodeCount: result.nodeCount + node.nodeCount + 1,
-                    left: result,
-                    right: node,
-                };
-            }
+            stackNodes.push(node);
         }
+    }
+
+    if (stackNodes.length === 0) {
+        return undefined;
+    }
+
+    // Combine from last to first (high index to low): earlier nodes (high index) on left, later nodes (low index) on right
+    let result = stackNodes[stackNodes.length - 1];
+    for (let i = stackNodes.length - 2; i >= 0; i--) {
+        // stackNodes[i] is later (lower index = deeper in tree), result is earlier (higher index = higher in tree)
+        // To preserve order: earlier (result) on left, later (stackNodes[i]) on right
+        result = {
+            hash: combineHashes(result.hash, stackNodes[i].hash),
+            nodeCount: result.nodeCount + stackNodes[i].nodeCount + 1,
+            left: result,
+            right: stackNodes[i],
+        };
     }
 
     return result;
@@ -770,6 +788,14 @@ function serializeMerkleNode(node: MerkleNode, serializer: ISerializer): void {
     }
     serializer.writeBytes(node.hash);
     
+    // For leaf nodes, write the name
+    if (node.nodeCount === 1) {
+        if (!node.name) {
+            throw new Error('Leaf node has no name');
+        }
+        serializer.writeString(node.name);
+    }
+    
     // Recursively write children if this is not a leaf
     if (node.left) {
         serializeMerkleNode(node.left, serializer);
@@ -886,6 +912,9 @@ function serializeSortNode(node: SortNode, serializer: ISerializer): void {
  * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
  *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 for no tree)
  *   - 32 bytes: hash (SHA-256) - only if nodeCount > 0
+ *   - If leaf node (nodeCount == 1):
+ *     - 4 bytes: name length (uint32)
+ *     - X bytes: name (UTF-8)
  */
 function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
     // Write database metadata BSON
@@ -979,8 +1008,9 @@ function deserializeMerkleNode(deserializer: IDeserializer): MerkleNode {
     const hash = deserializer.readBytes(32);
     
     if (nodeCount === 1) {
-        // Leaf node - no children
-        return { hash, nodeCount };
+        // Leaf node - read name
+        const name = deserializer.readString();
+        return { hash, nodeCount, name };
     } else {
         // Internal node - recursively deserialize children
         const left = deserializeMerkleNode(deserializer);
@@ -1010,8 +1040,9 @@ function deserializeMerkle(deserializer: IDeserializer): MerkleNode | undefined 
     const hash = deserializer.readBytes(32);
     
     if (nodeCount === 1) {
-        // Root is a leaf node
-        return { hash, nodeCount };
+        // Root is a leaf node - read name
+        const name = deserializer.readString();
+        return { hash, nodeCount, name };
     } else {
         // Root is an internal node - recursively deserialize children
         const left = deserializeMerkleNode(deserializer);

@@ -1,6 +1,7 @@
 import type { IBsonDatabase } from '../lib/database';
 import type { IBsonCollection, IRecord } from '../lib/collection';
 import { MockCollection } from './mock-collection';
+import { IMerkleTree } from 'merkle-tree';
 
 // Mock BsonDatabase for testing
 export class MockDatabase implements IBsonDatabase {
