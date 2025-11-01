@@ -5,7 +5,8 @@ import dayjs from "dayjs";
 import { Readable } from "stream";
 import { AddressInfo } from "net";
 import axios from "axios";
-import http, { IncomingMessage } from "http";
+import http from "http";
+import { MockTimestampProvider } from "utils";
 
 describe("photosphere backend", () => {
 
@@ -87,7 +88,7 @@ describe("photosphere backend", () => {
             close: jest.fn()
         };
 
-        const { app } = await createServer(() => dateNow, mockMediaFileDatabaseProvider, mockStorage, {
+        const { app } = await createServer(() => dateNow, mockMediaFileDatabaseProvider, new MockTimestampProvider(), mockStorage, {
             appMode: "readwrite",
             authType: "no-auth"
         });

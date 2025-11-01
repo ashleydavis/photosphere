@@ -5,7 +5,7 @@
 import type { IStorage } from "storage";
 import { BsonCollection } from "./collection";
 import type { IRecord, IBsonCollection } from "./collection";
-import type { IUuidGenerator } from "utils";
+import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 export interface IBsonDatabase {
 
@@ -33,6 +33,11 @@ export interface IBsonDatabaseOptions {
     // UUID generator for creating unique identifiers.
     //
     uuidGenerator: IUuidGenerator;
+
+    //
+    // Timestamp provider for generating timestamps.
+    //
+    timestampProvider: ITimestampProvider;
 }
 
 export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package.
@@ -83,7 +88,8 @@ export class BsonDatabase implements IBsonDatabase { //todo: move to bdb package
             collection = new BsonCollection<IRecord>(name, {
                 storage: this.options.storage,
                 directory: name,
-                uuidGenerator: this.options.uuidGenerator
+                uuidGenerator: this.options.uuidGenerator,
+                timestampProvider: this.options.timestampProvider
             });
             this._collections.set(name, collection);
         }        

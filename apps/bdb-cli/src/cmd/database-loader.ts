@@ -2,6 +2,7 @@ import { BsonDatabase } from "bdb";
 import type { IBsonDatabase } from "bdb";
 import { createStorage } from "storage";
 import pc from "picocolors";
+import { TimestampProvider } from "utils";
 
 //
 // Simple UUID generator for the database
@@ -28,7 +29,8 @@ export async function loadDatabase(dbPath: string, verbose: boolean = false): Pr
         // Create the BSON database
         const database = new BsonDatabase({
             storage,
-            uuidGenerator
+            uuidGenerator,
+            timestampProvider: new TimestampProvider()
         });
 
         if (verbose) {

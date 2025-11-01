@@ -186,7 +186,7 @@ describe('SortIndex Tree Balance', () => {
             for (let i = 1; i <= 10; i++) {
                 const recordNum = (batch - 1) * 10 + i;
                 const record = createRecord(recordNum, recordNum);
-                await sortIndex.addRecord(toInternal<TestRecord>(record));
+                await sortIndex.addRecord(toInternal<TestRecord>(record, 1000));
             }
             
             // Verify balance after each batch
@@ -260,7 +260,7 @@ describe('SortIndex Tree Balance', () => {
         
         // Delete every 3rd record
         for (let i = 3; i <= 60; i += 3) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1], 1000));
         }
         
         // Verify tree balance after deletions
@@ -304,18 +304,18 @@ describe('SortIndex Tree Balance', () => {
         for (let i = 1; i <= 15; i++) {
             // Add odd values
             const newRecord = createRecord(100 + i, i * 2 - 1);
-            await sortIndex.addRecord(toInternal<TestRecord>(newRecord));
+            await sortIndex.addRecord(toInternal<TestRecord>(newRecord, 1000));
             
             // Update some existing records
             if (i <= 10) {
                 const updatedRecord = createRecord(i, i * 2 + 100);
                 const oldRecord = records[i - 1];
-                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(oldRecord));
+                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(oldRecord, 1000));
             }
             
             // Delete some records
             if (i <= 5) {
-                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
+                await sortIndex.deleteRecord(`record-${(i + 15).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1], 1000));
             }
         }
         

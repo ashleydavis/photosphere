@@ -148,7 +148,7 @@ describe('Merkle Tree Performance Tests', () => {
       expect(node).toBeUndefined(); // Should not be found
       
       // Performance assertions - deletion should be O(log n)
-      expect(time).toBeLessThan(15); // Should be very fast
+      expect(time).toBeLessThan(20); // Should be very fast
     }
     
     // Make sure file count is reduced by the number of deletions

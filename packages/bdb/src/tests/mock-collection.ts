@@ -5,12 +5,13 @@ import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-ind
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
     private records: IInternalRecord[] = [];
 
-    constructor(records: T[] = []) {
-        this.records = records.map(records => toInternal<T>(records));
+    constructor(records: T[] = [], timestamp: number = Date.now()) {
+        this.records = records.map(record => toInternal<T>(record, timestamp));
     }
 
-    async insertOne(record: T): Promise<void> {
-        this.records.push(toInternal<T>(record));
+    async insertOne(record: T, options?: { timestamp?: number }): Promise<void> {
+        const timestamp = options?.timestamp ?? Date.now();
+        this.records.push(toInternal<T>(record, timestamp));
     }
 
     async getOne(id: string): Promise<T | undefined> {
@@ -71,29 +72,40 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         throw new Error('Method not implemented.');
     }
 
-    async updateOne(id: string, updates: Partial<T>, options?: { upsert?: boolean }): Promise<boolean> {
+    async updateOne(id: string, updates: Partial<T>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
+        const timestamp = options?.timestamp ?? Date.now();
         const index = this.records.findIndex(r => r._id === id);
         if (index === -1) {
             if (options?.upsert) {
-                this.records.push(toInternal<any>({ _id: id, ...updates }));
+                this.records.push(toInternal<any>({ _id: id, ...updates }, timestamp));
                 return true;
             }
             return false;
         }
-        this.records[index] = toInternal<any>({ ...this.records[index], ...updates });
+        // For updates, we need to preserve existing metadata and merge updates
+        // This is a simplified version - in real usage, you'd use updateMetadataRecursive
+        const existing = this.records[index];
+        const updatedFields = { ...existing.fields, ...updates };
+        const updated: IInternalRecord = {
+            _id: existing._id,
+            fields: updatedFields,
+            metadata: existing.metadata // Preserve existing metadata
+        };
+        this.records[index] = updated;
         return true;
     }
 
-    async replaceOne(id: string, record: T, options?: { upsert?: boolean }): Promise<boolean> {
+    async replaceOne(id: string, record: T, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
+        const timestamp = options?.timestamp ?? Date.now();
         const index = this.records.findIndex(r => r._id === id);
         if (index === -1) {
             if (options?.upsert) {
-                this.records.push(toInternal<T>(record));
+                this.records.push(toInternal<T>(record, timestamp));
                 return true;
             }
             return false;
         }
-        this.records[index] = toInternal<T>(record);
+        this.records[index] = toInternal<T>(record, timestamp);
         return true;
     }
 

@@ -262,7 +262,7 @@ describe('SortIndex with string type', () => {
             name: 'kiwi' // Change name from 'banana' to 'kiwi'
         };
         
-        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(testRecords[2]));
+        await sortIndexAsc.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(testRecords[2], 1000));
         
         // Find records by the new name
         const result = await sortIndexAsc.findByValue('kiwi');
@@ -315,7 +315,7 @@ describe('SortIndex with string type', () => {
             title: 'Purple Grape'
         };
         
-        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord));
+        await sortIndexAsc.addRecord(toInternal<TestRecord>(newRecord, 1000));
         
         // Find the record by its name
         const result = await sortIndexAsc.findByValue('grape');

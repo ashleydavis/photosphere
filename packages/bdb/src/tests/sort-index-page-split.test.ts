@@ -71,8 +71,8 @@ describe('SortIndex Page Split', () => {
         };
         
         // Add records that will trigger page splits
-        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit1)); // Add score 25 (should go in middle)
-        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit2)); // Add score 15 (should go near beginning)
+        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit1, 1000)); // Add score 25 (should go in middle)
+        await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit2, 1000)); // Add score 15 (should go near beginning)
         
         // After adding these records, the tree file should still exist
         expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
@@ -136,7 +136,7 @@ describe('SortIndex Page Split', () => {
         
         // Add records that will cause multiple page splits
         for (const record of additionalRecords) {
-            await sortIndex.addRecord(toInternal<TestRecord>(record));
+            await sortIndex.addRecord(toInternal<TestRecord>(record, 1000));
         }
         
         // Now we should have multiple pages

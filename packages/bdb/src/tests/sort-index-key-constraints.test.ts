@@ -222,7 +222,7 @@ describe('SortIndex Key Constraints', () => {
             for (let i = 1; i <= 15; i++) {
                 const recordNum = (batch - 1) * 15 + i;
                 const record = createRecord(recordNum, recordNum);
-                await sortIndex.addRecord(toInternal<TestRecord>(record));
+                await sortIndex.addRecord(toInternal<TestRecord>(record, 1000));
             }
             
             // Verify constraints after each batch
@@ -308,7 +308,7 @@ describe('SortIndex Key Constraints', () => {
         
         // Delete every 4th record
         for (let i = 4; i <= 80; i += 4) {
-            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
+            await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1], 1000));
             
             // Check constraints after each deletion
             constraints = await verifyKeyConstraints(sortIndex, keySize);
@@ -345,18 +345,18 @@ describe('SortIndex Key Constraints', () => {
         for (let i = 1; i <= 20; i++) {
             // Add new records with odd values
             const newRecord = createRecord(100 + i, i * 2 - 1);
-            await sortIndex.addRecord(toInternal<TestRecord>(newRecord));
+            await sortIndex.addRecord(toInternal<TestRecord>(newRecord, 1000));
             
             // Update some existing records
             if (i <= 10) {
                 const updatedRecord = createRecord(i, i * 2 + 1000);
                 const oldRecord = records[i - 1];
-                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord), toInternal<TestRecord>(oldRecord));
+                await sortIndex.updateRecord(toInternal<TestRecord>(updatedRecord, 1000), toInternal<TestRecord>(oldRecord, 1000));
             }
             
             // Delete some records
             if (i <= 8) {
-                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1]));
+                await sortIndex.deleteRecord(`record-${(i + 20).toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1], 1000));
             }
             
             // Verify constraints after each set of operations
