@@ -8,7 +8,7 @@
 
 import React, { ReactNode, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { AuthContext, IAuthContext } from "user-interface";
+import { AuthContext, IAuthContext } from "../auth-context"
 
 export interface IAuth0ContextProviderProps {
     //
