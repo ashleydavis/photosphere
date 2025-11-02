@@ -9,18 +9,27 @@ export function AboutPage() {
                 <p className="pt-4">Photosphere is developed by <a target="_blank" href="https://codecapers.com.au/about">Ashley Davis</a>.</p>
 
                 <p className="pt-4">
-                    I'm primarily building Photopshere to manage the photos, videos and other digital assets for myself and my family, whilst being able
+                    Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). 
+                    I like to think of it as the spiritual successor to Picasa but with a UI more like modern Google Photos and backed 
+                    by a Git-style database for immutable binary assets like photos and videos that have editable metadata.
+                </p>
+
+                <p>
+                    I'm building Photopshere to search, edit and protect the photos, videos and other digital assets for myself and my family, whilst being able
                     to control the storage, encryption and privacy of those assets.
                 </p>
 
                 <p className="pt-4">
-                    This software is open source. The current version is highly experimental and not ready for general use, but in the future
-                    I do hope that other people will use this software to manage their own digital assets. If you think you might like to use Photosphere in the future, please send me an email on <a href="mailto:ashley@codecapers.com.au">ashley@codecapers.com.au</a>.
+                    This software is open source. The current version is ready for technical users to try out and give feedback.
+                    In 2026 I plan to finish the GUI apps (mobile and desktop) that will open Photosphere up to non-technical users.
+                    If you would like to use Photosphere in the future, please send me an email on <a href="mailto:ashley@codecapers.com.au">ashley@codecapers.com.au</a>.
                 </p>
 
                 <p className="pt-4">
                     The big concept of Photosphere is that you bring your own storage from one of the major cloud vendors,
-                    like Digital Ocean Spaces or AWS S3, and that's basically all you need. This software uses no traditional database, it reads metadata and assets directly from cloud storage.
+                    like Digital Ocean Spaces or AWS S3, and that's basically all you need. 
+                    This software uses no traditional database, it reads metadata and assets directly from cloud storage.
+                    Assets stored in the cloud can be encrypted to ensure they are kept safe no matter what happens.
                 </p>
  
                 <p className="text-xl pt-4">
