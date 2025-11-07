@@ -378,6 +378,12 @@ jobs:
           bun run build-linux
           chmod +x bin/x64/linux/mk
           
+      - name: Build bdb CLI executable
+        working-directory: ./apps/bdb-cli
+        run: |
+          bun run build-linux
+          chmod +x bin/x64/linux/bdb
+          
       - name: Test version command
         working-directory: ./apps/cli
         run: |
@@ -535,6 +541,11 @@ jobs:
           
       - name: Build mk CLI executable
         working-directory: ./apps/mk-cli
+        run: |
+          bun run build-win
+          
+      - name: Build bdb CLI executable
+        working-directory: ./apps/bdb-cli
         run: |
           bun run build-win
           
@@ -789,6 +800,12 @@ jobs:
           bun run build-mac-x64
           chmod +x bin/x64/mac/mk
           
+      - name: Build bdb CLI executable
+        working-directory: ./apps/bdb-cli
+        run: |
+          bun run build-mac-x64
+          chmod +x bin/x64/mac/bdb
+          
       - name: Test built version command
         working-directory: ./apps/cli
         run: |
@@ -955,6 +972,12 @@ jobs:
         run: |
           bun run build-mac-arm64
           chmod +x bin/arm64/mac/mk
+          
+      - name: Build bdb CLI executable
+        working-directory: ./apps/bdb-cli
+        run: |
+          bun run build-mac-arm64
+          chmod +x bin/arm64/mac/bdb
           
       - name: Test version command
         working-directory: ./apps/cli
