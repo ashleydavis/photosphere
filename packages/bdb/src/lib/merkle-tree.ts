@@ -203,8 +203,6 @@ export async function buildDatabaseMerkleTree(
     rebuild: boolean
 ): Promise<IMerkleTree<undefined>> {
 
-    console.log(`Building database merkle tree for database: ${databaseDir}`); //fio:
-
     const collections = await listCollections(storage, databaseDir);
     console.log(`Collections: ${collections.length}`); //fio:
     let databaseTree = createTree<undefined>(uuidGenerator.generate());
