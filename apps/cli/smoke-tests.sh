@@ -1161,6 +1161,25 @@ test_setup() {
     esac
     cd ../cli
     
+    log_info "Building bdb CLI executable for platform: $platform ($arch)"
+    cd ../bdb-cli
+    case "$platform" in
+        "linux")
+            invoke_command "Build bdb Linux executable" "bun run build-linux"
+            ;;
+        "mac")
+            if [ "$arch" = "arm64" ]; then
+                invoke_command "Build bdb macOS ARM64 executable" "bun run build-mac-arm64"
+            else
+                invoke_command "Build bdb macOS x64 executable" "bun run build-mac-x64"
+            fi
+            ;;
+        "win")
+            invoke_command "Build bdb Windows executable" "bun run build-win"
+            ;;
+    esac
+    cd ../cli
+    
     log_info "Building frontend for platform: $platform"
     invoke_command "Build frontend" "bun run build-fe-$platform" || {
         log_warning "Frontend build failed, continuing anyway..."
