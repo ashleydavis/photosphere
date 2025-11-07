@@ -2956,9 +2956,6 @@ test_sync_edit_field() {
     test_passed
 }
 
-
-
-
 # Reset function to clean up test artifacts
 reset_environment() {
     echo "======================================"
