@@ -321,29 +321,29 @@ check_merkle_tree_order() {
     fi
 }
 
-# Verify that both file and BSON database merkle tree root hashes match between original and replica
-verify_both_merkle_tree_hashes() {
+# Verify that aggregate root hashes match between original and replica
+verify_root_hashes_match() {
     local original_dir="$1"
     local replica_dir="$2"
     local description="${3:-databases}"
     
-    log_info "Verifying both merkle tree root hashes match for $description"
+    log_info "Verifying aggregate root hashes match for $description"
     
-    # Check files merkle tree (.db/tree.dat)
-    local original_files_hash_output
-    local replica_files_hash_output
-    invoke_command "Get original files merkle tree root hash" "$(get_mk_command) root-hash $original_dir/.db/tree.dat" 0 "original_files_hash_output"
-    invoke_command "Get replica files merkle tree root hash" "$(get_mk_command) root-hash $replica_dir/.db/tree.dat" 0 "replica_files_hash_output"
+    # Get aggregate root hash (includes both files and BSON database merkle trees)
+    local original_hash_output
+    local replica_hash_output
+    invoke_command "Get original aggregate root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get replica aggregate root hash" "$(get_cli_command) root-hash --db $replica_dir --yes" 0 "replica_hash_output"
     
-    local original_files_hash=$(echo "$original_files_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_files_hash=$(echo "$replica_files_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     
-    if [ "$original_files_hash" = "$replica_files_hash" ]; then
-        log_success "Files merkle tree root hashes match: $original_files_hash"
+    if [ "$original_hash" = "$replica_hash" ]; then
+        log_success "Aggregate root hashes match: $original_hash"
     else
-        log_error "Files merkle tree root hashes do not match"
-        log_error "Original files hash: $original_files_hash"
-        log_error "Replica files hash: $replica_files_hash"
+        log_error "Aggregate root hashes do not match"
+        log_error "Original hash: $original_hash"
+        log_error "Replica hash: $replica_hash"
         
         # Show merkle trees for debugging
         log_info "Showing merkle trees for original database:"
@@ -354,43 +354,6 @@ verify_both_merkle_tree_hashes() {
         
         exit 1
     fi
-    
-    # Check BSON database merkle tree (metadata/db.dat) if it exists
-    if [ -f "$original_dir/metadata/db.dat" ] && [ -f "$replica_dir/metadata/db.dat" ]; then
-        local original_db_hash_output
-        local replica_db_hash_output
-        invoke_command "Get original BSON database merkle tree root hash" "$(get_mk_command) root-hash $original_dir/metadata/db.dat" 0 "original_db_hash_output"
-        invoke_command "Get replica BSON database merkle tree root hash" "$(get_mk_command) root-hash $replica_dir/metadata/db.dat" 0 "replica_db_hash_output"
-        
-        local original_db_hash=$(echo "$original_db_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        local replica_db_hash=$(echo "$replica_db_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        
-        if [ "$original_db_hash" = "$replica_db_hash" ]; then
-            log_success "BSON database merkle tree root hashes match: $original_db_hash"
-        else
-            log_error "BSON database merkle tree root hashes do not match"
-            log_error "Original database hash: $original_db_hash"
-            log_error "Replica database hash: $replica_db_hash"
-            
-            # Show merkle trees for debugging
-            log_info "Showing merkle trees for original database:"
-            $(get_cli_command) debug merkle-tree --db "$original_dir" --yes --records
-            
-            log_info "Showing merkle trees for replica database:"
-            $(get_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
-            
-            exit 1
-        fi
-    elif [ -f "$original_dir/metadata/db.dat" ] || [ -f "$replica_dir/metadata/db.dat" ]; then
-        # One exists but not the other - this is an error
-        log_error "BSON database merkle tree exists in one database but not the other"
-        log_error "Original has db.dat: $([ -f "$original_dir/metadata/db.dat" ] && echo "yes" || echo "no")"
-        log_error "Replica has db.dat: $([ -f "$replica_dir/metadata/db.dat" ] && echo "yes" || echo "no")"
-        exit 1
-    else
-        # Neither exists - this is fine (database might not have BSON collections yet)
-        log_info "BSON database merkle tree not present in either database (database may not have BSON collections yet)"
-    fi
 }
 
 # Test counting functions - only increment once per test function
@@ -400,7 +363,7 @@ test_passed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
-        if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db/tree.dat" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
         else
             TEST_RESULTS+=("PASS:hash_failed")
@@ -419,7 +382,7 @@ test_failed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
         local hash_output
-        if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db/tree.dat" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("FAIL:$test_name:$hash_output")
         else
             TEST_RESULTS+=("FAIL:$test_name:hash_failed")
@@ -481,7 +444,7 @@ EOF
         # Get root hash
         echo "ROOT HASH:" >> "$report_file"
         echo "----------" >> "$report_file"
-        $(get_mk_command) root-hash "$TEST_DB_DIR/.db/tree.dat" 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
+        $(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
         echo "" >> "$report_file"
         
         # Get merkle tree
@@ -644,7 +607,7 @@ write_github_step_summary() {
                 echo ""
                 echo "**Final database hash:**"
                 echo "\`\`\`"
-                if hash_output=$($(get_mk_command) root-hash "$TEST_DB_DIR/.db/tree.dat" 2>/dev/null); then
+                if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null); then
                     echo "$hash_output"
                 else
                     echo "Failed to get database hash"
@@ -981,7 +944,7 @@ invoke_command() {
                 # Check if database exists and print root hash
                 if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
                     echo ""
-                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_mk_command) root-hash "$db_path/.db/tree.dat" 2>/dev/null || echo "N/A")"
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
                     echo ""
                     # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
                     # $(get_mk_command) show "$db_path/.db/tree.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
@@ -1774,8 +1737,8 @@ test_database_replicate() {
     check_exists "$replica_dir/.db" "Replica metadata directory"
     check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
     
-    # Verify original and replica have the same root hash for both merkle trees
-    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica"
+    # Verify original and replica have the same aggregate root hash
+    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica"
     
     # Check merkle tree order for both original and replica
     check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
@@ -1844,9 +1807,9 @@ test_database_replicate_second() {
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
     expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"
     
-    # Verify original and replica still have the same root hash for both merkle trees after second replication
+    # Verify original and replica still have the same aggregate root hash after second replication
     log_info "Verifying original and replica still have the same root hash after second replication"
-    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica after second replication"
+    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after second replication"
     
     # Check merkle tree order for replica
     check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
@@ -1930,9 +1893,9 @@ test_replicate_after_changes() {
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
     
-    # Verify original and replica have the same root hash for both merkle trees after replication
+    # Verify original and replica have the same aggregate root hash after replication
     log_info "Verifying original and replica have the same root hash after replication"
-    verify_both_merkle_tree_hashes "$TEST_DB_DIR" "$replica_dir" "original and replica after replication"
+    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after replication"
     
     # Check merkle tree order for replica
     check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
