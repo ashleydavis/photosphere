@@ -23,7 +23,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true, true);
+    const { database } = await loadDatabase(options.db, options, true);
 
     writeProgress(options.path 
         ? `🔍 Verifying files matching: ${options.path}` 

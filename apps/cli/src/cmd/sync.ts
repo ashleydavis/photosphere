@@ -27,9 +27,9 @@ export async function syncCommand(options: ISyncCommandOptions): Promise<void> {
     log.info(`  Target:    ${pc.cyan(options.dest)}`);
     log.info("");
 
-    const { database: sourceDb } = await loadDatabase(options.db, options, false, false);
+    const { database: sourceDb } = await loadDatabase(options.db, options, false);
     const targetOptions = { ...options, db: options.dest };
-    const { database: targetDb } = await loadDatabase(targetOptions.db, targetOptions, false, false);
+    const { database: targetDb } = await loadDatabase(targetOptions.db, targetOptions, false);
     await syncDatabases(sourceDb, targetDb);
         
     log.info("Sync completed successfully!");       

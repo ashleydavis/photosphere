@@ -14,7 +14,7 @@ export async function removeCommand(assetId: string, options: IRemoveCommandOpti
     const dbPath = options.db || process.cwd();
 
     // Load the database using shared function
-    const { database } = await loadDatabase(dbPath, options, false, false);
+    const { database } = await loadDatabase(dbPath, options, false);
 
     // Remove the asset using the comprehensive removal method
     await database.remove(assetId);

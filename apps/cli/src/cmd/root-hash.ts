@@ -9,7 +9,7 @@ export interface IRootHashCommandOptions extends IBaseCommandOptions {
 //
 export async function rootHashCommand(options: IRootHashCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true, true);
+    const { database } = await loadDatabase(options.db, options, true);
     
     const hashes = await database.getDatabaseHashes();
     

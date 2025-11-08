@@ -33,7 +33,7 @@ export async function repairCommand(options: IRepairCommandOptions): Promise<voi
         await exit(1);
     }
     
-    const { database, databaseDir: targetDir } = await loadDatabase(options.db, options, false, false);
+    const { database, databaseDir: targetDir } = await loadDatabase(options.db, options, false);
     
     log.info('');
     log.info(`Repairing database:`);

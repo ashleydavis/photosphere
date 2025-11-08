@@ -21,7 +21,7 @@ export async function exportCommand(assetId: string, outputPath: string, options
     const assetType = options.type || "original";
     const dbPath = options.db || process.cwd();
 
-    const { database, assetStorage } = await loadDatabase(dbPath, options, false, true);
+    const { database, assetStorage } = await loadDatabase(dbPath, options, false);
 
     const metadataDatabase = database.getMetadataDatabase();
     const metadataCollection = metadataDatabase.collection("metadata");
