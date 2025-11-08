@@ -146,7 +146,7 @@ export function findMerkleTreeDifferences(
         };
     }
 
-    const onlyInTree1 = findDifferingNodes(tree1, tree2);    
+    const onlyInTree1 = findDifferingNodes(tree1, tree2);  //todo: This could be done in a single pass.
     const onlyInTree2 = findDifferingNodes(tree2, tree1);    
     return {
         identical: false,
