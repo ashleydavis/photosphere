@@ -72,16 +72,6 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         
         log.info(`Upgrading database from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}...`);
 
-        //fio:
-        // await performDatabaseUpgrade(database, database.getMetadataStorage()); //todo: could just inline this?
-
-
-        //fio:
-        // const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
-        // if (!merkleTree) {
-        //     throw new Error(`Failed to load merkle tree`);
-        // }
-
         const assetStorage = database.getAssetStorage();
 
         // Fill in missing lastModified from file info using async binary tree traversal.
