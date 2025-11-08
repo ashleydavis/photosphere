@@ -3,7 +3,7 @@ import { addItem, deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTre
 import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
 import { IDatabaseMetadata, MediaFileDatabase } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
-import { loadMerkleTree, loadOrCreateMerkleTree, saveMerkleTree } from "./tree";
+import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { retry, log } from "utils";
 import { computeHash } from "./hash";
 
@@ -83,7 +83,10 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         throw new Error("Failed to load source merkle tree.");
     }
 
-    let targetMerkleTree = await retry(() => loadOrCreateMerkleTree(targetDb.getMetadataStorage(), targetDb.uuidGenerator));
+    let targetMerkleTree = await retry(() => loadMerkleTree(targetDb.getMetadataStorage()));
+    if (!targetMerkleTree) {
+        throw new Error("Failed to load target merkle tree.");
+    }
    
     // Get deleted asset IDs from source and target
     const sourceDeletedIds = new Set(sourceMerkleTree.databaseMetadata?.deletedAssetIds || []);
@@ -140,7 +143,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         }
         
         // Add file to target merkle tree.
-        targetMerkleTree = addItem(targetMerkleTree, {
+        targetMerkleTree = addItem(targetMerkleTree!, {
             name: fileName,
             hash: copiedFileHash,
             length: copiedFileInfo.length,
@@ -167,7 +170,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         
         // Save target merkle tree every 100 files.
         if (filesCopied % 100 === 0) {
-            await retry(() => saveMerkleTree(targetMerkleTree, targetDb.getMetadataStorage()))
+            await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()))
         }
         
         return true;
@@ -225,7 +228,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree, targetDb.getMetadataStorage()))
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()))
     
     log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target out of ${filesProcessed} processed, ${filesExisting} files existing`);
 }

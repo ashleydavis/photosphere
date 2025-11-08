@@ -23,6 +23,7 @@ import { removeCommand } from './cmd/remove';
 import { clearCacheCommand } from './cmd/clear-cache';
 import { hashCommand } from './cmd/hash';
 import { rootHashCommand } from './cmd/root-hash';
+import { databaseIdCommand } from './cmd/database-id';
 import { syncCommand } from './cmd/sync';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
@@ -289,6 +290,16 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(rootHashCommand);
+
+    program
+        .command("database-id")
+        .description("Displays the database ID (UUID) of the database.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(databaseIdCommand);
 
     program
         .command("replicate")
