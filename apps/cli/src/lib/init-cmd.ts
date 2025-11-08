@@ -255,16 +255,7 @@ export interface IInitResult {
 }
 
 //
-// Shared database loading function for CLI commands
-// This handles all the common setup that most commands need:
-// - Configure logging
-// - Ensure media processing tools
-// - Get/validate database directory
-// - Configure S3 if needed
-// - Load encryption keys
-// - Create storage instances
-// - Create and load database
-// - Register termination callback
+// Shared database loading function for CLI commands.
 //
 export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean): Promise<IInitResult> { //todo: Move into api.
 
