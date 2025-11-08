@@ -1393,30 +1393,20 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
 export function deleteItem<DatabaseMetadata>(
     merkleTree: IMerkleTree<DatabaseMetadata>, 
     name: string
-): boolean {
-    if (!merkleTree || !merkleTree.sort) {
-        return false;
-    }
-    
-    // Remove the node from the tree
-    const newRoot = _deleteNode(merkleTree.sort, name);
-    if (!newRoot) {
-        return false; // Node not found
-    }
-    
-    // Update the tree
-    merkleTree.sort = newRoot;
-
+): void {
+    merkleTree.sort = _deleteNode(merkleTree.sort, name);
     merkleTree.dirty = true; // Mark the tree as dirty so it will be rebuilt later.
-
-    return true;
 }
 
 /**
  * Internal function to delete a node from the tree and return the new root
  * This handles the complex logic of removing a node while maintaining tree structure
  */
-function _deleteNode(node: SortNode, name: string): SortNode | undefined {
+function _deleteNode(node: SortNode | undefined, name: string): SortNode | undefined {
+    if (!node) {
+        return undefined;
+    }
+
     // If this is a leaf node, check if it's the target
     if (node.nodeCount === 1) {
         if (node.name === name) {

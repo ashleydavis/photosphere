@@ -68,6 +68,9 @@ declare -a TEST_TABLE=(
     "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
     "sync-edit-field:test_sync_edit_field:Test sync after editing field with bdb-cli"
     "sync-edit-field-reverse:test_sync_edit_field_reverse:Test sync after editing field in copy database with bdb-cli"
+    "sync-delete-asset:test_sync_delete_asset:Test sync after deleting asset (both ways)"
+    "sync-delete-asset-reverse:test_sync_delete_asset_reverse:Test sync after deleting asset from copy (reverse)"
+    "replicate-deleted-asset:test_replicate_with_deleted_asset:Test replicate database with deleted asset"
 )
 
 # Test table helper functions
@@ -3134,6 +3137,400 @@ test_sync_edit_field_reverse() {
     rm -rf "$original_dir"
     rm -rf "$copy_dir"
     log_success "Cleaned up temporary sync edit reverse test databases"
+    test_passed
+}
+
+test_sync_delete_asset() {
+    local test_number="$1"
+    print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET AND SYNC BOTH WAYS"
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local original_dir="./test/tmp/test-sync-delete-original"
+    local copy_dir="./test/tmp/test-sync-delete-copy"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Original database path: $original_dir"
+    log_info "Copy database path: $copy_dir"
+    
+    # Check that v4 database exists
+    check_exists "$v4_db_dir" "V4 test database directory"
+    
+    # Create the original database from v4
+    log_info "Creating original database from v4 to $original_dir"
+    rm -rf "$original_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
+    cp -r "$v4_db_dir" "$original_dir"
+    
+    # Create the copy database using replicate command
+    log_info "Creating copy database using replicate command to $copy_dir"
+    rm -rf "$copy_dir"
+    local replicate_output
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    
+    # Verify both databases exist
+    check_exists "$original_dir" "Original database directory"
+    check_exists "$copy_dir" "Copy database directory"
+    
+    # Get root hashes and verify they are the same
+    log_info "Verifying original and copy have the same root hash"
+    local original_hash_output
+    local copy_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$copy_hash" ]; then
+        log_success "Original and copy databases have the same root hash: $original_hash"
+    else
+        log_error "Original and copy databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Copy hash: $copy_hash"
+        exit 1
+    fi
+    
+    # Hardcoded asset ID from v4 database
+    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
+    log_info "Using asset ID for deletion test: $test_asset_id"
+    
+    # Delete the asset from the original database
+    log_info "Deleting asset '$test_asset_id' from original database"
+    local remove_output
+    invoke_command "Remove asset from original database" "$(get_cli_command) remove --db $original_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    
+    # Check that removal was successful
+    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
+    
+    # Get root hashes and verify they are now different
+    log_info "Verifying original and copy now have different root hashes after deletion"
+    invoke_command "Get original database root hash after deletion" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    # Verify the original database root hash changed after deletion
+    if [ "$original_hash" != "$original_hash_after" ]; then
+        log_success "Original database root hash changed after deletion"
+        log_info "Original hash before deletion: $original_hash"
+        log_info "Original hash after deletion: $original_hash_after"
+    else
+        log_error "Original database root hash should have changed after deletion but it did not"
+        log_error "Hash before deletion: $original_hash"
+        log_error "Hash after deletion: $original_hash_after"
+        exit 1
+    fi
+    
+    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
+        log_success "Original and copy databases have different root hashes after deletion"
+        log_info "Original hash: $original_hash_after"
+        log_info "Copy hash: $copy_hash_before_sync"
+    else
+        log_error "Original and copy databases should have different root hashes but they are the same"
+        exit 1
+    fi
+    
+    # Verify the asset still exists in the copy database
+    log_info "Verifying asset still exists in copy database"
+    local copy_asset_file="$copy_dir/asset/$test_asset_id"
+    if [ ! -f "$copy_asset_file" ]; then
+        log_error "Asset file should still exist in copy database but it doesn't: $copy_asset_file"
+        exit 1
+    else
+        log_success "Asset file still exists in copy database (as expected)"
+    fi
+    
+    # Sync from original to copy (should delete the asset in copy)
+    log_info "Syncing from original to copy (should delete asset in copy)"
+    local sync_output
+    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    
+    # Verify sync completed
+    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
+    
+    # Verify the asset has been deleted from the copy database
+    log_info "Verifying asset has been deleted from copy database after sync"
+    if [ -f "$copy_asset_file" ]; then
+        log_error "Asset file should have been deleted from copy database but it still exists: $copy_asset_file"
+        exit 1
+    else
+        log_success "Asset file has been deleted from copy database"
+    fi
+    
+    # Get root hashes and verify they are now the same again (sync is bidirectional)
+    log_info "Verifying original and copy have the same root hash after bidirectional sync"
+    invoke_command "Get original database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_final" = "$copy_hash_final" ]; then
+        log_success "Original and copy databases have the same root hash after bidirectional sync: $original_hash_final"
+    else
+        log_error "Original and copy databases have different root hashes after bidirectional sync"
+        log_error "Original hash: $original_hash_final"
+        log_error "Copy hash: $copy_hash_final"
+        exit 1
+    fi
+    
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync delete original database"
+    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync delete copy database"
+    
+    # Clean up temporary databases
+    rm -rf "$original_dir"
+    rm -rf "$copy_dir"
+    log_success "Cleaned up temporary sync delete test databases"
+    test_passed
+}
+
+test_sync_delete_asset_reverse() {
+    local test_number="$1"
+    print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET FROM COPY AND SYNC (REVERSE)"
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local original_dir="./test/tmp/test-sync-delete-reverse-original"
+    local copy_dir="./test/tmp/test-sync-delete-reverse-copy"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Original database path: $original_dir"
+    log_info "Copy database path: $copy_dir"
+    
+    # Check that v4 database exists
+    check_exists "$v4_db_dir" "V4 test database directory"
+    
+    # Create the original database from v4
+    log_info "Creating original database from v4 to $original_dir"
+    rm -rf "$original_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
+    cp -r "$v4_db_dir" "$original_dir"
+    
+    # Create the copy database using replicate command
+    log_info "Creating copy database using replicate command to $copy_dir"
+    rm -rf "$copy_dir"
+    local replicate_output
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    
+    # Verify both databases exist
+    check_exists "$original_dir" "Original database directory"
+    check_exists "$copy_dir" "Copy database directory"
+    
+    # Get root hashes and verify they are the same
+    log_info "Verifying original and copy have the same root hash"
+    local original_hash_output
+    local copy_hash_output
+    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash" = "$copy_hash" ]; then
+        log_success "Original and copy databases have the same root hash: $original_hash"
+    else
+        log_error "Original and copy databases have different root hashes after replication"
+        log_error "Original hash: $original_hash"
+        log_error "Copy hash: $copy_hash"
+        exit 1
+    fi
+    
+    # Hardcoded asset ID from v4 database
+    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
+    log_info "Using asset ID for deletion test: $test_asset_id"
+    
+    # Delete the asset from the copy database (reverse of test 36)
+    log_info "Deleting asset '$test_asset_id' from copy database"
+    local remove_output
+    invoke_command "Remove asset from copy database" "$(get_cli_command) remove --db $copy_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    
+    # Check that removal was successful
+    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
+    
+    # Get root hashes and verify they are now different
+    log_info "Verifying original and copy now have different root hashes after deletion"
+    invoke_command "Get copy database root hash after deletion" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    invoke_command "Get original database root hash (unchanged)" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    
+    local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    # Verify the copy database root hash changed after deletion
+    if [ "$copy_hash" != "$copy_hash_after" ]; then
+        log_success "Copy database root hash changed after deletion"
+        log_info "Copy hash before deletion: $copy_hash"
+        log_info "Copy hash after deletion: $copy_hash_after"
+    else
+        log_error "Copy database root hash should have changed after deletion but it did not"
+        log_error "Hash before deletion: $copy_hash"
+        log_error "Hash after deletion: $copy_hash_after"
+        exit 1
+    fi
+    
+    if [ "$copy_hash_after" != "$original_hash_before_sync" ]; then
+        log_success "Original and copy databases have different root hashes after deletion"
+        log_info "Copy hash: $copy_hash_after"
+        log_info "Original hash: $original_hash_before_sync"
+    else
+        log_error "Original and copy databases should have different root hashes but they are the same"
+        exit 1
+    fi
+    
+    # Verify the asset still exists in the original database
+    log_info "Verifying asset still exists in original database"
+    local original_asset_file="$original_dir/asset/$test_asset_id"
+    if [ ! -f "$original_asset_file" ]; then
+        log_error "Asset file should still exist in original database but it doesn't: $original_asset_file"
+        exit 1
+    else
+        log_success "Asset file still exists in original database (as expected)"
+    fi
+    
+    # Sync from copy to original (should delete the asset in original)
+    log_info "Syncing from copy to original (should delete asset in original)"
+    local sync_output
+    invoke_command "Sync copy to original" "$(get_cli_command) sync --db $copy_dir --dest $original_dir --yes" 0 "sync_output"
+    
+    # Verify sync completed
+    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
+    
+    # Verify the asset has been deleted from the original database
+    log_info "Verifying asset has been deleted from original database after sync"
+    if [ -f "$original_asset_file" ]; then
+        log_error "Asset file should have been deleted from original database but it still exists: $original_asset_file"
+        exit 1
+    else
+        log_success "Asset file has been deleted from original database"
+    fi
+    
+    # Get root hashes and verify they are now the same again (sync is bidirectional)
+    log_info "Verifying original and copy have the same root hash after bidirectional sync"
+    invoke_command "Get original database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    
+    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$original_hash_final" = "$copy_hash_final" ]; then
+        log_success "Original and copy databases have the same root hash after bidirectional sync: $original_hash_final"
+    else
+        log_error "Original and copy databases have different root hashes after bidirectional sync"
+        log_error "Original hash: $original_hash_final"
+        log_error "Copy hash: $copy_hash_final"
+        exit 1
+    fi
+    
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync delete reverse original database"
+    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync delete reverse copy database"
+    
+    # Clean up temporary databases
+    rm -rf "$original_dir"
+    rm -rf "$copy_dir"
+    log_success "Cleaned up temporary sync delete reverse test databases"
+    test_passed
+}
+
+test_replicate_with_deleted_asset() {
+    local test_number="$1"
+    print_test_header "$test_number" "REPLICATE DATABASE WITH DELETED ASSET"
+    
+    # Use the existing v4 database as base
+    local v4_db_dir="../../test/dbs/v4"
+    local source_dir="./test/tmp/test-replicate-deleted-source"
+    local replica_dir="./test/tmp/test-replicate-deleted-replica"
+    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $source_dir"
+    log_info "Replica database path: $replica_dir"
+    
+    # Check that v4 database exists
+    check_exists "$v4_db_dir" "V4 test database directory"
+    
+    # Create the source database from v4
+    log_info "Creating source database from v4 to $source_dir"
+    rm -rf "$source_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$source_dir\""
+    cp -r "$v4_db_dir" "$source_dir"
+    
+    # Verify source database exists
+    check_exists "$source_dir" "Source database directory"
+    
+    # Hardcoded asset ID from v4 database
+    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
+    log_info "Using asset ID for deletion test: $test_asset_id"
+    
+    # Delete the asset from the source database
+    log_info "Deleting asset '$test_asset_id' from source database"
+    local remove_output
+    invoke_command "Remove asset from source database" "$(get_cli_command) remove --db $source_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    
+    # Check that removal was successful
+    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
+    
+    # Verify the asset files no longer exist in source storage
+    local source_asset_file="$source_dir/asset/$test_asset_id"
+    local source_display_file="$source_dir/display/$test_asset_id"
+    local source_thumb_file="$source_dir/thumb/$test_asset_id"
+    
+    if [ -f "$source_asset_file" ] || [ -f "$source_display_file" ] || [ -f "$source_thumb_file" ]; then
+        log_error "Asset files should have been deleted from source database"
+        exit 1
+    else
+        log_success "Asset files have been deleted from source database"
+    fi
+    
+    # Replicate the database with the deleted asset
+    log_info "Replicating database with deleted asset to $replica_dir"
+    rm -rf "$replica_dir"
+    local replicate_output
+    invoke_command "Replicate database with deleted asset" "$(get_cli_command) replicate --db $source_dir --dest $replica_dir --yes" 0 "replicate_output"
+    
+    # Verify replica database exists
+    check_exists "$replica_dir" "Replica database directory"
+    
+    # Verify the asset files do not exist in replica storage
+    log_info "Verifying asset files do not exist in replica database"
+    local replica_asset_file="$replica_dir/asset/$test_asset_id"
+    local replica_display_file="$replica_dir/display/$test_asset_id"
+    local replica_thumb_file="$replica_dir/thumb/$test_asset_id"
+    
+    if [ -f "$replica_asset_file" ] || [ -f "$replica_display_file" ] || [ -f "$replica_thumb_file" ]; then
+        log_error "Asset files should not exist in replica database (asset was deleted in source)"
+        exit 1
+    else
+        log_success "Asset files do not exist in replica database (as expected)"
+    fi
+    
+    # Verify original and replica have the same aggregate root hash
+    log_info "Verifying original and replica have the same root hash after replication"
+    verify_root_hashes_match "$source_dir" "$replica_dir" "source and replica after replication"
+    
+    # Compare databases to verify they are identical
+    log_info "Comparing databases to verify they are identical"
+    local compare_output
+    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $source_dir --dest $replica_dir --yes" 0 "compare_output"
+    
+    # Check that comparison shows no differences
+    expect_output_string "$compare_output" "No differences detected" "No differences detected after replication"
+    
+    # Verify both databases pass integrity check
+    local verify_source_output
+    local verify_replica_output
+    invoke_command "Verify source database after replication" "$(get_cli_command) verify --db $source_dir --yes" 0 "verify_source_output"
+    invoke_command "Verify replica database after replication" "$(get_cli_command) verify --db $replica_dir --yes" 0 "verify_replica_output"
+    
+    expect_output_string "$verify_source_output" "Database verification passed" "Source database passes verification"
+    expect_output_string "$verify_replica_output" "Database verification passed" "Replica database passes verification"
+    
+    # Check merkle tree order for both databases
+    check_merkle_tree_order "$source_dir/.db/tree.dat" "replicate deleted source database"
+    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replicate deleted replica database"
+    
+    # Clean up temporary databases
+    rm -rf "$source_dir"
+    rm -rf "$replica_dir"
+    log_success "Cleaned up temporary replicate deleted test databases"
     test_passed
 }
 

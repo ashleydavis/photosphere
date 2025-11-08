@@ -21,8 +21,11 @@ import {
     loadDatabaseMerkleTree,
     saveDatabaseMerkleTree,
     hashRecord,
+    deleteCollectionMerkleTree,
+    deleteDatabaseMerkleTree,
+    deleteShardMerkleTree,
 } from './merkle-tree';
-import { addItem, deleteItem, upsertItem, buildMerkleTree, IMerkleTree } from 'merkle-tree';
+import { deleteItem, upsertItem, IMerkleTree } from 'merkle-tree';
 import * as crypto from 'crypto';
 import path from 'path';
 
@@ -445,61 +448,81 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Updates the shard merkle tree by deleting a record hash.
     //
     private async deleteRecordFromShardTree(shardId: string, recordId: string, shard: IShard): Promise<void> {
+
         let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
         if (!shardTree) {
-            // Tree doesn't exist, but if shard still has records, rebuild it
+            // Tree doesn't exist, but if shard still has records, build it.
             const records = Array.from(shard.records.values());
-            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+            if (records.length > 0) {
+                // Only bother building it if we have more than one record.
+                shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+            }
         }
-        else {
-            // Delete the record hash from the tree
+
+        if (shardTree && shardTree.sort) {
+            // Delete the record hash from the tree.
             deleteItem(shardTree, recordId);
         }
+
+        if (!shardTree || !shardTree.sort) {
+            // Shard tree is empty, delete it.
+            shardTree = undefined;
+            await deleteShardMerkleTree(this.storage, this.directory, shardId);
+        }
+        else {
+            await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);
+        }
         
-        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);
         await this.updateCollectionTree(shardId, shardTree);
     }
 
     //
     // Updates the collection merkle tree with the updated shard hash.
     //
-    private async updateCollectionTree(shardId: string, shardTree: IMerkleTree<undefined>): Promise<void> {
+    private async updateCollectionTree(shardId: string, shardTree: IMerkleTree<undefined> | undefined): Promise<void> {
         
         let collectionTree = await loadCollectionMerkleTree(this.storage, this.directory);        
         if (!collectionTree) {
             // Collection tree doesn't exist, build it.
             collectionTree = await buildCollectionMerkleTree(this.storage, this.name, this.directory, this.uuidGenerator, false);
         }
+
+        if (shardTree && shardTree.merkle) {
+            // Update the shard hash in the collection tree.
+            const hashedItem = {
+                name: shardId.toString(),
+                hash: shardTree.merkle.hash,
+                length: shardTree.merkle.nodeCount,
+                lastModified: new Date(),
+            };
+            
+            collectionTree = upsertItem(collectionTree, hashedItem);
+        } 
         else {
-            if (shardTree.merkle) {
-                // Update the shard hash in the collection tree.
-                const hashedItem = {
-                    name: shardId.toString(),
-                    hash: shardTree.merkle.hash,
-                    length: shardTree.merkle.nodeCount,
-                    lastModified: new Date(),
-                };
-                
-                collectionTree = upsertItem(collectionTree, hashedItem);
-            } 
-            else {
-                // Shard tree is empty or missing, remove shard from collection tree
-                deleteItem(collectionTree, shardId.toString());
-            }
+            // Shard tree is empty or missing, remove shard from collection tree.
+            deleteItem(collectionTree, shardId.toString());
+        }
+
+        if (!collectionTree.sort) {
+            // Collection tree is empty, delete it.
+            collectionTree = undefined;
+            await deleteCollectionMerkleTree(this.storage, this.directory);
+        }        
+        else {
+            await saveCollectionMerkleTree(this.storage, this.directory, collectionTree);
         }
         
-        await saveCollectionMerkleTree(this.storage, this.directory, collectionTree);
         await this.updateDatabaseTree(collectionTree);
     }
 
     //
     // Updates the database merkle tree with the updated collection hash.
     //
-    private async updateDatabaseTree(collectionTree: IMerkleTree<undefined>): Promise<void> {
-        let databaseTree = await loadDatabaseMerkleTree(this.storage);
+    private async updateDatabaseTree(collectionTree: IMerkleTree<undefined> | undefined): Promise<void> {
         
+        let databaseTree = await loadDatabaseMerkleTree(this.storage);        
         if (!databaseTree) {
-            // Database tree doesn't exist, rebuild it from all collections
+            // Database tree doesn't exist, rebuild it from all collections.
             databaseTree = await buildDatabaseMerkleTree(
                 this.storage,
                 this.uuidGenerator,
@@ -509,24 +532,29 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
                 false
             );            
         }
-        else {
-            // Update the collection hash in the database tree.
-            if (collectionTree.merkle) {
-                const hashedItem = {
-                    name: this.name,
-                    hash: collectionTree.merkle.hash,
-                    length: collectionTree.merkle.nodeCount,
-                    lastModified: new Date(),
-                };
-                databaseTree = upsertItem(databaseTree, hashedItem);
-            } 
-            else {
-                // Collection tree is empty or missing, remove collection from database tree.
-                deleteItem(databaseTree, this.name);
-            }
-        }         
 
-        await saveDatabaseMerkleTree(this.storage, databaseTree);
+        // Update the collection hash in the database tree.
+        if (collectionTree && collectionTree.merkle) {
+            const hashedItem = {
+                name: this.name,
+                hash: collectionTree.merkle.hash,
+                length: collectionTree.merkle.nodeCount,
+                lastModified: new Date(),
+            };
+            databaseTree = upsertItem(databaseTree, hashedItem);
+        } 
+        else {
+            // Collection tree is empty or missing, remove collection from database tree.
+            deleteItem(databaseTree, this.name);
+        }
+
+        if (!databaseTree.sort) {
+            // Database tree is empty, delete it.
+            await deleteDatabaseMerkleTree(this.storage);
+        }
+        else {
+            await saveDatabaseMerkleTree(this.storage, databaseTree);
+        }
     }
 
     //

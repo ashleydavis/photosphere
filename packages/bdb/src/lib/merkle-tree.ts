@@ -64,6 +64,15 @@ export async function saveShardMerkleTree(storage: IStorage, collectionDirectory
 }
 
 //
+// Deletes a shard merkle tree file.
+//
+export async function deleteShardMerkleTree(storage: IStorage, collectionDirectory: string, shardId: string): Promise<void> {
+    const shardFilePath = `${collectionDirectory}/${shardId}`;
+    const treeFilePath = `${shardFilePath}.dat`;
+    await storage.deleteFile(treeFilePath);
+}
+
+//
 // Loads a shard merkle tree.
 //
 export async function loadShardMerkleTree(storage: IStorage, collectionDirectory: string, shardId: string): Promise<IMerkleTree<undefined> | undefined> {
@@ -119,8 +128,11 @@ export async function buildCollectionMerkleTree(
         const records: IInternalRecord[] = await collection.loadRecords(`${collectionDirectory}/${shardId}`);
         let shardTree: IMerkleTree<undefined> | undefined;
 
-        if (rebuild) {
-            // Rebuild the shard tree.
+        if (records.length === 0) {
+            // If the shard is empty, delete the tree file instead of saving it
+            await deleteShardMerkleTree(storage, collectionDirectory, shardId);
+        }
+        else if (rebuild) {
             shardTree = await buildShardMerkleTree(records, uuidGenerator);
             await saveShardMerkleTree(storage, collectionDirectory, shardId, shardTree);
         }
@@ -171,6 +183,14 @@ export async function loadCollectionMerkleTree(storage: IStorage, collectionDire
 }
 
 //
+// Deletes a collection merkle tree file.
+//
+export async function deleteCollectionMerkleTree(storage: IStorage, collectionDirectory: string): Promise<void> {
+    const treeFilePath = `${collectionDirectory}/collection.dat`;
+    await storage.deleteFile(treeFilePath);
+}
+
+//
 // Lists all collections in the database.
 //
 async function listCollections(storage: IStorage, databaseDir: string): Promise<string[]> {
@@ -204,7 +224,7 @@ export async function buildDatabaseMerkleTree(
 ): Promise<IMerkleTree<undefined>> {
 
     const collections = await listCollections(storage, databaseDir);
-    console.log(`Collections: ${collections.length}`); //fio:
+
     let databaseTree = createTree<undefined>(uuidGenerator.generate());
 
     for (const collectionName of collections) {
@@ -216,7 +236,14 @@ export async function buildDatabaseMerkleTree(
         else if (rebuild) {
             // Rebuild the collection tree.
             collectionTree = await buildCollectionMerkleTree(storage, collectionName, `${databaseDir}/${collectionName}`, uuidGenerator, rebuild);
-            await saveCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`, collectionTree);
+            if (!collectionTree.sort) {
+                // Collection tree is empty, delete it.
+                collectionTree = undefined;
+                await deleteCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`);
+            }
+            else {
+                await saveCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`, collectionTree);                
+            }
         }
         else {
             // Load the collection tree.
@@ -224,10 +251,17 @@ export async function buildDatabaseMerkleTree(
             if (!collectionTree) {
                 // Collection tree doesn't exist, build it.
                 collectionTree = await buildCollectionMerkleTree(storage, collectionName, `${databaseDir}/${collectionName}`, uuidGenerator, rebuild);
-                await saveCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`, collectionTree);
+                if (!collectionTree.sort) {
+                    // Collection tree is empty, delete it.
+                    collectionTree = undefined;
+                    await deleteCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`);
+                }
+                else {
+                    await saveCollectionMerkleTree(storage, `${databaseDir}/${collectionName}`, collectionTree);
+                }
             }
         }
-        
+  
         if (collectionTree && collectionTree.merkle) {
             const hashedItem: HashedItem = {
                 name: collectionName,
@@ -262,6 +296,14 @@ export async function saveDatabaseMerkleTree(storage: IStorage, tree: IMerkleTre
 export async function loadDatabaseMerkleTree(storage: IStorage): Promise<IMerkleTree<undefined> | undefined> {
     const treeFilePath = "db.dat";
     return await loadTree<undefined>(treeFilePath, storage);
+}
+
+//
+// Deletes a database merkle tree file.
+//
+export async function deleteDatabaseMerkleTree(storage: IStorage): Promise<void> {
+    const treeFilePath = "db.dat";
+    await storage.deleteFile(treeFilePath);
 }
 
 //

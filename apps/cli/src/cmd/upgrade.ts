@@ -3,9 +3,9 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
-import { addItem, CURRENT_DATABASE_VERSION, deleteItem, rebuildTree, saveTree, SortNode, traverseTreeAsync, visualizeTree } from "merkle-tree";
+import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock } from "api";
-import { buildDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
+import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
 
@@ -190,7 +190,12 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
             undefined,
             true
         );
-        await saveDatabaseMerkleTree(bsonDatabaseStorage, bsonDatabaseTree);
+        if (!bsonDatabaseTree.sort) {
+            await deleteDatabaseMerkleTree(bsonDatabaseStorage);
+        }
+        else {
+            await saveDatabaseMerkleTree(bsonDatabaseStorage, bsonDatabaseTree);
+        }
         log.info(pc.green(`✓ BSON database merkle tree built successfully`));
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
