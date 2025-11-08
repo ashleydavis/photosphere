@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonCollection, IRecord, databaseMerkleTreeExists, getDatabaseRootHash } from "bdb";
+import { BsonDatabase, IBsonCollection, IRecord, getDatabaseRootHash } from "bdb";
 import type { IBsonDatabase } from "bdb";
 import { FileStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
