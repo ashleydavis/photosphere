@@ -28,7 +28,7 @@ import { syncCommand } from './cmd/sync';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
-import { log } from 'utils';
+import { log, FatalError } from 'utils';
 import { version } from './lib/version';
 
 async function main() {
@@ -422,6 +422,12 @@ Resources:
 // Handles errors in a consistent way.
 //
 function handleError(error: any) {
+    if (error instanceof FatalError) {
+        log.error(`\n\n${pc.red(error.message)}`);
+        return;
+    }
+    
+    // For other errors, show full details
     log.error(pc.red('An error occurred:'));
     if (error.message) {
         log.error(pc.red(error.message).toString());

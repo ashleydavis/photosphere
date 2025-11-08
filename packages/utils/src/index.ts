@@ -5,6 +5,7 @@ export * from "./lib/uuid-generator";
 export * from "./lib/random-uuid-generator";
 export * from "./lib/image";
 export * from "./lib/wrapped-error";
+export * from "./lib/fatal-error";
 export * from "./lib/log";
 export * from "./lib/timestamp-provider";
 export * from "./lib/mock-timestamp-provider";
