@@ -65,8 +65,7 @@ declare -a TEST_TABLE=(
     "v4-upgrade-no-effect:test_v4_database_upgrade_no_effect:Test v4 upgrade has no effect"
     "v4-add-file:test_v4_database_add_file:Test adding file to v4 database"
     "sync-original-to-copy:test_sync_original_to_copy:Test sync from original to copy"
-    # TODO: Get this working asap.
-    # "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
+    "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
     "sync-edit-field:test_sync_edit_field:Test sync after editing field with bdb-cli"
 )
 
@@ -2611,7 +2610,7 @@ test_sync_copy_to_original() {
     local v4_db_dir="../../test/dbs/v4"
     local original_dir="./test/tmp/test-sync-reverse-original"
     local copy_dir="./test/tmp/test-sync-reverse-copy"
-    local test_file="../../test/test.jpg"
+    local test_file="../../test/test.png"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
