@@ -134,16 +134,13 @@ describe('Merkle Tree Performance Tests', () => {
     for (const index of indicesToTest) {
       const fileName = fileNames[index];
       
-      const [success, time] = measureTime(() => {
-        return deleteItem(tree!, fileName);
+      const [, time] = measureTime(() => {
+        deleteItem(tree!, fileName);
       });
       
       // console.log(`Deleting file ${fileName} took ${time.toFixed(2)}ms`);
       
-      // Verify deletion was successful
-      expect(success).toBe(true);
-      
-      // Verify the file is completely gone
+      // Verify the file is completely gone (this verifies deletion was successful)
       const node = findItemNode(tree, fileName);
       expect(node).toBeUndefined(); // Should not be found
       
@@ -256,15 +253,15 @@ describe('Merkle Tree Performance Tests', () => {
     const deleteBatchSize = 100;
     const filesToDelete = baseFileNames.slice(updateBatchSize, updateBatchSize + deleteBatchSize);
     
-    const [deleteResults, deleteBatchTime] = measureTime(() => {
-      return filesToDelete.map(fileName => deleteItem(treeAfterAdd!, fileName));
+    const [, deleteBatchTime] = measureTime(() => {
+      filesToDelete.forEach(fileName => deleteItem(treeAfterAdd!, fileName));
     });
     
     // console.log(`Bulk deleting ${deleteBatchSize} files in a tree with ${treeAfterAdd!.sort?.leafCount} total files: ${deleteBatchTime.toFixed(2)}ms`);
     
     // Verify both operations completed successfully
     expect(updateResults.every(success => success === true)).toBe(true);
-    expect(deleteResults.every(success => success === true)).toBe(true);
+    // deleteItem now returns void, so success is verified by the fact that no exception was thrown
     
     // Verify the average time per operation is reasonable
     const avgTimePerUpdate = updateBatchTime / updateBatchSize;

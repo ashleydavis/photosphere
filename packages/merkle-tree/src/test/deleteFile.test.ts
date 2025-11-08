@@ -61,8 +61,7 @@ describe('File Deletion (deleteItem)', () => {
         expect(nodeBeforeDeletion?.name).toBe(fileToDelete);
         
         // Delete the file completely
-        const result = deleteItem(tree, fileToDelete);
-        expect(result).toBe(true);
+        deleteItem(tree, fileToDelete);
         
         // Verify the file is completely gone
         const nodeAfterDeletion = findItemNode(tree, fileToDelete);
@@ -81,8 +80,16 @@ describe('File Deletion (deleteItem)', () => {
 
     test('should handle deleting a non-existent file', () => {
         const tree = buildTestTree();
-        const result = deleteItem(tree, 'non-existent-file.txt');
-        expect(result).toBe(false);
+        const initialLeafCount = tree.sort?.leafCount || 0;
+        const initialNodeCount = tree.sort?.nodeCount || 0;
+        
+        // Attempt to delete a non-existent file
+        deleteItem(tree, 'non-existent-file.txt');
+        
+        // Verify the tree structure is unchanged
+        expect(tree.sort?.leafCount).toBe(initialLeafCount);
+        expect(tree.sort?.nodeCount).toBe(initialNodeCount);
+        expect(findItemNode(tree, 'non-existent-file.txt')).toBeUndefined();
     });
 
     test('should persist deletion when saving and loading the tree', async () => {
@@ -157,8 +164,7 @@ describe('File Deletion (deleteItem)', () => {
         expect(tree.sort?.nodeCount || 0).toBe(1);
         
         // Delete the only file
-        const result = deleteItem(tree, 'single-file.txt');
-        expect(result).toBe(true);
+        deleteItem(tree, 'single-file.txt');
         
         // Tree should be empty
         expect(tree.sort?.leafCount || 0).toBe(0);
@@ -167,8 +173,13 @@ describe('File Deletion (deleteItem)', () => {
 
     test('should handle deleting from empty tree', () => {
         const emptyTree = createTree("12345678-1234-5678-9abc-123456789abc");
-        const result = deleteItem(emptyTree, 'any-file.txt');
-        expect(result).toBe(false);
+        
+        // Attempt to delete from empty tree
+        deleteItem(emptyTree, 'any-file.txt');
+        
+        // Tree should remain empty
+        expect(emptyTree.sort?.leafCount || 0).toBe(0);
+        expect(emptyTree.sort?.nodeCount || 0).toBe(0);
     });
 });
 

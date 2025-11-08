@@ -1,7 +1,7 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadCollectionMerkleTree, loadDatabaseMerkleTree, loadShardMerkleTree, mergeRecords } from "bdb";
-import { addItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IStorage, StoragePrefixWrapper } from "storage";
-import { MediaFileDatabase } from "./media-file-database";
+import { addItem, deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, SortNode, traverseTreeAsync } from "merkle-tree";
+import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
+import { IDatabaseMetadata, MediaFileDatabase } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, loadOrCreateMerkleTree, saveMerkleTree } from "./tree";
 import { retry, log } from "utils";
@@ -48,6 +48,24 @@ export async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: Media
 }
 
 //
+// Extracts asset ID from a file path.
+// Asset files are stored with the asset ID as the filename, potentially in nested directories.
+// Examples: "asset/abc123" -> "abc123", "directory/subdirectory/abc123" -> "abc123"
+// Returns the asset ID (the last part of the path), or undefined if the path is empty.
+//
+function extractAssetId(filePath: string): string | undefined {
+    if (!filePath) {
+        return undefined;
+    }
+    const parts = filePath.split('/').filter(part => part.length > 0);
+    // Asset ID is always the last part of the path (the filename)
+    if (parts.length > 0) {
+        return parts[parts.length - 1];
+    }
+    return undefined;
+}
+
+//
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
@@ -67,19 +85,37 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
 
     let targetMerkleTree = await retry(() => loadOrCreateMerkleTree(targetDb.getMetadataStorage(), targetDb.uuidGenerator));
    
+    // Get deleted asset IDs from source and target
+    const sourceDeletedIds = new Set(sourceMerkleTree.databaseMetadata?.deletedAssetIds || []);
+    const targetDeletedIds = new Set(targetMerkleTree.databaseMetadata?.deletedAssetIds || []);
+   
     let filesCopied = 0;
     let filesProcessed = 0;
+    let filesExisting = 0;
 
     // 
     // Copies a single file if necessary.
     //
     const copyFile = async (fileName: string, sourceHash: Buffer, sourceSize: number, sourceModified: Date): Promise<void> => {
+        // Check if this asset is in the deleted list
+        const assetId = extractAssetId(fileName);
+        if (!assetId) {
+            throw new Error(`Failed to extract asset ID from file name: ${fileName}`);
+        }
+
+        if (sourceDeletedIds.has(assetId) || targetDeletedIds.has(assetId)) {
+            // Asset is deleted in source, skip copying it
+            log.verbose(`Skipped deleted asset file: ${fileName}`);
+            return;
+        }
+
         const targetFileInfo = getItemInfo(targetMerkleTree!, fileName);        
         if (targetFileInfo) {
             // File exists and so there is no need to copy it.
             // Just assume the target file is the same and ok. 
             // If it were different, it could only be from corruption, because files are immutable.
             // If the file is corrupted a verify/repair is needed.
+            filesExisting++;
             return;
         }
 
@@ -137,12 +173,62 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         return true;
     });
     
+    // Delete assets that are marked as deleted in source (but not yet deleted in target)
+    // Iterate through source's deleted list and delete each asset from target
+    let assetsDeleted = 0;
+    for (const assetId of sourceDeletedIds) {
+        // Skip if already deleted in target
+        if (targetDeletedIds.has(assetId)) {
+            continue;
+        }
+        
+        // Delete the asset files
+        const assetPath = pathJoin("asset", assetId);
+        const displayPath = pathJoin("display", assetId);
+        const thumbPath = pathJoin("thumb", assetId);
+        
+        // Try to delete files (may not exist, which is fine)
+        await targetStorage.deleteFile(assetPath).catch(() => {});
+        await targetStorage.deleteFile(displayPath).catch(() => {});
+        await targetStorage.deleteFile(thumbPath).catch(() => {});
+        
+        // Remove from the target merkle tree
+        deleteItem<IDatabaseMetadata>(targetMerkleTree, assetPath);
+        deleteItem<IDatabaseMetadata>(targetMerkleTree, displayPath);
+        deleteItem<IDatabaseMetadata>(targetMerkleTree, thumbPath);
+            
+        // Remove from metadata collection
+        const targetMetadataDb = targetDb.getMetadataDatabase();
+        const metadataCollection = targetMetadataDb.collection("metadata");
+        await metadataCollection.deleteOne(assetId);
+        
+        // Ensure databaseMetadata exists
+        if (!targetMerkleTree.databaseMetadata) {
+            targetMerkleTree.databaseMetadata = { filesImported: 0 };
+        }
+
+        // Decrement filesImported count
+        if (targetMerkleTree.databaseMetadata.filesImported > 0) {
+            targetMerkleTree.databaseMetadata.filesImported--;
+        }
+        
+        assetsDeleted++;
+        
+        // Add to target's deleted list
+        if (!targetMerkleTree.databaseMetadata.deletedAssetIds) {
+            targetMerkleTree.databaseMetadata.deletedAssetIds = [];
+        }
+
+        targetMerkleTree.databaseMetadata.deletedAssetIds.push(assetId);
+        
+        log.verbose(`Deleted asset ${assetId} from target (marked as deleted in source)`);
+    }
+    
     // Save the target merkle tree one final time.
     await retry(() => saveMerkleTree(targetMerkleTree, targetDb.getMetadataStorage()))
     
-    log.info(`Push completed: ${filesCopied} files copied out of ${filesProcessed} processed`);
+    log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target out of ${filesProcessed} processed, ${filesExisting} files existing`);
 }
-
 
 //
 // Generator to extract leaf node names from MerkleNode arrays.
@@ -379,4 +465,3 @@ export async function syncDatabase(sourceDb: MediaFileDatabase, targetDb: MediaF
         log.info(`Sync completed: ${mergedCount} records merged.`);
     }
 }
-

@@ -95,7 +95,6 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
     // Load or create the destination database
     await retry(() => destMediaFileDatabase.loadOrCreate());
 
-
     //
     // Load the destination database, or create it if it doesn't exist.
     //
@@ -258,7 +257,6 @@ Copied hash: ${copiedHash.toString("hex")}
 
             // Check if record exists in destination
             const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
-
             if (!destRecord) {
                 // Record doesn't exist in destination, add it
                 await retry(() => destCollection.insertOne(sourceRecord));

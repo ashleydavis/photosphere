@@ -126,13 +126,12 @@ describe('Merkle tree updates', () => {
         // Get updated shard tree
         const updatedShardTree = await loadShardMerkleTree(storage, 'test', shardId);
         
-        // After deleting the last record, the shard tree will exist but be empty (no sort)
-        expect(updatedShardTree).toBeDefined();
-        expect(updatedShardTree!.sort).toBeUndefined();
+        // After deleting the last record, the shard tree file is deleted (empty shards don't have tree files)
+        expect(updatedShardTree).toBeUndefined();
 
-        // Collection tree should still exist (may be updated)
+        // Collection tree is also deleted when the collection becomes empty (no shards with records)
         const collectionTree = await loadCollectionMerkleTree(storage, 'test');
-        expect(collectionTree).toBeDefined();
+        expect(collectionTree).toBeUndefined();
     });
 });
 

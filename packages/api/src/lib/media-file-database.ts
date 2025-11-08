@@ -138,9 +138,8 @@ export interface IDatabaseSummary {
 export interface IDatabaseMetadata {
     // Number of files imported into the database
     filesImported: number;
-    
-    // Additional metadata can be added here in the future
-    [key: string]: any;
+    // List of asset IDs that have been deleted from the database
+    deletedAssetIds?: string[];
 }
 
 export interface IAddSummary {
@@ -988,6 +987,15 @@ export class MediaFileDatabase {
                 }
                 if (merkleTree.databaseMetadata.filesImported > 0) {
                     merkleTree.databaseMetadata.filesImported--;
+                }
+                
+                // Add asset ID to deleted list
+                if (!merkleTree.databaseMetadata.deletedAssetIds) {
+                    merkleTree.databaseMetadata.deletedAssetIds = [];
+                }
+                // Only add if not already in the list
+                if (!merkleTree.databaseMetadata.deletedAssetIds.includes(assetId)) {
+                    merkleTree.databaseMetadata.deletedAssetIds.push(assetId);
                 }
             }
 
