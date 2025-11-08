@@ -937,7 +937,7 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 //
 // Rebuild a merkle tree in sorted order and removes a path.
 //
-export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathRemove?: string): IMerkleTree<DatabaseMetadata> {
+export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, pathsToRemove: string[]): IMerkleTree<DatabaseMetadata> {
 
     const items: HashedItem[] = [];
 
@@ -955,9 +955,10 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
                 throw new Error(`Leaf node has no last modified date. This could be a bug.`);
             }
 
-            if (pathRemove) {
-                if (node.name.startsWith(pathRemove)) {
+            for (const pathToRemove of pathsToRemove) {            
+                if (node.name.startsWith(pathToRemove)) {
                     // Don't add this item to the new tree.
+                    console.log(`Skipping item: ${node.name} because it starts with ${pathToRemove}`); //fio:
                     return true;
                 }
             }
@@ -1395,20 +1396,6 @@ export function deleteItem<DatabaseMetadata>(
 ): boolean {
     if (!merkleTree || !merkleTree.sort) {
         return false;
-    }
-    
-    // Check if the item exists
-    const existingNode = findItemInTree(merkleTree.sort, name);
-    if (!existingNode) {
-        return false;
-    }
-    
-    // If this is the only node in the tree, clear the tree
-    if (merkleTree.sort?.nodeCount === 1) {
-        //TODO: This doesn't check if the item is actually in the tree.
-        merkleTree.sort = undefined;
-        merkleTree.merkle = undefined;
-        return true;
     }
     
     // Remove the node from the tree
