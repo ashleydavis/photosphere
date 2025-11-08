@@ -384,14 +384,12 @@ export async function syncDatabase(sourceDb: MediaFileDatabase, targetDb: MediaF
         if (diff.sourceRecord && diff.targetRecord) {
             // Both records exist, merge them.
             const merged = mergeRecords(diff.sourceRecord, diff.targetRecord);
-            const externalRecord = toExternal(merged);
-            const { _id, ...fields } = externalRecord;
-            await targetCollection.updateOne(merged._id, fields as any, { upsert: true });
+            // Use setInternalRecord to preserve all timestamps exactly
+            await targetCollection.setInternalRecord(merged);
             mergedCount++;
         } else if (diff.sourceRecord) {
-            // Record only in source, insert it
-            const externalRecord = toExternal(diff.sourceRecord);
-            await targetCollection.insertOne(externalRecord);
+            // Record only in source, insert it with all timestamps preserved
+            await targetCollection.setInternalRecord(diff.sourceRecord);
             mergedCount++;
         } else if (diff.targetRecord) {
             // Record only in target, nothing to do (target already has it)

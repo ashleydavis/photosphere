@@ -105,6 +105,17 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return true;
     }
 
+    async setInternalRecord(record: IInternalRecord): Promise<void> {
+        const index = this.records.findIndex(r => r._id === record._id);
+        if (index === -1) {
+            // Record doesn't exist, add it
+            this.records.push(record);
+        } else {
+            // Replace existing record, preserving all metadata
+            this.records[index] = record;
+        }
+    }
+
     async deleteOne(id: string): Promise<boolean> {
         const index = this.records.findIndex(r => r._id === id);
         if (index === -1) {

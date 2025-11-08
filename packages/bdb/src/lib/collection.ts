@@ -246,6 +246,14 @@ export interface IBsonCollection<RecordT extends IRecord> {
     replaceOne(id: string, record: RecordT, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean>;
 
     //
+    // Sets an internal record directly, preserving all timestamps and metadata.
+    // This is useful for sync operations where timestamps must be preserved exactly.
+    // Always upserts (creates if doesn't exist, updates if it does).
+    // @param record The internal record to save (with all metadata intact)
+    //
+    setInternalRecord(record: IInternalRecord): Promise<void>;
+
+    //
     // Deletes a record.
     //
     deleteOne(id: string): Promise<boolean>;
@@ -415,9 +423,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Updates the shard merkle tree by adding a record hash.
+    // Upserts a record in the shard merkle tree (adds if doesn't exist, updates if it does).
     //
-    private async addRecordToShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
+    private async upsertRecordInShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
         let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
         if (!shardTree) {
             // Tree doesn't exist, build it from the shard.
@@ -425,26 +433,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
         }
         else {
-            // Add the record hash to the existing tree
-            shardTree = addItem(shardTree, hashRecord(record));
-        }
-        
-        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);        
-        await this.updateCollectionTree(shardId, shardTree);
-    }
-
-    //
-    // Updates the shard merkle tree by updating a record hash.
-    //
-    private async updateRecordInShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
-        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
-        if (!shardTree) {
-            // Tree doesn't exist, build it from the shard.
-            const records = Array.from(shard.records.values());
-            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
-        }
-        else {
-            // Update the record hash in the existing tree (or add if it doesn't exist)
+            // Upsert the record hash in the existing tree (adds if doesn't exist, updates if it does)
             shardTree = upsertItem(shardTree, hashRecord(record));
         }
         
@@ -754,7 +743,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         await this.sortManager.addRecord(internalRecord);
         
         // Update merkle trees
-        await this.addRecordToShardTree(shardId, internalRecord, shard);
+        await this.upsertRecordInShardTree(shardId, internalRecord, shard);
     }
 
     //
@@ -891,7 +880,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Update merkle trees.
         //
-        await this.updateRecordInShardTree(shardId, updatedRecord, shard);
+        await this.upsertRecordInShardTree(shardId, updatedRecord, shard);
 
         return true;
     }
@@ -925,11 +914,29 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Update merkle trees.
         //
-        await this.updateRecordInShardTree(shardId, internalRecord, shard);
+        await this.upsertRecordInShardTree(shardId, internalRecord, shard);
 
         return true;
     }
- 
+
+    //
+    // Sets an internal record directly, preserving all timestamps and metadata.
+    // This is useful for sync operations where timestamps must be preserved exactly.
+    // Always upserts (creates if doesn't exist, updates if it does).
+    //
+    async setInternalRecord(record: IInternalRecord): Promise<void> {
+        const shardId = this.generateShardId(record._id);
+        const shard = await this.loadShard(shardId);
+
+        const existingRecord = this.getRecord(record._id, shard);
+
+        // Set the record directly with all its metadata preserved
+        await this.setRecord(record._id, record, shard);
+        await this.saveShard(shard);
+
+        await this.sortManager.updateRecord(record, existingRecord);
+        await this.upsertRecordInShardTree(shardId, record, shard);
+    }
 
     //
     // Deletes a record.
