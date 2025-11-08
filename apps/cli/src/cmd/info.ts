@@ -6,7 +6,7 @@ import { getFileInfo, AssetInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { computeHash } from "adb";
+import { computeHash } from "api";
 import fs from "fs";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";

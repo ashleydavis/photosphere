@@ -36,7 +36,6 @@
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
     "utils": "workspace:*",
-    "adb": "workspace:*",
     "merkle-tree": "workspace:*",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",

@@ -7,7 +7,7 @@ import { addItem, CURRENT_DATABASE_VERSION, deleteItem, rebuildTree, saveTree, S
 import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock } from "api";
 import { buildDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
-import { computeHash } from "adb";
+import { computeHash } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;

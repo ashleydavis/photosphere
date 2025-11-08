@@ -9,3 +9,6 @@ export * from "./lib/replicate";
 export * from "./lib/tree";
 export * from "./lib/write-lock";
 export * from "./lib/sync";
+export * from "./lib/hash";
+export * from "./lib/hash-cache";
+export * from "./lib/database-update";
