@@ -401,3 +401,4 @@ describe('HashCache', () => {
         expect(hashCache.getHash('zzz.txt')).toBeUndefined();
     });
 });
+

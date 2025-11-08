@@ -11,7 +11,8 @@ import { IAsset } from "defs";
 import { Readable } from "stream";
 import { getVideoDetails } from "./video";
 import { getImageDetails, IResolution } from "./image";
-import { computeHash, HashCache } from "adb";
+import { computeHash } from "./hash";
+import { HashCache } from "./hash-cache";
 import { FileScanner, IFileStat } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";

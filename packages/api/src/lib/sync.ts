@@ -5,7 +5,7 @@ import { MediaFileDatabase } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, loadOrCreateMerkleTree, saveMerkleTree } from "./tree";
 import { retry, log } from "utils";
-import { computeHash } from "adb";
+import { computeHash } from "./hash";
 
 //
 // Syncs between source and target databases.

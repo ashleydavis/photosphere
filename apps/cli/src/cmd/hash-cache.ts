@@ -1,5 +1,5 @@
 import { IStorage, FileStorage, createStorage } from "storage";
-import { HashCache } from "adb";
+import { HashCache } from "api";
 import { exit } from "node-utils";
 import path from "path";
 import os from "os";

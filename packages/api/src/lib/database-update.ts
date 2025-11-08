@@ -72,3 +72,4 @@ export interface IUpsertUpdate extends IDatabaseUpdate {
 // The various types of database updates.
 //
 export type DatabaseUpdate = IFieldUpdate | IDeleteUpdate | IUpsertUpdate;
+

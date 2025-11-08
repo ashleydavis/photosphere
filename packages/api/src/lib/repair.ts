@@ -1,7 +1,6 @@
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { computeHash } from "adb";
-import { computeAssetHash } from "./hash";
+import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";

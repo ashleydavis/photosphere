@@ -1,5 +1,5 @@
 import { createStorage } from "storage";
-import { computeHash } from "adb";
+import { computeHash } from "api";
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { getS3Config } from '../lib/config';

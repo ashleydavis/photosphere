@@ -1,7 +1,7 @@
 //
 // Result of the replication process.
 
-import { computeHash } from "adb";
+import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry } from "utils";
 import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
