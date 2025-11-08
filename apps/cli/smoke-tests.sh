@@ -1741,6 +1741,18 @@ test_database_replicate() {
     # Verify original and replica have the same aggregate root hash
     verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica"
     
+    # Get source and replica summaries to compare files imported count
+    local source_summary
+    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
+    
+    local replica_summary
+    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
+    
+    # Extract and compare files imported count
+    local source_files_imported=$(parse_numeric "$source_summary" "Files imported:")
+    local replica_files_imported=$(parse_numeric "$replica_summary" "Files imported:")
+    expect_value "$replica_files_imported" "$source_files_imported" "Replica files imported count matches source"
+    
     # Check merkle tree order for both original and replica
     check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
     
