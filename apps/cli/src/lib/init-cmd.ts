@@ -1,4 +1,4 @@
-import { loadMerkleTree, MediaFileDatabase } from "api";
+import { MediaFileDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
@@ -11,7 +11,6 @@ import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
-import { performDatabaseUpgrade } from "./database-upgrade";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 
 //
@@ -267,7 +266,7 @@ export interface IInitResult {
 // - Create and load database
 // - Register termination callback
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean, readonly: boolean): Promise<IInitResult> { //todo: Move into api.
+export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
     
@@ -366,22 +365,6 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 
     // Load the database
     await database.load();
-
-    if (allowOlderVersions) {
-        //
-        // Upgrade the database.
-        // 
-        const merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
-        if (!merkleTree) {
-            throw new Error(`Failed to load merkle tree.`);
-        }
-        if (merkleTree.version < CURRENT_DATABASE_VERSION) {
-            //
-            // When loading an older database, upgrade it.
-            //
-            await performDatabaseUpgrade(database, metadataStorage, readonly); //todo: this doesn't actually achieve very much! It only actually saves the db if readonly is false!
-        }
-    }
 
     return {
         database,

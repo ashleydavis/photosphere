@@ -60,7 +60,7 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 export async function debugMerkleTreeCommand(options: IDebugMerkleTreeCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true, true);
+    const { database } = await loadDatabase(options.db, options, true);
     
     const metadataStorage = database.getMetadataStorage();
     const assetStorage = database.getAssetStorage();

@@ -43,7 +43,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
-    }, false, true);
+    }, false);
 
     let destDir = options.dest;
     if (destDir === undefined) {
