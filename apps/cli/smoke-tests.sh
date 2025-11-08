@@ -1609,6 +1609,7 @@ test_detect_deleted_file() {
     # Ensure destination doesn't exist to avoid copying into subdirectory
     rm -rf "$test_copy_dir"
     
+    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$test_copy_dir\""
     cp -r "$TEST_DB_DIR" "$test_copy_dir"
     
     # Verify the copy includes the .db subdirectory
@@ -1669,6 +1670,7 @@ test_detect_modified_file() {
     # Ensure destination doesn't exist to avoid copying into subdirectory
     rm -rf "$test_copy_dir"
     
+    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$test_copy_dir\""
     cp -r "$TEST_DB_DIR" "$test_copy_dir"
     
     # Verify the copy includes the .db subdirectory
@@ -2127,6 +2129,7 @@ test_repair_damaged_database() {
     # Create a copy of the database to damage
     log_info "Creating copy of database to damage"
     rm -rf "$damaged_dir"
+    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$damaged_dir\""
     cp -r "$TEST_DB_DIR" "$damaged_dir"
     
     # Damage the database by:
@@ -2263,6 +2266,7 @@ test_v2_database_upgrade() {
     # Create a copy of v2 database for upgrade testing
     log_info "Creating copy of v2 database for upgrade testing"
     rm -rf "$temp_v2_dir"
+    log_info "Copying database: cp -r \"$v2_db_dir\" \"$temp_v2_dir\""
     cp -r "$v2_db_dir" "$temp_v2_dir"
     
     # Test upgrade command on v2 database
@@ -2308,6 +2312,7 @@ test_v3_database_upgrade() {
     # Create a copy of v3 database for upgrade testing
     log_info "Creating copy of v3 database for upgrade testing"
     rm -rf "$temp_v3_dir"
+    log_info "Copying database: cp -r \"$v3_db_dir\" \"$temp_v3_dir\""
     cp -r "$v3_db_dir" "$temp_v3_dir"
     
     # Test upgrade command on v3 database
@@ -2354,6 +2359,7 @@ test_v4_database_upgrade_no_effect() {
     # Create a copy of v4 database for testing
     log_info "Creating copy of v4 database for upgrade testing"
     rm -rf "$temp_v4_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$temp_v4_dir\""
     cp -r "$v4_db_dir" "$temp_v4_dir"
     
     # Test upgrade command on v4 database (should have no effect)
@@ -2402,6 +2408,7 @@ test_v4_database_add_file() {
     # Create a copy of v4 database for testing
     log_info "Creating copy of v4 database for file addition testing"
     rm -rf "$temp_v4_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$temp_v4_dir\""
     cp -r "$v4_db_dir" "$temp_v4_dir"
     
     # Get initial asset count
@@ -2491,6 +2498,7 @@ test_sync_original_to_copy() {
     # Create the original database from v4
     log_info "Creating original database from v4 to $original_dir"
     rm -rf "$original_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
     cp -r "$v4_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
@@ -2615,6 +2623,7 @@ test_sync_copy_to_original() {
     # Create the original database from v4
     log_info "Creating original database from v4 to $original_dir"
     rm -rf "$original_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
     cp -r "$v4_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
@@ -2748,6 +2757,7 @@ test_sync_edit_field() {
     # Create the original database from v4
     log_info "Creating original database from v4 to $original_dir"
     rm -rf "$original_dir"
+    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
     cp -r "$v4_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
