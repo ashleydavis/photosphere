@@ -18,7 +18,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-TEST_DB_DIR="./test/tmp/test-db"
+TEST_DB_DIR="./test/tmp/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 
@@ -75,6 +75,12 @@ declare -a TEST_TABLE=(
 )
 
 # Test table helper functions
+# Get test directory path for a given test number
+get_test_dir() {
+    local test_number="$1"
+    echo "./test/tmp/$test_number"
+}
+
 # Get test name by index (1-based)
 get_test_name() {
     local index=$1
@@ -1251,6 +1257,9 @@ test_create_database() {
     local test_number="$1"
     print_test_header "$test_number" "CREATE DATABASE"
     
+    # Ensure shared directory exists
+    mkdir -p "$(dirname "$TEST_DB_DIR")"
+    
     log_info "Database path: $TEST_DB_DIR"
     
     invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
@@ -1454,8 +1463,10 @@ test_export_assets() {
     
     log_info "Database path: $TEST_DB_DIR"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Create export test directory
-    local export_dir="./test/tmp/exports"
+    local export_dir="$test_dir/exports"
     mkdir -p "$export_dir"
     
     # Try to find assets in the database directory directly first
@@ -1592,7 +1603,9 @@ test_detect_deleted_file() {
     local test_number="$1"
     print_test_header "$test_number" "DETECT DELETED FILE WITH VERIFY"
     
-    local test_copy_dir="$TEST_DB_DIR-deleted-file-test"
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
+    local test_copy_dir="$test_dir/test-db-deleted-file-test"
     log_info "Source database path: $TEST_DB_DIR"
     log_info "Test copy database path: $test_copy_dir"
     
@@ -1653,7 +1666,9 @@ test_detect_modified_file() {
     local test_number="$1"
     print_test_header "$test_number" "DETECT MODIFIED FILE WITH VERIFY"
     
-    local test_copy_dir="$TEST_DB_DIR-modified-file-test"
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
+    local test_copy_dir="$test_dir/test-db-modified-file-test"
     log_info "Source database path: $TEST_DB_DIR"
     log_info "Test copy database path: $test_copy_dir"
     
@@ -2153,8 +2168,10 @@ test_repair_damaged_database() {
     local test_number="$1"
     print_test_header "$test_number" "REPAIR DAMAGED DATABASE"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     local replica_dir="$TEST_DB_DIR-replica"
-    local damaged_dir="$TEST_DB_DIR-damaged"
+    local damaged_dir="$test_dir/test-db-damaged"
     log_info "Damaged database path: $damaged_dir"
     log_info "Source database path (for repair): $replica_dir"
     
@@ -2290,8 +2307,10 @@ test_v2_database_upgrade() {
     local test_number="$1"
     print_test_header "$test_number" "V2 DATABASE UPGRADE TO V4"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     local v2_db_dir="../../test/dbs/v2"
-    local temp_v2_dir="./test/tmp/test-v2-upgrade"
+    local temp_v2_dir="$test_dir/test-v2-upgrade"
     log_info "Source database path: $v2_db_dir"
     log_info "Temporary upgrade database path: $temp_v2_dir"
     
@@ -2336,8 +2355,10 @@ test_v3_database_upgrade() {
     local test_number="$1"
     print_test_header "$test_number" "V3 DATABASE UPGRADE TO V4"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     local v3_db_dir="../../test/dbs/v3"
-    local temp_v3_dir="./test/tmp/test-v3-upgrade"
+    local temp_v3_dir="$test_dir/test-v3-upgrade"
     log_info "Source database path: $v3_db_dir"
     log_info "Temporary upgrade database path: $temp_v3_dir"
     
@@ -2382,9 +2403,11 @@ test_v4_database_upgrade_no_effect() {
     local test_number="$1"
     print_test_header "$test_number" "V4 DATABASE UPGRADE HAS NO EFFECT"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database directly instead of upgrading from v3
     local v4_db_dir="../../test/dbs/v4"
-    local temp_v4_dir="./test/tmp/test-v4-upgrade"
+    local temp_v4_dir="$test_dir/test-v4-upgrade"
     log_info "Source database path: $v4_db_dir"
     log_info "Temporary upgrade database path: $temp_v4_dir"
     
@@ -2429,9 +2452,11 @@ test_v4_database_add_file() {
     local test_number="$1"
     print_test_header "$test_number" "V4 DATABASE ADD FILE AND VERIFY INTEGRITY"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local temp_v4_dir="./test/tmp/test-v4-add-file"
+    local temp_v4_dir="$test_dir/test-v4-add-file"
     local test_file="../../test/test.png"
     log_info "Source database path: $v4_db_dir"
     log_info "Temporary test database path: $temp_v4_dir"
@@ -2517,10 +2542,12 @@ test_sync_original_to_copy() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - ORIGINAL TO COPY"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-original"
-    local copy_dir="./test/tmp/test-sync-copy"
+    local original_dir="$test_dir/test-sync-original"
+    local copy_dir="$test_dir/test-sync-copy"
     local test_file="../../test/test.png"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
@@ -2639,13 +2666,15 @@ test_sync_copy_to_original() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - COPY TO ORIGINAL (REVERSE)"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # TODO: This test is temporarily disabled in automatic runs until sync bidirectional functionality is working
     # It can still be run individually with: ./smoke-tests.sh 34 or ./smoke-tests.sh sync-copy-to-original
     
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-reverse-original"
-    local copy_dir="./test/tmp/test-sync-reverse-copy"
+    local original_dir="$test_dir/test-sync-reverse-original"
+    local copy_dir="$test_dir/test-sync-reverse-copy"
     local test_file="../../test/test.png"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
@@ -2772,10 +2801,12 @@ test_sync_edit_field() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - EDIT FIELD WITH BDB-CLI"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-edit-original"
-    local copy_dir="./test/tmp/test-sync-edit-copy"
+    local original_dir="$test_dir/test-sync-edit-original"
+    local copy_dir="$test_dir/test-sync-edit-copy"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
@@ -2968,10 +2999,12 @@ test_sync_edit_field_reverse() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - EDIT FIELD IN COPY WITH BDB-CLI (REVERSE)"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-edit-reverse-original"
-    local copy_dir="./test/tmp/test-sync-edit-reverse-copy"
+    local original_dir="$test_dir/test-sync-edit-reverse-original"
+    local copy_dir="$test_dir/test-sync-edit-reverse-copy"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
@@ -3164,10 +3197,12 @@ test_sync_delete_asset() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET AND SYNC BOTH WAYS"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-delete-original"
-    local copy_dir="./test/tmp/test-sync-delete-copy"
+    local original_dir="$test_dir/test-sync-delete-original"
+    local copy_dir="$test_dir/test-sync-delete-copy"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
@@ -3310,10 +3345,12 @@ test_sync_delete_asset_reverse() {
     local test_number="$1"
     print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET FROM COPY AND SYNC (REVERSE)"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local original_dir="./test/tmp/test-sync-delete-reverse-original"
-    local copy_dir="./test/tmp/test-sync-delete-reverse-copy"
+    local original_dir="$test_dir/test-sync-delete-reverse-original"
+    local copy_dir="$test_dir/test-sync-delete-reverse-copy"
     log_info "Source database path: $v4_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
@@ -3456,10 +3493,12 @@ test_replicate_with_deleted_asset() {
     local test_number="$1"
     print_test_header "$test_number" "REPLICATE DATABASE WITH DELETED ASSET"
     
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
     # Use the existing v4 database as base
     local v4_db_dir="../../test/dbs/v4"
-    local source_dir="./test/tmp/test-replicate-deleted-source"
-    local replica_dir="./test/tmp/test-replicate-deleted-replica"
+    local source_dir="$test_dir/test-replicate-deleted-source"
+    local replica_dir="$test_dir/test-replicate-deleted-replica"
     log_info "Source database path: $v4_db_dir"
     log_info "Source database path: $source_dir"
     log_info "Replica database path: $replica_dir"
@@ -3577,9 +3616,13 @@ test_replicate_unrelated_databases_fail() {
     local test_number="$1"
     print_test_header "$test_number" "REPLICATE UNRELATED DATABASES FAIL"
     
-    # Create two independent databases
-    local first_db_dir="./test/tmp/test-unrelated-first"
-    local second_db_dir="./test/tmp/test-unrelated-second"
+    # Get test-specific directory for this test
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
+    
+    # Create two independent databases in test-specific directory
+    local first_db_dir="$test_dir/test-unrelated-first"
+    local second_db_dir="$test_dir/test-unrelated-second"
     log_info "First database path: $first_db_dir"
     log_info "Second database path: $second_db_dir"
     
@@ -3634,10 +3677,9 @@ test_replicate_unrelated_databases_fail() {
     log_success "Replication correctly failed between unrelated databases"
     
     # Preserve temporary databases for inspection
-    log_info "Temporary databases preserved for inspection:"
+    log_info "Temporary databases preserved for inspection in test directory: $test_dir"
     log_info "  First database: $first_db_dir"
     log_info "  Second database: $second_db_dir"
-    log_info "To clean up when done: rm -rf \"$first_db_dir\" \"$second_db_dir\""
     test_passed
 }
 
