@@ -308,6 +308,19 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         await exit(1);
     }
 
+    if (!allowOlderVersions) {
+        //
+        // When trying to load the database and we don't allow older versions,
+        // quickly load the version from the database and reject if the database is old.
+        //
+        
+        let databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);        
+        if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
+            outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
+            await exit(1);
+        }
+    }    
+
     //
     // See if the database is encrypted and requires a key.
     //
@@ -346,19 +359,6 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
-
-    if (!allowOlderVersions) {
-        //
-        // When trying to load the database and we don't allow older versions,
-        // quickly load the version from the database and reject if the database is old.
-        //
-        
-        let databaseVersion = await loadTreeVersion("tree.dat", metadataStorage);        
-        if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
-            outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
-            await exit(1);
-        }
-    }
         
     // Create database instance.
     const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId);
