@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
-import { addItem, CURRENT_DATABASE_VERSION, deleteItem, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
+import { addItem, CURRENT_DATABASE_VERSION, deleteItem, rebuildTree, saveTree, SortNode, traverseTreeAsync, visualizeTree } from "merkle-tree";
 import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock } from "api";
 import { buildDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
@@ -98,9 +98,13 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
             return true; // Continue traversal
         });
 
-        if (await assetStorage.fileExists("assets")) {
+        if (await assetStorage.dirExists("assets")) {
+
             log.info("Moving files from 'assets' directory to 'asset' directory...");
-            
+
+            // 
+            // Move files and add them to the merkle tree.
+            //
             let next: string | undefined = undefined;
             let filesMoved = 0;
             
@@ -135,8 +139,6 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
                         // Only delete the source file after successful verification
                         await assetStorage.deleteFile(sourceFile);
 
-                        // Delete the file from the merkle tree and readd it.
-                        deleteItem<IDatabaseMetadata>(merkleTree, sourceFile);
                         merkleTree = addItem<IDatabaseMetadata>(merkleTree, {
                             name: destFile,
                             hash: destHash,
@@ -152,9 +154,9 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
             
             log.info(`✓ Moved ${filesMoved} files from 'assets' to 'asset' directory`);
         }
-    
+
         // Rebuild the merkle tree in sorted order with no metadata/
-        const rebuiltTree = rebuildTree<IDatabaseMetadata>(merkleTree, "metadata/");
+        merkleTree = rebuildTree<IDatabaseMetadata>(merkleTree, ["metadata/", "assets/"]);
 
         // Count files in the asset directory to get the actual number of imported files
         let filesImported = 0;
@@ -174,7 +176,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         }                
 
         // Save the rebuilt tree.
-        await retry(() => saveTree("tree.dat", rebuiltTree, database.getMetadataStorage()));
+        await retry(() => saveTree("tree.dat", merkleTree!, database.getMetadataStorage()));
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(database.getAssetStorage(), "metadata");
 
