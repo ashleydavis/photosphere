@@ -2,12 +2,12 @@
 // Result of the replication process.
 
 import { computeHash } from "./hash";
-import { IStorage, StoragePrefixWrapper } from "storage";
+import { IStorage } from "storage";
 import { retry } from "utils";
-import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, getItemInfo, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
-import { loadMerkleTree, loadOrCreateMerkleTree } from "./tree";
-import { BsonDatabase, IInternalRecord, toExternal } from "bdb";
+import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
+import { buildMerkleTree, createTree, getItemInfo, IMerkleTree, loadTree, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
+import { loadMerkleTree } from "./tree";
+import { toExternal } from "bdb";
 import stringify from "json-stable-stringify";
 
 //
@@ -59,6 +59,26 @@ export interface IReplicateOptions {
 }
 
 //
+// Loads or creates the merkle tree.
+//
+export async function loadOrCreateMerkleTree(metadataStorage: IStorage, databaseId: string): Promise<IMerkleTree<IDatabaseMetadata>> {
+    let merkleTree = await loadTree<IDatabaseMetadata>("tree.dat", metadataStorage);
+    if (!merkleTree) {
+        merkleTree = createTree(databaseId);
+    } 
+    else if (databaseId && merkleTree.id !== databaseId) {
+        throw new Error(
+            `You are trying to replicate to a database that has a different ID than the source database.\n` +
+            `Source database ID: ${databaseId}\n` +
+            `Destination database ID: ${merkleTree.id}\n` + 
+            `The destination database is not related to the source database.`
+        );
+    }
+
+    return merkleTree;
+}
+
+//
 // Replicates the media file database to another storage.
 //
 export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
@@ -98,7 +118,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
     //
     // Load the destination database, or create it if it doesn't exist.
     //
-    let destMerkleTree = await loadOrCreateMerkleTree(destMetadataStorage, mediaFileDatabase.uuidGenerator);
+    let destMerkleTree = await loadOrCreateMerkleTree(destMetadataStorage, merkleTree.id);
     
     //
     // Copy database metadata from source to destination.

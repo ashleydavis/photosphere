@@ -71,6 +71,7 @@ declare -a TEST_TABLE=(
     "sync-delete-asset:test_sync_delete_asset:Test sync after deleting asset (both ways)"
     "sync-delete-asset-reverse:test_sync_delete_asset_reverse:Test sync after deleting asset from copy (reverse)"
     "replicate-deleted-asset:test_replicate_with_deleted_asset:Test replicate database with deleted asset"
+    "replicate-unrelated-fail:test_replicate_unrelated_databases_fail:Test replicate fails between unrelated databases"
 )
 
 # Test table helper functions
@@ -1744,6 +1745,25 @@ test_database_replicate() {
     
     # Verify original and replica have the same aggregate root hash
     verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica"
+    
+    # Verify original and replica have the same database ID
+    log_info "Verifying database IDs match for original and replica"
+    local source_id_output
+    local replica_id_output
+    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
+    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
+    
+    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$source_id" = "$replica_id" ]; then
+        log_success "Database IDs match: $source_id"
+    else
+        log_error "Database IDs do not match"
+        log_error "Source ID: $source_id"
+        log_error "Replica ID: $replica_id"
+        exit 1
+    fi
     
     # Get source and replica summaries to compare files imported count
     local source_summary
@@ -3506,6 +3526,25 @@ test_replicate_with_deleted_asset() {
     log_info "Verifying original and replica have the same root hash after replication"
     verify_root_hashes_match "$source_dir" "$replica_dir" "source and replica after replication"
     
+    # Verify original and replica have the same database ID
+    log_info "Verifying database IDs match for source and replica"
+    local source_id_output
+    local replica_id_output
+    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $source_dir --yes" 0 "source_id_output"
+    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
+    
+    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$source_id" = "$replica_id" ]; then
+        log_success "Database IDs match: $source_id"
+    else
+        log_error "Database IDs do not match"
+        log_error "Source ID: $source_id"
+        log_error "Replica ID: $replica_id"
+        exit 1
+    fi
+    
     # Compare databases to verify they are identical
     log_info "Comparing databases to verify they are identical"
     local compare_output
@@ -3531,6 +3570,74 @@ test_replicate_with_deleted_asset() {
     rm -rf "$source_dir"
     rm -rf "$replica_dir"
     log_success "Cleaned up temporary replicate deleted test databases"
+    test_passed
+}
+
+test_replicate_unrelated_databases_fail() {
+    local test_number="$1"
+    print_test_header "$test_number" "REPLICATE UNRELATED DATABASES FAIL"
+    
+    # Create two independent databases
+    local first_db_dir="./test/tmp/test-unrelated-first"
+    local second_db_dir="./test/tmp/test-unrelated-second"
+    log_info "First database path: $first_db_dir"
+    log_info "Second database path: $second_db_dir"
+    
+    # Clean up any existing test databases
+    rm -rf "$first_db_dir"
+    rm -rf "$second_db_dir"
+    
+    # Create first independent database
+    log_info "Creating first independent database"
+    invoke_command "Initialize first database" "$(get_cli_command) init --db $first_db_dir --yes"
+    
+    # Create second independent database
+    log_info "Creating second independent database"
+    invoke_command "Initialize second database" "$(get_cli_command) init --db $second_db_dir --yes"
+    
+    # Verify both databases exist
+    check_exists "$first_db_dir" "First database directory"
+    check_exists "$second_db_dir" "Second database directory"
+    
+    # Get database IDs to confirm they are different
+    log_info "Getting database IDs to confirm they are different"
+    local first_id_output
+    local second_id_output
+    invoke_command "Get first database ID" "$(get_cli_command) database-id --db $first_db_dir --yes" 0 "first_id_output"
+    invoke_command "Get second database ID" "$(get_cli_command) database-id --db $second_db_dir --yes" 0 "second_id_output"
+    
+    local first_id=$(echo "$first_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local second_id=$(echo "$second_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    log_info "First database ID: $first_id"
+    log_info "Second database ID: $second_id"
+    
+    # Verify they have different IDs
+    if [ "$first_id" = "$second_id" ]; then
+        log_error "Database IDs should be different but they are the same: $first_id"
+        exit 1
+    else
+        log_success "Database IDs are different (as expected for independent databases)"
+    fi
+    
+    # Try to replicate first database to second database (should fail)
+    log_info "Attempting to replicate first database to second database (should fail)"
+    local replicate_output
+    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes" 1 "replicate_output"
+    
+    # Check that the error message contains the expected text
+    expect_output_string "$replicate_output" "different ID than the source database" "Error message mentions different database IDs"
+    expect_output_string "$replicate_output" "Source database ID: $first_id" "Error message shows source database ID"
+    expect_output_string "$replicate_output" "Destination database ID: $second_id" "Error message shows destination database ID"
+    expect_output_string "$replicate_output" "not related to the source database" "Error message indicates databases are not related"
+    
+    log_success "Replication correctly failed between unrelated databases"
+    
+    # Preserve temporary databases for inspection
+    log_info "Temporary databases preserved for inspection:"
+    log_info "  First database: $first_db_dir"
+    log_info "  Second database: $second_db_dir"
+    log_info "To clean up when done: rm -rf \"$first_db_dir\" \"$second_db_dir\""
     test_passed
 }
 
@@ -3777,12 +3884,10 @@ run_multiple_commands() {
     local report_file="./tmp/reports/smoke-test-report.txt"
     generate_test_report "$report_file" "multiple"
     
-    # Check if database should be preserved
-    if [ "${PRESERVE_DATABASE:-false}" = "true" ]; then
-        echo ""
-        log_info "Database preserved for inspection at: $TEST_DB_DIR"
-        log_info "To clean up when done: $0 reset"
-    fi
+    # Always preserve database for inspection
+    echo ""
+    log_info "Database preserved for inspection at: $TEST_DB_DIR"
+    log_info "To clean up when done: $0 reset"
     
     exit 0
 }
@@ -3801,7 +3906,7 @@ show_usage() {
     echo "Commands:"
     echo "  all                 - Run all tests (assumes executable built and tools available)"
     local test_count=$(get_test_count)
-    echo "  to <number>         - Run tests 1 through <number> (1-$test_count, preserves database for inspection)"
+    echo "  to <number>         - Run tests 1 through <number> (1-$test_count)"
     echo "  setup               - Build executable and frontend"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
@@ -3824,8 +3929,9 @@ show_usage() {
     echo "Examples:"
     echo "  $0 all                      # Run all tests (exe must be built, tools available)"
     echo "  $0 --debug all              # Run all tests using debug mode (bun run start --)"
-    echo "  $0 to 5                     # Run tests 1-5 and keep database for inspection"
-    echo "  $0 -d to 10                 # Run tests 1-10 in debug mode and keep database"
+    echo "  $0 to 5                     # Run tests 1-5"
+    echo "  $0 -d to 10                 # Run tests 1-10 in debug mode"
+    echo "  $0 replicate-unrelated-fail # Run test"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
     echo "  $0 setup                    # Build executable and frontend only"
@@ -3880,8 +3986,6 @@ main() {
                 commands="$commands,$i"
             done
             log_info "Running tests 1 through $end_test"
-            # Set flag to preserve database
-            PRESERVE_DATABASE=true
             # Reset environment before running tests
             log_info "Resetting testing environment"
             if [ -d "./test/tmp" ]; then
