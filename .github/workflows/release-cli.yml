@@ -782,12 +782,6 @@ jobs:
           ffprobe -version | head -1
           echo ""
 
-      - name: Test version command
-        working-directory: ./apps/cli
-        run: |
-          echo "Testing version command before building..."
-          bun run start -- version
-
       - name: Build macOS executable
         working-directory: ./apps/cli
         run: |
