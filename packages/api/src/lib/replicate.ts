@@ -3,7 +3,7 @@
 
 import { computeHash } from "./hash";
 import { IStorage } from "storage";
-import { retry } from "utils";
+import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
 import { buildMerkleTree, createTree, getItemInfo, IMerkleTree, loadTree, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
@@ -67,7 +67,7 @@ export async function loadOrCreateMerkleTree(metadataStorage: IStorage, database
         merkleTree = createTree(databaseId);
     } 
     else if (databaseId && merkleTree.id !== databaseId) {
-        throw new Error(
+        throw new FatalError(
             `You are trying to replicate to a database that has a different ID than the source database.\n` +
             `Source database ID: ${databaseId}\n` +
             `Destination database ID: ${merkleTree.id}\n` + 
