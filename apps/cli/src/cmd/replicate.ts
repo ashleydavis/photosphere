@@ -8,6 +8,7 @@ import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate } from "api";
+import { confirm, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -29,6 +30,11 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
     // Path to a specific file or directory to replicate (instead of entire database).
     //
     path?: string;
+
+    //
+    // If true, allows replication even if destination has modifications not in source.
+    //
+    force?: boolean;
 }
 
 //
@@ -133,6 +139,36 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
     // Re-create destMetadataStorage with proper storage options (in case it's encrypted)
     const { storage: destMetadataStorageFinal } = createStorage(destMetaPath, s3Config);
+
+    // If destination database exists, warn user and ask for confirmation (unless --force is used)
+    if (destDbExists && !options.force) {
+        if (nonInteractive) {
+            log.error(pc.red(`✗ The destination database already exists at ${destDir}.`));
+            log.error(pc.red(`  Replication will overwrite any changes made to the destination database.`));
+            log.error(pc.red(`  Use the --force flag to proceed without confirmation.`));
+            await exit(1);
+        } 
+        else {
+            log.warn(pc.yellow(`⚠️  The destination database already exists at ${destDir}.`));
+            log.warn(pc.yellow(`    Replication will overwrite any changes made to the destination database.`));
+            log.info('');
+            
+            const confirmed = await confirm({
+                message: 
+                    `Do you want to proceed with replication?\n` +
+                    `   This will cause the destination database to be updated to match the source database.\n` +
+                    `   Any changes you have made separately to the destination database will be overwritten.\n` +
+                    `   If you have made changes to the source and destination databases separately you should use the sync command instead.`,
+                initialValue: false,
+            });
+
+            if (isCancel(confirmed) || !confirmed) {
+                log.info(pc.gray('Replication cancelled.'));
+                await exit(0);
+                return;
+            }
+        }
+    }
 
     log.info('');
     log.info(`Replicating database:`);
