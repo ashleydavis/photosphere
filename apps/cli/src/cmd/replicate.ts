@@ -227,10 +227,20 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(`    ${pc.cyan('psi verify --db')} ${pc.gray(destDir)}         Verify integrity of the replicated database`);
-    log.info(`    ${pc.cyan('psi compare --dest')} ${pc.gray(destDir)}      Compare source and destination databases`);
-    log.info(`    ${pc.cyan('psi summary --db')} ${pc.gray(destDir)}       View summary of the replicated database`);
-    log.info(`    ${pc.cyan('psi ui --db')} ${pc.gray(destDir)}            Open web interface for the replicated database`);
+    log.info(pc.gray(`    # Verify the integrity of the replicated database`));
+    log.info(`    psi verify --db ${destDir}`);
+    log.info('');
+    log.info(pc.gray(`    # Compare source and destination databases`));
+    log.info(`    psi compare --db ${srcDir} --dest ${destDir}`);
+    log.info('');
+    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    psi sync --db ${srcDir} --dest ${destDir}`);
+    log.info('');
+    log.info(pc.gray(`    # View summary of the replicated database`));
+    log.info(`    psi summary --db ${destDir}`);
+    log.info('');
+    log.info(pc.gray(`    # Open web interface for the replicated database`));
+    log.info(`    psi ui --db ${destDir}`);
 
     await exit(0);
 }
