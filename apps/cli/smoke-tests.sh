@@ -1742,7 +1742,7 @@ test_database_replicate() {
     
     # Run replicate command and capture output
     local replicate_output
-    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replicate_output"
     
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
@@ -1848,7 +1848,7 @@ test_database_replicate_second() {
     
     # Run second replicate command and capture output
     local second_replication_output
-    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "second_replication_output"
+    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "second_replication_output"
     
     # Check if replication was successful
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
@@ -1933,7 +1933,7 @@ test_replicate_after_changes() {
     
     # Replicate the changes from original to replica
     local replication_output
-    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "replication_output"
+    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replication_output"
     
     # Check that the 8 changed files were replicated
     expect_output_value "$replication_output" "Total files copied:" "3" "Files copied (the changes)"
@@ -2567,7 +2567,7 @@ test_sync_original_to_copy() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -2694,7 +2694,7 @@ test_sync_copy_to_original() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -2830,7 +2830,7 @@ test_sync_edit_field() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -3028,7 +3028,7 @@ test_sync_edit_field_reverse() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -3220,7 +3220,7 @@ test_sync_delete_asset() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -3368,7 +3368,7 @@ test_sync_delete_asset_reverse() {
     log_info "Creating copy database using replicate command to $copy_dir"
     rm -rf "$copy_dir"
     local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -3543,7 +3543,7 @@ test_replicate_with_deleted_asset() {
     log_info "Replicating database with deleted asset to $replica_dir"
     rm -rf "$replica_dir"
     local replicate_output
-    invoke_command "Replicate database with deleted asset" "$(get_cli_command) replicate --db $source_dir --dest $replica_dir --yes" 0 "replicate_output"
+    invoke_command "Replicate database with deleted asset" "$(get_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force" 0 "replicate_output"
     
     # Verify replica database exists
     check_exists "$replica_dir" "Replica database directory"
@@ -3666,7 +3666,7 @@ test_replicate_unrelated_databases_fail() {
     # Try to replicate first database to second database (should fail)
     log_info "Attempting to replicate first database to second database (should fail)"
     local replicate_output
-    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes" 1 "replicate_output"
+    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes --force" 1 "replicate_output"
     
     # Check that the error message contains the expected text
     expect_output_string "$replicate_output" "different ID than the source database" "Error message mentions different database IDs"
