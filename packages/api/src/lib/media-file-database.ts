@@ -338,14 +338,14 @@ export class MediaFileDatabase {
     //
     // Creates a new media file database.
     //
-    async create(): Promise<void> {
+    async create(databaseId?: string): Promise<void> {
         await retry(() => this.localHashCache.load());
 
         if (!await this.assetStorage.isEmpty("./")) {
             throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
         }
 
-        let merkleTree = createTree<IDatabaseMetadata>(this.uuidGenerator.generate());
+        let merkleTree = createTree<IDatabaseMetadata>(databaseId || this.uuidGenerator.generate());
         merkleTree.databaseMetadata = { filesImported: 0 };
 
         await this.ensureSortIndex();
@@ -380,18 +380,6 @@ export class MediaFileDatabase {
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
 
         log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
-    }
-
-    //
-    // Loads the existing media file database, or creates it if it doesn't exist.
-    //
-    async loadOrCreate(): Promise<void> {
-        const treeExists = await retry(() => this.metadataStorage.fileExists("tree.dat"));
-        if (treeExists) {
-            await this.load();
-        } else {
-            await this.create();
-        }
     }
 
     //

@@ -958,7 +958,6 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
             for (const pathToRemove of pathsToRemove) {            
                 if (node.name.startsWith(pathToRemove)) {
                     // Don't add this item to the new tree.
-                    console.log(`Skipping item: ${node.name} because it starts with ${pathToRemove}`); //fio:
                     return true;
                 }
             }

@@ -59,26 +59,6 @@ export interface IReplicateOptions {
 }
 
 //
-// Loads or creates the merkle tree.
-//
-export async function loadOrCreateMerkleTree(metadataStorage: IStorage, databaseId: string): Promise<IMerkleTree<IDatabaseMetadata>> {
-    let merkleTree = await loadTree<IDatabaseMetadata>("tree.dat", metadataStorage);
-    if (!merkleTree) {
-        merkleTree = createTree(databaseId);
-    } 
-    else if (databaseId && merkleTree.id !== databaseId) {
-        throw new FatalError(
-            `You are trying to replicate to a database that has a different ID than the source database.\n` +
-            `Source database ID: ${databaseId}\n` +
-            `Destination database ID: ${merkleTree.id}\n` + 
-            `The destination database is not related to the source database.`
-        );
-    }
-
-    return merkleTree;
-}
-
-//
 // Replicates the media file database to another storage.
 //
 export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
@@ -111,14 +91,34 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         mediaFileDatabase.uuidGenerator,
         mediaFileDatabase.getTimestampProvider()
     );
-    
-    // Load or create the destination database
-    await retry(() => destMediaFileDatabase.loadOrCreate());
 
+    const treeExists = await retry(() => destMetadataStorage.fileExists("tree.dat"));
+    if (treeExists) {
+        await retry(() => destMediaFileDatabase.load());
+    }
+    else {
+        //
+        // This is need because it will create the sort indexes and other things.
+        //
+        await retry(() => destMediaFileDatabase.create(merkleTree.id));
+    }
+    
     //
-    // Load the destination database, or create it if it doesn't exist.
+    // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await loadOrCreateMerkleTree(destMetadataStorage, merkleTree.id);
+    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    if (!destMerkleTree) {
+        throw new FatalError(`Failed to load merkle tree from destination database.`);
+    }
+    
+    if (destMerkleTree.id !== merkleTree.id) {
+        throw new FatalError(
+            `You are trying to replicate to a database that has a different ID than the source database.\n` +
+            `Source database ID: ${merkleTree.id}\n` +
+            `Destination database ID: ${destMerkleTree.id}\n` + 
+            `The destination database is not related to the source database.`
+        );
+    }
     
     //
     // Copy database metadata from source to destination.
@@ -220,11 +220,11 @@ Copied hash: ${copiedHash.toString("hex")}
             if (result.copiedFiles % 100 === 0) {
                 // Save the destination merkle tree periodically
                 await retry(async () => {
-                    if (destMerkleTree.dirty) {
-                        destMerkleTree.merkle = buildMerkleTree(destMerkleTree.sort);
-                        destMerkleTree.dirty = false;
+                    if (destMerkleTree!.dirty) {
+                        destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
+                        destMerkleTree!.dirty = false;
                     }
-                    await saveTree("tree.dat", destMerkleTree, destMetadataStorage);
+                    await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
                 });
             }
         }
@@ -237,11 +237,11 @@ Copied hash: ${copiedHash.toString("hex")}
     // Saves the dest database.
     //
     await retry(async () => {
-        if (destMerkleTree.dirty) {
-            destMerkleTree.merkle = buildMerkleTree(destMerkleTree.sort);
-            destMerkleTree.dirty = false;
+        if (destMerkleTree!.dirty) {
+            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
+            destMerkleTree!.dirty = false;
         }
-        await saveTree("tree.dat", destMerkleTree, destMetadataStorage);
+        await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
     });
 
     //
