@@ -12,7 +12,7 @@ export interface ISummaryCommandOptions extends IBaseCommandOptions {
 //
 export async function summaryCommand(options: ISummaryCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true);
+    const { database, databaseDir } = await loadDatabase(options.db, options, true);
 
     const summary = await database.getDatabaseSummary();
 
@@ -34,10 +34,20 @@ export async function summaryCommand(options: ISummaryCommandOptions): Promise<v
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    log.info(`    ${pc.cyan('psi add <paths>')}               Add more files to your database`);
-    log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
-    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(pc.gray(`    # Verify the integrity of all files in the database`));
+    log.info(`    psi verify`);
+    log.info('');
+    log.info(pc.gray(`    # Add more files to your database`));
+    log.info(`    psi add <paths>`);
+    log.info('');
+    log.info(pc.gray(`    # Create a backup copy of your database`));
+    log.info(`    psi replicate --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    psi sync --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Open the web interface to browse your media`));
+    log.info(`    psi ui`);
 
     await exit(0);
 }

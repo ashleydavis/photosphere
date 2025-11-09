@@ -31,7 +31,7 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     // Configure Google API key for reverse geocoding on first use
     await configureIfNeeded(['google'], nonInteractive);
     
-    const { database } = await loadDatabase(options.db, options, false);
+    const { database, databaseDir } = await loadDatabase(options.db, options, false);
 
     writeProgress(`Searching for files...`);
 
@@ -72,10 +72,20 @@ export async function addCommand(paths: string[], options: IAddCommandOptions): 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    log.info(`    ${pc.cyan('psi summary')}                   View database summary and tree hash`);
-    log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Replicate the database to another location`);
-    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(pc.gray(`    # Verify the integrity of all files in the database`));
+    log.info(`    psi verify`);
+    log.info('');
+    log.info(pc.gray(`    # View database summary and tree hash`));
+    log.info(`    psi summary`);
+    log.info('');
+    log.info(pc.gray(`    # Replicate the database to another location`));
+    log.info(`    psi replicate --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    psi sync --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Open the web interface to browse your media`));
+    log.info(`    psi ui`);
 
     await exit(0);
 }

@@ -23,7 +23,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
     
-    const { database } = await loadDatabase(options.db, options, true);
+    const { database, databaseDir } = await loadDatabase(options.db, options, true);
 
     writeProgress(options.path 
         ? `🔍 Verifying files matching: ${options.path}` 
@@ -90,12 +90,24 @@ export async function verifyCommand(options: IVerifyCommandOptions): Promise<voi
     log.info('');
     log.info(pc.bold('Next steps:'));
     if (result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0) {
-        log.info(`    ${pc.cyan('psi repair --source <path>')}   Fix database issues by restoring from source`);
+        log.info(pc.gray(`    # Fix database issues by restoring from source`));
+        log.info(`    psi repair --source <path>`);
+        log.info('');
     }
-    log.info(`    ${pc.cyan('psi replicate --dest <path>')}   Create a backup copy of your database`);
-    log.info(`    ${pc.cyan('psi compare --dest <path>')}     Compare this database with another location`);
-    log.info(`    ${pc.cyan('psi summary')}                   View database summary and tree hash`);
-    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
+    log.info(pc.gray(`    # Create a backup copy of your database`));
+    log.info(`    psi replicate --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    psi sync --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # Compare this database with another location`));
+    log.info(`    psi compare --db ${databaseDir} --dest <path>`);
+    log.info('');
+    log.info(pc.gray(`    # View database summary and tree hash`));
+    log.info(`    psi summary`);
+    log.info('');
+    log.info(pc.gray(`    # Open the web interface to browse your media`));
+    log.info(`    psi ui`);
 
     await exit(0);
 }
