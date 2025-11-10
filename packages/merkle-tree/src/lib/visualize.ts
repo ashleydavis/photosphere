@@ -1,4 +1,4 @@
-import { IMerkleTree, SortNode, MerkleNode } from "./merkle-tree";
+import { IMerkleTree, SortNode, MerkleNode, iterateLeaves } from "./merkle-tree";
 
 /**
  * Visualize a sort tree in simple ASCII format showing item names
@@ -128,6 +128,18 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
         
         result += "\n" + "=".repeat(50) + "\n";
         result += `Root Hash: ${merkleTree.merkle.hash.toString('hex')}\n`;
+        result += "=".repeat(50) + "\n";
+        
+        // List all leaf nodes
+        result += "\n" + "=".repeat(50) + "\n";
+        result += "Leaf Nodes:\n";
+        result += "=".repeat(50) + "\n";
+        for (const leaf of iterateLeaves(merkleTree.merkle)) {
+            if (leaf.name) {
+                const hashHex = leaf.hash.toString('hex');
+                result += `${leaf.name} (${hashHex})\n`;
+            }
+        }
         result += "=".repeat(50) + "\n";
     }
     
