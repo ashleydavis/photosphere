@@ -234,36 +234,10 @@
         "vite": "^5.1.6",
       },
     },
-    "packages/adb": {
-      "name": "adb",
-      "version": "1.0.0",
-      "dependencies": {
-        "axios": "^0.27.2",
-        "bson": "^6.10.3",
-        "dayjs": "^1.11.7",
-        "jszip": "^3.10.1",
-        "lodash": "^4.17.21",
-        "merkle-tree": "workspace:*",
-        "mime-types": "^2.1.35",
-        "uuid": "^11.1.0",
-      },
-      "devDependencies": {
-        "@peculiar/webcrypto": "^1.4.1",
-        "@types/jest": "^29.4.0",
-        "@types/lodash": "^4.17.5",
-        "@types/mime-types": "^2.1.1",
-        "@types/node": "^22.9.1",
-        "fs-extra": "^11.1.0",
-        "jest": "^29.0.1",
-        "ts-jest": "^29.0.5",
-        "typescript": "^5.6.3",
-      },
-    },
     "packages/api": {
       "name": "api",
       "version": "1.0.0",
       "dependencies": {
-        "adb": "workspace:*",
         "axios": "^0.27.2",
         "bdb": "workspace:*",
         "dayjs": "^1.11.7",
@@ -366,7 +340,6 @@
       "name": "rest-api",
       "version": "1.0.0",
       "dependencies": {
-        "adb": "workspace:*",
         "api": "workspace:*",
         "axios": "^0.27.2",
         "bdb": "workspace:*",
@@ -1107,8 +1080,6 @@
     "acorn-globals": ["acorn-globals@7.0.1", "", { "dependencies": { "acorn": "^8.1.0", "acorn-walk": "^8.0.2" } }, "sha512-umOSDSDrfHbTNPuNpC2NSnnA3LUrqpevPb4T9jRx4MagXNS0rs+gwiTcAvqCRmsD6utzsrzNt+ebm00SNWiC3Q=="],
 
     "acorn-walk": ["acorn-walk@8.3.4", "", { "dependencies": { "acorn": "^8.11.0" } }, "sha512-ueEepnujpqee2o5aIYnvHU6C0A42MNdsIDeqy5BydrkuC5R1ZuUFnm27EeFJGoEHJQgn3uleRvmTXaJgfXbt4g=="],
-
-    "adb": ["adb@workspace:packages/adb"],
 
     "adm-zip": ["adm-zip@0.5.16", "", {}, "sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ=="],
 
