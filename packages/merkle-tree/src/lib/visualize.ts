@@ -134,7 +134,7 @@ export function visualizeTree<DatabaseMetadata>(merkleTree: IMerkleTree<Database
         result += "\n" + "=".repeat(50) + "\n";
         result += "Leaf Nodes:\n";
         result += "=".repeat(50) + "\n";
-        for (const leaf of iterateLeaves(merkleTree.merkle)) {
+        for (const leaf of iterateLeaves<MerkleNode>(merkleTree.merkle)) {
             if (leaf.name) {
                 const hashHex = leaf.hash.toString('hex');
                 result += `${leaf.name} (${hashHex})\n`;

@@ -4,7 +4,7 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock } from "api";
+import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme } from "api";
 import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
@@ -153,6 +153,12 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
             } while (next);
             
             log.info(`✓ Moved ${filesMoved} files from 'assets' to 'asset' directory`);
+        }
+
+        // Create README.md if it doesn't exist
+        const existingReadme = await retry(() => assetStorage.info('README.md'));
+        if (!existingReadme) {
+            merkleTree = await createReadme(assetStorage, database.getMetadataStorage(), merkleTree);
         }
 
         // Rebuild the merkle tree in sorted order with no metadata/

@@ -23,7 +23,7 @@ import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
 import { loadMerkleTree, saveMerkleTree, getFilesRootHash } from "./tree";
-import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData, combineHashes } from "merkle-tree";
+import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData, combineHashes, IMerkleTree } from "merkle-tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
@@ -230,6 +230,33 @@ export interface IAssetDetails {
 }
 
 //
+// Creates the README.md file in the database.
+// Returns the updated merkle tree with the README.md file added.
+//
+export async function createReadme(
+    assetStorage: IStorage,
+    metadataStorage: IStorage,
+    merkleTree: IMerkleTree<IDatabaseMetadata>
+): Promise<IMerkleTree<IDatabaseMetadata>> {
+    // Create README.md file with warning about manual modifications
+    await retry(() => assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
+
+    const readmeInfo = await retry(() => assetStorage.info('README.md'));
+    if (!readmeInfo) {
+        throw new Error('README.md file not found after creation.');
+    }
+
+    merkleTree = addItem(merkleTree, {
+        name: 'README.md',
+        hash: await retry(() => computeHash(assetStorage.readStream('README.md'))),
+        length: readmeInfo.length,
+        lastModified: readmeInfo.lastModified,
+    });
+    
+    return merkleTree;
+}
+
+//
 // Implements the Photosphere media file database.
 //
 export class MediaFileDatabase {
@@ -350,20 +377,7 @@ export class MediaFileDatabase {
 
         await this.ensureSortIndex();
 
-        // Create README.md file with warning about manual modifications
-        await retry(() => this.assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
-
-        const readmeInfo = await retry(() => this.assetStorage.info('README.md'));
-        if (!readmeInfo) {
-            throw new Error('README.md file not found after creation.');
-        }
-
-        merkleTree = addItem(merkleTree, {
-            name: 'README.md',
-            hash: await retry(() => computeHash(this.assetStorage.readStream('README.md'))),
-            length: readmeInfo.length,
-            lastModified: readmeInfo.lastModified,
-        });
+        merkleTree = await createReadme(this.assetStorage, this.metadataStorage, merkleTree);
 
         await retry(() => saveMerkleTree(merkleTree, this.metadataStorage));
 
