@@ -87,6 +87,13 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
     }
+
+    // Don't do anything if the source and target merkle trees are identical.
+    if (sourceMerkleTree.merkle && targetMerkleTree.merkle 
+        && Buffer.compare(sourceMerkleTree.merkle.hash, targetMerkleTree.merkle.hash) === 0) {
+        log.verbose("Source and target merkle trees are identical, no sync needed.");
+        return;
+    }
    
     // Get deleted asset IDs from source and target
     const sourceDeletedIds = new Set(sourceMerkleTree.databaseMetadata?.deletedAssetIds || []);
