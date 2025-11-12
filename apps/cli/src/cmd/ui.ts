@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import { createServer, SingleMediaFileDatabaseProvider } from 'rest-api';
 import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { exit, registerTerminationCallback } from "node-utils";
 import open from "open";
 import { log, TimestampProvider } from "utils";
 import pc from "picocolors";
@@ -106,11 +105,6 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
         authType: "no-auth",
         staticMiddleware,
         googleApiKey: process.env.GOOGLE_API_KEY,
-    });
-
-    registerTerminationCallback(async () => {
-        // Shuts down the server gracefully on termination signals.
-        await close();
     });
 
     //
