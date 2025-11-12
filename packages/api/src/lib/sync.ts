@@ -434,7 +434,7 @@ export async function syncDatabase(sourceDb: MediaFileDatabase, targetDb: MediaF
     // Compare root hashes to see if databases are identical
     if (sourceDbTree?.merkle && targetDbTree?.merkle) { //todo: move this comparison to the iterateDatabaseDifferences function.
         if (Buffer.compare(sourceDbTree.merkle.hash, targetDbTree.merkle.hash) === 0) {
-            log.info("Databases are identical, no sync needed.");
+            log.verbose("Databases are identical, no sync needed.");
             return;
         }
     }
