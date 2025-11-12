@@ -203,6 +203,15 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     log.info(`Total records copied:      ${result.copiedRecords > 0 ? pc.green(result.copiedRecords.toString()) : pc.gray('0')}`);
     log.info(`Skipped records (unchanged): ${result.existingRecords > 0 ? pc.yellow(result.existingRecords.toString()) : pc.gray('0')}`);
     
+    // Print pruned files if any
+    if (result.prunedFiles.length > 0) {
+        log.info('');
+        log.info(`Files pruned from destination: ${pc.red(result.prunedFiles.length.toString())}`);
+        for (const fileName of result.prunedFiles) {
+            log.info(`  ${pc.red('✗')} ${fileName}`);
+        }
+    }
+    
     // If destination is encrypted, copy the public key to the destination .db directory
     if (destIsEncrypted && resolvedDestKeyPath) {
         const publicKeySource = `${resolvedDestKeyPath}.pub`;

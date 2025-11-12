@@ -1464,6 +1464,38 @@ function _deleteNode(node: SortNode | undefined, name: string): SortNode | undef
 }
 
 /**
+ * Prunes nodes from a merkle tree by removing all files represented by the given MerkleNode roots.
+ * This iterates leaves on each MerkleNode to find file names, then removes those files from the sort tree.
+ * 
+ * @param merkleTree The merkle tree to prune
+ * @param nodesToPrune Array of MerkleNode roots representing subtrees to remove
+ * @returns Array of file names that were pruned
+ */
+export function pruneTree<DatabaseMetadata>(
+    merkleTree: IMerkleTree<DatabaseMetadata>,
+    nodesToPrune: MerkleNode[]
+): string[] {
+    const prunedFiles: string[] = [];
+    
+    // Iterate leaves on each MerkleNode and remove files from the sort tree
+    for (const node of nodesToPrune) {
+        for (const leaf of iterateLeaves<MerkleNode>(node)) {
+            if (leaf.name) {
+                merkleTree.sort = _deleteNode(merkleTree.sort, leaf.name);
+                prunedFiles.push(leaf.name);
+            }
+        }
+    }
+    
+    // Mark the merkle tree as dirty so it will be rebuilt later
+    if (prunedFiles.length > 0) {
+        merkleTree.dirty = true;
+    }
+    
+    return prunedFiles;
+}
+
+/**
  * Completely removes multiple items from the merkle tree by rebuilding the tree without those items.
  * 
  * WARNING: This function is inefficient as it rebuilds the entire tree. Use sparingly.

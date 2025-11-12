@@ -5,7 +5,7 @@ import { computeHash } from "./hash";
 import { IStorage } from "storage";
 import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, createTree, getItemInfo, IMerkleTree, loadTree, saveTree, SortNode, traverseTreeAsync, upsertItem } from "merkle-tree";
+import { buildMerkleTree, createTree, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { toExternal } from "bdb";
 import stringify from "json-stable-stringify";
@@ -46,6 +46,11 @@ export interface IReplicationResult {
     // The number of BSON database records copied/updated in the destination database.
     //
     copiedRecords: number;
+
+    //
+    // List of file names that were pruned from the destination.
+    //
+    prunedFiles: string[];
 }
 
 //
@@ -71,6 +76,39 @@ async function replicateFiles(
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
 ): Promise<IMerkleTree<IDatabaseMetadata>> {
+    //
+    // Collect nodes to process from the source merkle tree that are different.
+    // If there's no dest merkle tree, we process the entire source tree.
+    //
+    let nodesToProcess: MerkleNode[] = [];
+    let nodesToPrune: MerkleNode[] = [];
+    
+    if (destMerkleTree.merkle) {
+        //
+        // Find differences between source and destination merkle trees.
+        //
+        const diff = findMerkleTreeDifferences(merkleTree.merkle, destMerkleTree.merkle);        
+        
+        //
+        // Collect nodes to process - only the differing MerkleNode roots from source.
+        //
+        nodesToProcess = diff.onlyInTree1;
+        
+        //
+        // Collect nodes to prune from dest that are different (only in tree2).
+        // Pruning will be done at the end.
+        //
+        nodesToPrune = diff.onlyInTree2;
+    } else {
+        // If there's no dest merkle tree, process the entire source tree
+        if (merkleTree.merkle) {
+            nodesToProcess = [ merkleTree.merkle ];
+        }
+        else if (destMerkleTree.merkle) {
+            nodesToPrune = [ destMerkleTree.merkle ];
+        }
+    }
+
     //
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
@@ -144,38 +182,56 @@ Copied hash: ${copiedHash.toString("hex")}
     };
 
     //
-    // Process a node in the soure merkle tree.
+    // Process files from MerkleNode differences.
     //
-    const processSrcNode = async (srcNode: SortNode): Promise<boolean> => {
-        if (srcNode.name) {
-            // Skip files that don't match the path filter
-            if (options?.pathFilter) {
-                const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
-                const fileName = srcNode.name.replace(/\\/g, '/');
+    const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+        if (!merkleNode.left && !merkleNode.right) {
+            // Leaf node - process the file directly
+            if (merkleNode.name && merkleNode.hash) {
+                // Skip files that don't match the path filter
+                if (options?.pathFilter) {
+                    const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
+                    const fileName = merkleNode.name.replace(/\\/g, '/');
+                    
+                    // Check if the file matches the filter (exact match or starts with filter + '/')
+                    if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
+                        return;
+                    }
+                }
                 
-                // Check if the file matches the filter (exact match or starts with filter + '/')
-                if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
-                    return true; // Continue traversal
+                await retry(() => copyAsset(merkleNode.name!, merkleNode.hash));
+
+                if (result.copiedFiles % 100 === 0) {
+                    // Save the destination merkle tree periodically
+                    await retry(async () => {
+                        if (destMerkleTree!.dirty) {
+                            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
+                            destMerkleTree!.dirty = false;
+                        }
+                        await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
+                    });
                 }
             }
-                            
-            await retry(() => copyAsset(srcNode.name!, srcNode.contentHash!));
-
-            if (result.copiedFiles % 100 === 0) {
-                // Save the destination merkle tree periodically
-                await retry(async () => {
-                    if (destMerkleTree!.dirty) {
-                        destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
-                        destMerkleTree!.dirty = false;
-                    }
-                    await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
-                });
+        } else {
+            // Internal node - recursively process children
+            if (merkleNode.left) {
+                await processMerkleNode(merkleNode.left);
+            }
+            if (merkleNode.right) {
+                await processMerkleNode(merkleNode.right);
             }
         }
-        return true; // Continue traversing.
     };
 
-    await traverseTreeAsync<SortNode>(merkleTree.sort, processSrcNode);
+    // Process only the nodes that differ
+    for (const nodeToProcess of nodesToProcess) {
+        await processMerkleNode(nodeToProcess);
+    }
+
+    //
+    // Prune nodes from dest that are different (only in tree2).
+    //
+    result.prunedFiles = pruneTree(destMerkleTree, nodesToPrune);
 
     //
     // Saves the dest database.
@@ -276,6 +332,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         recordsConsidered: 0,
         existingRecords: 0,
         copiedRecords: 0,
+        prunedFiles: [],
     };
 
     //
@@ -325,7 +382,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
     }
 
-    destMerkleTree = await replicateFiles(
+    destMerkleTree = await replicateFiles( //todo: doesn't need to return destMerkleTree, it can just be void
         merkleTree,
         destMerkleTree,
         destAssetStorage,
