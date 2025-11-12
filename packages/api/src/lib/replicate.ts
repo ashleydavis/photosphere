@@ -59,74 +59,18 @@ export interface IReplicateOptions {
 }
 
 //
-// Replicates the media file database to another storage.
+// Replicates files from source to destination.
 //
-export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
-
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
-    if (!merkleTree) {
-        throw new Error(`Failed to load merkle tree`);
-    }
-
-    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
-
-    const result: IReplicationResult = {
-        filesImported,
-        filesConsidered: 0,
-        existingFiles: 0,
-        copiedFiles: 0,
-        recordsConsidered: 0,
-        existingRecords: 0,
-        copiedRecords: 0,
-    };
-
-    //
-    // Create or load the destination MediaFileDatabase to ensure sort indexes are loaded/created.
-    // This has to be created before tree.dat is saved.
-    //
-    const destMediaFileDatabase = new MediaFileDatabase(
-        destAssetStorage,
-        destMetadataStorage,
-        undefined, // googleApiKey not needed for replication
-        mediaFileDatabase.uuidGenerator,
-        mediaFileDatabase.getTimestampProvider()
-    );
-
-    const treeExists = await retry(() => destMetadataStorage.fileExists("tree.dat"));
-    if (treeExists) {
-        await retry(() => destMediaFileDatabase.load());
-    }
-    else {
-        //
-        // This is need because it will create the sort indexes and other things.
-        //
-        await retry(() => destMediaFileDatabase.create(merkleTree.id));
-    }
-    
-    //
-    // Load the destination database that might have been just created.
-    //
-    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
-    if (!destMerkleTree) {
-        throw new FatalError(`Failed to load merkle tree from destination database.`);
-    }
-    
-    if (destMerkleTree.id !== merkleTree.id) {
-        throw new FatalError(
-            `You are trying to replicate to a database that has a different ID than the source database.\n` +
-            `Source database ID: ${merkleTree.id}\n` +
-            `Destination database ID: ${destMerkleTree.id}\n` + 
-            `The destination database is not related to the source database.`
-        );
-    }
-    
-    //
-    // Copy database metadata from source to destination.
-    //
-    if (merkleTree.databaseMetadata) {
-        destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
-    }
-
+async function replicateFiles(
+    merkleTree: IMerkleTree<IDatabaseMetadata>,
+    destMerkleTree: IMerkleTree<IDatabaseMetadata>,
+    destAssetStorage: IStorage,
+    destMetadataStorage: IStorage,
+    mediaFileDatabase: MediaFileDatabase,
+    options: IReplicateOptions | undefined,
+    progressCallback: ProgressCallback | undefined,
+    result: IReplicationResult
+): Promise<IMerkleTree<IDatabaseMetadata>> {
     //
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
@@ -244,6 +188,18 @@ Copied hash: ${copiedHash.toString("hex")}
         await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
     });
 
+    return destMerkleTree;
+}
+
+//
+// Replicates BSON database records from source to destination.
+//
+async function replicateBsonDatabase(
+    mediaFileDatabase: MediaFileDatabase,
+    destMediaFileDatabase: MediaFileDatabase,
+    progressCallback: ProgressCallback | undefined,
+    result: IReplicationResult
+): Promise<void> {
     //
     // Replicate BSON database records.
     // Iterate through all collections and records, adding or updating records as needed.
@@ -298,6 +254,94 @@ Copied hash: ${copiedHash.toString("hex")}
             }
         }
     }
+}
+
+//
+// Replicates the media file database to another storage.
+//
+export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
+
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree`);
+    }
+
+    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+
+    const result: IReplicationResult = {
+        filesImported,
+        filesConsidered: 0,
+        existingFiles: 0,
+        copiedFiles: 0,
+        recordsConsidered: 0,
+        existingRecords: 0,
+        copiedRecords: 0,
+    };
+
+    //
+    // Create or load the destination MediaFileDatabase to ensure sort indexes are loaded/created.
+    // This has to be created before tree.dat is saved.
+    //
+    const destMediaFileDatabase = new MediaFileDatabase(
+        destAssetStorage,
+        destMetadataStorage,
+        undefined, // googleApiKey not needed for replication
+        mediaFileDatabase.uuidGenerator,
+        mediaFileDatabase.getTimestampProvider()
+    );
+
+    const treeExists = await retry(() => destMetadataStorage.fileExists("tree.dat"));
+    if (treeExists) {
+        await retry(() => destMediaFileDatabase.load());
+    }
+    else {
+        //
+        // This is need because it will create the sort indexes and other things.
+        //
+        await retry(() => destMediaFileDatabase.create(merkleTree.id));
+    }
+    
+    //
+    // Load the destination database that might have been just created.
+    //
+    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    if (!destMerkleTree) {
+        throw new FatalError(`Failed to load merkle tree from destination database.`);
+    }
+    
+    if (destMerkleTree.id !== merkleTree.id) {
+        throw new FatalError(
+            `You are trying to replicate to a database that has a different ID than the source database.\n` +
+            `Source database ID: ${merkleTree.id}\n` +
+            `Destination database ID: ${destMerkleTree.id}\n` + 
+            `The destination database is not related to the source database.`
+        );
+    }
+    
+    //
+    // Copy database metadata from source to destination.
+    //
+    if (merkleTree.databaseMetadata) {
+        destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+    }
+
+    destMerkleTree = await replicateFiles(
+        merkleTree,
+        destMerkleTree,
+        destAssetStorage,
+        destMetadataStorage,
+        mediaFileDatabase,
+        options,
+        progressCallback,
+        result
+    );
+
+    await replicateBsonDatabase(
+        mediaFileDatabase,
+        destMediaFileDatabase,
+        progressCallback,
+        result
+    );
     
     return result;
 }
