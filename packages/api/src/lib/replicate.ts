@@ -1,15 +1,15 @@
-//
-// Result of the replication process.
 
 import { computeHash } from "./hash";
-import { IStorage } from "storage";
+import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, createTree, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
+import { buildMerkleTree, createTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import { toExternal } from "bdb";
+import { toExternal, IBsonDatabase, IBsonCollection, IRecord, loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
+//
+// Result of the replication process.
 //
 export interface IReplicationResult {
     //
@@ -228,6 +228,133 @@ Copied hash: ${copiedHash.toString("hex")}
 }
 
 //
+// Generator to extract leaf node names from MerkleNode arrays.
+//
+function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo: move this to the merkle-tree package and test it.
+    for (const node of nodes) {
+        if (!node.left && !node.right) {
+            if (!node.name) {
+                throw new Error("Leaf node has no name");
+            }
+            yield node.name;
+        } else {
+            if (node.left) {
+                yield* iterateLeaves([node.left]);
+            }
+            if (node.right) {
+                yield* iterateLeaves([node.right]);
+            }
+        }
+    }
+}
+
+//
+// Yields record IDs from tree1 that differ from tree2.
+// tree1 is the primary tree (source for pass 1, dest for pass 2).
+// tree2 is the comparison tree (dest for pass 1, source for pass 2).
+// tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
+//
+async function* iterateShardDifferences(
+    collectionName: string,
+    shardId: string,
+    tree1Storage: IStorage,
+    tree2Storage: IStorage
+): AsyncGenerator<{ collectionName: string; recordId: string }> {
+    const tree1 = await retry(() => loadShardMerkleTree(tree1Storage, collectionName, shardId));    
+    if (!tree1?.merkle) {
+        // If primary tree doesn't exist, no records to process.
+        return;
+    }
+    
+    const tree2 = await retry(() => loadShardMerkleTree(tree2Storage, collectionName, shardId));
+    if (!tree2?.merkle) {
+        // If comparison tree doesn't exist, all records in primary tree need to be processed
+        for (const recordId of iterateLeaves([tree1.merkle])) {
+            yield {
+                collectionName,
+                recordId,
+            };
+        }
+        return;
+    }
+    
+    // Find records in tree1 that differ from tree2
+    const differingNodes = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    for (const recordId of iterateLeaves(differingNodes)) {
+        yield {
+            collectionName,
+            recordId,
+        };
+    }
+}
+
+//
+// Yields record IDs from tree1 collection that differ from tree2 collection.
+// tree1 is the primary tree (source for pass 1, dest for pass 2).
+// tree2 is the comparison tree (dest for pass 1, source for pass 2).
+// tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
+//
+async function* iterateCollectionDifferences(
+    collectionName: string,
+    tree1Storage: IStorage,
+    tree2Storage: IStorage
+): AsyncGenerator<{ collectionName: string; recordId: string }> {
+    const tree1 = await retry(() => loadCollectionMerkleTree(tree1Storage, collectionName));
+    if (!tree1?.merkle) {
+        // If primary collection tree doesn't exist, no records to process.
+        return;
+    }
+    
+    const tree2 = await retry(() => loadCollectionMerkleTree(tree2Storage, collectionName));
+    if (!tree2?.merkle) {
+        // If comparison collection tree doesn't exist, process all shards in primary tree
+        for (const shardId of iterateLeaves([tree1.merkle])) {
+            yield* iterateShardDifferences(collectionName, shardId, tree1Storage, tree2Storage);
+        }
+        return;
+    }
+    
+    // Find shards in tree1 that differ from tree2
+    const differingShards = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    for (const shardId of iterateLeaves(differingShards)) {
+        yield* iterateShardDifferences(collectionName, shardId, tree1Storage, tree2Storage);
+    }
+}
+
+//
+// Yields record IDs from tree1 database that differ from tree2 database.
+// tree1 is the primary tree (source for pass 1, dest for pass 2).
+// tree2 is the comparison tree (dest for pass 1, source for pass 2).
+// tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
+//
+async function* iterateDatabaseDifferences(
+    tree1Storage: IStorage,
+    tree2Storage: IStorage
+): AsyncGenerator<{ collectionName: string; recordId: string }> {
+
+    const tree1 = await retry(() => loadDatabaseMerkleTree(tree1Storage));    
+    if (!tree1?.merkle) {
+        // If primary database tree doesn't exist, no records to process.
+        return;
+    }
+    
+    const tree2 = await retry(() => loadDatabaseMerkleTree(tree2Storage));
+    if (!tree2?.merkle) {
+        // If comparison database tree doesn't exist, process all collections in primary tree
+        for (const collectionName of iterateLeaves([tree1.merkle])) {
+            yield* iterateCollectionDifferences(collectionName, tree1Storage, tree2Storage);
+        }
+        return;
+    }
+    
+    // Find collections in tree1 that differ from tree2
+    const differingCollections = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    for (const collectionName of iterateLeaves(differingCollections)) {
+        yield* iterateCollectionDifferences(collectionName, tree1Storage, tree2Storage);
+    }
+}
+
+//
 // Replicates BSON database records from source to destination.
 //
 async function replicateBsonDatabase(
@@ -237,11 +364,17 @@ async function replicateBsonDatabase(
     result: IReplicationResult
 ): Promise<void> {
     //
-    // Replicate BSON database records.
-    // Iterate through all collections and records, adding or updating records as needed.
-    //    
+    // Replicate BSON database records using merkle tree differences.
+    // This walks the tree of trees (database -> collections -> shards -> records)
+    // to efficiently identify only the records that need to be updated.
+    //
     const sourceBsonDatabase = mediaFileDatabase.getMetadataDatabase();
     const destBsonDatabase = destMediaFileDatabase.getMetadataDatabase();
+
+    // Wrap storage with metadata prefix for merkle tree loading
+    // The BSON database merkle trees are stored in assetStorage with a "metadata" prefix
+    const sourceStorage = new StoragePrefixWrapper(mediaFileDatabase.getAssetStorage(), "metadata");
+    const destStorage = new StoragePrefixWrapper(destMediaFileDatabase.getAssetStorage(), "metadata");
 
     // Helper function to compare two records for equality
     // Both records should be in external format (flat objects)
@@ -252,42 +385,65 @@ async function replicateBsonDatabase(
         return record1Json === record2Json;
     };
 
-    // Get all collections from source database
-    const sourceCollections = await retry(() => sourceBsonDatabase.collections());
-
     let recordsConsidered = 0;
 
-    // Replicate each collection
-    for (const collectionName of sourceCollections) {
-        const sourceCollection = sourceBsonDatabase.collection(collectionName);
-        const destCollection = destBsonDatabase.collection(collectionName);
+    //
+    // First pass: Find records in source that are new or different.
+    // These records need to be inserted or replaced in the dest database.
+    //
+    for await (const diff of iterateDatabaseDifferences(sourceStorage, destStorage)) {
+        recordsConsidered++;
 
-        // Iterate through all records in the source collection
-        for await (const sourceRecordInternal of sourceCollection.iterateRecords()) {
-            recordsConsidered++;
+        const sourceCollection = sourceBsonDatabase.collection(diff.collectionName);
+        const destCollection = destBsonDatabase.collection(diff.collectionName);
 
-            // Convert source record to external format for comparison and insertion
-            const sourceRecord = toExternal(sourceRecordInternal);
+        // Load the source record (getOne already returns external format)
+        const sourceRecord = await retry(() => sourceCollection.getOne(diff.recordId));
+        if (!sourceRecord) {
+            // Record doesn't exist in source, skip it
+            continue;
+        }
 
-
-            // Check if record exists in destination
-            const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
-            if (!destRecord) {
-                // Record doesn't exist in destination, add it
-                await retry(() => destCollection.insertOne(sourceRecord));
+        // Check if record exists in destination
+        const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
+        if (!destRecord) {
+            // Record doesn't exist in destination, add it
+            await retry(() => destCollection.insertOne(sourceRecord));
+            result.copiedRecords++;
+        } else {
+            // Record exists, check if it's different
+            if (!recordsAreEqual(sourceRecord, destRecord)) {
+                // Records are different, update the destination record
+                await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
                 result.copiedRecords++;
-            } else {
-                // Record exists, check if it's different
-                if (!recordsAreEqual(sourceRecord, destRecord)) {
-                    // Records are different, update the destination record
-                    await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
-                    result.copiedRecords++;
-                }
             }
+        }
 
-            if (progressCallback && recordsConsidered % 100 === 0) {
-                progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
-            }
+        if (progressCallback && recordsConsidered % 100 === 0) {
+            progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
+        }
+    }
+
+    //
+    // Second pass: Find records in dest that are new or different.
+    // These records need to be removed from the dest database to match source.
+    //
+    for await (const diff of iterateDatabaseDifferences(destStorage, sourceStorage)) {
+        recordsConsidered++;
+
+        const destCollection = destBsonDatabase.collection(diff.collectionName);
+
+        // Check if record exists in source
+        const sourceCollection = sourceBsonDatabase.collection(diff.collectionName);
+        const sourceRecord = await retry(() => sourceCollection.getOne(diff.recordId)); //todo: It's possible we don't need to do this lookup.
+        if (!sourceRecord) {
+            // Record doesn't exist in source, remove it from dest to match source
+            await retry(() => destCollection.deleteOne(diff.recordId));
+            result.copiedRecords++;
+        }
+
+        if (progressCallback && recordsConsidered % 100 === 0) {
+            progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
         }
     }
 }
