@@ -18,29 +18,9 @@ export interface IReplicationResult {
     filesImported: number;
 
     //
-    // The total number of files considered.
-    //
-    filesConsidered: number;
-
-    //
-    // The number of files already existing in the destination storage.
-    //
-    existingFiles: number;
-
-    //
     // The number of files copied to the destination storage.
     //
     copiedFiles: number;
-
-    //
-    // The total number of BSON database records considered.
-    //
-    recordsConsidered: number;
-
-    //
-    // The number of BSON database records already existing in the destination database.
-    //
-    existingRecords: number;
 
     //
     // The number of BSON database records copied/updated in the destination database.
@@ -75,7 +55,7 @@ async function replicateFiles(
     options: IReplicateOptions | undefined,
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
-): Promise<IMerkleTree<IDatabaseMetadata>> {
+): Promise<void> {
     //
     // Collect nodes to process from the source merkle tree that are different.
     // If there's no dest merkle tree, we process the entire source tree.
@@ -109,21 +89,23 @@ async function replicateFiles(
         }
     }
 
+    let filesConsidered = 0;
+
+
     //
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
     //
     const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
-        result.filesConsidered++;
+        filesConsidered++;
         
         // Check if file already exists in destination tree with matching hash.
         const destFileInfo = getItemInfo(destMerkleTree!, fileName);
         if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
             // File already exists with correct hash, skip copying.
             // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
-            result.existingFiles++;
             if (progressCallback) {
-                progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
+                progressCallback(`Copied ${result.copiedFiles}`);
             }
             return;
         }
@@ -177,7 +159,7 @@ Copied hash: ${copiedHash.toString("hex")}
         result.copiedFiles++;
 
         if (progressCallback) {
-            progressCallback(`Copied ${result.copiedFiles} | Already copied ${result.existingFiles}`);
+            progressCallback(`Copied ${result.copiedFiles}`);
         }
     };
 
@@ -243,8 +225,6 @@ Copied hash: ${copiedHash.toString("hex")}
         }
         await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
     });
-
-    return destMerkleTree;
 }
 
 //
@@ -275,6 +255,8 @@ async function replicateBsonDatabase(
     // Get all collections from source database
     const sourceCollections = await retry(() => sourceBsonDatabase.collections());
 
+    let recordsConsidered = 0;
+
     // Replicate each collection
     for (const collectionName of sourceCollections) {
         const sourceCollection = sourceBsonDatabase.collection(collectionName);
@@ -282,10 +264,11 @@ async function replicateBsonDatabase(
 
         // Iterate through all records in the source collection
         for await (const sourceRecordInternal of sourceCollection.iterateRecords()) {
-            result.recordsConsidered++;
+            recordsConsidered++;
 
             // Convert source record to external format for comparison and insertion
             const sourceRecord = toExternal(sourceRecordInternal);
+
 
             // Check if record exists in destination
             const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
@@ -299,14 +282,11 @@ async function replicateBsonDatabase(
                     // Records are different, update the destination record
                     await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
                     result.copiedRecords++;
-                } else {
-                    // Records are identical, skip
-                    result.existingRecords++;
                 }
             }
 
-            if (progressCallback && result.recordsConsidered % 100 === 0) {
-                progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records | Already copied ${result.existingFiles} files, ${result.existingRecords} records`);
+            if (progressCallback && recordsConsidered % 100 === 0) {
+                progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
             }
         }
     }
@@ -326,11 +306,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
 
     const result: IReplicationResult = {
         filesImported,
-        filesConsidered: 0,
-        existingFiles: 0,
         copiedFiles: 0,
-        recordsConsidered: 0,
-        existingRecords: 0,
         copiedRecords: 0,
         prunedFiles: [],
     };
@@ -382,7 +358,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
     }
 
-    destMerkleTree = await replicateFiles( //todo: doesn't need to return destMerkleTree, it can just be void
+    await replicateFiles(
         merkleTree,
         destMerkleTree,
         destAssetStorage,

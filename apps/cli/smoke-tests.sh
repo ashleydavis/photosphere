@@ -1749,9 +1749,7 @@ test_database_replicate() {
     
     # Check expected values from replication output
     expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$replicate_output" "Total files considered:" "15" "Total files considered"
     expect_output_value "$replicate_output" "Total files copied:" "14" "Files copied"
-    expect_output_value "$replicate_output" "Skipped (unchanged):" "1" "Files skipped (first run - the README file is always there!)"
     
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
@@ -1855,9 +1853,7 @@ test_database_replicate_second() {
     
     # Check expected values from second replication output
     expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$second_replication_output" "Total files considered:" "15" "Total files considered"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    expect_output_value "$second_replication_output" "Skipped (unchanged):" "15" "Files skipped (already exist)"
     
     # Verify original and replica still have the same aggregate root hash after second replication
     log_info "Verifying original and replica still have the same root hash after second replication"
