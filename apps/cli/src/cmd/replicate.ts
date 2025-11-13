@@ -195,13 +195,9 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     log.info('');
     
     log.info(`Total files imported:      ${pc.cyan(result.filesImported.toString())}`);
-    log.info(`Total files considered:    ${pc.cyan(result.filesConsidered.toString())}`);
     log.info(`Total files copied:        ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : pc.gray('0')}`);
-    log.info(`Skipped (unchanged):       ${result.existingFiles > 0 ? pc.yellow(result.existingFiles.toString()) : pc.gray('0')}`);
     log.info('');
-    log.info(`Total records considered:  ${pc.cyan(result.recordsConsidered.toString())}`);
     log.info(`Total records copied:      ${result.copiedRecords > 0 ? pc.green(result.copiedRecords.toString()) : pc.gray('0')}`);
-    log.info(`Skipped records (unchanged): ${result.existingRecords > 0 ? pc.yellow(result.existingRecords.toString()) : pc.gray('0')}`);
     
     // Print pruned files if any
     if (result.prunedFiles.length > 0) {
