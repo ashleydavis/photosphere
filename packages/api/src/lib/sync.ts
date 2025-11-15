@@ -4,7 +4,7 @@ import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
 import { IDatabaseMetadata, MediaFileDatabase } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { retry, log } from "utils";
+import { retry, log, FatalError } from "utils";
 import { computeHash } from "./hash";
 
 //
@@ -84,6 +84,16 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     let targetMerkleTree = await retry(() => loadMerkleTree(targetDb.getMetadataStorage()));
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
+    }
+
+    // Check that source and target databases have the same ID.
+    if (sourceMerkleTree.id !== targetMerkleTree.id) {
+        throw new FatalError(
+            `You are trying to sync databases that have different IDs.\n` +
+            `Source database ID: ${sourceMerkleTree.id}\n` +
+            `Target database ID: ${targetMerkleTree.id}\n` + 
+            `The databases are not related to each other.`
+        );
     }
 
     // Don't do anything if the source and target merkle trees are identical.
