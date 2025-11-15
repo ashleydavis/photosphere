@@ -1,5 +1,6 @@
-import { IStorage, pathJoin } from "storage";
 import { log } from "utils";
+import { IStorage } from "./storage";
+import { pathJoin } from "./storage-factory";
 
 /**
  * Represents a file that has been ordered by where it was found in the file system.

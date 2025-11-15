@@ -1,10 +1,8 @@
-import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { IRecord, ISortedIndexEntry} from 'bdb';
-import { SortIndex } from 'bdb';
-import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
-import { toExternal, toInternal } from '../lib/collection';
+import { IRecord, toInternal } from '../lib/collection';
+import { SortIndex, ISortedIndexEntry } from '../lib/sort-index';
+import { MockCollection } from './mock-collection';
 
 // Test interface
 interface TestRecord extends IRecord {

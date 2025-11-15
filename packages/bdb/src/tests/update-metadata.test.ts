@@ -1,4 +1,3 @@
-import { expect, test, describe } from '@jest/globals';
 import { updateMetadata } from '../lib/update-metadata';
 import { type Metadata } from '../lib/collection';
 

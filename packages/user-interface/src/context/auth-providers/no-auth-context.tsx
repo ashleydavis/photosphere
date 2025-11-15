@@ -1,5 +1,5 @@
 import React, { ReactNode } from "react";
-import { AuthContext, IAuthContext } from "user-interface";
+import { IAuthContext, AuthContext } from "../auth-context";
 
 export interface INoAuthContextProviderProps {
     //

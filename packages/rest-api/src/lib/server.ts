@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, Application } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IStorage, StoragePrefixWrapper } from "storage";
@@ -244,7 +244,7 @@ export interface IServerOptions {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, timestampProvider: ITimestampProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
+export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, timestampProvider: ITimestampProvider, databaseStorage: IStorage | undefined, options: IServerOptions): Promise<{ app: Application }> {
 
     let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator(), timestampProvider }) : undefined;
     

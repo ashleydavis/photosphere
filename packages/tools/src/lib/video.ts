@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'fs-extra';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
 import { exec } from 'node-utils';
@@ -104,7 +104,7 @@ export class Video {
             return this._info;
         }
 
-        if (!await fs.promises.exists(this.filePath)) {
+        if (!await fs.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
         
@@ -187,7 +187,7 @@ export class Video {
         height?: number;
         quality?: number;
     }): Promise<string> {
-        if (!await fs.promises.exists(this.filePath)) {
+        if (!await fs.exists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 

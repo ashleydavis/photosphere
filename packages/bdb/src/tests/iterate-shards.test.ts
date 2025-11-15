@@ -1,9 +1,6 @@
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { BsonCollection } from 'bdb';
-import type { IRecord, IInternalRecord } from 'bdb';
+import { BsonCollection, type IRecord, type IInternalRecord } from '../lib/collection';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
-import crypto from 'crypto';
 
 // Test interfaces
 interface TestUser extends IRecord {
@@ -122,7 +119,7 @@ describe('BsonCollection.iterateShards', () => {
         }
                 
         // Process shards to compute shard-level statistics
-        const shardStats = [];
+        const shardStats: { recordCount: number; avgAge: number; roles: Record<string, number> }[] = [];
         for await (const shard of collection.iterateShards()) {
             const shardRecords = Array.from(shard);
             
