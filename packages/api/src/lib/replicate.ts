@@ -3,9 +3,9 @@ import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, createTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree } from "./tree";
-import { toExternal, IBsonDatabase, IBsonCollection, IRecord, loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
+import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
+import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
 //
@@ -41,6 +41,11 @@ export interface IReplicateOptions {
     // Path filter to only replicate files matching this path (file or directory).
     //
     pathFilter?: string;
+
+    //
+    // If true, allows replication even if source and destination have different database IDs.
+    //
+    force?: boolean;
 }
 
 //
@@ -89,15 +94,11 @@ async function replicateFiles(
         }
     }
 
-    let filesConsidered = 0;
-
-
     //
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
     //
     const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
-        filesConsidered++;
         
         // Check if file already exists in destination tree with matching hash.
         const destFileInfo = getItemInfo(destMerkleTree!, fileName);
@@ -498,13 +499,21 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
     
-    if (destMerkleTree.id !== merkleTree.id) {
+    if (!options?.force && destMerkleTree.id !== merkleTree.id) {
         throw new FatalError(
             `You are trying to replicate to a database that has a different ID than the source database.\n` +
             `Source database ID: ${merkleTree.id}\n` +
             `Destination database ID: ${destMerkleTree.id}\n` + 
-            `The destination database is not related to the source database.`
+            `The destination database is not related to the source database.\n` +
+            `Use the --force flag to proceed anyway.`
         );
+    }
+    
+    //
+    // If force is used and IDs don't match, update destination files merkle tree UUID to match source.
+    //
+    if (options?.force && destMerkleTree.id !== merkleTree.id) {
+        destMerkleTree.id = merkleTree.id;
     }
     
     //
