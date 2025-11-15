@@ -1,9 +1,9 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, Application } from "express";
 import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
-import { MediaFileDatabase } from "api";
+import { MediaFileDatabase, acquireWriteLock, releaseWriteLock } from "api";
 import { ITimestampProvider, RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { BsonDatabase } from "bdb";
@@ -126,16 +126,19 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     // Reads a streaming asset from the storage provider.
     //
     readStream(databaseId: string, assetType: string, assetId: string): NodeJS.ReadableStream {
-        const assetPath = `${databaseId}/${assetType}/${assetId}`;
-        return this.assetStorage.readStream(assetPath);
+        const mediaFileDatabase = this.databaseMap.get(databaseId);
+        if (!mediaFileDatabase) {
+            throw new Error(`Database ${databaseId} not opened`);
+        }
+        return mediaFileDatabase.streamAsset(assetId, assetType);
     }
 
     //
     // Writes an asset to the storage provider.
     //
     async write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
-        const assetPath = `${databaseId}/${assetType}/${assetId}`;
-        await this.assetStorage.write(assetPath, contentType, buffer);
+        const mediaFileDatabase = await this.openDatabase(databaseId);
+        await mediaFileDatabase.writeAsset(assetId, assetType, contentType, buffer);
     }
 }
 
@@ -195,21 +198,17 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
-        const assetPath = `${assetType}/${assetId}`; // Ignores the databaseId parameter.
-        const storage = this.mediaFileDatabase.getAssetStorage();
-        return storage.readStream(assetPath);
+        return this.mediaFileDatabase.streamAsset(assetId, assetType);
     }
 
     //
     // Writes an asset to the storage provider.
     //
-    async write(_databaseId_: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
+    async write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
-        const assetPath = `${assetType}/${assetId}`;
-        const storage = this.mediaFileDatabase.getAssetStorage();
-        await storage.write(assetPath, contentType, buffer);
+        await this.mediaFileDatabase.writeAsset(assetId, assetType, contentType, buffer);
     }            
 }
 
@@ -244,7 +243,7 @@ export interface IServerOptions {
 //
 // Starts the REST API.
 //
-export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, timestampProvider: ITimestampProvider, databaseStorage: IStorage | undefined, options: IServerOptions) {
+export async function createServer(now: () => Date, mediaFileDatabaseProvider: IMediaFileDatabaseProvider, timestampProvider: ITimestampProvider, databaseStorage: IStorage | undefined, options: IServerOptions): Promise<{ app: Application }> {
 
     let db = databaseStorage ? new BsonDatabase({ storage: databaseStorage, uuidGenerator: new RandomUuidGenerator(), timestampProvider }) : undefined;
     
@@ -463,35 +462,54 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
             const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(op.databaseId);
-            const metadataDatabase = mediaFileDatabase.getMetadataDatabase();            
-            const recordCollection = metadataDatabase.collection(op.collectionName);
+            const assetStorage = mediaFileDatabase.getAssetStorage();
+            const sessionId = mediaFileDatabase.sessionId;
             
-            if (op.op.type === "set") {
+            //
+            // Acquire write lock before database operations.
+            //
+            if (!await acquireWriteLock(assetStorage, sessionId)) {
+                res.status(500).json({ error: `Failed to acquire write lock for database ${op.databaseId}` });
+                return;
+            }
 
-                //
-                // Deserialize date fields.
-                //
-                const fields = Object.assign({}, op.op.fields);
-                for (const dateField of dateFields) {
-                    if (fields[dateField] !== undefined) {
-                        fields[dateField] = new Date(fields[dateField]);
+            try {
+                const metadataDatabase = mediaFileDatabase.getMetadataDatabase();            
+                const recordCollection = metadataDatabase.collection(op.collectionName);
+                
+                if (op.op.type === "set") {
+
+                    //
+                    // Deserialize date fields.
+                    //
+                    const fields = Object.assign({}, op.op.fields);
+                    for (const dateField of dateFields) {
+                        if (fields[dateField] !== undefined) {
+                            fields[dateField] = new Date(fields[dateField]);
+                        }
                     }
-                }
 
-                await recordCollection.updateOne(op.recordId, fields, { upsert: true });
+                    await recordCollection.updateOne(op.recordId, fields, { upsert: true });
+                }
+                else if (op.op.type === "push") {
+                    const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
+                    const array = record?.[op.op.field] || [];
+                    array.push(op.op.value);
+                    await recordCollection.updateOne(op.recordId, { [op.op.field]: array }, { upsert: true });
+                }
+                else if (op.op.type === "pull") {
+                    const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
+                    const array = record?.[op.op.field] || [];
+                    const value = op.op.value;
+                    const updatedArray = array.filter((item: any) => item !== value);
+                    await recordCollection.updateOne(op.recordId, { [op.op.field]: updatedArray }, { upsert: true });
+                }
             }
-            else if (op.op.type === "push") {
-                const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
-                const array = record?.[op.op.field] || [];
-                array.push(op.op.value);
-                await recordCollection.updateOne(op.recordId, { [op.op.field]: array }, { upsert: true });
-            }
-            else if (op.op.type === "pull") {
-                const record = await recordCollection.getOne(op.recordId); //TODO: Should the db take care of this?
-                const array = record?.[op.op.field] || [];
-                const value = op.op.value;
-                const updatedArray = array.filter((item: any) => item !== value);
-                await recordCollection.updateOne(op.recordId, { [op.op.field]: updatedArray }, { upsert: true });
+            finally {
+                //
+                // Release write lock after database operations.
+                //
+                await releaseWriteLock(assetStorage);
             }
         }
 

@@ -1,6 +1,5 @@
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { BsonDatabase } from 'bdb';
+import { BsonDatabase } from '../lib/database';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 describe('BsonDatabase', () => {

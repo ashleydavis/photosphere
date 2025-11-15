@@ -1,9 +1,8 @@
 import { MockStorage } from 'storage';
 import fs from 'fs';
 import path from 'path';
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
-import { BsonDatabase } from 'bdb';
-import type { IBsonCollection } from 'bdb';
+import { BsonDatabase } from '../lib/database';
+import type { IBsonCollection } from '../lib/collection';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 describe('Collection duplicate document tests', () => {

@@ -1,9 +1,8 @@
-import { SortIndex } from 'bdb';
-import { IBsonCollection, IRecord, IShard } from 'bdb';
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { MockCollection } from 'bdb';
 import { RandomUuidGenerator } from 'utils';
+import { IRecord } from '../lib/collection';
+import { SortIndex } from '../lib/sort-index';
+import { MockCollection } from './mock-collection';
 
 // Test interface
 interface TestRecord extends IRecord {
