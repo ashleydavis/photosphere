@@ -186,7 +186,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(database.getAssetStorage(), "metadata");
 
-        log.info(pc.blue(`Rebuilding BSON database merkle tree not found.`));
+        log.info(pc.blue(`Rebuilding BSON database merkle tree.`));
             
         const bsonDatabaseTree = await buildDatabaseMerkleTree(
             bsonDatabaseStorage,
