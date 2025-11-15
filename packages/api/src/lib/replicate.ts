@@ -41,6 +41,11 @@ export interface IReplicateOptions {
     // Path filter to only replicate files matching this path (file or directory).
     //
     pathFilter?: string;
+
+    //
+    // If true, allows replication even if source and destination have different database IDs.
+    //
+    force?: boolean;
 }
 
 //
@@ -494,12 +499,13 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
     
-    if (destMerkleTree.id !== merkleTree.id) {
+    if (!options?.force && destMerkleTree.id !== merkleTree.id) {
         throw new FatalError(
             `You are trying to replicate to a database that has a different ID than the source database.\n` +
             `Source database ID: ${merkleTree.id}\n` +
             `Destination database ID: ${destMerkleTree.id}\n` + 
-            `The destination database is not related to the source database.`
+            `The destination database is not related to the source database.\n` +
+            `Use the --force flag to proceed anyway.`
         );
     }
     
