@@ -27,6 +27,8 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "storage": "workspace:*"
+    "storage": "workspace:*",
+    "utils": "workspace:*",
+    "bson": "^6.10.3"
   }
 }

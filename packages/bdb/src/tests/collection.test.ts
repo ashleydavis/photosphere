@@ -1,7 +1,5 @@
-import { expect, test, describe, beforeEach, afterEach } from '@jest/globals';
 import { MockStorage } from 'storage';
-import { BsonCollection } from 'bdb';
-import type { IRecord, IInternalRecord } from 'bdb';
+import { BsonCollection, type IRecord, type IInternalRecord } from '../lib/collection';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 // Test interfaces

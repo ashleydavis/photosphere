@@ -958,6 +958,98 @@ export class MediaFileDatabase {
     }
 
     //
+    // Streams an asset from the database.
+    // This is used by the REST API server to read assets.
+    //
+    streamAsset(assetId: string, assetType: string): NodeJS.ReadableStream {
+        const assetPath = `${assetType}/${assetId}`;
+        return this.assetStorage.readStream(assetPath);
+    }
+
+    //
+    // Writes an asset from a buffer with a specific asset ID.
+    // This is used by the REST API server to add assets uploaded via HTTP.
+    //
+    async writeAsset(assetId: string, assetType: string, contentType: string, buffer: Buffer): Promise<void> {
+        const assetPath = `${assetType}/${assetId}`;
+
+        //
+        // Acquire the write lock before writing shared files in the database.
+        //
+        if (!await acquireWriteLock(this.assetStorage, this.sessionId)) {
+            throw new Error(`Failed to acquire write lock.`);
+        }
+
+        try {
+            //
+            // Always load the database after acquiring the write lock to ensure we have the latest tree.
+            //
+            let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+            if (!merkleTree) {
+                throw new Error(`Failed to load media file database.`);
+            }
+
+            //
+            // Write the asset to storage.
+            //
+            await retry(() => this.assetStorage.write(assetPath, contentType, buffer));
+
+            const assetInfo = await retry(() => this.assetStorage.info(assetPath));
+            if (!assetInfo) {
+                throw new Error(`Failed to get info for file "${assetPath}"`);
+            }
+
+            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
+
+            //
+            // Refresh the timeout of the write lock.
+            //
+            await refreshWriteLock(this.assetStorage, this.sessionId);
+
+            //
+            // Update the merkle tree with the new asset.
+            //
+            merkleTree = addItem(merkleTree, {
+                name: assetPath,
+                hash: hashedAsset.hash,
+                length: hashedAsset.length,
+                lastModified: hashedAsset.lastModified,
+            });
+
+            //
+            // If this is the main asset file (not thumb/display), increment the imported files count.
+            //
+            if (assetType === "asset") {
+                if (!merkleTree.databaseMetadata) {
+                    merkleTree.databaseMetadata = { filesImported: 0 };
+                }
+                merkleTree.databaseMetadata.filesImported++;
+            }
+
+            //
+            // Ensure the tree is saved before releasing the lock.
+            //
+            await retry(() => saveMerkleTree(merkleTree, this.metadataStorage));
+        }
+        catch (err: any) {
+            log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
+
+            //
+            // Clean up the file if something went wrong.
+            //
+            await retry(() => this.assetStorage.deleteFile(assetPath));
+
+            throw err;
+        }
+        finally {
+            //
+            // Release the write lock after writing shared files in the database.
+            //
+            await releaseWriteLock(this.assetStorage);
+        }
+    }
+
+    //
     // Removes an asset by ID, including all associated files and metadata.
     // This is the comprehensive removal method that handles storage cleanup.
     //

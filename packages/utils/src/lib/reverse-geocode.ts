@@ -181,7 +181,7 @@ export function parseReverseGeocodeResult(result: any): string {
         streetAddress = `${values.street_number} ${values.route}`;
     }
 
-    let parts = [];
+    let parts: string[] = [];
 
     if (streetAddress) {
         parts.push(streetAddress);

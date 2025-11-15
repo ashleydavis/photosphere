@@ -20,12 +20,15 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.16",
     "@peculiar/webcrypto": "^1.4.1",
     "@types/jest": "^29.4.0",
     "@types/lodash": "^4.17.5",
     "@types/mime-types": "^2.1.1",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.9.1",
-    "fs-extra": "^11.1.0",
+    "fs-extra": "^11.3.2",
     "jest": "^29.0.1",
     "ts-jest": "^29.0.5",
     "typescript": "^5.6.3",
@@ -40,6 +43,12 @@
     "api": "workspace:*",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
-    "mime-types": "^2.1.35"
+    "mime-types": "^2.1.35",
+    "express": "^5.0.0-beta.1",
+    "express-oauth2-jwt-bearer": "^1.6.0",
+    "cors": "^2.8.5",
+    "storage": "workspace:*",
+    "node-utils": "workspace:*",
+    "fs-extra": "^11.3.2"
   }
 }

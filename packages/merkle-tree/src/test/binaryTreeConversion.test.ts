@@ -1,4 +1,3 @@
-import { describe, it, expect } from "@jest/globals";
 import { createTree, addItem, binaryTreeToArray, arrayToBinaryTree, HashedItem } from "../lib/merkle-tree";
 import { traverseTreeSync } from "../lib/traverse";
 

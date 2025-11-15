@@ -1,8 +1,7 @@
-import { SortIndex } from 'bdb';
-import { IRecord } from 'bdb';
-import { expect, test, describe, beforeEach } from '@jest/globals';
+import { SortIndex } from '../lib/sort-index';
+import { IRecord } from '../lib/collection';
 import { MockStorage } from 'storage';
-import { MockCollection } from 'bdb';
+import { MockCollection } from './mock-collection';
 import { RandomUuidGenerator } from 'utils';
 import { toInternal } from '../lib/collection';
 

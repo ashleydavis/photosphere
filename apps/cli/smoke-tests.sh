@@ -3662,7 +3662,7 @@ test_replicate_unrelated_databases_fail() {
     # Try to replicate first database to second database (should fail)
     log_info "Attempting to replicate first database to second database (should fail)"
     local replicate_output
-    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes --force" 1 "replicate_output"
+    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes" 1 "replicate_output"
     
     # Check that the error message contains the expected text
     expect_output_string "$replicate_output" "different ID than the source database" "Error message mentions different database IDs"
