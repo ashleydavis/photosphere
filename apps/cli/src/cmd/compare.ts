@@ -1,15 +1,14 @@
 import { log } from "utils";
-import { createStorage, pathJoin } from "storage";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { configureIfNeeded, getS3Config } from '../lib/config';
 import { getDirectoryForCommand } from '../lib/directory-picker';
-import { ensureMediaProcessingTools } from '../lib/ensure-tools';
-import { compareTrees, loadTree } from "merkle-tree";
+import { compareTrees } from "merkle-tree";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
+import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadMerkleTree } from "api";
 
-export interface ICompareCommandOptions { 
+export interface ICompareCommandOptions extends IBaseCommandOptions {
     //
     // Source database directory.
     //
@@ -19,26 +18,6 @@ export interface ICompareCommandOptions {
     // Destination database directory.
     //
     dest?: string;
-
-    //
-    // Enables verbose logging.
-    //
-    verbose?: boolean;
-
-    //
-    // Enables tool output logging.
-    //
-    tools?: boolean;
-
-    //
-    // Non-interactive mode - use defaults and command line arguments.
-    //
-    yes?: boolean;
-
-    //
-    // Set the current working directory for directory selection prompts.
-    //
-    cwd?: string;
 }
 
 //
@@ -46,15 +25,7 @@ export interface ICompareCommandOptions {
 //
 export async function compareCommand(options: ICompareCommandOptions): Promise<void> {
 
-    await configureLog({
-        verbose: options.verbose,
-        tools: options.tools
-    });
-
     const nonInteractive = options.yes || false;
-
-    // Ensure media processing tools are available
-    await ensureMediaProcessingTools(nonInteractive);
 
     let srcDir = options.db;
     if (srcDir === undefined) {
@@ -65,47 +36,30 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     if (destDir === undefined) {
         destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
-    
-    const srcMetaPath = pathJoin(srcDir, '.db');
-    const destMetaPath = pathJoin(destDir, '.db');
 
-    if (srcDir.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-    
-    if (srcMetaPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-
-    if (destDir.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-    
-    if (destMetaPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-
-    const s3Config = await getS3Config();
-    const { storage: srcMetadataStorage } = createStorage(srcMetaPath, s3Config);
-    const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
+    // Load both databases with allowOlderVersions=false to disallow older databases
+    const { database: sourceDatabase, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false);
+    const destOptions = { ...options, db: destDir };
+    const { database: destDatabase, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false);
 
     log.info('');
     log.info(`Comparing two databases:`);
-    log.info(`  Source:         ${pc.cyan(srcDir)}`);
-    log.info(`  Destination:    ${pc.cyan(destDir)}`);
+    log.info(`  Source:         ${pc.cyan(srcDirResolved)}`);
+    log.info(`  Destination:    ${pc.cyan(destDirResolved)}`);
     log.info('');
 
-    const srcMerkleTree = await loadTree("tree.dat", srcMetadataStorage);
+    // Load merkle trees from the databases
+    const srcMerkleTree = await loadMerkleTree(sourceDatabase.getMetadataStorage());
     if (!srcMerkleTree) {
         clearProgressMessage();
-        log.info(pc.red(`Error: Failed to load source database from ${srcMetaPath}`));
+        log.info(pc.red(`Error: Failed to load source database merkle tree`));
         await exit(1);
     }
     
-    const destMerkleTree = await loadTree("tree.dat", destMetadataStorage);
+    const destMerkleTree = await loadMerkleTree(destDatabase.getMetadataStorage());
     if (!destMerkleTree) {
         clearProgressMessage();
-        log.info(pc.red(`Error: Failed to load destination database from ${destMetaPath}`));
+        log.info(pc.red(`Error: Failed to load destination database merkle tree`));
         await exit(1);
     }
 
