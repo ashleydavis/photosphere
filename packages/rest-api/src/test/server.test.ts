@@ -29,7 +29,11 @@ describe("photosphere backend", () => {
             },
         };
     
-        const mockStorage: any = {};
+        const mockStorage: any = {
+            acquireWriteLock: jest.fn().mockResolvedValue(true),
+            checkWriteLock: jest.fn().mockResolvedValue(undefined),
+            releaseWriteLock: jest.fn().mockResolvedValue(undefined),
+        };
         const mockUsersCollection: any = {
             findOne: async () => mockUser,
         };
@@ -81,6 +85,8 @@ describe("photosphere backend", () => {
                         return collection;
                     }
                 }),
+                getAssetStorage: jest.fn().mockReturnValue(mockStorage),
+                sessionId: "test-session-id",
                 close: jest.fn()
             }),
             readStream: jest.fn().mockReturnValue(stringStream("ABCD")),
