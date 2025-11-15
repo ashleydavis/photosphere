@@ -3,9 +3,9 @@ import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, createTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
+import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import { toExternal, IBsonDatabase, IBsonCollection, IRecord, loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
+import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
 //
@@ -89,15 +89,11 @@ async function replicateFiles(
         }
     }
 
-    let filesConsidered = 0;
-
-
     //
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
     //
     const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
-        filesConsidered++;
         
         // Check if file already exists in destination tree with matching hash.
         const destFileInfo = getItemInfo(destMerkleTree!, fileName);
