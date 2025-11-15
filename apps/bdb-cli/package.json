@@ -28,7 +28,8 @@
     "bdb": "workspace:*",
     "commander": "^13.1.0",
     "picocolors": "^1.1.1",
-    "storage": "workspace:*"
+    "storage": "workspace:*",
+    "utils": "workspace:*"
   }
 }
 

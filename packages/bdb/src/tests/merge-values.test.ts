@@ -1,4 +1,3 @@
-import { expect, test, describe } from '@jest/globals';
 import { mergeValues, MergeValue } from '../lib/merge-records';
 
 describe('mergeValues', () => {

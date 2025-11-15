@@ -1,4 +1,8 @@
 {
+  "include": [
+    "src/**/*",
+    "vite.d.ts"
+  ],
   "exclude": [
     "node_modules",
     "build",

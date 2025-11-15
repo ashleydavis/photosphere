@@ -1,11 +1,8 @@
-import { expect, test, describe, beforeEach } from '@jest/globals';
 import { MockStorage } from 'storage';
 import { BsonDatabase, IBsonCollection } from '../index';
 import { TestUuidGenerator } from 'node-utils';
 import { MockTimestampProvider } from 'utils';
 import { loadShardMerkleTree, loadCollectionMerkleTree, loadDatabaseMerkleTree, listShards } from './merkle-tree';
-import stringify from 'json-stable-stringify';
-import * as crypto from 'crypto';
 
 describe('Merkle tree updates', () => {
     let storage: MockStorage;
