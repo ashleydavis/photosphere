@@ -12,8 +12,7 @@ export async function databaseIdCommand(options: IDatabaseIdCommandOptions): Pro
     
     const { database } = await loadDatabase(options.db, options, true);
     
-    const metadataStorage = database.getMetadataStorage();
-    const merkleTree = await loadMerkleTree(metadataStorage);
+    const merkleTree = await loadMerkleTree(database.getAssetStorage());
     
     if (!merkleTree) {
         throw new Error("Failed to load merkle tree");

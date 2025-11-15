@@ -70,7 +70,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     private databaseMap = new Map<string, MediaFileDatabase>();
     
-    constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage, private readonly googleApiKey: string | undefined) {
+    constructor(private readonly assetStorage: IStorage, private readonly googleApiKey: string | undefined) {
     }
 
     //
@@ -80,7 +80,6 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
         let mediaFileDatabase = this.databaseMap.get(databaseId);
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
-            const metadataStorage = new StoragePrefixWrapper(this.metadataStorage, `${databaseId}/.db`);
             // Create appropriate providers based on NODE_ENV
             const uuidGenerator = process.env.NODE_ENV === "testing" 
                 ? new TestUuidGenerator()
@@ -91,7 +90,6 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
                 
             mediaFileDatabase = new MediaFileDatabase(
                 assetStorage,
-                metadataStorage,
                 this.googleApiKey,
                 uuidGenerator,
                 timestampProvider
@@ -149,7 +147,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
 
     private mediaFileDatabase: MediaFileDatabase | undefined = undefined;
     
-    constructor(private readonly assetStorage: IStorage, private readonly metadataStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
+    constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
     }
 
     //
@@ -170,7 +168,6 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             
         this.mediaFileDatabase = new MediaFileDatabase(
             this.assetStorage,
-            this.metadataStorage,
             this.googleApiKey,
             uuidGenerator,
             timestampProvider

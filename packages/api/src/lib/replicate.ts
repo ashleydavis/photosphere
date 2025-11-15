@@ -55,7 +55,6 @@ async function replicateFiles(
     merkleTree: IMerkleTree<IDatabaseMetadata>,
     destMerkleTree: IMerkleTree<IDatabaseMetadata>,
     destAssetStorage: IStorage,
-    destMetadataStorage: IStorage,
     mediaFileDatabase: MediaFileDatabase,
     options: IReplicateOptions | undefined,
     progressCallback: ProgressCallback | undefined,
@@ -191,7 +190,7 @@ Copied hash: ${copiedHash.toString("hex")}
                             destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
                             destMerkleTree!.dirty = false;
                         }
-                        await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
+                        await saveTree(".db/tree.dat", destMerkleTree!, destAssetStorage);
                     });
                 }
             }
@@ -224,7 +223,7 @@ Copied hash: ${copiedHash.toString("hex")}
             destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
             destMerkleTree!.dirty = false;
         }
-        await saveTree("tree.dat", destMerkleTree!, destMetadataStorage);
+        await saveTree(".db/tree.dat", destMerkleTree!, destAssetStorage);
     });
 }
 
@@ -452,9 +451,9 @@ async function replicateBsonDatabase(
 //
 // Replicates the media file database to another storage.
 //
-export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, destMetadataStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
+export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -474,13 +473,12 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
     //
     const destMediaFileDatabase = new MediaFileDatabase(
         destAssetStorage,
-        destMetadataStorage,
         undefined, // googleApiKey not needed for replication
         mediaFileDatabase.uuidGenerator,
         mediaFileDatabase.getTimestampProvider()
     );
 
-    const treeExists = await retry(() => destMetadataStorage.fileExists("tree.dat"));
+    const treeExists = await retry(() => destAssetStorage.fileExists(".db/tree.dat"));
     if (treeExists) {
         await retry(() => destMediaFileDatabase.load());
     }
@@ -494,7 +492,7 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
     //
     // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    let destMerkleTree = await loadMerkleTree(destAssetStorage);
     if (!destMerkleTree) {
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
@@ -527,7 +525,6 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         merkleTree,
         destMerkleTree,
         destAssetStorage,
-        destMetadataStorage,
         mediaFileDatabase,
         options,
         progressCallback,

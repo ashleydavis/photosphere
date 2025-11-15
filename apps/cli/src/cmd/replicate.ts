@@ -132,8 +132,6 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPath, options.generateKey || false);
 
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
-    // Re-create destMetadataStorage with proper storage options (in case it's encrypted)
-    const { storage: destMetadataStorageFinal } = createStorage(destMetaPath, s3Config);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {
@@ -175,7 +173,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceDatabase,destAssetStorage, destMetadataStorageFinal, { 
+    const result = await replicate(sourceDatabase, destAssetStorage, { 
         pathFilter: options.path,
         force: options.force
     }, (progress) => {

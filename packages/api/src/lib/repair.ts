@@ -225,7 +225,7 @@ export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRep
         progressCallback(`Checking for missing or corrupt files in merkle tree...`);
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

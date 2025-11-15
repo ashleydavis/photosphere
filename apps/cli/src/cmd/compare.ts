@@ -49,14 +49,14 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     log.info('');
 
     // Load merkle trees from the databases
-    const srcMerkleTree = await loadMerkleTree(sourceDatabase.getMetadataStorage());
+    const srcMerkleTree = await loadMerkleTree(sourceDatabase.getAssetStorage());
     if (!srcMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load source database merkle tree`));
         await exit(1);
     }
     
-    const destMerkleTree = await loadMerkleTree(destDatabase.getMetadataStorage());
+    const destMerkleTree = await loadMerkleTree(destDatabase.getAssetStorage());
     if (!destMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load destination database merkle tree`));
