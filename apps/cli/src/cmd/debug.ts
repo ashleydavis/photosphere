@@ -62,7 +62,6 @@ export async function debugMerkleTreeCommand(options: IDebugMerkleTreeCommandOpt
     
     const { database } = await loadDatabase(options.db, options, true);
     
-    const metadataStorage = database.getMetadataStorage();
     const assetStorage = database.getAssetStorage();
     const bsonDatabase = database.getMetadataDatabase();
     
@@ -80,7 +79,7 @@ export async function debugMerkleTreeCommand(options: IDebugMerkleTreeCommandOpt
     // Show files merkle tree
     log.info(pc.cyan('Files Merkle Tree (.db/tree.dat):'));
     log.info(pc.gray('='.repeat(60)));
-    const filesTree = await loadMerkleTree(metadataStorage);
+    const filesTree = await loadMerkleTree(assetStorage);
     if (filesTree) {
         const filesVisualization = visualizeTree(filesTree);
         log.info(filesVisualization);

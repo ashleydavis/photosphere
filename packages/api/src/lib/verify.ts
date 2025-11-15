@@ -183,7 +183,7 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
         }
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getMetadataStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

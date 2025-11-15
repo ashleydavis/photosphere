@@ -94,8 +94,7 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(options.db, s3Config, storageOptions);
-    const { storage: metadataStorage } = createStorage(metaPath, s3Config);
-    const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY);
+    const mediaFileDatabaseProvider = new SingleMediaFileDatabaseProvider(assetStorage, "local", "local", process.env.GOOGLE_API_KEY);
 
     //
     // Start the Photosphere REST API.

@@ -235,7 +235,6 @@ export interface IAssetDetails {
 //
 export async function createReadme(
     assetStorage: IStorage,
-    metadataStorage: IStorage,
     merkleTree: IMerkleTree<IDatabaseMetadata>
 ): Promise<IMerkleTree<IDatabaseMetadata>> {
     // Create README.md file with warning about manual modifications
@@ -306,7 +305,6 @@ export class MediaFileDatabase {
 
     constructor(
         private readonly assetStorage: IStorage,
-        private readonly metadataStorage: IStorage,
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
         private readonly timestampProvider: ITimestampProvider,
@@ -349,13 +347,6 @@ export class MediaFileDatabase {
     }
 
     //
-    // Gets the metadata storage for reading and writing metadata.
-    //
-    getMetadataStorage(): IStorage {
-        return this.metadataStorage;
-    }
-
-    //
     // Gets the database for reading and writing metadata for assets.
     //
     getMetadataDatabase(): BsonDatabase {
@@ -377,9 +368,9 @@ export class MediaFileDatabase {
 
         await this.ensureSortIndex();
 
-        merkleTree = await createReadme(this.assetStorage, this.metadataStorage, merkleTree);
+        merkleTree = await createReadme(this.assetStorage, merkleTree);
 
-        await retry(() => saveMerkleTree(merkleTree, this.metadataStorage));
+        await retry(() => saveMerkleTree(merkleTree, this.assetStorage));
 
         log.verbose(`Created new media file database.`);
     }
@@ -393,7 +384,7 @@ export class MediaFileDatabase {
         await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
         await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
 
-        log.verbose(`Loaded existing media file database from: ${this.assetStorage.location} / ${this.metadataStorage.location}`);
+        log.verbose(`Loaded existing media file database from: ${this.assetStorage.location}`);
     }
 
     //
@@ -417,7 +408,7 @@ export class MediaFileDatabase {
     //
     async getDatabaseHashes(): Promise<IDatabaseHashes> {
         // Get root hashes from both merkle trees
-        const filesRootHash = await retry(() => getFilesRootHash(this.metadataStorage));
+        const filesRootHash = await retry(() => getFilesRootHash(this.assetStorage));
         const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(this.assetStorage, "metadata")));
         
         // Compute aggregate root hash
@@ -444,7 +435,7 @@ export class MediaFileDatabase {
     // Gets a summary of the entire database.
     //
     async getDatabaseSummary(): Promise<IDatabaseSummary> {
-        const merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+        const merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load merkle tree.`);
         }
@@ -606,7 +597,7 @@ export class MediaFileDatabase {
                 //
                 // Always load the database after acquiring the write lock to ensure we have the latest tree.
                 //
-                let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+                let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
                 if (!merkleTree) {
                     throw new Error(`Failed to load media file database.`);
                 }
@@ -799,7 +790,7 @@ export class MediaFileDatabase {
                 //
                 // Ensure the tree is saved before releasing the lock.
                 //
-                await retry(() => saveMerkleTree(merkleTree, this.metadataStorage)); 
+                await retry(() => saveMerkleTree(merkleTree, this.assetStorage)); 
             }
             catch (err: any) {
                 log.exception(`Failed to upload asset data for file "${filePath}"`, err);
@@ -984,7 +975,7 @@ export class MediaFileDatabase {
             //
             // Always load the database after acquiring the write lock to ensure we have the latest tree.
             //
-            let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+            let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
             if (!merkleTree) {
                 throw new Error(`Failed to load media file database.`);
             }
@@ -1029,7 +1020,7 @@ export class MediaFileDatabase {
             //
             // Ensure the tree is saved before releasing the lock.
             //
-            await retry(() => saveMerkleTree(merkleTree, this.metadataStorage));
+            await retry(() => saveMerkleTree(merkleTree, this.assetStorage));
         }
         catch (err: any) {
             log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -1066,7 +1057,7 @@ export class MediaFileDatabase {
             //
             // Always reload the database after acquiring the write lock to ensure we have the latest tree.
             //
-            let merkleTree = await retry(() => loadMerkleTree(this.metadataStorage));
+            let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
             if (!merkleTree) {
                 throw new Error(`Failed to load media file database.`);
             }
@@ -1109,7 +1100,7 @@ export class MediaFileDatabase {
             //
             // Ensure the tree is saved before releasing the lock.
             //
-            await retry(() => saveMerkleTree(merkleTree, this.metadataStorage)); 
+            await retry(() => saveMerkleTree(merkleTree, this.assetStorage)); 
         }
         finally {
             //

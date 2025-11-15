@@ -22,7 +22,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     
     const { database, databaseDir } = await loadDatabase(options.db, options, true);
 
-    let merkleTree = await retry(() => loadMerkleTree(database.getMetadataStorage()));
+    let merkleTree = await retry(() => loadMerkleTree(database.getAssetStorage()));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -158,7 +158,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         // Create README.md if it doesn't exist
         const existingReadme = await retry(() => assetStorage.info('README.md'));
         if (!existingReadme) {
-            merkleTree = await createReadme(assetStorage, database.getMetadataStorage(), merkleTree);
+            merkleTree = await createReadme(assetStorage, merkleTree);
         }
 
         // Rebuild the merkle tree in sorted order with no metadata/
@@ -182,7 +182,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         }                
 
         // Save the rebuilt tree.
-        await retry(() => saveTree("tree.dat", merkleTree!, database.getMetadataStorage()));
+        await retry(() => saveTree(".db/tree.dat", merkleTree!, database.getAssetStorage()));
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(database.getAssetStorage(), "metadata");
 

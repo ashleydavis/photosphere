@@ -84,12 +84,11 @@ async function main() {
     }
 
     const { storage: assetStorage } = createStorage(assetStorageConnection, undefined, storageOptions);    
-    const { storage: metadataStorage } = createStorage(isSingleDirMode ? databaseStorageConnection : assetStorageConnection);    
     const { storage: dbStorage } = createStorage(databaseStorageConnection);
     
     const mediaFileDatabaseProvider = isSingleDirMode 
-        ? new SingleMediaFileDatabaseProvider(assetStorage, metadataStorage, "local", "local", process.env.GOOGLE_API_KEY)
-        : new MultipleMediaFileDatabaseProvider(assetStorage, metadataStorage, process.env.GOOGLE_API_KEY);
+        ? new SingleMediaFileDatabaseProvider(assetStorage, "local", "local", process.env.GOOGLE_API_KEY)
+        : new MultipleMediaFileDatabaseProvider(assetStorage, process.env.GOOGLE_API_KEY);
 
     const APP_MODE = isSingleDirMode ? "readwrite" : process.env.APP_MODE;
     if (!APP_MODE) {

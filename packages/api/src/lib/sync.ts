@@ -76,12 +76,12 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     //
     // Load the merkle tree.
     //
-    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceDb.getMetadataStorage()));
+    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceDb.getAssetStorage()));
     if (!sourceMerkleTree) {
         throw new Error("Failed to load source merkle tree.");
     }
 
-    let targetMerkleTree = await retry(() => loadMerkleTree(targetDb.getMetadataStorage()));
+    let targetMerkleTree = await retry(() => loadMerkleTree(targetDb.getAssetStorage()));
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
     }
@@ -201,7 +201,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
 
                 if (filesCopied % 100 === 0) {
                     // Save the target merkle tree periodically
-                    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()));
+                    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getAssetStorage()));
                 }
             }
         } else {
@@ -272,7 +272,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage())); //TODO: This doesn't really need to be done unless something changed.
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getAssetStorage())); //TODO: This doesn't really need to be done unless something changed.
     
     log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target`);
 }
