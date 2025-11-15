@@ -311,7 +311,7 @@ Resources:
         .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
         .option(...generateKeyOption)
         .option("-p, --path <path>", "Replicate only files matching this path (file or directory)")
-        .option("--force", "Proceed with replication without confirmation, even if destination database exists")
+        .option("--force", "Proceed with replication without confirmation, even if destination database exists, and allow replication between databases with different IDs (THIS IS DANGEROUS, use it carefully, use it rarely)")
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)

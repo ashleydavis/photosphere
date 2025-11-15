@@ -176,7 +176,8 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         : `Copying files...`);
 
     const result = await replicate(sourceDatabase,destAssetStorage, destMetadataStorageFinal, { 
-        pathFilter: options.path 
+        pathFilter: options.path,
+        force: options.force
     }, (progress) => {
         const progressMessage = `🔄 ${progress}`;
         writeProgress(progressMessage);
