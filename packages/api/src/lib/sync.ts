@@ -1,10 +1,10 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadCollectionMerkleTree, loadDatabaseMerkleTree, loadShardMerkleTree, mergeRecords } from "bdb";
-import { addItem, deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, SortNode, traverseTreeAsync } from "merkle-tree";
+import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
 import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
 import { IDatabaseMetadata, MediaFileDatabase } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { retry, log } from "utils";
+import { retry, log, FatalError } from "utils";
 import { computeHash } from "./hash";
 
 //
@@ -69,8 +69,6 @@ function extractAssetId(filePath: string): string | undefined {
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
-// TODO: Need a faster algorithm to traverse each tree comparing nodes and trying to make them the same.
-//
 async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
     const sourceStorage = sourceDb.getAssetStorage();
     const targetStorage = targetDb.getAssetStorage();
@@ -88,6 +86,16 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         throw new Error("Failed to load target merkle tree.");
     }
 
+    // Check that source and target databases have the same ID.
+    if (sourceMerkleTree.id !== targetMerkleTree.id) {
+        throw new FatalError(
+            `You are trying to sync databases that have different IDs.\n` +
+            `Source database ID: ${sourceMerkleTree.id}\n` +
+            `Target database ID: ${targetMerkleTree.id}\n` + 
+            `The databases are not related to each other.`
+        );
+    }
+
     // Don't do anything if the source and target merkle trees are identical.
     if (sourceMerkleTree.merkle && targetMerkleTree.merkle 
         && Buffer.compare(sourceMerkleTree.merkle.hash, targetMerkleTree.merkle.hash) === 0) {
@@ -100,13 +108,12 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     const targetDeletedIds = new Set(targetMerkleTree.databaseMetadata?.deletedAssetIds || []);
    
     let filesCopied = 0;
-    let filesProcessed = 0;
-    let filesExisting = 0;
 
     // 
     // Copies a single file if necessary.
     //
-    const copyFile = async (fileName: string, sourceHash: Buffer, sourceSize: number, sourceModified: Date): Promise<void> => {
+    const copyFile = async (fileName: string, sourceHash: Buffer): Promise<void> => {
+        
         // Check if this asset is in the deleted list
         const assetId = extractAssetId(fileName);
         if (!assetId) {
@@ -114,18 +121,16 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         }
 
         if (sourceDeletedIds.has(assetId) || targetDeletedIds.has(assetId)) {
-            // Asset is deleted in source, skip copying it
+            // Asset is deleted, skip copying it
             log.verbose(`Skipped deleted asset file: ${fileName}`);
             return;
         }
 
-        const targetFileInfo = getItemInfo(targetMerkleTree!, fileName);        
-        if (targetFileInfo) {
-            // File exists and so there is no need to copy it.
-            // Just assume the target file is the same and ok. 
-            // If it were different, it could only be from corruption, because files are immutable.
-            // If the file is corrupted a verify/repair is needed.
-            filesExisting++;
+        // Check if file already exists in destination tree with matching hash.
+        const targetFileInfo = getItemInfo(targetMerkleTree!, fileName);
+        if (targetFileInfo && Buffer.compare(targetFileInfo.hash, sourceHash) === 0) {
+            // File already exists with correct hash, skip copying.
+            // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
             return;
         }
 
@@ -149,8 +154,8 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
             throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);            
         }
         
-        // Add file to target merkle tree.
-        targetMerkleTree = addItem(targetMerkleTree!, {
+        // Add or update file in target merkle tree.
+        targetMerkleTree = upsertItem(targetMerkleTree!, {
             name: fileName,
             hash: copiedFileHash,
             length: copiedFileInfo.length,
@@ -162,26 +167,58 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         log.verbose(`Copied file: ${fileName}`);
     };
     
-    // Walk the source merkle tree.
-    //todo: This should traverse the merkle tree, not the sort tree. It can use the efficient algorithm to deliver differences.
-    await traverseTreeAsync<SortNode>(sourceMerkleTree.sort, async (node: SortNode): Promise<boolean> => {
-        if (!node.name) {
-            // Skip intermediate nodes.
-            return true;
-        }
-
-        filesProcessed++;
-
-        // Copy file to target, if necessary.
-        await retry(() => copyFile(node.name!, node.contentHash!, node.size, node.lastModified!));
+    //
+    // Collect nodes to process from the source merkle tree that are different.
+    // If there's no target merkle tree, we process the entire source tree.
+    //
+    let nodesToProcess: MerkleNode[] = [];
+    
+    if (targetMerkleTree.merkle) {
+        //
+        // Find differences between source and target merkle trees.
+        //
+        const diff = findMerkleTreeDifferences(sourceMerkleTree.merkle, targetMerkleTree.merkle);
         
-        // Save target merkle tree every 100 files.
-        if (filesCopied % 100 === 0) {
-            await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()))
+        //
+        // Collect nodes to process - only the differing MerkleNode roots from source.
+        //
+        nodesToProcess = diff.onlyInTree1;
+    } else {
+        // If there's no target merkle tree, process the entire source tree
+        if (sourceMerkleTree.merkle) {
+            nodesToProcess = [ sourceMerkleTree.merkle ];
         }
-        
-        return true;
-    });
+    }
+
+    //
+    // Process files from MerkleNode differences.
+    //
+    const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+        if (!merkleNode.left && !merkleNode.right) {
+            // Leaf node - process the file directly
+            if (merkleNode.name && merkleNode.hash) {
+                await retry(() => copyFile(merkleNode.name!, merkleNode.hash));
+
+                if (filesCopied % 100 === 0) {
+                    // Save the target merkle tree periodically
+                    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()));
+                }
+            }
+        } else {
+            // Internal node - recursively process children
+            if (merkleNode.left) {
+                await processMerkleNode(merkleNode.left);
+            }
+            if (merkleNode.right) {
+                await processMerkleNode(merkleNode.right);
+            }
+        }
+    };
+
+    // Process only the nodes that differ
+    for (const nodeToProcess of nodesToProcess) {
+        await processMerkleNode(nodeToProcess);
+    }
     
     // Delete assets that are marked as deleted in source (but not yet deleted in target)
     // Iterate through source's deleted list and delete each asset from target
@@ -235,9 +272,9 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage()))
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getMetadataStorage())); //TODO: This doesn't really need to be done unless something changed.
     
-    log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target out of ${filesProcessed} processed, ${filesExisting} files existing`);
+    log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target`);
 }
 
 //
