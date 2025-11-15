@@ -14,6 +14,7 @@ import { getImageDetails, IResolution } from "./image";
 import { computeHash } from "./hash";
 import { HashCache } from "./hash-cache";
 import { FileScanner, IFileStat } from "./file-scanner";
+import { IWorkerPool } from "./worker-pool-interface";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
@@ -293,6 +294,11 @@ export class MediaFileDatabase {
     public readonly sessionId: string; //todo: Shouldn't be public.
 
     //
+    // Optional worker pool for parallel processing
+    //
+    private readonly workerPool?: IWorkerPool;
+
+    //
     // The summary of files added to the database.
     //
     private readonly addSummary: IAddSummary = {
@@ -310,7 +316,8 @@ export class MediaFileDatabase {
         private readonly googleApiKey: string | undefined,
         uuidGenerator: IUuidGenerator,
         private readonly timestampProvider: ITimestampProvider,
-        sessionId?: string
+        sessionId?: string,
+        workerPool?: IWorkerPool
             ) {
         
         const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
@@ -332,6 +339,9 @@ export class MediaFileDatabase {
 
         // Set session ID for write lock identification
         this.sessionId = sessionId || this.uuidGenerator.generate();
+        
+        // Store worker pool if provided
+        this.workerPool = workerPool;
     }
 
     //
@@ -882,6 +892,26 @@ export class MediaFileDatabase {
     // Validates the local file.
     //
     async validateFile(filePath: string, contentType: string, tempDir: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
+        // Use worker pool if available and we have a file path (not just a stream)
+        if (this.workerPool && !openStream) {
+            try {
+                // Resolve file path to absolute path for worker
+                const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+                const absoluteTempDir = path.isAbsolute(tempDir) ? tempDir : path.resolve(tempDir);
+                
+                const result = await this.workerPool.execute({
+                    type: 'validate',
+                    filePath: absoluteFilePath,
+                    contentType,
+                    tempDir: absoluteTempDir,
+                });
+                return result.valid;
+            } catch (error) {
+                // Fall back to regular validation on error
+                log.verbose(`Worker validation failed for ${filePath}, falling back to regular validation: ${error}`);
+            }
+        }
+        
         try {
             return await validateFile(filePath, contentType, tempDir, this.uuidGenerator, openStream);
         }
@@ -923,6 +953,52 @@ export class MediaFileDatabase {
         progressCallback: ProgressCallback
     ): Promise<IHashedData | undefined> {
 
+        // Use worker pool if available and we have a file path (not just a stream)
+        if (this.workerPool && !openStream) {
+            try {
+                // Resolve file path to absolute path for worker
+                const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+                const absoluteTempDir = path.isAbsolute(assetTempDir) ? assetTempDir : path.resolve(assetTempDir);
+                
+                // Validate and hash in parallel using workers
+                const [validateResult, hashResult] = await Promise.all([
+                    this.workerPool.execute({
+                        type: 'validate',
+                        filePath: absoluteFilePath,
+                        contentType,
+                        tempDir: absoluteTempDir,
+                    }),
+                    this.workerPool.execute({
+                        type: 'hash',
+                        filePath: absoluteFilePath,
+                    }),
+                ]);
+
+                // If validation failed in worker, fall back to regular validation
+                // (worker might not have access to same tools/environment)
+                if (!validateResult.valid) {
+                    log.verbose(`Worker validation failed for ${filePath}, falling back to regular validation: ${validateResult.error || 'Unknown error'}`);
+                    // Fall through to regular processing below
+                } else {
+                    // Worker validation succeeded, use worker results
+                    const hashedFile: IHashedData = {
+                        hash: hashResult.hash,
+                        lastModified: fileStat.lastModified,
+                        length: fileStat.length,
+                    };
+
+                    // At the point where we commit the hash to the hash cache, we have tested that the file is valid.
+                    this.localHashCache.addHash(filePath, hashedFile);
+
+                    return hashedFile;
+                }
+            } catch (error) {
+                // Fall back to regular processing on error
+                log.verbose(`Worker processing failed for ${filePath}, falling back to regular processing: ${error}`);
+            }
+        }
+
+        // Regular processing (no worker pool or stream-based)
         if (openStream === undefined) {
             openStream = () => fs.createReadStream(filePath);
         }

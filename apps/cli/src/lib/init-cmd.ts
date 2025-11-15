@@ -12,6 +12,8 @@ import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
+import { WorkerPool } from "./worker-pool";
+import { IWorkerPool } from "api";
 
 //
 // Helper function to resolve encryption key path
@@ -211,6 +213,11 @@ export interface IBaseCommandOptions {
     // Session identifier for write lock tracking.
     //
     sessionId?: string;
+
+    //
+    // Number of worker threads to use for parallel processing.
+    //
+    workers?: number;
 }
 
 //
@@ -350,9 +357,27 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
     
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
+    
+    // Create worker pool - use provided count or default to CPUs/4
+    let workerPool: IWorkerPool | undefined = undefined;
+    let workerCount: number | undefined = undefined;
+    
+    if (options.workers !== undefined && options.workers !== null) {
+        // User provided --workers option
+        const parsed = typeof options.workers === 'string' ? Number(options.workers) : options.workers;
+        if (!isNaN(parsed) && parsed > 0) {
+            workerCount = parsed;
+        }
+    } else {
+        // Use default: CPUs/4 (minimum 1)
+        workerCount = undefined; // Will use default in WorkerPool constructor
+    }
+    
+    // Always create worker pool (lazy spawning, so no overhead if not used)
+    workerPool = new WorkerPool(workerCount) as any; // Cast to IWorkerPool interface
         
     // Create database instance.
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId);
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId, workerPool);
 
     // Load the database
     await database.load();
@@ -445,9 +470,27 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
 
     // Get Google API key from config or environment  
     const googleApiKey = await getGoogleApiKey();
+    
+    // Create worker pool - use provided count or default to CPUs/4
+    let workerPool: IWorkerPool | undefined = undefined;
+    let workerCount: number | undefined = undefined;
+    
+    if (options.workers !== undefined && options.workers !== null) {
+        // User provided --workers option
+        const parsed = typeof options.workers === 'string' ? Number(options.workers) : options.workers;
+        if (!isNaN(parsed) && parsed > 0) {
+            workerCount = parsed;
+        }
+    } else {
+        // Use default: CPUs/4 (minimum 1)
+        workerCount = undefined; // Will use default in WorkerPool constructor
+    }
+    
+    // Always create worker pool (lazy spawning, so no overhead if not used)
+    workerPool = new WorkerPool(workerCount) as any; // Cast to IWorkerPool interface
         
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId); 
+    const database = new MediaFileDatabase(assetStorage, metadataStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId, workerPool); 
 
     // Create the database (instead of loading)
     await database.create();

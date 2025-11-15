@@ -45,6 +45,7 @@ async function main() {
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
+    const workersOption: [string, string] = ["--workers <count>", "Number of worker threads to use for parallel processing. Defaults to CPUs/4 (minimum 1)."];
 
     program
         .name("psi")
@@ -83,6 +84,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .option(...sessionIdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(addCommand);
 
@@ -106,6 +108,7 @@ Resources:
         .option(...toolsOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(checkCommand);
 
@@ -222,6 +225,7 @@ Resources:
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
+        .option(...workersOption)
         .argument("<files...>", "The media files to analyze.")
         .addHelpText('after', getCommandExamplesHelp('info'))
         .action(infoCommand);
@@ -278,6 +282,7 @@ Resources:
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option(...cwdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('repair'))
         .action(repairCommand);
 
@@ -316,6 +321,7 @@ Resources:
         .option(...toolsOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('replicate'))
         .action(replicateCommand);
 
@@ -340,6 +346,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('sync'))
         .action(syncCommand);
 
@@ -383,6 +390,7 @@ Resources:
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
         .option(...cwdOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(verifyCommand);
 
