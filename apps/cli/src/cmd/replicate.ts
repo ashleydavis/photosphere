@@ -135,8 +135,8 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     // Re-create destMetadataStorage with proper storage options (in case it's encrypted)
     const { storage: destMetadataStorageFinal } = createStorage(destMetaPath, s3Config);
 
-    // If destination database exists, warn user and ask for confirmation (unless --force is used)
-    if (destDbExists && !options.force) {
+    // If destination database exists, warn user and ask for confirmation (unless --ues is used)
+    if (destDbExists && !options.yes) {
         if (nonInteractive) {
             log.error(pc.red(`✗ The destination database already exists at ${destDir}.`));
             log.error(pc.red(`  Replication will overwrite any changes made to the destination database.`));
