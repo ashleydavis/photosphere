@@ -52,7 +52,7 @@
     },
     "apps/cli": {
       "name": "cli",
-      "version": "0.0.6",
+      "version": "0.0.7",
       "dependencies": {
         "adm-zip": "^0.5.16",
         "api": "workspace:*",
