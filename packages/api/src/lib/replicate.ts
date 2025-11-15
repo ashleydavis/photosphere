@@ -4,7 +4,7 @@ import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry, FatalError } from "utils";
 import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
 import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree } from "./tree";
+import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
@@ -507,6 +507,13 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
             `The destination database is not related to the source database.\n` +
             `Use the --force flag to proceed anyway.`
         );
+    }
+    
+    //
+    // If force is used and IDs don't match, update destination files merkle tree UUID to match source.
+    //
+    if (options?.force && destMerkleTree.id !== merkleTree.id) {
+        destMerkleTree.id = merkleTree.id;
     }
     
     //
