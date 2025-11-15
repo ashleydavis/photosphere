@@ -71,12 +71,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
     const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
 
     // Check for tree.dat in device-specific location first, then old location
-    let destDbExists = await destMetadataStorage.fileExists("tree.dat");
-    if (!destDbExists) {
-        // Fall back to old location for backward compatibility
-        destDbExists = await destMetadataStorage.fileExists('tree.dat');
-    }    
-    
+    let destDbExists = await destMetadataStorage.fileExists("tree.dat");    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
         const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');
