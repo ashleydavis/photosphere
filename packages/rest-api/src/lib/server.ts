@@ -3,10 +3,13 @@ import cors from "cors";
 import { auth } from "express-oauth2-jwt-bearer";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
-import { MediaFileDatabase, acquireWriteLock, releaseWriteLock } from "api";
-import { ITimestampProvider, RandomUuidGenerator, TimestampProvider } from "utils";
+import { createMediaFileDatabase, acquireWriteLock, releaseWriteLock, loadDatabase } from "api";
+import { ITimestampProvider, IUuidGenerator, RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { BsonDatabase } from "bdb";
+import { BsonDatabase, IBsonCollection } from "bdb";
+import type { HashCache, FileScanner } from "api";
+import type { IAsset } from "defs";
+import { streamAsset, writeAsset } from "api";
 
 interface IUser extends IMediaFileDatabases {
     _id: string;
@@ -47,7 +50,7 @@ export interface IMediaFileDatabaseProvider {
     //
     // Opens a media file database.
     //
-    openDatabase(databaseId: string): Promise<MediaFileDatabase>;
+    openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>;
 
     //
     // Reads a streaming asset from the storage provider.
@@ -68,7 +71,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Tracks open databases that need to be closed.
     //
-    private databaseMap = new Map<string, MediaFileDatabase>();
+    private databaseMap = new Map<string, { assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>();
     
     constructor(private readonly assetStorage: IStorage, private readonly googleApiKey: string | undefined) {
     }
@@ -76,7 +79,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Opens a media file database.
     //
-    async openDatabase(databaseId: string): Promise<MediaFileDatabase> {
+    async openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
         let mediaFileDatabase = this.databaseMap.get(databaseId);
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
@@ -88,13 +91,20 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
                 ? new TestTimestampProvider()
                 : new TimestampProvider();
                 
-            mediaFileDatabase = new MediaFileDatabase(
+            const sessionId = uuidGenerator.generate();
+            const database = createMediaFileDatabase(
                 assetStorage,
-                this.googleApiKey,
                 uuidGenerator,
                 timestampProvider
             );
-            await mediaFileDatabase.load();
+            await loadDatabase(database.assetStorage, database.metadataCollection);
+            mediaFileDatabase = {
+                ...database,
+                uuidGenerator,
+                timestampProvider,
+                googleApiKey: this.googleApiKey,
+                sessionId,
+            };
             this.databaseMap.set(databaseId, mediaFileDatabase);
             console.log(`Opened media file database in ${databaseId}.`);
         }
@@ -128,7 +138,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
         if (!mediaFileDatabase) {
             throw new Error(`Database ${databaseId} not opened`);
         }
-        return mediaFileDatabase.streamAsset(assetId, assetType);
+        return streamAsset(mediaFileDatabase.assetStorage, assetId, assetType);
     }
 
     //
@@ -136,7 +146,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     async write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
         const mediaFileDatabase = await this.openDatabase(databaseId);
-        await mediaFileDatabase.writeAsset(assetId, assetType, contentType, buffer);
+        await writeAsset(mediaFileDatabase.assetStorage, mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
     }
 }
 
@@ -145,7 +155,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
 //
 export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvider {
 
-    private mediaFileDatabase: MediaFileDatabase | undefined = undefined;
+    private mediaFileDatabase: { assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner } | undefined = undefined;
     
     constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
     }
@@ -153,7 +163,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
     //
     // Opens a media file database.
     //
-    async openDatabase(_databaseId: string): Promise<MediaFileDatabase> {
+    async openDatabase(_databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
         if (this.mediaFileDatabase) {
             return this.mediaFileDatabase;
         }
@@ -166,13 +176,20 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             ? new TestTimestampProvider()
             : new TimestampProvider();
             
-        this.mediaFileDatabase = new MediaFileDatabase(
+        const sessionId = uuidGenerator.generate();
+        const database = createMediaFileDatabase(
             this.assetStorage,
-            this.googleApiKey,
             uuidGenerator,
             timestampProvider
         );
-        await this.mediaFileDatabase.load();
+        await loadDatabase(database.assetStorage, database.metadataCollection);
+        this.mediaFileDatabase = {
+            ...database,
+            uuidGenerator,
+            timestampProvider,
+            googleApiKey: this.googleApiKey,
+            sessionId,
+        };
 
         return this.mediaFileDatabase;
     }
@@ -195,7 +212,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
-        return this.mediaFileDatabase.streamAsset(assetId, assetType);
+        return streamAsset(this.mediaFileDatabase.assetStorage, assetId, assetType);
     }
 
     //
@@ -205,7 +222,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
-        await this.mediaFileDatabase.writeAsset(assetId, assetType, contentType, buffer);
+        await writeAsset(this.mediaFileDatabase.assetStorage, this.mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
     }            
 }
 
@@ -459,7 +476,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
             const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(op.databaseId);
-            const assetStorage = mediaFileDatabase.getAssetStorage();
+            const assetStorage = mediaFileDatabase.assetStorage;
             const sessionId = mediaFileDatabase.sessionId;
             
             //
@@ -471,7 +488,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
             }
 
             try {
-                const metadataDatabase = mediaFileDatabase.getMetadataDatabase();            
+                const metadataDatabase = mediaFileDatabase.bsonDatabase;            
                 const recordCollection = metadataDatabase.collection(op.collectionName);
                 
                 if (op.op.type === "set") {
@@ -602,7 +619,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const collectionName = getValue<string>(req.query, "col");
         const recordId = getValue<string>(req.query, "id");
         const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
-        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const metadataDatabase = mediaFileDatabase.bsonDatabase;
         const collection = metadataDatabase.collection(collectionName);
         const record = await collection.getOne(recordId);
         if (!record) {
@@ -622,7 +639,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const next = req.query.next as string | undefined;
 
         const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
-        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const metadataDatabase = mediaFileDatabase.bsonDatabase;
         const collection = metadataDatabase.collection(collectionName);
         const result = await collection.getSorted("photoDate", "desc", next);
         res.json({
@@ -638,7 +655,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
         const databaseId = getValue<string>(req.query, "db");
         const hash = getValue<string>(req.query, "hash");
         const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(databaseId);
-        const metadataDatabase = mediaFileDatabase.getMetadataDatabase();
+        const metadataDatabase = mediaFileDatabase.bsonDatabase;
         const metadataCollection = metadataDatabase.collection("metadata");
         await metadataCollection.ensureSortIndex("hash", "asc", "string");
         const records = await metadataCollection.findByIndex("hash", hash);

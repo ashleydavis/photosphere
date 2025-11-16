@@ -2,7 +2,11 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import * as os from 'os';
+import * as path from 'path';
+import { checkPaths, HashCache } from "api";
+import { FileStorage } from "storage";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
 }
@@ -10,20 +14,39 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 // Command that checks which files and directories have been added to the Photosphere media file database.
 //
-export async function checkCommand(paths: string[], options: ICheckCommandOptions): Promise<void> {
+export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { metadataCollection, localFileScanner } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
-    const { database } = await loadDatabase(options.db, options, true);
+    // Create hash cache for file hashing optimization
+    const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
+    const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+    await localHashCache.load();
 
     writeProgress(`Searching for files...`);
 
-    await database.checkPaths(paths, (currentlyScanning) => {
-        const addSummary = database.getAddSummary();
-        let progressMessage = `Already in DB: ${pc.green(addSummary.filesAlreadyAdded)}`;
-        if (addSummary.filesAdded > 0) {
-            progressMessage += ` | Would add: ${pc.yellow(addSummary.filesAdded)}`;
+    let currentSummary = {
+        filesAdded: 0,
+        filesAlreadyAdded: 0,
+        filesIgnored: 0,
+        filesFailed: 0,
+        totalSize: 0,
+        averageSize: 0,
+    };
+
+    const addSummary = await checkPaths(
+        uuidGenerator,
+        metadataCollection,
+        localHashCache,
+        localFileScanner,
+        paths,
+        (currentlyScanning) => {
+        let progressMessage = `Already in DB: ${pc.green(currentSummary.filesAlreadyAdded)}`;
+        if (currentSummary.filesAdded > 0) {
+            progressMessage += ` | Would add: ${pc.yellow(currentSummary.filesAdded)}`;
         }
-        if (addSummary.filesIgnored > 0) {
-            progressMessage += ` | Ignored: ${pc.gray(addSummary.filesIgnored)}`;
+        if (currentSummary.filesIgnored > 0) {
+            progressMessage += ` | Ignored: ${pc.gray(currentSummary.filesIgnored)}`;
         }
         if (currentlyScanning) {
             progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
@@ -31,9 +54,7 @@ export async function checkCommand(paths: string[], options: ICheckCommandOption
 
         progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
         writeProgress(progressMessage);
-    });
-
-    const addSummary = database.getAddSummary();
+    }, currentSummary);
 
     clearProgressMessage(); // Flush the progress message.
 

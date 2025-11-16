@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
 import { verify } from "api";
 
@@ -21,15 +21,15 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 // Command that verifies the integrity of the Photosphere media file database.
 //
-export async function verifyCommand(options: IVerifyCommandOptions): Promise<void> {
-    
-    const { database, databaseDir } = await loadDatabase(options.db, options, true);
+export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
     writeProgress(options.path 
         ? `🔍 Verifying files matching: ${options.path}` 
         : `🔍 Verifying database integrity`);
 
-    const result = await verify(database, { 
+    const result = await verify(assetStorage, { 
         full: options.full,
         pathFilter: options.path
     }, (progress) => {

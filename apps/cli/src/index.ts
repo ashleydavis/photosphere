@@ -25,6 +25,7 @@ import { hashCommand } from './cmd/hash';
 import { rootHashCommand } from './cmd/root-hash';
 import { databaseIdCommand } from './cmd/database-id';
 import { syncCommand } from './cmd/sync';
+import { initContext } from './lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -84,7 +85,7 @@ Resources:
         .option(...cwdOption)
         .option(...sessionIdOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
-        .action(addCommand);
+        .action(initContext(addCommand));
 
     program
         .command("bug")
@@ -107,16 +108,11 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
-        .action(checkCommand);
+        .action(initContext(checkCommand));
 
     program
         .command("clear-cache")
         .description("Clear the local hash cache to force re-hashing of files.")
-        .option(...dbOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
         .action(clearCacheCommand);
 
     program
@@ -129,7 +125,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
-        .action(compareCommand);
+        .action(initContext(compareCommand));
 
     program
         .command("config")
@@ -159,7 +155,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('export'))
-        .action(exportCommand);
+        .action(initContext(exportCommand));
 
     program
         .command("hash")
@@ -196,7 +192,7 @@ Resources:
         .option(...cwdOption)
         .option(...recordsOption)
         .option(...allOption)
-        .action(debugMerkleTreeCommand);
+        .action(initContext(debugMerkleTreeCommand));
 
     program
         .command("help [command]")
@@ -239,7 +235,7 @@ Resources:
         .option(...cwdOption)
         .option(...sessionIdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
-        .action(initCommand);
+        .action(initContext(initCommand));
 
     program
         .command("list")
@@ -252,7 +248,7 @@ Resources:
         .option(...cwdOption)
         .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
         .addHelpText('after', getCommandExamplesHelp('list'))
-        .action(listCommand);
+        .action(initContext(listCommand));
 
     program
         .command("remove")
@@ -265,7 +261,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('remove'))
-        .action(removeCommand);
+        .action(initContext(removeCommand));
 
     program
         .command("repair")
@@ -279,7 +275,7 @@ Resources:
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('repair'))
-        .action(repairCommand);
+        .action(initContext(repairCommand));
 
     program
         .command("root-hash")
@@ -289,7 +285,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
-        .action(rootHashCommand);
+        .action(initContext(rootHashCommand));
 
     program
         .command("database-id")
@@ -299,7 +295,7 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
-        .action(databaseIdCommand);
+        .action(initContext(databaseIdCommand));
 
     program
         .command("replicate")
@@ -317,7 +313,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('replicate'))
-        .action(replicateCommand);
+        .action(initContext(replicateCommand));
 
     program
         .command("summary")
@@ -329,7 +325,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('summary'))
-        .action(summaryCommand);
+        .action(initContext(summaryCommand));
 
     program
         .command("sync")
@@ -341,7 +337,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('sync'))
-        .action(syncCommand);
+        .action(initContext(syncCommand));
 
     program
         .command("tools")
@@ -369,7 +365,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('upgrade'))
-        .action(upgradeCommand);
+        .action(initContext(upgradeCommand));
 
     program
         .command("verify")
@@ -384,7 +380,7 @@ Resources:
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
-        .action(verifyCommand);
+        .action(initContext(verifyCommand));
 
     program
         .command("version")

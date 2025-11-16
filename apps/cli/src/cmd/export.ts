@@ -3,7 +3,7 @@ import { exit } from "node-utils";
 import path from "path";
 import fs from "fs-extra";
 import { log } from "utils";
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 
 export type AssetType = "original" | "display" | "thumb";
 
@@ -17,13 +17,12 @@ export interface IExportCommandOptions extends IBaseCommandOptions {
 //
 // Command that exports a particular asset by ID to a specified path.
 //
-export async function exportCommand(assetId: string, outputPath: string, options: IExportCommandOptions): Promise<void> {
+export async function exportCommand(context: ICommandContext, assetId: string, outputPath: string, options: IExportCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
     const assetType = options.type || "original";
     const dbPath = options.db || process.cwd();
 
-    const { database, assetStorage } = await loadDatabase(dbPath, options, false);
-
-    const metadataDatabase = database.getMetadataDatabase();
+    const { bsonDatabase: metadataDatabase, assetStorage } = await loadDatabase(dbPath, options, false, uuidGenerator, timestampProvider, sessionId);
     const metadataCollection = metadataDatabase.collection("metadata");
     
     const asset = await metadataCollection.getOne(assetId);

@@ -1,5 +1,5 @@
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
+import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import { IDatabaseMetadata, ProgressCallback, getDatabaseSummary } from "./media-file-database";
 import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
@@ -88,12 +88,12 @@ export interface IRepairResult {
 //
 // Repairs the media file database by restoring corrupted or missing files from a source database.
 //
-export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {        
+export async function repair(assetStorage: IStorage, options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {        
     const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
     const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
     const { storage: sourceMetadataStorage } = createStorage(pathJoin(options.source, '.db'));
 
-    const summary = await mediaFileDatabase.getDatabaseSummary();
+    const summary = await getDatabaseSummary(assetStorage);
     const result: IRepairResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -140,7 +140,6 @@ export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRep
             // A write lock isn't needed here unless we think multiple repairs might try to operate on the tree at the same time.
             // TODO: Maybe a "repair lock" will be in order at some point in the future.
             //
-            const assetStorage = mediaFileDatabase.getAssetStorage();
             await assetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
 
             // Verify copied file
@@ -175,7 +174,6 @@ export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRep
         }
 
         const fileName = node.name!;
-        const assetStorage = mediaFileDatabase.getAssetStorage();
         const fileInfo = await assetStorage.info(fileName);
         if (!fileInfo) {
             // File is missing - try to repair.
@@ -225,7 +223,7 @@ export async function repair(mediaFileDatabase: MediaFileDatabase, options: IRep
         progressCallback(`Checking for missing or corrupt files in merkle tree...`);
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

@@ -1,9 +1,8 @@
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { BsonDatabase, IBsonCollection, IRecord, getDatabaseRootHash } from "bdb";
-import type { IBsonDatabase } from "bdb";
-import { FileStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
+import { BsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
+import { IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { validateFile } from "./validation";
 import { ILocation, log, retry, reverseGeocode, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
@@ -23,12 +22,12 @@ import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
 import { loadMerkleTree, saveMerkleTree, getFilesRootHash } from "./tree";
-import { addItem, buildMerkleTree, createTree, deleteItem, IHashedData, combineHashes, IMerkleTree } from "merkle-tree";
+import { addItem, createTree, deleteItem, IHashedData, combineHashes, IMerkleTree } from "merkle-tree";
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-async function extractDominantColorFromThumbnail(inputPath: string): Promise<[number, number, number] | undefined> {
+export async function extractDominantColorFromThumbnail(inputPath: string): Promise<[number, number, number] | undefined> {
     const image = new Image(inputPath);
     return await image.getDominantColor();
 }
@@ -256,750 +255,289 @@ export async function createReadme(
 }
 
 //
-// Implements the Photosphere media file database.
+// Creates database dependencies
 //
-export class MediaFileDatabase {
+export function createMediaFileDatabase(
+    assetStorage: IStorage,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider
+) {
+    const bsonDatabase = new BsonDatabase({
+        storage: new StoragePrefixWrapper(assetStorage, `metadata`),
+        uuidGenerator: uuidGenerator,
+        timestampProvider: timestampProvider
+    });
 
-    //
-    // For interacting with the bson database.
-    //
-    private readonly bsonDatabase: BsonDatabase;
+    const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
+    const localFileScanner = new FileScanner({
+        ignorePatterns: [/\.db/]
+    });
 
-    //
-    // For interacting with the metadata collection.
-    //
-    private readonly metadataCollection: IBsonCollection<IAsset>;
+    return {
+        assetStorage,
+        bsonDatabase,
+        metadataCollection,
+        localFileScanner,
+    };
+}
 
-    //
-    // The hash cache for the local file system.
-    // This is used to speed up the hashing of files that are already known locally.
-    //
-    private readonly localHashCache: HashCache;
+//
+// Creates a new media file database.
+//
+export async function createDatabase(
+    assetStorage: IStorage,
+    uuidGenerator: IUuidGenerator,
+    metadataCollection: IBsonCollection<IAsset>,
+    databaseId?: string
+): Promise<void> {
 
-    //
-    // The file scanner for scanning directories and files.
-    //
-    private readonly localFileScanner: FileScanner;
+    if (!await assetStorage.isEmpty("./")) {
+        throw new Error(`Cannot create new media file database in ${assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
+    }
 
-    //
-    // The UUID generator for creating asset IDs.
-    //
-    public readonly uuidGenerator: IUuidGenerator; //todo: Shouldn't be public.
+    let merkleTree = createTree<IDatabaseMetadata>(databaseId || uuidGenerator.generate());
+    merkleTree.databaseMetadata = { filesImported: 0 };
 
-    //
-    // The session ID for this instance (used for write lock identification).
-    //
-    public readonly sessionId: string; //todo: Shouldn't be public.
+    await ensureSortIndex(metadataCollection);
 
-    //
-    // The summary of files added to the database.
-    //
-    private readonly addSummary: IAddSummary = {
-        filesAdded: 0,
-        filesAlreadyAdded: 0,
-        filesIgnored: 0,
-        filesFailed: 0,
-        totalSize: 0,
-        averageSize: 0,
+    merkleTree = await createReadme(assetStorage, merkleTree);
+
+    await retry(() => saveMerkleTree(merkleTree, assetStorage));
+
+    log.verbose(`Created new media file database.`);
+}
+
+//
+// Loads the existing media file database.
+//
+export async function loadDatabase(
+    assetStorage: IStorage,
+    metadataCollection: IBsonCollection<IAsset>
+): Promise<void> {
+    await retry(() => metadataCollection.loadSortIndex("hash", "asc", "string"));
+    await retry(() => metadataCollection.loadSortIndex("photoDate", "desc", "date"));
+
+    log.verbose(`Loaded existing media file database from: ${assetStorage.location}`);
+}
+
+//
+// Ensures the sort index exists.
+//
+export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset>): Promise<void> {
+    await retry(() => metadataCollection.ensureSortIndex("hash", "asc", "string"));
+    await retry(() => metadataCollection.ensureSortIndex("photoDate", "desc", "date"));
+}
+
+//
+// Gets the database hashes (files hash, database hash, and aggregate hash).
+//
+export async function getDatabaseHashes(assetStorage: IStorage): Promise<IDatabaseHashes> {
+    // Get root hashes from both merkle trees
+    const filesRootHash = await retry(() => getFilesRootHash(assetStorage));
+    const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, "metadata")));
+    
+    // Compute aggregate root hash
+    let fullHash: string;
+    if (filesRootHash && databaseRootHash) {
+        const aggregateHash = combineHashes(filesRootHash, databaseRootHash);
+        fullHash = aggregateHash.toString('hex');
+    } else if (filesRootHash) {
+        fullHash = filesRootHash.toString('hex');
+    } else if (databaseRootHash) {
+        fullHash = databaseRootHash.toString('hex');
+    } else {
+        fullHash = 'empty';
+    }
+    
+    return {
+        fullHash,
+        filesHash: filesRootHash?.toString('hex'),
+        databaseHash: databaseRootHash?.toString('hex'),
+    };
+}
+
+//
+// Gets a summary of the entire database.
+//
+export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatabaseSummary> {
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree.`);
+    }
+    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+    
+    // Get database hashes
+    const hashes = await getDatabaseHashes(assetStorage);
+    
+    return {
+        totalImports: filesImported,
+        totalFiles: merkleTree.sort?.leafCount || 0,
+        totalSize: merkleTree.sort?.size || 0,
+        totalNodes: merkleTree.sort?.nodeCount || 0,
+        fullHash: hashes.fullHash,
+        filesHash: hashes.filesHash,
+        databaseHash: hashes.databaseHash,
+        databaseVersion: merkleTree.version
+    };
+}
+
+//
+// Helper functions for file operations
+//
+async function getHashFromCache(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedData | undefined> {
+    const cacheEntry = hashCache.getHash(filePath);
+    if (cacheEntry) {
+        if (cacheEntry.length === fileStat.length && cacheEntry.lastModified.getTime() === fileStat.lastModified.getTime()) {
+            return {
+                hash: cacheEntry.hash,
+                lastModified: fileStat.lastModified,
+                length: fileStat.length,
+            }
+        }
+    }
+    return undefined;
+}
+
+//
+// Computes the hash of a file for import, validating it first and caching the result in the hash cache.
+//
+async function computeCachedHash(
+    uuidGenerator: IUuidGenerator,
+    localHashCache: HashCache,
+    localFileScanner: FileScanner,
+    filePath: string, 
+    fileStat: IFileStat, 
+    contentType: string, 
+    assetTempDir: string, 
+    openStream: (() => NodeJS.ReadableStream) | undefined,
+    progressCallback: ProgressCallback,
+    summary: IAddSummary
+): Promise<{ hashedFile?: IHashedData; summary: IAddSummary }> {
+    let updatedSummary = { ...summary };
+
+    if (openStream === undefined) {
+        openStream = () => fs.createReadStream(filePath);
+    }
+    
+    try {
+        if (!await validateFile(filePath, contentType, assetTempDir, uuidGenerator, openStream)) {
+            updatedSummary.filesFailed++;
+            if (progressCallback) {
+                progressCallback(localFileScanner.getCurrentlyScanning());
+            }            
+            return { summary: updatedSummary };
+        }
+    }
+    catch (error: any) {
+        log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);
+        updatedSummary.filesFailed++;
+        if (progressCallback) {
+            progressCallback(localFileScanner.getCurrentlyScanning());
+        }            
+        return { summary: updatedSummary };
+    }
+
+    const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
+    const hashedFile: IHashedData = {
+        hash,
+        lastModified: fileStat.lastModified,
+        length: fileStat.length,
     };
 
-    constructor(
-        private readonly assetStorage: IStorage,
-        private readonly googleApiKey: string | undefined,
-        uuidGenerator: IUuidGenerator,
-        private readonly timestampProvider: ITimestampProvider,
-        sessionId?: string
-            ) {
-        
-        const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
-        this.localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+    localHashCache.addHash(filePath, hashedFile);
 
-        this.bsonDatabase = new BsonDatabase({
-            storage: new StoragePrefixWrapper(this.assetStorage, `metadata`),
-            uuidGenerator: uuidGenerator,
-            timestampProvider: timestampProvider
-        });
+    return { hashedFile, summary: updatedSummary };
+}
 
-        this.metadataCollection = this.bsonDatabase.collection("metadata");
-        this.localFileScanner = new FileScanner({
-            ignorePatterns: [/\.db/]
-        });
-
-        // Use the provided UUID generator
-        this.uuidGenerator = uuidGenerator;
-
-        // Set session ID for write lock identification
-        this.sessionId = sessionId || this.uuidGenerator.generate();
-    }
-
-    //
-    // Gets the asset storage for reading and writing files.
-    //
-    getAssetStorage(): IStorage {
-        return this.assetStorage;
-    }
-
-    //
-    // Gets the timestamp provider.
-    //
-    getTimestampProvider(): ITimestampProvider {
-        return this.timestampProvider;
-    }
-
-    //
-    // Gets the database for reading and writing metadata for assets.
-    //
-    getMetadataDatabase(): BsonDatabase {
-        return this.bsonDatabase;
-    }
-
-    //
-    // Creates a new media file database.
-    //
-    async create(databaseId?: string): Promise<void> {
-        await retry(() => this.localHashCache.load());
-
-        if (!await this.assetStorage.isEmpty("./")) {
-            throw new Error(`Cannot create new media file database in ${this.assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
-        }
-
-        let merkleTree = createTree<IDatabaseMetadata>(databaseId || this.uuidGenerator.generate());
-        merkleTree.databaseMetadata = { filesImported: 0 };
-
-        await this.ensureSortIndex();
-
-        merkleTree = await createReadme(this.assetStorage, merkleTree);
-
-        await retry(() => saveMerkleTree(merkleTree, this.assetStorage));
-
-        log.verbose(`Created new media file database.`);
-    }
-
-    //
-    // Loads the existing media file database.
-    //
-    async load(): Promise<void> {
-        await retry(() => this.localHashCache.load());
-
-        await retry(() => this.metadataCollection.loadSortIndex("hash", "asc", "string"));
-        await retry(() => this.metadataCollection.loadSortIndex("photoDate", "desc", "date"));
-
-        log.verbose(`Loaded existing media file database from: ${this.assetStorage.location}`);
-    }
-
-    //
-    // Ensures the sort index exists.
-    //
-    async ensureSortIndex() {
-        await retry(() => this.metadataCollection.ensureSortIndex("hash", "asc", "string"));
-        await retry(() => this.metadataCollection.ensureSortIndex("photoDate", "desc", "date")) ;
-    }
-
-    //
-    // Gets the summary of files added to the database.
-    //
-    getAddSummary(): IAddSummary {
-        this.addSummary.averageSize = this.addSummary.filesAdded > 0 ? Math.floor(this.addSummary.totalSize / this.addSummary.filesAdded) : 0;
-        return this.addSummary;
-    }
-
-    //
-    // Gets the database hashes (files hash, database hash, and aggregate hash).
-    //
-    async getDatabaseHashes(): Promise<IDatabaseHashes> {
-        // Get root hashes from both merkle trees
-        const filesRootHash = await retry(() => getFilesRootHash(this.assetStorage));
-        const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(this.assetStorage, "metadata")));
-        
-        // Compute aggregate root hash
-        let fullHash: string;
-        if (filesRootHash && databaseRootHash) {
-            const aggregateHash = combineHashes(filesRootHash, databaseRootHash);
-            fullHash = aggregateHash.toString('hex');
-        } else if (filesRootHash) {
-            fullHash = filesRootHash.toString('hex');
-        } else if (databaseRootHash) {
-            fullHash = databaseRootHash.toString('hex');
-        } else {
-            fullHash = 'empty';
-        }
-        
-        return {
-            fullHash,
-            filesHash: filesRootHash?.toString('hex'),
-            databaseHash: databaseRootHash?.toString('hex'),
-        };
-    }
-
-    //
-    // Gets a summary of the entire database.
-    //
-    async getDatabaseSummary(): Promise<IDatabaseSummary> {
-        const merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
-        if (!merkleTree) {
-            throw new Error(`Failed to load merkle tree.`);
-        }
-        const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
-        
-        // Get database hashes
-        const hashes = await this.getDatabaseHashes();
-        
-        return {
-            totalImports: filesImported,
-            totalFiles: merkleTree.sort?.leafCount || 0,
-            totalSize: merkleTree.sort?.size || 0,
-            totalNodes: merkleTree.sort?.nodeCount || 0,
-            fullHash: hashes.fullHash,
-            filesHash: hashes.filesHash,
-            databaseHash: hashes.databaseHash,
-            databaseVersion: merkleTree.version
-        };
-    }
-
-    //
-    // Gets a BSON collection for database operations
-    //
-    getCollection<T extends IRecord = IRecord>(name: string): IBsonCollection<T> {
-        return this.bsonDatabase.collection<T>(name);
-    }
-
-    //
-    // Gets the BSON database interface
-    //
-    getBsonDatabase(): IBsonDatabase {
-        return this.bsonDatabase;
-    }
-
-    //
-    // Adds a list of files or directories to the media file database.
-    //
-    async addPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        await this.localFileScanner.scanPaths(paths, async (result) => {
-            await this.importFile(
-                result.filePath,
-                result.fileStat,
-                result.contentType,
-                result.labels,
-                result.openStream,
-                progressCallback
-            );
-            
-            if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
-                await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
-            }
-
-        }, progressCallback);
-
-        // Update the number of ignored files after scanning
-        this.addSummary.filesIgnored += this.localFileScanner.getNumFilesIgnored();
-
-        //
-        // Commit any additions that were made.
-        //
-        await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
-    }
-
-    //
-    // Checks a list of files or directories to find files already added to the media file database.
-    //
-    async checkPaths(paths: string[], progressCallback: ProgressCallback): Promise<void> {
-        await this.localFileScanner.scanPaths(paths, async (result) => {
-            await this.checkFile(
-                result.filePath,
-                result.fileStat,
-                result.contentType,
-                result.openStream,
-                progressCallback
-            );
-            
-            if (this.addSummary.filesAdded % 100 === 0) { // Save hash caches progressively to make the next run faster.
-                await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
-            }
-
-        }, progressCallback);
-
-         await retry(() => this.localHashCache.save()); // Saving hashes locally makes if faster next time.
-    }
-
-    //
-    // Imports a file to the media file database.
-    //
-    private importFile = async (filePath: string, fileStat: IFileStat, contentType: string, labels: string[], openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
-
-        const assetId = this.uuidGenerator.generate();
-
-        //
-        // Create a temporary directory for generating files like the thumbnail, display asset, etc.
-        //
-        const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, this.uuidGenerator.generate());
-        await fs.ensureDir(assetTempDir);
-       
-        try {
-            let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
-            if (!localHashedFile) {
-                //
-                // Validate, compute and cache the hash of the file.
-                //
-                localHashedFile = await this.computeLocalHash(filePath, fileStat, contentType, assetTempDir, openStream, progressCallback);
-                if (!localHashedFile) {
-                    // Failed validation.
-                    return;
-                }
-            }
+//
+// Imports a single file into the media file database, processing it, extracting metadata, and storing it with all variants.
+//
+async function importFile(
+    assetStorage: IStorage,
+    googleApiKey: string | undefined,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider,
+    sessionId: string,
+    metadataCollection: IBsonCollection<IAsset>,
+    localHashCache: HashCache,
+    localFileScanner: FileScanner,
+    filePath: string,
+    fileStat: IFileStat,
+    contentType: string,
+    labels: string[],
+    openStream: (() => NodeJS.ReadableStream) | undefined,
+    progressCallback: ProgressCallback,
+    summary: IAddSummary
+): Promise<IAddSummary> {
+    const assetId = uuidGenerator.generate();
+    const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
+    await fs.ensureDir(assetTempDir);
     
-            const metadataCollection = this.bsonDatabase.collection("metadata");
+    let updatedSummary = { ...summary };
     
-            log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
-    
-            const localHashStr = localHashedFile.hash.toString("hex");
-            const records = await metadataCollection.findByIndex("hash", localHashStr);
-            if (records.length > 0) {
-                //
-                // The file is already in the database.
-                //
-                log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-                this.addSummary.filesAlreadyAdded++;
-                if (progressCallback) {
-                    progressCallback(this.localFileScanner.getCurrentlyScanning());
-                }
-                return;
+    try {
+        let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
+        if (!localHashedFile) {
+            const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, assetTempDir, openStream, progressCallback, updatedSummary);
+            if (!hashResult.hashedFile) {
+                return hashResult.summary;
             }
-            
-            let assetDetails: IAssetDetails | undefined = undefined;
-            
-            if (contentType?.startsWith("video")) {
-                assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
-            }
-            else if (contentType?.startsWith("image")) {
-                assetDetails = await getImageDetails(filePath, assetTempDir, contentType, this.uuidGenerator, openStream);
-            }
-    
-            const assetPath = `asset/${assetId}`;
-            const thumbPath = `thumb/${assetId}`;
-            const displayPath = `display/${assetId}`;
-
-            //
-            // Acquire the write lock before writing shared files in the database.
-            // Ideally we would upload new files before acquiring the lock and then update the merkle tree and BSON database,
-            // but the way the code is currently structured is that file uploads and merkle tree changes are intertwined.
-            //
-            if (!await acquireWriteLock(this.assetStorage, this.sessionId)) {
-                throw new Error(`Failed to acquire write lock.`);
-            }
-
-            // Simulate failure for testing (10% chance when SIMULATE_FAILURE=add-file)
-            // This occurs while holding the write lock to test lock recovery scenarios
-            if (process.env.SIMULATE_FAILURE === "add-file" && Math.random() < 0.1) {
-                throw new Error(`Simulated failure during add-file operation for ${filePath}`);
-            }
-
-            try {
-                //
-                // Always load the database after acquiring the write lock to ensure we have the latest tree.
-                //
-                let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
-                if (!merkleTree) {
-                    throw new Error(`Failed to load media file database.`);
-                }
-
-                //
-                // Uploads the full asset.
-                // No write lock is needed to write new assets as the asset UUID is unique.
-                //
-                await retry(() => this.assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
-
-                const assetInfo = await retry(() => this.assetStorage.info(assetPath));
-                if (!assetInfo) {
-                    throw new Error(`Failed to get info for file "${assetPath}"`);
-                }
-
-                const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
-                if (hashedAsset.hash.toString("hex") !== localHashStr) {
-                    throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
-                }
-
-                //
-                // Refresh the timeout of the write lock.
-                //
-                await refreshWriteLock(this.assetStorage, this.sessionId);
-
-                //
-                // Write lock is needed to update the merkle tree and BSON database.
-                //
-                merkleTree = addItem(merkleTree, {
-                    name: assetPath,
-                    hash: hashedAsset.hash,
-                    length: hashedAsset.length,
-                    lastModified: hashedAsset.lastModified,
-                });
-
-                if (assetDetails?.thumbnailPath) {
-                    //
-                    // Uploads the thumbnail.
-                    // No write lock is needed to write new assets as the asset UUID is unique.
-                    // Write lock is needed to update the merkle tree and BSON database.
-                    //
-                    await retry(() => this.assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
-
-                    const thumbInfo = await retry(() => this.assetStorage.info(thumbPath));
-                    if (!thumbInfo) {
-                        throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
-                    }
-                    const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
-
-                    //
-                    // Refresh the timeout of the write lock.
-                    //
-                    await refreshWriteLock(this.assetStorage, this.sessionId);
-
-                    //
-                    // Write lock is needed to update the merkle tree and BSON database.
-                    //
-                    merkleTree = addItem(merkleTree, {
-                        name: thumbPath,
-                        hash: hashedThumb.hash,
-                        length: hashedThumb.length,
-                        lastModified: hashedThumb.lastModified,
-                    });    
-                }
-
-                if (assetDetails?.displayPath) {
-                    //
-                    // Uploads the display asset.
-                    // No write lock is needed to write new assets as the asset UUID is unique.
-                    //
-                    await retry(() => this.assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
-
-                    const displayInfo = await retry(() => this.assetStorage.info(displayPath));
-                    if (!displayInfo) {
-                        throw new Error(`Failed to get info for display "${displayPath}"`);
-                    }
-                    const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
-
-                    //
-                    // Refresh the timeout of the write lock.
-                    //
-                    await refreshWriteLock(this.assetStorage, this.sessionId);
-
-                    //
-                    // Write lock is needed to update the merkle tree and BSON database.
-                    //
-                    merkleTree = addItem(merkleTree, {
-                        name: displayPath,
-                        hash: hashedDisplay.hash,
-                        length: hashedDisplay.length,
-                        lastModified: hashedDisplay.lastModified,
-                    });
-                }
-
-                const properties: any = {};
-
-                if (assetDetails?.metadata) {
-                    properties.metadata = assetDetails.metadata;
-                }
-
-                let coordinates: ILocation | undefined = undefined;
-                let location: string | undefined = undefined;
-                if (assetDetails?.coordinates) {
-                    coordinates = assetDetails.coordinates;
-                    const googleApiKey = this.googleApiKey;
-                    if (googleApiKey) {
-                        const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
-                        if (reverseGeocodingResult) {
-                            location = reverseGeocodingResult.location;
-                            properties.reverseGeocoding = {
-                                type: reverseGeocodingResult.type,
-                                fullResult: reverseGeocodingResult.fullResult,
-                            };
-                        }
-                    }
-                }
-
-                //
-                // Read the date of the file.
-                //
-                const fileDir = path.dirname(filePath);
-                labels = labels.concat(
-                    fileDir.replace(/\\/g, "/")
-                        .split("/")
-                        .filter(label => label)
-                );
-
-                const description = "";
-
-                const micro = assetDetails?.microPath
-                    ? (await retry(() => fs.promises.readFile(assetDetails.microPath))).toString("base64")
-                    : undefined;
-
-                const color = assetDetails 
-                    ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
-                    : undefined;
-
-                //
-                // Refresh the timeout of the write lock.
-                //
-                await refreshWriteLock(this.assetStorage, this.sessionId);
-
-                //
-                // Add the asset's metadata to the database.
-                // Write lock is needed to update the merkle tree and BSON database.
-                //
-                await this.bsonDatabase.collection("metadata").insertOne({
-                    _id: assetId,
-                    width: assetDetails?.resolution.width,
-                    height: assetDetails?.resolution.height,
-                    origFileName: path.basename(filePath),
-                    origPath: fileDir,
-                    contentType,
-                    hash: localHashStr,
-                    coordinates,
-                    location,
-                    duration: assetDetails?.duration,
-                    fileDate: dayjs(fileStat.lastModified).toISOString(),
-                    photoDate: assetDetails?.photoDate || dayjs(fileStat.lastModified).toISOString(),
-                    uploadDate: dayjs(this.timestampProvider.dateNow()).toISOString(),
-                    properties,
-                    labels,
-                    description,
-                    micro,
-                    color: assetDetails ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) : undefined,
-                });
-
-                log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
-
-                //
-                // Refresh the timeout of the write lock.
-                //
-                await refreshWriteLock(this.assetStorage, this.sessionId);
-
-                //
-                // Increment the imported files count.
-                // Write lock is needed to update the merkle tree and BSON database.
-                //
-                if (!merkleTree.databaseMetadata) {
-                    merkleTree.databaseMetadata = { filesImported: 0 };
-                }
-                merkleTree.databaseMetadata.filesImported++;
-
-                this.addSummary.filesAdded++;
-                this.addSummary.totalSize += fileStat.length;
-                if (progressCallback) {
-                    progressCallback(this.localFileScanner.getCurrentlyScanning());
-                }
-
-                //
-                // Ensure the tree is saved before releasing the lock.
-                //
-                await retry(() => saveMerkleTree(merkleTree, this.assetStorage)); 
-            }
-            catch (err: any) {
-                log.exception(`Failed to upload asset data for file "${filePath}"`, err);
-
-                //
-                // If we get here it means something went wrong during the upload or database update.
-                // Clean up any files that might have been uploaded.
-                // No write lock is needed to delete files as we are deleting by unique asset ID.
-                //
-                await retry(() => this.assetStorage.deleteFile(assetPath));
-                await retry(() => this.assetStorage.deleteFile(thumbPath));
-                await retry(() => this.assetStorage.deleteFile(displayPath));
-
-                this.addSummary.filesFailed++;
-                if (progressCallback) {
-                    progressCallback(this.localFileScanner.getCurrentlyScanning());
-                }
-            }
-            finally {
-
-                //
-                // Release the write lock after writing shared files in the database.
-                //
-                await releaseWriteLock(this.assetStorage);
-            }
+            localHashedFile = hashResult.hashedFile;
+            updatedSummary = hashResult.summary;
         }
-        finally {            
-            //
-            // Remove all temporary assets created during the process.
-            //
-            await retry(() => fs.remove(assetTempDir));
-        }
-    }
-
-    //
-    // Checks if a file has already been added to the media file database.
-    //
-    private checkFile = async  (filePath: string, fileStat: IFileStat, contentType: string, openStream: (() => NodeJS.ReadableStream) | undefined, progressCallback: ProgressCallback): Promise<void> => {
-
-        let localHashedFile = await this.getHash(filePath, fileStat, this.localHashCache);
-        if (!localHashedFile) {          
-            const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
-            await fs.ensureDir(tempDir);
-
-            //
-            // Validate, compute and cache the hash of the file.
-            //
-            localHashedFile = await this.computeLocalHash(filePath, fileStat, contentType, tempDir, openStream, progressCallback);
-            if (!localHashedFile) {
-                // Failed validation.
-                return;
-            }
-        }
-
-        const metadataCollection = this.bsonDatabase.collection("metadata");
-
-        log.verbose(`Checking if file "${filePath}" with hash "${localHashedFile.hash.toString("hex")}" is already in the media file database.`);
 
         const localHashStr = localHashedFile.hash.toString("hex");
         const records = await metadataCollection.findByIndex("hash", localHashStr);
         if (records.length > 0) {
-            //
-            // The file is already in the database.
-            //
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            this.addSummary.filesAlreadyAdded++;
-            return;
-        }
-
-        log.verbose(`File "${filePath}" has not been added to the media file database.`);
-
-        this.addSummary.filesAdded++;
-        this.addSummary.totalSize += fileStat.length;
-        if (progressCallback) {
-            progressCallback(this.localFileScanner.getCurrentlyScanning());
-        }
-    }
-
-    //
-    // Validates the local file.
-    //
-    async validateFile(filePath: string, contentType: string, tempDir: string, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<boolean> {
-        try {
-            return await validateFile(filePath, contentType, tempDir, this.uuidGenerator, openStream);
-        }
-        catch (error: any) {
-            log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);                
-            return false;
-        }
-    }
-
-    //
-    // Gets the hash of a file from the hash cache or returns undefined if the file is not in the cache.
-    //
-    async getHash(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedData | undefined> {
-        const cacheEntry = hashCache.getHash(filePath);
-        if (cacheEntry) {
-            if (cacheEntry.length === fileStat.length && cacheEntry.lastModified.getTime() === fileStat.lastModified.getTime()) {
-                // The hash cache entry is valid, so return it.
-                // If a hash is commited to the hash cache, the file is assumed to be valid.
-                return {
-                    hash: cacheEntry.hash,
-                    lastModified: fileStat.lastModified,
-                    length: fileStat.length,
-                }
+            updatedSummary.filesAlreadyAdded++;
+            if (progressCallback) {
+                progressCallback(localFileScanner.getCurrentlyScanning());
             }
-        }
-
-        return undefined;
-    }
-
-    //
-    // Computes the hash of a local file and stores it in the local hash cache.
-    //
-    async computeLocalHash(
-        filePath: string, 
-        fileStat: IFileStat, 
-        contentType: string, 
-        assetTempDir: string, 
-        openStream: (() => NodeJS.ReadableStream) | undefined,
-        progressCallback: ProgressCallback
-    ): Promise<IHashedData | undefined> {
-
-        if (openStream === undefined) {
-            openStream = () => fs.createReadStream(filePath);
+            return updatedSummary;
         }
         
-        //
-        // We might not have seen this file before, so we need to validate it.
-        //
-        if (!await this.validateFile(filePath, contentType, assetTempDir, openStream)) {
-            log.error(`File "${filePath}" has failed validation.`);
-            this.addSummary.filesFailed++;
-            if (progressCallback) {
-                progressCallback(this.localFileScanner.getCurrentlyScanning());
-            }            
-            return undefined;
+        let assetDetails: IAssetDetails | undefined = undefined;
+        
+        if (contentType?.startsWith("video")) {
+            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, uuidGenerator, openStream);
+        }
+        else if (contentType?.startsWith("image")) {
+            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, openStream);
         }
 
-        //
-        // Compute the hash of the file.
-        //
-        const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
-        const hashedFile: IHashedData = {
-            hash,
-            lastModified: fileStat.lastModified,
-            length: fileStat.length,
-        };
+        const assetPath = `asset/${assetId}`;
+        const thumbPath = `thumb/${assetId}`;
+        const displayPath = `display/${assetId}`;
 
-        //
-        // At the point where we commit the hash to the hash cache, we have tested that the file is valid.
-        //
-        this.localHashCache.addHash(filePath, hashedFile);
-
-        return hashedFile;
-    }
-
-    //
-    // Streams an asset from the database.
-    // This is used by the REST API server to read assets.
-    //
-    streamAsset(assetId: string, assetType: string): NodeJS.ReadableStream {
-        const assetPath = `${assetType}/${assetId}`;
-        return this.assetStorage.readStream(assetPath);
-    }
-
-    //
-    // Writes an asset from a buffer with a specific asset ID.
-    // This is used by the REST API server to add assets uploaded via HTTP.
-    //
-    async writeAsset(assetId: string, assetType: string, contentType: string, buffer: Buffer): Promise<void> {
-        const assetPath = `${assetType}/${assetId}`;
-
-        //
-        // Acquire the write lock before writing shared files in the database.
-        //
-        if (!await acquireWriteLock(this.assetStorage, this.sessionId)) {
+        if (!await acquireWriteLock(assetStorage, sessionId)) {
             throw new Error(`Failed to acquire write lock.`);
         }
 
+        if (process.env.SIMULATE_FAILURE === "add-file" && Math.random() < 0.1) {
+            throw new Error(`Simulated failure during add-file operation for ${filePath}`);
+        }
+
         try {
-            //
-            // Always load the database after acquiring the write lock to ensure we have the latest tree.
-            //
-            let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
+            let merkleTree = await retry(() => loadMerkleTree(assetStorage));
             if (!merkleTree) {
                 throw new Error(`Failed to load media file database.`);
             }
 
-            //
-            // Write the asset to storage.
-            //
-            await retry(() => this.assetStorage.write(assetPath, contentType, buffer));
+            await retry(() => assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
 
-            const assetInfo = await retry(() => this.assetStorage.info(assetPath));
+            const assetInfo = await retry(() => assetStorage.info(assetPath));
             if (!assetInfo) {
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
 
-            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => this.assetStorage.readStream(assetPath)));
+            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => assetStorage.readStream(assetPath)));
+            if (hashedAsset.hash.toString("hex") !== localHashStr) {
+                throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
+            }
 
-            //
-            // Refresh the timeout of the write lock.
-            //
-            await refreshWriteLock(this.assetStorage, this.sessionId);
+            await refreshWriteLock(assetStorage, sessionId);
 
-            //
-            // Update the merkle tree with the new asset.
-            //
             merkleTree = addItem(merkleTree, {
                 name: assetPath,
                 hash: hashedAsset.hash,
@@ -1007,108 +545,412 @@ export class MediaFileDatabase {
                 lastModified: hashedAsset.lastModified,
             });
 
-            //
-            // If this is the main asset file (not thumb/display), increment the imported files count.
-            //
-            if (assetType === "asset") {
-                if (!merkleTree.databaseMetadata) {
-                    merkleTree.databaseMetadata = { filesImported: 0 };
+            if (assetDetails?.thumbnailPath) {
+                await retry(() => assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
+
+                const thumbInfo = await retry(() => assetStorage.info(thumbPath));
+                if (!thumbInfo) {
+                    throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                merkleTree.databaseMetadata.filesImported++;
+                const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
+
+                await refreshWriteLock(assetStorage, sessionId);
+
+                merkleTree = addItem(merkleTree, {
+                    name: thumbPath,
+                    hash: hashedThumb.hash,
+                    length: hashedThumb.length,
+                    lastModified: hashedThumb.lastModified,
+                });    
             }
 
-            //
-            // Ensure the tree is saved before releasing the lock.
-            //
-            await retry(() => saveMerkleTree(merkleTree, this.assetStorage));
+            if (assetDetails?.displayPath) {
+                await retry(() => assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
+
+                const displayInfo = await retry(() => assetStorage.info(displayPath));
+                if (!displayInfo) {
+                    throw new Error(`Failed to get info for display "${displayPath}"`);
+                }
+                const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
+
+                await refreshWriteLock(assetStorage, sessionId);
+
+                merkleTree = addItem(merkleTree, {
+                    name: displayPath,
+                    hash: hashedDisplay.hash,
+                    length: hashedDisplay.length,
+                    lastModified: hashedDisplay.lastModified,
+                });
+            }
+
+            const properties: any = {};
+            if (assetDetails?.metadata) {
+                properties.metadata = assetDetails.metadata;
+            }
+
+            let coordinates: ILocation | undefined = undefined;
+            let location: string | undefined = undefined;
+            if (assetDetails?.coordinates) {
+                coordinates = assetDetails.coordinates;
+                if (googleApiKey) {
+                    const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
+                    if (reverseGeocodingResult) {
+                        location = reverseGeocodingResult.location;
+                        properties.reverseGeocoding = {
+                            type: reverseGeocodingResult.type,
+                            fullResult: reverseGeocodingResult.fullResult,
+                        };
+                    }
+                }
+            }
+
+            const fileDir = path.dirname(filePath);
+            labels = labels.concat(
+                fileDir.replace(/\\/g, "/")
+                    .split("/")
+                    .filter(label => label)
+            );
+
+            const description = "";
+            const micro = assetDetails?.microPath
+                ? (await retry(() => fs.promises.readFile(assetDetails.microPath))).toString("base64")
+                : undefined;
+
+            const color = assetDetails 
+                ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
+                : undefined;
+
+            await refreshWriteLock(assetStorage, sessionId);
+
+            await metadataCollection.insertOne({
+                _id: assetId,
+                width: assetDetails?.resolution.width ?? 0,
+                height: assetDetails?.resolution.height ?? 0,
+                origFileName: path.basename(filePath),
+                origPath: fileDir,
+                contentType: contentType || "",
+                hash: localHashStr,
+                coordinates,
+                location,
+                duration: assetDetails?.duration,
+                fileDate: dayjs(fileStat.lastModified).toISOString(),
+                photoDate: assetDetails?.photoDate || dayjs(fileStat.lastModified).toISOString(),
+                uploadDate: dayjs(timestampProvider.dateNow()).toISOString(),
+                properties,
+                labels,
+                description: description || "",
+                micro: micro || "",
+                color: color || [0, 0, 0],
+            });
+
+            log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
+
+            await refreshWriteLock(assetStorage, sessionId);
+
+            if (!merkleTree.databaseMetadata) {
+                merkleTree.databaseMetadata = { filesImported: 0 };
+            }
+            merkleTree.databaseMetadata.filesImported++;
+
+            updatedSummary.filesAdded++;
+            updatedSummary.totalSize += fileStat.length;
+            if (progressCallback) {
+                progressCallback(localFileScanner.getCurrentlyScanning());
+            }
+
+            await retry(() => saveMerkleTree(merkleTree, assetStorage)); 
         }
         catch (err: any) {
-            log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
-
-            //
-            // Clean up the file if something went wrong.
-            //
-            await retry(() => this.assetStorage.deleteFile(assetPath));
-
-            throw err;
+            log.exception(`Failed to upload asset data for file "${filePath}"`, err);
+            await retry(() => assetStorage.deleteFile(assetPath));
+            await retry(() => assetStorage.deleteFile(thumbPath));
+            await retry(() => assetStorage.deleteFile(displayPath));
+            updatedSummary.filesFailed++;
+            if (progressCallback) {
+                progressCallback(localFileScanner.getCurrentlyScanning());
+            }
         }
         finally {
-            //
-            // Release the write lock after writing shared files in the database.
-            //
-            await releaseWriteLock(this.assetStorage);
+            await releaseWriteLock(assetStorage);
         }
     }
-
-    //
-    // Removes an asset by ID, including all associated files and metadata.
-    // This is the comprehensive removal method that handles storage cleanup.
-    //
-    async remove(assetId: string): Promise<void> {
-
-        //
-        // Acquire a write lock before modifying shared database state.
-        //
-        if (!await acquireWriteLock(this.assetStorage, this.sessionId)) {
-            throw new Error(`Failed to acquire write lock.`);
-        }
-
-        try {
-            //
-            // Always reload the database after acquiring the write lock to ensure we have the latest tree.
-            //
-            let merkleTree = await retry(() => loadMerkleTree(this.assetStorage));
-            if (!merkleTree) {
-                throw new Error(`Failed to load media file database.`);
-            }
-
-            //
-            // Remove the asset from the metadata collection and decrement the count.
-            //
-            const removed = await this.metadataCollection.deleteOne(assetId);
-            if (removed) {
-                if (!merkleTree.databaseMetadata) {
-                    merkleTree.databaseMetadata = { filesImported: 0 };
-                }
-                if (merkleTree.databaseMetadata.filesImported > 0) {
-                    merkleTree.databaseMetadata.filesImported--;
-                }
-                
-                // Add asset ID to deleted list
-                if (!merkleTree.databaseMetadata.deletedAssetIds) {
-                    merkleTree.databaseMetadata.deletedAssetIds = [];
-                }
-                // Only add if not already in the list
-                if (!merkleTree.databaseMetadata.deletedAssetIds.includes(assetId)) {
-                    merkleTree.databaseMetadata.deletedAssetIds.push(assetId);
-                }
-            }
-
-            //
-            // We need the write lock for deleting assets only because this also update the merkle tree.
-            // If anything fails after deleting the metadata and before deleting
-            // these files, they will become "orphaned assets" in our database.
-            //
-            await this.assetStorage.deleteFile(pathJoin("asset", assetId));
-            await this.assetStorage.deleteFile(pathJoin("display", assetId));
-            await this.assetStorage.deleteFile(pathJoin("thumb", assetId));
-
-            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
-            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
-            deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
-
-            //
-            // Ensure the tree is saved before releasing the lock.
-            //
-            await retry(() => saveMerkleTree(merkleTree, this.assetStorage)); 
-        }
-        finally {
-            //
-            // Release the write lock after writing shared files in the database.
-            //
-            await releaseWriteLock(this.assetStorage);
-        }    
+    finally {            
+        await retry(() => fs.remove(assetTempDir));
     }
+    
+    return updatedSummary;
+}
+
+//
+// Checks if a file has already been added to the database by computing its hash and looking it up in the metadata collection.
+//
+async function checkFile(
+    uuidGenerator: IUuidGenerator,
+    metadataCollection: IBsonCollection<IAsset>,
+    localHashCache: HashCache,
+    localFileScanner: FileScanner,
+    filePath: string,
+    fileStat: IFileStat,
+    contentType: string,
+    openStream: (() => NodeJS.ReadableStream) | undefined,
+    progressCallback: ProgressCallback,
+    summary: IAddSummary
+): Promise<IAddSummary> {
+    let updatedSummary = { ...summary };
+
+    let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
+    if (!localHashedFile) {          
+        const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
+        await fs.ensureDir(tempDir);
+
+        const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, tempDir, openStream, progressCallback, updatedSummary);
+        if (!hashResult.hashedFile) {
+            return hashResult.summary;
+        }
+        localHashedFile = hashResult.hashedFile;
+        updatedSummary = hashResult.summary;
+    }
+
+    const localHashStr = localHashedFile.hash.toString("hex");
+    const records = await metadataCollection.findByIndex("hash", localHashStr);
+    if (records.length > 0) {
+        log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
+        updatedSummary.filesAlreadyAdded++;
+        return updatedSummary;
+    }
+
+    log.verbose(`File "${filePath}" has not been added to the media file database.`);
+
+    updatedSummary.filesAdded++;
+    updatedSummary.totalSize += fileStat.length;
+    if (progressCallback) {
+        progressCallback(localFileScanner.getCurrentlyScanning());
+    }
+    
+    return updatedSummary;
+}
+
+//
+// Adds a list of files or directories to the media file database.
+//
+export async function addPaths(
+    assetStorage: IStorage,
+    googleApiKey: string | undefined,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider,
+    sessionId: string,
+    metadataCollection: IBsonCollection<IAsset>,
+    localHashCache: HashCache,
+    localFileScanner: FileScanner,
+    paths: string[],
+    progressCallback: ProgressCallback,
+    summary: IAddSummary = {
+        filesAdded: 0,
+        filesAlreadyAdded: 0,
+        filesIgnored: 0,
+        filesFailed: 0,
+        totalSize: 0,
+        averageSize: 0,
+    }
+): Promise<IAddSummary> {
+    let updatedSummary = { ...summary };
+
+    await localFileScanner.scanPaths(paths, async (result) => {
+        updatedSummary = await importFile(
+            assetStorage,
+            googleApiKey,
+            uuidGenerator,
+            timestampProvider,
+            sessionId,
+            metadataCollection,
+            localHashCache,
+            localFileScanner,
+            result.filePath,
+            result.fileStat,
+            result.contentType,
+            result.labels,
+            result.openStream,
+            progressCallback,
+            updatedSummary
+        );
+        
+        if (updatedSummary.filesAdded % 100 === 0) {
+            await retry(() => localHashCache.save());
+        }
+    }, progressCallback);
+
+    updatedSummary.filesIgnored += localFileScanner.getNumFilesIgnored();
+    await retry(() => localHashCache.save());
+
+    updatedSummary.averageSize = updatedSummary.filesAdded > 0 ? Math.floor(updatedSummary.totalSize / updatedSummary.filesAdded) : 0;
+    return updatedSummary;
+}
+
+//
+// Checks a list of files or directories to find files already added to the media file database.
+//
+export async function checkPaths(
+    uuidGenerator: IUuidGenerator,
+    metadataCollection: IBsonCollection<IAsset>,
+    localHashCache: HashCache,
+    localFileScanner: FileScanner,
+    paths: string[],
+    progressCallback: ProgressCallback,
+    summary: IAddSummary = {
+        filesAdded: 0,
+        filesAlreadyAdded: 0,
+        filesIgnored: 0,
+        filesFailed: 0,
+        totalSize: 0,
+        averageSize: 0,
+    }
+): Promise<IAddSummary> {
+    let updatedSummary = { ...summary };
+
+    await localFileScanner.scanPaths(paths, async (result) => {
+        updatedSummary = await checkFile(
+            uuidGenerator,
+            metadataCollection,
+            localHashCache,
+            localFileScanner,
+            result.filePath,
+            result.fileStat,
+            result.contentType,
+            result.openStream,
+            progressCallback,
+            updatedSummary
+        );
+        
+        if (updatedSummary.filesAdded % 100 === 0) {
+            await retry(() => localHashCache.save());
+        }
+    }, progressCallback);
+
+    await retry(() => localHashCache.save());
+    updatedSummary.averageSize = updatedSummary.filesAdded > 0 ? Math.floor(updatedSummary.totalSize / updatedSummary.filesAdded) : 0;
+    return updatedSummary;
+}
+
+//
+// Streams an asset from the database.
+// This is used by the REST API server to read assets.
+//
+export function streamAsset(assetStorage: IStorage, assetId: string, assetType: string): NodeJS.ReadableStream {
+    const assetPath = `${assetType}/${assetId}`;
+    return assetStorage.readStream(assetPath);
+}
+
+//
+// Writes an asset from a buffer with a specific asset ID.
+// This is used by the REST API server to add assets uploaded via HTTP.
+//
+export async function writeAsset(
+    assetStorage: IStorage,
+    sessionId: string,
+    assetId: string,
+    assetType: string,
+    contentType: string,
+    buffer: Buffer
+): Promise<void> {
+    const assetPath = `${assetType}/${assetId}`;
+
+    if (!await acquireWriteLock(assetStorage, sessionId)) {
+        throw new Error(`Failed to acquire write lock.`);
+    }
+
+    try {
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+        if (!merkleTree) {
+            throw new Error(`Failed to load media file database.`);
+        }
+
+        await retry(() => assetStorage.write(assetPath, contentType, buffer));
+
+        const assetInfo = await retry(() => assetStorage.info(assetPath));
+        if (!assetInfo) {
+            throw new Error(`Failed to get info for file "${assetPath}"`);
+        }
+
+        const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => assetStorage.readStream(assetPath)));
+
+        await refreshWriteLock(assetStorage, sessionId);
+
+        merkleTree = addItem(merkleTree, {
+            name: assetPath,
+            hash: hashedAsset.hash,
+            length: hashedAsset.length,
+            lastModified: hashedAsset.lastModified,
+        });
+
+        if (assetType === "asset") {
+            if (!merkleTree.databaseMetadata) {
+                merkleTree.databaseMetadata = { filesImported: 0 };
+            }
+            merkleTree.databaseMetadata.filesImported++;
+        }
+
+        await retry(() => saveMerkleTree(merkleTree, assetStorage));
+    }
+    catch (err: any) {
+        log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
+        await retry(() => assetStorage.deleteFile(assetPath));
+        throw err;
+    }
+    finally {
+        await releaseWriteLock(assetStorage);
+    }
+}
+
+//
+// Removes an asset by ID, including all associated files and metadata.
+// This is the comprehensive removal method that handles storage cleanup.
+//
+export async function removeAsset(
+    assetStorage: IStorage,
+    sessionId: string,
+    metadataCollection: IBsonCollection<IAsset>,
+    assetId: string
+): Promise<void> {
+    if (!await acquireWriteLock(assetStorage, sessionId)) {
+        throw new Error(`Failed to acquire write lock.`);
+    }
+
+    try {
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+        if (!merkleTree) {
+            throw new Error(`Failed to load media file database.`);
+        }
+
+        const removed = await metadataCollection.deleteOne(assetId);
+        if (removed) {
+            if (!merkleTree.databaseMetadata) {
+                merkleTree.databaseMetadata = { filesImported: 0 };
+            }
+            if (merkleTree.databaseMetadata.filesImported > 0) {
+                merkleTree.databaseMetadata.filesImported--;
+            }
+            
+            if (!merkleTree.databaseMetadata.deletedAssetIds) {
+                merkleTree.databaseMetadata.deletedAssetIds = [];
+            }
+            if (!merkleTree.databaseMetadata.deletedAssetIds.includes(assetId)) {
+                merkleTree.databaseMetadata.deletedAssetIds.push(assetId);
+            }
+        }
+
+        await assetStorage.deleteFile(pathJoin("asset", assetId));
+        await assetStorage.deleteFile(pathJoin("display", assetId));
+        await assetStorage.deleteFile(pathJoin("thumb", assetId));
+
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
+
+        await retry(() => saveMerkleTree(merkleTree, assetStorage)); 
+    }
+    finally {
+        await releaseWriteLock(assetStorage);
+    }    
 }
 
 //

@@ -1,7 +1,7 @@
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { createDatabase, ICreateCommandOptions } from "../lib/init-cmd";
+import { createDatabase, ICreateCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { intro, outro } from '../lib/clack/prompts';
 import { basename } from "path";
 
@@ -11,11 +11,12 @@ export interface IInitCommandOptions extends ICreateCommandOptions {
 //
 // Command that initializes a new Photosphere media file database.
 //
-export async function initCommand(options: IInitCommandOptions): Promise<void> {
+export async function initCommand(context: ICommandContext, options: IInitCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
 
     intro(pc.blue(`Creating a new media file database...`));
 
-    const { databaseDir } = await createDatabase(options.db, options);
+    const { databaseDir } = await createDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     const isCurrentDir = databaseDir === "." || databaseDir === "./";
     const displayPath = isCurrentDir ? "the current directory" : databaseDir;

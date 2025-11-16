@@ -1,8 +1,9 @@
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { formatBytes } from "../lib/format";
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { log } from "utils";
+import { getDatabaseSummary } from "api";
 
 export interface ISummaryCommandOptions extends IBaseCommandOptions {
 }
@@ -10,11 +11,11 @@ export interface ISummaryCommandOptions extends IBaseCommandOptions {
 //
 // Command that displays a summary of the Photosphere media file database.
 //
-export async function summaryCommand(options: ISummaryCommandOptions): Promise<void> {
-    
-    const { database, databaseDir } = await loadDatabase(options.db, options, true);
+export async function summaryCommand(context: ICommandContext, options: ISummaryCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    const summary = await database.getDatabaseSummary();
+    const summary = await getDatabaseSummary(assetStorage);
 
     log.info('');
     log.info(pc.bold(pc.blue(`📊 Database Summary`)));

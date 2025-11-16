@@ -1,11 +1,10 @@
 import { log } from "utils";
-import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { compareTrees } from "merkle-tree";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { loadMerkleTree } from "api";
 
 export interface ICompareCommandOptions extends IBaseCommandOptions {
@@ -23,7 +22,8 @@ export interface ICompareCommandOptions extends IBaseCommandOptions {
 //
 // Command that compares two asset databases by analyzing their Merkle trees.
 //
-export async function compareCommand(options: ICompareCommandOptions): Promise<void> {
+export async function compareCommand(context: ICommandContext, options: ICompareCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
 
     const nonInteractive = options.yes || false;
 
@@ -38,9 +38,10 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     }
 
     // Load both databases with allowOlderVersions=false to disallow older databases
-    const { database: sourceDatabase, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false);
+    const destSessionId = uuidGenerator.generate();
+    const { assetStorage: sourceAssetStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false, uuidGenerator, timestampProvider, sessionId);
     const destOptions = { ...options, db: destDir };
-    const { database: destDatabase, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false);
+    const { assetStorage: destAssetStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false, uuidGenerator, timestampProvider, destSessionId);
 
     log.info('');
     log.info(`Comparing two databases:`);
@@ -49,14 +50,14 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
     log.info('');
 
     // Load merkle trees from the databases
-    const srcMerkleTree = await loadMerkleTree(sourceDatabase.getAssetStorage());
+    const srcMerkleTree = await loadMerkleTree(sourceAssetStorage);
     if (!srcMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load source database merkle tree`));
         await exit(1);
     }
     
-    const destMerkleTree = await loadMerkleTree(destDatabase.getAssetStorage());
+    const destMerkleTree = await loadMerkleTree(destAssetStorage);
     if (!destMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load destination database merkle tree`));
