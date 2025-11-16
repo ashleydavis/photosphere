@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { formatBytes } from "../lib/format";
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { log } from "utils";
 import { IAsset } from "defs";
 
@@ -15,12 +15,12 @@ export interface IListCommandOptions extends IBaseCommandOptions {
 //
 // Command that lists all files in the database with pagination
 //
-export async function listCommand(options: IListCommandOptions): Promise<void> {
-    
-    const { database } = await loadDatabase(options.db, options, true);
+export async function listCommand(context: ICommandContext, options: IListCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     const pageSize = parseInt(options.pageSize?.toString() || '20', 10);
 
-    const metadataDatabase = database.getMetadataDatabase();
+    const metadataDatabase = bsonDatabase;
     const metadataCollection = metadataDatabase.collection<IAsset>("metadata");
     
     log.info('');

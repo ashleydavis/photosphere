@@ -1,9 +1,12 @@
-import { MediaFileDatabase } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin, IStorage, StoragePrefixWrapper } from "storage";
+import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase, FileScanner } from "api";
+import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import type { BsonDatabase, IBsonCollection } from "bdb";
+import type { IUuidGenerator, ITimestampProvider } from "utils";
+import type { IAsset } from "defs";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { log, RandomUuidGenerator, retry, TimestampProvider } from "utils";
-import { configureIfNeeded, getGoogleApiKey, getS3Config } from './config';
+import { log, RandomUuidGenerator, TimestampProvider } from "utils";
+import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs-extra';
@@ -225,43 +228,87 @@ export interface ICreateCommandOptions extends IBaseCommandOptions {
 }
 
 //
+// Common dependencies injected into CLI commands.
+//
+export interface ICommandContext {
+    uuidGenerator: IUuidGenerator;
+    timestampProvider: ITimestampProvider;
+    sessionId: string;
+}
+
+//
+// Wraps a command function to inject common dependencies.
+//
+export function initContext<TArgs extends any[], TReturn>(
+    command: (context: ICommandContext, ...args: TArgs) => Promise<TReturn>
+): (...args: TArgs) => Promise<TReturn> {
+    return async (...args: TArgs): Promise<TReturn> => {
+        // Extract options from args - commander.js passes (args..., options, command)
+        // So options is always the second-to-last argument
+        const options = args[args.length - 2] as IBaseCommandOptions;
+        
+        // Configure logging
+        await configureLog({
+            verbose: options.verbose,
+            tools: options.tools
+        });        
+        
+        // Test providers are automatically configured when NODE_ENV === "testing"
+        const uuidGenerator = process.env.NODE_ENV === "testing" 
+            ? new TestUuidGenerator()
+            : new RandomUuidGenerator();
+        const timestampProvider = process.env.NODE_ENV === "testing"
+            ? new TestTimestampProvider()
+            : new TimestampProvider();
+        const sessionId = options.sessionId || uuidGenerator.generate();
+        
+        const context: ICommandContext = {
+            uuidGenerator,
+            timestampProvider,
+            sessionId,
+        };
+        
+        return command(context, ...args);
+    };
+}
+
+//
 // Result of the initialization
 //
 export interface IInitResult {
     //
-    // The initialized database instance
-    //
-    database: MediaFileDatabase;
-
-    //
     // The resolved database directory
     //
     databaseDir: string;
+    
+    //
+    // Individual database dependencies
+    //
+    assetStorage: IStorage;
+    bsonDatabase: BsonDatabase;
+    sessionId: string;
+    metadataCollection: IBsonCollection<IAsset>;
+    localFileScanner: FileScanner;
 
     //
     // The resolved metadata path
     //
     metaPath: string;
-
-    //
-    // The asset storage instance
-    //
-    assetStorage: IStorage;
-
 }
 
 //
 // Shared database loading function for CLI commands.
 //
-export async function loadDatabase(dbDir: string | undefined, options: IBaseCommandOptions, allowOlderVersions: boolean): Promise<IInitResult> { //todo: Move into api.
+export async function loadDatabase(
+    dbDir: string | undefined, 
+    options: IBaseCommandOptions, 
+    allowOlderVersions: boolean,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider,
+    sessionId: string
+): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
-    
-    // Configure logging
-    await configureLog({
-        verbose: options.verbose,
-        tools: options.tools
-    });   
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(nonInteractive);
@@ -335,28 +382,20 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
         }
     }
 
-    // Test providers are automatically configured when NODE_ENV === "testing"
-    const uuidGenerator = process.env.NODE_ENV === "testing" 
-        ? new TestUuidGenerator()
-        : new RandomUuidGenerator();
-    const timestampProvider = process.env.NODE_ENV === "testing"
-        ? new TestTimestampProvider()
-        : new TimestampProvider();
-    
-    // Get Google API key from config or environment  
-    const googleApiKey = await getGoogleApiKey();
-        
     // Create database instance.
-    const database = new MediaFileDatabase(assetStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId);
+    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Load the database
-    await database.load();
+    await loadMediaDatabase(database.assetStorage, database.metadataCollection);
 
     return {
-        database,
         databaseDir: dbDir,
         metaPath,
-        assetStorage
+        assetStorage: database.assetStorage,
+        bsonDatabase: database.bsonDatabase,
+        sessionId,
+        metadataCollection: database.metadataCollection,
+        localFileScanner: database.localFileScanner,
     };
 }
 
@@ -365,15 +404,15 @@ export async function loadDatabase(dbDir: string | undefined, options: IBaseComm
 // This handles creating a new database with similar setup to loadDatabase
 // but uses 'init' directory type and calls database.create() instead of load()
 //
-export async function createDatabase(dbDir: string | undefined, options: ICreateCommandOptions): Promise<IInitResult> { //todo: Move into api.
+export async function createDatabase(
+    dbDir: string | undefined, 
+    options: ICreateCommandOptions,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider,
+    sessionId: string
+): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
-    
-    // Configure logging
-    await configureLog({
-        verbose: options.verbose,
-        tools: options.tools
-    });
     
     // Log the command being executed
     const command = process.argv.slice(2).join(' ');
@@ -426,24 +465,11 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
         await exit(1);
     }
 
-    // Create appropriate providers based on NODE_ENV
-    const uuidGenerator = process.env.NODE_ENV === "testing" 
-        ? new TestUuidGenerator()
-        : new RandomUuidGenerator();
-    const timestampProvider = process.env.NODE_ENV === "testing"
-        ? new TestTimestampProvider()
-        : new TimestampProvider();
-    
-    // Test providers are automatically configured when NODE_ENV === "testing"
-
-    // Get Google API key from config or environment  
-    const googleApiKey = await getGoogleApiKey();
-        
     // Create database instance
-    const database = new MediaFileDatabase(assetStorage, googleApiKey, uuidGenerator, timestampProvider, options.sessionId); 
+    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider); 
 
     // Create the database (instead of loading)
-    await database.create();
+    await createMediaDatabase(database.assetStorage, uuidGenerator, database.metadataCollection);
 
     // If database is encrypted, copy the public key to the .db directory as a marker
     if (isEncrypted && resolvedKeyPath) {
@@ -461,10 +487,13 @@ export async function createDatabase(dbDir: string | undefined, options: ICreate
     }
 
     return {
-        database,
         databaseDir: dbDir,
         metaPath,
-        assetStorage
+        assetStorage: database.assetStorage,
+        bsonDatabase: database.bsonDatabase,
+        sessionId,
+        metadataCollection: database.metadataCollection,
+        localFileScanner: database.localFileScanner,
     };
 }
 

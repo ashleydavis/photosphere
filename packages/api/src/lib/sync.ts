@@ -1,7 +1,7 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadCollectionMerkleTree, loadDatabaseMerkleTree, loadShardMerkleTree, mergeRecords } from "bdb";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
 import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
-import { IDatabaseMetadata, MediaFileDatabase } from "./media-file-database";
+import { IDatabaseMetadata } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { retry, log, FatalError } from "utils";
@@ -10,40 +10,47 @@ import { computeHash } from "./hash";
 //
 // Syncs between source and target databases.
 //
-export async function syncDatabases(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
+export async function syncDatabases(
+    sourceAssetStorage: IStorage,
+    sourceBsonDatabase: IBsonDatabase,
+    sourceSessionId: string,
+    targetAssetStorage: IStorage,
+    targetBsonDatabase: IBsonDatabase,
+    targetSessionId: string
+): Promise<void> {
 
     //
     // Pull incoming files.
     //
-    if (!await acquireWriteLock(sourceDb.getAssetStorage(), sourceDb.sessionId)) { //todo: Don't need write lock if nothing to pull.
+    if (!await acquireWriteLock(sourceAssetStorage, sourceSessionId)) { //todo: Don't need write lock if nothing to pull.
         throw new Error(`Failed to acquire write lock for source database.`);
     }
 
     try {
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
-        await pushFiles(targetDb, sourceDb);
-        await syncDatabase(targetDb, sourceDb);
+        await pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase);
+        await syncDatabase(targetAssetStorage, targetBsonDatabase, sourceAssetStorage, sourceBsonDatabase);
     }
     finally {
-        await releaseWriteLock(sourceDb.getAssetStorage());
+        await releaseWriteLock(sourceAssetStorage);
     }
 
     //
     // Push outgoing files.
     //
-    if (!await acquireWriteLock(targetDb.getAssetStorage(), targetDb.sessionId)) { //todo: Don't need write lock if nothing to push.
+    if (!await acquireWriteLock(targetAssetStorage, targetSessionId)) { //todo: Don't need write lock if nothing to push.
         throw new Error(`Failed to acquire write lock for target database.`);
     }
 
     try {
         // Push files from source to target.
         // Need the write lock in the target database.
-        await pushFiles(sourceDb, targetDb);
-        await syncDatabase(sourceDb, targetDb);
+        await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase);
+        await syncDatabase(sourceAssetStorage, sourceBsonDatabase, targetAssetStorage, targetBsonDatabase);
     } 
     finally {
-        await releaseWriteLock(targetDb.getAssetStorage());
+        await releaseWriteLock(targetAssetStorage);
     }
 }
 
@@ -69,19 +76,17 @@ function extractAssetId(filePath: string): string | undefined {
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
-async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
-    const sourceStorage = sourceDb.getAssetStorage();
-    const targetStorage = targetDb.getAssetStorage();
+async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: IBsonDatabase): Promise<void> {
 
     //
     // Load the merkle tree.
     //
-    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceDb.getAssetStorage()));
+    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
     if (!sourceMerkleTree) {
         throw new Error("Failed to load source merkle tree.");
     }
 
-    let targetMerkleTree = await retry(() => loadMerkleTree(targetDb.getAssetStorage()));
+    let targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage));
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
     }
@@ -135,21 +140,21 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         }
 
         // Get file info from source.
-        const sourceFileInfo = await sourceStorage.info(fileName);
+        const sourceFileInfo = await sourceAssetStorage.info(fileName);
         if (!sourceFileInfo) {
             throw new Error(`Failed to find file ${fileName} in source database.`);
         }
         
         // Copy file from source to target.
-        const readStream = sourceStorage.readStream(fileName);
-        await targetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
+        const readStream = sourceAssetStorage.readStream(fileName);
+        await targetAssetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
 
-        const copiedFileInfo = await targetStorage.info(fileName);
+        const copiedFileInfo = await targetAssetStorage.info(fileName);
         if (!copiedFileInfo) {
             throw new Error(`Failed to copy ${fileName} to target db.`);
         }
 
-        const copiedFileHash = await computeHash(targetStorage.readStream(fileName));
+        const copiedFileHash = await computeHash(targetAssetStorage.readStream(fileName));
         if (Buffer.compare(copiedFileHash, sourceHash) !== 0) {
             throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);            
         }
@@ -201,7 +206,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
 
                 if (filesCopied % 100 === 0) {
                     // Save the target merkle tree periodically
-                    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getAssetStorage()));
+                    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage));
                 }
             }
         } else {
@@ -235,9 +240,9 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         const thumbPath = pathJoin("thumb", assetId);
         
         // Try to delete files (may not exist, which is fine)
-        await targetStorage.deleteFile(assetPath).catch(() => {});
-        await targetStorage.deleteFile(displayPath).catch(() => {});
-        await targetStorage.deleteFile(thumbPath).catch(() => {});
+        await targetAssetStorage.deleteFile(assetPath).catch(() => {});
+        await targetAssetStorage.deleteFile(displayPath).catch(() => {});
+        await targetAssetStorage.deleteFile(thumbPath).catch(() => {});
         
         // Remove from the target merkle tree
         deleteItem<IDatabaseMetadata>(targetMerkleTree, assetPath);
@@ -245,8 +250,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
         deleteItem<IDatabaseMetadata>(targetMerkleTree, thumbPath);
             
         // Remove from metadata collection
-        const targetMetadataDb = targetDb.getMetadataDatabase();
-        const metadataCollection = targetMetadataDb.collection("metadata");
+        const metadataCollection = targetBsonDatabase.collection("metadata");
         await metadataCollection.deleteOne(assetId);
         
         // Ensure databaseMetadata exists
@@ -272,7 +276,7 @@ async function pushFiles(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabas
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetDb.getAssetStorage())); //TODO: This doesn't really need to be done unless something changed.
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage)); //TODO: This doesn't really need to be done unless something changed.
     
     log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target`);
 }
@@ -459,13 +463,16 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
 //
 // Syncs database records from source to target using hierarchical merkle-tree based diffing.
 //
-export async function syncDatabase(sourceDb: MediaFileDatabase, targetDb: MediaFileDatabase): Promise<void> {
-    const targetMetadataDb = targetDb.getMetadataDatabase();
-        
+export async function syncDatabase(
+    sourceAssetStorage: IStorage,
+    sourceBsonDatabase: IBsonDatabase,
+    targetAssetStorage: IStorage,
+    targetBsonDatabase: IBsonDatabase
+): Promise<void> {
     // Load database merkle trees (they should already exist)
-    const sourceStorage = new StoragePrefixWrapper(sourceDb.getAssetStorage(), "metadata"); //todo: It's kind of annoying having to wrap the storage like this.
+    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, "metadata"); //todo: It's kind of annoying having to wrap the storage like this.
     const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage);
-    const targetStorage = new StoragePrefixWrapper(targetDb.getAssetStorage(), "metadata");
+    const targetStorage = new StoragePrefixWrapper(targetAssetStorage, "metadata");
     const targetDbTree = await loadDatabaseMerkleTree(targetStorage);
     
     // Compare root hashes to see if databases are identical
@@ -481,9 +488,9 @@ export async function syncDatabase(sourceDb: MediaFileDatabase, targetDb: MediaF
     let mergedCount = 0;
     
     // Process differing records as they're found (using generator)
-    for await (const diff of iterateDatabaseDifferences(sourceStorage, targetStorage, sourceDb.getMetadataDatabase(), targetDb.getMetadataDatabase())) {
+    for await (const diff of iterateDatabaseDifferences(sourceStorage, targetStorage, sourceBsonDatabase, targetBsonDatabase)) {
 
-        const targetCollection = targetMetadataDb.collection(diff.collectionName);        
+        const targetCollection = targetBsonDatabase.collection(diff.collectionName);        
 
         if (diff.sourceRecord && diff.targetRecord) {
             // Both records exist, merge them.

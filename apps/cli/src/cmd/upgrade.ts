@@ -1,7 +1,7 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
+import { IBaseCommandOptions, loadDatabase, ICommandContext } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme } from "api";
@@ -16,13 +16,14 @@ export interface IUpgradeCommandOptions extends IBaseCommandOptions {
 //
 // Command that upgrades a Photosphere media file database to the latest format.
 //
-export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<void> {
+export async function upgradeCommand(context: ICommandContext, options: IUpgradeCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
     
     intro(pc.blue(`Upgrading media file database...`));
     
-    const { database, databaseDir } = await loadDatabase(options.db, options, true);
+    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    let merkleTree = await retry(() => loadMerkleTree(database.getAssetStorage()));
+    let merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -78,8 +79,7 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
     log.info(`Upgrading database from version ${currentVersion} to version ${CURRENT_DATABASE_VERSION}...`);
 
     // Acquire write lock before making changes
-    const assetStorage = database.getAssetStorage();
-    if (!await acquireWriteLock(assetStorage, database.sessionId)) {
+    if (!await acquireWriteLock(assetStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock for database upgrade.`);
     }
 
@@ -182,15 +182,15 @@ export async function upgradeCommand(options: IUpgradeCommandOptions): Promise<v
         }                
 
         // Save the rebuilt tree.
-        await retry(() => saveTree(".db/tree.dat", merkleTree!, database.getAssetStorage()));
+        await retry(() => saveTree(".db/tree.dat", merkleTree!, assetStorage));
 
-        const bsonDatabaseStorage = new StoragePrefixWrapper(database.getAssetStorage(), "metadata");
+        const bsonDatabaseStorage = new StoragePrefixWrapper(assetStorage, "metadata");
 
         log.info(pc.blue(`Rebuilding BSON database merkle tree.`));
             
         const bsonDatabaseTree = await buildDatabaseMerkleTree(
             bsonDatabaseStorage,
-            database.uuidGenerator,
+            uuidGenerator,
             "", // The storage wraps the metadata directory already.
             undefined,
             undefined,

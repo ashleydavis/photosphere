@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
 import { repair } from "api";
 
@@ -26,14 +26,15 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
 //
 // Command that repairs the integrity of the Photosphere media file database by restoring files from a source database.
 //
-export async function repairCommand(options: IRepairCommandOptions): Promise<void> {
+export async function repairCommand(context: ICommandContext, options: IRepairCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
     
     if (!options.source) {
         log.error(pc.red("Source database path is required for repair command"));
         await exit(1);
     }
     
-    const { database, databaseDir: targetDir } = await loadDatabase(options.db, options, false);
+    const { assetStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(`Repairing database:`);
@@ -43,7 +44,7 @@ export async function repairCommand(options: IRepairCommandOptions): Promise<voi
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await repair(database, {
+    const result = await repair(assetStorage, {
         source: options.source,
         sourceKey: options.sourceKey,
         full: options.full,

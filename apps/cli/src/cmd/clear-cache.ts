@@ -3,17 +3,10 @@ import os from "os";
 import fs from "fs";
 import pc from "picocolors";
 
-export interface IClearCacheCommandOptions {
-    db?: string;
-    key?: string;
-    verbose?: boolean;
-    yes?: boolean;
-}
-
 //
 // Command to clear hash cache entries
 //
-export async function clearCacheCommand(options: IClearCacheCommandOptions): Promise<void> {
+export async function clearCacheCommand(): Promise<void> {
 
     const localHashCachePath = path.join(os.tmpdir(), "photosphere");
     

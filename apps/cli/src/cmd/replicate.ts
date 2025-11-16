@@ -3,7 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
-import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import * as fs from 'fs-extra';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -40,16 +40,16 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
 //
 // Command that replicates an asset database from source to destination.
 //
-export async function replicateCommand(options: IReplicateCommandOptions): Promise<void> {
+export async function replicateCommand(context: ICommandContext, options: IReplicateCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
 
     const nonInteractive = options.yes || false;
-
-    const { database: sourceDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
-    }, false);
+    }, false, uuidGenerator, timestampProvider, sessionId);
 
     let destDir = options.dest;
     if (destDir === undefined) {
@@ -173,7 +173,7 @@ export async function replicateCommand(options: IReplicateCommandOptions): Promi
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceDatabase, destAssetStorage, { 
+    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, { 
         pathFilter: options.path,
         force: options.force
     }, (progress) => {

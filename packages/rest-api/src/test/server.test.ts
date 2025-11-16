@@ -75,19 +75,14 @@ describe("photosphere backend", () => {
         const mockMediaFileDatabaseProvider = {
             listAssetDatabases: jest.fn().mockResolvedValue([{id: setId, name: setId}]),
             openDatabase: jest.fn().mockResolvedValue({
-                getAllAssets: jest.fn().mockResolvedValue([]),
-                getMetadataDatabase: jest.fn().mockReturnValue({
-                    collection: (name: string) => {
-                        const collection = collections[name];
-                        if (!collection) {
-                            throw new Error(`No mock collection for ${name}`);
-                        }
-                        return collection;
-                    }
-                }),
-                getAssetStorage: jest.fn().mockReturnValue(mockStorage),
+                assetStorage: mockStorage,
+                bsonDatabase: mockDatabase,
                 sessionId: "test-session-id",
-                close: jest.fn()
+                uuidGenerator: {} as any,
+                timestampProvider: {} as any,
+                googleApiKey: undefined,
+                metadataCollection: mockMetadataCollection,
+                localFileScanner: {} as any,
             }),
             readStream: jest.fn().mockReturnValue(stringStream("ABCD")),
             write: jest.fn().mockResolvedValue(undefined),

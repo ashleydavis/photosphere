@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { log } from "utils";
 import { visualizeTree } from "merkle-tree";
 import { 
@@ -11,7 +11,7 @@ import {
     hashRecord
 } from "bdb";
 import { StoragePrefixWrapper, IStorage } from "storage";
-import { loadMerkleTree } from "api";
+import { loadMerkleTree, getDatabaseSummary } from "api";
 
 export interface IDebugMerkleTreeCommandOptions extends IBaseCommandOptions {
     records?: boolean;
@@ -58,19 +58,16 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 // Command to visualize all merkle trees in a media file database.
 //
-export async function debugMerkleTreeCommand(options: IDebugMerkleTreeCommandOptions): Promise<void> {
-    
-    const { database } = await loadDatabase(options.db, options, true);
-    
-    const assetStorage = database.getAssetStorage();
-    const bsonDatabase = database.getMetadataDatabase();
+export async function debugMerkleTreeCommand(context: ICommandContext, options: IDebugMerkleTreeCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { assetStorage, bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(pc.bold(pc.blue(`🌳 Merkle Trees Visualization`)));
     log.info('');
     
     // Get and display the aggregate root hash
-    const summary = await database.getDatabaseSummary();
+    const summary = await getDatabaseSummary(assetStorage);
     log.info(pc.cyan('Aggregate Root Hash:'));
     log.info(pc.gray('='.repeat(60)));
     log.info(pc.white(summary.fullHash));

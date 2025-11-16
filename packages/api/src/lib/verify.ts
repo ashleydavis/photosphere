@@ -1,8 +1,9 @@
 import { formatFileSize, log, retry } from "utils";
-import { MediaFileDatabase, ProgressCallback } from "./media-file-database";
+import { ProgressCallback, getDatabaseSummary } from "./media-file-database";
 import { computeAssetHash } from "./hash";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
+import { IStorage } from "storage";
 
 //
 // Options for verifying the media file database.
@@ -76,13 +77,13 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(assetStorage: IStorage, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
         : undefined;
 
-    const summary = await mediaFileDatabase.getDatabaseSummary();
+    const summary = await getDatabaseSummary(assetStorage);
     const result: IVerifyResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -121,7 +122,6 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
             progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
         }
 
-        const assetStorage = mediaFileDatabase.getAssetStorage();
         const fileInfo = await assetStorage.info(fileName);
         if (!fileInfo) {
             // The file doesn't exist in the storage.
@@ -183,7 +183,7 @@ export async function verify(mediaFileDatabase: MediaFileDatabase, options?: IVe
         }
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

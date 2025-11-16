@@ -1,10 +1,11 @@
 
 import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
-import { retry, FatalError } from "utils";
-import { IDatabaseMetadata, MediaFileDatabase, ProgressCallback } from "./media-file-database";
-import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, loadTree, MerkleNode, MerkleTreeDiff, pruneTree, saveTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { retry, FatalError, ITimestampProvider, IUuidGenerator } from "utils";
+import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
+import { BsonDatabase } from "bdb";
+import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
+import { loadMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
@@ -55,7 +56,7 @@ async function replicateFiles(
     merkleTree: IMerkleTree<IDatabaseMetadata>,
     destMerkleTree: IMerkleTree<IDatabaseMetadata>,
     destAssetStorage: IStorage,
-    mediaFileDatabase: MediaFileDatabase,
+    sourceAssetStorage: IStorage,
     options: IReplicateOptions | undefined,
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
@@ -110,7 +111,7 @@ async function replicateFiles(
             return;
         }
 
-        const assetStorage = mediaFileDatabase.getAssetStorage();
+        const assetStorage = sourceAssetStorage;
         const srcFileInfo = await retry(() => assetStorage.info(fileName));
         if (!srcFileInfo) {
             throw new Error(`Source file "${fileName}" does not exist in the source database.`);
@@ -358,8 +359,10 @@ async function* iterateDatabaseDifferences(
 // Replicates BSON database records from source to destination.
 //
 async function replicateBsonDatabase(
-    mediaFileDatabase: MediaFileDatabase,
-    destMediaFileDatabase: MediaFileDatabase,
+    sourceBsonDatabase: BsonDatabase,
+    destBsonDatabase: BsonDatabase,
+    sourceAssetStorage: IStorage,
+    destAssetStorage: IStorage,
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
 ): Promise<void> {
@@ -368,13 +371,10 @@ async function replicateBsonDatabase(
     // This walks the tree of trees (database -> collections -> shards -> records)
     // to efficiently identify only the records that need to be updated.
     //
-    const sourceBsonDatabase = mediaFileDatabase.getMetadataDatabase();
-    const destBsonDatabase = destMediaFileDatabase.getMetadataDatabase();
-
     // Wrap storage with metadata prefix for merkle tree loading
     // The BSON database merkle trees are stored in assetStorage with a "metadata" prefix
-    const sourceStorage = new StoragePrefixWrapper(mediaFileDatabase.getAssetStorage(), "metadata");
-    const destStorage = new StoragePrefixWrapper(destMediaFileDatabase.getAssetStorage(), "metadata");
+    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, "metadata");
+    const destStorage = new StoragePrefixWrapper(destAssetStorage, "metadata");
 
     // Helper function to compare two records for equality
     // Both records should be in external format (flat objects)
@@ -451,9 +451,17 @@ async function replicateBsonDatabase(
 //
 // Replicates the media file database to another storage.
 //
-export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetStorage: IStorage, options?: IReplicateOptions, progressCallback?: ProgressCallback): Promise<IReplicationResult> {
+export async function replicate(
+    sourceAssetStorage: IStorage,
+    sourceBsonDatabase: BsonDatabase,
+    sourceUuidGenerator: IUuidGenerator,
+    sourceTimestampProvider: ITimestampProvider,
+    destAssetStorage: IStorage,
+    options?: IReplicateOptions,
+    progressCallback?: ProgressCallback
+): Promise<IReplicationResult> {
 
-    const merkleTree = await retry(() => loadMerkleTree(mediaFileDatabase.getAssetStorage()));
+    const merkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -471,22 +479,21 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
     // Create or load the destination MediaFileDatabase to ensure sort indexes are loaded/created.
     // This has to be created before tree.dat is saved.
     //
-    const destMediaFileDatabase = new MediaFileDatabase(
+    const destDb = createMediaFileDatabase(
         destAssetStorage,
-        undefined, // googleApiKey not needed for replication
-        mediaFileDatabase.uuidGenerator,
-        mediaFileDatabase.getTimestampProvider()
+        sourceUuidGenerator,
+        sourceTimestampProvider
     );
 
     const treeExists = await retry(() => destAssetStorage.fileExists(".db/tree.dat"));
     if (treeExists) {
-        await retry(() => destMediaFileDatabase.load());
+        await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
     }
     else {
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await retry(() => destMediaFileDatabase.create(merkleTree.id));
+        await retry(() => createDatabase(destDb.assetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id));
     }
     
     //
@@ -525,15 +532,17 @@ export async function replicate(mediaFileDatabase: MediaFileDatabase, destAssetS
         merkleTree,
         destMerkleTree,
         destAssetStorage,
-        mediaFileDatabase,
+        sourceAssetStorage,
         options,
         progressCallback,
         result
     );
 
     await replicateBsonDatabase(
-        mediaFileDatabase,
-        destMediaFileDatabase,
+        sourceBsonDatabase,
+        destDb.bsonDatabase,
+        sourceAssetStorage,
+        destAssetStorage,
         progressCallback,
         result
     );

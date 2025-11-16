@@ -1,5 +1,5 @@
 import { exit } from "node-utils";
-import { loadDatabase, IBaseCommandOptions } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 
 export interface IRootHashCommandOptions extends IBaseCommandOptions {
 }
@@ -7,11 +7,12 @@ export interface IRootHashCommandOptions extends IBaseCommandOptions {
 //
 // Command to display the aggregate root hash of the database.
 //
-export async function rootHashCommand(options: IRootHashCommandOptions): Promise<void> {
+export async function rootHashCommand(context: ICommandContext, options: IRootHashCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { assetStorage } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
-    const { database } = await loadDatabase(options.db, options, true);
-    
-    const hashes = await database.getDatabaseHashes();
+    const { getDatabaseHashes } = await import("api");
+    const hashes = await getDatabaseHashes(assetStorage);
     
     console.log(hashes.fullHash);
     

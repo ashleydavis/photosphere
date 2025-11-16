@@ -14,7 +14,7 @@ export interface IHashCommandOptions {
 }
 
 //
-// Command to hash a file through the storage abstraction
+// Compute the hash of a file.
 //
 export async function hashCommand(filePath: string, options: IHashCommandOptions): Promise<void> {
     
