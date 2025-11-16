@@ -333,6 +333,7 @@ Resources:
         .option(...dbOption)
         .option(...destDbOption)
         .option(...keyOption)
+        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
