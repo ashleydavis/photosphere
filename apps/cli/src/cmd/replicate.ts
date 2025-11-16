@@ -44,6 +44,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const { uuidGenerator, timestampProvider, sessionId } = context;
 
     const nonInteractive = options.yes || false;
+
     const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
@@ -74,8 +75,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     let destDbExists = await destMetadataStorage.fileExists("tree.dat");    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
-        const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');
-        
+        const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');        
         if (destDbIsEncrypted) {
             // Database is encrypted - user must provide a key
             if (!options.destKey) {
