@@ -260,6 +260,7 @@
         "mime-types": "^2.1.35",
         "node-utils": "workspace:*",
         "storage": "workspace:*",
+        "task-queue": "workspace:*",
         "tools": "workspace:*",
         "utils": "workspace:*",
       },

@@ -68,6 +68,16 @@ export interface IQueueStatus {
 }
 
 //
+// Execution statistics interface
+//
+export interface IExecutionStats {
+    tasksQueued: number;
+    maxWorkers: number;
+    completed: number;
+    failed: number;
+}
+
+//
 // Task queue interface
 //
 export interface ITaskQueue {
@@ -126,6 +136,11 @@ export interface ITaskQueue {
     // Gets the status of the queue: number of pending tasks, successful tasks, failed tasks, etc.
     //
     getStatus(): IQueueStatus;
+
+    //
+    // Gets execution statistics: number of tasks queued, workers used, completed, and failed.
+    //
+    getExecutionStats(): IExecutionStats;
 }
 
 //
@@ -142,6 +157,7 @@ export class TaskQueue implements ITaskQueue {
     private taskResolvers: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
     private completionCallbacks: TaskCompletionCallback[] = [];
+    private tasksQueued: number = 0;
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -183,6 +199,7 @@ export class TaskQueue implements ITaskQueue {
 
         this.tasks.set(id, task);
         this.pendingTasks.push(id);
+        this.tasksQueued++;
         this.processNextTask();
 
         return id;
@@ -356,6 +373,20 @@ export class TaskQueue implements ITaskQueue {
             completed,
             failed,
             total: this.tasks.size
+        };
+    }
+
+    //
+    // Gets execution statistics: number of tasks queued, workers used, completed, and failed.
+    // Useful for debug logging and performance analysis.
+    //
+    getExecutionStats(): IExecutionStats {
+        const status = this.getStatus();
+        return {
+            tasksQueued: this.tasksQueued,
+            maxWorkers: this.maxWorkers,
+            completed: status.completed,
+            failed: status.failed
         };
     }
 

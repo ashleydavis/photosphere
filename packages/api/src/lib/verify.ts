@@ -4,6 +4,7 @@ import { computeAssetHash } from "./hash";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage } from "storage";
+import { TaskQueue, TaskStatus, ITaskResult } from "task-queue";
 
 //
 // Options for verifying the media file database.
@@ -104,30 +105,44 @@ export async function verify(assetStorage: IStorage, options?: IVerifyOptions, p
     }
 
     //
-    // Checks that a file matches the merkle tree record.
+    // Result from verifying a single file.
     //
-    const verifyFile = async (node: SortNode): Promise<void> => {
-        
+    interface IVerifyFileResult {
+        fileName: string;
+        status: "removed" | "modified" | "unmodified";
+        reasons?: string[];
+    }
+
+    //
+    // Creates a task queue and registers the verify file handler.
+    //
+    const queue = new TaskQueue(4); // Use 4 workers for parallel verification
+
+    //
+    // Registers a handler that verifies a single file.
+    //
+    queue.registerHandler("verify-file", async (data: { node: SortNode; assetStorage: IStorage; options?: IVerifyOptions; pathFilter?: string }) => {
+        const { node, assetStorage, options, pathFilter } = data;
         const fileName = node.name!;
 
-            if (pathFilter) {
+        if (pathFilter) {
             if (!fileName.startsWith(pathFilter)) {
-                return; // Skips files that don't match the path filter.
+                // Skip files that don't match the path filter
+                return {
+                    fileName,
+                    status: "unmodified",
+                };
             }
-        }
-
-        result.filesProcessed++;
-
-        if (progressCallback) {
-            progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
         }
 
         const fileInfo = await assetStorage.info(fileName);
         if (!fileInfo) {
             // The file doesn't exist in the storage.
             log.warn(`File "${fileName}" is missing, even though we just found it by walking the directory.`);
-            result.removed.push(fileName);
-            return;
+                return {
+                    fileName,
+                    status: "removed",
+                };
         }
 
         const sizeChanged = node.size !== fileInfo.length;
@@ -137,28 +152,35 @@ export async function verify(assetStorage: IStorage, options?: IVerifyOptions, p
             const freshHash = await computeAssetHash(fileName, fileInfo, () => assetStorage.readStream(fileName));
             if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
                 // The file content has actually been modified.
-                result.modified.push(fileName);
+                const reasons: string[] = [];
+                if (sizeChanged) {
+                    const oldSize = formatFileSize(node.size);
+                    const newSize = formatFileSize(fileInfo.length);
+                    reasons.push(`size changed (${oldSize} → ${newSize})`);
+                }
+                if (timestampChanged) {
+                    const oldTime = node.lastModified!.toLocaleString();
+                    const newTime = fileInfo.lastModified.toLocaleString();
+                    reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
+                }
+                reasons.push('content hash changed');
                 
-                // Log detailed reasons for modification only if verbose logging is enabled.
                 if (log.verboseEnabled) {
-                    const reasons: string[] = [];
-                    if (sizeChanged) {
-                        const oldSize = formatFileSize(node.size);
-                        const newSize = formatFileSize(fileInfo.length);
-                        reasons.push(`size changed (${oldSize} → ${newSize})`);
-                    }
-                    if (timestampChanged) {
-                        const oldTime = node.lastModified!.toLocaleString();
-                        const newTime = fileInfo.lastModified.toLocaleString();
-                        reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
-                    }
-                    reasons.push('content hash changed');
                     log.verbose(`Modified file: ${node.name} - ${reasons.join(', ')}`);
                 }
+                
+                return {
+                    fileName,
+                    status: "modified",
+                    reasons,
+                };
             } 
             else {
                 // Content is the same, just metadata changed - cache is already updated by computeHash.
-                result.numUnmodified++;
+                return {
+                    fileName,
+                    status: "unmodified",
+                };
             }
         }
         else if (options?.full) {
@@ -166,39 +188,95 @@ export async function verify(assetStorage: IStorage, options?: IVerifyOptions, p
             const freshHash = await computeAssetHash(fileName, fileInfo, () => assetStorage.readStream(fileName));
             if (Buffer.compare(freshHash.hash, node.contentHash!) === 0) {
                 // The file is unmodified.
-                result.numUnmodified++;
+                return {
+                    fileName,
+                    status: "unmodified",
+                };
             } 
             else {
                 // The file has been modified (content only, since metadata matched).
-                result.modified.push(fileName);
-                
-                // Log detailed reason for modification only if verbose logging is enabled
                 if (log.verboseEnabled) {
                     log.verbose(`Modified file: ${node.name} - content hash changed`);
                 }
+                return {
+                    fileName,
+                    status: "modified",
+                    reasons: ["content hash changed"],
+                };
             }
         }
         else {
-            result.numUnmodified++;
+            return {
+                fileName,
+                status: "unmodified",
+            };
         }
-    }
+    });
+
+    //
+    // Registers a callback to integrate results as tasks complete.
+    //
+    queue.onTaskComplete((taskResult: ITaskResult) => {
+        if (taskResult.status === TaskStatus.Completed) {
+            const fileResult = taskResult.outputs as IVerifyFileResult;
+            result.filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles}`);
+            }
+
+            if (fileResult.status === "removed") {
+                result.removed.push(fileResult.fileName);
+            } else if (fileResult.status === "modified") {
+                result.modified.push(fileResult.fileName);
+            } else {
+                result.numUnmodified++;
+            }
+        } else if (taskResult.status === TaskStatus.Failed) {
+            // Task failed - treat as error but continue processing
+            const errorObj = JSON.parse(taskResult.error || "{}");
+            log.error(`Failed to verify file: ${errorObj.message}`);
+            result.filesProcessed++;
+        }
+    });
 
     const merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
 
+    //
+    // Queue up all verification tasks as quickly as possible.
+    //
     await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
         result.nodesProcessed++;
 
         if (node.name) {
-            await verifyFile(node);
+            queue.addTask("verify-file", {
+                node,
+                assetStorage,
+                options,
+                pathFilter,
+            });
         }
 
         return true;
     });
+
+    //
+    // Wait for all tasks to complete.
+    //
+    await queue.awaitAllTasks();
+
+    //
+    // Log debug information about task execution.
+    //
+    const stats = queue.getExecutionStats();
+    log.verbose(`Verification complete: ${stats.tasksQueued} tasks queued, ${stats.maxWorkers} workers, ${stats.completed} completed, ${stats.failed} failed`);
+
+    queue.shutdown();
+
     
-    result.nodesProcessed = result.nodesProcessed;
 
     return result;
 }
