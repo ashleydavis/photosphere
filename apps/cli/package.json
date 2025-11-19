@@ -15,13 +15,13 @@
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo bin",
-    "start": "bun run src/index.ts",
-    "start:dev": "bun run --hot src/index.ts",
-    "build-linux": "bun run build-fe-linux && bun build --env=disable --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile bin/x64/linux/psi ./src/index.ts",
-    "build-win": "bun run build-fe-win && bun build --env=disable --compile --minify --sourcemap --target=bun-windows-x64 --outfile bin/x64/win/psi.exe ./src/index.ts",
-    "build-win-baseline": "bun run build-fe-win && bun build --env=disable --compile --minify --sourcemap --target=bun-windows-x64-baseline --outfile bin/x64/win/psi.exe ./src/index.ts",
-    "build-mac-x64": "bun run build-fe-mac && bun build --env=disable --compile --minify --sourcemap --target=bun-darwin-x64 --outfile bin/x64/mac/psi ./src/index.ts",
-    "build-mac-arm64": "bun run build-fe-mac && bun build --env=disable --compile --minify --sourcemap --target=bun-darwin-arm64 --outfile bin/arm64/mac/psi ./src/index.ts",
+    "start": "bun run index.ts",
+    "start:dev": "bun run --hot index.ts",
+    "build-linux": "bun run build-fe-linux && bun build --env=disable --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile bin/x64/linux/psi ./index.ts ./worker.ts",
+    "build-win": "bun run build-fe-win && bun build --env=disable --compile --minify --sourcemap --target=bun-windows-x64 --outfile bin/x64/win/psi.exe ./index.ts ./worker.ts",
+    "build-win-baseline": "bun run build-fe-win && bun build --env=disable --compile --minify --sourcemap --target=bun-windows-x64-baseline --outfile bin/x64/win/psi.exe ./index.ts ./worker.ts",
+    "build-mac-x64": "bun run build-fe-mac && bun build --env=disable --compile --minify --sourcemap --target=bun-darwin-x64 --outfile bin/x64/mac/psi ./index.ts ./worker.ts",
+    "build-mac-arm64": "bun run build-fe-mac && bun build --env=disable --compile --minify --sourcemap --target=bun-darwin-arm64 --outfile bin/arm64/mac/psi ./index.ts ./worker.ts",
     "build-fe-linux": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && rm -f pfe.zip && zip -r pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
     "build-fe-win": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && tar acvf pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
     "build-fe-mac": "cd ../frontend && cross-env VITE_BASE_URL=\"\" bun run build && tar acvf pfe.zip dist && cp pfe.zip ../cli/pfe.zip",
@@ -63,6 +63,7 @@
     "utils": "workspace:*",
     "wrap-ansi": "^9.0.0",
     "bdb": "workspace:*",
-    "defs": "workspace:*"
+    "defs": "workspace:*",
+    "task-queue": "workspace:*"
   }
 }

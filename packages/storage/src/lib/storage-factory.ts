@@ -34,6 +34,22 @@ export interface IStorageOptions {
 }
 
 /**
+ * Descriptor for storage configuration that can be serialized and passed to workers.
+ * Contains all information needed to recreate a storage instance.
+ */
+export interface IStorageDescriptor {
+    /**
+     * Storage location string (e.g., "fs:/path" or "s3:bucket/path")
+     */
+    location: string;
+    
+    /**
+     * Path to encryption key file (if storage is encrypted)
+     */
+    encryptionKeyPath?: string;
+}
+
+/**
  * Creates the appropriate storage implementation based on the prefix in the path
  * @param rootPath Path with storage prefix (e.g. "fs:/path" or "s3:bucket/path")
  * @param options Options for storage creation including encryption keys

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IUuidGenerator } from "utils";
-import { registerHandler as registerHandlerInStorage } from "./worker";
+import { serializeError } from "serialize-error";
+import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
 
 //
 // Task status enumeration
@@ -48,8 +49,9 @@ interface ITask {
 //
 // Task handler function type
 // Returns the result payload (can be any type)
+// Re-exported from worker.ts to avoid duplication
 //
-export type TaskHandler = (data: any, workingDirectory: string) => Promise<any>;
+export type { TaskHandler };
 
 //
 // Task completion callback
@@ -141,6 +143,11 @@ export interface ITaskQueue {
     // Gets execution statistics: number of tasks queued, workers used, completed, and failed.
     //
     getExecutionStats(): IExecutionStats;
+
+    //
+    // Shuts down the task queue and terminates all workers.
+    //
+    shutdown(): void;
 }
 
 //
@@ -173,19 +180,15 @@ export class TaskQueue implements ITaskQueue {
     //
     // Creates a new task queue with the specified number of workers.
     // Tasks will execute in separate Bun worker threads for true parallelism.
+    // workerPath: Path to the worker script file (must be provided by the caller).
     //
-    constructor(maxWorkers: number = 4, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator) {
+    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator) {
         this.maxWorkers = maxWorkers;
+        this.workerPath = workerPath;
         this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
         this.uuidGenerator = uuidGenerator || {
             generate: () => randomUUID()
         } as IUuidGenerator;
-
-        // Get the path to the worker script
-        // Use import.meta.url to get the current file's directory
-        const currentFile = new URL(import.meta.url).pathname;
-        const currentDir = currentFile.substring(0, currentFile.lastIndexOf("/"));
-        this.workerPath = join(currentDir, "worker.ts");
 
         // Create and start worker pool
         this.startWorkers();
@@ -410,7 +413,7 @@ export class TaskQueue implements ITaskQueue {
             const workerState: IWorkerState = {
                 worker,
                 workerId: i + 1,
-                isIdle: true,
+                isIdle: false, // Start as not ready, will be set to true when worker sends "ready" message
                 currentTaskId: null
             };
 
@@ -454,27 +457,8 @@ export class TaskQueue implements ITaskQueue {
             return;
         }
 
-        // Check if handler is registered
-        if (!this.handlers.has(task.type)) {
-            // No handler registered, mark as failed
-            task.status = TaskStatus.Failed;
-            task.completedAt = new Date();
-            const result: ITaskResult = {
-                status: TaskStatus.Failed,
-                error: `No handler registered for task type: ${task.type}`,
-                inputs: task.data,
-                taskId: task.id,
-                taskType: task.type,
-                createdAt: task.createdAt,
-                startedAt: task.startedAt,
-                completedAt: task.completedAt
-            };
-            task.result = result;
-            this.notifyCompletionCallbacks(result);
-            this.resolveTask(taskId, result);
-            this.processNextTask();
-            return;
-        }
+        // Note: Handler registration is checked in the worker thread, not here.
+        // The worker will report if a handler is missing when it tries to execute the task.
 
         // Mark task as running and assign to worker
         task.status = TaskStatus.Running;
@@ -484,13 +468,14 @@ export class TaskQueue implements ITaskQueue {
 
         // Send task to worker
         try {
-            availableWorker.worker.postMessage({
+            const executeMsg: WorkerMessage = {
                 type: "execute",
                 taskId: task.id,
                 taskType: task.type,
                 data: task.data,
-                workingDirectory: task.workingDirectory
-            });
+                workingDirectory: task.workingDirectory,
+            };
+            availableWorker.worker.postMessage(executeMsg);
         } catch (error) {
             console.error(`Error sending task to worker ${availableWorker.workerId}:`, error);
             this.handleWorkerCrash(availableWorker);
@@ -503,6 +488,13 @@ export class TaskQueue implements ITaskQueue {
     // Processes task results and errors.
     //
     private handleWorkerMessage(workerState: IWorkerState, data: any): void {
+        // Handle worker ready message
+        if (data && typeof data === "object" && "type" in data && data.type === "ready") {
+            workerState.isIdle = true;
+            this.processNextTask(); // Try to process pending tasks now that worker is ready
+            return;
+        }
+
         // Handle task result
         if (data && typeof data === "object" && "type" in data && data.type === "result") {
             const { taskId, result } = data;
@@ -545,12 +537,7 @@ export class TaskQueue implements ITaskQueue {
 
             task.status = TaskStatus.Failed;
             task.completedAt = new Date();
-            const errorString = error ? JSON.stringify({
-                message: error.message || String(error),
-                stack: error.stack,
-                name: error.name,
-                ...(typeof error === "object" && error !== null ? error : {})
-            }, null, 2) : "Unknown error";
+            const errorString = error ? JSON.stringify(serializeError(error)) : "Unknown error";
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
                 error: errorString,

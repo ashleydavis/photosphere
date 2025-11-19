@@ -20,8 +20,9 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "dependencies": {
-    "utils": "workspace:*",
-    "node-utils": "workspace:*"
+    "node-utils": "workspace:*",
+    "serialize-error": "^12.0.0",
+    "utils": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",
@@ -32,4 +33,3 @@
     "typescript": "^5.6.3"
   }
 }
-
