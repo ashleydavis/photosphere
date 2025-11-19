@@ -1,10 +1,13 @@
 //
-// Worker script for executing tasks
-// This runs in a Bun worker context
+// Worker infrastructure for task execution
+// This module provides the core worker functionality that can be imported
+// by application-specific worker files
 //
 
+import { serializeError } from "serialize-error";
+
 //
-// Handler storage - shared between main thread and workers
+// Handler registry - handlers are stored in a Map
 //
 export type TaskHandler = (data: any, workingDirectory: string) => Promise<any>;
 
@@ -18,7 +21,11 @@ export function getHandler(type: string): TaskHandler | undefined {
     return handlers.get(type);
 }
 
-interface WorkerMessage {
+export function getRegisteredHandlerTypes(): string[] {
+    return Array.from(handlers.keys());
+}
+
+export interface WorkerMessage {
     type: "execute";
     taskId: string;
     taskType: string;
@@ -33,21 +40,22 @@ async function executeTask(message: WorkerMessage): Promise<void> {
     const { taskId, taskType, data, workingDirectory } = message;
 
     try {
-        // Get handler from shared storage
+        // Get handler (registered statically when worker module loads)
+        const registeredTypes = getRegisteredHandlerTypes();
         const handler = getHandler(taskType);
         if (!handler) {
-            throw new Error(`No handler registered for task type: ${taskType}`);
+            throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
         }
 
         // Execute the handler
         const outputs = await handler(data, workingDirectory);
-
+        
         // Send success result back to main thread
         self.postMessage({
             type: "result",
             taskId,
             result: {
-                status: "completed" as const,
+                status: "completed",
                 message: typeof outputs === "string" ? outputs : "Task completed successfully",
                 outputs: outputs
             }
@@ -57,23 +65,25 @@ async function executeTask(message: WorkerMessage): Promise<void> {
         self.postMessage({
             type: "error",
             taskId,
-            error: {
-                message: error.message || String(error),
-                stack: error.stack,
-                name: error.name
-            }
+            error: serializeError(error)
         });
     }
 }
 
 //
-// Listen for messages from the main thread
+// Initialize the worker message listener
+// This should be called by application-specific worker files after registering handlers
 //
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-    const message = event.data;
+export function initWorker(): void {
+    self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+        const message = event.data;
 
-    if (message.type === "execute") {
-        await executeTask(message);
-    }
-};
+        if (message.type === "execute") {
+            await executeTask(message);
+        }
+    };
+    
+    // Send ready message to main thread to indicate worker is initialized and ready for tasks
+    self.postMessage({ type: "ready" });
+}
 

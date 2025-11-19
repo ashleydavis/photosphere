@@ -3,6 +3,8 @@ import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
+import type { ITaskQueueProvider } from "api";
+import { TaskQueueProvider } from "./task-queue-provider";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -16,10 +18,6 @@ import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 
-//
-// Helper function to resolve encryption key path
-// If the key path doesn't contain path separators, check ~/.config/photosphere/keys/ first, then current directory
-//
 //
 // Helper function to get available encryption keys from the keys directory
 //
@@ -214,6 +212,12 @@ export interface IBaseCommandOptions {
     // Session identifier for write lock tracking.
     //
     sessionId?: string;
+
+    //
+    // Number of worker threads to use for parallel processing.
+    // Supported by commands that use the task queue (e.g., verify).
+    //
+    workers?: number;
 }
 
 //
@@ -234,6 +238,7 @@ export interface ICommandContext {
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
+    taskQueueProvider: ITaskQueueProvider;
 }
 
 //
@@ -261,11 +266,16 @@ export function initContext<TArgs extends any[], TReturn>(
             ? new TestTimestampProvider()
             : new TimestampProvider();
         const sessionId = options.sessionId || uuidGenerator.generate();
+        // TaskQueueProvider defaults to number of CPUs if not specified
+        // Check if command supports --workers option and use it if provided
+        const workers = options.workers;
+        const taskQueueProvider = new TaskQueueProvider(workers);
         
         const context: ICommandContext = {
             uuidGenerator,
             timestampProvider,
             sessionId,
+            taskQueueProvider,
         };
         
         return command(context, ...args);

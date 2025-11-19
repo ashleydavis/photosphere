@@ -2,9 +2,10 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
 import { verify } from "api";
+import { IStorageDescriptor } from "storage";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -16,6 +17,12 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
     // Path to a specific file or directory to verify (instead of entire database).
     //
     path?: string;
+
+    //
+    // Number of worker threads to use for parallel verification.
+    // Defaults to the number of CPU cores.
+    //
+    workers?: number;
 }
 
 //
@@ -25,16 +32,20 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     const { uuidGenerator, timestampProvider, sessionId } = context;
     const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    writeProgress(options.path 
-        ? `🔍 Verifying files matching: ${options.path}` 
-        : `🔍 Verifying database integrity`);
 
-    const result = await verify(assetStorage, { 
+    // Create storage descriptor for passing to workers
+    const resolvedKeyPath = await resolveKeyPath(options.key);
+    const storageDescriptor: IStorageDescriptor = {
+        location: assetStorage.location,
+        encryptionKeyPath: resolvedKeyPath
+    };
+    
+    const result = await verify(assetStorage, context.taskQueueProvider, { 
         full: options.full,
         pathFilter: options.path
     }, (progress) => {
         writeProgress(`🔍 ${progress}`);
-    });
+    }, storageDescriptor);
 
     clearProgressMessage(); // Flush the progress message.
 
@@ -53,6 +64,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     log.info(`Modified:         ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
     log.info(`New:              ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
     log.info(`Removed:          ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
+    log.info(`Failures:         ${result.numFailures > 0 ? pc.red(result.numFailures.toString()) : pc.green('0')}`);
         
     // Show details for problematic files
     if (result.modified.length > 0) {
@@ -80,7 +92,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     }
     
     log.info('');
-    if (result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0) {
+    if (result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0 && result.numFailures === 0) {
         log.info(pc.green(`✅ Database verification passed - all files are intact`));
     } else {
         log.info(pc.yellow(`⚠️ Database verification found issues - see details above`));

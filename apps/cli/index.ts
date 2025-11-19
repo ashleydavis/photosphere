@@ -1,36 +1,36 @@
 import { program } from 'commander';
-import { uiCommand } from './cmd/ui';
-import { addCommand } from './cmd/add';
-import { checkCommand } from './cmd/check';
-import { initCommand } from './cmd/init';
-import { configureCommand } from './cmd/config';
-import { infoCommand } from './cmd/info';
-import { toolsCommand } from './cmd/tools';
-import { summaryCommand } from './cmd/summary';
-import { verifyCommand } from './cmd/verify';
-import { replicateCommand } from './cmd/replicate';
-import { compareCommand } from './cmd/compare';
-import { hashCacheCommand } from './cmd/hash-cache';
-import { debugMerkleTreeCommand } from './cmd/debug';
-import { bugReportCommand } from './cmd/bug';
-import { examplesCommand } from './cmd/examples';
-import { versionCommand } from './cmd/version';
-import { listCommand } from './cmd/list';
-import { exportCommand } from './cmd/export';
-import { upgradeCommand } from './cmd/upgrade';
-import { repairCommand } from './cmd/repair';
-import { removeCommand } from './cmd/remove';
-import { clearCacheCommand } from './cmd/clear-cache';
-import { hashCommand } from './cmd/hash';
-import { rootHashCommand } from './cmd/root-hash';
-import { databaseIdCommand } from './cmd/database-id';
-import { syncCommand } from './cmd/sync';
-import { initContext } from './lib/init-cmd';
-import { MAIN_EXAMPLES, getCommandExamplesHelp } from './examples';
+import { uiCommand } from './src/cmd/ui';
+import { addCommand } from './src/cmd/add';
+import { checkCommand } from './src/cmd/check';
+import { initCommand } from './src/cmd/init';
+import { configureCommand } from './src/cmd/config';
+import { infoCommand } from './src/cmd/info';
+import { toolsCommand } from './src/cmd/tools';
+import { summaryCommand } from './src/cmd/summary';
+import { verifyCommand } from './src/cmd/verify';
+import { replicateCommand } from './src/cmd/replicate';
+import { compareCommand } from './src/cmd/compare';
+import { hashCacheCommand } from './src/cmd/hash-cache';
+import { debugMerkleTreeCommand } from './src/cmd/debug';
+import { bugReportCommand } from './src/cmd/bug';
+import { examplesCommand } from './src/cmd/examples';
+import { versionCommand } from './src/cmd/version';
+import { listCommand } from './src/cmd/list';
+import { exportCommand } from './src/cmd/export';
+import { upgradeCommand } from './src/cmd/upgrade';
+import { repairCommand } from './src/cmd/repair';
+import { removeCommand } from './src/cmd/remove';
+import { clearCacheCommand } from './src/cmd/clear-cache';
+import { hashCommand } from './src/cmd/hash';
+import { rootHashCommand } from './src/cmd/root-hash';
+import { databaseIdCommand } from './src/cmd/database-id';
+import { syncCommand } from './src/cmd/sync';
+import { initContext } from './src/lib/init-cmd';
+import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log, FatalError } from 'utils';
-import { version } from './lib/version';
+import { version } from './src/lib/version';
 
 async function main() {
 
@@ -379,6 +379,7 @@ Resources:
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
+        .option("--workers <number>", "Number of worker threads to use for parallel verification (default: number of CPU cores)")
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(initContext(verifyCommand));

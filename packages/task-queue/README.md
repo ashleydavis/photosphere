@@ -4,9 +4,7 @@ A task queue system using Bun workers for parallel task execution. This package 
 
 ## Todo
 
-- The worker queue should be injected into verify.
 - Default max workers to num cpus.
-- Check that error serialization works ok.
 - Each task needs to return json results.
     - I need to be able to accumulate those.
 - Check all times and uuids come from the providers.
