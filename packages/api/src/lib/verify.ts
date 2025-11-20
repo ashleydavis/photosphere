@@ -142,80 +142,80 @@ export async function verify(assetStorage: IStorage, metadataStorage: IStorage, 
         // Registers a callback to integrate results as tasks complete.
         //
         queue.onTaskComplete((taskResult: ITaskResult) => {
-        if (taskResult.status === TaskStatus.Completed) {
-            const fileResult = taskResult.outputs as IVerifyFileResult;
-            result.filesProcessed++;
+            if (taskResult.status === TaskStatus.Completed) {
+                const fileResult = taskResult.outputs as IVerifyFileResult;
+                result.filesProcessed++;
 
-            if (progressCallback) {
-                const status = queue.getStatus();
-                progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles} (${status.running} tasks running in parallel)`);
-            }
-
-            if (fileResult.status === "removed") {
-                result.removed.push(fileResult.fileName);
-            } else if (fileResult.status === "modified") {
-                result.modified.push(fileResult.fileName);
-            } else {
-                result.numUnmodified++;
-            }
-        } else if (taskResult.status === TaskStatus.Failed) {
-            // Task failed - track the failure separately
-            let errorMessage: string;
-            if (taskResult.error) {
-                try {
-                    const errorObj = JSON.parse(taskResult.error);
-                    const deserializedError = deserializeError(errorObj);
-                    errorMessage = deserializedError.message || String(deserializedError);
-                } catch {
-                    // Error is not JSON, use it as-is
-                    errorMessage = taskResult.error;
+                if (progressCallback) {
+                    const status = queue.getStatus();
+                    progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles} (${status.running} tasks running in parallel)`);
                 }
-            } else {
-                errorMessage = "Unknown error";
+
+                if (fileResult.status === "removed") {
+                    result.removed.push(fileResult.fileName);
+                } else if (fileResult.status === "modified") {
+                    result.modified.push(fileResult.fileName);
+                } else {
+                    result.numUnmodified++;
+                }
+            } else if (taskResult.status === TaskStatus.Failed) {
+                // Task failed - track the failure separately
+                let errorMessage: string;
+                if (taskResult.error) {
+                    try {
+                        const errorObj = JSON.parse(taskResult.error);
+                        const deserializedError = deserializeError(errorObj);
+                        errorMessage = deserializedError.message || String(deserializedError);
+                    } catch {
+                        // Error is not JSON, use it as-is
+                        errorMessage = taskResult.error;
+                    }
+                } else {
+                    errorMessage = "Unknown error";
+                }
+                const fileName = taskResult.inputs?.node?.name || "unknown";
+                log.error(`Failed to verify file "${fileName}": ${errorMessage}`);
+                result.filesProcessed++;
+                result.numFailures++;
             }
-            const fileName = taskResult.inputs?.node?.name || "unknown";
-            log.error(`Failed to verify file "${fileName}": ${errorMessage}`);
-            result.filesProcessed++;
-            result.numFailures++;
-        }
-    });
+        });
 
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
-    if (!merkleTree) {
-        throw new Error(`Failed to load merkle tree`);
-    }
-
-    //
-    // Queue up all verification tasks as quickly as possible.
-    // Pass the storage descriptor instead of the storage object (which can't be serialized).
-    // Filter nodes by pathFilter before queuing tasks.
-    //
-    const descriptor: IStorageDescriptor = storageDescriptor || {
-        location: assetStorage.location
-    };
-    await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
-        result.nodesProcessed++;
-
-        if (node.name) {
-            // Apply path filter before queuing the task
-            if (pathFilter && !node.name.startsWith(pathFilter)) {
-                return true; // Skip this node
-            }
-
-            queue.addTask("verify-file", {
-                node,
-                storageDescriptor: descriptor,
-                options,
-            });
+        const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+        if (!merkleTree) {
+            throw new Error(`Failed to load merkle tree`);
         }
 
-        return true;
-    });
+        //
+        // Queue up all verification tasks as quickly as possible.
+        // Pass the storage descriptor instead of the storage object (which can't be serialized).
+        // Filter nodes by pathFilter before queuing tasks.
+        //
+        const descriptor: IStorageDescriptor = storageDescriptor || {
+            location: assetStorage.location
+        };
+        await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
+            result.nodesProcessed++;
 
-    //
-    // Wait for all tasks to complete.
-    //
-    await queue.awaitAllTasks();
+            if (node.name) {
+                // Apply path filter before queuing the task
+                if (pathFilter && !node.name.startsWith(pathFilter)) {
+                    return true; // Skip this node
+                }
+
+                queue.addTask("verify-file", {
+                    node,
+                    storageDescriptor: descriptor,
+                    options,
+                });
+            }
+
+            return true;
+        });
+
+        //
+        // Wait for all tasks to complete.
+        //
+        await queue.awaitAllTasks();
 
         //
         // Log debug information about task execution.
