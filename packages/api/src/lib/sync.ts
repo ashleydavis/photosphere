@@ -12,9 +12,11 @@ import { computeHash } from "./hash";
 //
 export async function syncDatabases(
     sourceAssetStorage: IStorage,
+    sourceMetadataStorage: IStorage,
     sourceBsonDatabase: IBsonDatabase,
     sourceSessionId: string,
     targetAssetStorage: IStorage,
+    targetMetadataStorage: IStorage,
     targetBsonDatabase: IBsonDatabase,
     targetSessionId: string
 ): Promise<void> {
@@ -22,35 +24,35 @@ export async function syncDatabases(
     //
     // Pull incoming files.
     //
-    if (!await acquireWriteLock(sourceAssetStorage, sourceSessionId)) { //todo: Don't need write lock if nothing to pull.
+    if (!await acquireWriteLock(sourceMetadataStorage, sourceSessionId)) { //todo: Don't need write lock if nothing to pull.
         throw new Error(`Failed to acquire write lock for source database.`);
     }
 
     try {
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
-        await pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase);
+        await pushFiles(targetAssetStorage, targetMetadataStorage, sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase);
         await syncDatabase(targetAssetStorage, targetBsonDatabase, sourceAssetStorage, sourceBsonDatabase);
     }
     finally {
-        await releaseWriteLock(sourceAssetStorage);
+        await releaseWriteLock(sourceMetadataStorage);
     }
 
     //
     // Push outgoing files.
     //
-    if (!await acquireWriteLock(targetAssetStorage, targetSessionId)) { //todo: Don't need write lock if nothing to push.
+    if (!await acquireWriteLock(targetMetadataStorage, targetSessionId)) { //todo: Don't need write lock if nothing to push.
         throw new Error(`Failed to acquire write lock for target database.`);
     }
 
     try {
         // Push files from source to target.
         // Need the write lock in the target database.
-        await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase);
+        await pushFiles(sourceAssetStorage, sourceMetadataStorage, targetAssetStorage, targetMetadataStorage, targetBsonDatabase);
         await syncDatabase(sourceAssetStorage, sourceBsonDatabase, targetAssetStorage, targetBsonDatabase);
     } 
     finally {
-        await releaseWriteLock(targetAssetStorage);
+        await releaseWriteLock(targetMetadataStorage);
     }
 }
 
@@ -76,17 +78,17 @@ function extractAssetId(filePath: string): string | undefined {
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
-async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: IBsonDatabase): Promise<void> {
+async function pushFiles(sourceAssetStorage: IStorage, sourceMetadataStorage: IStorage, targetAssetStorage: IStorage, targetMetadataStorage: IStorage, targetBsonDatabase: IBsonDatabase): Promise<void> {
 
     //
     // Load the merkle tree.
     //
-    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
+    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceMetadataStorage));
     if (!sourceMerkleTree) {
         throw new Error("Failed to load source merkle tree.");
     }
 
-    let targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage));
+    let targetMerkleTree = await retry(() => loadMerkleTree(targetMetadataStorage));
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
     }
@@ -206,7 +208,7 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
 
                 if (filesCopied % 100 === 0) {
                     // Save the target merkle tree periodically
-                    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage));
+                    await retry(() => saveMerkleTree(targetMerkleTree!, targetMetadataStorage));
                 }
             }
         } else {
@@ -276,7 +278,7 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage)); //TODO: This doesn't really need to be done unless something changed.
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetMetadataStorage)); //TODO: This doesn't really need to be done unless something changed.
     
     log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target`);
 }

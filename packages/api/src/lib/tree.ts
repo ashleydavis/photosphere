@@ -21,16 +21,16 @@ export async function saveMerkleTree(merkleTree: IMerkleTree<IDatabaseMetadata>,
 //
 // Loads the merkle tree from disk.
 //
-export async function loadMerkleTree(assetStorage: IStorage): Promise<IMerkleTree<IDatabaseMetadata> | undefined> {
-    return await loadTree(".db/tree.dat", assetStorage);
+export async function loadMerkleTree(metadataStorage: IStorage): Promise<IMerkleTree<IDatabaseMetadata> | undefined> {
+    return await loadTree(".db/tree.dat", metadataStorage);
 }
 
 //
 // Gets the root hash for the files merkle tree.
 // Returns undefined if the merkle tree doesn't exist or has no root hash.
 //
-export async function getFilesRootHash(assetStorage: IStorage): Promise<Buffer | undefined> {
-    const tree = await loadMerkleTree(assetStorage);
+export async function getFilesRootHash(metadataStorage: IStorage): Promise<Buffer | undefined> {
+    const tree = await loadMerkleTree(metadataStorage);
     return tree?.merkle?.hash;
 }
 
