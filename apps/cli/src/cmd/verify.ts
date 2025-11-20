@@ -36,16 +36,16 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // Create storage descriptor for passing to workers
     const resolvedKeyPath = await resolveKeyPath(options.key);
     const storageDescriptor: IStorageDescriptor = {
-        location: assetStorage.location,
+        dbDir: databaseDir,
         encryptionKeyPath: resolvedKeyPath
     };
     
-    const result = await verify(assetStorage, metadataStorage, context.taskQueueProvider, { 
+    const result = await verify(storageDescriptor, assetStorage, metadataStorage, context.taskQueueProvider, { 
         full: options.full,
         pathFilter: options.path
     }, (progress) => {
         writeProgress(`🔍 ${progress}`);
-    }, storageDescriptor);
+    });
 
     clearProgressMessage(); // Flush the progress message.
 

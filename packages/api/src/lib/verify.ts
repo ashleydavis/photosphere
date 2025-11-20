@@ -90,7 +90,7 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(assetStorage: IStorage, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback, storageDescriptor?: IStorageDescriptor) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, assetStorage: IStorage, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
@@ -190,9 +190,6 @@ export async function verify(assetStorage: IStorage, metadataStorage: IStorage, 
         // Pass the storage descriptor instead of the storage object (which can't be serialized).
         // Filter nodes by pathFilter before queuing tasks.
         //
-        const descriptor: IStorageDescriptor = storageDescriptor || {
-            location: assetStorage.location
-        };
         await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
             result.nodesProcessed++;
 
@@ -204,7 +201,7 @@ export async function verify(assetStorage: IStorage, metadataStorage: IStorage, 
 
                 queue.addTask("verify-file", {
                     node,
-                    storageDescriptor: descriptor,
+                    storageDescriptor,
                     options,
                 });
             }
