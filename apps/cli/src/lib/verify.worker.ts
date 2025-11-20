@@ -33,7 +33,7 @@ export async function verifyFileHandler(data: IVerifyFileData, workingDirectory:
     // S3 config is loaded from environment/config, and encryption key path comes from the storage descriptor
     const s3Config = await getS3Config();
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
-    const { storage: assetStorage } = createStorage(storageDescriptor.location, s3Config, storageOptions);
+    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
     const fileInfo = await assetStorage.info(fileName);
     if (!fileInfo) {

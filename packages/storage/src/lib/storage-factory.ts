@@ -39,9 +39,9 @@ export interface IStorageOptions {
  */
 export interface IStorageDescriptor {
     /**
-     * Storage location string (e.g., "fs:/path" or "s3:bucket/path")
+     * Storage location string (e.g., "fs:path" or "s3:bucket/path")
      */
-    location: string;
+    dbDir: string;
     
     /**
      * Path to encryption key file (if storage is encrypted)
@@ -51,7 +51,7 @@ export interface IStorageDescriptor {
 
 /**
  * Creates the appropriate storage implementation based on the prefix in the path
- * @param rootPath Path with storage prefix (e.g. "fs:/path" or "s3:bucket/path")
+ * @param rootPath Path with storage prefix (e.g. "fs:path" or "s3:bucket/path")
  * @param options Options for storage creation including encryption keys
  * @returns The corresponding storage implementation and normalized path
  */
