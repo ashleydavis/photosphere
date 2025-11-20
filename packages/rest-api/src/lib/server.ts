@@ -50,7 +50,7 @@ export interface IMediaFileDatabaseProvider {
     //
     // Opens a media file database.
     //
-    openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>;
+    openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>;
 
     //
     // Reads a streaming asset from the storage provider.
@@ -71,7 +71,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Tracks open databases that need to be closed.
     //
-    private databaseMap = new Map<string, { assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>();
+    private databaseMap = new Map<string, { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>();
     
     constructor(private readonly assetStorage: IStorage, private readonly googleApiKey: string | undefined) {
     }
@@ -79,10 +79,13 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Opens a media file database.
     //
-    async openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
+    async openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
         let mediaFileDatabase = this.databaseMap.get(databaseId);
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
+            // Create unencrypted metadata storage (same base storage, but without encryption)
+            // For now, use the same storage instance - encryption handling can be refined later
+            const metadataStorage = assetStorage;
             // Create appropriate providers based on NODE_ENV
             const uuidGenerator = process.env.NODE_ENV === "testing" 
                 ? new TestUuidGenerator()
@@ -100,6 +103,8 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
             await loadDatabase(database.assetStorage, database.metadataCollection);
             mediaFileDatabase = {
                 ...database,
+                assetStorage,
+                metadataStorage,
                 uuidGenerator,
                 timestampProvider,
                 googleApiKey: this.googleApiKey,
@@ -146,7 +151,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     async write(databaseId: string, assetType: string, assetId: string, contentType: string, buffer: Buffer): Promise<void> {
         const mediaFileDatabase = await this.openDatabase(databaseId);
-        await writeAsset(mediaFileDatabase.assetStorage, mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
+        await writeAsset(mediaFileDatabase.assetStorage, mediaFileDatabase.metadataStorage, mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
     }
 }
 
@@ -155,7 +160,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
 //
 export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvider {
 
-    private mediaFileDatabase: { assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner } | undefined = undefined;
+    private mediaFileDatabase: { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner } | undefined = undefined;
     
     constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
     }
@@ -163,11 +168,14 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
     //
     // Opens a media file database.
     //
-    async openDatabase(_databaseId: string): Promise<{ assetStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
+    async openDatabase(_databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
         if (this.mediaFileDatabase) {
             return this.mediaFileDatabase;
         }
 
+        // Create unencrypted metadata storage (same base storage, but without encryption)
+        // For now, use the same storage instance - encryption handling can be refined later
+        const metadataStorage = this.assetStorage;
         // Create appropriate providers based on NODE_ENV
         const uuidGenerator = process.env.NODE_ENV === "testing" 
             ? new TestUuidGenerator()
@@ -185,6 +193,8 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         await loadDatabase(database.assetStorage, database.metadataCollection);
         this.mediaFileDatabase = {
             ...database,
+            assetStorage: this.assetStorage,
+            metadataStorage,
             uuidGenerator,
             timestampProvider,
             googleApiKey: this.googleApiKey,
@@ -222,7 +232,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
         if (!this.mediaFileDatabase) {
             throw new Error(`Database not opened`);
         }
-        await writeAsset(this.mediaFileDatabase.assetStorage, this.mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
+        await writeAsset(this.mediaFileDatabase.assetStorage, this.mediaFileDatabase.metadataStorage, this.mediaFileDatabase.sessionId, assetId, assetType, contentType, buffer);
     }            
 }
 

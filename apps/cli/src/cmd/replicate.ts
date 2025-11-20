@@ -45,7 +45,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const nonInteractive = options.yes || false;
 
-    const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, metadataStorage: sourceMetadataStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
@@ -69,13 +69,13 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     
     // Check if destination database already exists
     const s3Config = await getS3Config();
-    const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
+    const { storage: destMetadataStorage } = createStorage(destDir, s3Config, undefined);
 
     // Check for tree.dat in device-specific location first, then old location
-    let destDbExists = await destMetadataStorage.fileExists("tree.dat");    
+    let destDbExists = await destMetadataStorage.fileExists(".db/tree.dat");    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
-        const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');        
+        const destDbIsEncrypted = await destMetadataStorage.fileExists('.db/encryption.pub');        
         if (destDbIsEncrypted) {
             // Database is encrypted - user must provide a key
             if (!options.destKey) {
@@ -131,7 +131,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const resolvedDestKeyPath = await resolveKeyPath(options.destKey);
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPath, options.generateKey || false);
 
-    const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);        
+    const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {
@@ -173,7 +173,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, { 
+    const result = await replicate(sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destMetadataStorage, { 
         pathFilter: options.path,
         force: options.force
     }, (progress) => {

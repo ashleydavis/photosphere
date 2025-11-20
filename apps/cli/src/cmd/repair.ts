@@ -34,17 +34,23 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
         await exit(1);
     }
     
-    const { assetStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(options.source, {
+        db: options.source,
+        key: options.sourceKey,
+        verbose: options.verbose,
+        yes: options.yes
+    }, false, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(`Repairing database:`);
-    log.info(`  Source:    ${pc.cyan(options.source)}`);
+    log.info(`  Source:    ${pc.cyan(sourceDir)}`);
     log.info(`  Target:    ${pc.cyan(targetDir)}`);
     log.info('');
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await repair(assetStorage, {
+    const result = await repair(assetStorage, metadataStorage, sourceAssetStorage, {
         source: options.source,
         sourceKey: options.sourceKey,
         full: options.full,

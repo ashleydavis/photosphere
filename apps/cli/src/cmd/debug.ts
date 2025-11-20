@@ -60,14 +60,14 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 export async function debugMerkleTreeCommand(context: ICommandContext, options: IDebugMerkleTreeCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(pc.bold(pc.blue(`🌳 Merkle Trees Visualization`)));
     log.info('');
     
     // Get and display the aggregate root hash
-    const summary = await getDatabaseSummary(assetStorage);
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     log.info(pc.cyan('Aggregate Root Hash:'));
     log.info(pc.gray('='.repeat(60)));
     log.info(pc.white(summary.fullHash));
@@ -76,7 +76,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     // Show files merkle tree
     log.info(pc.cyan('Files Merkle Tree (.db/tree.dat):'));
     log.info(pc.gray('='.repeat(60)));
-    const filesTree = await loadMerkleTree(assetStorage);
+    const filesTree = await loadMerkleTree(metadataStorage);
     if (filesTree) {
         const filesVisualization = visualizeTree(filesTree);
         log.info(filesVisualization);

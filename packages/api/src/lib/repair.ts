@@ -1,4 +1,4 @@
-import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import { IStorage } from "storage";
 import { IDatabaseMetadata, ProgressCallback, getDatabaseSummary } from "./media-file-database";
 import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
@@ -88,12 +88,14 @@ export interface IRepairResult {
 //
 // Repairs the media file database by restoring corrupted or missing files from a source database.
 //
-export async function repair(assetStorage: IStorage, options: IRepairOptions, progressCallback?: ProgressCallback): Promise<IRepairResult> {        
-    const { options: sourceStorageOptions } = await loadEncryptionKeys(options.sourceKey, false);
-    const { storage: sourceAssetStorage } = createStorage(options.source, undefined, sourceStorageOptions);
-    const { storage: sourceMetadataStorage } = createStorage(pathJoin(options.source, '.db'));
-
-    const summary = await getDatabaseSummary(assetStorage);
+export async function repair(
+    assetStorage: IStorage, 
+    metadataStorage: IStorage, 
+    sourceAssetStorage: IStorage,
+    options: IRepairOptions, 
+    progressCallback?: ProgressCallback
+): Promise<IRepairResult> {        
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     const result: IRepairResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -223,7 +225,7 @@ export async function repair(assetStorage: IStorage, options: IRepairOptions, pr
         progressCallback(`Checking for missing or corrupt files in merkle tree...`);
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

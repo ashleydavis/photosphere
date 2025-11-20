@@ -13,9 +13,9 @@ export interface ISummaryCommandOptions extends IBaseCommandOptions {
 //
 export async function summaryCommand(context: ICommandContext, options: ISummaryCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    const summary = await getDatabaseSummary(assetStorage);
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
 
     log.info('');
     log.info(pc.bold(pc.blue(`📊 Database Summary`)));

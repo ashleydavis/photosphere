@@ -56,6 +56,7 @@ async function replicateFiles(
     merkleTree: IMerkleTree<IDatabaseMetadata>,
     destMerkleTree: IMerkleTree<IDatabaseMetadata>,
     destAssetStorage: IStorage,
+    destMetadataStorage: IStorage,
     sourceAssetStorage: IStorage,
     options: IReplicateOptions | undefined,
     progressCallback: ProgressCallback | undefined,
@@ -191,7 +192,7 @@ Copied hash: ${copiedHash.toString("hex")}
                             destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
                             destMerkleTree!.dirty = false;
                         }
-                        await saveTree(".db/tree.dat", destMerkleTree!, destAssetStorage);
+                        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
                     });
                 }
             }
@@ -224,7 +225,7 @@ Copied hash: ${copiedHash.toString("hex")}
             destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
             destMerkleTree!.dirty = false;
         }
-        await saveTree(".db/tree.dat", destMerkleTree!, destAssetStorage);
+        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
     });
 }
 
@@ -453,15 +454,17 @@ async function replicateBsonDatabase(
 //
 export async function replicate(
     sourceAssetStorage: IStorage,
+    sourceMetadataStorage: IStorage,
     sourceBsonDatabase: BsonDatabase,
     sourceUuidGenerator: IUuidGenerator,
     sourceTimestampProvider: ITimestampProvider,
     destAssetStorage: IStorage,
+    destMetadataStorage: IStorage,
     options?: IReplicateOptions,
     progressCallback?: ProgressCallback
 ): Promise<IReplicationResult> {
 
-    const merkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
+    const merkleTree = await retry(() => loadMerkleTree(sourceMetadataStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -485,7 +488,7 @@ export async function replicate(
         sourceTimestampProvider
     );
 
-    const treeExists = await retry(() => destAssetStorage.fileExists(".db/tree.dat"));
+    const treeExists = await retry(() => destMetadataStorage.fileExists(".db/tree.dat"));
     if (treeExists) {
         await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
     }
@@ -493,13 +496,13 @@ export async function replicate(
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await retry(() => createDatabase(destDb.assetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id));
+        await retry(() => createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id));
     }
     
     //
     // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await loadMerkleTree(destAssetStorage);
+    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
     if (!destMerkleTree) {
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
@@ -532,6 +535,7 @@ export async function replicate(
         merkleTree,
         destMerkleTree,
         destAssetStorage,
+        destMetadataStorage,
         sourceAssetStorage,
         options,
         progressCallback,

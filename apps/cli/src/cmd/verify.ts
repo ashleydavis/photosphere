@@ -30,7 +30,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
 
     // Create storage descriptor for passing to workers
@@ -40,7 +40,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         encryptionKeyPath: resolvedKeyPath
     };
     
-    const result = await verify(assetStorage, context.taskQueueProvider, { 
+    const result = await verify(assetStorage, metadataStorage, context.taskQueueProvider, { 
         full: options.full,
         pathFilter: options.path
     }, (progress) => {
