@@ -500,7 +500,6 @@ export class TaskQueue implements ITaskQueue {
         }
     }
 
-
     //
     // Internal: Handles messages from worker threads.
     // Processes task results and errors.
