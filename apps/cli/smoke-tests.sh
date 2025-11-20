@@ -60,10 +60,11 @@ declare -a TEST_TABLE=(
     "repair-damaged:test_repair_damaged_database:Repair damaged database from replica"
     "v2-readonly:test_v2_database_readonly_commands:Test readonly commands work on v2 database (summary, verify)"
     "v2-write-fail:test_v2_database_write_commands_fail:Test write commands fail on v2 database (add, remove)"
-    "v2-upgrade:test_v2_database_upgrade:Upgrade v2 database to v4"
-    "v3-upgrade:test_v3_database_upgrade:Upgrade v3 database to v4"
-    "v4-upgrade-no-effect:test_v4_database_upgrade_no_effect:Test v4 upgrade has no effect"
-    "v4-add-file:test_v4_database_add_file:Test adding file to v4 database"
+    "v2-upgrade:test_v2_database_upgrade:Upgrade v2 database to v5"
+    "v3-upgrade:test_v3_database_upgrade:Upgrade v3 database to v5"
+    "v4-upgrade:test_v4_database_upgrade:Upgrade v4 database to v5"
+    "v5-upgrade-no-effect:test_v5_database_upgrade_no_effect:Test v5 upgrade has no effect"
+    "v5-add-file:test_v5_database_add_file:Test adding file to v5 database"
     "sync-original-to-copy:test_sync_original_to_copy:Test sync from original to copy"
     "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
     "sync-edit-field:test_sync_edit_field:Test sync after editing field with bdb-cli"
@@ -2301,7 +2302,7 @@ test_v2_database_write_commands_fail() {
 
 test_v2_database_upgrade() {
     local test_number="$1"
-    print_test_header "$test_number" "V2 DATABASE UPGRADE TO V4"
+    print_test_header "$test_number" "V2 DATABASE UPGRADE TO V5"
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
@@ -2321,16 +2322,16 @@ test_v2_database_upgrade() {
     
     # Test upgrade command on v2 database
     local upgrade_output
-    invoke_command "Upgrade v2 database to v4" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v2 database to v5" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
     
     # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 4" "Upgrade completed successfully"
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 5" "Upgrade completed successfully"
     
-    # Verify the upgraded database is now version 4
+    # Verify the upgraded database is now version 5
     local summary_output
     invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v2_dir --yes" 0 "summary_output"
     
-    expect_output_string "$summary_output" "Database version: 4" "Upgraded database is now version 4"
+    expect_output_string "$summary_output" "Database version: 5" "Upgraded database is now version 5"
     
     # Test that verify command now works on upgraded database
     local verify_output
@@ -2349,7 +2350,7 @@ test_v2_database_upgrade() {
 
 test_v3_database_upgrade() {
     local test_number="$1"
-    print_test_header "$test_number" "V3 DATABASE UPGRADE TO V4"
+    print_test_header "$test_number" "V3 DATABASE UPGRADE TO V5"
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
@@ -2369,16 +2370,16 @@ test_v3_database_upgrade() {
     
     # Test upgrade command on v3 database
     local upgrade_output
-    invoke_command "Upgrade v3 database to v4" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v3 database to v5" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
     
     # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 4" "Upgrade completed successfully"
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 5" "Upgrade completed successfully"
     
-    # Verify the upgraded database is now version 4
+    # Verify the upgraded database is now version 5
     local summary_output
     invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
     
-    expect_output_string "$summary_output" "Database version: 4" "Upgraded database is now version 4"
+    expect_output_string "$summary_output" "Database version: 5" "Upgraded database is now version 5"
     
     # Test that verify command now works on upgraded database
     local verify_output
@@ -2395,13 +2396,13 @@ test_v3_database_upgrade() {
     test_passed
 }
 
-test_v4_database_upgrade_no_effect() {
+test_v4_database_upgrade() {
     local test_number="$1"
-    print_test_header "$test_number" "V4 DATABASE UPGRADE HAS NO EFFECT"
+    print_test_header "$test_number" "V4 DATABASE UPGRADE TO V5"
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database directly instead of upgrading from v3
+    # Use the existing v4 database directly
     local v4_db_dir="../../test/dbs/v4"
     local temp_v4_dir="$test_dir/test-v4-upgrade"
     log_info "Source database path: $v4_db_dir"
@@ -2416,27 +2417,27 @@ test_v4_database_upgrade_no_effect() {
     log_info "Copying database: cp -r \"$v4_db_dir\" \"$temp_v4_dir\""
     cp -r "$v4_db_dir" "$temp_v4_dir"
     
-    # Test upgrade command on v4 database (should have no effect)
+    # Test upgrade command on v4 database
     local upgrade_output
-    invoke_command "Upgrade v4 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v4 database to v5" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "upgrade_output"
     
-    # Check that upgrade reports database is already current
-    expect_output_string "$upgrade_output" "Database is already at the latest version (4)" "Upgrade reports database is already current"
+    # Check that upgrade was successful
+    expect_output_string "$upgrade_output" "Database upgraded successfully to version 5" "Upgrade completed successfully"
     
-    # Verify the database is still version 4
+    # Verify the upgraded database is now version 5
     local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "summary_output"
+    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "summary_output"
     
-    expect_output_string "$summary_output" "Database version: 4" "Database is still version 4"
+    expect_output_string "$summary_output" "Database version: 5" "Upgraded database is now version 5"
     
     # Test that verify command still works
     local verify_output
-    invoke_command "Verify v4 database after upgrade" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
+    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
     
-    expect_output_string "$verify_output" "Database verification passed" "V4 database verifies successfully after upgrade"
+    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
-    # Check merkle tree order for v4 database
-    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "v4 upgrade test database"
+    # Check merkle tree order for upgraded database
+    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "upgraded v4 database"
     
     # Clean up temporary database
     rm -rf "$temp_v4_dir"
@@ -2444,32 +2445,81 @@ test_v4_database_upgrade_no_effect() {
     test_passed
 }
 
-test_v4_database_add_file() {
+test_v5_database_upgrade_no_effect() {
     local test_number="$1"
-    print_test_header "$test_number" "V4 DATABASE ADD FILE AND VERIFY INTEGRITY"
+    print_test_header "$test_number" "V5 DATABASE UPGRADE HAS NO EFFECT"
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
-    local temp_v4_dir="$test_dir/test-v4-add-file"
-    local test_file="../../test/test.png"
-    log_info "Source database path: $v4_db_dir"
-    log_info "Temporary test database path: $temp_v4_dir"
+    # Use the existing v5 database directly
+    local v5_db_dir="../../test/dbs/v5"
+    local temp_v5_dir="$test_dir/test-v5-upgrade"
+    log_info "Source database path: $v5_db_dir"
+    log_info "Temporary upgrade database path: $temp_v5_dir"
     
-    # Check that v4 database and test file exist
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
+    
+    # Create a copy of v5 database for testing
+    log_info "Creating copy of v5 database for upgrade testing"
+    rm -rf "$temp_v5_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$temp_v5_dir\""
+    cp -r "$v5_db_dir" "$temp_v5_dir"
+    
+    # Test upgrade command on v5 database (should have no effect)
+    local upgrade_output
+    invoke_command "Upgrade v5 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v5_dir --yes" 0 "upgrade_output"
+    
+    # Check that upgrade reports database is already current
+    expect_output_string "$upgrade_output" "Database is already at the latest version (5)" "Upgrade reports database is already current"
+    
+    # Verify the database is still version 5
+    local summary_output
+    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v5_dir --yes" 0 "summary_output"
+    
+    expect_output_string "$summary_output" "Database version: 5" "Database is still version 5"
+    
+    # Test that verify command still works
+    local verify_output
+    invoke_command "Verify v5 database after upgrade" "$(get_cli_command) verify --db $temp_v5_dir --yes" 0 "verify_output"
+    
+    expect_output_string "$verify_output" "Database verification passed" "V5 database verifies successfully after upgrade"
+    
+    # Check merkle tree order for v5 database
+    check_merkle_tree_order "$temp_v5_dir/.db/tree.dat" "v5 upgrade test database"
+    
+    # Clean up temporary database
+    rm -rf "$temp_v5_dir"
+    log_success "Cleaned up temporary v5 upgrade database"
+    test_passed
+}
+
+test_v5_database_add_file() {
+    local test_number="$1"
+    print_test_header "$test_number" "V5 DATABASE ADD FILE AND VERIFY INTEGRITY"
+    
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
+    local temp_v5_dir="$test_dir/test-v5-add-file"
+    local test_file="../../test/test.png"
+    log_info "Source database path: $v5_db_dir"
+    log_info "Temporary test database path: $temp_v5_dir"
+    
+    # Check that v5 database and test file exist
+    check_exists "$v5_db_dir" "V5 test database directory"
     check_exists "$test_file" "Test image file"
     
-    # Create a copy of v4 database for testing
-    log_info "Creating copy of v4 database for file addition testing"
-    rm -rf "$temp_v4_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$temp_v4_dir\""
-    cp -r "$v4_db_dir" "$temp_v4_dir"
+    # Create a copy of v5 database for testing
+    log_info "Creating copy of v5 database for file addition testing"
+    rm -rf "$temp_v5_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$temp_v5_dir\""
+    cp -r "$v5_db_dir" "$temp_v5_dir"
     
     # Get initial asset count
     local initial_summary_output
-    invoke_command "Get initial asset count" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "initial_summary_output"
+    invoke_command "Get initial asset count" "$(get_cli_command) summary --db $temp_v5_dir --yes" 0 "initial_summary_output"
     
     # Extract initial asset count from summary
     local initial_count
@@ -2478,14 +2528,14 @@ test_v4_database_add_file() {
     
     # Add test file to the database
     local add_output
-    invoke_command "Add test file to v4 database" "$(get_cli_command) add --db $temp_v4_dir $test_file --yes" 0 "add_output"
+    invoke_command "Add test file to v5 database" "$(get_cli_command) add --db $temp_v5_dir $test_file --yes" 0 "add_output"
     
     # Verify file was added successfully
     expect_output_string "$add_output" "Added" "File was added successfully"
     
     # Get final asset count and verify it increased
     local final_summary_output
-    invoke_command "Get final asset count" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "final_summary_output"
+    invoke_command "Get final asset count" "$(get_cli_command) summary --db $temp_v5_dir --yes" 0 "final_summary_output"
     
     # Extract final asset count from summary
     local final_count
@@ -2511,26 +2561,26 @@ test_v4_database_add_file() {
     
     # Verify database integrity
     local verify_output
-    invoke_command "Verify database integrity after adding file" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
+    invoke_command "Verify database integrity after adding file" "$(get_cli_command) verify --db $temp_v5_dir --yes" 0 "verify_output"
     
     expect_output_string "$verify_output" "Database verification passed" "Database maintains integrity after adding file"
     
-    # Verify database is still version 4
-    expect_output_string "$final_summary_output" "Database version: 4" "Database is still version 4"
+    # Verify database is still version 5
+    expect_output_string "$final_summary_output" "Database version: 5" "Database is still version 5"
     
     # List assets to verify the new file is present
     local list_output
-    invoke_command "List assets to verify new file" "$(get_cli_command) list --db $temp_v4_dir --yes" 0 "list_output"
+    invoke_command "List assets to verify new file" "$(get_cli_command) list --db $temp_v5_dir --yes" 0 "list_output"
     
     # Check that the test file appears in the listing
     expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
     
-    # Check merkle tree order for v4 database
-    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "v4 add-file test database"
+    # Check merkle tree order for v5 database
+    check_merkle_tree_order "$temp_v5_dir/.db/tree.dat" "v5 add-file test database"
     
     # Clean up temporary database
-    rm -rf "$temp_v4_dir"
-    log_success "Cleaned up temporary v4 add-file database"
+    rm -rf "$temp_v5_dir"
+    log_success "Cleaned up temporary v5 add-file database"
     test_passed
 }
 
@@ -2540,24 +2590,24 @@ test_sync_original_to_copy() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-original"
     local copy_dir="$test_dir/test-sync-copy"
     local test_file="../../test/test.png"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Check that v4 database and test file exist
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database and test file exist
+    check_exists "$v5_db_dir" "V5 test database directory"
     check_exists "$test_file" "Test image file"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -2667,24 +2717,24 @@ test_sync_copy_to_original() {
     # TODO: This test is temporarily disabled in automatic runs until sync bidirectional functionality is working
     # It can still be run individually with: ./smoke-tests.sh 34 or ./smoke-tests.sh sync-copy-to-original
     
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-reverse-original"
     local copy_dir="$test_dir/test-sync-reverse-copy"
     local test_file="../../test/test.png"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Check that v4 database and test file exist
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database and test file exist
+    check_exists "$v5_db_dir" "V5 test database directory"
     check_exists "$test_file" "Test image file for reverse sync"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -2799,28 +2849,28 @@ test_sync_edit_field() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-edit-original"
     local copy_dir="$test_dir/test-sync-edit-copy"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Hardcoded values from inspecting the v4 database
+    # Hardcoded values from inspecting the v5 database
     local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     local field_name="description"
     local field_type="string"
     local new_field_value="Test description edited by bdb-cli"
     
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -2997,28 +3047,28 @@ test_sync_edit_field_reverse() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-edit-reverse-original"
     local copy_dir="$test_dir/test-sync-edit-reverse-copy"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Hardcoded values from inspecting the v4 database
+    # Hardcoded values from inspecting the v5 database
     local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     local field_name="description"
     local field_type="string"
     local new_field_value="Test description edited in copy by bdb-cli"
     
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -3195,22 +3245,22 @@ test_sync_delete_asset() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-delete-original"
     local copy_dir="$test_dir/test-sync-delete-copy"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -3241,7 +3291,7 @@ test_sync_delete_asset() {
         exit 1
     fi
     
-    # Hardcoded asset ID from v4 database
+    # Hardcoded asset ID from v5 database
     local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     log_info "Using asset ID for deletion test: $test_asset_id"
     
@@ -3343,22 +3393,22 @@ test_sync_delete_asset_reverse() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local original_dir="$test_dir/test-sync-delete-reverse-original"
     local copy_dir="$test_dir/test-sync-delete-reverse-copy"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Original database path: $original_dir"
     log_info "Copy database path: $copy_dir"
     
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
     
-    # Create the original database from v4
-    log_info "Creating original database from v4 to $original_dir"
+    # Create the original database from v5
+    log_info "Creating original database from v5 to $original_dir"
     rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$original_dir\""
-    cp -r "$v4_db_dir" "$original_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$original_dir\""
+    cp -r "$v5_db_dir" "$original_dir"
     
     # Create the copy database using replicate command
     log_info "Creating copy database using replicate command to $copy_dir"
@@ -3389,7 +3439,7 @@ test_sync_delete_asset_reverse() {
         exit 1
     fi
     
-    # Hardcoded asset ID from v4 database
+    # Hardcoded asset ID from v5 database
     local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     log_info "Using asset ID for deletion test: $test_asset_id"
     
@@ -3491,27 +3541,27 @@ test_replicate_with_deleted_asset() {
     
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
-    # Use the existing v4 database as base
-    local v4_db_dir="../../test/dbs/v4"
+    # Use the existing v5 database as base
+    local v5_db_dir="../../test/dbs/v5"
     local source_dir="$test_dir/test-replicate-deleted-source"
     local replica_dir="$test_dir/test-replicate-deleted-replica"
-    log_info "Source database path: $v4_db_dir"
+    log_info "Source database path: $v5_db_dir"
     log_info "Source database path: $source_dir"
     log_info "Replica database path: $replica_dir"
     
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
+    # Check that v5 database exists
+    check_exists "$v5_db_dir" "V5 test database directory"
     
-    # Create the source database from v4
-    log_info "Creating source database from v4 to $source_dir"
+    # Create the source database from v5
+    log_info "Creating source database from v5 to $source_dir"
     rm -rf "$source_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$source_dir\""
-    cp -r "$v4_db_dir" "$source_dir"
+    log_info "Copying database: cp -r \"$v5_db_dir\" \"$source_dir\""
+    cp -r "$v5_db_dir" "$source_dir"
     
     # Verify source database exists
     check_exists "$source_dir" "Source database directory"
     
-    # Hardcoded asset ID from v4 database
+    # Hardcoded asset ID from v5 database
     local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     log_info "Using asset ID for deletion test: $test_asset_id"
     
