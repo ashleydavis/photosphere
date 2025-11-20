@@ -26,10 +26,13 @@ export function clearProgressMessage(): void {
 }
 
 export function writeProgress(message: string): void {
-    // Only write progress messages when verbose logging is disabled
-    // In verbose mode, detailed logs are shown instead
-    if (!log.verboseEnabled && process.stdout.isTTY) {
-        clearProgressMessage();
-        process.stdout.write(message);
+    if (process.stdout.isTTY) {
+        if (!log.verboseEnabled) {
+            clearProgressMessage();
+            process.stdout.write(message);
+        }
+        else {
+            process.stdout.write(`${message}\n`);
+        }
     }
 }
