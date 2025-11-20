@@ -44,6 +44,7 @@ interface ITask {
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
+    timeoutCount: number; // Track number of times this task has timed out
 }
 
 //
@@ -176,19 +177,23 @@ export class TaskQueue implements ITaskQueue {
     private completionCallbacks: TaskCompletionCallback[] = [];
     private tasksQueued: number = 0;
     private workerPath: string;
+    private taskTimeout: number;
+    private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
     //
     // Creates a new task queue with the specified number of workers.
     // Tasks will execute in separate Bun worker threads for true parallelism.
     // workerPath: Path to the worker script file (must be provided by the caller).
+    // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     //
-    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator) {
+    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000) {
         this.maxWorkers = maxWorkers;
         this.workerPath = workerPath;
         this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
         this.uuidGenerator = uuidGenerator || {
             generate: () => randomUUID()
         } as IUuidGenerator;
+        this.taskTimeout = taskTimeout;
 
         // Create and start worker pool
         this.startWorkers();
@@ -208,7 +213,8 @@ export class TaskQueue implements ITaskQueue {
             status: TaskStatus.Pending,
             data,
             workingDirectory,
-            createdAt: new Date()
+            createdAt: new Date(),
+            timeoutCount: 0
         };
 
         this.tasks.set(id, task);
@@ -466,6 +472,12 @@ export class TaskQueue implements ITaskQueue {
         availableWorker.isIdle = false;
         availableWorker.currentTaskId = taskId;
 
+        // Set up timeout for this task
+        const timeoutId = setTimeout(() => {
+            this.handleTaskTimeout(taskId, availableWorker);
+        }, this.taskTimeout);
+        this.taskTimeouts.set(taskId, timeoutId);
+
         // Send task to worker
         try {
             const executeMsg: WorkerMessage = {
@@ -478,6 +490,12 @@ export class TaskQueue implements ITaskQueue {
             availableWorker.worker.postMessage(executeMsg);
         } catch (error) {
             console.error(`Error sending task to worker ${availableWorker.workerId}:`, error);
+            // Clear timeout on error
+            const timeout = this.taskTimeouts.get(taskId);
+            if (timeout) {
+                clearTimeout(timeout);
+                this.taskTimeouts.delete(taskId);
+            }
             this.handleWorkerCrash(availableWorker);
         }
     }
@@ -501,6 +519,13 @@ export class TaskQueue implements ITaskQueue {
             const task = this.tasks.get(taskId);
             if (!task) {
                 return;
+            }
+
+            // Clear timeout since task completed successfully
+            const timeout = this.taskTimeouts.get(taskId);
+            if (timeout) {
+                clearTimeout(timeout);
+                this.taskTimeouts.delete(taskId);
             }
 
             task.status = TaskStatus.Completed;
@@ -535,6 +560,13 @@ export class TaskQueue implements ITaskQueue {
                 return;
             }
 
+            // Clear timeout since task completed (with error)
+            const timeout = this.taskTimeouts.get(taskId);
+            if (timeout) {
+                clearTimeout(timeout);
+                this.taskTimeouts.delete(taskId);
+            }
+
             task.status = TaskStatus.Failed;
             task.completedAt = new Date();
             const errorString = error ? JSON.stringify(serializeError(error)) : "Unknown error";
@@ -561,6 +593,74 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
+    // Internal: Handles task timeout by terminating the worker, requeuing the task, and replacing the worker.
+    // Only allows up to 3 timeouts per task, after which the task is marked as failed.
+    //
+    private handleTaskTimeout(taskId: string, workerState: IWorkerState): void {
+        const task = this.tasks.get(taskId);
+        if (!task || task.status !== TaskStatus.Running) {
+            // Task already completed or doesn't exist, ignore timeout
+            return;
+        }
+
+        // Clear the timeout (should already be cleared, but be safe)
+        const timeout = this.taskTimeouts.get(taskId);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.taskTimeouts.delete(taskId);
+        }
+
+        // Increment timeout count
+        task.timeoutCount++;
+
+        console.error(`[Task Queue] Task ${taskId} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
+
+        // Terminate the worker
+        try {
+            workerState.worker.terminate();
+        } catch (error) {
+            console.error(`[Task Queue] Error terminating worker ${workerState.workerId}:`, error);
+        }
+
+        // Check if we've exceeded the maximum number of timeouts
+        if (task.timeoutCount >= 3) {
+            // Mark task as failed after 3 timeouts
+            task.status = TaskStatus.Failed;
+            task.completedAt = new Date();
+            const error = new Error(`Task timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
+            const result: ITaskResult = {
+                status: TaskStatus.Failed,
+                error: JSON.stringify(serializeError(error)),
+                inputs: task.data,
+                taskId: task.id,
+                taskType: task.type,
+                createdAt: task.createdAt,
+                startedAt: task.startedAt,
+                completedAt: task.completedAt
+            };
+            task.result = result;
+
+            workerState.isIdle = true;
+            workerState.currentTaskId = null;
+
+            this.notifyCompletionCallbacks(result);
+            this.resolveTask(taskId, result);
+            this.processNextTask();
+
+            // Replace the worker
+            this.replaceWorker(workerState);
+        } else {
+            // Requeue the task for retry
+            task.status = TaskStatus.Pending;
+            task.startedAt = undefined;
+            this.pendingTasks.unshift(taskId); // Add to front of queue for priority
+
+            // Replace the worker
+            this.replaceWorker(workerState);
+        }
+    }
+
+    //
     // Internal: Handles worker crashes by terminating the worker and creating a replacement.
     // If the worker had a task, it will be requeued.
     //
@@ -574,14 +674,14 @@ export class TaskQueue implements ITaskQueue {
             // Worker may already be terminated
         }
 
-        // Remove from workers array
-        const index = this.workers.indexOf(workerState);
-        if (index > -1) {
-            this.workers.splice(index, 1);
-        }
-
-        // If worker had a task, requeue it
+        // If worker had a task, clear its timeout and requeue it
         if (crashedTaskId) {
+            const timeout = this.taskTimeouts.get(crashedTaskId);
+            if (timeout) {
+                clearTimeout(timeout);
+                this.taskTimeouts.delete(crashedTaskId);
+            }
+
             const task = this.tasks.get(crashedTaskId);
             if (task && task.status === TaskStatus.Running) {
                 task.status = TaskStatus.Pending;
@@ -590,11 +690,25 @@ export class TaskQueue implements ITaskQueue {
             }
         }
 
+        // Replace the worker
+        this.replaceWorker(workerState);
+    }
+
+    //
+    // Internal: Replaces a worker with a new one.
+    //
+    private replaceWorker(oldWorkerState: IWorkerState): void {
+        // Remove from workers array
+        const index = this.workers.indexOf(oldWorkerState);
+        if (index > -1) {
+            this.workers.splice(index, 1);
+        }
+
         // Create replacement worker
         const worker = new Worker(this.workerPath);
         const newWorkerState: IWorkerState = {
             worker,
-            workerId: workerState.workerId,
+            workerId: oldWorkerState.workerId,
             isIdle: false,
             currentTaskId: null
         };
@@ -664,6 +778,12 @@ export class TaskQueue implements ITaskQueue {
     // Terminates all workers and should be called when the queue is no longer needed.
     //
     shutdown(): void {
+        // Clear all timeouts
+        for (const timeout of this.taskTimeouts.values()) {
+            clearTimeout(timeout);
+        }
+        this.taskTimeouts.clear();
+
         for (const workerState of this.workers) {
             try {
                 workerState.worker.terminate();
