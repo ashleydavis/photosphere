@@ -75,7 +75,7 @@ export interface IQueueStatus {
 //
 export interface IExecutionStats {
     tasksQueued: number;
-    maxWorkers: number;
+    peakWorkers: number;
     completed: number;
     failed: number;
 }
@@ -157,7 +157,8 @@ export interface ITaskQueue {
 interface IWorkerState {
     worker: Worker;
     workerId: number;
-    isIdle: boolean;
+    isReady: boolean; // Worker has sent "ready" message and can process tasks
+    isIdle: boolean; // Worker is ready and not currently processing a task
     currentTaskId: string | null;
 }
 
@@ -170,6 +171,7 @@ export class TaskQueue implements ITaskQueue {
     private pendingTasks: string[] = [];
     private workers: IWorkerState[] = [];
     private maxWorkers: number;
+    private peakWorkers: number = 0;
     private baseWorkingDirectory: string;
     private uuidGenerator: IUuidGenerator;
     private taskResolvers: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
@@ -195,8 +197,7 @@ export class TaskQueue implements ITaskQueue {
         } as IUuidGenerator;
         this.taskTimeout = taskTimeout;
 
-        // Create and start worker pool
-        this.startWorkers();
+        // Workers will be created lazily when tasks are added
     }
 
     //
@@ -404,46 +405,53 @@ export class TaskQueue implements ITaskQueue {
         const status = this.getStatus();
         return {
             tasksQueued: this.tasksQueued,
-            maxWorkers: this.maxWorkers,
+            peakWorkers: this.peakWorkers,
             completed: status.completed,
             failed: status.failed
         };
     }
 
     //
-    // Internal: Creates and starts all workers in the pool.
+    // Internal: Creates a single worker and adds it to the pool.
+    // Returns the worker state.
     //
-    private startWorkers(): void {
-        for (let i = 0; i < this.maxWorkers; i++) {
-            const worker = new Worker(this.workerPath);
-            const workerState: IWorkerState = {
-                worker,
-                workerId: i + 1,
-                isIdle: false, // Start as not ready, will be set to true when worker sends "ready" message
-                currentTaskId: null
-            };
+    private createWorker(): IWorkerState {
+        const worker = new Worker(this.workerPath);
+        const workerState: IWorkerState = {
+            worker,
+            workerId: this.workers.length + 1,
+            isReady: false, // Will be set to true when worker sends "ready" message
+            isIdle: false, // Will be set to true when worker is ready and idle
+            currentTaskId: null
+        };
 
-            worker.addEventListener("message", (event: MessageEvent) => {
-                this.handleWorkerMessage(workerState, event.data);
-            });
+        worker.addEventListener("message", (event: MessageEvent) => {
+            this.handleWorkerMessage(workerState, event.data);
+        });
 
-            worker.addEventListener("error", (error) => {
-                console.error(`[Worker ${workerState.workerId}] Error: ${error.message || "Unknown error"}`);
-                this.handleWorkerCrash(workerState);
-            });
+        worker.addEventListener("error", (error) => {
+            console.error(`[Worker ${workerState.workerId}] Error: ${error.message || "Unknown error"}`);
+            this.handleWorkerCrash(workerState);
+        });
 
-            worker.addEventListener("messageerror", (error) => {
-                console.error(`[Worker ${workerState.workerId}] Message error:`, error);
-                this.handleWorkerCrash(workerState);
-            });
+        worker.addEventListener("messageerror", (error) => {
+            console.error(`[Worker ${workerState.workerId}] Message error:`, error);
+            this.handleWorkerCrash(workerState);
+        });
 
-            this.workers.push(workerState);
+        this.workers.push(workerState);
+
+        // Update peak workers count
+        if (this.workers.length > this.peakWorkers) {
+            this.peakWorkers = this.workers.length;
         }
+        return workerState;
     }
 
     //
     // Internal: Processes the next pending task if a worker is available.
     // Called automatically when tasks are added or completed.
+    // Creates workers lazily if needed (up to maxWorkers limit).
     //
     private processNextTask(): void {
         if (this.pendingTasks.length === 0) {
@@ -452,9 +460,39 @@ export class TaskQueue implements ITaskQueue {
         }
 
         // Find an available idle worker
-        const availableWorker = this.workers.find(w => w.isIdle);
+        let availableWorker = this.workers.find(w => w.isIdle);
+        
+        // If no idle worker available and we haven't reached maxWorkers, create workers for pending tasks
+        if (!availableWorker && this.workers.length < this.maxWorkers) {
+            // Count workers that are not ready yet (will become available soon)
+            // These workers will be able to process tasks once they're ready, so we should account for them
+            let workersNotReadyYet = 0;
+            for (const worker of this.workers) {
+                if (!worker.isReady) {
+                    workersNotReadyYet++;
+                }
+            }
+            
+            // Calculate how many workers we need: pending tasks minus workers that will become available
+            const workersNeeded = this.pendingTasks.length - workersNotReadyYet; 
+            if (workersNeeded > 0) {
+                // Create workers for the tasks that need them, up to maxWorkers limit
+                const workersToCreate = Math.min(
+                    workersNeeded,
+                    this.maxWorkers - this.workers.length
+                );
+                
+                for (let i = 0; i < workersToCreate; i++) {
+                    this.createWorker();
+                }
+            }
+            
+            // Workers won't be idle until they send "ready" messages, so return for now
+            return;
+        }
+        
         if (!availableWorker) {
-            return; // All workers busy
+            return; // All workers busy or not ready yet
         }
 
         const taskId = this.pendingTasks.shift()!;
@@ -462,9 +500,6 @@ export class TaskQueue implements ITaskQueue {
         if (!task) {
             return;
         }
-
-        // Note: Handler registration is checked in the worker thread, not here.
-        // The worker will report if a handler is missing when it tries to execute the task.
 
         // Mark task as running and assign to worker
         task.status = TaskStatus.Running;
@@ -474,7 +509,7 @@ export class TaskQueue implements ITaskQueue {
 
         // Set up timeout for this task
         const timeoutId = setTimeout(() => {
-            this.handleTaskTimeout(taskId, availableWorker);
+            this.handleTaskTimeout(taskId, availableWorker!);
         }, this.taskTimeout);
         this.taskTimeouts.set(taskId, timeoutId);
 
@@ -507,6 +542,7 @@ export class TaskQueue implements ITaskQueue {
     private handleWorkerMessage(workerState: IWorkerState, data: any): void {
         // Handle worker ready message
         if (data && typeof data === "object" && "type" in data && data.type === "ready") {
+            workerState.isReady = true;
             workerState.isIdle = true;
             this.processNextTask(); // Try to process pending tasks now that worker is ready
             return;
@@ -708,6 +744,7 @@ export class TaskQueue implements ITaskQueue {
         const newWorkerState: IWorkerState = {
             worker,
             workerId: oldWorkerState.workerId,
+            isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false,
             currentTaskId: null
         };

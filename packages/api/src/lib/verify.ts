@@ -221,7 +221,7 @@ export async function verify(assetStorage: IStorage, metadataStorage: IStorage, 
         // Log debug information about task execution.
         //
         const stats = queue.getExecutionStats();
-        log.verbose(`Verification complete: ${stats.tasksQueued} tasks queued, ${stats.maxWorkers} workers, ${stats.completed} completed, ${stats.failed} failed`);
+        log.verbose(`Verification complete: ${stats.tasksQueued} tasks queued, ${stats.peakWorkers} workers allocated, ${stats.completed} completed, ${stats.failed} failed`);
 
         return result;
     } finally {
