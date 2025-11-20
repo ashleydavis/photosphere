@@ -218,6 +218,13 @@ export interface IBaseCommandOptions {
     // Supported by commands that use the task queue (e.g., verify).
     //
     workers?: number;
+
+    //
+    // Task timeout in milliseconds.
+    // Supported by commands that use the task queue (e.g., verify).
+    // Defaults to 10 minutes (600000ms).
+    //
+    timeout?: number;
 }
 
 //
@@ -267,9 +274,10 @@ export function initContext<TArgs extends any[], TReturn>(
             : new TimestampProvider();
         const sessionId = options.sessionId || uuidGenerator.generate();
         // TaskQueueProvider defaults to number of CPUs if not specified
-        // Check if command supports --workers option and use it if provided
+        // Check if command supports --workers and --timeout options and use them if provided
         const workers = options.workers;
-        const taskQueueProvider = new TaskQueueProvider(workers);
+        const timeout = options.timeout;
+        const taskQueueProvider = new TaskQueueProvider(workers, timeout);
         
         const context: ICommandContext = {
             uuidGenerator,

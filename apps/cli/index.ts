@@ -380,6 +380,7 @@ Resources:
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
         .option("--workers <number>", "Number of worker threads to use for parallel verification (default: number of CPU cores)")
+        .option("--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)")
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(initContext(verifyCommand));
