@@ -334,7 +334,7 @@ export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset
 //
 export async function getDatabaseHashes(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseHashes> {
     // Get root hashes from both merkle trees
-    const filesRootHash = await retry(() => getFilesRootHash(assetStorage));
+    const filesRootHash = await retry(() => getFilesRootHash(metadataStorage));
     const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, "metadata")));
     
     // Compute aggregate root hash
@@ -361,7 +361,7 @@ export async function getDatabaseHashes(assetStorage: IStorage, metadataStorage:
 // Gets a summary of the entire database.
 //
 export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage)); //todo: The merkle tree gets loaded twice in this function!
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree.`);
     }

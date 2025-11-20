@@ -96,7 +96,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
         : undefined;
 
-    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage); //todo: This is rather expensive when loading from S3.
     const result: IVerifyResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -180,7 +180,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
             }
         });
 
-        const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+        const merkleTree = await retry(() => loadMerkleTree(metadataStorage)); //todo: This loads the merkle tree a second time.
         if (!merkleTree) {
             throw new Error(`Failed to load merkle tree`);
         }
