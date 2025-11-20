@@ -303,6 +303,7 @@ export interface IInitResult {
     // Individual database dependencies
     //
     assetStorage: IStorage;
+    metadataStorage: IStorage; // Unencrypted storage for metadata (under .db directory)
     bsonDatabase: BsonDatabase;
     sessionId: string;
     metadataCollection: IBsonCollection<IAsset>;
@@ -349,12 +350,15 @@ export async function loadDatabase(
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
 
     const s3Config = await getS3Config();
-    let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+    let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
+    
+    // Create unencrypted storage for metadata (metadata was never encrypted)
+    const { storage: metadataStorage } = createStorage(dbDir, s3Config, undefined);
 
     //
     // Check that tree.dat exists.
     //
-    if (!await assetStorage.fileExists(".db/tree.dat")) {
+    if (!await metadataStorage.fileExists(".db/tree.dat")) {
         outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
     }
@@ -365,7 +369,7 @@ export async function loadDatabase(
         // quickly load the version from the database and reject if the database is old.
         //
         
-        let databaseVersion = await loadTreeVersion(".db/tree.dat", assetStorage);        
+        let databaseVersion = await loadTreeVersion(".db/tree.dat", metadataStorage);        
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
@@ -375,7 +379,7 @@ export async function loadDatabase(
     //
     // See if the database is encrypted and requires a key.
     //
-    if (await assetStorage.fileExists('.db/encryption.pub')) {
+    if (await metadataStorage.fileExists('.db/encryption.pub')) {
         if (!resolvedKeyPath) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
@@ -401,6 +405,7 @@ export async function loadDatabase(
     }
 
     // Create database instance.
+    // Pass assetStorage - the function will wrap it for BSON metadata operations
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Load the database
@@ -409,7 +414,8 @@ export async function loadDatabase(
     return {
         databaseDir: dbDir,
         metaPath,
-        assetStorage: database.assetStorage,
+        assetStorage: assetStorage,
+        metadataStorage: metadataStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
@@ -471,6 +477,9 @@ export async function createDatabase(
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
+    
+    // Create unencrypted storage for metadata (metadata was never encrypted)
+    const { storage: metadataStorage } = createStorage(dbDir, s3Config, undefined);
 
     // Check the requested directory is empty or non-existent using the storage interface. 
     if (!await assetStorage.isEmpty("/")) {
@@ -478,16 +487,17 @@ export async function createDatabase(
         await exit(1);
     }
 
-    if (!await assetStorage.isEmpty(".db")) {
+    if (!await metadataStorage.isEmpty(".db")) {
         outro(pc.red(`✗ The metadata directory ${pc.cyan(metaPath)} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.`));
         await exit(1);
     }
 
     // Create database instance
+    // Pass assetStorage - the function will wrap it for BSON metadata operations
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider); 
 
     // Create the database (instead of loading)
-    await createMediaDatabase(database.assetStorage, uuidGenerator, database.metadataCollection);
+    await createMediaDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection);
 
     // If database is encrypted, copy the public key to the .db directory as a marker
     if (isEncrypted && resolvedKeyPath) {
@@ -507,7 +517,8 @@ export async function createDatabase(
     return {
         databaseDir: dbDir,
         metaPath,
-        assetStorage: database.assetStorage,
+        assetStorage: assetStorage,
+        metadataStorage: metadataStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,

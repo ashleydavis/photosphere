@@ -90,13 +90,13 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(assetStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback, storageDescriptor?: IStorageDescriptor) : Promise<IVerifyResult> {
+export async function verify(assetStorage: IStorage, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback, storageDescriptor?: IStorageDescriptor) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
         : undefined;
 
-    const summary = await getDatabaseSummary(assetStorage);
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     const result: IVerifyResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -180,7 +180,7 @@ export async function verify(assetStorage: IStorage, taskQueueProvider: ITaskQue
         }
     });
 
-    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }

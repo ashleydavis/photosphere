@@ -286,6 +286,7 @@ export function createMediaFileDatabase(
 //
 export async function createDatabase(
     assetStorage: IStorage,
+    metadataStorage: IStorage,
     uuidGenerator: IUuidGenerator,
     metadataCollection: IBsonCollection<IAsset>,
     databaseId?: string
@@ -302,7 +303,7 @@ export async function createDatabase(
 
     merkleTree = await createReadme(assetStorage, merkleTree);
 
-    await retry(() => saveMerkleTree(merkleTree, assetStorage));
+    await retry(() => saveMerkleTree(merkleTree, metadataStorage));
 
     log.verbose(`Created new media file database.`);
 }
@@ -331,7 +332,7 @@ export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset
 //
 // Gets the database hashes (files hash, database hash, and aggregate hash).
 //
-export async function getDatabaseHashes(assetStorage: IStorage): Promise<IDatabaseHashes> {
+export async function getDatabaseHashes(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseHashes> {
     // Get root hashes from both merkle trees
     const filesRootHash = await retry(() => getFilesRootHash(assetStorage));
     const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, "metadata")));
@@ -359,15 +360,15 @@ export async function getDatabaseHashes(assetStorage: IStorage): Promise<IDataba
 //
 // Gets a summary of the entire database.
 //
-export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatabaseSummary> {
-    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
+export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree.`);
     }
     const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
     
-    // Get database hashes
-    const hashes = await getDatabaseHashes(assetStorage);
+    // Get database hashes - need assetStorage for files hash, metadataStorage for database hash
+    const hashes = await getDatabaseHashes(assetStorage, metadataStorage);
     
     return {
         totalImports: filesImported,
@@ -454,6 +455,7 @@ async function computeCachedHash(
 //
 async function importFile(
     assetStorage: IStorage,
+    metadataStorage: IStorage,
     googleApiKey: string | undefined,
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
@@ -510,7 +512,7 @@ async function importFile(
         const thumbPath = `thumb/${assetId}`;
         const displayPath = `display/${assetId}`;
 
-        if (!await acquireWriteLock(assetStorage, sessionId)) {
+        if (!await acquireWriteLock(metadataStorage, sessionId)) {
             throw new Error(`Failed to acquire write lock.`);
         }
 
@@ -519,7 +521,7 @@ async function importFile(
         }
 
         try {
-            let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+            let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
             if (!merkleTree) {
                 throw new Error(`Failed to load media file database.`);
             }
@@ -536,7 +538,7 @@ async function importFile(
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
 
-            await refreshWriteLock(assetStorage, sessionId);
+            await refreshWriteLock(metadataStorage, sessionId);
 
             merkleTree = addItem(merkleTree, {
                 name: assetPath,
@@ -554,7 +556,7 @@ async function importFile(
                 }
                 const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
 
-                await refreshWriteLock(assetStorage, sessionId);
+                await refreshWriteLock(metadataStorage, sessionId);
 
                 merkleTree = addItem(merkleTree, {
                     name: thumbPath,
@@ -573,7 +575,7 @@ async function importFile(
                 }
                 const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
 
-                await refreshWriteLock(assetStorage, sessionId);
+                await refreshWriteLock(metadataStorage, sessionId);
 
                 merkleTree = addItem(merkleTree, {
                     name: displayPath,
@@ -620,7 +622,7 @@ async function importFile(
                 ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
                 : undefined;
 
-            await refreshWriteLock(assetStorage, sessionId);
+            await refreshWriteLock(metadataStorage, sessionId);
 
             await metadataCollection.insertOne({
                 _id: assetId,
@@ -645,7 +647,7 @@ async function importFile(
 
             log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
 
-            await refreshWriteLock(assetStorage, sessionId);
+            await refreshWriteLock(metadataStorage, sessionId);
 
             if (!merkleTree.databaseMetadata) {
                 merkleTree.databaseMetadata = { filesImported: 0 };
@@ -658,7 +660,7 @@ async function importFile(
                 progressCallback(localFileScanner.getCurrentlyScanning());
             }
 
-            await retry(() => saveMerkleTree(merkleTree, assetStorage)); 
+            await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
         }
         catch (err: any) {
             log.exception(`Failed to upload asset data for file "${filePath}"`, err);
@@ -671,7 +673,7 @@ async function importFile(
             }
         }
         finally {
-            await releaseWriteLock(assetStorage);
+            await releaseWriteLock(metadataStorage);
         }
     }
     finally {            
@@ -735,6 +737,7 @@ async function checkFile(
 //
 export async function addPaths(
     assetStorage: IStorage,
+    metadataStorage: IStorage,
     googleApiKey: string | undefined,
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
@@ -758,6 +761,7 @@ export async function addPaths(
     await localFileScanner.scanPaths(paths, async (result) => {
         updatedSummary = await importFile(
             assetStorage,
+            metadataStorage,
             googleApiKey,
             uuidGenerator,
             timestampProvider,
@@ -846,6 +850,7 @@ export function streamAsset(assetStorage: IStorage, assetId: string, assetType: 
 //
 export async function writeAsset(
     assetStorage: IStorage,
+    metadataStorage: IStorage,
     sessionId: string,
     assetId: string,
     assetType: string,
@@ -854,12 +859,12 @@ export async function writeAsset(
 ): Promise<void> {
     const assetPath = `${assetType}/${assetId}`;
 
-    if (!await acquireWriteLock(assetStorage, sessionId)) {
+    if (!await acquireWriteLock(metadataStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
     try {
-        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+        let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load media file database.`);
         }
@@ -873,7 +878,7 @@ export async function writeAsset(
 
         const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => assetStorage.readStream(assetPath)));
 
-        await refreshWriteLock(assetStorage, sessionId);
+        await refreshWriteLock(metadataStorage, sessionId);
 
         merkleTree = addItem(merkleTree, {
             name: assetPath,
@@ -889,7 +894,7 @@ export async function writeAsset(
             merkleTree.databaseMetadata.filesImported++;
         }
 
-        await retry(() => saveMerkleTree(merkleTree, assetStorage));
+        await retry(() => saveMerkleTree(merkleTree, metadataStorage));
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -897,7 +902,7 @@ export async function writeAsset(
         throw err;
     }
     finally {
-        await releaseWriteLock(assetStorage);
+        await releaseWriteLock(metadataStorage);
     }
 }
 
@@ -907,16 +912,17 @@ export async function writeAsset(
 //
 export async function removeAsset(
     assetStorage: IStorage,
+    metadataStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     assetId: string
 ): Promise<void> {
-    if (!await acquireWriteLock(assetStorage, sessionId)) {
+    if (!await acquireWriteLock(metadataStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
     try {
-        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+        let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load media file database.`);
         }
@@ -946,10 +952,10 @@ export async function removeAsset(
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
 
-        await retry(() => saveMerkleTree(merkleTree, assetStorage)); 
+        await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
     }
     finally {
-        await releaseWriteLock(assetStorage);
+        await releaseWriteLock(metadataStorage);
     }    
 }
 
