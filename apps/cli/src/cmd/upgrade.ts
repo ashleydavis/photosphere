@@ -48,10 +48,10 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     
     // Provide platform-specific backup commands
     if (process.platform === 'win32') {
-        log.warn(pc.yellow(`   xcopy "${databaseDir}" "${databaseDir}-backup" /E /I`));
+        log.warn(pc.yellow(`    xcopy "${databaseDir}" "${databaseDir}-backup" /E /I`));
     } 
     else {
-        log.warn(pc.yellow(`   cp -r "${databaseDir}" "${databaseDir}-backup"`));
+        log.warn(pc.yellow(`    cp -r "${databaseDir}" "${databaseDir}-backup"`));
     }
     console.log("");
     
