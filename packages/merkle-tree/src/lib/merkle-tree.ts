@@ -877,11 +877,6 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
     // Write nodeCount
     serializer.writeUInt32(node.nodeCount);
     
-    // Write tree size
-    const splitSize = splitBigNum(BigInt(node.size));
-    serializer.writeUInt32(splitSize.low);
-    serializer.writeUInt32(splitSize.high);
-    
     // Write minName index (all nodes have minName)
     if (!node.minName) {
         throw new Error(`Node has no minName. This could be a bug.`);
@@ -901,6 +896,11 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
         if (!node.contentHash) {
             throw new Error(`Leaf node has no content hash. This could be a bug.`);
         }
+
+        // Write size (only for leaf nodes)
+        const splitSize = splitBigNum(BigInt(node.size));
+        serializer.writeUInt32(splitSize.low);
+        serializer.writeUInt32(splitSize.high);
 
         // Write name index
         const nameIndex = stringTable.get(node.name);
@@ -988,13 +988,14 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
  * Sort tree (pre-order traversal):
  * - For each sort node (root's nodeCount of 0 means no tree):
  *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 if no tree)
- *   - 4 bytes: leafCount (uint32) - only if nodeCount > 0
- *   - 8 bytes: size (uint64 split into low/high uint32s) - only if nodeCount > 0
  *   - 4 bytes: minName index (uint32) - index into string table
  *   - If leaf node (nodeCount == 1):
+ *     - 8 bytes: size (uint64 split into low/high uint32s)
  *     - 4 bytes: name index (uint32) - index into string table
  *     - 32 bytes: content hash (SHA-256)
  *     - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
+ *   - If internal node (nodeCount > 1):
+ *     - Recursively serialize children (size is recalculated during deserialization)
  * 
  * Merkle tree:
  * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
@@ -1237,10 +1238,6 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         return undefined;
     }
     
-    const sizeLow = deserializer.readUInt32();
-    const sizeHigh = deserializer.readUInt32();
-    const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
-    
     // Read minName index (all nodes have minName in version 5)
     const minNameIndex = deserializer.readUInt32();
     if (minNameIndex >= stringTable.length) {
@@ -1250,6 +1247,11 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
     
     if (nodeCount === 1) {
         // This is a leaf node
+        // Read size (only serialized for leaf nodes)
+        const sizeLow = deserializer.readUInt32();
+        const sizeHigh = deserializer.readUInt32();
+        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
+        
         // Read name index
         const nameIndex = deserializer.readUInt32();
         if (nameIndex >= stringTable.length) {
@@ -1275,7 +1277,11 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
     } else {
         // This is an internal node - recursively read children
         const left = deserializeSortNodeV5(deserializer, stringTable);
-        const right = deserializeSortNodeV5(deserializer, stringTable);        
+        const right = deserializeSortNodeV5(deserializer, stringTable);
+        
+        // Recalculate size from children (size is not serialized for internal nodes)
+        const size = (left?.size || 0) + (right?.size || 0);
+        
         return {
             nodeCount,
             size,
