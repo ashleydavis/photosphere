@@ -882,20 +882,6 @@ function serializeSortTreeV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
 }
 
 //
-// Serializes the sort tree metadata and nodes (version 4 and earlier).
-//
-function serializeSortTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
-    if (!tree.sort) {
-        // Write 0 to indicate no tree
-        serializer.writeUInt32(0);
-        return;
-    }
-
-    // Recursively serialize the sort tree (root's nodeCount serves as the "tree exists" indicator)
-    serializeSortNode(tree.sort, serializer);
-}
-
-//
 // Recursively serializes a single sort tree node and its children (version 5 with string table).
 //
 function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTable: Map<string, number>): void {
@@ -953,59 +939,6 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
         }
         if (node.right) {
             serializeSortNodeV5(node.right, serializer, stringTable);
-        }
-    }
-}
-
-//
-// Recursively serializes a single sort tree node and its children (version 4 and earlier).
-//
-function serializeSortNode(node: SortNode, serializer: ISerializer): void {
-    // Write nodeCount
-    serializer.writeUInt32(node.nodeCount);
-    
-    // Write leafCount
-    serializer.writeUInt32(node.leafCount);
-
-    // Write tree size
-    const splitSize = splitBigNum(BigInt(node.size));
-    serializer.writeUInt32(splitSize.low);
-    serializer.writeUInt32(splitSize.high);
-    
-    if (node.nodeCount === 1) {
-        // Leaf node
-        if (!node.name) {
-            throw new Error(`Leaf node has no name. This could be a bug.`);
-        }
-
-        if (!node.contentHash) {
-            throw new Error(`Leaf node has no content hash. This could be a bug.`);
-        }
-
-        const nameLength = Buffer.byteLength(node.name, 'utf8');
-        serializer.writeUInt32(nameLength);
-
-        // Create a buffer with exact length and write string into it
-        const nameBuffer = Buffer.alloc(nameLength);
-        nameBuffer.write(node.name, 0, 'utf8');
-        serializer.writeBytes(nameBuffer); //todo: Be good to use write string.
-
-        // Write content hash
-        serializer.writeBytes(node.contentHash);
-        
-        // Write item metadata for leaf nodes in version 3+
-        // Write lastModified timestamp (8 bytes)
-        const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
-        const splitLastModified = splitBigNum(BigInt(lastModified));
-        serializer.writeUInt32(splitLastModified.low);
-        serializer.writeUInt32(splitLastModified.high);
-    } else {
-        // Internal node - recursively serialize children
-        if (node.left) {
-            serializeSortNode(node.left, serializer);
-        }
-        if (node.right) {
-            serializeSortNode(node.right, serializer);
         }
     }
 }
