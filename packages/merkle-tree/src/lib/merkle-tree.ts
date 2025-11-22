@@ -887,11 +887,6 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
             throw new Error(`Leaf node has no content hash. This could be a bug.`);
         }
 
-        // Write size (only for leaf nodes)
-        const splitSize = splitBigNum(BigInt(node.size));
-        serializer.writeUInt32(splitSize.low);
-        serializer.writeUInt32(splitSize.high);
-
         // Write name index
         const nameIndex = stringTable.get(node.name);
         if (nameIndex === undefined) {
@@ -902,6 +897,11 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
         // Write content hash
         serializer.writeBytes(node.contentHash);
         
+        // Write size (only for leaf nodes)
+        const splitSize = splitBigNum(BigInt(node.size));
+        serializer.writeUInt32(splitSize.low);
+        serializer.writeUInt32(splitSize.high);
+
         // Write item metadata for leaf nodes in version 3+
         // Write lastModified timestamp (8 bytes)
         const lastModified = node.lastModified ? node.lastModified.getTime() : 0;
@@ -1228,10 +1228,6 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
     
     if (nodeCount === 1) {
         // This is a leaf node
-        // Read size (only serialized for leaf nodes)
-        const sizeLow = deserializer.readUInt32();
-        const sizeHigh = deserializer.readUInt32();
-        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
         
         // Read name index
         const nameIndex = deserializer.readUInt32();
@@ -1242,6 +1238,11 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         
         const contentHash = deserializer.readBytes(32);
         
+        // Read size (only serialized for leaf nodes)
+        const sizeLow = deserializer.readUInt32();
+        const sizeHigh = deserializer.readUInt32();
+        const size = Number(combineBigNum({ low: sizeLow, high: sizeHigh }));
+
         const lastModifiedLow = deserializer.readUInt32();
         const lastModifiedHigh = deserializer.readUInt32();
         const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
