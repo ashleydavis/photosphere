@@ -877,16 +877,6 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
     // Write nodeCount
     serializer.writeUInt32(node.nodeCount);
     
-    // Write minName index (all nodes have minName)
-    if (!node.minName) {
-        throw new Error(`Node has no minName. This could be a bug.`);
-    }
-    const minNameIndex = stringTable.get(node.minName);
-    if (minNameIndex === undefined) {
-        throw new Error(`minName "${node.minName}" not found in string table. This could be a bug.`);
-    }
-    serializer.writeUInt32(minNameIndex);
-    
     if (node.nodeCount === 1) {
         // Leaf node
         if (!node.name) {
@@ -942,9 +932,6 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
         if (node.name) {
             strings.add(node.name);
         }
-        if (node.minName) {
-            strings.add(node.minName);
-        }
         
         collectFromSortNode(node.left);
         collectFromSortNode(node.right);
@@ -988,14 +975,15 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
  * Sort tree (pre-order traversal):
  * - For each sort node (root's nodeCount of 0 means no tree):
  *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 if no tree)
- *   - 4 bytes: minName index (uint32) - index into string table
  *   - If leaf node (nodeCount == 1):
  *     - 8 bytes: size (uint64 split into low/high uint32s)
  *     - 4 bytes: name index (uint32) - index into string table
  *     - 32 bytes: content hash (SHA-256)
  *     - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
  *   - If internal node (nodeCount > 1):
- *     - Recursively serialize children (size is recalculated during deserialization)
+ *     - Recursively serialize children
+ *   - Note: minName and size for internal nodes are recalculated during deserialization
+ *     (minName = name for leaf nodes, minName = left.minName for internal nodes)
  * 
  * Merkle tree:
  * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
@@ -1238,13 +1226,6 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         return undefined;
     }
     
-    // Read minName index (all nodes have minName in version 5)
-    const minNameIndex = deserializer.readUInt32();
-    if (minNameIndex >= stringTable.length) {
-        throw new Error(`minName index ${minNameIndex} is out of bounds for string table of size ${stringTable.length}`);
-    }
-    const minName = stringTable[minNameIndex];
-    
     if (nodeCount === 1) {
         // This is a leaf node
         // Read size (only serialized for leaf nodes)
@@ -1266,13 +1247,14 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         const lastModifiedTimestamp = Number(combineBigNum({ low: lastModifiedLow, high: lastModifiedHigh }));
         const lastModified = lastModifiedTimestamp > 0 ? new Date(lastModifiedTimestamp) : undefined;
         
+        // For leaf nodes, minName equals name
         return {
             contentHash,
             name,
             nodeCount,
             size,
             lastModified,
-            minName,
+            minName: name,
         };
     } else {
         // This is an internal node - recursively read children
@@ -1285,7 +1267,7 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         return {
             nodeCount,
             size,
-            minName,
+            minName: left!.minName,
             left,
             right,
         };
