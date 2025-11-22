@@ -3,6 +3,8 @@ import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { save, load, ISerializer, IDeserializer } from 'serialization';
 import { traverseTreeSync } from './traverse';
+import { BufferSet } from './buffer-set';
+import { BufferMap } from './buffer-map';
 
 //
 // Current database version
@@ -767,15 +769,19 @@ function combineBigNum(input: { low: number, high: number }): bigint {
 //
 // Recursively serializes a single merkle tree node and its children (version 5 with string table).
 //
-function serializeMerkleNodeV5(node: MerkleNode, serializer: ISerializer, stringTable: Map<string, number>): void {
+function serializeMerkleNodeV5(node: MerkleNode, serializer: ISerializer, stringTable: Map<string, number>, hashTable: BufferMap<number>): void {
     // Write nodeCount
     serializer.writeUInt32(node.nodeCount);
     
-    // Write the hash (32 bytes)
+    // Write the hash index (instead of the hash bytes)
     if (node.hash.length !== 32) {
         throw new Error(`Invalid hash length: ${node.hash.length}, expected 32 bytes`);
     }
-    serializer.writeBytes(node.hash);
+    const hashIndex = hashTable.get(node.hash);
+    if (hashIndex === undefined) {
+        throw new Error(`Hash not found in hash table. This could be a bug.`);
+    }
+    serializer.writeUInt32(hashIndex);
     
     // For leaf nodes, write the name index
     if (node.nodeCount === 1) {
@@ -791,10 +797,10 @@ function serializeMerkleNodeV5(node: MerkleNode, serializer: ISerializer, string
     
     // Recursively write children if this is not a leaf
     if (node.left) {
-        serializeMerkleNodeV5(node.left, serializer, stringTable);
+        serializeMerkleNodeV5(node.left, serializer, stringTable, hashTable);
     }
     if (node.right) {
-        serializeMerkleNodeV5(node.right, serializer, stringTable);
+        serializeMerkleNodeV5(node.right, serializer, stringTable, hashTable);
     }
 }
 
@@ -831,7 +837,7 @@ function serializeMerkleNode(node: MerkleNode, serializer: ISerializer): void {
 //
 // Serializes the merkle tree nodes (version 5 with string table).
 //
-function serializeMerkleV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer, stringTable: Map<string, number>): void {
+function serializeMerkleV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer, stringTable: Map<string, number>, hashTable: BufferMap<number>): void {
     if (!tree.merkle) {
         // Write 0 to indicate no merkle tree
         serializer.writeUInt32(0);
@@ -839,7 +845,7 @@ function serializeMerkleV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>
     }
 
     // Recursively serialize the merkle tree (root nodeCount will indicate total nodes)
-    serializeMerkleNodeV5(tree.merkle, serializer, stringTable);
+    serializeMerkleNodeV5(tree.merkle, serializer, stringTable, hashTable);
 }
 
 //
@@ -859,7 +865,7 @@ function serializeMerkle<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, 
 //
 // Serializes the sort tree metadata and nodes (version 5 with string table).
 //
-function serializeSortTreeV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer, stringTable: Map<string, number>): void {
+function serializeSortTreeV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer, stringTable: Map<string, number>, hashTable: BufferMap<number>): void {
     if (!tree.sort) {
         // Write 0 to indicate no tree
         serializer.writeUInt32(0);
@@ -867,13 +873,13 @@ function serializeSortTreeV5<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     }
 
     // Recursively serialize the sort tree (root's nodeCount serves as the "tree exists" indicator)
-    serializeSortNodeV5(tree.sort, serializer, stringTable);
+    serializeSortNodeV5(tree.sort, serializer, stringTable, hashTable);
 }
 
 //
 // Recursively serializes a single sort tree node and its children (version 5 with string table).
 //
-function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTable: Map<string, number>): void {
+function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTable: Map<string, number>, hashTable: BufferMap<number>): void {
     // Write nodeCount
     serializer.writeUInt32(node.nodeCount);
     
@@ -894,8 +900,15 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
         }
         serializer.writeUInt32(nameIndex);
 
-        // Write content hash
-        serializer.writeBytes(node.contentHash);
+        // Write content hash index (instead of the hash bytes)
+        if (!node.contentHash) {
+            throw new Error(`Leaf node has no content hash. This could be a bug.`);
+        }
+        const contentHashIndex = hashTable.get(node.contentHash);
+        if (contentHashIndex === undefined) {
+            throw new Error(`Content hash not found in hash table. This could be a bug.`);
+        }
+        serializer.writeUInt32(contentHashIndex);
         
         // Write size (only for leaf nodes)
         const splitSize = splitBigNum(BigInt(node.size));
@@ -911,10 +924,10 @@ function serializeSortNodeV5(node: SortNode, serializer: ISerializer, stringTabl
     } else {
         // Internal node - recursively serialize children
         if (node.left) {
-            serializeSortNodeV5(node.left, serializer, stringTable);
+            serializeSortNodeV5(node.left, serializer, stringTable, hashTable);
         }
         if (node.right) {
-            serializeSortNodeV5(node.right, serializer, stringTable);
+            serializeSortNodeV5(node.right, serializer, stringTable, hashTable);
         }
     }
 }
@@ -955,6 +968,42 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
     return strings;
 }
 
+//
+// Collects all unique hashes from the tree for the hash table.
+// Returns an array of unique Buffers (hashes are 32 bytes).
+//
+function collectHashes<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): Buffer[] {
+    const hashSet = new BufferSet();
+    
+    // Collect from sort tree (contentHash for leaf nodes)
+    function collectFromSortNode(node: SortNode | undefined): void {
+        if (!node) return;
+        
+        if (node.contentHash) {
+            hashSet.add(node.contentHash);
+        }
+        
+        collectFromSortNode(node.left);
+        collectFromSortNode(node.right);
+    }
+    
+    // Collect from merkle tree (hash for all nodes)
+    function collectFromMerkleNode(node: MerkleNode | undefined): void {
+        if (!node) return;
+        
+        hashSet.add(node.hash);
+        
+        collectFromMerkleNode(node.left);
+        collectFromMerkleNode(node.right);
+    }
+    
+    collectFromSortNode(tree.sort);
+    collectFromMerkleNode(tree.merkle);
+    
+    // Convert BufferSet to array
+    return Array.from(hashSet.values());
+}
+
 /**
  * Serializes a merkle tree to storage.
  * 
@@ -972,13 +1021,18 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
  *   - 4 bytes: string length (uint32)
  *   - X bytes: string (UTF-8)
  * 
+ * Hash table:
+ * - 4 bytes: hash table size (number of hashes, uint32)
+ * - For each hash:
+ *   - 32 bytes: hash (SHA-256)
+ * 
  * Sort tree (pre-order traversal):
  * - For each sort node (root's nodeCount of 0 means no tree):
  *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 if no tree)
  *   - If leaf node (nodeCount == 1):
- *     - 8 bytes: size (uint64 split into low/high uint32s)
  *     - 4 bytes: name index (uint32) - index into string table
- *     - 32 bytes: content hash (SHA-256)
+ *     - 4 bytes: content hash index (uint32) - index into hash table
+ *     - 8 bytes: size (uint64 split into low/high uint32s)
  *     - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
  *   - If internal node (nodeCount > 1):
  *     - Recursively serialize children
@@ -988,7 +1042,7 @@ function collectStrings<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): 
  * Merkle tree:
  * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
  *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 for no tree)
- *   - 32 bytes: hash (SHA-256) - only if nodeCount > 0
+ *   - 4 bytes: hash index (uint32) - index into hash table - only if nodeCount > 0
  *   - If leaf node (nodeCount == 1):
  *     - 4 bytes: name index (uint32) - index into string table
  */
@@ -1011,17 +1065,33 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
         stringTable.set(str, index);
     });
     
+    // Collect all unique hashes and build hash table
+    const uniqueHashes = collectHashes(tree);
+    const hashTable = new BufferMap<number>();
+    uniqueHashes.forEach((hash, index) => {
+        hashTable.set(hash, index);
+    });
+    
     // Write string table
     serializer.writeUInt32(stringArray.length);
     for (const str of stringArray) {
         serializer.writeString(str);
     }
     
-    // Write sort tree metadata and nodes (using string indices)
-    serializeSortTreeV5(tree, serializer, stringTable);
+    // Write hash table
+    serializer.writeUInt32(uniqueHashes.length);
+    for (const hash of uniqueHashes) {
+        if (hash.length !== 32) {
+            throw new Error(`Invalid hash length: ${hash.length}, expected 32 bytes`);
+        }
+        serializer.writeBytes(hash);
+    }
     
-    // Write merkle tree nodes (using string indices)
-    serializeMerkleV5(tree, serializer, stringTable);
+    // Write sort tree metadata and nodes (using string and hash indices)
+    serializeSortTreeV5(tree, serializer, stringTable, hashTable);
+    
+    // Write merkle tree nodes (using string and hash indices)
+    serializeMerkleV5(tree, serializer, stringTable, hashTable);
 }
 
 //
@@ -1088,14 +1158,18 @@ export function rebuildTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata
 }
 
 //
-// Recursively deserializes a single merkle tree node and its children (version 5 with string table).
+// Recursively deserializes a single merkle tree node and its children (version 5 with string and hash tables).
 //
-function deserializeMerkleNodeV5(deserializer: IDeserializer, stringTable: string[]): MerkleNode {
+function deserializeMerkleNodeV5(deserializer: IDeserializer, stringTable: string[], hashTable: Buffer[]): MerkleNode {
     // Read nodeCount
     const nodeCount = deserializer.readUInt32();
     
-    // Read this node's hash
-    const hash = deserializer.readBytes(32);
+    // Read this node's hash index
+    const hashIndex = deserializer.readUInt32();
+    if (hashIndex >= hashTable.length) {
+        throw new Error(`Hash index ${hashIndex} is out of bounds for hash table of size ${hashTable.length}`);
+    }
+    const hash = hashTable[hashIndex];
     
     if (nodeCount === 1) {
         // Leaf node - read name index
@@ -1107,8 +1181,8 @@ function deserializeMerkleNodeV5(deserializer: IDeserializer, stringTable: strin
         return { hash, nodeCount, name };
     } else {
         // Internal node - recursively deserialize children
-        const left = deserializeMerkleNodeV5(deserializer, stringTable);
-        const right = deserializeMerkleNodeV5(deserializer, stringTable);
+        const left = deserializeMerkleNodeV5(deserializer, stringTable, hashTable);
+        const right = deserializeMerkleNodeV5(deserializer, stringTable, hashTable);
         
         return {
             hash,
@@ -1148,9 +1222,9 @@ function deserializeMerkleNode(deserializer: IDeserializer): MerkleNode {
 }
 
 //
-// Deserializes the merkle tree nodes (version 5 with string table).
+// Deserializes the merkle tree nodes (version 5 with string and hash tables).
 //
-function deserializeMerkleV5(deserializer: IDeserializer, stringTable: string[]): MerkleNode | undefined {
+function deserializeMerkleV5(deserializer: IDeserializer, stringTable: string[], hashTable: Buffer[]): MerkleNode | undefined {
     // Read the root node's nodeCount (0 means no merkle tree)
     const nodeCount = deserializer.readUInt32();    
     if (nodeCount === 0) {
@@ -1158,8 +1232,12 @@ function deserializeMerkleV5(deserializer: IDeserializer, stringTable: string[])
         return undefined;
     }
     
-    // Read the root node's hash
-    const hash = deserializer.readBytes(32);
+    // Read the root node's hash index
+    const hashIndex = deserializer.readUInt32();
+    if (hashIndex >= hashTable.length) {
+        throw new Error(`Hash index ${hashIndex} is out of bounds for hash table of size ${hashTable.length}`);
+    }
+    const hash = hashTable[hashIndex];
     
     if (nodeCount === 1) {
         // Root is a leaf node - read name index
@@ -1171,8 +1249,8 @@ function deserializeMerkleV5(deserializer: IDeserializer, stringTable: string[])
         return { hash, nodeCount, name };
     } else {
         // Root is an internal node - recursively deserialize children
-        const left = deserializeMerkleNodeV5(deserializer, stringTable);
-        const right = deserializeMerkleNodeV5(deserializer, stringTable);
+        const left = deserializeMerkleNodeV5(deserializer, stringTable, hashTable);
+        const right = deserializeMerkleNodeV5(deserializer, stringTable, hashTable);
         
         return {
             hash,
@@ -1216,9 +1294,9 @@ function deserializeMerkle(deserializer: IDeserializer): MerkleNode | undefined 
 }
 
 //
-// Recursively deserializes a single sort tree node and its children (version 5 with string table).
+// Recursively deserializes a single sort tree node and its children (version 5 with string and hash tables).
 //
-function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[]): SortNode | undefined {
+function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[], hashTable: Buffer[]): SortNode | undefined {
     // Read node metadata
     const nodeCount = deserializer.readUInt32();    
     if (nodeCount === 0) {
@@ -1236,7 +1314,12 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         }
         const name = stringTable[nameIndex];
         
-        const contentHash = deserializer.readBytes(32);
+        // Read content hash index
+        const contentHashIndex = deserializer.readUInt32();
+        if (contentHashIndex >= hashTable.length) {
+            throw new Error(`Content hash index ${contentHashIndex} is out of bounds for hash table of size ${hashTable.length}`);
+        }
+        const contentHash = hashTable[contentHashIndex];
         
         // Read size (only serialized for leaf nodes)
         const sizeLow = deserializer.readUInt32();
@@ -1259,8 +1342,8 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         };
     } else {
         // This is an internal node - recursively read children
-        const left = deserializeSortNodeV5(deserializer, stringTable);
-        const right = deserializeSortNodeV5(deserializer, stringTable);
+        const left = deserializeSortNodeV5(deserializer, stringTable, hashTable);
+        const right = deserializeSortNodeV5(deserializer, stringTable, hashTable);
         
         // Recalculate size from children (size is not serialized for internal nodes)
         const size = (left?.size || 0) + (right?.size || 0);
@@ -1329,9 +1412,9 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
 //
 // Deserializes the sort tree metadata and nodes (version 5 with string table).
 //
-function deserializeSortTreeV5(deserializer: IDeserializer, stringTable: string[]): SortNode | undefined {
+function deserializeSortTreeV5(deserializer: IDeserializer, stringTable: string[], hashTable: Buffer[]): SortNode | undefined {
     // Deserialize the root node (may return undefined if nodeCount is 0)
-    return deserializeSortNodeV5(deserializer, stringTable);
+    return deserializeSortNodeV5(deserializer, stringTable, hashTable);
 }
 
 //
@@ -1361,11 +1444,19 @@ function deserializeMerkleTreeV5<DatabaseMetadata>(deserializer: IDeserializer):
         stringTable.push(str);
     }
     
-    // Read sort tree metadata and nodes (using string table)
-    const sort = deserializeSortTreeV5(deserializer, stringTable);
+    // Read hash table
+    const hashTableSize = deserializer.readUInt32();
+    const hashTable: Buffer[] = [];
+    for (let i = 0; i < hashTableSize; i++) {
+        const hash = deserializer.readBytes(32);
+        hashTable.push(hash);
+    }
     
-    // Read merkle tree nodes (using string table)
-    const merkle = deserializeMerkleV5(deserializer, stringTable);
+    // Read sort tree metadata and nodes (using string and hash tables)
+    const sort = deserializeSortTreeV5(deserializer, stringTable, hashTable);
+    
+    // Read merkle tree nodes (using string and hash tables)
+    const merkle = deserializeMerkleV5(deserializer, stringTable, hashTable);
     
     return {
         id,
