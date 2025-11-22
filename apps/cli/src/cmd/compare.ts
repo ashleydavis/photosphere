@@ -18,6 +18,11 @@ export interface ICompareCommandOptions extends IBaseCommandOptions {
     // Destination database directory.
     //
     dest?: string;
+
+    //
+    // Path to destination encryption key file.
+    //
+    destKey?: string;
 }
 
 //
@@ -39,7 +44,7 @@ export async function compareCommand(options: ICompareCommandOptions): Promise<v
 
     // Load both databases with allowOlderVersions=false to disallow older databases
     const { database: sourceDatabase, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false);
-    const destOptions = { ...options, db: destDir };
+    const destOptions = { ...options, db: destDir, key: options.destKey };
     const { database: destDatabase, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false);
 
     log.info('');
