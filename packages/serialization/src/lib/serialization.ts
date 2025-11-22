@@ -4,7 +4,6 @@
 
 import { IStorage } from 'storage';
 import { createHash } from 'crypto';
-import { gzipSync, gunzipSync } from 'zlib';
 import { serialize as bsonSerialize, deserialize as bsonDeserialize } from 'bson';
 import { retry } from 'utils';
 
@@ -170,12 +169,6 @@ export interface SerializationOptions {
     // Defaults to true if not specified
     //
     checksum?: boolean;
-    
-    //
-    // Enable or disable gzip compression
-    // Defaults to false if not specified
-    //
-    compression?: boolean;
 }
 
 //
@@ -425,18 +418,7 @@ export async function save<T>(
     // Get the serialized data
     const serializedData = binarySerializer.getBuffer();
     
-    // Apply compression if enabled
-    const useCompression = options?.compression === true;
-    let dataToChecksum: Buffer;
-    
-    if (useCompression) {
-        // Compress the serialized data using gzip
-        dataToChecksum = gzipSync(serializedData, { level: 9 });
-    } else {
-        dataToChecksum = serializedData;
-    }
-    
-    // Calculate SHA256 checksum of the data (compressed or not)
+    // Calculate SHA256 checksum of the data
     //TODO: Need as way to make this checksum be 32 bits instead of 32 bytes!
     // Add checksum if enabled (default: true)
     const useChecksum = options?.checksum !== false;
@@ -444,13 +426,13 @@ export async function save<T>(
     
     if (useChecksum) {
         // Calculate SHA256 checksum of the data (full 32 bytes)
-        const checksum = createHash('sha256').update(dataToChecksum).digest();
+        const checksum = createHash('sha256').update(serializedData).digest();
         
         // Combine data and checksum footer.
-        finalBuffer = Buffer.concat([dataToChecksum, checksum]);
+        finalBuffer = Buffer.concat([serializedData, checksum]);
     } else {
         // No checksum, just use the data
-        finalBuffer = dataToChecksum;
+        finalBuffer = serializedData;
     }
     
     // Write to storage
@@ -504,17 +486,6 @@ export async function load<T>(
         
         // No checksum, use entire buffer as data
         dataBuffer = buffer;
-    }
-    
-    // Auto-detect and decompress if data is compressed (check for gzip magic bytes: 0x1f 0x8b)
-    // This allows backward compatibility with uncompressed files
-    const isCompressed = dataBuffer.length >= 2 && dataBuffer[0] === 0x1f && dataBuffer[1] === 0x8b;
-    if (isCompressed) {
-        try {
-            dataBuffer = gunzipSync(dataBuffer);
-        } catch (error) {
-            throw new Error(`Failed to decompress file '${filePath}': ${error instanceof Error ? error.message : String(error)}`);
-        }
     }
     
     // Determine the target version (latest available if not specified)
