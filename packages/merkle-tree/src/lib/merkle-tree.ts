@@ -1574,6 +1574,7 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
         serializeMerkleTree,
         {
             checksum: false,
+            compression: true, // Enable gzip compression for tree files
         }
     );
 }
@@ -1635,6 +1636,7 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
         CURRENT_DATABASE_VERSION,
         {
             checksum: false,
+            // Compression is auto-detected when loading, so this option is not needed here
         }
     );
 }
