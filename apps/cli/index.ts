@@ -38,6 +38,7 @@ async function main() {
     const destDbOption: [string, string] = ["--dest <path>", "The destination directory that specifies the target database"];
     const sourceDbOption: [string, string] = ["--source <path>", "The source directory that contains the database to repair from"];
     const keyOption: [string, string] = ["-k, --key <keyfile>", "Path to the private key file for encryption."];
+    const destKeyOption: [string, string] = ["--dk, --dest-key <keyfile>", "Path to destination encryption key file"];
     const generateKeyOption: [string, string, boolean] = ["-g, --generate-key", "Generate encryption keys if they don't exist.", false];
     const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verbose logging.", false];
     const toolsOption: [string, string, boolean] = ["--tools", "Enables output from media processing tools (ImageMagick, ffmpeg, etc.).", false];
@@ -118,9 +119,11 @@ Resources:
     program
         .command("compare")
         .alias("cmp")
-        .description("Compares two asset databases by analyzing their Merkle trees.")
+        .description("Compares two databases to find the differences between them.")
         .option(...dbOption)
         .option(...destDbOption)
+        .option(...keyOption)
+        .option(...destKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
@@ -304,7 +307,7 @@ Resources:
         .option(...dbOption)
         .option(...destDbOption)
         .option(...keyOption)
-        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
+        .option(...destKeyOption)
         .option(...generateKeyOption)
         .option("-p, --path <path>", "Replicate only files matching this path (file or directory)")
         .option("--force", "Proceed with replication without confirmation, even if destination database exists, and allow replication between databases with different IDs (THIS IS DANGEROUS, use it carefully, use it rarely)")
@@ -333,7 +336,7 @@ Resources:
         .option(...dbOption)
         .option(...destDbOption)
         .option(...keyOption)
-        .option("--dk, --dest-key <keyfile>", "Path to destination encryption key file")
+        .option(...destKeyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)

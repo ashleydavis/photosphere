@@ -17,6 +17,11 @@ export interface ICompareCommandOptions extends IBaseCommandOptions {
     // Destination database directory.
     //
     dest?: string;
+
+    //
+    // Path to destination encryption key file.
+    //
+    destKey?: string;
 }
 
 //
@@ -37,11 +42,10 @@ export async function compareCommand(context: ICommandContext, options: ICompare
         destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
     }
 
-    // Load both databases with allowOlderVersions=false to disallow older databases
-    const destSessionId = uuidGenerator.generate();
+    // Load both databases with allowOlderVersions=false to disallow older databases    
     const { assetStorage: sourceAssetStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false, uuidGenerator, timestampProvider, sessionId);
-    const destOptions = { ...options, db: destDir };
-    const { assetStorage: destAssetStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false, uuidGenerator, timestampProvider, destSessionId);
+    const destOptions = { ...options, db: destDir, key: options.destKey };
+    const { assetStorage: destAssetStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Comparing two databases:`);
