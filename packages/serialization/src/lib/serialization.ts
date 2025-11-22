@@ -4,6 +4,7 @@
 
 import { IStorage } from 'storage';
 import { createHash } from 'crypto';
+import { gzipSync, gunzipSync } from 'zlib';
 import { serialize as bsonSerialize, deserialize as bsonDeserialize } from 'bson';
 import { retry } from 'utils';
 
@@ -274,6 +275,146 @@ export class BinarySerializer implements ISerializer {
     getBuffer(): Buffer {
         // Return only the used portion of the buffer
         return this.buffer.subarray(0, this.position);
+    }
+}
+
+//
+// CompressedBinarySerializer wraps BinarySerializer and automatically compresses
+// the data when finished, writing the compressed length and data to the main serializer.
+//
+export class CompressedBinarySerializer implements ISerializer {
+    private serializer: BinarySerializer;
+    private mainSerializer: ISerializer;
+
+    constructor(mainSerializer: ISerializer, initialCapacity: number = 1024) {
+        this.mainSerializer = mainSerializer;
+        this.serializer = new BinarySerializer(initialCapacity);
+    }
+
+    writeUInt32(value: number): void {
+        this.serializer.writeUInt32(value);
+    }
+
+    writeInt32(value: number): void {
+        this.serializer.writeInt32(value);
+    }
+
+    writeUInt64(value: bigint): void {
+        this.serializer.writeUInt64(value);
+    }
+
+    writeInt64(value: bigint): void {
+        this.serializer.writeInt64(value);
+    }
+
+    writeFloat(value: number): void {
+        this.serializer.writeFloat(value);
+    }
+
+    writeDouble(value: number): void {
+        this.serializer.writeDouble(value);
+    }
+
+    writeBoolean(value: boolean): void {
+        this.serializer.writeBoolean(value);
+    }
+
+    writeUInt8(value: number): void {
+        this.serializer.writeUInt8(value);
+    }
+
+    writeString(value: string): void {
+        this.serializer.writeString(value);
+    }
+
+    writeBuffer(buffer: Buffer): void {
+        this.serializer.writeBuffer(buffer);
+    }
+
+    writeBytes(buffer: Buffer): void {
+        this.serializer.writeBytes(buffer);
+    }
+
+    writeBSON<T>(obj: T): void {
+        this.serializer.writeBSON(obj);
+    }
+
+    //
+    // Finishes writing, compresses the data, and writes it to the main serializer.
+    // This must be called after all data has been written.
+    //
+    finish(): void {
+        const buffer = this.serializer.getBuffer();
+        const compressed = gzipSync(buffer, { level: 9 });
+        this.mainSerializer.writeUInt32(compressed.length);
+        this.mainSerializer.writeBytes(compressed);
+    }
+}
+
+//
+// CompressedBinaryDeserializer reads compressed data from a deserializer,
+// decompresses it, and provides a BinaryDeserializer for reading the decompressed data.
+//
+export class CompressedBinaryDeserializer implements IDeserializer {
+    private deserializer: BinaryDeserializer;
+
+    constructor(mainDeserializer: IDeserializer) {
+        // Read compressed length
+        const compressedLength = mainDeserializer.readUInt32();
+        // Read compressed data
+        const compressed = mainDeserializer.readBytes(compressedLength);
+        // Decompress
+        const decompressed = gunzipSync(compressed);
+        // Create deserializer from decompressed buffer
+        this.deserializer = new BinaryDeserializer(decompressed);
+    }
+
+    readUInt32(): number {
+        return this.deserializer.readUInt32();
+    }
+
+    readInt32(): number {
+        return this.deserializer.readInt32();
+    }
+
+    readUInt64(): bigint {
+        return this.deserializer.readUInt64();
+    }
+
+    readInt64(): bigint {
+        return this.deserializer.readInt64();
+    }
+
+    readFloat(): number {
+        return this.deserializer.readFloat();
+    }
+
+    readDouble(): number {
+        return this.deserializer.readDouble();
+    }
+
+    readBoolean(): boolean {
+        return this.deserializer.readBoolean();
+    }
+
+    readUInt8(): number {
+        return this.deserializer.readUInt8();
+    }
+
+    readString(): string {
+        return this.deserializer.readString();
+    }
+
+    readBuffer(): Buffer {
+        return this.deserializer.readBuffer();
+    }
+
+    readBytes(length: number): Buffer {
+        return this.deserializer.readBytes(length);
+    }
+
+    readBSON<T>(): T {
+        return this.deserializer.readBSON<T>();
     }
 }
 
