@@ -1080,6 +1080,8 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
     // Collect all unique strings and build string table
     const uniqueStrings = collectStrings(tree);
     const stringArray = Array.from(uniqueStrings);
+    // Sort string table in ascending order to improve compression
+    stringArray.sort();
     const stringTable = new Map<string, number>();
     stringArray.forEach((str, index) => {
         stringTable.set(str, index);
