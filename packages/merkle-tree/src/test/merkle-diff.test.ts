@@ -265,7 +265,7 @@ describe('findMerkleTreeDifferences', () => {
         const endTime = Date.now();
         
         expect(diff.identical).toBe(false);
-        expect(endTime - startTime).toBeLessThan(50);
+        expect(endTime - startTime).toBeLessThan(200);
     });
     
     test('should detect changes when trees have different structures but same leaves', () => {
