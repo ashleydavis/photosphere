@@ -43,8 +43,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     log.warn(pc.yellow(`⚠️  IMPORTANT: Database upgrade will modify your database files.`));
-    log.warn(pc.yellow(`   It is strongly recommended to backup your database before proceeding.`));
-    log.warn(pc.yellow(`   You can backup your database by copying the entire directory:`));
+    log.warn(pc.yellow(`    It is strongly recommended to backup your database before proceeding.`));
+    log.warn(pc.yellow(`    You can backup your database by copying the entire directory:`));
     
     // Provide platform-specific backup commands
     if (process.platform === 'win32') {
