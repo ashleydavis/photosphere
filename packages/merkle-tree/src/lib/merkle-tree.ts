@@ -1,7 +1,8 @@
 import * as crypto from 'crypto';
+import { gzipSync, gunzipSync } from 'zlib';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
-import { save, load, ISerializer, IDeserializer } from 'serialization';
+import { save, load, ISerializer, IDeserializer, BinarySerializer, BinaryDeserializer } from 'serialization';
 import { traverseTreeSync } from './traverse';
 import { BufferSet } from './buffer-set';
 import { BufferMap } from './buffer-map';
@@ -1015,36 +1016,45 @@ function collectHashes<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>): B
  * Tree metadata:
  * - 16 bytes: UUID
  * 
- * String table:
- * - 4 bytes: string table size (number of strings, uint32)
- * - For each string:
- *   - 4 bytes: string length (uint32)
- *   - X bytes: string (UTF-8)
+ * String table (compressed with gzip):
+ * - 4 bytes: compressed string table length (uint32)
+ * - X bytes: compressed string table data (gzip)
+ *   - Decompressed format:
+ *     - 4 bytes: string table size (number of strings, uint32)
+ *     - For each string:
+ *       - 4 bytes: string length (uint32)
+ *       - X bytes: string (UTF-8)
  * 
- * Hash table:
+ * Hash table (uncompressed):
  * - 4 bytes: hash table size (number of hashes, uint32)
  * - For each hash:
  *   - 32 bytes: hash (SHA-256)
  * 
- * Sort tree (pre-order traversal):
- * - For each sort node (root's nodeCount of 0 means no tree):
- *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 if no tree)
- *   - If leaf node (nodeCount == 1):
- *     - 4 bytes: name index (uint32) - index into string table
- *     - 4 bytes: content hash index (uint32) - index into hash table
- *     - 8 bytes: size (uint64 split into low/high uint32s)
- *     - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
- *   - If internal node (nodeCount > 1):
- *     - Recursively serialize children
- *   - Note: minName and size for internal nodes are recalculated during deserialization
- *     (minName = name for leaf nodes, minName = left.minName for internal nodes)
+ * Sort tree (compressed with gzip, pre-order traversal):
+ * - 4 bytes: compressed sort tree length (uint32)
+ * - X bytes: compressed sort tree data (gzip)
+ *   - Decompressed format:
+ *     - For each sort node (root's nodeCount of 0 means no tree):
+ *       - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 if no tree)
+ *       - If leaf node (nodeCount == 1):
+ *         - 4 bytes: name index (uint32) - index into string table
+ *         - 4 bytes: content hash index (uint32) - index into hash table
+ *         - 8 bytes: size (uint64 split into low/high uint32s)
+ *         - 8 bytes: lastModified timestamp (uint64 split into low/high uint32s)
+ *       - If internal node (nodeCount > 1):
+ *         - Recursively serialize children
+ *       - Note: minName and size for internal nodes are recalculated during deserialization
+ *         (minName = name for leaf nodes, minName = left.minName for internal nodes)
  * 
- * Merkle tree:
- * - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
- *   - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 for no tree)
- *   - 4 bytes: hash index (uint32) - index into hash table - only if nodeCount > 0
- *   - If leaf node (nodeCount == 1):
- *     - 4 bytes: name index (uint32) - index into string table
+ * Merkle tree (compressed with gzip):
+ * - 4 bytes: compressed merkle tree length (uint32)
+ * - X bytes: compressed merkle tree data (gzip)
+ *   - Decompressed format:
+ *     - For each merkle node (pre-order traversal, root nodeCount of 0 means no merkle tree):
+ *       - 4 bytes: nodeCount (uint32, 1 for leaf nodes, 0 for no tree)
+ *       - 4 bytes: hash index (uint32) - index into hash table - only if nodeCount > 0
+ *       - If leaf node (nodeCount == 1):
+ *         - 4 bytes: name index (uint32) - index into string table
  */
 function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadata>, serializer: ISerializer): void {
     // Write database metadata BSON
@@ -1072,13 +1082,18 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
         hashTable.set(hash, index);
     });
     
-    // Write string table
-    serializer.writeUInt32(stringArray.length);
+    // Write string table (compressed for version 5)
+    const stringTableSerializer = new BinarySerializer();
+    stringTableSerializer.writeUInt32(stringArray.length);
     for (const str of stringArray) {
-        serializer.writeString(str);
+        stringTableSerializer.writeString(str);
     }
+    const stringTableBuffer = stringTableSerializer.getBuffer();
+    const stringTableCompressed = gzipSync(stringTableBuffer, { level: 9 });
+    serializer.writeUInt32(stringTableCompressed.length);
+    serializer.writeBytes(stringTableCompressed);
     
-    // Write hash table
+    // Write hash table (uncompressed)
     serializer.writeUInt32(uniqueHashes.length);
     for (const hash of uniqueHashes) {
         if (hash.length !== 32) {
@@ -1087,11 +1102,21 @@ function serializeMerkleTree<DatabaseMetadata>(tree: IMerkleTree<DatabaseMetadat
         serializer.writeBytes(hash);
     }
     
-    // Write sort tree metadata and nodes (using string and hash indices)
-    serializeSortTreeV5(tree, serializer, stringTable, hashTable);
+    // Write sort tree metadata and nodes (compressed for version 5, using string and hash indices)
+    const sortTreeSerializer = new BinarySerializer();
+    serializeSortTreeV5(tree, sortTreeSerializer, stringTable, hashTable);
+    const sortTreeBuffer = sortTreeSerializer.getBuffer();
+    const sortTreeCompressed = gzipSync(sortTreeBuffer, { level: 9 });
+    serializer.writeUInt32(sortTreeCompressed.length);
+    serializer.writeBytes(sortTreeCompressed);
     
-    // Write merkle tree nodes (using string and hash indices)
-    serializeMerkleV5(tree, serializer, stringTable, hashTable);
+    // Write merkle tree nodes (compressed for version 5, using string and hash indices)
+    const merkleTreeSerializer = new BinarySerializer();
+    serializeMerkleV5(tree, merkleTreeSerializer, stringTable, hashTable);
+    const merkleTreeBuffer = merkleTreeSerializer.getBuffer();
+    const merkleTreeCompressed = gzipSync(merkleTreeBuffer, { level: 9 });
+    serializer.writeUInt32(merkleTreeCompressed.length);
+    serializer.writeBytes(merkleTreeCompressed);
 }
 
 //
@@ -1436,15 +1461,19 @@ function deserializeMerkleTreeV5<DatabaseMetadata>(deserializer: IDeserializer):
     const uuidBytes = deserializer.readBytes(16);
     const id = stringifyUuid(uuidBytes);
     
-    // Read string table
-    const stringTableSize = deserializer.readUInt32();
+    // Read string table (compressed for version 5)
+    const stringTableCompressedLength = deserializer.readUInt32();
+    const stringTableCompressed = deserializer.readBytes(stringTableCompressedLength);
+    const stringTableBuffer = gunzipSync(stringTableCompressed);
+    const stringTableDeserializer = new BinaryDeserializer(stringTableBuffer);
+    const stringTableSize = stringTableDeserializer.readUInt32();
     const stringTable: string[] = [];
     for (let i = 0; i < stringTableSize; i++) {
-        const str = deserializer.readString();
+        const str = stringTableDeserializer.readString();
         stringTable.push(str);
     }
     
-    // Read hash table
+    // Read hash table (uncompressed)
     const hashTableSize = deserializer.readUInt32();
     const hashTable: Buffer[] = [];
     for (let i = 0; i < hashTableSize; i++) {
@@ -1452,11 +1481,19 @@ function deserializeMerkleTreeV5<DatabaseMetadata>(deserializer: IDeserializer):
         hashTable.push(hash);
     }
     
-    // Read sort tree metadata and nodes (using string and hash tables)
-    const sort = deserializeSortTreeV5(deserializer, stringTable, hashTable);
+    // Read sort tree metadata and nodes (compressed for version 5, using string and hash tables)
+    const sortTreeCompressedLength = deserializer.readUInt32();
+    const sortTreeCompressed = deserializer.readBytes(sortTreeCompressedLength);
+    const sortTreeBuffer = gunzipSync(sortTreeCompressed);
+    const sortTreeDeserializer = new BinaryDeserializer(sortTreeBuffer);
+    const sort = deserializeSortTreeV5(sortTreeDeserializer, stringTable, hashTable);
     
-    // Read merkle tree nodes (using string and hash tables)
-    const merkle = deserializeMerkleV5(deserializer, stringTable, hashTable);
+    // Read merkle tree nodes (compressed for version 5, using string and hash tables)
+    const merkleTreeCompressedLength = deserializer.readUInt32();
+    const merkleTreeCompressed = deserializer.readBytes(merkleTreeCompressedLength);
+    const merkleTreeBuffer = gunzipSync(merkleTreeCompressed);
+    const merkleTreeDeserializer = new BinaryDeserializer(merkleTreeBuffer);
+    const merkle = deserializeMerkleV5(merkleTreeDeserializer, stringTable, hashTable);
     
     return {
         id,
@@ -1665,7 +1702,6 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
         serializeMerkleTree,
         {
             checksum: false,
-            compression: true, // Enable gzip compression for tree files
         }
     );
 }
