@@ -6,6 +6,7 @@ export default {
         "build",
     ],
     moduleNameMapper: {
-        '^mime$': '<rootDir>/__mocks__/mime.js'
+        '^mime$': '<rootDir>/__mocks__/mime.js',
+        '^serialize-error$': '<rootDir>/__mocks__/serialize-error.js'
     }
 };
