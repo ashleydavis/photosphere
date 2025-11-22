@@ -8,6 +8,8 @@ export {
     UnsupportedVersionError,
     BinarySerializer,
     BinaryDeserializer,
+    CompressedBinarySerializer,
+    CompressedBinaryDeserializer,
     type ISerializer,
     type IDeserializer,
     type SerializerFunction,
