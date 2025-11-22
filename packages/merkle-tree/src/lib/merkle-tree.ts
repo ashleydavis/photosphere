@@ -26,6 +26,7 @@ export interface SortNode { //todo: Would be nice to have SortLeaf and SortParen
     contentHash?: Buffer; // The hash of the content, for leaf nodes only.
     name?: string; // The name/identifier this hash represents, for leaf nodes only.
     nodeCount: number; // Number of nodes in the subtree rooted at this node (including this node). Set to 1 for leaf nodes.
+    leafCount: number; // Number of leaf nodes in the subtree rooted at this node. Computed during deserialization, not serialized.
     size: number; // The size of the node and children in bytes.
     lastModified?: Date; // The last modified date (for leaf nodes only, version 3+).
     minName: string; // The minimum name in this subtree (for efficient sorted insertion).
@@ -192,6 +193,7 @@ export function createLeafNode(item: HashedItem): SortNode {
         contentHash: item.hash,
         name: item.name,
         nodeCount: 1, // Leaf nodes have a node count of 1.
+        leafCount: 1, // Leaf nodes have a leaf count of 1.
         size: item.length, // Size is the length of the item.
         lastModified: item.lastModified, // Include last modified date if provided.
         minName: item.name, // For leaf nodes, minName is the name itself.
@@ -205,6 +207,7 @@ export function createParentNode(left: SortNode, right: SortNode): SortNode {
     return {
         name: undefined, // Internal nodes don't represent an item
         nodeCount: 1 + left.nodeCount + right.nodeCount, // Total node count is 1 (this node) + left + right
+        leafCount: left.leafCount + right.leafCount, // Total leaf count is sum of children
         size: left.size + right.size, // Total size is the sum of both subtrees.
         minName: left.minName, // Since we maintain sorted order, the min name is always the min of the left subtree
         left: left,
@@ -227,6 +230,7 @@ export function binaryTreeToArray(root: SortNode | undefined): Omit<SortNode, 'm
             contentHash: node.contentHash,
             name: node.name,
             nodeCount: node.nodeCount,
+            leafCount: node.leafCount,
             size: node.size,
             lastModified: node.lastModified,
         };
@@ -256,6 +260,7 @@ export function arrayToBinaryTree(nodes: Omit<SortNode, 'minName'>[]): SortNode 
             // Leaf node - no children
             return { 
                 ...node, 
+                leafCount: 1,
                 minName: node.name!,
             };
         }
@@ -266,6 +271,7 @@ export function arrayToBinaryTree(nodes: Omit<SortNode, 'minName'>[]): SortNode 
         
         return { 
             ...node, 
+            leafCount: node.left!.leafCount + node.right!.leafCount,
             minName: node.left!.minName!,
         };
     }
@@ -366,6 +372,7 @@ export function rotateRight(node: SortNode): SortNode {
     
     return {
         nodeCount: 1 + newLeft.nodeCount + 1 + newCenter.nodeCount + right.nodeCount,
+        leafCount: newLeft.leafCount + newCenter.leafCount + right.leafCount,
         size: newLeft.size + newCenter.size + right.size,
         minName: newLeft.minName,
         left: newLeft,
@@ -373,6 +380,7 @@ export function rotateRight(node: SortNode): SortNode {
             left: newCenter,
             right: right,
             nodeCount: 1 + newCenter.nodeCount + right.nodeCount,
+            leafCount: newCenter.leafCount + right.leafCount,
             size: newCenter.size + right.size,
             minName: newCenter.minName,
         },
@@ -404,12 +412,14 @@ export function rotateLeft(node: SortNode): SortNode {
     
     return {
         nodeCount: 1 + 1 + left.nodeCount + newCenter.nodeCount + newRight.nodeCount,
+        leafCount: left.leafCount + newCenter.leafCount + newRight.leafCount,
         size: left.size + newCenter.size + newRight.size,
         minName: left.minName,
         left: {
             left: left,
             right: newCenter,
             nodeCount: 1 + left.nodeCount + newCenter.nodeCount,
+            leafCount: left.leafCount + newCenter.leafCount,
             size: left.size + newCenter.size,
             minName: left.minName,
         },
@@ -470,6 +480,7 @@ function _addItem(node: SortNode | undefined, item: HashedItem): SortNode {
         left: newLeft,
         right: newRight,
         nodeCount: 1 + newLeftCount + newRightCount,
+        leafCount: newLeft.leafCount + newRight.leafCount,
         size: newLeftSize + newRightSize,
         minName: newLeft.minName,
     };
@@ -1351,6 +1362,7 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
             contentHash,
             name,
             nodeCount,
+            leafCount: 1,
             size,
             lastModified,
             minName: name,
@@ -1365,6 +1377,7 @@ function deserializeSortNodeV5(deserializer: IDeserializer, stringTable: string[
         
         return {
             nodeCount,
+            leafCount: left!.leafCount + right!.leafCount,
             size,
             minName: left!.minName,
             left,
@@ -1406,6 +1419,7 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
             contentHash,
             name,
             nodeCount,
+            leafCount: 1,
             size,
             lastModified,
             minName: name,
@@ -1416,6 +1430,7 @@ function deserializeSortNode(deserializer: IDeserializer): SortNode | undefined 
         const right = deserializeSortNode(deserializer);        
         return {
             nodeCount,
+            leafCount: left!.leafCount + right!.leafCount,
             size,
             minName: left!.minName,
             left,
@@ -1575,6 +1590,7 @@ function deserializeMerkleTreeV3<DatabaseMetadata>(deserializer: IDeserializer):
             contentHash: nodeCount === 1 ? hash : undefined,
             name,
             nodeCount,
+            leafCount,
             size,
             lastModified,
             left: undefined,
@@ -1648,6 +1664,7 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
             contentHash: nodeCount === 1 ? hash : undefined,
             name,
             nodeCount,
+            leafCount,
             size,
             lastModified,
             left: undefined,
@@ -1822,6 +1839,7 @@ function _deleteNode(node: SortNode | undefined, name: string): SortNode | undef
         left: newLeft,
         right: newRight,
         nodeCount: 1 + newLeft.nodeCount + newRight.nodeCount,
+        leafCount: newLeft.leafCount + newRight.leafCount,
         size: newLeft.size + newRight.size,
         minName: newLeft.minName,
     };
