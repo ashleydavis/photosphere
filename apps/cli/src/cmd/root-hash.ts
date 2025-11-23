@@ -11,10 +11,10 @@ export async function rootHashCommand(context: ICommandContext, options: IRootHa
     const { uuidGenerator, timestampProvider, sessionId } = context;
     const { assetStorage, metadataStorage } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
-    const { getDatabaseHashes } = await import("api");
-    const hashes = await getDatabaseHashes(assetStorage, metadataStorage);
+    const { getDatabaseSummary } = await import("api");
+    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     
-    console.log(hashes.fullHash);
+    console.log(summary.fullHash);
     
     await exit(0);
 }

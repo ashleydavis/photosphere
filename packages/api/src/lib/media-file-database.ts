@@ -72,23 +72,6 @@ export const DISPLAY_MIN_SIZE = 1000;
 //
 export const DISPLAY_QUALITY = 95;
 
-export interface IDatabaseHashes {
-    //
-    // Full aggregate hash of the tree root (combines files and database hashes).
-    //
-    fullHash: string;
-
-    //
-    // Root hash of the files merkle tree.
-    //
-    filesHash: string | undefined;
-
-    //
-    // Root hash of the BSON database merkle tree.
-    //
-    databaseHash: string | undefined;
-}
-
 export interface IDatabaseSummary {
     //
     // Total number of files imported into the database.
@@ -330,11 +313,18 @@ export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset
 }
 
 //
-// Gets the database hashes (files hash, database hash, and aggregate hash).
+// Gets a summary of the entire database.
 //
-export async function getDatabaseHashes(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseHashes> {
-    // Get root hashes from both merkle trees
-    const filesRootHash = await retry(() => getFilesRootHash(metadataStorage));
+export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree.`);
+    }
+    
+    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+    
+    // Get root hashes from both merkle trees (compute inline to avoid loading merkle tree again)
+    const filesRootHash = merkleTree.merkle?.hash;
     const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, "metadata")));
     
     // Compute aggregate root hash
@@ -351,33 +341,13 @@ export async function getDatabaseHashes(assetStorage: IStorage, metadataStorage:
     }
     
     return {
-        fullHash,
-        filesHash: filesRootHash?.toString('hex'),
-        databaseHash: databaseRootHash?.toString('hex'),
-    };
-}
-
-//
-// Gets a summary of the entire database.
-//
-export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage)); //todo: The merkle tree gets loaded twice in this function!
-    if (!merkleTree) {
-        throw new Error(`Failed to load merkle tree.`);
-    }
-    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
-    
-    // Get database hashes - need assetStorage for files hash, metadataStorage for database hash
-    const hashes = await getDatabaseHashes(assetStorage, metadataStorage);
-    
-    return {
         totalImports: filesImported,
         totalFiles: merkleTree.sort?.leafCount || 0,
         totalSize: merkleTree.sort?.size || 0,
         totalNodes: merkleTree.sort?.nodeCount || 0,
-        fullHash: hashes.fullHash,
-        filesHash: hashes.filesHash,
-        databaseHash: hashes.databaseHash,
+        fullHash,
+        filesHash: filesRootHash?.toString('hex'),
+        databaseHash: databaseRootHash?.toString('hex'),
         databaseVersion: merkleTree.version
     };
 }
