@@ -21,9 +21,9 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     
     intro(pc.blue(`Upgrading media file database...`));
     
-    const { assetStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+    let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -182,7 +182,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }                
 
         // Save the rebuilt tree.
-        await retry(() => saveTree(".db/tree.dat", merkleTree!, assetStorage));
+        await retry(() => saveTree(".db/tree.dat", merkleTree!, metadataStorage));
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(assetStorage, "metadata");
 
