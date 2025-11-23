@@ -1,5 +1,5 @@
 import {  log, retry } from "utils";
-import { ProgressCallback, getDatabaseSummary } from "./media-file-database";
+import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor } from "storage";
@@ -16,8 +16,6 @@ export interface ITaskQueueProvider {
 //
 // Options for verifying the media file database.
 //
-
-
 export interface IVerifyOptions {
     //
     // Enables full verification where all files are re-hashed.
@@ -96,11 +94,17 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
         : undefined;
 
-    const summary = await getDatabaseSummary(assetStorage, metadataStorage); //todo: This is rather expensive when loading from S3.
+    // Load the merkle tree once and reuse it throughout the verification process
+    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    if (!merkleTree) {
+        throw new Error(`Failed to load merkle tree`);
+    }
+
+    const totalFiles = merkleTree.sort?.leafCount || 0;
     const result: IVerifyResult = {
-        totalImports: summary.totalImports,
-        totalFiles: summary.totalFiles,
-        totalSize: summary.totalSize,
+        totalImports: merkleTree.databaseMetadata?.filesImported || 0,
+        totalFiles,
+        totalSize: merkleTree.sort?.size || 0,
         numUnmodified: 0,
         numFailures: 0,
         modified: [],
@@ -148,7 +152,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
 
                 if (progressCallback) {
                     const status = queue.getStatus();
-                    progressCallback(`Verified file ${result.filesProcessed} of ${summary.totalFiles} (${status.running} tasks running in parallel)`);
+                    progressCallback(`Verified file ${result.filesProcessed} of ${totalFiles} (${status.running} tasks running in parallel)`);
                 }
 
                 if (fileResult.status === "removed") {
@@ -179,11 +183,6 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
                 result.numFailures++;
             }
         });
-
-        const merkleTree = await retry(() => loadMerkleTree(metadataStorage)); //todo: This loads the merkle tree a second time.
-        if (!merkleTree) {
-            throw new Error(`Failed to load merkle tree`);
-        }
 
         //
         // Queue up all verification tasks as quickly as possible.
