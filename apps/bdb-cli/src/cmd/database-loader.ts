@@ -17,34 +17,26 @@ const uuidGenerator = {
 // Loads a BSON database from a given path
 //
 export async function loadDatabase(dbPath: string, verbose: boolean = false): Promise<IBsonDatabase> {
-    try {
-        if (verbose) {
-            console.log(pc.gray(`Loading database from: ${dbPath}`));
-        }
-
-        // Create storage based on the path
-        const storageResult = createStorage(dbPath);
-        const storage = storageResult.storage;
-
-        // Create the BSON database
-        const database = new BsonDatabase({
-            storage,
-            uuidGenerator,
-            timestampProvider: new TimestampProvider()
-        });
-
-        if (verbose) {
-            console.log(pc.green('✓ Database loaded successfully'));
-        }
-
-        return database;
-    } catch (error) {
-        console.error(pc.red(`Failed to load database from ${dbPath}:`));
-        if (error instanceof Error) {
-            console.error(pc.red(error.message));
-        }
-        throw error;
+    if (verbose) {
+        console.log(pc.gray(`Loading database from: ${dbPath}`));
     }
+
+    // Create storage based on the path
+    const storageResult = createStorage(dbPath);
+    const storage = storageResult.storage;
+
+    // Create the BSON database
+    const database = new BsonDatabase({
+        storage,
+        uuidGenerator,
+        timestampProvider: new TimestampProvider()
+    });
+
+    if (verbose) {
+        console.log(pc.green('✓ Database loaded successfully'));
+    }
+
+    return database;
 }
 
 //
