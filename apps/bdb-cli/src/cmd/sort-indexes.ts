@@ -9,33 +9,25 @@ interface ISortIndexesCommandOptions {
 // Lists all sort indexes for a collection
 //
 export async function sortIndexesCommand(dbPath: string, collectionName: string, options: ISortIndexesCommandOptions): Promise<void> {
-    try {
-        const database = await loadDatabase(dbPath, options.verbose);
-        const collection = database.collection(collectionName);
-        
-        // Get list of sort indexes
-        const sortIndexes = await collection.listSortIndexes();
-        
-        console.log(pc.green(`Collection: ${collectionName}`));
-        console.log(pc.green(`Number of sort indexes: ${sortIndexes.length}`));
-        
-        if (sortIndexes.length > 0) {
-            console.log(pc.cyan("\nSort indexes:"));
-            for (const index of sortIndexes) {
-                console.log(pc.white(`  ${index.fieldName} (${index.direction})`));
-            }
-        } else {
-            console.log(pc.yellow("No sort indexes found for this collection."));
+    const database = await loadDatabase(dbPath, options.verbose);
+    const collection = database.collection(collectionName);
+    
+    // Get list of sort indexes
+    const sortIndexes = await collection.listSortIndexes();
+    
+    console.log(pc.green(`Collection: ${collectionName}`));
+    console.log(pc.green(`Number of sort indexes: ${sortIndexes.length}`));
+    
+    if (sortIndexes.length > 0) {
+        console.log(pc.cyan("\nSort indexes:"));
+        for (const index of sortIndexes) {
+            console.log(pc.white(`  ${index.fieldName} (${index.direction})`));
         }
-        
-        process.exit(0);
-    } catch (error) {
-        console.error(pc.red(`Failed to list sort indexes for collection '${collectionName}'`));
-        if (error instanceof Error) {
-            console.error(pc.red(error.message));
-        }
-        process.exit(1);
+    } else {
+        console.log(pc.yellow("No sort indexes found for this collection."));
     }
+    
+    process.exit(0);
 }
 
 
