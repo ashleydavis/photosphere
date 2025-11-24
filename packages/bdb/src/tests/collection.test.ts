@@ -383,6 +383,188 @@ describe('BsonCollection', () => {
         expect(indexesAfterDelete.some(idx => idx.fieldName === 'age' && idx.direction === 'asc')).toBe(false);
     });
     
+    test('should update sort index when record is updated', async () => {
+        const users = [
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174001',
+                name: 'John Doe',
+                email: 'john@example.com',
+                age: 30,
+                role: 'user'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174002',
+                name: 'Alice Smith',
+                email: 'alice@example.com',
+                age: 25,
+                role: 'admin'
+            }
+        ];
+        
+        // Insert users
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+        
+        // Create an index on age
+        await collection.ensureSortIndex('age', 'asc', 'number');
+        
+        // Verify initial sort order
+        let result = await collection.getSorted('age', 'asc');
+        expect(result.records[0].age).toBe(25); // Alice first
+        expect(result.records[1].age).toBe(30); // John second
+        
+        // Update John's age to 20 (should move him before Alice)
+        await collection.updateOne(users[0]._id, { age: 20 });
+        
+        // Verify sort order is updated
+        result = await collection.getSorted('age', 'asc');
+        expect(result.records[0].age).toBe(20); // John first now
+        expect(result.records[1].age).toBe(25); // Alice second now
+    });
+    
+    test('should update sort index when record is deleted', async () => {
+        const users = [
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174001',
+                name: 'John Doe',
+                email: 'john@example.com',
+                age: 30,
+                role: 'user'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174002',
+                name: 'Alice Smith',
+                email: 'alice@example.com',
+                age: 25,
+                role: 'admin'
+            }
+        ];
+        
+        // Insert users
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+        
+        // Create an index on age
+        await collection.ensureSortIndex('age', 'asc', 'number');
+        
+        // Verify initial sort order
+        let result = await collection.getSorted('age', 'asc');
+        expect(result.records.length).toBe(2);
+        expect(result.totalRecords).toBe(2);
+        
+        // Delete Alice
+        await collection.deleteOne(users[1]._id);
+        
+        // Verify sort index is updated
+        result = await collection.getSorted('age', 'asc');
+        expect(result.records.length).toBe(1);
+        expect(result.totalRecords).toBe(1);
+        expect(result.records[0].age).toBe(30); // Only John remains
+    });
+    
+    test('should support pagination with sort indexes', async () => {
+        const users = [
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174001',
+                name: 'John Doe',
+                email: 'john@example.com',
+                age: 30,
+                role: 'user'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174002',
+                name: 'Alice Smith',
+                email: 'alice@example.com',
+                age: 25,
+                role: 'admin'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174003',
+                name: 'Bob Johnson',
+                email: 'bob@example.com',
+                age: 35,
+                role: 'user'
+            }
+        ];
+        
+        // Insert users
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+        
+        // Create an index on age
+        await collection.ensureSortIndex('age', 'asc', 'number');
+        
+        // Get first page
+        let result = await collection.getSorted('age', 'asc');
+        expect(result.records.length).toBeGreaterThan(0);
+        expect(result.totalRecords).toBe(3);
+        expect(result.totalPages).toBeGreaterThan(0);
+        
+        // Collect all records across pages
+        const allRecords: TestUser[] = [...result.records];
+        let currentPageId = result.nextPageId;
+        
+        while (currentPageId) {
+            result = await collection.getSorted('age', 'asc', currentPageId);
+            allRecords.push(...result.records);
+            currentPageId = result.nextPageId;
+        }
+        
+        // Verify we got all records
+        expect(allRecords.length).toBe(3);
+        
+        // Verify they're sorted correctly
+        expect(allRecords[0].age).toBe(25); // Alice
+        expect(allRecords[1].age).toBe(30); // John
+        expect(allRecords[2].age).toBe(35); // Bob
+    });
+    
+    test('should support descending order with sort indexes', async () => {
+        const users = [
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174001',
+                name: 'John Doe',
+                email: 'john@example.com',
+                age: 30,
+                role: 'user'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174002',
+                name: 'Alice Smith',
+                email: 'alice@example.com',
+                age: 25,
+                role: 'admin'
+            },
+            {
+                _id: '123e4567-e89b-12d3-a456-426614174003',
+                name: 'Bob Johnson',
+                email: 'bob@example.com',
+                age: 35,
+                role: 'user'
+            }
+        ];
+        
+        // Insert users
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+        
+        // Create a descending index on age
+        await collection.ensureSortIndex('age', 'desc', 'number');
+        
+        // Get sorted records in descending order
+        const result = await collection.getSorted('age', 'desc');
+        
+        // Verify records are sorted in descending order
+        expect(result.records.length).toBe(users.length);
+        expect(result.records[0].age).toBe(35); // Bob first
+        expect(result.records[1].age).toBe(30); // John second
+        expect(result.records[2].age).toBe(25); // Alice last
+    });
+    
     test('should drop the collection', async () => {
         const user: TestUser = {
             _id: '123e4567-e89b-12d3-a456-426614174000',
