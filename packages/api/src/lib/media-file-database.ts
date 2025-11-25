@@ -298,8 +298,8 @@ export async function loadDatabase(
     assetStorage: IStorage,
     metadataCollection: IBsonCollection<IAsset>
 ): Promise<void> {
-    await retry(() => metadataCollection.loadSortIndex("hash", "asc", "string"));
-    await retry(() => metadataCollection.loadSortIndex("photoDate", "desc", "date"));
+    await retry(() => metadataCollection.loadSortIndexFromStorage("hash", "asc", "string"));
+    await retry(() => metadataCollection.loadSortIndexFromStorage("photoDate", "desc", "date"));
 
     log.verbose(`Loaded existing media file database from: ${assetStorage.location}`);
 }
