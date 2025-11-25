@@ -237,6 +237,12 @@ export interface IBsonCollection<RecordT extends IRecord> {
     deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean>;
 
     //
+    // Loads a sort index by field name and direction.
+    // Returns the SortIndex instance if it exists, undefined otherwise.
+    //
+    loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined>;
+
+    //
     // Updates a record.
     // @param timestamp Optional unix timestamp for field metadata (defaults to current time)
     //
@@ -378,7 +384,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads a sort index by field name and direction.
     // Creates a new instance and tries to load it from disk.
     //
-    private async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
+    async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
         const sortIndex = this.createSortIndex(fieldName, direction);
         const loaded = await sortIndex.load();
         if (!loaded) {

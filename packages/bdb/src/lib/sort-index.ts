@@ -1884,6 +1884,17 @@ export class SortIndex implements ISortIndex {
     }
 
     /**
+     * Helper function to format a value, truncating to first 4 and last 4 characters
+     */
+    private formatValueForDisplay(value: any): string {
+        const str = String(value);
+        if (str.length > 8) {
+            return `${str.slice(0, 4)}-${str.slice(-4)}`;
+        }
+        return str;
+    }
+
+    /**
      * Visualizes the B-tree structure for debugging purposes
      * Returns a string representation of the tree
      */
@@ -1907,10 +1918,11 @@ export class SortIndex implements ISortIndex {
             const indent = "  ".repeat(level);
             const nodeType = node.children.length === 0 ? "LEAF" : "INTERNAL";
             
-            lines.push(`${indent}[${nodeId}] ${nodeType} NODE`);
+            const shortNodeId = `${nodeId.slice(0, 4)}-${nodeId.slice(-4)}`;
+            lines.push(`${indent}[${shortNodeId}] ${nodeType} NODE`);
             
             if (node.keys.length > 0) {
-                lines.push(`${indent} Keys: ${node.keys.join(', ')}`);
+                lines.push(`${indent} Keys: ${node.keys.map(k => this.formatValueForDisplay(k)).join(', ')}`);
             }
             
             if (node.children.length === 0) {
@@ -1918,7 +1930,7 @@ export class SortIndex implements ISortIndex {
                 if (records && records.length > 0) {
                     lines.push(`${indent} Records: ${records.length}`);
                     // Show first few records for preview
-                    const preview = records.slice(0, 3).map(r => `${r.value}`).join(', ');
+                    const preview = records.slice(0, 3).map(r => this.formatValueForDisplay(r.value)).join(', ');
                     if (records.length > 3) {
                         lines.push(`${indent} Values: ${preview}, ...`);
                     } 
@@ -1926,13 +1938,11 @@ export class SortIndex implements ISortIndex {
                         lines.push(`${indent} Values: ${preview}`);
                     }
                     
-                    if (node.nextLeaf) {
-                        lines.push(`${indent} Next leaf: ${node.nextLeaf}`);
-                    }
+                    const shortPrevLeaf = node.previousLeaf ? `${node.previousLeaf.slice(0, 4)}-${node.previousLeaf.slice(-4)}` : 'undefined';
+                    lines.push(`${indent} Previous leaf: ${shortPrevLeaf}`);
 
-                    if (node.previousLeaf) {
-                        lines.push(`${indent} Previous leaf: ${node.previousLeaf}`);
-                    }
+                    const shortNextLeaf = node.nextLeaf ? `${node.nextLeaf.slice(0, 4)}-${node.nextLeaf.slice(-4)}` : 'undefined';
+                    lines.push(`${indent} Next leaf: ${shortNextLeaf}`);
                 }
             } 
             else {
