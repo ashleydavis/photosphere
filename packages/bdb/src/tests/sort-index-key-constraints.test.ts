@@ -48,7 +48,6 @@ describe('SortIndex Key Constraints', () => {
         // We need to access the tree nodes directly to get the actual key counts
         // Since these are private, we'll use the visualization to understand the structure
         const visualization = await index.visualizeTree();
-        const stats = await index.analyzeTreeStructure();
         
         const violations: Array<{
             nodeId: string;
