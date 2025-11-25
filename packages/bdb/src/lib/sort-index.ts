@@ -213,7 +213,7 @@ export class SortIndex implements ISortIndex {
     private treeFilePath: string;
     
     // Map of all tree nodes
-    private treeNodes: Map<string, IBTreeNode> = new Map(); //todo: load this as needed.
+    private treeNodes: Map<string, IBTreeNode> = new Map();
     
     // UUID generator for creating unique identifiers
     private readonly uuidGenerator: IUuidGenerator;
