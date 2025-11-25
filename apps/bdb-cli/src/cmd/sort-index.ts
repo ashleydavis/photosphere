@@ -27,7 +27,7 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
     console.log(pc.green(`Direction: ${direction}`));
     console.log(pc.green(`Index exists: ${hasIndex ? 'Yes' : 'No'}`));
     
-    if (hasIndex) {
+    if (hasIndex) {       
         // Try to get some records to show index structure
         const sortedRecords = await collection.getSorted(fieldName, direction as SortDirection);
         
@@ -44,6 +44,16 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
                 console.log(pc.white(`  ${(record as any)._id}: ${fieldValue}`));
             }
         }
+
+        // Load the sort index from the collection
+        const sortIndex = await collection.loadSortIndex(fieldName, direction as SortDirection);        
+        if (sortIndex) {
+            // Display the btree structure
+            const treeVisualization = await sortIndex.visualizeTree();
+            console.log(pc.cyan("\nB-Tree Structure:"));
+            console.log(pc.white(treeVisualization));
+        }
+
     } else {
         console.log(pc.yellow("Index does not exist."));
     }
