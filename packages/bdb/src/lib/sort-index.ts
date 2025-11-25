@@ -609,7 +609,7 @@ export class SortIndex implements ISortIndex {
        
         // Iterate through all records and add them directly to the B-tree
         for await (const record of collection.iterateRecords()) {
-            const value = record.fields[this.fieldName];
+            const value = record.fields[this.fieldName]; //TODO: To make this work incrementally, we need a fast to tell if the record is already in the index.
             if (value !== undefined) {
                 // Add each record directly to the index
                 await this.addRecord(record);
