@@ -37,7 +37,7 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
         console.log(pc.white(`  Current page: ${sortedRecords.currentPageId}`));
         
         if (sortedRecords.records.length > 0) {
-            console.log(pc.cyan(`\nFirst ${Math.min(5, sortedRecords.records.length)} records (sorted by ${fieldName}):`));
+            console.log(pc.cyan(`\nFirst ${Math.min(5, sortedRecords.records.length)} records (sorted by ${fieldName}/${direction}):`));
             for (let i = 0; i < Math.min(5, sortedRecords.records.length); i++) {
                 const record = sortedRecords.records[i];
                 const fieldValue = (record as any)[fieldName];
