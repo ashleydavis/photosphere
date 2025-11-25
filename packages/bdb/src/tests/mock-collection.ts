@@ -1,6 +1,7 @@
 import { IMerkleTree } from 'merkle-tree';
 import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord } from '../lib/collection';
 import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
+import type { SortIndex } from '../lib/sort-index';
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
@@ -66,6 +67,11 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
 
     async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         throw new Error('Method not implemented.');
+    }
+
+    async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
+        // Mock implementation - return undefined for testing
+        return undefined;
     }
 
     async updateOne(id: string, updates: Partial<T>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
