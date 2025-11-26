@@ -512,6 +512,9 @@ export class SortIndex implements ISortIndex {
             return;
         }
       
+        // Clear any existing tree nodes to start fresh
+        this.treeNodes.clear();
+      
         // Create an empty root leaf node to start with (empty children array means it's a leaf)
         const emptyRoot: IBTreeNode = {
             keys: [],
