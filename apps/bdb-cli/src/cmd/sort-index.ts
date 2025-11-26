@@ -52,6 +52,30 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
             const treeVisualization = await sortIndex.visualizeTree();
             console.log(pc.cyan("\nB-Tree Structure:"));
             console.log(pc.white(treeVisualization));
+
+            // Collect all page IDs by traversing through all pages
+            const pageIds: string[] = [];
+            let currentPage = await collection.getSorted(fieldName, direction as SortDirection);
+            
+            if (currentPage.currentPageId) {
+                pageIds.push(currentPage.currentPageId);
+                
+                // Traverse through all pages using nextPageId
+                while (currentPage.nextPageId) {
+                    currentPage = await collection.getSorted(fieldName, direction as SortDirection, currentPage.nextPageId);
+                    if (currentPage.currentPageId) {
+                        pageIds.push(currentPage.currentPageId);
+                    }
+                }
+            }
+
+            // Display all page IDs numbered from page 1
+            if (pageIds.length > 0) {
+                console.log(pc.cyan("\nAll Page IDs:"));
+                pageIds.forEach((pageId, index) => {
+                    console.log(pc.white(`  Page ${index + 1}: ${pageId}`));
+                });
+            }
         }
 
     } else {
