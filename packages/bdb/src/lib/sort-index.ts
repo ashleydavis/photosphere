@@ -115,8 +115,9 @@ export interface ISortIndex {
 
     //
     // Builds the sort index from the collection.
+    // @param progressCallback Optional callback to report progress (called every 1000 records)
     //
-    build(collection: IBsonCollection<any>): Promise<void>;
+    build(collection: IBsonCollection<any>, progressCallback?: (message: string) => void): Promise<void>;
 
     //
     // Get a page of records from the collection using the sort index.
@@ -507,7 +508,7 @@ export class SortIndex implements ISortIndex {
     //
     // Builds the sort index by directly inserting records from the collection.
     //
-    async build(collection: IBsonCollection<any>): Promise<void> {
+    async build(collection: IBsonCollection<any>, progressCallback?: (message: string) => void): Promise<void> {
         if (this.loaded) {
             return;
         }
@@ -536,21 +537,128 @@ export class SortIndex implements ISortIndex {
         this.totalEntries = 0;
         this.totalPages = 1; // Start with a single leaf page
         
-        // Track whether we've added any records
+        // Local cache for batched writes - only keeps pages being actively modified
+        const leafRecordsCache: Map<string, ISortedIndexEntry[]> = new Map();
+        const dirtyLeafNodes: Set<string> = new Set();
+        let treeStructureChanged = false;
         let recordsAdded = 0;
+        const batchSize = 1000;
        
-        // Iterate through all records and add them directly to the B-tree
-        for await (const record of collection.iterateRecords()) {
-            const value = record.fields[this.fieldName]; //TODO: To make this work incrementally, we need a fast to tell if the record is already in the index.
-            if (value !== undefined) {
-                // Add each record directly to the index
-                await this.addRecord(record);
-                recordsAdded++;
+        // Helper function to flush dirty nodes to disk
+        const flushDirtyNodes = async (): Promise<void> => {
+            for (const leafId of dirtyLeafNodes) {
+                const leafRecords = leafRecordsCache.get(leafId);
+                if (leafRecords) {
+                    await this.saveLeafRecords(leafId, leafRecords);
+                    // Remove from cache once written (page is full or being flushed)
+                    leafRecordsCache.delete(leafId);
+                }
             }
+            dirtyLeafNodes.clear();
+            
+            if (treeStructureChanged) {
+                await this.saveTree();
+                treeStructureChanged = false;
+            }
+        };
+
+        // Helper function to add a record with batching
+        const addRecordBatched = async (record: IInternalRecord): Promise<void> => {
+            const recordId = record._id;
+            const value = record.fields[this.fieldName];
+            
+            if (value === undefined) {
+                return;
+            }
+            
+            const newEntry: ISortedIndexEntry = {
+                _id: recordId,
+                value,
+                fields: record.fields,
+            };
+            
+            const leafId = this.findLeafForValue(value);
+            if (!leafId) {
+                return;
+            }
+            
+            const leafNode = this.getNode(leafId);
+            if (!leafNode || leafNode.children.length > 0) {
+                return;
+            }
+            
+            // Get leaf records from cache or load from disk
+            let leafRecords = leafRecordsCache.get(leafId);
+            if (!leafRecords) {
+                leafRecords = await this.loadLeafRecords(leafId) || [];
+                leafRecordsCache.set(leafId, leafRecords);
+            }
+            
+            // Binary search to find insertion point
+            let left = 0;
+            let right = leafRecords.length - 1;
+            let insertIndex = leafRecords.length;
+            
+            while (left <= right) {
+                const mid = Math.floor((left + right) / 2);
+                const compareResult = this.compareValues(value, leafRecords[mid].value);
+                if (compareResult < 0) {
+                    insertIndex = mid;
+                    right = mid - 1;
+                } else {
+                    left = mid + 1;
+                }
+            }
+            
+            leafRecords.splice(insertIndex, 0, newEntry);
+            dirtyLeafNodes.add(leafId);
+            
+            // If inserted at beginning, mark tree structure as changed
+            if (insertIndex === 0 && leafRecords.length > 1) {
+                treeStructureChanged = true;
+            }
+            
+            this.totalEntries++;
+            recordsAdded++;
+            
+            // If leaf exceeds split threshold, split it (this saves both nodes)
+            if (leafRecords.length > this.pageSize * leafSplitThreshold) {
+                await this.splitLeafNode(leafId, leafNode, leafRecords);
+                treeStructureChanged = true;
+                // After split, both nodes are saved, so remove from cache
+                leafRecordsCache.delete(leafId);
+                dirtyLeafNodes.delete(leafId);
+            }
+            // If page is full (but not over split threshold), write it immediately and remove from cache
+            else if (leafRecords.length >= this.pageSize) {
+                await this.saveLeafRecords(leafId, leafRecords);
+                leafRecordsCache.delete(leafId);
+                dirtyLeafNodes.delete(leafId);
+            }
+            
+            // Flush every batchSize records
+            if (recordsAdded % batchSize === 0) {
+                await flushDirtyNodes();
+                if (progressCallback) {
+                    progressCallback(`Indexed ${recordsAdded} records...`);
+                }
+            }
+        };
+       
+        // Iterate through all records and add them with batching
+        for await (const record of collection.iterateRecords()) {
+            await addRecordBatched(record);
         }
+        
+        // Final flush of any remaining dirty nodes
+        await flushDirtyNodes();
         
         // Save tree nodes and metadata to the single file
         await this.saveTree();
+        
+        if (progressCallback && recordsAdded > 0) {
+            progressCallback(`Completed indexing ${recordsAdded} records.`);
+        }
                        
         this.loaded = true;
     }
