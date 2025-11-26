@@ -244,4 +244,258 @@ describe('SortIndex', () => {
         const exists = await storage.dirExists('db/sort_indexes/test_collection/score_asc');
         expect(exists).toBe(false);        
     });
+
+    test('should throw error when calling getPage without loading', async () => {
+        // Don't build the index
+        await expect(sortIndex.getPage()).rejects.toThrow('Sort index is not loaded');
+    });
+
+    test('should throw error when calling findByValue without loading', async () => {
+        // Don't build the index
+        await expect(sortIndex.findByValue(85)).rejects.toThrow('Sort index is not loaded');
+    });
+
+    test('should throw error when calling findByRange without loading', async () => {
+        // Don't build the index
+        await expect(sortIndex.findByRange({ min: 70, max: 85 })).rejects.toThrow('Sort index is not loaded');
+    });
+
+    test('should throw error when calling updateRecord without loading', async () => {
+        // Don't build the index
+        await expect(sortIndex.updateRecord(
+            toInternal<TestRecord>(testRecords[0], 1000),
+            undefined
+        )).rejects.toThrow('Sort index is not loaded');
+    });
+
+    test('should throw error when calling deleteRecord without loading', async () => {
+        // Don't build the index
+        await expect(sortIndex.deleteRecord(
+            testRecords[0]._id,
+            toInternal<TestRecord>(testRecords[0], 1000)
+        )).rejects.toThrow('Sort index is not loaded');
+    });
+
+    test('should handle empty collection', async () => {
+        const emptyCollection = new MockCollection<TestRecord>([]);
+        await sortIndex.build(emptyCollection);
+        
+        const result = await sortIndex.getPage();
+        expect(result.records.length).toBe(0);
+        expect(result.totalRecords).toBe(0);
+        expect(result.totalPages).toBe(1); // Should have one empty leaf page
+    });
+
+    test('should handle single record collection', async () => {
+        const singleRecord: TestRecord[] = [
+            { _id: '123e4567-e89b-12d3-a456-426614174001', name: 'Record 1', score: 85, category: 'A' }
+        ];
+        const singleCollection = new MockCollection<TestRecord>(singleRecord);
+        await sortIndex.build(singleCollection);
+        
+        const result = await sortIndex.getPage();
+        expect(result.records.length).toBe(1);
+        expect(result.totalRecords).toBe(1);
+        expect(result.totalPages).toBe(1);
+        expect(result.records[0].fields.score).toBe(85);
+    });
+
+    test('should handle collection with all same values', async () => {
+        const sameValueRecords: TestRecord[] = [
+            { _id: '1', name: 'Record 1', score: 100, category: 'A' },
+            { _id: '2', name: 'Record 2', score: 100, category: 'B' },
+            { _id: '3', name: 'Record 3', score: 100, category: 'C' },
+            { _id: '4', name: 'Record 4', score: 100, category: 'D' },
+        ];
+        const sameCollection = new MockCollection<TestRecord>(sameValueRecords);
+        await sortIndex.build(sameCollection);
+        
+        const result = await sortIndex.findByValue(100);
+        expect(result.length).toBe(4);
+        expect(result.every(r => r.fields.score === 100)).toBe(true);
+        
+        // All records should be accessible via pagination
+        let allRecords: ISortedIndexEntry[] = [];
+        let currentPage = await sortIndex.getPage('');
+        allRecords = [...allRecords, ...currentPage.records];
+        
+        while (currentPage.nextPageId) {
+            currentPage = await sortIndex.getPage(currentPage.nextPageId);
+            allRecords = [...allRecords, ...currentPage.records];
+        }
+        
+        expect(allRecords.length).toBe(4);
+    });
+
+    test('should handle records with undefined indexed field', async () => {
+        interface RecordWithOptionalScore extends IRecord {
+            _id: string;
+            name: string;
+            score?: number;
+            category: string;
+        }
+        
+        const recordsWithUndefined: RecordWithOptionalScore[] = [
+            { _id: '1', name: 'Record 1', score: 85, category: 'A' },
+            { _id: '2', name: 'Record 2', category: 'B' }, // No score
+            { _id: '3', name: 'Record 3', score: 90, category: 'C' },
+        ];
+        const collectionWithUndefined = new MockCollection<RecordWithOptionalScore>(recordsWithUndefined);
+        
+        const indexWithUndefined = new SortIndex({
+            storage,
+            baseDirectory: 'db',
+            collectionName: 'test_collection',
+            fieldName: 'score',
+            direction: 'asc',
+            pageSize: 2,
+            uuidGenerator: new RandomUuidGenerator()
+        });
+        
+        await indexWithUndefined.build(collectionWithUndefined);
+        
+        const result = await indexWithUndefined.getPage();
+        // Should only have 2 records (those with score defined)
+        expect(result.totalRecords).toBe(2);
+        expect(result.records.every(r => r.fields.score !== undefined)).toBe(true);
+    });
+
+    test('should load index from disk', async () => {
+        // Build the index first
+        await sortIndex.build(collection);
+        
+        // Create a new index instance pointing to the same location
+        const loadedIndex = new SortIndex({
+            storage,
+            baseDirectory: 'db',
+            collectionName: 'test_collection',
+            fieldName: 'score',
+            direction: 'asc',
+            pageSize: 2,
+            uuidGenerator: new RandomUuidGenerator()
+        });
+        
+        // Load the index
+        const loaded = await loadedIndex.load();
+        expect(loaded).toBe(true);
+        
+        // Verify we can access the data
+        const result = await loadedIndex.getPage();
+        expect(result.totalRecords).toBe(5);
+        expect(result.records.length).toBeGreaterThan(0);
+    });
+
+    test('should return false when loading non-existent index', async () => {
+        const newIndex = new SortIndex({
+            storage,
+            baseDirectory: 'db',
+            collectionName: 'nonexistent',
+            fieldName: 'score',
+            direction: 'asc',
+            pageSize: 2,
+            uuidGenerator: new RandomUuidGenerator()
+        });
+        
+        const loaded = await newIndex.load();
+        expect(loaded).toBe(false);
+    });
+
+    test('should clear treeNodes when building after load', async () => {
+        // Build the index first
+        await sortIndex.build(collection);
+        
+        // Verify it has data
+        const firstResult = await sortIndex.getPage();
+        expect(firstResult.totalRecords).toBe(5);
+        
+        // Create a new collection with different data
+        const newRecords: TestRecord[] = [
+            { _id: 'new1', name: 'New 1', score: 10, category: 'A' },
+            { _id: 'new2', name: 'New 2', score: 20, category: 'B' },
+        ];
+        const newCollection = new MockCollection<TestRecord>(newRecords);
+        
+        // Delete the index first to allow rebuild
+        await sortIndex.delete();
+        
+        // Build again with new data - this should clear treeNodes
+        await sortIndex.build(newCollection);
+        
+        // Verify we have the new data, not the old
+        const secondResult = await sortIndex.getPage();
+        expect(secondResult.totalRecords).toBe(2);
+        expect(secondResult.records[0].fields.score).toBe(10);
+        expect(secondResult.records[1].fields.score).toBe(20);
+    });
+
+    test('should not rebuild if already loaded', async () => {
+        // Build the index
+        await sortIndex.build(collection);
+        
+        // Try to build again - should return early without error
+        await sortIndex.build(collection);
+        
+        // Verify the original data is still there
+        const result = await sortIndex.getPage();
+        expect(result.totalRecords).toBe(5);
+    });
+
+    test('should reset state properly when building', async () => {
+        // Build with initial data
+        await sortIndex.build(collection);
+        
+        const firstResult = await sortIndex.getPage();
+        const firstTotalEntries = firstResult.totalRecords;
+        const firstTotalPages = firstResult.totalPages;
+        const firstRootPageId = firstResult.currentPageId;
+        
+        // Delete and rebuild with different data
+        await sortIndex.delete();
+        
+        const newRecords: TestRecord[] = [
+            { _id: 'new1', name: 'New 1', score: 10, category: 'A' },
+        ];
+        const newCollection = new MockCollection<TestRecord>(newRecords);
+        await sortIndex.build(newCollection);
+        
+        // Verify state was reset
+        const secondResult = await sortIndex.getPage();
+        expect(secondResult.totalRecords).toBe(1); // New count
+        expect(secondResult.totalPages).toBe(1); // New page count
+        expect(secondResult.currentPageId).not.toBe(firstRootPageId); // New root
+    });
+
+    test('should handle visualizeTree', async () => {
+        await sortIndex.build(collection);
+        
+        const visualization = await sortIndex.visualizeTree();
+        expect(visualization).toContain('B-Tree Index');
+        expect(visualization).toContain('score');
+        expect(visualization).toContain('asc');
+        expect(visualization).toContain('Total entries: 5');
+    });
+
+    test('should handle analyzeTreeStructure', async () => {
+        await sortIndex.build(collection);
+        
+        const stats = await sortIndex.analyzeTreeStructure();
+        expect(stats.totalNodes).toBeGreaterThan(0);
+        expect(stats.leafNodes).toBeGreaterThan(0);
+        expect(stats.totalNodes).toBeGreaterThanOrEqual(stats.leafNodes);
+        expect(stats.minKeysPerNode).toBeGreaterThanOrEqual(0);
+        expect(stats.maxKeysPerNode).toBeGreaterThan(0);
+        expect(stats.avgKeysPerNode).toBeGreaterThan(0);
+        expect(stats.nodeKeyDistribution.length).toBe(stats.totalNodes);
+    });
+
+    test('should handle empty tree visualization', async () => {
+        const emptyCollection = new MockCollection<TestRecord>([]);
+        await sortIndex.build(emptyCollection);
+        
+        const visualization = await sortIndex.visualizeTree();
+        // Building an empty collection creates a root node, so it shouldn't be "Empty tree"
+        expect(visualization).not.toContain('Empty tree');
+        expect(visualization).toContain('Total entries: 0');
+        expect(visualization).toContain('Total pages: 1'); // Should have one empty leaf page
+    });
 });
