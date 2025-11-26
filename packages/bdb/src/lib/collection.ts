@@ -215,8 +215,10 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // Create or rebuild a sort index for the specified field
     // @param fieldName The field to create a sort index for
     // @param direction The sort direction
+    // @param progressCallback Optional callback to report progress during build (called every 1000 records)
     //
-    ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void>;
+    ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, progressCallback?: (message: string) => void): Promise<void>;
+
 
     //
     // Load a sort index from storage.
@@ -1152,20 +1154,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Builds the sort index if it doesn't exist.
-    //
-    private async ensureSortIndexInternal(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
-        if (!await sortIndex.load()) {
-            await sortIndex.build(this);
-        }
-    }
-
-    //
     // Create or rebuild a sort index for the specified field
     //
-    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {       
-        await this.ensureSortIndexInternal(fieldName, direction, type);
+    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, progressCallback?: (message: string) => void): Promise<void> {
+        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
+        if (!await sortIndex.load()) {
+            await sortIndex.build(this, progressCallback);
+        }
     }
 
     //

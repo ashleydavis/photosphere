@@ -54,10 +54,13 @@ export async function buildSortIndexCommand(
         console.log(pc.green(`Building sort index for ${fieldName}/${direction}...`));
     }
 
-    // Use ensureSortIndex which will create and build the index if it doesn't exist
-    // After deletion (rebuild case), it will also create and build
     const startTime = Date.now();
-    await collection.ensureSortIndex(fieldName, direction as SortDirection, type);
+    
+    // Build the index with progress reporting
+    await collection.ensureSortIndex(fieldName, direction as SortDirection, type, (message) => {
+        console.log(pc.cyan(message));
+    });
+    
     const endTime = Date.now();
     const duration = endTime - startTime;
 
