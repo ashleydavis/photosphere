@@ -8,6 +8,8 @@ import { editCommand } from './cmd/edit';
 import { sortIndexesCommand } from './cmd/sort-indexes';
 import { sortIndexCommand } from './cmd/sort-index';
 import { sortPageCommand } from './cmd/sort-page';
+import { buildSortIndexCommand } from './cmd/build-sort-index';
+import { deleteSortIndexCommand } from './cmd/delete-sort-index';
 import pc from "picocolors";
 
 async function main() {
@@ -24,6 +26,7 @@ Examples:
   ${pc.bold("bdb record <db-path> <collection> <record-id>")}     Show a specific record
   ${pc.bold("bdb edit <db-path> <collection> <record-id> <field> <type> <value>")}  Edit a field in a record
   ${pc.bold("bdb sort-indexes <db-path> <collection>")}           List sort indexes
+  ${pc.bold("bdb build-sort-index <db-path> <collection> <field> <direction> --type <type>")}  Build a sort index
 
 Resources:
   📖 BDB Package: packages/bdb
@@ -167,6 +170,41 @@ Examples:
   ${pc.bold("bdb sort-page ./my-database metadata photoTakenAt desc page-1")}
   ${pc.bold("bdb sort-pg ./my-database users createdAt asc page-5")}`)
         .action(sortPageCommand);
+
+    program
+        .command("build-sort-index")
+        .alias("build-idx")
+        .description("Builds or rebuilds a sort index for a collection")
+        .argument("<db-path>", "Path to the database directory")
+        .argument("<collection-name>", "Name of the collection")
+        .argument("<field-name>", "Name of the field to index")
+        .argument("<direction>", "Sort direction: 'asc' or 'desc'")
+        .option("-v, --verbose", "Enable verbose logging", false)
+        .option("--rebuild", "Rebuild the index even if it already exists", false)
+        .option("--type <type>", "Data type: 'date', 'string', or 'number' (defaults to 'string')", 'string')
+        .addHelpText('after', `
+
+Examples:
+  ${pc.bold("bdb build-sort-index ./my-database metadata photoTakenAt desc --type date")}
+  ${pc.bold("bdb build-idx ./my-database users createdAt asc --type date --rebuild")}
+  ${pc.bold("bdb build-sort-index ./my-database products price asc --type number")}`)
+        .action(buildSortIndexCommand);
+
+    program
+        .command("delete-sort-index")
+        .alias("delete-idx")
+        .description("Deletes a sort index from a collection")
+        .argument("<db-path>", "Path to the database directory")
+        .argument("<collection-name>", "Name of the collection")
+        .argument("<field-name>", "Name of the field for the sort index")
+        .argument("<direction>", "Sort direction: 'asc' or 'desc'")
+        .option("-v, --verbose", "Enable verbose logging", false)
+        .addHelpText('after', `
+
+Examples:
+  ${pc.bold("bdb delete-sort-index ./my-database metadata photoTakenAt desc")}
+  ${pc.bold("bdb delete-idx ./my-database users createdAt asc")}`)
+        .action(deleteSortIndexCommand);
 
     // Parse the command line arguments
     try {
