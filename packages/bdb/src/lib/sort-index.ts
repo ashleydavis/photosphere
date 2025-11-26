@@ -7,7 +7,7 @@ import type { IInternalRecord, IBsonCollection } from './collection';
 import type { IStorage } from 'storage';
 import { retry } from 'utils';
 import type { IUuidGenerator } from 'utils';
-import { save, load } from 'serialization';
+import { save, load, BinarySerializer, BinaryDeserializer } from 'serialization';
 import type { IDeserializer, ISerializer } from 'serialization';
 
 export type SortDirection = 'asc' | 'desc';
@@ -276,11 +276,8 @@ export class SortIndex implements ISortIndex {
             const pageIdBuffer = deserializer.readBuffer();
             const pageId = pageIdBuffer.toString('utf8');
             
-            // Read node data with length prefix
-            const nodeBuffer = deserializer.readBuffer();
-            
-            // Deserialize the node
-            const { node } = this.deserializeNode(nodeBuffer, 0);
+            // Deserialize node directly from the deserializer
+            const node = this.deserializeNode(deserializer);
             treeNodes.set(pageId, node);
         }
 
@@ -332,7 +329,9 @@ export class SortIndex implements ISortIndex {
         
         // Start with the root node, which has no parent
         const rootNode = this.treeNodes.get(this.rootPageId);
-        if (!rootNode) return;
+        if (!rootNode) {
+            return;
+        }
         
         // Root node has no parent
         rootNode.parentId = undefined;
@@ -340,7 +339,9 @@ export class SortIndex implements ISortIndex {
         // Recursively set parents for all children
         const setParentsForChildren = (nodeId: string): void => {
             const node = this.treeNodes.get(nodeId);
-            if (!node || node.children.length === 0) return;
+            if (!node || node.children.length === 0) {
+                return;
+            }
             
             // For each child of this node, set its parent to this node
             for (const childId of node.children) {
@@ -361,121 +362,57 @@ export class SortIndex implements ISortIndex {
     }
 
     // Serialize a single node to a buffer
-    //TODO: Would be good if this used the new serialization interface.
-    private serializeNode(node: IBTreeNode, buffer: Buffer, offset: number): number {
-        let currentOffset = offset;
-        
-        // Serialize keys as BSON and write length + data
-        const keysBson = Buffer.from(BSON.serialize({ keys: node.keys }));
-        buffer.writeUInt32LE(keysBson.length, currentOffset);
-        currentOffset += 4;
-        keysBson.copy(buffer, currentOffset);
-        currentOffset += keysBson.length;
+    private serializeNode(node: IBTreeNode, serializer: ISerializer): void {
+
+        serializer.writeUInt32(0); // Each node used to store a buffer prefixed with the length. Write this for backward compatibility.
+
+        // Serialize keys as BSON
+        serializer.writeBSON({ keys: node.keys });
         
         // Write children count (4 bytes) and children data
         // Note: A node is a leaf if children.length === 0, no need for separate isLeaf flag
-        buffer.writeUInt32LE(node.children.length, currentOffset);
-        currentOffset += 4;
+        serializer.writeUInt32(node.children.length);
         
         for (const child of node.children) {
-            const childBuffer = Buffer.from(child, 'utf8');
-            buffer.writeUInt32LE(childBuffer.length, currentOffset);
-            currentOffset += 4;
-            childBuffer.copy(buffer, currentOffset);
-            currentOffset += childBuffer.length;
+            serializer.writeString(child);
         }
         
-        // Write nextLeaf if it exists
-        if (node.nextLeaf) {
-            const nextLeafBuffer = Buffer.from(node.nextLeaf, 'utf8');
-            buffer.writeUInt32LE(nextLeafBuffer.length, currentOffset);
-            currentOffset += 4;
-            nextLeafBuffer.copy(buffer, currentOffset);
-            currentOffset += nextLeafBuffer.length;
-        } else {
-            // Write 0 length for no nextLeaf
-            buffer.writeUInt32LE(0, currentOffset);
-            currentOffset += 4;
-        }
+        // Write nextLeaf (empty string if undefined)
+        serializer.writeString(node.nextLeaf || '');
         
-        // Write previousLeaf if it exists
-        if (node.previousLeaf) {
-            const previousLeafBuffer = Buffer.from(node.previousLeaf, 'utf8');
-            buffer.writeUInt32LE(previousLeafBuffer.length, currentOffset);
-            currentOffset += 4;
-            previousLeafBuffer.copy(buffer, currentOffset);
-            currentOffset += previousLeafBuffer.length;
-        } else {
-            // Write 0 length for no previousLeaf
-            buffer.writeUInt32LE(0, currentOffset);
-            currentOffset += 4;
-        }
+        // Write previousLeaf (empty string if undefined)
+        serializer.writeString(node.previousLeaf || '');
                
         // parentId is deliberately not serialized - it will be reconstructed during load
-        
-        return currentOffset;
     }
     
-    // Deserialize a single node from a buffer
-    //TODO: Would be good if this used the new serialization interface.
-    private deserializeNode(buffer: Buffer, offset: number): { node: IBTreeNode, nextOffset: number } {
-        let currentOffset = offset;
-        
-        // Read keys length and data
-        const keysLength = buffer.readUInt32LE(currentOffset);
-        currentOffset += 4;
-        const keysBson = buffer.subarray(currentOffset, currentOffset + keysLength);
-        currentOffset += keysLength;
-        const keysData = BSON.deserialize(keysBson);
+    // Deserialize a single node from a deserializer
+    private deserializeNode(deserializer: IDeserializer): IBTreeNode {
+
+        deserializer.readUInt32(); // Each node use to be stored a buffer prefixed with the lenght. Need to drop this.
+
+        // Read keys as BSON
+        const keysData = deserializer.readBSON<{ keys: any[] }>();
         const keys = keysData.keys || [];
         
         // Read children count and data
-        const childrenCount = buffer.readUInt32LE(currentOffset);
-        currentOffset += 4;
+        const childrenCount = deserializer.readUInt32();
         const children: string[] = [];
         
         for (let i = 0; i < childrenCount; i++) {
-            const childLength = buffer.readUInt32LE(currentOffset);
-            currentOffset += 4;
-            const childBuffer = buffer.subarray(currentOffset, currentOffset + childLength);
-            currentOffset += childLength;
-            children.push(childBuffer.toString('utf8'));
+            children.push(deserializer.readString());
         }
         
-        // Read nextLeaf
-        const nextLeafLength = buffer.readUInt32LE(currentOffset);
-        currentOffset += 4;
-        let nextLeaf: string | undefined = undefined;
+        // Read nextLeaf (empty string becomes undefined)
+        const nextLeaf = deserializer.readString() || undefined;
         
-        if (nextLeafLength > 0) {
-            const nextLeafBuffer = buffer.subarray(currentOffset, currentOffset + nextLeafLength);
-            currentOffset += nextLeafLength;
-            nextLeaf = nextLeafBuffer.toString('utf8');
-        }
-        
-        // Read previousLeaf
-        const previousLeafLength = buffer.readUInt32LE(currentOffset);
-        currentOffset += 4;
-        let previousLeaf: string | undefined = undefined;
-        
-        if (previousLeafLength > 0) {
-            const previousLeafBuffer = buffer.subarray(currentOffset, currentOffset + previousLeafLength);
-            currentOffset += previousLeafLength;
-            previousLeaf = previousLeafBuffer.toString('utf8');
-        }
-        
-        // Read numRecords if there is data left
-        let numRecords = 0;
-        if (currentOffset < buffer.length) {
-            // Check if there's data for numRecords (for backward compatibility)
-            numRecords = buffer.readUInt32LE(currentOffset);
-            currentOffset += 4;
-        }
+        // Read previousLeaf (empty string becomes undefined)
+        const previousLeaf = deserializer.readString() || undefined;
         
         // parentId is not present in the serialized format anymore
         // It will be reconstructed after loading all nodes
         
-        const node: IBTreeNode = {
+        return {
             keys,
             children,
             nextLeaf,
@@ -483,8 +420,6 @@ export class SortIndex implements ISortIndex {
             // parentId is initially undefined
             // A node is a leaf if children.length === 0
         };
-        
-        return { node, nextOffset: currentOffset };
     }
 
     //
@@ -549,14 +484,8 @@ export class SortIndex implements ISortIndex {
             // Write pageId with length prefix
             serializer.writeBuffer(pageIdBuffer);
             
-            // Serialize node to separate buffer first to get length
-            const nodeBuffer = Buffer.alloc(65536); // Temporary buffer for node
-            const nodeEndOffset = this.serializeNode(node, nodeBuffer, 0);
-            const nodeLength = nodeEndOffset;
-            const nodeData = nodeBuffer.subarray(0, nodeLength);
-            
-            // Write node data with length prefix
-            serializer.writeBuffer(nodeData);
+            // Serialize node directly to the serializer (no length prefix wrapper needed)
+            this.serializeNode(node, serializer);
         }
     }
 
