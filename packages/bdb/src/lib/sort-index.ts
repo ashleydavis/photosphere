@@ -85,6 +85,12 @@ export interface ISortIndexOptions {
     // Supports 'date' for ISO string date parsing, 'string' for string comparison, 'number' for numeric comparison
     // If not set, type will be inferred from the values.
     type?: SortDataType;
+    
+    // Batch size for saving during build (default: 1000)
+    buildBatchSize?: number;
+    
+    // Progress reporting interval during build (default: 100)
+    buildProgressInterval?: number;
 }
 
 export interface ISortIndexResult {
@@ -219,6 +225,10 @@ export class SortIndex implements ISortIndex {
     // UUID generator for creating unique identifiers
     private readonly uuidGenerator: IUuidGenerator;
     
+    // Build configuration
+    private readonly buildBatchSize: number;
+    private readonly buildProgressInterval: number;
+    
     constructor(options: ISortIndexOptions) {
         this.storage = options.storage;
         this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
@@ -229,6 +239,8 @@ export class SortIndex implements ISortIndex {
         this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
         this.uuidGenerator = options.uuidGenerator;
+        this.buildBatchSize = options.buildBatchSize || 10000;
+        this.buildProgressInterval = options.buildProgressInterval || 100;
     }
 
     //
@@ -685,8 +697,8 @@ export class SortIndex implements ISortIndex {
                 treeStructureChanged = true;
             }
             
-            // Report progress every 100 records
-            if (recordsAdded % 100 === 0 && progressCallback) {
+            // Report progress at configured interval
+            if (recordsAdded % this.buildProgressInterval === 0 && progressCallback) {
                 const totalTime = timeInTreeTraversal + timeInLoadRecords + timeInBinarySearch + timeInSplice + timeInSplit + timeInSave + timeInFlush;
                 const report = [
                     `Indexed ${recordsAdded} records... (cache: ${leafRecordsCache.size} pages, dirty: ${dirtyLeafNodes.size} pages)`,
@@ -701,11 +713,10 @@ export class SortIndex implements ISortIndex {
                 progressCallback(report);
             }
 
-            //TODO:
-            // Flush every 1000 records
-            // if (recordsAdded % 1000 === 0) {
-            //     await flushDirtyNodes();
-            // }
+            // Flush at configured batch size
+            if (recordsAdded % this.buildBatchSize === 0) {
+                await flushDirtyNodes();
+            }
         };
        
         // Iterate through all records and add them with batching
@@ -719,7 +730,7 @@ export class SortIndex implements ISortIndex {
         // Save tree nodes and metadata to the single file
         await this.saveTree();
         
-        if (progressCallback && recordsAdded > 0) {
+        if (progressCallback) {
             // Calculate averages
             const avgTreeTraversal = countTreeTraversal > 0 ? timeInTreeTraversal / countTreeTraversal : 0;
             const avgLoadRecords = countLoadRecords > 0 ? timeInLoadRecords / countLoadRecords : 0;
