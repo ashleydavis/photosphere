@@ -542,14 +542,35 @@ export class SortIndex implements ISortIndex {
         const dirtyLeafNodes: Set<string> = new Set();
         let treeStructureChanged = false;
         let recordsAdded = 0;
-        const batchSize = 1000;
+        
+        // Performance timers and counters
+        let timeInTreeTraversal = 0;
+        let timeInLoadRecords = 0;
+        let timeInBinarySearch = 0;
+        let timeInSplice = 0;
+        let timeInSplit = 0;
+        let timeInSave = 0;
+        let timeInFlush = 0;
+        
+        let countTreeTraversal = 0;
+        let countLoadRecords = 0;
+        let countBinarySearch = 0;
+        let countSplice = 0;
+        let countSplit = 0;
+        let countSave = 0;
+        let countFlush = 0;
        
         // Helper function to flush dirty nodes to disk
         const flushDirtyNodes = async (): Promise<void> => {
+            const flushStart = performance.now();
             for (const leafId of dirtyLeafNodes) {
                 const leafRecords = leafRecordsCache.get(leafId);
                 if (leafRecords) {
+                    const saveStart = performance.now();
                     await this.saveLeafRecords(leafId, leafRecords);
+                    const saveTime = performance.now() - saveStart;
+                    timeInSave += saveTime;
+                    countSave++;
                     // Remove from cache once written (page is full or being flushed)
                     leafRecordsCache.delete(leafId);
                 }
@@ -560,6 +581,9 @@ export class SortIndex implements ISortIndex {
                 await this.saveTree();
                 treeStructureChanged = false;
             }
+            const flushTime = performance.now() - flushStart;
+            timeInFlush += flushTime;
+            countFlush++;
         };
 
         // Helper function to add a record with batching
@@ -577,7 +601,12 @@ export class SortIndex implements ISortIndex {
                 fields: record.fields,
             };
             
+            // Find the leaf node where this record belongs
+            const treeStart = performance.now();
             const leafId = this.findLeafForValue(value);
+            const treeTime = performance.now() - treeStart;
+            timeInTreeTraversal += treeTime;
+            countTreeTraversal++;
             if (!leafId) {
                 return;
             }
@@ -590,11 +619,16 @@ export class SortIndex implements ISortIndex {
             // Get leaf records from cache or load from disk
             let leafRecords = leafRecordsCache.get(leafId);
             if (!leafRecords) {
+                const loadStart = performance.now();
                 leafRecords = await this.loadLeafRecords(leafId) || [];
+                const loadTime = performance.now() - loadStart;
+                timeInLoadRecords += loadTime;
+                countLoadRecords++;
                 leafRecordsCache.set(leafId, leafRecords);
             }
             
             // Binary search to find insertion point
+            const binaryStart = performance.now();
             let left = 0;
             let right = leafRecords.length - 1;
             let insertIndex = leafRecords.length;
@@ -609,8 +643,15 @@ export class SortIndex implements ISortIndex {
                     left = mid + 1;
                 }
             }
+            const binaryTime = performance.now() - binaryStart;
+            timeInBinarySearch += binaryTime;
+            countBinarySearch++;
             
+            const spliceStart = performance.now();
             leafRecords.splice(insertIndex, 0, newEntry);
+            const spliceTime = performance.now() - spliceStart;
+            timeInSplice += spliceTime;
+            countSplice++;
             dirtyLeafNodes.add(leafId);
             
             // If inserted at beginning, mark tree structure as changed
@@ -621,28 +662,50 @@ export class SortIndex implements ISortIndex {
             this.totalEntries++;
             recordsAdded++;
             
-            // If leaf exceeds split threshold, split it (this saves both nodes)
+            // If leaf exceeds split threshold, split it (keep in cache, don't save yet)
             if (leafRecords.length > this.pageSize * leafSplitThreshold) {
-                await this.splitLeafNode(leafId, leafNode, leafRecords);
+                if (progressCallback) {
+                    progressCallback(`⚠️ SPLITTING page at record ${recordsAdded + 1}: page has ${leafRecords.length} records (threshold: ${Math.floor(this.pageSize * leafSplitThreshold)})`);
+                }
+                const splitStart = performance.now();
+                
+                // Split the node (splitLeafNodeInternal modifies leafRecords in place and returns the new node ID and entries)
+                const { newNodeId, newEntries } = this.splitLeafNodeInternal(leafId, leafNode, leafRecords);
+                
+                // Update cache with both split nodes
+                // leafRecords now contains the first half (modified in place by splitLeafNode)
+                leafRecordsCache.set(leafId, leafRecords);
+                leafRecordsCache.set(newNodeId, newEntries);
+                dirtyLeafNodes.add(leafId);
+                dirtyLeafNodes.add(newNodeId);
+                
+                const splitTime = performance.now() - splitStart;
+                timeInSplit += splitTime;
+                countSplit++;
                 treeStructureChanged = true;
-                // After split, both nodes are saved, so remove from cache
-                leafRecordsCache.delete(leafId);
-                dirtyLeafNodes.delete(leafId);
-            }
-            // If page is full (but not over split threshold), write it immediately and remove from cache
-            else if (leafRecords.length >= this.pageSize) {
-                await this.saveLeafRecords(leafId, leafRecords);
-                leafRecordsCache.delete(leafId);
-                dirtyLeafNodes.delete(leafId);
             }
             
-            // Flush every batchSize records
-            if (recordsAdded % batchSize === 0) {
-                await flushDirtyNodes();
-                if (progressCallback) {
-                    progressCallback(`Indexed ${recordsAdded} records...`);
-                }
+            // Report progress every 100 records
+            if (recordsAdded % 100 === 0 && progressCallback) {
+                const totalTime = timeInTreeTraversal + timeInLoadRecords + timeInBinarySearch + timeInSplice + timeInSplit + timeInSave + timeInFlush;
+                const report = [
+                    `Indexed ${recordsAdded} records... (cache: ${leafRecordsCache.size} pages, dirty: ${dirtyLeafNodes.size} pages)`,
+                    `  Tree traversal: ${(timeInTreeTraversal / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInTreeTraversal / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Load records: ${(timeInLoadRecords / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInLoadRecords / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Binary search: ${(timeInBinarySearch / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInBinarySearch / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Array splice: ${(timeInSplice / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplice / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Split nodes: ${(timeInSplit / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplit / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Save records: ${(timeInSave / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSave / totalTime) * 100).toFixed(1) : 0}%)`,
+                    `  Flush: ${(timeInFlush / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInFlush / totalTime) * 100).toFixed(1) : 0}%)`,
+                ].join('\n');
+                progressCallback(report);
             }
+
+            //TODO:
+            // Flush every 1000 records
+            // if (recordsAdded % 1000 === 0) {
+            //     await flushDirtyNodes();
+            // }
         };
        
         // Iterate through all records and add them with batching
@@ -657,7 +720,38 @@ export class SortIndex implements ISortIndex {
         await this.saveTree();
         
         if (progressCallback && recordsAdded > 0) {
-            progressCallback(`Completed indexing ${recordsAdded} records.`);
+            // Calculate averages
+            const avgTreeTraversal = countTreeTraversal > 0 ? timeInTreeTraversal / countTreeTraversal : 0;
+            const avgLoadRecords = countLoadRecords > 0 ? timeInLoadRecords / countLoadRecords : 0;
+            const avgBinarySearch = countBinarySearch > 0 ? timeInBinarySearch / countBinarySearch : 0;
+            const avgSplice = countSplice > 0 ? timeInSplice / countSplice : 0;
+            const avgSplit = countSplit > 0 ? timeInSplit / countSplit : 0;
+            const avgSave = countSave > 0 ? timeInSave / countSave : 0;
+            const avgFlush = countFlush > 0 ? timeInFlush / countFlush : 0;
+            
+            // Find the most expensive operation on average
+            const averages = [
+                { name: 'Tree traversal', avg: avgTreeTraversal, count: countTreeTraversal },
+                { name: 'Load records', avg: avgLoadRecords, count: countLoadRecords },
+                { name: 'Binary search', avg: avgBinarySearch, count: countBinarySearch },
+                { name: 'Array splice', avg: avgSplice, count: countSplice },
+                { name: 'Split nodes', avg: avgSplit, count: countSplit },
+                { name: 'Save records', avg: avgSave, count: countSave },
+                { name: 'Flush', avg: avgFlush, count: countFlush },
+            ];
+            
+            const mostExpensive = averages.reduce((max, curr) => curr.avg > max.avg ? curr : max, averages[0]);
+            
+            const report = [
+                `Completed indexing ${recordsAdded} records.`,
+                ``,
+                `Average time per operation:`,
+                ...averages.map(a => 
+                    `  ${a.name}: ${(a.avg).toFixed(3)}ms (${a.count} operations)${a === mostExpensive ? ' ⚠️ MOST EXPENSIVE' : ''}`
+                ),
+            ].join('\n');
+            
+            progressCallback(report);
         }
                        
         this.loaded = true;
@@ -1511,7 +1605,7 @@ export class SortIndex implements ISortIndex {
         
         // If the leaf is now too large, split it
         if (leafRecords.length > this.pageSize * leafSplitThreshold) {
-            this.splitLeafNode(leafId, leafNode, leafRecords);
+            await this.splitLeafNode(leafId, leafNode, leafRecords); // Save immediately in regular addRecord
         } 
         else {
             // Just update the leaf records
@@ -1526,11 +1620,12 @@ export class SortIndex implements ISortIndex {
     }
     
     /**
-     * Splits a leaf node when it gets too large
+     * Internal function that splits a leaf node without saving to disk
+     * @returns An object with the new node ID and the new entries (second half of the split)
      */
-    private async splitLeafNode(nodeId: string, node: IBTreeNode, records: ISortedIndexEntry[]): Promise<void> {
+    private splitLeafNodeInternal(nodeId: string, node: IBTreeNode, records: ISortedIndexEntry[]): { newNodeId: string; newEntries: ISortedIndexEntry[] } {
         if (node.children.length > 0) {
-            return;
+            throw new Error('Cannot split internal node as leaf node');
         }
         
         // Ensure entries are properly sorted first
@@ -1607,12 +1702,21 @@ export class SortIndex implements ISortIndex {
             }
         }
         
+        // Increment total pages since we created a new leaf page
+        this.totalPages++;
+        
+        return { newNodeId, newEntries };
+    }
+
+    /**
+     * Splits a leaf node when it gets too large and saves to disk
+     */
+    private async splitLeafNode(nodeId: string, node: IBTreeNode, records: ISortedIndexEntry[]): Promise<void> {
+        const { newNodeId, newEntries } = this.splitLeafNodeInternal(nodeId, node, records);
+        
         // Save leaf records for both nodes
         await this.saveLeafRecords(nodeId, records);
         await this.saveLeafRecords(newNodeId, newEntries);
-
-        // Increment total pages since we created a new leaf page
-        this.totalPages++;
         
         // Save both nodes
         await this.saveTree();
