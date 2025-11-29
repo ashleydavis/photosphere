@@ -203,6 +203,15 @@ interface IBTreeNode {
     // A node is a leaf if children.length === 0, and NOT a leaf if children.length > 0
 }
 
+// Build checkpoint for incremental builds
+interface IBuildCheckpoint {
+    completedShards: number[];  // Shard IDs that have been fully processed
+    currentShard: number | null;  // Current shard being processed (if build was interrupted)
+    currentShardRecordIndex: number;  // Record index within current shard to resume from
+    totalRecordsProcessed: number;  // Total records processed so far
+    lastUpdated: number;  // Timestamp when checkpoint was created/updated
+}
+
 export class SortIndex implements ISortIndex {
     private storage: IStorage;
     private indexDirectory: string;
@@ -218,6 +227,9 @@ export class SortIndex implements ISortIndex {
     
     // Path to the single file that contains all tree nodes and metadata
     private treeFilePath: string;
+    
+    // Path to the checkpoint file for incremental builds
+    private checkpointFilePath: string;
     
     // Map of all tree nodes
     private treeNodes: Map<string, IBTreeNode> = new Map();
@@ -238,6 +250,7 @@ export class SortIndex implements ISortIndex {
         this.keySize = options.keySize || 100;
         this.type = options.type;
         this.treeFilePath = `${this.indexDirectory}/tree.dat`;
+        this.checkpointFilePath = `${this.indexDirectory}/build.checkpoint`;
         this.uuidGenerator = options.uuidGenerator;
         this.buildBatchSize = options.buildBatchSize || 10000;
         this.buildProgressInterval = options.buildProgressInterval || 100;
@@ -502,6 +515,37 @@ export class SortIndex implements ISortIndex {
         }
     }
 
+    // Save checkpoint for incremental builds
+    private async saveCheckpoint(checkpoint: IBuildCheckpoint): Promise<void> {
+        checkpoint.lastUpdated = Date.now();
+        const json = JSON.stringify(checkpoint);
+        await this.storage.write(this.checkpointFilePath, 'application/json', Buffer.from(json, 'utf-8'));
+    }
+    
+    // Load checkpoint for incremental builds
+    private async loadCheckpoint(): Promise<IBuildCheckpoint | null> {
+        const buffer = await this.storage.read(this.checkpointFilePath);
+        if (!buffer) {
+            return null;
+        }
+        try {
+            const json = buffer.toString('utf-8');
+            return JSON.parse(json) as IBuildCheckpoint;
+        } catch (error) {
+            // Corrupted checkpoint, return null to start fresh
+            return null;
+        }
+    }
+    
+    // Delete checkpoint file (called when build completes successfully)
+    private async deleteCheckpoint(): Promise<void> {
+        try {
+            await this.storage.deleteFile(this.checkpointFilePath);
+        } catch (error) {
+            // Ignore errors if file doesn't exist
+        }
+    }
+    
     // Save the tree nodes and metadata to a single file using serialization library while preserving exact binary format
     async saveTree(): Promise<void> {
         if (!this.rootPageId) {
@@ -521,33 +565,72 @@ export class SortIndex implements ISortIndex {
     // Builds the sort index by directly inserting records from the collection.
     //
     async build(collection: IBsonCollection<any>, progressCallback?: (message: string) => void): Promise<void> {
-        if (this.loaded) {
+        // Load checkpoint if it exists (incremental build)
+        let checkpoint = await this.loadCheckpoint();
+        
+        // If no checkpoint and index is already loaded, return early
+        if (!checkpoint && this.loaded) {
             return;
         }
-      
-        // Clear any existing tree nodes to start fresh
-        this.treeNodes.clear();
-      
-        // Create an empty root leaf node to start with (empty children array means it's a leaf)
-        const emptyRoot: IBTreeNode = {
-            keys: [],
-            children: [],
-            nextLeaf: undefined,
-            previousLeaf: undefined,
-            parentId: undefined,
-        };
+        
+        // Initialize or load index
+        if (!this.loaded) {
+            // Try to load existing index first (in case we're resuming from checkpoint)
+            const loaded = await this.load();
+            
+            if (!loaded) {
+                // No existing index - if checkpoint exists, it's stale (e.g., after rebuild)
+                // Delete the stale checkpoint and start fresh
+                if (checkpoint) {
+                    await this.deleteCheckpoint();
+                    checkpoint = null;
+                }
+                
+                // Create new index
+                // Clear any existing tree nodes to start fresh
+                this.treeNodes.clear();
+              
+                // Create an empty root leaf node to start with (empty children array means it's a leaf)
+                const emptyRoot: IBTreeNode = {
+                    keys: [],
+                    children: [],
+                    nextLeaf: undefined,
+                    previousLeaf: undefined,
+                    parentId: undefined,
+                };
 
-        this.rootPageId = this.uuidGenerator.generate(); // Generate a new UUID for the root page ID.
+                this.rootPageId = this.uuidGenerator.generate(); // Generate a new UUID for the root page ID.
+                
+                // Store in the tree nodes map
+                this.treeNodes.set(this.rootPageId, emptyRoot);
+                
+                // Create empty leaf records array
+                const emptyLeafRecords: ISortedIndexEntry[] = [];
+                await this.saveLeafRecords(this.rootPageId, emptyLeafRecords);
+                
+                this.totalEntries = 0;
+                this.totalPages = 1; // Start with a single leaf page
+            }
+            // If loaded successfully, use existing index state
+            // Note: this.loaded is set to true by load(), but we continue building if checkpoint exists
+        }
         
-        // Store in the tree nodes map
-        this.treeNodes.set(this.rootPageId, emptyRoot);
+        // Create initial checkpoint if it doesn't exist
+        if (!checkpoint) {
+            checkpoint = {
+                completedShards: [],
+                currentShard: null,
+                currentShardRecordIndex: 0,
+                totalRecordsProcessed: this.totalEntries,
+                lastUpdated: Date.now()
+            };
+            await this.saveCheckpoint(checkpoint);
+        }
         
-        // Create empty leaf records array
-        const emptyLeafRecords: ISortedIndexEntry[] = [];
-        await this.saveLeafRecords(this.rootPageId, emptyLeafRecords);
-        
-        this.totalEntries = 0;
-        this.totalPages = 1; // Start with a single leaf page
+        // Temporarily set loaded to false to allow building to continue
+        // We'll set it back to true at the end (or in finally block if aborted)
+        const wasLoaded = this.loaded;
+        this.loaded = false;
         
         // Local cache for batched writes - only keeps pages being actively modified
         const leafRecordsCache: Map<string, ISortedIndexEntry[]> = new Map();
@@ -697,31 +780,86 @@ export class SortIndex implements ISortIndex {
                 treeStructureChanged = true;
             }
             
-            // Report progress at configured interval
-            if (recordsAdded % this.buildProgressInterval === 0 && progressCallback) {
-                const totalTime = timeInTreeTraversal + timeInLoadRecords + timeInBinarySearch + timeInSplice + timeInSplit + timeInSave + timeInFlush;
-                const report = [
-                    `Indexed ${recordsAdded} records... (cache: ${leafRecordsCache.size} pages, dirty: ${dirtyLeafNodes.size} pages)`,
-                    `  Tree traversal: ${(timeInTreeTraversal / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInTreeTraversal / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Load records: ${(timeInLoadRecords / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInLoadRecords / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Binary search: ${(timeInBinarySearch / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInBinarySearch / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Array splice: ${(timeInSplice / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplice / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Split nodes: ${(timeInSplit / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplit / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Save records: ${(timeInSave / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSave / totalTime) * 100).toFixed(1) : 0}%)`,
-                    `  Flush: ${(timeInFlush / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInFlush / totalTime) * 100).toFixed(1) : 0}%)`,
-                ].join('\n');
-                progressCallback(report);
-            }
-
             // Flush at configured batch size
             if (recordsAdded % this.buildBatchSize === 0) {
                 await flushDirtyNodes();
             }
         };
        
-        // Iterate through all records and add them with batching
-        for await (const record of collection.iterateRecords()) {
-            await addRecordBatched(record);
+        // Iterate through shards and process records with checkpoint support
+        let shardIndex = 0;
+        for await (const shardRecords of collection.iterateShards()) {
+            // Skip if shard is already completed
+            if (checkpoint.completedShards.includes(shardIndex)) {
+                shardIndex++;
+                continue;
+            }
+            
+            // Determine starting record index for this shard
+            let startIndex = 0;
+            if (checkpoint.currentShard === shardIndex) {
+                startIndex = checkpoint.currentShardRecordIndex;
+            }
+            
+            // Process records in this shard starting from startIndex
+            const recordsArray = Array.from(shardRecords);
+            let recordIndex = 0;
+            
+            for (const record of recordsArray) {
+                // Skip records before startIndex
+                if (recordIndex < startIndex) {
+                    recordIndex++;
+                    continue;
+                }
+                
+                // Process record
+                await addRecordBatched(record);
+                
+                // Save checkpoint every 1000 records (not every progress interval to avoid excessive I/O)
+                if (recordsAdded % 1000 === 0) {
+                    // Only flush if there are actually dirty nodes (avoid unnecessary I/O)
+                    if (dirtyLeafNodes.size > 0 || treeStructureChanged) {
+                        await flushDirtyNodes();
+                    }
+                    
+                    // Update checkpoint
+                    checkpoint.currentShard = shardIndex;
+                    checkpoint.currentShardRecordIndex = recordIndex + 1;
+                    checkpoint.totalRecordsProcessed = recordsAdded;
+                    await this.saveCheckpoint(checkpoint);
+                    
+                    // Mark as loaded so getPage() works even after abort
+                    if (this.rootPageId) {
+                        this.loaded = true;
+                    }
+                }
+                
+                // Progress callback (may throw to abort build)
+                if (recordsAdded % this.buildProgressInterval === 0 && progressCallback) {
+                    const totalTime = timeInTreeTraversal + timeInLoadRecords + timeInBinarySearch + timeInSplice + timeInSplit + timeInSave + timeInFlush;
+                    const report = [
+                        `Indexed ${recordsAdded} records... (cache: ${leafRecordsCache.size} pages, dirty: ${dirtyLeafNodes.size} pages)`,
+                        `  Tree traversal: ${(timeInTreeTraversal / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInTreeTraversal / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Load records: ${(timeInLoadRecords / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInLoadRecords / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Binary search: ${(timeInBinarySearch / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInBinarySearch / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Array splice: ${(timeInSplice / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplice / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Split nodes: ${(timeInSplit / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSplit / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Save records: ${(timeInSave / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInSave / totalTime) * 100).toFixed(1) : 0}%)`,
+                        `  Flush: ${(timeInFlush / 1000).toFixed(2)}s (${totalTime > 0 ? ((timeInFlush / totalTime) * 100).toFixed(1) : 0}%)`,
+                    ].join('\n');
+                    progressCallback(report);
+                }
+                
+                recordIndex++;
+            }
+            
+            // Shard complete - mark it and update checkpoint
+            checkpoint.completedShards.push(shardIndex);
+            checkpoint.currentShard = null;
+            checkpoint.currentShardRecordIndex = 0;
+            await this.saveCheckpoint(checkpoint);
+            
+            shardIndex++;
         }
         
         // Final flush of any remaining dirty nodes
@@ -729,6 +867,12 @@ export class SortIndex implements ISortIndex {
         
         // Save tree nodes and metadata to the single file
         await this.saveTree();
+        
+        // Delete checkpoint on successful completion
+        await this.deleteCheckpoint();
+        
+        // Ensure index is marked as loaded
+        this.loaded = true;
         
         if (progressCallback) {
             // Calculate averages
