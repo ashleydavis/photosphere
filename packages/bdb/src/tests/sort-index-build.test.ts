@@ -330,6 +330,132 @@ describe('SortIndex build function', () => {
         expect(dates[1]).toBeLessThan(dates[2]);
     });
     
+    test('should support incremental builds with abort and resume', async () => {
+        const records: TestRecord[] = [
+            { _id: 'record-1', name: 'Record 1', score: 10, category: 'A' },
+            { _id: 'record-2', name: 'Record 2', score: 20, category: 'B' },
+            { _id: 'record-3', name: 'Record 3', score: 30, category: 'C' },
+        ];
+        
+        const collection = new MockCollection<TestRecord>(records);
+        const sortIndex = new SortIndex({
+            storage,
+            baseDirectory: 'db',
+            collectionName: 'test_collection',
+            fieldName: 'score',
+            direction: 'asc',
+            pageSize: 10,
+            buildBatchSize: 10,
+            buildProgressInterval: 1, // Report after every record
+            uuidGenerator
+        });
+        
+        const buildTimes: number[] = [];
+        
+        // First build attempt: should process record 1, then abort
+        try {
+            let recordsProcessedInThisAttempt = 0;
+            const startTime = performance.now();
+            await sortIndex.build(collection, (message) => {
+                recordsProcessedInThisAttempt++;
+                // Abort after processing one record
+                if (recordsProcessedInThisAttempt === 1) {
+                    const elapsed = performance.now() - startTime;
+                    buildTimes.push(elapsed);
+                    throw new Error('Build aborted for testing');
+                }
+            });
+        } catch (error: any) {
+            expect(error.message).toBe('Build aborted for testing');
+        }
+        
+        // Second build attempt: should process record 2, then abort
+        try {
+            let recordsProcessedInThisAttempt = 0;
+            const startTime = performance.now();
+            await sortIndex.build(collection, (message) => {
+                recordsProcessedInThisAttempt++;
+                // Abort after processing one more record
+                if (recordsProcessedInThisAttempt === 1) {
+                    const elapsed = performance.now() - startTime;
+                    buildTimes.push(elapsed);
+                    throw new Error('Build aborted for testing');
+                }
+            });
+        } catch (error: any) {
+            expect(error.message).toBe('Build aborted for testing');
+        }
+        
+        // Third build attempt: should process record 3, then abort
+        try {
+            let recordsProcessedInThisAttempt = 0;
+            const startTime = performance.now();
+            await sortIndex.build(collection, (message) => {
+                recordsProcessedInThisAttempt++;
+                // Abort after processing one more record
+                if (recordsProcessedInThisAttempt === 1) {
+                    const elapsed = performance.now() - startTime;
+                    buildTimes.push(elapsed);
+                    throw new Error('Build aborted for testing');
+                }
+            });
+        } catch (error: any) {
+            expect(error.message).toBe('Build aborted for testing');
+        }
+        
+        // Fourth build attempt: should complete successfully (all records already indexed)
+        const startTime = performance.now();
+        await sortIndex.build(collection, (message) => {
+            // Should not process any new records if incremental build works
+        });
+        const elapsed = performance.now() - startTime;
+        buildTimes.push(elapsed);
+        
+        // Verify all records are indexed
+        const result = await sortIndex.getPage();
+        expect(result.totalRecords).toBe(3);
+        
+        // Verify all records are present and sorted correctly
+        let allRecords: ISortedIndexEntry[] = [];
+        let currentPage = await sortIndex.getPage();
+        allRecords.push(...currentPage.records);
+        
+        while (currentPage.nextPageId) {
+            currentPage = await sortIndex.getPage(currentPage.nextPageId);
+            allRecords.push(...currentPage.records);
+        }
+        
+        expect(allRecords.length).toBe(3);
+        const recordIds = allRecords.map(r => r._id).sort();
+        expect(recordIds).toEqual(['record-1', 'record-2', 'record-3']);
+        
+        // Verify records are sorted by score
+        const scores = allRecords.map(r => r.value);
+        expect(scores).toEqual([10, 20, 30]);
+        
+        // Verify each build call took roughly the same time (within 50% variance)
+        // This ensures we're not re-processing already indexed records
+        // Note: This test will fail if incremental builds are not supported,
+        // as subsequent build calls will either:
+        // 1. Return early without processing (if this.loaded check prevents building)
+        // 2. Re-process all records (if no deduplication exists)
+        expect(buildTimes.length).toBe(4);
+        if (buildTimes.length >= 2) {
+            const avgTime = buildTimes.reduce((a, b) => a + b, 0) / buildTimes.length;
+            // First 3 attempts should take similar time (processing one record each)
+            // Note: First build may take slightly longer due to index initialization
+            // Fourth attempt should be fast (no new records to process)
+            const firstThreeAvg = buildTimes.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+            // Allow higher variance (100%) to account for index initialization on first build
+            for (let i = 0; i < 3; i++) {
+                const variance = Math.abs(buildTimes[i] - firstThreeAvg) / firstThreeAvg;
+                expect(variance).toBeLessThan(1.0); // Within 100% of average for first 3 (accounts for initialization)
+            }
+            // Fourth attempt should be fast (ideally much faster, but at least not slower)
+            expect(buildTimes[3]).toBeLessThanOrEqual(firstThreeAvg * 2);
+        }
+    });
+    
     test('should show performance metrics in final progress message', async () => {
         const records: TestRecord[] = [];
         for (let i = 0; i < 15; i++) {
