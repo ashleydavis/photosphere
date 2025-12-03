@@ -1,13 +1,16 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, loadDatabase, ICommandContext } from "../lib/init-cmd";
+import { IBaseCommandOptions, loadDatabase, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme } from "api";
 import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
+import { loadPrivateKey, loadPublicKey } from "storage";
+import { createPublicKey } from "node:crypto";
+import * as fs from "fs-extra";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -159,6 +162,41 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         const existingReadme = await retry(() => assetStorage.info('README.md'));
         if (!existingReadme) {
             merkleTree = await createReadme(assetStorage, merkleTree);
+        }
+
+        // Check if database is encrypted and ensure public key is in .db directory
+        // First check if we have a key (which indicates the database is encrypted)
+        const resolvedKeyPath = await resolveKeyPath(options.key);
+        if (resolvedKeyPath) {
+            // Database is encrypted - check if public key marker exists in .db directory
+            if (!await metadataStorage.fileExists('.db/encryption.pub')) {
+                // Generate public key from private key and save it
+                try {
+                    let publicKeyPem: string | undefined;
+                    const publicKeyPath = `${resolvedKeyPath}.pub`;
+                    if (await fs.pathExists(publicKeyPath)) {
+                        publicKeyPem = await fs.readFile(publicKeyPath, 'utf8');
+                    } else {
+                        // Extract public key from private key
+                        const privateKey = await loadPrivateKey(resolvedKeyPath);
+                        if (privateKey) {
+                            const publicKey = createPublicKey(privateKey);
+                            publicKeyPem = publicKey.export({
+                                type: 'spki',
+                                format: 'pem'
+                            }) as string;
+                        }
+                    }
+                    
+                    if (publicKeyPem) {
+                        // Write public key to .db/encryption.pub in metadata storage
+                        await metadataStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
+                        log.info(pc.green(`✓ Copied public key to database directory`));
+                    }
+                } catch (error) {
+                    log.error(pc.red(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                }
+            }
         }
 
         // Rebuild the merkle tree in sorted order with no metadata/
