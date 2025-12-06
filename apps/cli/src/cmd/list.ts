@@ -63,7 +63,7 @@ export async function listCommand(context: ICommandContext, options: IListComman
         }
 
         // Wait for user input
-        log.info(pc.dim('Press Enter for next page, Escape to exit...'));
+        log.info(pc.dim('Press Enter or any key for next page, Ctrl+C to exit...'));
         const shouldContinue = await waitForUserInput();
         if (!shouldContinue) {
             log.info(pc.cyan(`\nDisplayed ${totalDisplayed} files. Exiting.`));
@@ -119,9 +119,6 @@ async function waitForUserInput(): Promise<boolean> {
             if (key === '\r' || key === '\n') {
                 // Enter key - continue to next page
                 resolve(true);
-            } else if (key === '\u001b') {
-                // Escape key - exit
-                resolve(false);
             } else if (key === '\u0003') {
                 // Ctrl+C - exit
                 resolve(false);
