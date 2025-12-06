@@ -384,28 +384,26 @@ async function computeCachedHash(
     progressCallback: ProgressCallback,
     summary: IAddSummary
 ): Promise<{ hashedFile?: IHashedData; summary: IAddSummary }> {
-    let updatedSummary = { ...summary };
-
     if (openStream === undefined) {
         openStream = () => fs.createReadStream(filePath);
     }
     
     try {
         if (!await validateFile(filePath, contentType, assetTempDir, uuidGenerator, openStream)) {
-            updatedSummary.filesFailed++;
+            summary.filesFailed++;
             if (progressCallback) {
                 progressCallback(localFileScanner.getCurrentlyScanning());
             }            
-            return { summary: updatedSummary };
+            return { summary };
         }
     }
     catch (error: any) {
         log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);
-        updatedSummary.filesFailed++;
+        summary.filesFailed++;
         if (progressCallback) {
             progressCallback(localFileScanner.getCurrentlyScanning());
         }            
-        return { summary: updatedSummary };
+        return { summary };
     }
 
     const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
@@ -417,7 +415,7 @@ async function computeCachedHash(
 
     localHashCache.addHash(filePath, hashedFile);
 
-    return { hashedFile, summary: updatedSummary };
+    return { hashedFile, summary };
 }
 
 //
@@ -445,28 +443,25 @@ async function importFile(
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await fs.ensureDir(assetTempDir);
     
-    let updatedSummary = { ...summary };
-    
     try {
         let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
         if (!localHashedFile) {
-            const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, assetTempDir, openStream, progressCallback, updatedSummary);
+            const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, assetTempDir, openStream, progressCallback, summary);
             if (!hashResult.hashedFile) {
                 return hashResult.summary;
             }
             localHashedFile = hashResult.hashedFile;
-            updatedSummary = hashResult.summary;
         }
 
         const localHashStr = localHashedFile.hash.toString("hex");
         const records = await metadataCollection.findByIndex("hash", localHashStr);
         if (records.length > 0) {
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-            updatedSummary.filesAlreadyAdded++;
+            summary.filesAlreadyAdded++;
             if (progressCallback) {
                 progressCallback(localFileScanner.getCurrentlyScanning());
             }
-            return updatedSummary;
+            return summary;
         }
         
         let assetDetails: IAssetDetails | undefined = undefined;
@@ -624,8 +619,8 @@ async function importFile(
             }
             merkleTree.databaseMetadata.filesImported++;
 
-            updatedSummary.filesAdded++;
-            updatedSummary.totalSize += fileStat.length;
+            summary.filesAdded++;
+            summary.totalSize += fileStat.length;
             if (progressCallback) {
                 progressCallback(localFileScanner.getCurrentlyScanning());
             }
@@ -637,7 +632,7 @@ async function importFile(
             await retry(() => assetStorage.deleteFile(assetPath));
             await retry(() => assetStorage.deleteFile(thumbPath));
             await retry(() => assetStorage.deleteFile(displayPath));
-            updatedSummary.filesFailed++;
+            summary.filesFailed++;
             if (progressCallback) {
                 progressCallback(localFileScanner.getCurrentlyScanning());
             }
@@ -650,7 +645,7 @@ async function importFile(
         await retry(() => fs.remove(assetTempDir));
     }
     
-    return updatedSummary;
+    return summary;
 }
 
 //
@@ -668,38 +663,35 @@ async function checkFile(
     progressCallback: ProgressCallback,
     summary: IAddSummary
 ): Promise<IAddSummary> {
-    let updatedSummary = { ...summary };
-
     let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
     if (!localHashedFile) {          
         const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
         await fs.ensureDir(tempDir);
 
-        const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, tempDir, openStream, progressCallback, updatedSummary);
+        const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, tempDir, openStream, progressCallback, summary);
         if (!hashResult.hashedFile) {
             return hashResult.summary;
         }
         localHashedFile = hashResult.hashedFile;
-        updatedSummary = hashResult.summary;
     }
 
     const localHashStr = localHashedFile.hash.toString("hex");
     const records = await metadataCollection.findByIndex("hash", localHashStr);
     if (records.length > 0) {
         log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
-        updatedSummary.filesAlreadyAdded++;
-        return updatedSummary;
+        summary.filesAlreadyAdded++;
+        return summary;
     }
 
     log.verbose(`File "${filePath}" has not been added to the media file database.`);
 
-    updatedSummary.filesAdded++;
-    updatedSummary.totalSize += fileStat.length;
+    summary.filesAdded++;
+    summary.totalSize += fileStat.length;
     if (progressCallback) {
         progressCallback(localFileScanner.getCurrentlyScanning());
     }
     
-    return updatedSummary;
+    return summary;
 }
 
 //
@@ -726,10 +718,8 @@ export async function addPaths(
         averageSize: 0,
     }
 ): Promise<IAddSummary> {
-    let updatedSummary = { ...summary };
-
     await localFileScanner.scanPaths(paths, async (result) => {
-        updatedSummary = await importFile(
+        await importFile(
             assetStorage,
             metadataStorage,
             googleApiKey,
@@ -745,19 +735,19 @@ export async function addPaths(
             result.labels,
             result.openStream,
             progressCallback,
-            updatedSummary
+            summary
         );
         
-        if (updatedSummary.filesAdded % 100 === 0) {
+        if (summary.filesAdded % 100 === 0) {
             await retry(() => localHashCache.save());
         }
     }, progressCallback);
 
-    updatedSummary.filesIgnored += localFileScanner.getNumFilesIgnored();
+    summary.filesIgnored += localFileScanner.getNumFilesIgnored();
     await retry(() => localHashCache.save());
 
-    updatedSummary.averageSize = updatedSummary.filesAdded > 0 ? Math.floor(updatedSummary.totalSize / updatedSummary.filesAdded) : 0;
-    return updatedSummary;
+    summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
+    return summary;
 }
 
 //
@@ -779,10 +769,8 @@ export async function checkPaths(
         averageSize: 0,
     }
 ): Promise<IAddSummary> {
-    let updatedSummary = { ...summary };
-
     await localFileScanner.scanPaths(paths, async (result) => {
-        updatedSummary = await checkFile(
+        await checkFile(
             uuidGenerator,
             metadataCollection,
             localHashCache,
@@ -792,17 +780,17 @@ export async function checkPaths(
             result.contentType,
             result.openStream,
             progressCallback,
-            updatedSummary
+            summary
         );
         
-        if (updatedSummary.filesAdded % 100 === 0) {
+        if (summary.filesAdded % 100 === 0) {
             await retry(() => localHashCache.save());
         }
     }, progressCallback);
 
     await retry(() => localHashCache.save());
-    updatedSummary.averageSize = updatedSummary.filesAdded > 0 ? Math.floor(updatedSummary.totalSize / updatedSummary.filesAdded) : 0;
-    return updatedSummary;
+    summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
+    return summary;
 }
 
 //
