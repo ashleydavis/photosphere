@@ -309,6 +309,7 @@ export async function addPaths(
     }, progressCallback);
 
     summary.filesIgnored += localFileScanner.getNumFilesIgnored();
+    summary.filesFailed += localFileScanner.getNumFilesFailed();
     await retry(() => localHashCache.save());
 
     summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
