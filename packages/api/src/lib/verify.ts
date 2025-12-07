@@ -2,7 +2,7 @@ import {  log, retry } from "utils";
 import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import { IStorage, IStorageDescriptor } from "storage";
+import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { TaskStatus, ITaskResult, ITaskQueue } from "task-queue";
 import { deserializeError } from "serialize-error";
 
@@ -26,6 +26,11 @@ export interface IVerifyOptions {
     // Path filter to only verify files matching this path (file or directory).
     //
     pathFilter?: string;
+
+    //
+    // Optional S3 configuration for accessing S3-hosted storage.
+    //
+    s3Config?: IS3Credentials;
 }
 
 //
@@ -201,7 +206,10 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
                 queue.addTask("verify-file", {
                     node,
                     storageDescriptor,
-                    options,
+                    s3Config: options?.s3Config,
+                    options: {
+                        full: options?.full,
+                    },
                 });
             }
 

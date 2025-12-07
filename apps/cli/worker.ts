@@ -5,7 +5,7 @@
 //
 
 import { registerHandler, initWorker } from "task-queue";
-import { verifyFileHandler } from "./src/lib/verify.worker";
+import { verifyFileHandler } from "api";
 
 //
 // Register all task handlers
