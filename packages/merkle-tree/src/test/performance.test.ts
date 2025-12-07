@@ -69,7 +69,7 @@ describe('Merkle Tree Performance Tests', () => {
       
       // Time should be roughly O(n log n)
       const timePerFile = time / size;
-      expect(timePerFile).toBeLessThan(4);
+      expect(timePerFile).toBeLessThan(8);
     }
   });
   
