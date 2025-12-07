@@ -1,4 +1,6 @@
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { createReadStream } from "fs";
+import { ensureDir, remove } from "node-utils";
 import os from "os";
 import path from "path";
 import { IBsonCollection } from "bdb";
@@ -44,7 +46,7 @@ async function importFile(
 ): Promise<IAddSummary> {
     const assetId = uuidGenerator.generate();
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
-    await fs.ensureDir(assetTempDir);
+    await ensureDir(assetTempDir);
     
     try {
         let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
@@ -101,7 +103,7 @@ async function importFile(
 
             const stream = zipFilePath 
                 ? await extractFileFromZipRecursive(zipFilePath, filePath)
-                : fs.createReadStream(filePath);
+                : createReadStream(filePath);
             await retry(() => assetStorage.writeStream(assetPath, contentType, stream, fileStat.length));
 
             const assetInfo = await retry(() => assetStorage.info(assetPath));
@@ -124,7 +126,7 @@ async function importFile(
             });
 
             if (assetDetails?.thumbnailPath) {
-                await retry(() => assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, fs.createReadStream(assetDetails.thumbnailPath)));
+                await retry(() => assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)));
 
                 const thumbInfo = await retry(() => assetStorage.info(thumbPath));
                 if (!thumbInfo) {
@@ -143,7 +145,7 @@ async function importFile(
             }
 
             if (assetDetails?.displayPath) {
-                await retry(() => assetStorage.writeStream(displayPath, assetDetails.displayContentType, fs.createReadStream(assetDetails.displayPath!)));
+                await retry(() => assetStorage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)));
 
                 const displayInfo = await retry(() => assetStorage.info(displayPath));
                 if (!displayInfo) {
@@ -191,7 +193,7 @@ async function importFile(
 
             const description = "";
             const micro = assetDetails?.microPath
-                ? (await retry(() => fs.promises.readFile(assetDetails.microPath))).toString("base64")
+                ? (await retry(() => fs.readFile(assetDetails.microPath))).toString("base64")
                 : undefined;
 
             const color = assetDetails 
@@ -253,7 +255,7 @@ async function importFile(
         }
     }
     finally {            
-        await retry(() => fs.remove(assetTempDir));
+        await retry(() => remove(assetTempDir));
     }
     
     return summary;

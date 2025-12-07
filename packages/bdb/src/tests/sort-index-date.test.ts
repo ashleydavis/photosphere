@@ -3,7 +3,7 @@ import { IBsonCollection, IRecord, IShard } from '../lib/collection';
 import { MockStorage } from 'storage';
 import { MockCollection } from './mock-collection';
 import { BSON } from 'bson';
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { RandomUuidGenerator } from 'utils';

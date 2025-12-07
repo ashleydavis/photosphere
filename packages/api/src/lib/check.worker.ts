@@ -2,7 +2,8 @@
 // Check worker handler - handles file checking tasks
 //
 
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { ensureDir } from "node-utils";
 import os from "os";
 import path from "path";
 import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
@@ -57,7 +58,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     if (!hashedFile) {
         // Not in cache - compute hash
         const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
-        await fs.ensureDir(tempDir);
+        await ensureDir(tempDir);
         
         hashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, tempDir, zipFilePath);
         if (!hashedFile) {

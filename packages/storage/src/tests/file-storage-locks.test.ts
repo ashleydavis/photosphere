@@ -1,6 +1,7 @@
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { FileStorage } from '../lib/file-storage';
+import { ensureDir, remove, pathExists } from 'node-utils';
 
 describe('FileStorage Write Locks', () => {
     let tempDir: string;
@@ -9,7 +10,7 @@ describe('FileStorage Write Locks', () => {
     beforeEach(async () => {
         // Use a unique temp directory for each test
         tempDir = path.join(__dirname, `temp-test-locks-${Date.now()}-${Math.random()}`);
-        await fs.ensureDir(tempDir);
+        await ensureDir(tempDir);
         storage = new FileStorage(tempDir);
     });
 
@@ -19,13 +20,13 @@ describe('FileStorage Write Locks', () => {
             const files = await fs.readdir(tempDir, { recursive: true });
             for (const file of files) {
                 if (typeof file === 'string' && file.endsWith('.lock')) {
-                    await fs.remove(path.join(tempDir, file));
+                    await remove(path.join(tempDir, file));
                 }
             }
         } catch (err) {
             // Ignore cleanup errors
         }
-        await fs.remove(tempDir);
+        await remove(tempDir);
     });
 
     describe('checkWriteLock', () => {
@@ -52,7 +53,7 @@ describe('FileStorage Write Locks', () => {
             const lockFilePath = `${filePath}.lock`;
             
             // Create an invalid JSON lock file
-            await fs.ensureDir(path.dirname(lockFilePath));
+            await ensureDir(path.dirname(lockFilePath));
             await fs.writeFile(lockFilePath, 'invalid json');
             
             const lockInfo = await storage.checkWriteLock(filePath);
@@ -76,7 +77,7 @@ describe('FileStorage Write Locks', () => {
             expect(result).toBe(true);
             
             // Verify lock file was created
-            expect(await fs.pathExists(lockFilePath)).toBe(true);
+            expect(await pathExists(lockFilePath)).toBe(true);
             
             // Verify lock content
             const lockContent = await fs.readFile(lockFilePath, 'utf8');
@@ -102,7 +103,7 @@ describe('FileStorage Write Locks', () => {
             const result = await storage.acquireWriteLock(lockFilePath, owner);
             expect(result).toBe(true);
             
-            expect(await fs.pathExists(lockFilePath)).toBe(true);
+            expect(await pathExists(lockFilePath)).toBe(true);
         });
 
         it('should handle race conditions properly', async () => {
@@ -127,7 +128,7 @@ describe('FileStorage Write Locks', () => {
             expect(successCount).toBe(1);
             
             // Verify only one lock file exists
-            expect(await fs.pathExists(lockFilePath)).toBe(true);
+            expect(await pathExists(lockFilePath)).toBe(true);
             
             // Verify the lock has one of the expected owners
             const lockInfo = await storage.checkWriteLock(lockFilePath);
@@ -186,7 +187,7 @@ describe('FileStorage Write Locks', () => {
             expect(lockInfo!.owner).toBe(successfulAttempts[0].owner);
             
             // Verify only one lock file exists
-            expect(await fs.pathExists(lockFilePath)).toBe(true);
+            expect(await pathExists(lockFilePath)).toBe(true);
         });
 
         it('should handle race conditions with realistic timing delays', async () => {
@@ -291,7 +292,7 @@ describe('FileStorage Write Locks', () => {
             expect(await storage.checkWriteLock(lockFilePath)).toBeUndefined();
             
             // Verify lock file was deleted
-            expect(await fs.pathExists(lockFilePath)).toBe(false);
+            expect(await pathExists(lockFilePath)).toBe(false);
         });
 
         it('should handle releasing non-existent lock gracefully', async () => {

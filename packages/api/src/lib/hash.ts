@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { IFileStat } from "./file-scanner";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import os from "os";
 import mime from "mime";
@@ -103,7 +104,7 @@ export async function validateAndHash(
         }
 
         // Compute hash using the same file (already extracted if from zip)
-        const hash = await computeHash(fs.createReadStream(actualFilePath));
+        const hash = await computeHash(createReadStream(actualFilePath));
         const hashedFile: IHashedData = {
             hash,
             lastModified: fileStat.lastModified,

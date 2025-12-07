@@ -11,7 +11,9 @@ import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
+import { pathExists, ensureDir, copy } from 'node-utils';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
@@ -24,7 +26,7 @@ import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 export async function getAvailableKeys(): Promise<string[]> {
     const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
     
-    if (!await fs.pathExists(keysDir)) {
+    if (!await pathExists(keysDir)) {
         return [];
     }
     
@@ -115,7 +117,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
         const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
         
         // Ensure the ~/.config/photosphere/keys directory exists
-        await fs.ensureDir(keysDir);
+        await ensureDir(keysDir);
 
         // Ask for filename
         const keyFilename = await text({
@@ -132,7 +134,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
                 }
                 // Check if file already exists
                 const keyPath = join(keysDir, value);
-                if (fs.existsSync(keyPath)) {
+                if (existsSync(keyPath)) {
                     return 'File already exists';
                 }
                 return undefined;
@@ -166,7 +168,7 @@ export async function resolveKeyPath(keyPath: string | undefined): Promise<strin
     const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
     const keysPath = join(keysDir, keyPath);
     
-    if (await fs.pathExists(keysPath)) {
+    if (await pathExists(keysPath)) {
         return keysPath;
     }
     
@@ -510,8 +512,8 @@ export async function createDatabase(
         const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
         
         try {
-            if (await fs.pathExists(publicKeySource)) {
-                await fs.copy(publicKeySource, publicKeyDest);
+            if (await pathExists(publicKeySource)) {
+                await copy(publicKeySource, publicKeyDest);
                 // console.log(`Copied public key to database directory: ${publicKeyDest}`);
             }
         } catch (error) {

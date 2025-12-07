@@ -1,4 +1,5 @@
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
 import { ILog } from "utils";
@@ -37,7 +38,7 @@ export class FileLogger implements ILog {
         // Create logs directory in Photosphere temp
         const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
-        fs.ensureDirSync(logsDir);
+        ensureDirSync(logsDir);
         
         // Create log file with timestamp
         const timestamp = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
