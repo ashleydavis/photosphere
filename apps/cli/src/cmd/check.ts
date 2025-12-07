@@ -73,7 +73,7 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     log.info(pc.green(`Checked ${totalChecked} files.\n`));
     
     log.info(pc.bold('Summary:'));
-    log.info(`Files added:      ${addSummary.filesAdded}`);
+    log.info(`Files to add:      ${addSummary.filesAdded}`);
     log.info(`Files ignored:    ${addSummary.filesIgnored}`);
     log.info(`Files failed:     ${addSummary.filesFailed}`);
     log.info(`Already added:    ${addSummary.filesAlreadyAdded}`);
