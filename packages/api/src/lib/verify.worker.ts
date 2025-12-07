@@ -3,14 +3,14 @@
 //
 
 import { SortNode } from "merkle-tree";
-import { createStorage, loadEncryptionKeys, IStorageDescriptor } from "storage";
-import { getS3Config } from "./config";
-import { computeAssetHash } from "api";
+import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
+import { computeAssetHash } from "./hash";
 import { formatFileSize, log } from "utils";
 
 export interface IVerifyFileData {
     node: SortNode;
     storageDescriptor: IStorageDescriptor; // Storage descriptor containing location and encryption info
+    s3Config?: IS3Credentials; // S3 config for accessing S3-hosted storage
     options?: {
         full?: boolean;
     };
@@ -26,12 +26,11 @@ export interface IVerifyFileResult {
 // Handler for verifying a single file
 //
 export async function verifyFileHandler(data: IVerifyFileData, workingDirectory: string): Promise<IVerifyFileResult> {
-    const { node, storageDescriptor, options } = data;
+    const { node, storageDescriptor, s3Config, options } = data;
     const fileName = node.name!;
 
     // Recreate the storage in the worker (storage objects can't be passed through worker messages)
-    // S3 config is loaded from environment/config, and encryption key path comes from the storage descriptor
-    const s3Config = await getS3Config();
+    // S3 config is passed in the data, and encryption key path comes from the storage descriptor
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
     const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 

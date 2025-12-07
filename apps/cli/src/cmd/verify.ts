@@ -6,6 +6,7 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } fr
 import { formatBytes } from "../lib/format";
 import { verify } from "api";
 import { IStorageDescriptor } from "storage";
+import { getS3Config } from "../lib/config";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -40,9 +41,13 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         encryptionKeyPath: resolvedKeyPath
     };
     
+    // Get S3 config to pass to workers (needed for S3-hosted storage)
+    const s3Config = await getS3Config();
+    
     const result = await verify(storageDescriptor, assetStorage, metadataStorage, context.taskQueueProvider, { 
         full: options.full,
-        pathFilter: options.path
+        pathFilter: options.path,
+        s3Config
     }, (progress) => {
         writeProgress(`🔍 ${progress}`);
     });
