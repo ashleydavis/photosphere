@@ -41,7 +41,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     const { uuidGenerator, timestampProvider } = context;
     
     // Load hash cache (read-only)
-    const localHashCache = new HashCache(new FileStorage(hashCacheDir), hashCacheDir, true); // readonly = true
+    const localHashCache = new HashCache(hashCacheDir, true); // readonly = true
     await localHashCache.load();
     
     // Recreate storage and metadata collection in the worker

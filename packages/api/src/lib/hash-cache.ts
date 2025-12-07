@@ -1,4 +1,5 @@
-import { IStorage, pathJoin } from "storage";
+import * as fs from "fs-extra";
+import * as path from "path";
 
 /**
  * Starts with:
@@ -23,12 +24,10 @@ export class HashCache {
     /**
      * Creates a new hash cache
      *
-     * @param storage The storage implementation for persistence
      * @param cacheDir The directory where the hash cache will be stored
      * @param isReadonly Whether the cache should skip saves when in readonly mode
      */
     constructor(
-        private readonly storage: IStorage,
         private readonly cacheDir: string,
         private readonly isReadonly: boolean = false
     ) {}
@@ -44,13 +43,17 @@ export class HashCache {
      * Loads the hash cache from storage.
      */
     async load(): Promise<boolean> {
-        const cachePath = pathJoin(this.cacheDir, "hash-cache-x.dat");
-        const cacheData = await this.storage.read(cachePath);
-        if (cacheData) {
-            this.buffer = cacheData;
-            this.createLookupTable();
-            this.initialized = true;
-            return true;
+        const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
+        try {
+            const cacheData = await fs.readFile(cachePath);
+            if (cacheData) {
+                this.buffer = cacheData;
+                this.createLookupTable();
+                this.initialized = true;
+                return true;
+            }
+        } catch (error) {
+            // File doesn't exist or can't be read - create new cache
         }
 
         // Create a new empty cache if it doesn't exist
@@ -145,7 +148,7 @@ export class HashCache {
             return;
         }
 
-        const cachePath = pathJoin(this.cacheDir, "hash-cache-x.dat");
+        const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
 
         // Calculate actual used size
         let offset = 0;
@@ -157,7 +160,16 @@ export class HashCache {
 
         // Write only the used portion of the buffer
         const usedBuffer = this.buffer.slice(0, offset);
-        await this.storage.write(cachePath, undefined, usedBuffer);
+        
+        // Use atomic write: write to temp file first, then rename
+        // This ensures workers always read a complete file, never a partially written one
+        const tempPath = `${cachePath}.tmp`;
+        await fs.ensureDir(this.cacheDir);
+        await fs.writeFile(tempPath, usedBuffer);
+        
+        // Rename is atomic on most filesystems, ensuring workers see either old or new complete file
+        await fs.rename(tempPath, cachePath);
+        
         this.isDirty = false;
     }
 
