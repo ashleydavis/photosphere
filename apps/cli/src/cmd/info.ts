@@ -1,16 +1,18 @@
 import { FileScanner, IFileStat } from "api";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
-import { exit } from "node-utils";
+import { exit, writeStreamToFile } from "node-utils";
 import { getFileInfo, AssetInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { computeHash } from "api";
-import fs from "fs";
+import { computeHash, extractFileFromZipRecursive } from "api";
+import fs from "fs-extra";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
 import mime from "mime";
+import { tmpdir } from "os";
+import { randomUUID } from "crypto";
 
 export interface IInfoCommandOptions { 
     //
@@ -58,7 +60,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     const fileScanner = new FileScanner();
     await fileScanner.scanPaths(paths, async (fileResult) => {
         try {
-            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.openStream);
+            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.zipFilePath);
             results.push(analysis);
             fileCount++;
         } catch (error) {
@@ -93,33 +95,61 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileStat, openStream?: () => NodeJS.ReadableStream): Promise<FileAnalysis> {
-    const absolutePath = path.resolve(filePath);
+async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileStat, zipFilePath?: string): Promise<FileAnalysis> {
+    const absolutePath = zipFilePath ? zipFilePath : path.resolve(filePath);
     
     let fileAnalysis: FileAnalysis = {
         path: filePath,
         fileStat: fileInfo,        
     };
     
-    // Calculate file hash
+    let tempFilePath: string | undefined;
+    
     try {
-        const fileStream = openStream ? openStream() : fs.createReadStream(absolutePath);
-        const hashBuffer = await computeHash(fileStream);
-        fileAnalysis.hash = hashBuffer.toString("hex");
-    } 
-    catch (error) {
-        log.verbose(`Failed to calculate hash for ${filePath}: ${error}`);
-    }
-
-    // Analyze file content using the unified getFileInfo function
-    try {
-        const assetInfo = await getFileInfo(absolutePath, contentType);        
-        if (assetInfo) {
-            fileAnalysis.assetInfo = assetInfo;
+        // Calculate file hash
+        try {
+            const fileStream = zipFilePath 
+                ? await extractFileFromZipRecursive(zipFilePath, filePath)
+                : fs.createReadStream(absolutePath);
+            const hashBuffer = await computeHash(fileStream);
+            fileAnalysis.hash = hashBuffer.toString("hex");
+        } 
+        catch (error) {
+            log.verbose(`Failed to calculate hash for ${filePath}: ${error}`);
         }
-    } 
-    catch (error) {
-        fileAnalysis.error = `Failed to analyze file: ${error}`;
+
+        // Analyze file content using the unified getFileInfo function
+        // For zip files, extract to temporary location first
+        let actualFilePath = absolutePath;
+        if (zipFilePath) {
+            // Extract file from zip to temporary location
+            const ext = mime.getExtension(contentType) || path.extname(filePath) || '';
+            const tempFileName = `temp_${randomUUID()}${ext ? `.${ext}` : ''}`;
+            tempFilePath = path.join(tmpdir(), tempFileName);
+            
+            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+            await writeStreamToFile(stream, tempFilePath);
+            actualFilePath = tempFilePath;
+        }
+        
+        try {
+            const assetInfo = await getFileInfo(actualFilePath, contentType);        
+            if (assetInfo) {
+                fileAnalysis.assetInfo = assetInfo;
+            }
+        } 
+        catch (error) {
+            fileAnalysis.error = `Failed to analyze file: ${error}`;
+        }
+    } finally {
+        // Clean up temporary file if created
+        if (tempFilePath) {
+            try {
+                await fs.unlink(tempFilePath);
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        }
     }
 
     return fileAnalysis;

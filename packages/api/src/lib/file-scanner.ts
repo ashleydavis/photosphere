@@ -1,7 +1,6 @@
 import path from "path";
 import mime from "mime";
 import { log } from "utils";
-import { Readable } from "stream";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
 import fs from "fs-extra";
@@ -23,17 +22,17 @@ export type ScanProgressCallback = (currentlyScanning: string | undefined) => vo
 //
 // Callback for visiting a file when scanning a directory or zip file.
 //
-export type VisitFileCallback = (filePath: string, fileInfo: IFileStat, fileDate: Date, contentType: string, labels: string[], openStream: (() => Readable) | undefined, progressCallback: ScanProgressCallback) => Promise<void>;
+export type VisitFileCallback = (filePath: string, fileInfo: IFileStat, fileDate: Date, contentType: string, labels: string[], zipFilePath: string | undefined, progressCallback: ScanProgressCallback) => Promise<void>;
 
 //
 // Result of scanning a single file
 //
 export interface FileScannedResult {
-    filePath: string;
+    filePath: string; // Relative path within zip if zipFilePath is present, otherwise the actual file path
     fileStat: IFileStat;
     contentType: string;
     labels: string[];
-    openStream?: () => NodeJS.ReadableStream;
+    zipFilePath?: string; // Path to the zip file containing this file, if present
 }
 
 //
@@ -130,7 +129,8 @@ export class FileScanner {
                     await this.scanZipFile(
                         filePath, 
                         fileInfo, 
-                        undefined, // Indication to use the file directly.
+                        undefined, // No parent zip
+                        undefined, // No relative path in parent
                         visitFile, 
                         progressCallback
                     );
@@ -142,7 +142,6 @@ export class FileScanner {
                         fileStat: fileInfo,
                         contentType,
                         labels: [],
-                        openStream: undefined, // Indication to use the file directly.
                     });
                 }
             } 
@@ -196,7 +195,7 @@ export class FileScanner {
 
                 if (contentType === "application/zip") {
                     // If it's a zip file, we need to scan its contents.
-                    await this.scanZipFile(filePath, fileInfo, undefined, visitFile, progressCallback);
+                    await this.scanZipFile(filePath, fileInfo, undefined, undefined, visitFile, progressCallback);
                 } 
                 else {
                     // Otherwise, process the file directly.
@@ -205,7 +204,6 @@ export class FileScanner {
                         fileStat: fileInfo,
                         contentType,
                         labels: [],
-                        openStream: undefined // Indication to use the file directly.
                     });
                 }
             } 
@@ -257,16 +255,24 @@ export class FileScanner {
     //
     // Scans files from a zip file
     //
-    private async scanZipFile(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
-        log.verbose(`Scanning zip file "${filePath}" for media files.`);
+    private async scanZipFile(zipFilePath: string, fileStat: IFileStat, parentZipFilePath: string | undefined, parentZipRelativePath: string | undefined, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
+        const actualZipPath = parentZipFilePath ? parentZipFilePath : zipFilePath;
+        log.verbose(`Scanning zip file "${actualZipPath}"${parentZipRelativePath ? ` (nested: ${parentZipRelativePath})` : ''} for media files.`);
 
         if (progressCallback) {
-            this.currentlyScanning = path.basename(filePath);
+            this.currentlyScanning = path.basename(actualZipPath);
             progressCallback(this.currentlyScanning);
         }
 
         const zip = new JSZip();
-        const unpacked = await zip.loadAsync(await buffer(openStream ? openStream() : fs.createReadStream(filePath)));
+        // If parentZipFilePath is provided, we're reading from a nested zip
+        let zipStream: NodeJS.ReadableStream;
+        if (parentZipFilePath && parentZipRelativePath) {
+            zipStream = await this.extractZipFromParent(parentZipFilePath, parentZipRelativePath);
+        } else {
+            zipStream = fs.createReadStream(zipFilePath);
+        }
+        const unpacked = await zip.loadAsync(await buffer(zipStream));
         
         for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
             if (!zipObject.dir) {
@@ -283,21 +289,24 @@ export class FileScanner {
 
                     if (contentType === "application/zip") {
                         // If it's a zip file, we need to scan its contents recursively.
+                        // For nested zips, the actual zip file path is the top-level zip
+                        const topLevelZipPath = parentZipFilePath || zipFilePath;
                         await this.scanZipFile(
-                            path.join(filePath, fileName), 
+                            topLevelZipPath, // Top-level zip file path
                             zipFileInfo, 
-                            () => zipObject.nodeStream(), // Provide stream to extract the file from the zip.
+                            topLevelZipPath, // Parent zip is the top-level zip
+                            fileName, // Relative path of nested zip within parent
                             visitFile, 
                             progressCallback
                         );
                     }
                     else {
                         await visitFile({
-                            filePath: path.join(filePath, fileName),
+                            filePath: fileName, // Relative path within zip
                             fileStat: zipFileInfo,
                             contentType,
-                            labels: [],                            
-                            openStream: () => zipObject.nodeStream() // Provide stream to extract the file from the zip.
+                            labels: [],
+                            zipFilePath: actualZipPath, // Actual filesystem path to the zip file containing this file
                         });
                     }
 
@@ -308,6 +317,20 @@ export class FileScanner {
                 }
             }
         }
+    }
+
+    //
+    // Extracts a nested zip file from a parent zip
+    //
+    private async extractZipFromParent(parentZipFilePath: string, nestedZipRelativePath: string): Promise<NodeJS.ReadableStream> {
+        const parentZip = new JSZip();
+        const parentStream = fs.createReadStream(parentZipFilePath);
+        const unpacked = await parentZip.loadAsync(await buffer(parentStream));
+        const nestedZipObject = unpacked.files[nestedZipRelativePath];
+        if (!nestedZipObject || nestedZipObject.dir) {
+            throw new Error(`Nested zip file "${nestedZipRelativePath}" not found in parent zip "${parentZipFilePath}"`);
+        }
+        return nestedZipObject.nodeStream();
     }
 
     //

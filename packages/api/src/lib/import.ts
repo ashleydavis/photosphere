@@ -8,9 +8,10 @@ import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
-import { computeAssetHash, getHashFromCache, computeCachedHash } from "./hash";
+import { computeAssetHash, getHashFromCache, validateAndHash } from "./hash";
 import { HashCache } from "./hash-cache";
 import { FileScanner, IFileStat } from "./file-scanner";
+import { extractFileFromZipRecursive } from "./zip-utils";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
@@ -37,7 +38,7 @@ async function importFile(
     fileStat: IFileStat,
     contentType: string,
     labels: string[],
-    openStream: (() => NodeJS.ReadableStream) | undefined,
+    zipFilePath: string | undefined,
     progressCallback: ProgressCallback,
     summary: IAddSummary
 ): Promise<IAddSummary> {
@@ -48,11 +49,16 @@ async function importFile(
     try {
         let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
         if (!localHashedFile) {
-            const hashResult = await computeCachedHash(uuidGenerator, localHashCache, localFileScanner, filePath, fileStat, contentType, assetTempDir, openStream, progressCallback, summary);
-            if (!hashResult.hashedFile) {
-                return hashResult.summary;
+            localHashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, assetTempDir, zipFilePath);
+            if (!localHashedFile) {
+                summary.filesFailed++;
+                if (progressCallback) {
+                    progressCallback(localFileScanner.getCurrentlyScanning());
+                }
+                return summary;
             }
-            localHashedFile = hashResult.hashedFile;
+            // Add hash to cache after computation
+            localHashCache.addHash(filePath, localHashedFile);
         }
 
         const localHashStr = localHashedFile.hash.toString("hex");
@@ -69,10 +75,10 @@ async function importFile(
         let assetDetails: IAssetDetails | undefined = undefined;
         
         if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, uuidGenerator, openStream);
+            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, uuidGenerator, zipFilePath);
         }
         else if (contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, openStream);
+            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, zipFilePath);
         }
 
         const assetPath = `asset/${assetId}`;
@@ -93,14 +99,17 @@ async function importFile(
                 throw new Error(`Failed to load media file database.`);
             }
 
-            await retry(() => assetStorage.writeStream(assetPath, contentType, openStream ? openStream() : fs.createReadStream(filePath), fileStat.length));
+            const stream = zipFilePath 
+                ? await extractFileFromZipRecursive(zipFilePath, filePath)
+                : fs.createReadStream(filePath);
+            await retry(() => assetStorage.writeStream(assetPath, contentType, stream, fileStat.length));
 
             const assetInfo = await retry(() => assetStorage.info(assetPath));
             if (!assetInfo) {
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
 
-            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => assetStorage.readStream(assetPath)));
+            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, undefined));
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
@@ -121,7 +130,7 @@ async function importFile(
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, () => fs.createReadStream(assetDetails.thumbnailPath)));
+                const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, undefined));
 
                 await refreshWriteLock(metadataStorage, sessionId);
 
@@ -140,7 +149,7 @@ async function importFile(
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, () => fs.createReadStream(assetDetails.displayPath!)));
+                const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, undefined));
 
                 await refreshWriteLock(metadataStorage, sessionId);
 
@@ -289,7 +298,7 @@ export async function addPaths(
             result.fileStat,
             result.contentType,
             result.labels,
-            result.openStream,
+            result.zipFilePath,
             progressCallback,
             summary
         );

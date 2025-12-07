@@ -151,7 +151,7 @@ export async function repair(
                 return false;
             }
 
-            const copiedHash = await computeAssetHash(fileName, copiedFileInfo, () => assetStorage.readStream(fileName));
+            const copiedHash = await computeAssetHash(fileName, copiedFileInfo, undefined);
             if (Buffer.compare(copiedHash.hash, expectedHash) !== 0) {
                 log.warn(`Repaired file hash mismatch: ${fileName}`);
                 return false;
@@ -199,7 +199,7 @@ export async function repair(
             || options.full) {
             
             // Verify the actual hash.
-            const freshHash = await computeAssetHash(fileName, fileInfo, () => assetStorage.readStream(fileName));                
+            const freshHash = await computeAssetHash(fileName, fileInfo, undefined);                
             if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
                 // File is corrupted - try to repair.
                 if (progressCallback) {

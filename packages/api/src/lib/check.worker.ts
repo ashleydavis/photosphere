@@ -1,0 +1,82 @@
+//
+// Check worker handler - handles file checking tasks
+//
+
+import fs from "fs-extra";
+import os from "os";
+import path from "path";
+import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { validateAndHash, getHashFromCache } from "./hash";
+import { HashCache } from "./hash-cache";
+import { IFileStat } from "./file-scanner";
+import { createMediaFileDatabase } from "./media-file-database";
+
+export interface ICheckFileData {
+    filePath: string;
+    fileStat: IFileStat;
+    contentType: string;
+    storageDescriptor: IStorageDescriptor;
+    hashCacheDir: string;
+    s3Config?: IS3Credentials;
+    zipFilePath?: string;
+}
+
+export interface ICheckFileResult {
+    hashedFile?: {
+        hash: string; // hex string
+        lastModified: string; // ISO string
+        length: number;
+    };
+    alreadyInDatabase: boolean;
+}
+
+//
+// Handler for checking a single file
+// Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
+//
+export async function checkFileHandler(data: ICheckFileData, workingDirectory: string): Promise<ICheckFileResult> {
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, zipFilePath } = data;
+    
+    // Recreate dependencies in the worker
+    const uuidGenerator = new RandomUuidGenerator(); //TODO: These should be injected as context from a higher level.
+    const timestampProvider = new TimestampProvider();
+    
+    // Load hash cache (read-only)
+    const localHashCache = new HashCache(new FileStorage(hashCacheDir), hashCacheDir, true); // readonly = true
+    await localHashCache.load();
+    
+    // Recreate storage and metadata collection in the worker
+    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
+    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const metadataCollection = database.metadataCollection;
+    
+    // Check cache first
+    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);    
+    if (!hashedFile) {
+        // Not in cache - compute hash
+        const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
+        await fs.ensureDir(tempDir);
+        
+        hashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, tempDir, zipFilePath);
+        if (!hashedFile) {
+            return { hashedFile: undefined, alreadyInDatabase: false };
+        }
+    }
+    
+    // Check if file is already in database
+    const localHashStr = hashedFile.hash.toString("hex");
+    const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: This is very slow, especially when the hash is not found.
+    const alreadyInDatabase = records.length > 0;
+    
+    return {
+        hashedFile: {
+            hash: localHashStr,
+            lastModified: hashedFile.lastModified.toISOString(),
+            length: hashedFile.length,
+        },
+        alreadyInDatabase,
+    };
+}
+

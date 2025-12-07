@@ -5,8 +5,7 @@ import { IHashedData } from "merkle-tree";
 import { HashCache } from "./hash-cache";
 import { validateFile } from "./validation";
 import { log, IUuidGenerator } from "utils";
-import { FileScanner } from "./file-scanner";
-import { ProgressCallback, IAddSummary } from "./media-file-database";
+import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Computes a hash from a stream.
@@ -32,11 +31,14 @@ export function computeHash(inputStream: NodeJS.ReadableStream): Promise<Buffer>
 //
 // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
 //
-export async function computeAssetHash(filePath: string, fileStat: IFileStat, openStream: (() => NodeJS.ReadableStream) | undefined): Promise<IHashedData> {
+export async function computeAssetHash(filePath: string, fileStat: IFileStat, zipFilePath: string | undefined): Promise<IHashedData> {
     //
     // Compute the hash of the file.
     //
-    const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
+    const stream = zipFilePath 
+        ? await extractFileFromZipRecursive(zipFilePath, filePath)
+        : fs.createReadStream(filePath);
+    const hash = await computeHash(stream);
     return {
         hash,
         lastModified: fileStat.lastModified,
@@ -62,50 +64,36 @@ export async function getHashFromCache(filePath: string, fileStat: IFileStat, ha
 }
 
 //
-// Computes the hash of a file for import, validating it first and caching the result in the hash cache.
+// Validates and computes the hash of a file for import.
+// Returns the hashed file data on success, or undefined on failure.
 //
-export async function computeCachedHash(
+export async function validateAndHash(
     uuidGenerator: IUuidGenerator,
-    localHashCache: HashCache,
-    localFileScanner: FileScanner,
     filePath: string, 
     fileStat: IFileStat, 
     contentType: string, 
     assetTempDir: string, 
-    openStream: (() => NodeJS.ReadableStream) | undefined,
-    progressCallback: ProgressCallback,
-    summary: IAddSummary
-): Promise<{ hashedFile?: IHashedData; summary: IAddSummary }> {
-    if (openStream === undefined) {
-        openStream = () => fs.createReadStream(filePath);
-    }
-    
+    zipFilePath: string | undefined
+): Promise<IHashedData | undefined> {
     try {
-        if (!await validateFile(filePath, contentType, assetTempDir, uuidGenerator, openStream)) {
-            summary.filesFailed++;
-            if (progressCallback) {
-                progressCallback(localFileScanner.getCurrentlyScanning());
-            }            
-            return { summary };
+        if (!await validateFile(filePath, contentType, assetTempDir, uuidGenerator, zipFilePath)) {
+            return undefined;
         }
     }
     catch (error: any) {
         log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);
-        summary.filesFailed++;
-        if (progressCallback) {
-            progressCallback(localFileScanner.getCurrentlyScanning());
-        }            
-        return { summary };
+        return undefined;
     }
 
-    const hash = await computeHash(openStream ? openStream() : fs.createReadStream(filePath));
+    const stream = zipFilePath 
+        ? await extractFileFromZipRecursive(zipFilePath, filePath)
+        : fs.createReadStream(filePath);
+    const hash = await computeHash(stream);
     const hashedFile: IHashedData = {
         hash,
         lastModified: fileStat.lastModified,
         length: fileStat.length,
     };
 
-    localHashCache.addHash(filePath, hashedFile);
-
-    return { hashedFile, summary };
+    return hashedFile;
 }

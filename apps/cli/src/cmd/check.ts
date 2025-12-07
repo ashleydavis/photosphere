@@ -2,11 +2,12 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
+import { getS3Config } from "../lib/config";
 import * as os from 'os';
 import * as path from 'path';
 import { checkPaths, HashCache } from "api";
-import { FileStorage } from "storage";
+import { FileStorage, IStorageDescriptor } from "storage";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
 }
@@ -16,12 +17,22 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { metadataCollection, localFileScanner } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { localFileScanner, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
     const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
     await localHashCache.load();
+
+    // Create storage descriptor for passing to workers
+    const resolvedKeyPath = await resolveKeyPath(options.key);
+    const storageDescriptor: IStorageDescriptor = {
+        dbDir: databaseDir,
+        encryptionKeyPath: resolvedKeyPath
+    };
+    
+    // Get S3 config to pass to workers (needed for S3-hosted storage)
+    const s3Config = await getS3Config();
 
     writeProgress(`Searching for files...`);
 
@@ -35,8 +46,7 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     };
 
     const addSummary = await checkPaths(
-        uuidGenerator,
-        metadataCollection,
+        storageDescriptor,
         localHashCache,
         localFileScanner,
         paths,
@@ -54,7 +64,7 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
 
         progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
         writeProgress(progressMessage);
-    }, currentSummary);
+    }, context.taskQueueProvider, localHashCachePath, s3Config, currentSummary);
 
     clearProgressMessage(); // Flush the progress message.
 
