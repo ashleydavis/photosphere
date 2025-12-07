@@ -421,7 +421,20 @@ export class TaskQueue implements ITaskQueue {
     //
     private createWorker(): IWorkerState {
         // Pass worker options via environment variable
+        // Also pass through environment variables needed for tmpdir() to work correctly
         const workerEnv: Record<string, string> = {};
+        
+        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
+        if (process.env.TEMP) {
+            workerEnv.TEMP = process.env.TEMP;
+        }
+        if (process.env.TMP) {
+            workerEnv.TMP = process.env.TMP;
+        }
+        if (process.env.TMPDIR) {
+            workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+        
         if (this.workerOptions) {
             workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
         } else {
@@ -753,7 +766,20 @@ export class TaskQueue implements ITaskQueue {
 
         // Create replacement worker
         // Pass worker options via environment variable
+        // Also pass through environment variables needed for tmpdir() to work correctly
         const workerEnv: Record<string, string> = {};
+        
+        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
+        if (process.env.TEMP) {
+            workerEnv.TEMP = process.env.TEMP;
+        }
+        if (process.env.TMP) {
+            workerEnv.TMP = process.env.TMP;
+        }
+        if (process.env.TMPDIR) {
+            workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+        
         if (this.workerOptions) {
             workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
         } else {
