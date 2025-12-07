@@ -5,7 +5,8 @@ import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { configureIfNeeded, getGoogleApiKey } from '../lib/config';
 import { getFileLogger } from "../lib/log";
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { pathExists } from 'node-utils';
 import * as os from 'os';
 import * as path from 'path';
 import { formatBytes } from "../lib/format";
@@ -25,7 +26,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     
     // Validate that all paths exist before processing
     for (const path of paths) {
-        if (!await fs.pathExists(path)) {
+        if (!await pathExists(path)) {
             log.error('');
             log.error(pc.red(`✗ Path does not exist: ${pc.cyan(path)}`));
             log.error(pc.red('  Please verify the path is correct and try again.'));

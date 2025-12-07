@@ -1,5 +1,5 @@
 import { configureLog } from "../lib/log";
-import fs from "fs-extra";
+import { existsSync, readdirSync, statSync, readFileSync } from "fs";
 import path from "path";
 import os from "os";
 import open from "open";
@@ -259,16 +259,16 @@ async function getToolVersions() {
 function getLatestLogFile(): string | null {
     try {
         const logsDir = path.join(os.tmpdir(), 'photosphere', 'logs');
-        if (!fs.existsSync(logsDir)) {
+        if (!existsSync(logsDir)) {
             return null;
         }
         
-        const logFiles = fs.readdirSync(logsDir)
+        const logFiles = readdirSync(logsDir)
             .filter(file => file.startsWith('psi-') && file.endsWith('.log'))
             .map(file => ({
                 name: file,
                 path: path.join(logsDir, file),
-                mtime: fs.statSync(path.join(logsDir, file)).mtime
+                mtime: statSync(path.join(logsDir, file)).mtime
             }))
             .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
         
@@ -279,12 +279,12 @@ function getLatestLogFile(): string | null {
 }
 
 function getLogHeader(logFilePath: string | null): string {
-    if (!logFilePath || !fs.existsSync(logFilePath)) {
+    if (!logFilePath || !existsSync(logFilePath)) {
         return 'No log file available';
     }
     
     try {
-        const logContent = fs.readFileSync(logFilePath, 'utf8');
+        const logContent = readFileSync(logFilePath, 'utf8');
         const logStartIndex = logContent.indexOf('--- Log Start ---');
         
         if (logStartIndex === -1) {

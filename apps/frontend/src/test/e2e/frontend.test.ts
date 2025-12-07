@@ -1,4 +1,5 @@
-import * as fs from "fs-extra";
+import * as fs from "fs/promises";
+import { existsSync } from "fs";
 import { test, expect } from '@playwright/test';
 const { describe } = test; 
 
@@ -34,7 +35,7 @@ describe("frontend tests", () => {
             await sleep(1); //TODO: Should wait until progress spinner has hidden.
 
             const uploadDir = "../backend/files/collections/test-collection/display";
-            if (!fs.existsSync(uploadDir)) {
+            if (!existsSync(uploadDir)) {
                 continue;
             }
     

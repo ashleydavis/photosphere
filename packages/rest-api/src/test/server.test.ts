@@ -1,5 +1,6 @@
 import { createServer } from "../lib/server";
-import * as fs from "fs-extra";
+import * as fs from "fs/promises";
+import { readFileSync } from "fs";
 import * as path from "path";
 import dayjs from "dayjs";
 import { Readable } from "stream";
@@ -229,7 +230,7 @@ describe("photosphere backend", () => {
 
         const response = await axios.post(
             `${baseUrl}/asset`, 
-            fs.readFileSync(path.resolve(__dirname, "../../../../test/test.jpg")),
+            readFileSync(path.resolve(__dirname, "../../../../test/test.jpg")),
             {
                 headers: { 
                     "db": setId,

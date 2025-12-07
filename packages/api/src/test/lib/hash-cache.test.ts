@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as os from 'os';
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import { HashCache } from '../../lib/hash-cache';
 
 // Mock implementation of IStorage (no longer used, kept for reference)

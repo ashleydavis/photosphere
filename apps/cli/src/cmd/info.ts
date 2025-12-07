@@ -7,7 +7,8 @@ import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { computeHash, extractFileFromZipRecursive } from "api";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { createReadStream } from "fs";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
 import mime from "mime";
@@ -110,7 +111,7 @@ async function analyzeFile(filePath: string, contentType: string, fileInfo: IFil
         try {
             const fileStream = zipFilePath 
                 ? await extractFileFromZipRecursive(zipFilePath, filePath)
-                : fs.createReadStream(absolutePath);
+                : createReadStream(absolutePath);
             const hashBuffer = await computeHash(fileStream);
             fileAnalysis.hash = hashBuffer.toString("hex");
         } 

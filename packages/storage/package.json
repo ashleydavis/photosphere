@@ -20,7 +20,6 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.9.1",
     "@types/jest": "^29.4.0",
     "typescript": "^5.6.3",
@@ -29,7 +28,6 @@
   },
   "dependencies": {
     "aws-sdk": "=2.1311.0",
-    "fs-extra": "^11.3.2",
     "utils": "workspace:*",
     "node-utils": "workspace:*"
   }

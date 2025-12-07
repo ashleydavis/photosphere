@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
 import { exec, execLogged } from 'node-utils';
 import { IUuidGenerator, log, IImageTransformation } from 'utils';

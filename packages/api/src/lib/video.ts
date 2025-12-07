@@ -1,6 +1,7 @@
 import { getVideoTransformation, ILocation } from "utils";
 import path from "path";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { pathExists } from "node-utils";
 import dayjs from "dayjs";
 import { writeStreamToFile } from "node-utils";
 import { tmpdir } from "os";
@@ -72,7 +73,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         // See if we can get photo date from the JSON file.
         //
         const jsonFilePath = filePath + ".json";
-        if (await fs.pathExists(jsonFilePath)) {
+        if (await pathExists(jsonFilePath)) {
             const jsonFileData = await fs.readFile(jsonFilePath);
             const photoData = JSON.parse(jsonFileData.toString());
             if (photoData.photoTakenTime?.timestamp) {

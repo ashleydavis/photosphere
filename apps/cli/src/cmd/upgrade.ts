@@ -10,7 +10,8 @@ import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
 import { loadPrivateKey, loadPublicKey } from "storage";
 import { createPublicKey } from "node:crypto";
-import * as fs from "fs-extra";
+import * as fs from "fs/promises";
+import { pathExists } from "node-utils";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -174,7 +175,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
                 try {
                     let publicKeyPem: string | undefined;
                     const publicKeyPath = `${resolvedKeyPath}.pub`;
-                    if (await fs.pathExists(publicKeyPath)) {
+                    if (await pathExists(publicKeyPath)) {
                         publicKeyPem = await fs.readFile(publicKeyPath, 'utf8');
                     } else {
                         // Extract public key from private key

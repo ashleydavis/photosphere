@@ -1,5 +1,6 @@
-import * as fs from "fs-extra";
+import * as fs from "fs/promises";
 import * as path from "path";
+import { ensureDir } from "node-utils";
 
 /**
  * Starts with:
@@ -164,7 +165,7 @@ export class HashCache {
         // Use atomic write: write to temp file first, then rename
         // This ensures workers always read a complete file, never a partially written one
         const tempPath = `${cachePath}.tmp`;
-        await fs.ensureDir(this.cacheDir);
+        await ensureDir(this.cacheDir);
         await fs.writeFile(tempPath, usedBuffer);
         
         // Rename is atomic on most filesystems, ensuring workers see either old or new complete file

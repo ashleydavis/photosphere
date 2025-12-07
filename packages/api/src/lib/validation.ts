@@ -1,6 +1,6 @@
 import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.

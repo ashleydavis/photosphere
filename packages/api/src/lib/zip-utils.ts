@@ -3,7 +3,7 @@
 //
 
 import JSZip from "jszip";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
 import { buffer } from "node:stream/consumers";
 
 //

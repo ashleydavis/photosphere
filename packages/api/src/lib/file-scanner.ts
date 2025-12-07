@@ -3,7 +3,9 @@ import mime from "mime";
 import { log } from "utils";
 import JSZip from "jszip";
 import { buffer } from "node:stream/consumers";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { createReadStream } from "fs";
+import { pathExists } from "node-utils";
 
 //
 // File statistics interface
@@ -238,7 +240,7 @@ export class FileScanner {
     // Walks a directory recursively and yields files in alphanumeric order
     //
     private async* walkDirectory(dirPath: string, ignorePatterns: RegExp[] = [/node_modules/, /\.git/, /\.DS_Store/]): AsyncGenerator<IOrderedFile> {
-        if (!await fs.pathExists(dirPath)) {
+        if (!await pathExists(dirPath)) {
             return;
         }
 
@@ -288,7 +290,7 @@ export class FileScanner {
         if (parentZipFilePath && parentZipRelativePath) {
             zipStream = await this.extractZipFromParent(parentZipFilePath, parentZipRelativePath);
         } else {
-            zipStream = fs.createReadStream(zipFilePath);
+            zipStream = createReadStream(zipFilePath);
         }
 
         let unpacked;
@@ -350,7 +352,7 @@ export class FileScanner {
     //
     private async extractZipFromParent(parentZipFilePath: string, nestedZipRelativePath: string): Promise<NodeJS.ReadableStream> {
         const parentZip = new JSZip();
-        const parentStream = fs.createReadStream(parentZipFilePath);
+        const parentStream = createReadStream(parentZipFilePath);
         const unpacked = await parentZip.loadAsync(await buffer(parentStream));
         const nestedZipObject = unpacked.files[nestedZipRelativePath];
         if (!nestedZipObject || nestedZipObject.dir) {

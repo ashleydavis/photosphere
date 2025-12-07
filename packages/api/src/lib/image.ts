@@ -4,7 +4,7 @@ import utc from "dayjs/plugin/utc";
 dayjs.extend(utc);
 import { execLogged, writeStreamToFile } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { getFileInfo, Image } from "tools";
 const exifParser = require("exif-parser");
