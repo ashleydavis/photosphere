@@ -63,6 +63,7 @@ interface IOrderedFile {
 export class FileScanner {
     private currentlyScanning: string | undefined;
     private numFilesIgnored: number = 0;
+    private numFilesFailed: number = 0;
 
     constructor(private readonly options?: ScannerOptions) {
     }
@@ -72,6 +73,13 @@ export class FileScanner {
     //
     getNumFilesIgnored(): number {
         return this.numFilesIgnored;
+    }
+
+    //
+    // Gets the number of files that failed during the last scan
+    //
+    getNumFilesFailed(): number {
+        return this.numFilesFailed;
     }
 
     //
@@ -86,6 +94,7 @@ export class FileScanner {
     //
     resetIgnoredCounter(): void {
         this.numFilesIgnored = 0;
+        this.numFilesFailed = 0;
     }
 
     //
@@ -281,7 +290,15 @@ export class FileScanner {
         } else {
             zipStream = fs.createReadStream(zipFilePath);
         }
-        const unpacked = await zip.loadAsync(await buffer(zipStream));
+
+        let unpacked;
+        try {
+            unpacked = await zip.loadAsync(await buffer(zipStream));
+        } catch (error) {
+            log.error(`Failed to load zip file "${actualZipPath}": ${error instanceof Error ? error.message : String(error)}`);
+            this.numFilesFailed++;
+            return;
+        }
         
         for (const [fileName, zipObject] of Object.entries(unpacked.files)) {
             if (!zipObject.dir) {

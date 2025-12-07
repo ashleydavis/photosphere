@@ -97,6 +97,10 @@ export async function checkPaths(
         // Final save of hash cache
         await retry(() => localHashCache.save());
         
+        // Add scanner's ignored and failed counts to summary
+        summary.filesIgnored += localFileScanner.getNumFilesIgnored();
+        summary.filesFailed += localFileScanner.getNumFilesFailed();
+        
         summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
         return summary;
     } finally {
