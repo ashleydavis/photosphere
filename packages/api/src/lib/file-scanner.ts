@@ -102,9 +102,11 @@ export class FileScanner {
     // Scans a single file or directory
     //
     async scanPath(filePath: string, visitFile: SimpleFileCallback, progressCallback?: ScanProgressCallback): Promise<void> {
-        const stats = await fs.stat(filePath).catch(() => null);
-        if (!stats) {
-            log.verbose(`Path "${filePath}" does not exist.`);
+        let stats;
+        try {
+            stats = await fs.stat(filePath);
+        } catch (error) {
+            log.verbose(`Path "${filePath}" does not exist: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
 
@@ -180,9 +182,16 @@ export class FileScanner {
             }
 
             if (this.shouldIncludeFile(contentType)) {
-                const stats = await fs.stat(filePath).catch(() => null);
-                if (!stats || !stats.isFile()) {
-                    log.verbose(`Could not get file info for "${filePath}", skipping.`);
+                let stats;
+                try {
+                    stats = await fs.stat(filePath);
+                } catch (error) {
+                    log.verbose(`Could not get file info for "${filePath}", skipping: ${error instanceof Error ? error.message : String(error)}`);
+                    this.numFilesIgnored++;
+                    continue;
+                }
+                if (!stats.isFile()) {
+                    log.verbose(`"${filePath}" is not a file, skipping.`);
                     this.numFilesIgnored++;
                     continue;
                 }
