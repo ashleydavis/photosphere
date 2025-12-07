@@ -109,7 +109,7 @@ async function importFile(
                 throw new Error(`Failed to get info for file "${assetPath}"`);
             }
 
-            const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, undefined));
+            const hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
             if (hashedAsset.hash.toString("hex") !== localHashStr) {
                 throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
             }
@@ -130,7 +130,7 @@ async function importFile(
                 if (!thumbInfo) {
                     throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
                 }
-                const hashedThumb = await retry(() => computeAssetHash(thumbPath, thumbInfo, undefined));
+                const hashedThumb = await retry(() => computeAssetHash(assetStorage.readStream(thumbPath), thumbInfo));
 
                 await refreshWriteLock(metadataStorage, sessionId);
 
@@ -149,7 +149,7 @@ async function importFile(
                 if (!displayInfo) {
                     throw new Error(`Failed to get info for display "${displayPath}"`);
                 }
-                const hashedDisplay = await retry(() => computeAssetHash(displayPath, displayInfo, undefined));
+                const hashedDisplay = await retry(() => computeAssetHash(assetStorage.readStream(displayPath), displayInfo));
 
                 await refreshWriteLock(metadataStorage, sessionId);
 

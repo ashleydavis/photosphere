@@ -34,14 +34,12 @@ export function computeHash(inputStream: NodeJS.ReadableStream): Promise<Buffer>
 
 //
 // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
+// Takes a stream directly to avoid reading the file back from storage.
 //
-export async function computeAssetHash(filePath: string, fileStat: IFileStat, zipFilePath: string | undefined): Promise<IHashedData> {
+export async function computeAssetHash(stream: NodeJS.ReadableStream, fileStat: IFileStat): Promise<IHashedData> {
     //
     // Compute the hash of the file.
     //
-    const stream = zipFilePath 
-        ? await extractFileFromZipRecursive(zipFilePath, filePath)
-        : fs.createReadStream(filePath);
     const hash = await computeHash(stream);
     return {
         hash,
