@@ -4,6 +4,7 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { configureIfNeeded, getGoogleApiKey } from '../lib/config';
+import { getFileLogger } from "../lib/log";
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
@@ -96,6 +97,17 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     log.info(`Already added:    ${addSummary.filesAlreadyAdded}`);
     log.info(`Total size:       ${formatBytes(addSummary.totalSize)}`);
     log.info(`Average size:     ${formatBytes(addSummary.averageSize)}`);
+
+    // If there were failures, tell the user to check the log file
+    if (addSummary.filesFailed > 0) {
+        const fileLogger = getFileLogger();
+        if (fileLogger) {
+            const logFilePath = fileLogger.getLogFilePath();
+            log.info('');
+            log.info(pc.yellow(`⚠️  ${addSummary.filesFailed} file${addSummary.filesFailed === 1 ? '' : 's'} failed. Check the log file for details:`));
+            log.info(`    ${pc.cyan(logFilePath)}`);
+        }
+    }
 
     // Show follow-up commands
     log.info('');
