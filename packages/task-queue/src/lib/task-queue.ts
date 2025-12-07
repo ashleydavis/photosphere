@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { IUuidGenerator } from "utils";
 import { serializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
+import type { IWorkerOptions } from "./worker-init";
 
 //
 // Task status enumeration
@@ -181,14 +182,16 @@ export class TaskQueue implements ITaskQueue {
     private workerPath: string;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
+    private workerOptions?: IWorkerOptions;
 
     //
     // Creates a new task queue with the specified number of workers.
     // Tasks will execute in separate Bun worker threads for true parallelism.
     // workerPath: Path to the worker script file (must be provided by the caller).
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
+    // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000) {
+    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000, workerOptions?: IWorkerOptions) {
         this.maxWorkers = maxWorkers;
         this.workerPath = workerPath;
         this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
@@ -196,6 +199,7 @@ export class TaskQueue implements ITaskQueue {
             generate: () => randomUUID()
         } as IUuidGenerator;
         this.taskTimeout = taskTimeout;
+        this.workerOptions = workerOptions;
 
         // Workers will be created lazily when tasks are added
     }
@@ -416,7 +420,15 @@ export class TaskQueue implements ITaskQueue {
     // Returns the worker state.
     //
     private createWorker(): IWorkerState {
-        const worker = new Worker(this.workerPath);
+        // Pass worker options via environment variable
+        const workerEnv: Record<string, string> = {};
+        if (this.workerOptions) {
+            workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        } else {
+            workerEnv.WORKER_OPTIONS = JSON.stringify({});
+        }
+        
+        const worker = new Worker(this.workerPath, { env: workerEnv });
         const workerState: IWorkerState = {
             worker,
             workerId: this.workers.length + 1,
@@ -740,7 +752,15 @@ export class TaskQueue implements ITaskQueue {
         }
 
         // Create replacement worker
-        const worker = new Worker(this.workerPath);
+        // Pass worker options via environment variable
+        const workerEnv: Record<string, string> = {};
+        if (this.workerOptions) {
+            workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        } else {
+            workerEnv.WORKER_OPTIONS = JSON.stringify({});
+        }
+        
+        const worker = new Worker(this.workerPath, { env: workerEnv });
         const newWorkerState: IWorkerState = {
             worker,
             workerId: oldWorkerState.workerId,

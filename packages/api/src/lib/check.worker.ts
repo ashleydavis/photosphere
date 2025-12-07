@@ -6,7 +6,7 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+import type { IWorkerContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
 import { IFileStat } from "./file-scanner";
@@ -35,12 +35,9 @@ export interface ICheckFileResult {
 // Handler for checking a single file
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 //
-export async function checkFileHandler(data: ICheckFileData, workingDirectory: string): Promise<ICheckFileResult> {
+export async function checkFileHandler(data: ICheckFileData, workingDirectory: string, context: IWorkerContext): Promise<ICheckFileResult> {
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, zipFilePath } = data;
-    
-    // Recreate dependencies in the worker
-    const uuidGenerator = new RandomUuidGenerator(); //TODO: These should be injected as context from a higher level.
-    const timestampProvider = new TimestampProvider();
+    const { uuidGenerator, timestampProvider } = context;
     
     // Load hash cache (read-only)
     const localHashCache = new HashCache(new FileStorage(hashCacheDir), hashCacheDir, true); // readonly = true

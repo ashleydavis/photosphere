@@ -1,4 +1,4 @@
-import { TaskQueue } from "task-queue";
+import { TaskQueue, type IWorkerOptions } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { ITaskQueueProvider } from "api";
 import os from "node:os";
@@ -10,18 +10,20 @@ export class TaskQueueProvider implements ITaskQueueProvider {
     private taskQueueInstance: ITaskQueue | null = null;
     private maxWorkers: number;
     private taskTimeout: number;
+    private workerOptions?: IWorkerOptions;
 
-    constructor(maxWorkers?: number, taskTimeout?: number) {
+    constructor(maxWorkers?: number, taskTimeout?: number, workerOptions?: IWorkerOptions) {
         // Default to number of CPUs if not specified
         this.maxWorkers = maxWorkers ?? os.cpus().length;
         // Default to 10 minutes (600000ms) if not specified
         this.taskTimeout = taskTimeout ?? 600000;
+        this.workerOptions = workerOptions;
     }
 
     async create(): Promise<ITaskQueue> {
         if (!this.taskQueueInstance) {
             // Worker path resolved relative to project root (per Bun docs)
-            this.taskQueueInstance = new TaskQueue(this.maxWorkers, "./worker.ts", undefined, undefined, this.taskTimeout);
+            this.taskQueueInstance = new TaskQueue(this.maxWorkers, "./worker.ts", undefined, undefined, this.taskTimeout, this.workerOptions);
         }
         return this.taskQueueInstance;
     }
