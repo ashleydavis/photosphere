@@ -1,15 +1,12 @@
 import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
-import { IUuidGenerator } from "utils";
-import { writeStreamToFile } from "node-utils";
 import fs from "fs-extra";
-import path from "path";
-import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
+// filePath must be a path to a locally extracted file (not a zip file path).
 //
-export async function validateFile(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
+export async function validateFile(filePath: string, contentType: string): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -17,10 +14,10 @@ export async function validateFile(filePath: string, contentType: string, tempDi
     }
 
     if (contentType.startsWith("image")) {
-        return await validateImage(filePath, contentType, tempDir, uuidGenerator, zipFilePath);
+        return await validateImage(filePath, contentType);
     }
     else if (contentType.startsWith("video")) {
-        return await validateVideo(filePath, contentType, tempDir, uuidGenerator, zipFilePath);
+        return await validateVideo(filePath, contentType);
     }
 
     return true;
@@ -28,28 +25,18 @@ export async function validateFile(filePath: string, contentType: string, tempDi
 
 //
 // Validates an image file by checking if it has valid dimensions
+// filePath must be a path to a locally extracted file.
 //
-async function validateImage(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
-    let tempFilePath: string | undefined;
-    let actualFilePath = filePath;
-
+async function validateImage(filePath: string, contentType: string): Promise<boolean> {
     try {
-        // If zipFilePath is provided, we need to extract to a temporary file
-        if (zipFilePath) {
-            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
-            tempFilePath = await extractToTempFile(stream, tempDir, 'temp_image', path.extname(filePath), uuidGenerator);
-            actualFilePath = tempFilePath;
-        }
-
-        // We now have a file in the file system.
         // Check that it's not a zero-byte file.
-        const stats = await fs.stat(actualFilePath);
+        const stats = await fs.stat(filePath);
         if (stats.size === 0) {
             console.error(`Invalid image ${filePath} - zero-byte file`);
             return false;
         }
 
-        const fileInfo = await getFileInfo(actualFilePath, contentType);
+        const fileInfo = await getFileInfo(filePath, contentType);
         if (!fileInfo) {
             console.error(`Invalid image ${filePath} - failed to get file info`);
             return false;
@@ -65,42 +52,23 @@ async function validateImage(filePath: string, contentType: string, tempDir: str
     } catch (error) {
         console.error(`Invalid image ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         return false;
-    } finally {
-        // Clean up temporary file if created
-        if (tempFilePath) {
-            try {
-                await fs.unlink(tempFilePath);
-            } catch (err) {
-                // Ignore cleanup errors
-            }
-        }
     }
 }
 
 //
 // Validates a video file by checking if it has valid dimensions
+// filePath must be a path to a locally extracted file.
 //
-async function validateVideo(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
-    let tempFilePath: string | undefined;
-    let actualFilePath = filePath;
-
+async function validateVideo(filePath: string, contentType: string): Promise<boolean> {
     try {
-        // If zipFilePath is provided, we need to extract to a temporary file
-        if (zipFilePath) {
-            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
-            tempFilePath = await extractToTempFile(stream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
-            actualFilePath = tempFilePath;
-        }
-
-        // We now have a file in the file system.
         // Check that it's not a zero-byte file.
-        const stats = await fs.stat(actualFilePath);
+        const stats = await fs.stat(filePath);
         if (stats.size === 0) {
             console.error(`Invalid video ${filePath} - zero-byte file.`);
             return false;
         }
 
-        const fileInfo = await getFileInfo(actualFilePath, contentType);
+        const fileInfo = await getFileInfo(filePath, contentType);
         if (!fileInfo) {
             console.error(`Invalid video ${filePath} - failed to get file info`);
             return false;
@@ -116,30 +84,6 @@ async function validateVideo(filePath: string, contentType: string, tempDir: str
     } catch (error) {
         console.error(`Invalid video ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         return false;
-    } finally {
-        // Clean up temporary file if created
-        if (tempFilePath) {
-            try {
-                await fs.unlink(tempFilePath);
-            } catch (err) {
-                // Ignore cleanup errors
-            }
-        }
     }
-}
-
-//
-// Extracts stream data to a temporary file and returns the file path
-//
-async function extractToTempFile(stream: NodeJS.ReadableStream, tempDir: string, prefix: string, ext: string, uuidGenerator: IUuidGenerator): Promise<string> {
-    if (!ext.startsWith('.')) {
-        ext = `.${ext}`;
-    }
-    const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}${ext}`);
-    await writeStreamToFile(stream, tempPath);
-    if (!await fs.exists(tempPath)) {
-        throw new Error(`Failed to create temporary file at ${tempPath}`);
-    }
-    return tempPath;
 }
 

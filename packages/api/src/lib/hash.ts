@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 import { IFileStat } from "./file-scanner";
 import fs from "fs-extra";
+import path from "path";
+import os from "os";
+import mime from "mime";
 import { IHashedData } from "merkle-tree";
 import { HashCache } from "./hash-cache";
 import { validateFile } from "./validation";
 import { log, IUuidGenerator } from "utils";
 import { extractFileFromZipRecursive } from "./zip-utils";
+import { writeStreamToFile } from "node-utils";
 
 //
 // Computes a hash from a stream.
@@ -75,25 +79,53 @@ export async function validateAndHash(
     assetTempDir: string, 
     zipFilePath: string | undefined
 ): Promise<IHashedData | undefined> {
+    let actualFilePath = filePath;
+    let tempFilePath: string | undefined;
+
     try {
-        if (!await validateFile(filePath, contentType, assetTempDir, uuidGenerator, zipFilePath)) {
+        // If zipFilePath is provided, extract to a temporary file first
+        if (zipFilePath) {
+            const ext = mime.getExtension(contentType) || path.extname(filePath);
+            tempFilePath = path.join(assetTempDir, `temp_validate_${uuidGenerator.generate()}${ext.startsWith('.') ? ext : '.' + ext}`);
+            log.verbose(`Extracting file ${filePath} from zip file ${zipFilePath} to temporary file ${tempFilePath}`);
+            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+            await writeStreamToFile(stream, tempFilePath);
+            actualFilePath = tempFilePath;
+        }
+
+        try {
+            // Validate the file (now always working with a local file)
+            if (!await validateFile(actualFilePath, contentType)) {
+                return undefined;
+            }
+        }
+        catch (error: any) {
+            log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);
             return undefined;
         }
+
+        // Compute hash using the same file (already extracted if from zip)
+        const hash = await computeHash(fs.createReadStream(actualFilePath));
+        const hashedFile: IHashedData = {
+            hash,
+            lastModified: fileStat.lastModified,
+            length: fileStat.length,
+        };
+
+        return hashedFile;
     }
     catch (error: any) {
-        log.error(`File "${filePath}" has failed its validation with error: ${error.message}`);
+        log.exception(`Failed to hash file ${filePath}`, error);
         return undefined;
     }
-
-    const stream = zipFilePath 
-        ? await extractFileFromZipRecursive(zipFilePath, filePath)
-        : fs.createReadStream(filePath);
-    const hash = await computeHash(stream);
-    const hashedFile: IHashedData = {
-        hash,
-        lastModified: fileStat.lastModified,
-        length: fileStat.length,
-    };
-
-    return hashedFile;
+    finally {
+        // Clean up temporary file if created
+        if (tempFilePath) {
+            try {
+                await fs.unlink(tempFilePath);
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        }
+    }
 }
