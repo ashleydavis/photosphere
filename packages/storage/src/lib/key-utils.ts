@@ -2,6 +2,7 @@ import { generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } fro
 import * as fs from 'fs-extra';
 import { IStorageOptions } from './storage-factory';
 import { ensureParentDirectoryExists } from 'node-utils';
+import { FatalError } from 'utils';
 
 /**
  * Interface for key pair
@@ -164,7 +165,7 @@ export async function loadEncryptionKeys(
         // Just load existing keys
         const privateKey = await loadPrivateKey(keyPath);
         if (!privateKey) {
-            throw new Error(`Private key not found: ${keyPath}\nSpecify --generate-key to create a new key.`);
+            throw new FatalError(`Private key not found: ${keyPath}\nUse --generate-key to create a new key or specify an existing key file either in the current directory or in the ~/.config/photosphere/keys directory.`);
         }
         
         let publicKey = await loadPublicKey(`${keyPath}.pub`);
