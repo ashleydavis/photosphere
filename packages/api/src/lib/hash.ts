@@ -112,10 +112,6 @@ export async function validateAndHash(
 
         return hashedFile;
     }
-    catch (error: any) {
-        log.exception(`Failed to hash file ${filePath}`, error);
-        return undefined;
-    }
     finally {
         // Clean up temporary file if created
         if (tempFilePath) {
