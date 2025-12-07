@@ -82,7 +82,7 @@ export async function validateAndHash(
 
     try {
         // If zipFilePath is provided, extract to a temporary file first
-        if (zipFilePath) {
+        if (zipFilePath) { //TODO: Be good to move the zip file stuff up one level.
             const ext = mime.getExtension(contentType) || path.extname(filePath);
             tempFilePath = path.join(assetTempDir, `temp_validate_${uuidGenerator.generate()}${ext.startsWith('.') ? ext : '.' + ext}`);
             log.verbose(`Extracting file ${filePath} from zip file ${zipFilePath} to temporary file ${tempFilePath}`);
