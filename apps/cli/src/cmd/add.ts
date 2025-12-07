@@ -42,7 +42,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
-    const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+    const localHashCache = new HashCache(localHashCachePath);
     await localHashCache.load();
 
     writeProgress(`Searching for files...`);

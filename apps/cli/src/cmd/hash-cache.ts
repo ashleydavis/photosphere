@@ -21,7 +21,7 @@ export async function hashCacheCommand(options: IHashCacheCommandOptions): Promi
     try {
         console.log(pc.blue("\n=== Local Hash Cache ==="));
         const localHashCachePath = path.join(os.tmpdir(), "photosphere");
-        const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+        const localHashCache = new HashCache(localHashCachePath);
         
         const loaded = await localHashCache.load();
         if (!loaded) {

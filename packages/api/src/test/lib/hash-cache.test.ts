@@ -1,9 +1,11 @@
 import * as crypto from 'crypto';
-import { IStorage, IWriteLockInfo } from 'storage';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs-extra';
 import { HashCache } from '../../lib/hash-cache';
 
-// Mock implementation of IStorage
-class MockStorage implements IStorage {
+// Mock implementation of IStorage (no longer used, kept for reference)
+class MockStorage {
     private files: Map<string, Buffer> = new Map();
     
     constructor(public readonly location: string = 'mock-storage', public readonly isReadonly: boolean = false) {}
@@ -90,7 +92,7 @@ class MockStorage implements IStorage {
         }
     }
     
-    async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
+    async checkWriteLock(filePath: string): Promise<any> {
         return undefined;
     }
     
@@ -113,13 +115,12 @@ function createHash(content: string): Buffer {
 }
 
 describe('HashCache', () => {
-    let mockStorage: MockStorage;
     let hashCache: HashCache;
-    const cacheDir = '.db';
+    let cacheDir: string;
     
     beforeEach(() => {
-        mockStorage = new MockStorage();
-        hashCache = new HashCache(mockStorage, cacheDir);
+        cacheDir = path.join(os.tmpdir(), `hash-cache-test-${Date.now()}`);
+        hashCache = new HashCache(cacheDir);
     });
     
     test('should initialize with empty cache', async () => {
@@ -192,7 +193,7 @@ describe('HashCache', () => {
         await hashCache.save();
         
         // Create a new cache instance and load
-        const newCache = new HashCache(mockStorage, cacheDir);
+        const newCache = new HashCache(cacheDir);
         const loaded = await newCache.load();
         
         expect(loaded).toBe(true);
@@ -282,7 +283,7 @@ describe('HashCache', () => {
         // Save and reload to verify order
         await hashCache.save();
         
-        const newCache = new HashCache(mockStorage, cacheDir);
+        const newCache = new HashCache(cacheDir);
         await newCache.load();
         
         // Verify all hashes can be retrieved
@@ -339,7 +340,7 @@ describe('HashCache', () => {
         // Save and reload to verify
         await hashCache.save();
         
-        const newCache = new HashCache(mockStorage, cacheDir);
+        const newCache = new HashCache(cacheDir);
         await newCache.load();
         
         // Verify both entries

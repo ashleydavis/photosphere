@@ -22,7 +22,7 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
-    const localHashCache = new HashCache(new FileStorage(localHashCachePath), localHashCachePath);
+    const localHashCache = new HashCache(localHashCachePath);
     await localHashCache.load();
 
     // Create storage descriptor for passing to workers
