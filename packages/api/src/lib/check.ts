@@ -22,6 +22,7 @@ export async function checkPaths(
     summary: IAddSummary
 ): Promise<IAddSummary> {
     const queue = await taskQueueProvider.create();
+    let filesAddedToCache = 0;
 
     try {
         //
@@ -32,17 +33,21 @@ export async function checkPaths(
                 const checkResult = taskResult.outputs as ICheckFileResult;
                 const taskData = taskResult.inputs as ICheckFileData;
                 
-                // Add hash to cache if computation was successful
+                // Add hash to cache if computation was successful and hash wasn't already in cache
                 if (checkResult.hashedFile) {
-                    localHashCache.addHash(taskData.filePath, {
-                        hash: Buffer.from(checkResult.hashedFile.hash, "hex"),
-                        lastModified: new Date(checkResult.hashedFile.lastModified),
-                        length: checkResult.hashedFile.length,
-                    });
-                    
-                    // Save cache periodically
-                    if (summary.filesAdded % 100 === 0) {
-                        await retry(() => localHashCache.save());
+                    if (!checkResult.hashFromCache) {
+                        localHashCache.addHash(taskData.filePath, {
+                            hash: Buffer.from(checkResult.hashedFile.hash, "hex"),
+                            lastModified: new Date(checkResult.hashedFile.lastModified),
+                            length: checkResult.hashedFile.length,
+                        });
+                        
+                        filesAddedToCache++;
+                        
+                        // Save cache periodically (every 100 files added to cache)
+                        if (filesAddedToCache % 100 === 0) {
+                            await retry(() => localHashCache.save());
+                        }
                     }
                     
                     // Use database lookup result from worker

@@ -29,6 +29,7 @@ export interface ICheckFileResult {
         length: number;
     };
     alreadyInDatabase: boolean;
+    hashFromCache: boolean; // true if hash was loaded from cache, false if computed
 }
 
 //
@@ -50,7 +51,9 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     const metadataCollection = database.metadataCollection;
     
     // Check cache first
-    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);    
+    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
+    const hashFromCache = !!hashedFile;
+    
     if (!hashedFile) {
         // Not in cache - compute hash
         const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
@@ -58,7 +61,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
         
         hashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, tempDir, zipFilePath);
         if (!hashedFile) {
-            return { hashedFile: undefined, alreadyInDatabase: false };
+            return { hashedFile: undefined, alreadyInDatabase: false, hashFromCache: false };
         }
     }
     
@@ -74,6 +77,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
             length: hashedFile.length,
         },
         alreadyInDatabase,
+        hashFromCache,
     };
 }
 
