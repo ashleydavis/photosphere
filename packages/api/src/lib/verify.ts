@@ -1,9 +1,9 @@
-import {  log, retry } from "utils";
+import { log, retry } from "utils";
 import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
-import { TaskStatus, ITaskResult, ITaskQueue } from "task-queue";
+import { TaskStatus, ITaskResult, ITaskQueue, registerHandler } from "task-queue";
 import { deserializeError } from "serialize-error";
 
 //
@@ -93,7 +93,7 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, assetStorage: IStorage, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators

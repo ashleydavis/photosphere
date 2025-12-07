@@ -31,7 +31,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
 
     // Create storage descriptor for passing to workers
@@ -44,7 +44,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // Get S3 config to pass to workers (needed for S3-hosted storage)
     const s3Config = await getS3Config();
     
-    const result = await verify(storageDescriptor, assetStorage, metadataStorage, context.taskQueueProvider, { 
+    const result = await verify(storageDescriptor, metadataStorage, context.taskQueueProvider, { 
         full: options.full,
         pathFilter: options.path,
         s3Config

@@ -5,12 +5,12 @@
 //
 
 import { registerHandler, initWorker } from "task-queue";
-import { verifyFileHandler } from "api";
+import { initTaskHandlers } from "api";
 
 //
 // Register all task handlers
 //
-registerHandler("verify-file", verifyFileHandler);
+initTaskHandlers();
 
 //
 // Initialize the worker message listener
