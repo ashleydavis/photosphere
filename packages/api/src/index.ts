@@ -13,3 +13,4 @@ export * from "./lib/sync";
 export * from "./lib/hash";
 export * from "./lib/hash-cache";
 export * from "./lib/database-update";
+export * from "./lib/zip-utils";

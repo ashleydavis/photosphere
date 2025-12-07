@@ -11,24 +11,26 @@ import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from
 import { getFileInfo, Video } from "tools";
 import { resizeImage, transformImage } from "./image";
 import mime from 'mime';
+import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<IAssetDetails> {
+export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<IAssetDetails> {
 
     let videoPath: string;
 
-    if (openStream) {
+    if (zipFilePath) {
         // Choose extension based on content type.            
         const ext = mime.getExtension(contentType);
         if (!ext) {
             throw new Error(`Unsupported content type: ${contentType}`);
         }
 
-        // If openStream is provided, we need to extract to a temporary file.
+        // If zipFilePath is provided, we need to extract to a temporary file.
         videoPath = join(tmpdir(), `temp_video_${uuidGenerator.generate()}.${ext}`);
-        await writeStreamToFile(openStream(), videoPath);        
+        const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+        await writeStreamToFile(stream, videoPath);        
     }
     else {
         // Use the file directly from its location on disk.

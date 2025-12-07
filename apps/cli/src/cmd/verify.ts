@@ -18,12 +18,6 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
     // Path to a specific file or directory to verify (instead of entire database).
     //
     path?: string;
-
-    //
-    // Number of worker threads to use for parallel verification.
-    // Defaults to the number of CPU cores.
-    //
-    workers?: number;
 }
 
 //

@@ -31,7 +31,7 @@ export async function extractDominantColorFromThumbnail(inputPath: string): Prom
 //
 // A function that validates a file.
 //
-export type FileValidator = (filePath: string, fileStat: IFileStat, contentType: string, openStream?: () => Readable) => Promise<boolean>;
+export type FileValidator = (filePath: string, fileStat: IFileStat, contentType: string, zipFilePath?: string) => Promise<boolean>;
 
 //
 // Progress callback for the add operation.
@@ -393,7 +393,7 @@ export async function writeAsset(
             throw new Error(`Failed to get info for file "${assetPath}"`);
         }
 
-        const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, () => assetStorage.readStream(assetPath)));
+        const hashedAsset = await retry(() => computeAssetHash(assetPath, assetInfo, undefined));
 
         await refreshWriteLock(metadataStorage, sessionId);
 

@@ -47,6 +47,8 @@ async function main() {
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
+    const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
+    const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
 
     program
         .name("psi")
@@ -107,6 +109,8 @@ Resources:
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
+        .option(...workersOption)
+        .option(...timeoutOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(initContext(checkCommand));
@@ -382,8 +386,8 @@ Resources:
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
-        .option("--workers <number>", "Number of worker threads to use for parallel verification (default: number of CPU cores)")
-        .option("--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)")
+        .option(...workersOption)
+        .option(...timeoutOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(initContext(verifyCommand));

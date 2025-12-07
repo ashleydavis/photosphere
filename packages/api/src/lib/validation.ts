@@ -4,11 +4,12 @@ import { IUuidGenerator } from "utils";
 import { writeStreamToFile } from "node-utils";
 import fs from "fs-extra";
 import path from "path";
+import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 //
-export async function validateFile(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
+export async function validateFile(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -16,10 +17,10 @@ export async function validateFile(filePath: string, contentType: string, tempDi
     }
 
     if (contentType.startsWith("image")) {
-        return await validateImage(filePath, contentType, tempDir, uuidGenerator, openStream);
+        return await validateImage(filePath, contentType, tempDir, uuidGenerator, zipFilePath);
     }
     else if (contentType.startsWith("video")) {
-        return await validateVideo(filePath, contentType, tempDir, uuidGenerator, openStream);
+        return await validateVideo(filePath, contentType, tempDir, uuidGenerator, zipFilePath);
     }
 
     return true;
@@ -28,14 +29,15 @@ export async function validateFile(filePath: string, contentType: string, tempDi
 //
 // Validates an image file by checking if it has valid dimensions
 //
-async function validateImage(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
+async function validateImage(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
-        // If openStream is provided, we need to extract to a temporary file
-        if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_image', path.extname(filePath), uuidGenerator);
+        // If zipFilePath is provided, we need to extract to a temporary file
+        if (zipFilePath) {
+            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+            tempFilePath = await extractToTempFile(stream, tempDir, 'temp_image', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -78,14 +80,15 @@ async function validateImage(filePath: string, contentType: string, tempDir: str
 //
 // Validates a video file by checking if it has valid dimensions
 //
-async function validateVideo(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<boolean> {
+async function validateVideo(filePath: string, contentType: string, tempDir: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<boolean> {
     let tempFilePath: string | undefined;
     let actualFilePath = filePath;
 
     try {
-        // If openStream is provided, we need to extract to a temporary file
-        if (openStream) {
-            tempFilePath = await extractToTempFile(openStream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
+        // If zipFilePath is provided, we need to extract to a temporary file
+        if (zipFilePath) {
+            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+            tempFilePath = await extractToTempFile(stream, tempDir, 'temp_video', path.extname(filePath), uuidGenerator);
             actualFilePath = tempFilePath;
         }
 
@@ -128,13 +131,12 @@ async function validateVideo(filePath: string, contentType: string, tempDir: str
 //
 // Extracts stream data to a temporary file and returns the file path
 //
-async function extractToTempFile(openStream: () => NodeJS.ReadableStream, tempDir: string, prefix: string, ext: string, uuidGenerator: IUuidGenerator): Promise<string> {
+async function extractToTempFile(stream: NodeJS.ReadableStream, tempDir: string, prefix: string, ext: string, uuidGenerator: IUuidGenerator): Promise<string> {
     if (!ext.startsWith('.')) {
         ext = `.${ext}`;
     }
     const tempPath = path.join(tempDir, `${prefix}_${uuidGenerator.generate()}${ext}`);
-    const inputStream = openStream();
-    await writeStreamToFile(inputStream, tempPath);
+    await writeStreamToFile(stream, tempPath);
     if (!await fs.exists(tempPath)) {
         throw new Error(`Failed to create temporary file at ${tempPath}`);
     }

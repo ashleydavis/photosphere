@@ -11,24 +11,26 @@ const exifParser = require("exif-parser");
 import mime from 'mime';
 import os from "os";
 import path from "path";
+import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<IAssetDetails> {
+export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<IAssetDetails> {
 
     let imagePath: string;
 
-    if (openStream) {
+    if (zipFilePath) {
         // Choose extension based on content type.            
         const ext = mime.getExtension(contentType);
         if (!ext) {
             throw new Error(`Unsupported content type: ${contentType}`);
         }
 
-        // If openStream is provided, we need to extract to a temporary file.        
+        // If zipFilePath is provided, we need to extract to a temporary file.        
         imagePath = path.join(os.tmpdir(), `temp_asset_${uuidGenerator.generate()}.${ext}`);
-        await writeStreamToFile(openStream(), imagePath);        
+        const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
+        await writeStreamToFile(stream, imagePath);        
     }
     else {
         // Use the file directly from its location on disk.

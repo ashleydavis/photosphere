@@ -215,7 +215,8 @@ export interface IBaseCommandOptions {
 
     //
     // Number of worker threads to use for parallel processing.
-    // Supported by commands that use the task queue (e.g., verify).
+    // Defaults to the number of CPU cores.
+    // Supported by commands that use the task queue (e.g., verify, check).
     //
     workers?: number;
 
