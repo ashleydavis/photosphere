@@ -1,12 +1,13 @@
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs/promises';
-import { FileScanner, scanPath, scanPaths, FileScannedResult, ScannerOptions } from '../../lib/file-scanner';
+import { scanPath, scanPaths, FileScannedResult, ScannerOptions, ScannerState } from '../../lib/file-scanner';
 import { ensureDir, remove, outputFile } from 'node-utils';
 import JSZip from 'jszip';
 
-describe('FileScanner', () => {
+describe('file-scanner', () => {
     let testDir: string;
+    const defaultScannerOptions: ScannerOptions = { ignorePatterns: [/node_modules/, /\.git/, /\.DS_Store/, /\.db/] };
 
     beforeEach(async () => {
         // Create a unique test directory for each test
@@ -92,7 +93,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -108,7 +109,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -122,7 +123,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -134,13 +135,11 @@ describe('FileScanner', () => {
             await fs.writeFile(filePath, 'some content');
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner();
-            await scanner.scanPath(filePath, async (result) => {
+            await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(0);
-            expect(scanner.getNumFilesIgnored()).toBe(1);
         });
 
         test('should ignore SVG files', async () => {
@@ -150,7 +149,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -162,7 +161,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -173,7 +172,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -186,7 +185,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles[0].fileStat.length).toBe(pngData.length);
             expect(scannedFiles[0].fileStat.lastModified).toBeDefined();
@@ -207,7 +206,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBeGreaterThanOrEqual(3);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -227,7 +226,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBeGreaterThanOrEqual(2);
             const filePaths = scannedFiles.map(f => f.filePath);
@@ -243,10 +242,9 @@ describe('FileScanner', () => {
             await fs.writeFile(path.join(subDir, 'data.db'), Buffer.from('database content'));
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner({ ignorePatterns: [/\.db$/] });
-            await scanner.scanPath(testDir, async (result) => {
+            await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, { ignorePatterns: [/\.db$/] });
 
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
             expect(fileNames).toContain('image.png');
@@ -263,7 +261,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('root.png'))).toBe(true);
@@ -280,7 +278,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('root.png'))).toBe(true);
@@ -299,7 +297,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(subDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(3);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -323,7 +321,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(2); // Only images, not readme.txt
             const fileNames = scannedFiles.map(f => f.filePath);
@@ -353,10 +351,9 @@ describe('FileScanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner();
-            await scanner.scanPath(zipPath, async (result) => {
+            await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             // Note: Currently nested zip extraction has a bug with stream handling
             // The outer.png should always be found
@@ -396,10 +393,9 @@ describe('FileScanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner();
-            await scanner.scanPath(zipPath, async (result) => {
+            await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             // Note: Currently nested zip extraction has a bug with stream handling
             // At minimum, level1.png should be found
@@ -420,13 +416,15 @@ describe('FileScanner', () => {
             await fs.writeFile(zipPath, 'This is not a valid zip file');
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner();
-            await scanner.scanPath(zipPath, async (result) => {
+            let scannerState: ScannerState | undefined;
+            await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, (currentlyScanning, state) => {
+                scannerState = state;
+            }, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
-            expect(scanner.getNumFilesFailed()).toBe(1);
+            expect(scannerState?.numFilesFailed).toBe(1);
         });
 
         test('should ignore non-media files in zip', async () => {
@@ -442,7 +440,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe('image.png');
@@ -461,7 +459,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(3);
             const filePaths = scannedFiles.map(f => f.filePath);
@@ -481,7 +479,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPaths([file1, file2], async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(2);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -501,7 +499,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPaths([dir1, dir2], async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(2);
         });
@@ -516,7 +514,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPaths([file1, dir1], async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(2);
         });
@@ -529,7 +527,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPaths([file1, nonexistent], async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(file1);
@@ -549,7 +547,7 @@ describe('FileScanner', () => {
                 }
             };
 
-            await scanPath(testDir, async () => {}, progressCallback);
+            await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions);
 
             expect(progressUpdates.length).toBeGreaterThan(0);
         });
@@ -569,68 +567,58 @@ describe('FileScanner', () => {
                 }
             };
 
-            await scanPath(zipPath, async () => {}, progressCallback);
+            await scanPath(zipPath, async () => {}, progressCallback, defaultScannerOptions);
 
             expect(progressUpdates.length).toBeGreaterThan(0);
             expect(progressUpdates.some(u => u.includes('test.zip'))).toBe(true);
         });
     });
 
-    describe('FileScanner instance methods', () => {
+    describe('scanner state tracking', () => {
         test('should track ignored files count', async () => {
-            const scanner = new FileScanner();
-            
             const file1 = path.join(testDir, 'file1.png');
             const file2 = path.join(testDir, 'file2.unknown');
             await fs.writeFile(file1, createMinimalPNG());
             await fs.writeFile(file2, 'content');
 
-            await scanner.scanPath(testDir, async () => {});
+            let scannerState: ScannerState | undefined;
+            await scanPath(testDir, async () => {}, (currentlyScanning, state) => {
+                scannerState = state;
+            }, defaultScannerOptions);
 
-            expect(scanner.getNumFilesIgnored()).toBeGreaterThan(0);
+            expect(scannerState?.numFilesIgnored).toBeGreaterThan(0);
         });
 
         test('should track failed files count', async () => {
-            const scanner = new FileScanner();
-            
             const zipPath = path.join(testDir, 'invalid.zip');
             await fs.writeFile(zipPath, 'not a zip');
 
-            await scanner.scanPath(zipPath, async () => {});
+            let scannerState: ScannerState | undefined;
+            await scanPath(zipPath, async () => {}, (currentlyScanning, state) => {
+                scannerState = state;
+            }, defaultScannerOptions);
 
-            expect(scanner.getNumFilesFailed()).toBe(1);
+            expect(scannerState?.numFilesFailed).toBe(1);
         });
 
-        test('should reset counters', async () => {
-            const scanner = new FileScanner();
-            
-            const file1 = path.join(testDir, 'file1.unknown');
-            await fs.writeFile(file1, 'content');
-
-            await scanner.scanPath(testDir, async () => {});
-            expect(scanner.getNumFilesIgnored()).toBeGreaterThan(0);
-
-            scanner.resetIgnoredCounter();
-            expect(scanner.getNumFilesIgnored()).toBe(0);
-            expect(scanner.getNumFilesFailed()).toBe(0);
-        });
-
-        test('should get currently scanning path', async () => {
-            const scanner = new FileScanner();
-            
+        test('should track currently scanning path through progress callback', async () => {
             const subDir = path.join(testDir, 'subdir');
             await ensureDir(subDir);
             await fs.writeFile(path.join(subDir, 'image.png'), createMinimalPNG());
 
             let currentPath: string | undefined;
-            const progressCallback = (path: string | undefined) => {
-                currentPath = scanner.getCurrentlyScanning();
+            let scannerState: ScannerState | undefined;
+            const progressCallback = (path: string | undefined, state: ScannerState) => {
+                currentPath = path;
+                scannerState = state;
             };
 
-            await scanner.scanPath(testDir, async () => {}, progressCallback);
+            await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions);
 
             // Should have been set during scanning
             expect(currentPath).toBeDefined();
+            expect(scannerState).toBeDefined();
+            expect(scannerState?.currentlyScanning).toBeDefined();
         });
     });
 
@@ -642,7 +630,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].contentType).toMatch(/^image\//);
@@ -655,7 +643,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].contentType).toMatch(/^video\//);
@@ -668,7 +656,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -680,7 +668,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(filePath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -691,7 +679,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -705,7 +693,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -720,7 +708,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(zipPath, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -732,12 +720,11 @@ describe('FileScanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner();
             
             // Start scanning, then delete file and create directory with same name
-            const scanPromise = scanner.scanPath(testDir, async (result) => {
+            const scanPromise = scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             // Wait a bit, then modify filesystem
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -763,7 +750,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -776,7 +763,7 @@ describe('FileScanner', () => {
             const scannedFiles: FileScannedResult[] = [];
             await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -793,11 +780,10 @@ describe('FileScanner', () => {
             await fs.writeFile(path.join(subDir, 'backup.bak'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner({ 
-                ignorePatterns: [/\.tmp$/, /\.bak$/] 
-            });
-            await scanner.scanPath(testDir, async (result) => {
+            await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
+            }, undefined, { 
+                ignorePatterns: [/\.tmp$/, /\.bak$/] 
             });
 
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -817,10 +803,9 @@ describe('FileScanner', () => {
             await fs.writeFile(path.join(nodeModules, 'package.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            const scanner = new FileScanner(); // No custom patterns
-            await scanner.scanPath(testDir, async (result) => {
+            await scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            });
+            }, undefined, defaultScannerOptions);
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('image.png'))).toBe(true);

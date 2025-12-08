@@ -18,7 +18,7 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { localFileScanner, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
@@ -37,35 +37,29 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
 
     writeProgress(`Searching for files...`);
 
-    let currentSummary = {
-        filesAdded: 0,
-        filesAlreadyAdded: 0,
-        filesIgnored: 0,
-        filesFailed: 0,
-        totalSize: 0,
-        averageSize: 0,
-    };
-
     const addSummary = await checkPaths(
         storageDescriptor,
         localHashCache,
-        localFileScanner,
         paths,
-        (currentlyScanning) => {
-        let progressMessage = `Already in DB: ${pc.green(currentSummary.filesAlreadyAdded)}`;
-        if (currentSummary.filesAdded > 0) {
-            progressMessage += ` | Would add: ${pc.yellow(currentSummary.filesAdded)}`;
-        }
-        if (currentSummary.filesIgnored > 0) {
-            progressMessage += ` | Ignored: ${pc.gray(currentSummary.filesIgnored)}`;
-        }
-        if (currentlyScanning) {
-            progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
-        }
+        (currentlyScanning, summary) => {
+            let progressMessage = `Already in DB: ${pc.green(summary.filesAlreadyAdded)}`;
+            if (summary.filesAdded > 0) {
+                progressMessage += ` | Would add: ${pc.yellow(summary.filesAdded)}`;
+            }
+            if (summary.filesIgnored > 0) {
+                progressMessage += ` | Ignored: ${pc.gray(summary.filesIgnored)}`;
+            }
+            if (currentlyScanning) {
+                progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
+            }
 
-        progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
-        writeProgress(progressMessage);
-    }, context.taskQueueProvider, localHashCachePath, s3Config, currentSummary);
+            progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
+            writeProgress(progressMessage);
+        },
+        context.taskQueueProvider,
+        localHashCachePath,
+        s3Config
+    );
 
     clearProgressMessage(); // Flush the progress message.
 

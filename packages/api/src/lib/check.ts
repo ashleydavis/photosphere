@@ -1,11 +1,16 @@
 import { log, retry } from "utils";
 import { HashCache } from "./hash-cache";
-import { FileScanner } from "./file-scanner";
-import { ProgressCallback, IAddSummary } from "./media-file-database";
+import { ScannerOptions, scanPaths } from "./file-scanner";
+import { IAddSummary } from "./media-file-database";
 import { TaskStatus, ITaskResult } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
 import { ITaskQueueProvider } from "./verify";
 import { IStorageDescriptor, IS3Credentials } from "storage";
+
+//
+// Progress callback for checkPaths that includes the current summary
+//
+export type CheckPathsProgressCallback = (currentlyScanning: string | undefined, summary: IAddSummary) => void;
 
 //
 // Checks a list of files or directories to find files already added to the media file database.
@@ -13,14 +18,20 @@ import { IStorageDescriptor, IS3Credentials } from "storage";
 export async function checkPaths(
     storageDescriptor: IStorageDescriptor,
     localHashCache: HashCache,
-    localFileScanner: FileScanner,
     paths: string[],
-    progressCallback: ProgressCallback,
+    progressCallback: CheckPathsProgressCallback | undefined,
     taskQueueProvider: ITaskQueueProvider,
     hashCacheDir: string,
-    s3Config: IS3Credentials | undefined,
-    summary: IAddSummary
+    s3Config: IS3Credentials | undefined
 ): Promise<IAddSummary> {
+    const summary: IAddSummary = {
+        filesAdded: 0,
+        filesAlreadyAdded: 0,
+        filesIgnored: 0,
+        filesFailed: 0,
+        totalSize: 0,
+        averageSize: 0,
+    };
     const queue = await taskQueueProvider.create();
     let filesAddedToCache = 0;
 
@@ -62,10 +73,6 @@ export async function checkPaths(
                 } else {
                     summary.filesFailed++;
                 }
-                
-                if (progressCallback) {
-                    progressCallback(localFileScanner.getCurrentlyScanning());
-                }
             } else if (taskResult.status === TaskStatus.Failed) {
                 const taskData = taskResult.inputs as ICheckFileData;
                 log.error(`Failed to check file "${taskData.filePath}"`);
@@ -77,7 +84,7 @@ export async function checkPaths(
         // Queue up all checking tasks as files are scanned.
         // All files are queued - workers will check cache and database.
         //
-        await localFileScanner.scanPaths(paths, async (result) => {
+        await scanPaths(paths, async (result) => {
             // Queue all files for worker processing (workers will check cache and database)
             queue.addTask("check-file", {
                 filePath: result.filePath,
@@ -88,11 +95,12 @@ export async function checkPaths(
                 s3Config,
                 zipFilePath: result.zipFilePath,
             } as ICheckFileData);
-            
+        }, (currentlyScanning, state) => {
+            summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {
-                progressCallback(localFileScanner.getCurrentlyScanning());
+                progressCallback(currentlyScanning, summary);
             }
-        }, progressCallback);
+        }, { ignorePatterns: [/\.db/] });
 
         //
         // Wait for all tasks to complete.
@@ -101,10 +109,6 @@ export async function checkPaths(
 
         // Final save of hash cache
         await retry(() => localHashCache.save());
-        
-        // Add scanner's ignored and failed counts to summary
-        summary.filesIgnored += localFileScanner.getNumFilesIgnored();
-        summary.filesFailed += localFileScanner.getNumFilesFailed();
         
         summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
         return summary;

@@ -1,4 +1,4 @@
-import { FileScanner, IFileStat } from "api";
+import { scanPaths, IFileStat } from "api";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
 import { exit, writeStreamToFile } from "node-utils";
@@ -58,8 +58,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     
     writeProgress(`Searching for files...`);
     
-    const fileScanner = new FileScanner();
-    await fileScanner.scanPaths(paths, async (fileResult) => {
+    await scanPaths(paths, async (fileResult) => {
         try {
             const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.zipFilePath);
             results.push(analysis);
@@ -79,7 +78,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
         }
         progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
         writeProgress(progressMessage);
-    });
+    }, { ignorePatterns: [/\.db/] });
 
     clearProgressMessage();
 

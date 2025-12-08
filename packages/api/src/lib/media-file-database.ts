@@ -3,17 +3,14 @@ import { IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
-import { Readable } from "stream";
-import { getVideoDetails } from "./video";
-import { getImageDetails, IResolution } from "./image";
 import { computeHash } from "./hash";
-import { HashCache } from "./hash-cache";
-import { FileScanner, IFileStat } from "./file-scanner";
+import { IFileStat, ScannerOptions } from "./file-scanner";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
 dayjs.extend(customParseFormat);
 
 import { Image } from "tools";
+import { IResolution } from "./image";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
@@ -248,15 +245,11 @@ export function createMediaFileDatabase(
     });
 
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
-    const localFileScanner = new FileScanner({
-        ignorePatterns: [/\.db/]
-    });
 
     return {
         assetStorage,
         bsonDatabase,
         metadataCollection,
-        localFileScanner,
     };
 }
 
@@ -347,10 +340,6 @@ export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage
         databaseVersion: merkleTree.version
     };
 }
-
-// Import and re-export functions from extracted modules
-export { addPaths } from "./import";
-export { checkPaths } from "./check";
 
 //
 // Streams an asset from the database.

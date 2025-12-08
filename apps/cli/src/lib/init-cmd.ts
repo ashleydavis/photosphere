@@ -1,4 +1,4 @@
-import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase, FileScanner } from "api";
+import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
@@ -314,7 +314,6 @@ export interface IInitResult {
     bsonDatabase: BsonDatabase;
     sessionId: string;
     metadataCollection: IBsonCollection<IAsset>;
-    localFileScanner: FileScanner;
 
     //
     // The resolved metadata path
@@ -426,7 +425,6 @@ export async function loadDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        localFileScanner: database.localFileScanner,
     };
 }
 
@@ -529,7 +527,6 @@ export async function createDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        localFileScanner: database.localFileScanner,
     };
 }
 
