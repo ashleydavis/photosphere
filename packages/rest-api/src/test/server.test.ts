@@ -83,7 +83,7 @@ describe("photosphere backend", () => {
                 timestampProvider: {} as any,
                 googleApiKey: undefined,
                 metadataCollection: mockMetadataCollection,
-                localFileScanner: {} as any,
+                scannerOptions: { ignorePatterns: [/\.db/] },
             }),
             readStream: jest.fn().mockReturnValue(stringStream("ABCD")),
             write: jest.fn().mockResolvedValue(undefined),

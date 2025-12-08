@@ -12,7 +12,7 @@ import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
 import { computeAssetHash, getHashFromCache, validateAndHash } from "./hash";
 import { HashCache } from "./hash-cache";
-import { FileScanner, IFileStat } from "./file-scanner";
+import { IFileStat, ScannerOptions, scanPaths } from "./file-scanner";
 import { extractFileFromZipRecursive } from "./zip-utils";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -22,6 +22,11 @@ import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lo
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { addItem } from "merkle-tree";
 import { extractDominantColorFromThumbnail, ProgressCallback, IAddSummary, IAssetDetails } from "./media-file-database";
+
+//
+// Progress callback for addPaths that includes the current summary
+//
+export type AddPathsProgressCallback = (currentlyScanning: string | undefined, summary: IAddSummary) => void;
 
 //
 // Imports a single file into the media file database, processing it, extracting metadata, and storing it with all variants.
@@ -35,13 +40,11 @@ async function importFile(
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     localHashCache: HashCache,
-    localFileScanner: FileScanner,
     filePath: string,
     fileStat: IFileStat,
     contentType: string,
     labels: string[],
     zipFilePath: string | undefined,
-    progressCallback: ProgressCallback,
     summary: IAddSummary
 ): Promise<IAddSummary> {
     const assetId = uuidGenerator.generate();
@@ -54,9 +57,6 @@ async function importFile(
             localHashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, assetTempDir, zipFilePath);
             if (!localHashedFile) {
                 summary.filesFailed++;
-                if (progressCallback) {
-                    progressCallback(localFileScanner.getCurrentlyScanning());
-                }
                 return summary;
             }
             // Add hash to cache after computation
@@ -68,9 +68,6 @@ async function importFile(
         if (records.length > 0) {
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             summary.filesAlreadyAdded++;
-            if (progressCallback) {
-                progressCallback(localFileScanner.getCurrentlyScanning());
-            }
             return summary;
         }
         
@@ -234,9 +231,6 @@ async function importFile(
 
             summary.filesAdded++;
             summary.totalSize += fileStat.length;
-            if (progressCallback) {
-                progressCallback(localFileScanner.getCurrentlyScanning());
-            }
 
             await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
         }
@@ -246,9 +240,6 @@ async function importFile(
             await retry(() => assetStorage.deleteFile(thumbPath));
             await retry(() => assetStorage.deleteFile(displayPath));
             summary.filesFailed++;
-            if (progressCallback) {
-                progressCallback(localFileScanner.getCurrentlyScanning());
-            }
         }
         finally {
             await releaseWriteLock(metadataStorage);
@@ -273,19 +264,19 @@ export async function addPaths(
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     localHashCache: HashCache,
-    localFileScanner: FileScanner,
     paths: string[],
-    progressCallback: ProgressCallback,
-    summary: IAddSummary = {
+    progressCallback?: AddPathsProgressCallback
+): Promise<IAddSummary> {
+    const summary: IAddSummary = {
         filesAdded: 0,
         filesAlreadyAdded: 0,
         filesIgnored: 0,
         filesFailed: 0,
         totalSize: 0,
         averageSize: 0,
-    }
-): Promise<IAddSummary> {
-    await localFileScanner.scanPaths(paths, async (result) => {
+    };
+
+    await scanPaths(paths, async (result) => {
         await importFile(
             assetStorage,
             metadataStorage,
@@ -295,23 +286,24 @@ export async function addPaths(
             sessionId,
             metadataCollection,
             localHashCache,
-            localFileScanner,
             result.filePath,
             result.fileStat,
             result.contentType,
             result.labels,
             result.zipFilePath,
-            progressCallback,
             summary
         );
         
         if (summary.filesAdded % 100 === 0) {
             await retry(() => localHashCache.save());
         }
-    }, progressCallback);
-
-    summary.filesIgnored += localFileScanner.getNumFilesIgnored();
-    summary.filesFailed += localFileScanner.getNumFilesFailed();
+    }, (currentlyScanning, state) => {
+        summary.filesIgnored = state.numFilesIgnored;
+        if (progressCallback) {
+            progressCallback(currentlyScanning, summary);
+        }
+    }, { ignorePatterns: [/\.db/] });
+    
     await retry(() => localHashCache.save());
 
     summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;

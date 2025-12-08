@@ -39,7 +39,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     await configureIfNeeded(['google'], nonInteractive);
     const googleApiKey = await getGoogleApiKey();
     
-    const { assetStorage, metadataStorage, metadataCollection, localFileScanner, databaseDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, metadataCollection, databaseDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
@@ -47,15 +47,6 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     await localHashCache.load();
 
     writeProgress(`Searching for files...`);
-
-    let currentSummary = {
-        filesAdded: 0,
-        filesAlreadyAdded: 0,
-        filesIgnored: 0,
-        filesFailed: 0,
-        totalSize: 0,
-        averageSize: 0,
-    };
 
     const addSummary = await addPaths(
         assetStorage,
@@ -66,26 +57,26 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         sessionId,
         metadataCollection,
         localHashCache,
-        localFileScanner,
         paths,
-        (currentlyScanning) => {
-        let progressMessage = `Added: ${pc.green(currentSummary.filesAdded.toString().padStart(4))}`;
-        if (currentSummary.filesAlreadyAdded > 0) {
-            progressMessage += ` | Existing: ${pc.blue(currentSummary.filesAlreadyAdded.toString().padStart(4))}`;
-        }
-        if (currentSummary.filesIgnored > 0) {
-            progressMessage += ` | Ignored: ${pc.yellow(currentSummary.filesIgnored.toString().padStart(4))}`;
-        }
-        if (currentSummary.filesFailed > 0) {
-            progressMessage += ` | Failed: ${pc.red(currentSummary.filesFailed.toString().padStart(4))}`;
-        }
-        if (currentlyScanning) {
-            progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
-        }
+        (currentlyScanning, summary) => {
+            let progressMessage = `Added: ${pc.green(summary.filesAdded.toString().padStart(4))}`;
+            if (summary.filesAlreadyAdded > 0) {
+                progressMessage += ` | Existing: ${pc.blue(summary.filesAlreadyAdded.toString().padStart(4))}`;
+            }
+            if (summary.filesIgnored > 0) {
+                progressMessage += ` | Ignored: ${pc.yellow(summary.filesIgnored.toString().padStart(4))}`;
+            }
+            if (summary.filesFailed > 0) {
+                progressMessage += ` | Failed: ${pc.red(summary.filesFailed.toString().padStart(4))}`;
+            }
+            if (currentlyScanning) {
+                progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
+            }
 
-        progressMessage += ` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`;
-        writeProgress(progressMessage);
-    }, currentSummary);
+            progressMessage += ` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`;
+            writeProgress(progressMessage);
+        }
+    );
 
     clearProgressMessage(); // Flush the progress message.
 

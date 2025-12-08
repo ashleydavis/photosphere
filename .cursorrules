@@ -1,0 +1,34 @@
+# Cursor Rules
+
+## Code Style Guidelines
+
+### DO NOT create import-and-reexport patterns
+
+**NEVER** create patterns like this:
+```typescript
+// In file A.ts
+export { functionFromB } from "./B";
+```
+
+**Why:** This creates unnecessary indirection and makes it harder to find where functions are actually defined. It also creates circular dependency risks and makes refactoring more difficult.
+
+**Instead:** 
+- Export functions directly from their source files
+- If you need to expose them from a package's main index, add them there directly:
+  ```typescript
+  // In packages/api/src/index.ts
+  export { functionFromB } from "./lib/B";
+  ```
+
+**Exception:** Only use re-exports when creating a public API from a package's main index file (like `packages/api/src/index.ts`), and only export from subdirectories/modules, not from peer files at the same level.
+
+## Critical Workflow Rules
+
+### NEVER finish up until all code is compiling
+
+**ALWAYS** run `bun run c` on the entire project before considering work complete. Do not assume the code compiles just because the linter shows no errors. TypeScript compilation may catch errors that the linter doesn't.
+
+**Before marking any task as complete:**
+1. Run `bun run c` to compile the entire project
+2. Fix any compilation errors
+3. Only then consider the work done
