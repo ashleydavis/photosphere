@@ -2,9 +2,7 @@ import path from "path";
 import mime from "mime";
 import { log } from "utils";
 import JSZip from "jszip";
-import { buffer } from "node:stream/consumers";
 import * as fs from "fs/promises";
-import { createReadStream } from "fs";
 import { pathExists } from "node-utils";
 
 //
@@ -112,15 +110,15 @@ function shouldIncludeFile(contentType: string): boolean {
 //
 // Extracts a nested zip file from a parent zip
 //
-async function extractZipFromParent(parentZipFilePath: string, nestedZipRelativePath: string): Promise<NodeJS.ReadableStream> {
+async function extractZipFromParent(parentZipFilePath: string, nestedZipRelativePath: string): Promise<Buffer> {
     const parentZip = new JSZip();
-    const parentStream = createReadStream(parentZipFilePath);
-    const unpacked = await parentZip.loadAsync(await buffer(parentStream));
+    const parentBuffer = await fs.readFile(parentZipFilePath);
+    const unpacked = await parentZip.loadAsync(parentBuffer);
     const nestedZipObject = unpacked.files[nestedZipRelativePath];
     if (!nestedZipObject || nestedZipObject.dir) {
         throw new Error(`Nested zip file "${nestedZipRelativePath}" not found in parent zip "${parentZipFilePath}"`);
     }
-    return nestedZipObject.nodeStream();
+    return await nestedZipObject.async('nodebuffer');
 }
 
 //
@@ -182,18 +180,20 @@ async function scanZipFile(
 
     const zip = new JSZip();
     // If parentZipFilePath is provided, we're reading from a nested zip
-    let zipStream: NodeJS.ReadableStream;
+    let zipBuffer: Buffer;
     if (parentZipFilePath && parentZipRelativePath) {
-        zipStream = await extractZipFromParent(parentZipFilePath, parentZipRelativePath);
-    } else {
-        zipStream = createReadStream(zipFilePath);
+        zipBuffer = await extractZipFromParent(parentZipFilePath, parentZipRelativePath);
+    } 
+    else {
+        zipBuffer = await fs.readFile(zipFilePath);
     }
 
     let unpacked;
     try {
-        unpacked = await zip.loadAsync(await buffer(zipStream));
-    } catch (error) {
-        log.error(`Failed to load zip file "${actualZipPath}": ${error instanceof Error ? error.message : String(error)}`);
+        unpacked = await zip.loadAsync(zipBuffer);
+    } 
+    catch (error: any) {
+        log.exception(`Failed to load zip file ${actualZipPath}`, error);
         state.numFilesFailed++;
         return;
     }
