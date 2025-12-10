@@ -179,7 +179,7 @@ describe("TaskQueue", () => {
             const result = await queue.awaitTask(taskId);
 
             expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error).toContain("Task failed");
+            expect(result.error?.message).toContain("Task failed");
         });
 
         it("should fail if no handler is registered", async () => {
@@ -187,7 +187,7 @@ describe("TaskQueue", () => {
             const result = await queue.awaitTask(taskId);
 
             expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error).toContain("No handler registered");
+            expect(result.error?.message).toContain("No handler registered");
         });
 
         it("should throw error for non-existent task", async () => {
@@ -711,7 +711,7 @@ describe("TaskQueue", () => {
             const result = await queue.awaitTask(taskId);
 
             expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error).toContain(errorMessage);
+            expect(result.error?.message).toContain(errorMessage);
         });
     });
 });
