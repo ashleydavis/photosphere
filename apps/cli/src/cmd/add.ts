@@ -83,6 +83,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     log.info(pc.green(`Added ${addSummary.filesAdded} files to the media database.\n`));
     
     log.info(pc.bold('Summary:'));
+    log.info(`Files considered: ${addSummary.filesProcessed}`);
     log.info(`Files added:      ${addSummary.filesAdded}`);
     log.info(`Files ignored:    ${addSummary.filesIgnored}`);
     log.info(`Files failed:     ${addSummary.filesFailed}`);

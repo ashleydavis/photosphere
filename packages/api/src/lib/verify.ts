@@ -151,9 +151,11 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         // Registers a callback to integrate results as tasks complete.
         //
         queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((taskResult) => {
+
+            result.filesProcessed++;
+            
             if (taskResult.status === TaskStatus.Completed) {
                 const fileResult = taskResult.outputs!;
-                result.filesProcessed++;
 
                 if (progressCallback) {
                     const status = queue.getStatus();
@@ -162,9 +164,11 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
 
                 if (fileResult.status === "removed") {
                     result.removed.push(fileResult.fileName);
-                } else if (fileResult.status === "modified") {
+                }
+                else if (fileResult.status === "modified") {
                     result.modified.push(fileResult.fileName);
-                } else {
+                }
+                else {
                     result.numUnmodified++;
                 }
             } 
@@ -176,7 +180,6 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 else {
                     log.error(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`);
                 }
-                result.filesProcessed++;
                 result.numFailures++;
             }
         });
