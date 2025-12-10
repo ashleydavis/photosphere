@@ -73,9 +73,15 @@ export async function checkPaths(
                 } else {
                     summary.filesFailed++;
                 }
-            } else if (taskResult.status === TaskStatus.Failed) {
-                const taskData = taskResult.inputs as ICheckFileData;
-                log.error(`Failed to check file "${taskData.filePath}"`);
+            } 
+            else if (taskResult.status === TaskStatus.Failed) {
+                const fileName = taskResult.inputs?.fileName || "unknown";
+                if (taskResult.error) {
+                    log.exception(`Failed to check file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
+                } 
+                else {
+                    log.error(`Failed to check file "${fileName}": ${taskResult.errorMessage}`);
+                }
                 summary.filesFailed++;
             }
         });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IUuidGenerator } from "utils";
-import { serializeError } from "serialize-error";
+import { serializeError, deserializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
 import type { IWorkerOptions } from "./worker-init";
 
@@ -22,7 +22,8 @@ export enum TaskStatus {
 export interface ITaskResult {
     status: TaskStatus;
     message?: string;
-    error?: string;
+    error?: Error; // Deserialized error object (automatically deserialized from JSON)
+    errorMessage?: string; // Convenience field: error?.message || "Unknown error"
     outputs?: any; // The actual result data returned by the handler
     inputs: any; // The original arguments/data sent to the task
     taskId: string;
@@ -629,10 +630,21 @@ export class TaskQueue implements ITaskQueue {
 
             task.status = TaskStatus.Failed;
             task.completedAt = new Date();
-            const errorString = error ? JSON.stringify(serializeError(error)) : "Unknown error";
+            let deserializedError: Error | undefined;
+            if (error) {
+                try {
+                    deserializedError = deserializeError(error);
+                } catch {
+                    // If deserialization fails, create a generic error
+                    deserializedError = new Error(typeof error === 'string' ? error : JSON.stringify(error));
+                }
+            } else {
+                deserializedError = new Error("Unknown error");
+            }
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
-                error: errorString,
+                error: deserializedError,
+                errorMessage: deserializedError.message || "Unknown error",
                 inputs: task.data,
                 taskId: task.id,
                 taskType: task.type,
@@ -690,7 +702,8 @@ export class TaskQueue implements ITaskQueue {
             const error = new Error(`Task timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
-                error: JSON.stringify(serializeError(error)),
+                error: error,
+                errorMessage: error.message,
                 inputs: task.data,
                 taskId: task.id,
                 taskType: task.type,

@@ -4,7 +4,6 @@ import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { TaskStatus, ITaskResult, ITaskQueue, registerHandler } from "task-queue";
-import { deserializeError } from "serialize-error";
 
 //
 // Provider object that creates and manages task queues.
@@ -167,23 +166,15 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 } else {
                     result.numUnmodified++;
                 }
-            } else if (taskResult.status === TaskStatus.Failed) {
-                // Task failed - track the failure separately
-                let errorMessage: string;
-                if (taskResult.error) {
-                    try {
-                        const errorObj = JSON.parse(taskResult.error);
-                        const deserializedError = deserializeError(errorObj);
-                        errorMessage = deserializedError.message || String(deserializedError);
-                    } catch {
-                        // Error is not JSON, use it as-is
-                        errorMessage = taskResult.error;
-                    }
-                } else {
-                    errorMessage = "Unknown error";
-                }
+            } 
+            else if (taskResult.status === TaskStatus.Failed) {
                 const fileName = taskResult.inputs?.node?.name || "unknown";
-                log.error(`Failed to verify file "${fileName}": ${errorMessage}`);
+                if (taskResult.error) {
+                    log.exception(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
+                } 
+                else {
+                    log.error(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`);
+                }
                 result.filesProcessed++;
                 result.numFailures++;
             }
