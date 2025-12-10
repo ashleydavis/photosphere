@@ -57,6 +57,7 @@ async function importFile(
             localHashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, assetTempDir, zipFilePath);
             if (!localHashedFile) {
                 summary.filesFailed++;
+                summary.filesProcessed++;
                 return summary;
             }
             // Add hash to cache after computation
@@ -68,6 +69,7 @@ async function importFile(
         if (records.length > 0) {
             log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             summary.filesAlreadyAdded++;
+            summary.filesProcessed++;
             return summary;
         }
         
@@ -230,6 +232,7 @@ async function importFile(
             merkleTree.databaseMetadata.filesImported++;
 
             summary.filesAdded++;
+            summary.filesProcessed++;
             summary.totalSize += fileStat.length;
 
             await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
@@ -240,6 +243,7 @@ async function importFile(
             await retry(() => assetStorage.deleteFile(thumbPath));
             await retry(() => assetStorage.deleteFile(displayPath));
             summary.filesFailed++;
+            summary.filesProcessed++;
         }
         finally {
             await releaseWriteLock(metadataStorage);
@@ -272,6 +276,7 @@ export async function addPaths(
         filesAlreadyAdded: 0,
         filesIgnored: 0,
         filesFailed: 0,
+        filesProcessed: 0,
         totalSize: 0,
         averageSize: 0,
     };

@@ -22,6 +22,29 @@ export { functionFromB } from "./B";
 
 **Exception:** Only use re-exports when creating a public API from a package's main index file (like `packages/api/src/index.ts`), and only export from subdirectories/modules, not from peer files at the same level.
 
+### Code Formatting: else statements
+
+**NEVER** put `else` or `else if` on the same line as a closing bracket.
+
+**Bad:**
+```typescript
+if (condition) {
+    // code
+} else {
+    // code
+}
+```
+
+**Good:**
+```typescript
+if (condition) {
+    // code
+}
+else {
+    // code
+}
+```
+
 ## Critical Workflow Rules
 
 ### NEVER finish up until all code is compiling

@@ -29,6 +29,7 @@ export async function checkPaths(
         filesAlreadyAdded: 0,
         filesIgnored: 0,
         filesFailed: 0,
+        filesProcessed: 0,
         totalSize: 0,
         averageSize: 0,
     };
@@ -41,6 +42,9 @@ export async function checkPaths(
         //
         queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (taskResult) => {
             if (taskResult.status === TaskStatus.Completed) {
+
+                summary.filesProcessed++;
+
                 const checkResult = taskResult.outputs!;
                 const taskData = taskResult.inputs;
                 
@@ -65,14 +69,16 @@ export async function checkPaths(
                     if (checkResult.alreadyInDatabase) {
                         log.verbose(`File "${taskData.filePath}" with hash "${checkResult.hashedFile.hash}", matches existing records.`);
                         summary.filesAlreadyAdded++;
-                    } else {
+                    } 
+                    else {
                         log.verbose(`File "${taskData.filePath}" has not been added to the media file database.`);
                         summary.filesAdded++;
                         summary.totalSize += taskData.fileStat.length;
                     }
-                } else {
+                } 
+                else {
                     summary.filesFailed++;
-                }
+                }                
             } 
             else if (taskResult.status === TaskStatus.Failed) {
                 const fileName = taskResult.inputs.filePath || "unknown";
@@ -83,6 +89,7 @@ export async function checkPaths(
                     log.error(`Failed to check file "${fileName}": ${taskResult.errorMessage}`);
                 }
                 summary.filesFailed++;
+                summary.filesProcessed++;
             }
         });
 

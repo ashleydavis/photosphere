@@ -139,6 +139,11 @@ export interface IAddSummary {
     filesFailed: number;
 
     //
+    // The number of files that were processed (completed or failed).
+    //
+    filesProcessed: number;
+
+    //
     // The total size of the files added to the database.
     //
     totalSize: number;
