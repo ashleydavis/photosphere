@@ -39,10 +39,10 @@ export async function checkPaths(
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete(async (taskResult: ITaskResult) => {
+        queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (taskResult) => {
             if (taskResult.status === TaskStatus.Completed) {
-                const checkResult = taskResult.outputs as ICheckFileResult;
-                const taskData = taskResult.inputs as ICheckFileData;
+                const checkResult = taskResult.outputs!;
+                const taskData = taskResult.inputs;
                 
                 // Add hash to cache if computation was successful and hash wasn't already in cache
                 if (checkResult.hashedFile) {
@@ -75,7 +75,7 @@ export async function checkPaths(
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
-                const fileName = taskResult.inputs?.fileName || "unknown";
+                const fileName = taskResult.inputs.filePath || "unknown";
                 if (taskResult.error) {
                     log.exception(`Failed to check file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
                 } 

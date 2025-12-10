@@ -4,6 +4,7 @@ import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { TaskStatus, ITaskResult, ITaskQueue, registerHandler } from "task-queue";
+import { IVerifyFileData, IVerifyFileResult } from "./verify.worker";
 
 //
 // Provider object that creates and manages task queues.
@@ -149,9 +150,9 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete((taskResult: ITaskResult) => {
+        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((taskResult) => {
             if (taskResult.status === TaskStatus.Completed) {
-                const fileResult = taskResult.outputs as IVerifyFileResult;
+                const fileResult = taskResult.outputs!;
                 result.filesProcessed++;
 
                 if (progressCallback) {
@@ -168,7 +169,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
-                const fileName = taskResult.inputs?.node?.name || "unknown";
+                const fileName = taskResult.inputs.node?.name || "unknown";
                 if (taskResult.error) {
                     log.exception(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
                 } 

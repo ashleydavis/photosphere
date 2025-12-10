@@ -19,13 +19,13 @@ export enum TaskStatus {
 //
 // Task result interface
 //
-export interface ITaskResult {
+export interface ITaskResult<TInputs = any, TOutputs = any> {
     status: TaskStatus;
     message?: string;
     error?: Error; // Deserialized error object (automatically deserialized from JSON)
     errorMessage?: string; // Convenience field: error?.message || "Unknown error"
-    outputs?: any; // The actual result data returned by the handler
-    inputs: any; // The original arguments/data sent to the task
+    outputs?: TOutputs; // The actual result data returned by the handler
+    inputs: TInputs; // The original arguments/data sent to the task
     taskId: string;
     taskType: string;
     createdAt: Date;
@@ -59,7 +59,7 @@ export type { TaskHandler };
 //
 // Task completion callback
 //
-export type TaskCompletionCallback = (result: ITaskResult) => void;
+export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void;
 
 //
 // Queue status interface
@@ -100,7 +100,7 @@ export interface ITaskQueue {
     //
     // Registers a callback that will be called when any task completes (success or failure).
     //
-    onTaskComplete(callback: TaskCompletionCallback): void;
+    onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
 
     //
     // Awaits the completion of a particular task.
@@ -178,7 +178,7 @@ export class TaskQueue implements ITaskQueue {
     private uuidGenerator: IUuidGenerator;
     private taskResolvers: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
-    private completionCallbacks: TaskCompletionCallback[] = [];
+    private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private tasksQueued: number = 0;
     private workerPath: string;
     private taskTimeout: number;
@@ -244,8 +244,8 @@ export class TaskQueue implements ITaskQueue {
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     // Multiple callbacks can be registered and will all be called.
     //
-    onTaskComplete(callback: TaskCompletionCallback): void {
-        this.completionCallbacks.push(callback);
+    onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
+        this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
     }
 
     //
