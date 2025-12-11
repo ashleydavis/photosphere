@@ -1,8 +1,8 @@
-import { log, retry } from "utils";
+import { log, retry, IUuidGenerator } from "utils";
 import { HashCache } from "./hash-cache";
-import { ScannerOptions, scanPaths } from "./file-scanner";
+import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
-import { TaskStatus, ITaskResult } from "task-queue";
+import { TaskStatus } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
 import { ITaskQueueProvider } from "./verify";
 import { IStorageDescriptor, IS3Credentials } from "storage";
@@ -22,7 +22,9 @@ export async function checkPaths(
     progressCallback: CheckPathsProgressCallback | undefined,
     taskQueueProvider: ITaskQueueProvider,
     hashCacheDir: string,
-    s3Config: IS3Credentials | undefined
+    s3Config: IS3Credentials | undefined,
+    uuidGenerator: IUuidGenerator,
+    sessionTempDir: string
 ): Promise<IAddSummary> {
     const summary: IAddSummary = {
         filesAdded: 0,
@@ -66,27 +68,28 @@ export async function checkPaths(
                     }
                     
                     // Use database lookup result from worker
+                    // Use logicalPath for display (always set)
                     if (checkResult.alreadyInDatabase) {
-                        log.verbose(`File "${taskData.filePath}" with hash "${checkResult.hashedFile.hash}", matches existing records.`);
+                        log.verbose(`File "${taskData.logicalPath}" with hash "${checkResult.hashedFile.hash}", matches existing records.`);
                         summary.filesAlreadyAdded++;
                     } 
                     else {
-                        log.verbose(`File "${taskData.filePath}" has not been added to the media file database.`);
+                        log.verbose(`File "${taskData.logicalPath}" has not been added to the media file database.`);
                         summary.filesAdded++;
                         summary.totalSize += taskData.fileStat.length;
                     }
                 } 
                 else {
+                    log.error(`Failed to get hash for file ${taskData.logicalPath}`);
                     summary.filesFailed++;
                 }                
             } 
             else if (taskResult.status === TaskStatus.Failed) {
-                const fileName = taskResult.inputs.filePath || "unknown";
                 if (taskResult.error) {
-                    log.exception(`Failed to check file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
+                    log.exception(`Failed to check file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
                 } 
                 else {
-                    log.error(`Failed to check file "${fileName}": ${taskResult.errorMessage}`);
+                    log.error(`Failed to check file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
                 }
                 summary.filesFailed++;
                 summary.filesProcessed++;
@@ -100,20 +103,20 @@ export async function checkPaths(
         await scanPaths(paths, async (result) => {
             // Queue all files for worker processing (workers will check cache and database)
             queue.addTask("check-file", {
-                filePath: result.filePath,
+                filePath: result.filePath, // Use filePath for checking (always a valid file, possibly temp file from zip)
                 fileStat: result.fileStat,
                 contentType: result.contentType,
                 storageDescriptor,
                 hashCacheDir,
                 s3Config,
-                zipFilePath: result.zipFilePath,
+                logicalPath: result.logicalPath, // Use logicalPath for display to user
             } as ICheckFileData);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {
                 progressCallback(currentlyScanning, summary);
             }
-        }, { ignorePatterns: [/\.db/] });
+        }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
 
         //
         // Wait for all tasks to complete.

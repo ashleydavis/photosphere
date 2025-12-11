@@ -45,6 +45,29 @@ else {
 }
 ```
 
+### Code Formatting: catch blocks
+
+**NEVER** put `catch` on the same line as a closing bracket.
+
+**Bad:**
+```typescript
+try {
+    // code
+} catch (error) {
+    // code
+}
+```
+
+**Good:**
+```typescript
+try {
+    // code
+}
+catch (error) {
+    // code
+}
+```
+
 ## Critical Workflow Rules
 
 ### NEVER finish up until all code is compiling

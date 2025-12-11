@@ -1,12 +1,18 @@
 import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
-import * as fs from "fs/promises";
+import { log } from "utils";
+import { IFileStat } from "./file-scanner";
 
 //
 // Validates that a file is good before allowing it to be added to the merkle tree.
 // filePath must be a path to a locally extracted file (not a zip file path).
 //
-export async function validateFile(filePath: string, contentType: string): Promise<boolean> {
+export async function validateFile(filePath: string, contentType: string, fileStat: IFileStat): Promise<boolean> {
+    // Check that it's not a zero-byte file.
+    if (fileStat.length === 0) {
+        log.error(`Invalid file ${filePath} - zero-byte file`);
+        return false;
+    }
 
     if (contentType === "image/vnd.adobe.photoshop") {
         // Not sure how to validate PSD files just yet.
@@ -29,28 +35,23 @@ export async function validateFile(filePath: string, contentType: string): Promi
 //
 async function validateImage(filePath: string, contentType: string): Promise<boolean> {
     try {
-        // Check that it's not a zero-byte file.
-        const stats = await fs.stat(filePath);
-        if (stats.size === 0) {
-            console.error(`Invalid image ${filePath} - zero-byte file`);
-            return false;
-        }
-
         const fileInfo = await getFileInfo(filePath, contentType);
         if (!fileInfo) {
-            console.error(`Invalid image ${filePath} - failed to get file info`);
+            log.error(`Invalid image ${filePath} - failed to get file info`);
             return false;
         }
         
-        if (typeof fileInfo.dimensions.width === 'number' && typeof fileInfo.dimensions.height === 'number' && 
-            fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
+        if (fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
+            log.verbose(`Valid image ${filePath} - dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return true;
-        } else {
-            console.error(`Invalid image ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
+        }
+        else {
+            log.error(`Invalid image ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return false;
         }
-    } catch (error) {
-        console.error(`Invalid image ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    catch (error: any) {
+        log.exception(`Invalid image ${filePath} - analysis failed`, error);
         return false;
     }
 }
@@ -61,28 +62,23 @@ async function validateImage(filePath: string, contentType: string): Promise<boo
 //
 async function validateVideo(filePath: string, contentType: string): Promise<boolean> {
     try {
-        // Check that it's not a zero-byte file.
-        const stats = await fs.stat(filePath);
-        if (stats.size === 0) {
-            console.error(`Invalid video ${filePath} - zero-byte file.`);
-            return false;
-        }
-
         const fileInfo = await getFileInfo(filePath, contentType);
         if (!fileInfo) {
-            console.error(`Invalid video ${filePath} - failed to get file info`);
+            log.error(`Invalid video ${filePath} - failed to get file info`);
             return false;
         }
         
-        if (typeof fileInfo.dimensions.width === 'number' && typeof fileInfo.dimensions.height === 'number' && 
-            fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
+        if (fileInfo.dimensions.width > 0 && fileInfo.dimensions.height > 0) {
+            log.verbose(`Valid video ${filePath} - dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return true;
-        } else {
-            console.error(`Invalid video ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
+        }
+        else {
+            log.error(`Invalid video ${filePath} - invalid dimensions: ${fileInfo.dimensions.width}x${fileInfo.dimensions.height}`);
             return false;
         }
-    } catch (error) {
-        console.error(`Invalid video ${filePath} - analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    catch (error: any) {
+        log.exception(`Invalid video ${filePath} - analysis failed`, error);
         return false;
     }
 }

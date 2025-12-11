@@ -1,9 +1,10 @@
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs/promises';
-import { scanPath, scanPaths, FileScannedResult, ScannerOptions, ScannerState } from '../../lib/file-scanner';
+import { scanPath, scanPaths, FileScannedResult, ScannerOptions, ScannerState, constructLogicalPath } from '../../lib/file-scanner';
 import { ensureDir, remove, outputFile } from 'node-utils';
 import JSZip from 'jszip';
+import { RandomUuidGenerator } from 'utils';
 
 describe('file-scanner', () => {
     let testDir: string;
@@ -23,6 +24,15 @@ describe('file-scanner', () => {
             // Ignore cleanup errors
         }
     });
+
+    // Helper function to create a session temporary directory for scanning
+    const uuidGenerator = new RandomUuidGenerator();
+    
+    async function createSessionTempDir(): Promise<string> {
+        const sessionTempDir = path.join(os.tmpdir(), 'photosphere', uuidGenerator.generate());
+        await fs.mkdir(sessionTempDir, { recursive: true });
+        return sessionTempDir;
+    }
 
     // Helper function to create a minimal valid PNG file
     // PNG signature + minimal IHDR chunk
@@ -91,15 +101,21 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
             expect(scannedFiles[0].contentType).toBe('image/png');
             expect(scannedFiles[0].fileStat.length).toBeGreaterThan(0);
-            expect(scannedFiles[0].zipFilePath).toBeUndefined();
+            expect(scannedFiles[0].logicalPath).toBe(filePath); // logicalPath equals filePath for non-zip files
         });
 
         test('should scan a single JPEG file', async () => {
@@ -107,9 +123,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalJPEG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -121,9 +143,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalMP4());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -135,9 +163,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, 'some content');
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -147,9 +181,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, '<svg></svg>');
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -159,9 +199,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, 'export const test = 1;');
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -170,9 +216,15 @@ describe('file-scanner', () => {
             const filePath = path.join(testDir, 'nonexistent.png');
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles).toHaveLength(0);
         });
@@ -183,9 +235,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, pngData);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles[0].fileStat.length).toBe(pngData.length);
             expect(scannedFiles[0].fileStat.lastModified).toBeDefined();
@@ -204,9 +262,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(subDir, 'image3.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBeGreaterThanOrEqual(3);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -224,9 +288,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(testDir, 'root.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBeGreaterThanOrEqual(2);
             const filePaths = scannedFiles.map(f => f.filePath);
@@ -242,9 +312,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(subDir, 'data.db'), Buffer.from('database content'));
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, { ignorePatterns: [/\.db$/] });
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, { ignorePatterns: [/\.db$/] }, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
             expect(fileNames).toContain('image.png');
@@ -259,9 +335,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(testDir, 'root.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir1 = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir1, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir1, { recursive: true, force: true }).catch(() => {});
+            }
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('root.png'))).toBe(true);
@@ -276,9 +358,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(testDir, 'root.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir2 = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir2, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir2, { recursive: true, force: true }).catch(() => {});
+            }
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('root.png'))).toBe(true);
@@ -295,9 +383,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(subDir, 'm.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(subDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(subDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(3);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -319,19 +413,27 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(2); // Only images, not readme.txt
-            const fileNames = scannedFiles.map(f => f.filePath);
-            expect(fileNames).toContain('image1.png');
-            expect(fileNames).toContain('image2.jpg');
-            expect(fileNames).not.toContain('readme.txt');
+            // Files from zips are extracted to temp files, so check logicalPath instead
+            const logicalPaths = scannedFiles.map(f => f.logicalPath);
+            expect(logicalPaths.some(p => p.includes('image1.png'))).toBe(true);
+            expect(logicalPaths.some(p => p.includes('image2.jpg'))).toBe(true);
+            expect(logicalPaths.some(p => p.includes('readme.txt'))).toBe(false);
 
-            // All files should reference the zip file
+            // All files should have logicalPath set
             scannedFiles.forEach(file => {
-                expect(file.zipFilePath).toBe(zipPath);
+                expect(file.logicalPath).toBeDefined();
+                expect(file.logicalPath).toContain(zipPath);
             });
         });
 
@@ -351,22 +453,30 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             // Note: Currently nested zip extraction has a bug with stream handling
             // The outer.png should always be found
             expect(scannedFiles.length).toBeGreaterThanOrEqual(1);
-            const filePaths = scannedFiles.map(f => f.filePath);
-            expect(filePaths).toContain('outer.png');
+            // Files from zips are extracted to temp files, so check logicalPath instead
+            const logicalPaths = scannedFiles.map(f => f.logicalPath);
+            expect(logicalPaths.some(p => p.includes('outer.png'))).toBe(true);
             
             // If nested zip extraction works, inner.png should also be found
             // This test documents current behavior - nested zips may fail due to stream compatibility
             if (scannedFiles.length >= 2) {
-                expect(filePaths).toContain('inner.png');
+                expect(logicalPaths.some(p => p.includes('inner.png'))).toBe(true);
                 scannedFiles.forEach(file => {
-                    expect(file.zipFilePath).toBe(zipPath);
+                    expect(file.logicalPath).toBeDefined();
+                    expect(file.logicalPath).toContain(zipPath);
                 });
             }
         });
@@ -393,21 +503,28 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             // Note: Currently nested zip extraction has a bug with stream handling
             // At minimum, level1.png should be found
             expect(scannedFiles.length).toBeGreaterThanOrEqual(1);
-            const filePaths = scannedFiles.map(f => f.filePath);
-            expect(filePaths).toContain('level1.png');
+            // Files from zips are extracted to temp files, so check logicalPath instead
+            const logicalPaths = scannedFiles.map(f => f.logicalPath);
+            expect(logicalPaths.some(p => p.includes('level1.png'))).toBe(true);
             
             // If nested zip extraction works, other levels should also be found
             // This test documents current behavior - nested zips may fail due to stream compatibility
             if (scannedFiles.length >= 3) {
-                expect(filePaths).toContain('level2.png');
-                expect(filePaths).toContain('level3.png');
+                expect(logicalPaths.some(p => p.includes('level2.png'))).toBe(true);
+                expect(logicalPaths.some(p => p.includes('level3.png'))).toBe(true);
             }
         });
 
@@ -417,11 +534,17 @@ describe('file-scanner', () => {
 
             const scannedFiles: FileScannedResult[] = [];
             let scannerState: ScannerState | undefined;
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, (currentlyScanning, state) => {
-                scannerState = state;
-            }, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, (currentlyScanning, state) => {
+                    scannerState = state;
+                }, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
             expect(scannerState?.numFilesFailed).toBe(1);
@@ -438,12 +561,20 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(1);
-            expect(scannedFiles[0].filePath).toBe('image.png');
+            // Files from zips are extracted to temp files, so check logicalPath instead
+            expect(scannedFiles[0].logicalPath).toContain('image.png');
+            expect(scannedFiles[0].logicalPath).toContain(zipPath);
         });
 
         test('should preserve relative paths within zip', async () => {
@@ -457,15 +588,22 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(3);
-            const filePaths = scannedFiles.map(f => f.filePath);
-            expect(filePaths).toContain('folder1/image1.png');
-            expect(filePaths).toContain('folder2/image2.png');
-            expect(filePaths).toContain('root.png');
+            // Files from zips are extracted to temp files, so check logicalPath instead
+            const logicalPaths = scannedFiles.map(f => f.logicalPath);
+            expect(logicalPaths.some(p => p.includes('folder1/image1.png'))).toBe(true);
+            expect(logicalPaths.some(p => p.includes('folder2/image2.png'))).toBe(true);
+            expect(logicalPaths.some(p => p.includes('root.png'))).toBe(true);
         });
     });
 
@@ -477,9 +615,15 @@ describe('file-scanner', () => {
             await fs.writeFile(file2, createMinimalJPEG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPaths([file1, file2], async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPaths([file1, file2], async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(2);
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
@@ -497,9 +641,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(dir2, 'image2.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPaths([dir1, dir2], async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPaths([dir1, dir2], async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(2);
         });
@@ -512,9 +662,15 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(dir1, 'image1.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPaths([file1, dir1], async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPaths([file1, dir1], async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(2);
         });
@@ -525,9 +681,15 @@ describe('file-scanner', () => {
             await fs.writeFile(file1, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPaths([file1, nonexistent], async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPaths([file1, nonexistent], async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(file1);
@@ -547,7 +709,13 @@ describe('file-scanner', () => {
                 }
             };
 
-            await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(progressUpdates.length).toBeGreaterThan(0);
         });
@@ -567,7 +735,13 @@ describe('file-scanner', () => {
                 }
             };
 
-            await scanPath(zipPath, async () => {}, progressCallback, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async () => {}, progressCallback, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(progressUpdates.length).toBeGreaterThan(0);
             expect(progressUpdates.some(u => u.includes('test.zip'))).toBe(true);
@@ -582,9 +756,15 @@ describe('file-scanner', () => {
             await fs.writeFile(file2, 'content');
 
             let scannerState: ScannerState | undefined;
-            await scanPath(testDir, async () => {}, (currentlyScanning, state) => {
-                scannerState = state;
-            }, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async () => {}, (currentlyScanning, state) => {
+                    scannerState = state;
+                }, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannerState?.numFilesIgnored).toBeGreaterThan(0);
         });
@@ -594,9 +774,15 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, 'not a zip');
 
             let scannerState: ScannerState | undefined;
-            await scanPath(zipPath, async () => {}, (currentlyScanning, state) => {
-                scannerState = state;
-            }, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async () => {}, (currentlyScanning, state) => {
+                    scannerState = state;
+                }, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannerState?.numFilesFailed).toBe(1);
         });
@@ -613,7 +799,13 @@ describe('file-scanner', () => {
                 scannerState = state;
             };
 
-            await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async () => {}, progressCallback, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             // Should have been set during scanning
             expect(currentPath).toBeDefined();
@@ -628,9 +820,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].contentType).toMatch(/^image\//);
@@ -641,9 +839,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalMP4());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].contentType).toMatch(/^video\//);
@@ -654,9 +858,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, '<svg></svg>');
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -666,9 +876,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, Buffer.from('PSD content'));
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(filePath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(filePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -677,9 +893,15 @@ describe('file-scanner', () => {
     describe('edge cases', () => {
         test('should handle empty directory', async () => {
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -691,9 +913,15 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -706,9 +934,15 @@ describe('file-scanner', () => {
             await fs.writeFile(zipPath, zipBuffer);
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(zipPath, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(zipPath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(0);
         });
@@ -720,11 +954,12 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
+            const sessionTempDir = await createSessionTempDir();
             
             // Start scanning, then delete file and create directory with same name
             const scanPromise = scanPath(testDir, async (result) => {
                 scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
 
             // Wait a bit, then modify filesystem
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -748,9 +983,15 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
@@ -761,10 +1002,16 @@ describe('file-scanner', () => {
             await fs.writeFile(filePath, createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
-
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
+            
             expect(scannedFiles.length).toBe(1);
             expect(scannedFiles[0].filePath).toBe(filePath);
         });
@@ -780,11 +1027,17 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(subDir, 'backup.bak'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, { 
-                ignorePatterns: [/\.tmp$/, /\.bak$/] 
-            });
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, { 
+                    ignorePatterns: [/\.tmp$/, /\.bak$/] 
+                }, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             const fileNames = scannedFiles.map(f => path.basename(f.filePath));
             expect(fileNames).toContain('image.png');
@@ -803,13 +1056,63 @@ describe('file-scanner', () => {
             await fs.writeFile(path.join(nodeModules, 'package.png'), createMinimalPNG());
 
             const scannedFiles: FileScannedResult[] = [];
-            await scanPath(testDir, async (result) => {
-                scannedFiles.push(result);
-            }, undefined, defaultScannerOptions);
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(testDir, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
 
             const filePaths = scannedFiles.map(f => f.filePath);
             expect(filePaths.some(p => p.includes('image.png'))).toBe(true);
             expect(filePaths.some(p => p.includes('node_modules'))).toBe(false);
+        });
+    });
+
+    describe('constructLogicalPath', () => {
+        test('should construct path for file directly in root zip', () => {
+            const zipPathStack = ['/path/to/root.zip'];
+            const fileName = 'image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('/path/to/root.zip/image.png');
+        });
+
+        test('should construct path for file in nested zip', () => {
+            const zipPathStack = ['/path/to/root.zip', 'nested.zip'];
+            const fileName = 'image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('/path/to/root.zip/nested.zip/image.png');
+        });
+
+        test('should construct path for file in deeply nested zip', () => {
+            const zipPathStack = ['/path/to/root.zip', 'parent1.zip', 'parent2.zip', 'parent3.zip'];
+            const fileName = 'image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('/path/to/root.zip/parent1.zip/parent2.zip/parent3.zip/image.png');
+        });
+
+        test('should handle nested zip names with paths', () => {
+            const zipPathStack = ['/path/to/root.zip', 'folder/nested.zip', 'subfolder/deep.zip'];
+            const fileName = 'image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('/path/to/root.zip/folder/nested.zip/subfolder/deep.zip/image.png');
+        });
+
+        test('should handle file names with paths', () => {
+            const zipPathStack = ['/path/to/root.zip', 'nested.zip'];
+            const fileName = 'folder/subfolder/image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('/path/to/root.zip/nested.zip/folder/subfolder/image.png');
+        });
+
+        test('should handle Windows-style paths', () => {
+            const zipPathStack = ['C:\\path\\to\\root.zip', 'nested.zip'];
+            const fileName = 'image.png';
+            const result = constructLogicalPath(zipPathStack, fileName);
+            expect(result).toBe('C:\\path\\to\\root.zip/nested.zip/image.png');
         });
     });
 });

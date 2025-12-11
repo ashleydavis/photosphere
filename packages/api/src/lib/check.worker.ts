@@ -14,13 +14,13 @@ import { IFileStat } from "./file-scanner";
 import { createMediaFileDatabase } from "./media-file-database";
 
 export interface ICheckFileData {
-    filePath: string;
+    filePath: string; // Actual file path (always a valid file, possibly temp file from zip)
     fileStat: IFileStat;
     contentType: string;
     storageDescriptor: IStorageDescriptor;
     hashCacheDir: string;
     s3Config?: IS3Credentials;
-    zipFilePath?: string;
+    logicalPath: string; // Logical path for display (always set - equals filePath for non-zip files)
 }
 
 export interface ICheckFileResult {
@@ -38,7 +38,7 @@ export interface ICheckFileResult {
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 //
 export async function checkFileHandler(data: ICheckFileData, workingDirectory: string, context: IWorkerContext): Promise<ICheckFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, zipFilePath } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config } = data;
     const { uuidGenerator, timestampProvider } = context;
     
     // Load hash cache (read-only)
@@ -57,10 +57,11 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     
     if (!hashedFile) {
         // Not in cache - compute hash
+        // filePath is always a valid file (already extracted if from zip)
         const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
         await ensureDir(tempDir);
         
-        hashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, tempDir, zipFilePath);
+        hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
         if (!hashedFile) {
             return { hashedFile: undefined, alreadyInDatabase: false, hashFromCache: false };
         }

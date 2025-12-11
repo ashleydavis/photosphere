@@ -7,8 +7,9 @@ let terminationCallbacksInitialized = false;
 
 //
 // The type of a callback to handle graceful termination of the process.
+// The exit code is passed to indicate whether the process is exiting successfully (0) or with an error (non-zero).
 //
-export type TerminationCallback = () => Promise<void>;
+export type TerminationCallback = (exitCode: number) => Promise<void>;
 
 //
 // List of registered termination callbacks.
@@ -16,11 +17,11 @@ export type TerminationCallback = () => Promise<void>;
 const terminationCallbacks: TerminationCallback[] = [];
 
 //
-// Invokes all registered termination callbacks.
+// Invokes all registered termination callbacks with the given exit code.
 //
-export async function invokeTerminationCallbacks(): Promise<void> {
+export async function invokeTerminationCallbacks(exitCode: number): Promise<void> {
     for (const callback of terminationCallbacks) {
-        await callback();
+        await callback(exitCode);
     }
 }
 
@@ -31,7 +32,7 @@ export async function invokeTerminationCallbacks(): Promise<void> {
 export async function exit(code: number): Promise<never> {
 
     try {
-        await invokeTerminationCallbacks();
+        await invokeTerminationCallbacks(code);
     
         process.exit(code);
     }
@@ -44,7 +45,7 @@ export async function exit(code: number): Promise<never> {
 //
 // Register a callback function to be called when the process is about to exit.
 //
-export function registerTerminationCallback(callback: () => Promise<void>): void {
+export function registerTerminationCallback(callback: TerminationCallback): void {
     initializeTerminationHandlers();
     terminationCallbacks.push(callback);
 }
@@ -65,11 +66,12 @@ function initializeTerminationHandlers(): void {
         log.verbose('SIGTERM received. Shutting down gracefully...');
 
         try {
-            await invokeTerminationCallbacks();
+            await invokeTerminationCallbacks(0);
             process.exit(0);
         }
         catch (err: any) {
             log.exception('Error during SIGTERM shutdown.', err);
+            await invokeTerminationCallbacks(1);
             process.exit(1);
         }
     });
@@ -81,11 +83,12 @@ function initializeTerminationHandlers(): void {
         log.verbose('SIGINT received. Shutting down...');
         
         try {
-            await invokeTerminationCallbacks();
+            await invokeTerminationCallbacks(0);
             process.exit(0);
         }
         catch (err: any) {
             log.exception('Error during SIGINT shutdown.', err);
+            await invokeTerminationCallbacks(1);
             process.exit(1);
         }
     });
@@ -97,7 +100,7 @@ function initializeTerminationHandlers(): void {
         log.exception('Uncaught exception.', err);
 
         try {
-            await invokeTerminationCallbacks();
+            await invokeTerminationCallbacks(1);
         }
         catch (err: any) {
             log.exception('Error during uncaught exception shutdown.', err);
@@ -114,7 +117,7 @@ function initializeTerminationHandlers(): void {
         log.exception('Unhandled promise rejection.', new Error(reason));
 
         try {
-            await invokeTerminationCallbacks();
+            await invokeTerminationCallbacks(1);
         }
         catch (err: any) {
             log.exception('Error during unhandled rejection shutdown.', err);

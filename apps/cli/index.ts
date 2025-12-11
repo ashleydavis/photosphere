@@ -227,7 +227,7 @@ Resources:
         .option(...yesOption)
         .argument("<files...>", "The media files to analyze.")
         .addHelpText('after', getCommandExamplesHelp('info'))
-        .action(infoCommand);
+        .action(initContext(infoCommand));
 
     program
         .command("init")
