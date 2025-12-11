@@ -25,12 +25,14 @@ import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
 import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
+import { testDebugCommand } from './src/cmd/test-debug';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log, FatalError } from 'utils';
 import { version } from './src/lib/version';
+import { startDebugServer } from 'debug-server';
 
 async function main() {
 
@@ -57,6 +59,7 @@ async function main() {
             console.log(version);
             process.exit(0);
         })
+        .option('--debug', 'Enable debug REST API server')
         .addHelpText('after', `
 
 Getting help:
@@ -393,10 +396,31 @@ Resources:
         .action(initContext(verifyCommand));
 
     program
+        .command("test-debug", { hidden: true })
+        .description("Temporary command for testing the debug REST API. Runs an infinite loop that updates debug data.")
+        .option(...verboseOption)
+        .action(testDebugCommand);
+
+    program
         .command("version")
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
+
+    // Start debug server if --debug flag is set (before parsing so it's available during command execution)
+    if (process.argv.includes('--debug')) {
+        try {
+            const { url } = await startDebugServer({
+                initialData: { message: "Hello world" },
+                openBrowser: true
+            });
+            console.log(pc.green(`Debug REST API server started on ${url}`));
+            console.log(pc.cyan("Press Ctrl+C in this terminal to stop the server."));
+        }
+        catch (error: any) {
+            console.error(pc.red(`Failed to start debug server: ${error.message}`));
+        }
+    }
 
     // Parse the command line arguments
     try {
