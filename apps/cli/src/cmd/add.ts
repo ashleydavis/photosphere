@@ -20,7 +20,7 @@ export interface IAddCommandOptions extends IBaseCommandOptions {
 // Command that adds files and directories to the Photosphere media file database.
 //
 export async function addCommand(context: ICommandContext, paths: string[], options: IAddCommandOptions): Promise<void> {
-    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { uuidGenerator, timestampProvider, sessionId, sessionTempDir } = context;
 
     const nonInteractive = options.yes || false;
     
@@ -75,7 +75,8 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
 
             progressMessage += ` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`;
             writeProgress(progressMessage);
-        }
+        },
+        sessionTempDir
     );
 
     clearProgressMessage(); // Flush the progress message.

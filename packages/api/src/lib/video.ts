@@ -1,42 +1,20 @@
 import { getVideoTransformation, ILocation } from "utils";
-import path from "path";
 import * as fs from "fs/promises";
 import { pathExists } from "node-utils";
 import dayjs from "dayjs";
-import { writeStreamToFile } from "node-utils";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IUuidGenerator } from "utils";
-import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
 import { getFileInfo, Video } from "tools";
 import { resizeImage, transformImage } from "./image";
-import mime from 'mime';
-import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<IAssetDetails> {
-
-    let videoPath: string;
-
-    if (zipFilePath) {
-        // Choose extension based on content type.            
-        const ext = mime.getExtension(contentType);
-        if (!ext) {
-            throw new Error(`Unsupported content type: ${contentType}`);
-        }
-
-        // If zipFilePath is provided, we need to extract to a temporary file.
-        videoPath = join(tmpdir(), `temp_video_${uuidGenerator.generate()}.${ext}`);
-        const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
-        await writeStreamToFile(stream, videoPath);        
-    }
-    else {
-        // Use the file directly from its location on disk.
-        videoPath = filePath;
-    }
+export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, logicalPath: string): Promise<IAssetDetails> {
+    // filePath is always a valid file (already extracted if from zip)
+    const videoPath = filePath;
 
     const assetInfo = await getFileInfo(videoPath, contentType);
     if (!assetInfo) {

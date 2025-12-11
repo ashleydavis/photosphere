@@ -6,7 +6,7 @@ import type { IAsset } from "defs";
 import type { ITaskQueueProvider } from "api";
 import { TaskQueueProvider } from "./task-queue-provider";
 import { configureLog } from "./log";
-import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
+import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
@@ -18,6 +18,7 @@ import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
+import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 
 //
@@ -248,6 +249,7 @@ export interface ICommandContext {
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
+    sessionTempDir: string;
     taskQueueProvider: ITaskQueueProvider;
 }
 
@@ -276,6 +278,12 @@ export function initContext<TArgs extends any[], TReturn>(
             ? new TestTimestampProvider()
             : new TimestampProvider();
         const sessionId = options.sessionId || uuidGenerator.generate();
+        
+        // Create a session temporary directory for this command execution
+        const sessionTempDir = path.join(os.tmpdir(), 'photosphere', sessionId);
+        await fs.mkdir(sessionTempDir, { recursive: true });
+        log.verbose(`Created temporary directory for command session: "${sessionTempDir}"`);
+        
         // TaskQueueProvider defaults to number of CPUs if not specified
         // Check if command supports --workers and --timeout options and use them if provided
         const workers = options.workers;
@@ -290,8 +298,27 @@ export function initContext<TArgs extends any[], TReturn>(
             uuidGenerator,
             timestampProvider,
             sessionId,
+            sessionTempDir,
             taskQueueProvider,
         };
+        
+        // Register cleanup handler for termination
+        registerTerminationCallback(async (exitCode: number) => {
+            if (exitCode === 0) {
+                // Successful exit - clean up temp directory
+                try {
+                    await fs.rm(sessionTempDir, { recursive: true, force: true });
+                    log.verbose(`Cleaned up temporary directory "${sessionTempDir}"`);
+                }
+                catch (error: any) {
+                    log.exception(`Failed to clean up temporary directory ${sessionTempDir}`, error);
+                }
+            }
+            else {
+                // Error exit - retain temp directory for inspection
+                log.info(`Temporary files retained for inspection: ${sessionTempDir}`);
+            }
+        });
         
         return command(context, ...args);
     };

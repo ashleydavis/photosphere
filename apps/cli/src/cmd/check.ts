@@ -17,7 +17,7 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 // Command that checks which files and directories have been added to the Photosphere media file database.
 //
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
-    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { uuidGenerator, timestampProvider, sessionId, sessionTempDir } = context;
     const { databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
     
     // Create hash cache for file hashing optimization
@@ -58,7 +58,9 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
         },
         context.taskQueueProvider,
         localHashCachePath,
-        s3Config
+        s3Config,
+        uuidGenerator,
+        sessionTempDir
     );
 
     clearProgressMessage(); // Flush the progress message.

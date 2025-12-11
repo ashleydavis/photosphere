@@ -293,6 +293,7 @@ export class TaskQueue implements ITaskQueue {
             status: task.status,
             message: task.result?.message,
             error: task.result?.error,
+            errorMessage: task.result?.errorMessage,
             outputs: task.result?.outputs,
             inputs: task.data,
             taskId: task.id,

@@ -12,7 +12,7 @@ import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
 import { computeAssetHash, getHashFromCache, validateAndHash } from "./hash";
 import { HashCache } from "./hash-cache";
-import { IFileStat, ScannerOptions, scanPaths } from "./file-scanner";
+import { IFileStat, scanPaths } from "./file-scanner";
 import { extractFileFromZipRecursive } from "./zip-utils";
 
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -40,21 +40,25 @@ async function importFile(
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     localHashCache: HashCache,
-    filePath: string,
+    filePath: string, // Actual file path (always a valid file, possibly temp file from zip)
     fileStat: IFileStat,
     contentType: string,
     labels: string[],
-    zipFilePath: string | undefined,
+    logicalPath: string, // Logical path for display (always set - equals filePath for non-zip files)
     summary: IAddSummary
 ): Promise<IAddSummary> {
     const assetId = uuidGenerator.generate();
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
     
+    // Use logicalPath for display (always set)
+    const fileDisplayPath = logicalPath;
+    
     try {
         let localHashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
         if (!localHashedFile) {
-            localHashedFile = await validateAndHash(uuidGenerator, filePath, fileStat, contentType, assetTempDir, zipFilePath);
+            // filePath is always a valid file (already extracted if from zip)
+            localHashedFile = await validateAndHash(filePath, fileStat, contentType, logicalPath);
             if (!localHashedFile) {
                 summary.filesFailed++;
                 summary.filesProcessed++;
@@ -67,19 +71,22 @@ async function importFile(
         const localHashStr = localHashedFile.hash.toString("hex");
         const records = await metadataCollection.findByIndex("hash", localHashStr);
         if (records.length > 0) {
-            log.verbose(`File "${filePath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
+            log.verbose(`File "${fileDisplayPath}" with hash "${localHashStr}", matches existing records:\n  ${records.map(r => r._id).join("\n  ")}`);
             summary.filesAlreadyAdded++;
             summary.filesProcessed++;
             return summary;
         }
+
+        log.verbose(`File ${fileDisplayPath} with hash ${localHashStr} has not been added to the media file database. Going to add it now.`);
         
         let assetDetails: IAssetDetails | undefined = undefined;
         
+        // filePath is always a valid file (already extracted if from zip)
         if (contentType?.startsWith("video")) {
-            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, uuidGenerator, zipFilePath);
+            assetDetails = await getVideoDetails(filePath, assetTempDir, contentType, uuidGenerator, logicalPath);
         }
         else if (contentType?.startsWith("image")) {
-            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, zipFilePath);
+            assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, logicalPath);
         }
 
         const assetPath = `asset/${assetId}`;
@@ -91,7 +98,7 @@ async function importFile(
         }
 
         if (process.env.SIMULATE_FAILURE === "add-file" && Math.random() < 0.1) {
-            throw new Error(`Simulated failure during add-file operation for ${filePath}`);
+            throw new Error(`Simulated failure during add-file operation for ${fileDisplayPath}`);
         }
 
         try {
@@ -100,9 +107,8 @@ async function importFile(
                 throw new Error(`Failed to load media file database.`);
             }
 
-            const stream = zipFilePath 
-                ? await extractFileFromZipRecursive(zipFilePath, filePath)
-                : createReadStream(filePath);
+            // filePath is always a valid file (already extracted if from zip)
+            const stream = createReadStream(filePath);
             await retry(() => assetStorage.writeStream(assetPath, contentType, stream, fileStat.length));
 
             const assetInfo = await retry(() => assetStorage.info(assetPath));
@@ -222,7 +228,7 @@ async function importFile(
                 color: color || [0, 0, 0],
             });
 
-            log.verbose(`Added file "${filePath}" to the database with ID "${assetId}".`);
+            log.verbose(`Added file "${fileDisplayPath}" to the database with ID "${assetId}".`);
 
             await refreshWriteLock(metadataStorage, sessionId);
 
@@ -238,7 +244,7 @@ async function importFile(
             await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
         }
         catch (err: any) {
-            log.exception(`Failed to upload asset data for file "${filePath}"`, err);
+            log.exception(`Failed to upload asset data for file "${fileDisplayPath}"`, err);
             await retry(() => assetStorage.deleteFile(assetPath));
             await retry(() => assetStorage.deleteFile(thumbPath));
             await retry(() => assetStorage.deleteFile(displayPath));
@@ -269,7 +275,8 @@ export async function addPaths(
     metadataCollection: IBsonCollection<IAsset>,
     localHashCache: HashCache,
     paths: string[],
-    progressCallback?: AddPathsProgressCallback
+    progressCallback: AddPathsProgressCallback | undefined,
+    sessionTempDir: string
 ): Promise<IAddSummary> {
     const summary: IAddSummary = {
         filesAdded: 0,
@@ -291,11 +298,11 @@ export async function addPaths(
             sessionId,
             metadataCollection,
             localHashCache,
-            result.filePath,
+            result.filePath, // Use filePath for checking (always a valid file, possibly temp file from zip)
             result.fileStat,
             result.contentType,
             result.labels,
-            result.zipFilePath,
+            result.logicalPath, // Use logicalPath for display to user
             summary
         );
         
@@ -307,7 +314,7 @@ export async function addPaths(
         if (progressCallback) {
             progressCallback(currentlyScanning, summary);
         }
-    }, { ignorePatterns: [/\.db/] });
+    }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
     
     await retry(() => localHashCache.save());
 

@@ -129,7 +129,7 @@ describe("TaskQueue", () => {
 
             const status = queue.taskStatus(taskId);
             expect(status?.status).toBe(TaskStatus.Failed);
-            expect(status?.error).toContain("Task error");
+            expect(status?.errorMessage).toContain("Task error");
         });
 
         it("should return running status while task is executing", async () => {

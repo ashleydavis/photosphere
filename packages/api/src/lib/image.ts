@@ -2,40 +2,20 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
-import { execLogged, writeStreamToFile } from "node-utils";
+import { execLogged } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
 import * as fs from "fs/promises";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { getFileInfo, Image } from "tools";
 const exifParser = require("exif-parser");
-import mime from 'mime';
-import os from "os";
 import path from "path";
-import { extractFileFromZipRecursive } from "./zip-utils";
 
 //
 // Gets the details of an image.
 //
-export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, zipFilePath: string | undefined): Promise<IAssetDetails> {
-
-    let imagePath: string;
-
-    if (zipFilePath) {
-        // Choose extension based on content type.            
-        const ext = mime.getExtension(contentType);
-        if (!ext) {
-            throw new Error(`Unsupported content type: ${contentType}`);
-        }
-
-        // If zipFilePath is provided, we need to extract to a temporary file.        
-        imagePath = path.join(os.tmpdir(), `temp_asset_${uuidGenerator.generate()}.${ext}`);
-        const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
-        await writeStreamToFile(stream, imagePath);        
-    }
-    else {
-        // Use the file directly from its location on disk.
-        imagePath = filePath;
-    }
+export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, logicalPath: string): Promise<IAssetDetails> {
+    // filePath is always a valid file (already extracted if from zip)
+    let imagePath = filePath;
 
     const assetInfo = await getFileInfo(imagePath, contentType);
     if (!assetInfo) {

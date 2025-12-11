@@ -1,19 +1,17 @@
 import { scanPaths, IFileStat } from "api";
+import { ICommandContext } from "../lib/init-cmd";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
-import { exit, writeStreamToFile } from "node-utils";
+import { exit } from "node-utils";
 import { getFileInfo, AssetInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { computeHash, extractFileFromZipRecursive } from "api";
-import * as fs from "fs/promises";
+import { computeHash } from "api";
 import { createReadStream } from "fs";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
 import mime from "mime";
-import { tmpdir } from "os";
-import { randomUUID } from "crypto";
 
 export interface IInfoCommandOptions { 
     //
@@ -38,17 +36,14 @@ interface FileAnalysis {
     assetInfo?: AssetInfo;
     hash?: string;
     error?: string;
+    logicalPath: string; // Logical path showing root zip file, parent zip names, and file name (always set)
 }
 
 //
 // Command that displays detailed information about media files.
 //
-export async function infoCommand(paths: string[], options: IInfoCommandOptions): Promise<void> {
-
-    await configureLog({
-        verbose: options.verbose,
-        tools: options.tools
-    });
+export async function infoCommand(context: ICommandContext, paths: string[], options: IInfoCommandOptions): Promise<void> {
+    const { uuidGenerator, sessionTempDir } = context;
 
     // Ensure media processing tools are available
     await ensureMediaProcessingTools(options.yes || false);
@@ -60,13 +55,14 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     
     await scanPaths(paths, async (fileResult) => {
         try {
-            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.zipFilePath);
+            const analysis = await analyzeFile(fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath);
             results.push(analysis);
             fileCount++;
         } catch (error) {
             results.push({
                 path: fileResult.filePath,
                 fileStat: fileResult.fileStat,
+                logicalPath: fileResult.logicalPath,
                 error: error instanceof Error ? error.message : String(error)
             });
             fileCount++;
@@ -78,7 +74,7 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
         }
         progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
         writeProgress(progressMessage);
-    }, { ignorePatterns: [/\.db/] });
+    }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
 
     clearProgressMessage();
 
@@ -95,22 +91,18 @@ export async function infoCommand(paths: string[], options: IInfoCommandOptions)
     await exit(0);
 }
 
-async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileStat, zipFilePath?: string): Promise<FileAnalysis> {
-    const absolutePath = zipFilePath ? zipFilePath : path.resolve(filePath);
-    
+async function analyzeFile(filePath: string, contentType: string, fileInfo: IFileStat, logicalPath: string): Promise<FileAnalysis> {
+    // filePath is either the temporary unpacked file path or the original source file path
     let fileAnalysis: FileAnalysis = {
         path: filePath,
-        fileStat: fileInfo,        
+        fileStat: fileInfo,
+        logicalPath, // Include logical path if provided (shows location in zip files)
     };
-    
-    let tempFilePath: string | undefined;
     
     try {
         // Calculate file hash
         try {
-            const fileStream = zipFilePath 
-                ? await extractFileFromZipRecursive(zipFilePath, filePath)
-                : createReadStream(absolutePath);
+            const fileStream = createReadStream(filePath);
             const hashBuffer = await computeHash(fileStream);
             fileAnalysis.hash = hashBuffer.toString("hex");
         } 
@@ -119,21 +111,9 @@ async function analyzeFile(filePath: string, contentType: string, fileInfo: IFil
         }
 
         // Analyze file content using the unified getFileInfo function
-        // For zip files, extract to temporary location first
-        let actualFilePath = absolutePath;
-        if (zipFilePath) {
-            // Extract file from zip to temporary location
-            const ext = mime.getExtension(contentType) || path.extname(filePath) || '';
-            const tempFileName = `temp_${randomUUID()}${ext ? `.${ext}` : ''}`;
-            tempFilePath = path.join(tmpdir(), tempFileName);
-            
-            const stream = await extractFileFromZipRecursive(zipFilePath, filePath);
-            await writeStreamToFile(stream, tempFilePath);
-            actualFilePath = tempFilePath;
-        }
-        
+        // Files are already unpacked, so we can use the file path directly
         try {
-            const assetInfo = await getFileInfo(actualFilePath, contentType);        
+            const assetInfo = await getFileInfo(filePath, contentType);        
             if (assetInfo) {
                 fileAnalysis.assetInfo = assetInfo;
             }
@@ -141,24 +121,18 @@ async function analyzeFile(filePath: string, contentType: string, fileInfo: IFil
         catch (error) {
             fileAnalysis.error = `Failed to analyze file: ${error}`;
         }
-    } finally {
-        // Clean up temporary file if created
-        if (tempFilePath) {
-            try {
-                await fs.unlink(tempFilePath);
-            } catch (err) {
-                // Ignore cleanup errors
-            }
-        }
+    } catch (error) {
+        fileAnalysis.error = `Failed to analyze file: ${error instanceof Error ? error.message : String(error)}`;
     }
 
     return fileAnalysis;
 }
 
 function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
-    const { path, fileStat: fileInfo, assetInfo, hash, error } = analysis;
+    const { path, fileStat: fileInfo, assetInfo, hash, error, logicalPath } = analysis;
     
-    console.log(pc.bold(pc.blue(`📁 ${path}`)));
+    // Use logicalPath for display (always set)
+    console.log(pc.bold(pc.blue(`📁 ${logicalPath}`)));
     
     if (error) {
         console.log(`   ${pc.red(`Error: ${error}`)}`);

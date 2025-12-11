@@ -1,6 +1,6 @@
 import path from "path";
 import mime from "mime";
-import { log } from "utils";
+import { log, IUuidGenerator } from "utils";
 import JSZip from "jszip";
 import * as fs from "fs/promises";
 import { pathExists } from "node-utils";
@@ -21,6 +21,7 @@ export interface ScannerState {
     currentlyScanning: string | undefined;
     numFilesIgnored: number;
     numFilesFailed: number;
+    tempDir: string; // Temporary directory for extracted files from this scanning session
 }
 
 //
@@ -29,19 +30,14 @@ export interface ScannerState {
 export type ScanProgressCallback = (currentlyScanning: string | undefined, state: ScannerState) => void;
 
 //
-// Callback for visiting a file when scanning a directory or zip file.
-//
-export type VisitFileCallback = (filePath: string, fileInfo: IFileStat, fileDate: Date, contentType: string, labels: string[], zipFilePath: string | undefined, progressCallback: ScanProgressCallback, state: ScannerState) => Promise<void>;
-
-//
 // Result of scanning a single file
 //
 export interface FileScannedResult {
-    filePath: string; // Relative path within zip if zipFilePath is present, otherwise the actual file path
+    filePath: string; // Actual file path (temporary file path if extracted from zip, otherwise the original file path)
     fileStat: IFileStat;
     contentType: string;
     labels: string[];
-    zipFilePath?: string; // Path to the zip file containing this file, if present
+    logicalPath: string; // Logical path showing root zip file, parent zip names, and file name (always set - equals filePath for non-zip files)
 }
 
 //
@@ -108,20 +104,6 @@ function shouldIncludeFile(contentType: string): boolean {
 }
 
 //
-// Extracts a nested zip file from a parent zip
-//
-async function extractZipFromParent(parentZipFilePath: string, nestedZipRelativePath: string): Promise<Buffer> {
-    const parentZip = new JSZip();
-    const parentBuffer = await fs.readFile(parentZipFilePath);
-    const unpacked = await parentZip.loadAsync(parentBuffer);
-    const nestedZipObject = unpacked.files[nestedZipRelativePath];
-    if (!nestedZipObject || nestedZipObject.dir) {
-        throw new Error(`Nested zip file "${nestedZipRelativePath}" not found in parent zip "${parentZipFilePath}"`);
-    }
-    return await nestedZipObject.async('nodebuffer');
-}
-
-//
 // Walks a directory recursively and yields files in alphanumeric order
 //
 async function* walkDirectory(dirPath: string, ignorePatterns: RegExp[] = [/node_modules/, /\.git/, /\.DS_Store/]): AsyncGenerator<IOrderedFile> {
@@ -158,34 +140,84 @@ async function* walkDirectory(dirPath: string, ignorePatterns: RegExp[] = [/node
 }
 
 //
+// Formats the full zip path for log messages, showing all parents in the stack
+//
+function formatZipDisplayPath(zipPathStack: string[]): string {
+    return zipPathStack.join(' / ');
+}
+
+//
+// Constructs a logical path showing root zip file, parent zip names, and file name
+// zipPathStack should include the root zip file path as the first element, followed by nested zip names
+//
+export function constructLogicalPath(zipPathStack: string[], fileName: string): string {
+    const logicalPathParts = [...zipPathStack, fileName];
+    return logicalPathParts.join('/');
+}
+
+//
+// Formats a truncated zip path for progress callbacks, showing only root and last nested zip
+//
+function formatZipProgressPath(zipPathStack: string[]): string {
+    if (zipPathStack.length === 0) {
+        throw new Error('zipPathStack cannot be empty');
+    }
+    
+    const rootZipName = path.basename(zipPathStack[0]);
+    const truncatedRoot = rootZipName.length > 50 
+        ? rootZipName.substring(0, 50) 
+        : rootZipName;
+    
+    if (zipPathStack.length === 1) {
+        // Just the root zip
+        return truncatedRoot;
+    }
+    else if (zipPathStack.length === 2) {
+        // Root + 1 nested zip, no "..."
+        const lastNestedZip = path.basename(zipPathStack[1]);
+        return `${truncatedRoot} / ${lastNestedZip}`;
+    }
+    else {
+        // More than two entries (root + at least 2 nested), show "..."
+        const lastNestedZip = path.basename(zipPathStack[zipPathStack.length - 1]);
+        return `${truncatedRoot} / ... / ${lastNestedZip}`;
+    }
+}
+
+//
 // Scans files from a zip file
+// zipFilePath is always a valid zip file on disk (either root or extracted temp file)
+// zipPathStack is an array representing the zip hierarchy, with the root zip path as the first element
 //
 async function scanZipFile(
     zipFilePath: string, 
     fileStat: IFileStat, 
-    parentZipFilePath: string | undefined, 
-    parentZipRelativePath: string | undefined, 
+    zipPathStack: string[],
     visitFile: SimpleFileCallback, 
     progressCallback: ScanProgressCallback | undefined,
     state: ScannerState,
-    options: ScannerOptions
+    options: ScannerOptions,
+    tempDir: string,
+    uuidGenerator: IUuidGenerator
 ): Promise<void> {
-    const actualZipPath = parentZipFilePath ? parentZipFilePath : zipFilePath;
-    log.verbose(`Scanning zip file "${actualZipPath}"${parentZipRelativePath ? ` (nested: ${parentZipRelativePath})` : ''} for media files.`);
+    const displayPath = formatZipDisplayPath(zipPathStack);
+    log.verbose(`Scanning zip file "${displayPath}" for media files.`);
 
     if (progressCallback) {
-        state.currentlyScanning = path.basename(actualZipPath);
+        const progressPath = formatZipProgressPath(zipPathStack);
+        state.currentlyScanning = progressPath;
         progressCallback(state.currentlyScanning, state);
     }
 
     const zip = new JSZip();
-    // If parentZipFilePath is provided, we're reading from a nested zip
     let zipBuffer: Buffer;
-    if (parentZipFilePath && parentZipRelativePath) {
-        zipBuffer = await extractZipFromParent(parentZipFilePath, parentZipRelativePath);
-    } 
-    else {
+    try {
         zipBuffer = await fs.readFile(zipFilePath);
+    }
+    catch (error: any) {
+        log.exception(`Failed to read zip file ${displayPath}`, error);
+        state.numFilesFailed++;
+        return;
     }
 
     let unpacked;
@@ -193,7 +225,7 @@ async function scanZipFile(
         unpacked = await zip.loadAsync(zipBuffer);
     } 
     catch (error: any) {
-        log.exception(`Failed to load zip file ${actualZipPath}`, error);
+        log.exception(`Failed to load zip file ${displayPath}`, error);
         state.numFilesFailed++;
         return;
     }
@@ -202,13 +234,13 @@ async function scanZipFile(
         if (!zipObject.dir) {
             const contentType = mime.getType(fileName);
             if (!contentType) {
-                log.verbose(`Ignoring file ${fileName} in zip ${actualZipPath} with unknown content type.`);
+                log.verbose(`Ignoring file ${fileName} in zip ${displayPath} with unknown content type.`);
                 state.numFilesIgnored++;
                 continue;
             } 
 
             if (!shouldIncludeFile(contentType)) {
-                log.verbose(`Ignoring file ${fileName} in zip with ${actualZipPath} specific content type "${contentType}".`);
+                log.verbose(`Ignoring file ${fileName} in zip ${displayPath} with content type "${contentType}".`);
                 state.numFilesIgnored++;
                 continue;
             }
@@ -220,28 +252,89 @@ async function scanZipFile(
             };
 
             if (contentType === "application/zip") {
-                // If it's a zip file, we need to scan its contents recursively.
-                // For nested zips, the actual zip file path is the top-level zip
-                const topLevelZipPath = parentZipFilePath || zipFilePath;
-                await scanZipFile(
-                    topLevelZipPath, // Top-level zip file path
-                    zipFileInfo, 
-                    topLevelZipPath, // Parent zip is the top-level zip
-                    fileName, // Relative path of nested zip within parent
-                    visitFile, 
-                    progressCallback,
-                    state,
-                    options
-                );
+                // If it's a zip file, extract it to a temporary file, scan it, then delete it
+                // Build the path stack for nested zips - add this zip name to the existing stack
+                const nestedZipPathStack = zipPathStack.concat([fileName]);
+                
+                // Extract nested zip from this zip file to temp file
+                let tempZipPath: string | undefined;
+                try {
+                    const nestedZipBuffer = await zipObject.async('nodebuffer');
+                    tempZipPath = path.join(tempDir, `${uuidGenerator.generate()}.zip`);
+                    log.verbose(`Extracting nested zip file "${fileName}" from ${displayPath} to temporary file "${tempZipPath}"`);
+                    await fs.writeFile(tempZipPath, nestedZipBuffer);
+                    
+                    // Verify the file was written correctly
+                    const zipStats = await fs.stat(tempZipPath);
+                    if (zipStats.size === 0) {
+                        log.error(`Extracted nested zip file "${fileName}" from ${displayPath} is empty (0 bytes), skipping`);
+                        state.numFilesFailed++;
+                        log.verbose(`Keeping temporary zip file "${tempZipPath}" for inspection due to error`);
+                        continue;
+                    }
+                    
+                    // Scan the extracted zip file
+                    await scanZipFile(
+                        tempZipPath,
+                        zipFileInfo,
+                        nestedZipPathStack, // Path stack including root zip and nested zips
+                        visitFile, 
+                        progressCallback,
+                        state,
+                        options,
+                        tempDir,
+                        uuidGenerator
+                    );
+                }
+                catch (error) {
+                    // Keep file for inspection on error
+                    if (tempZipPath) {
+                        log.verbose(`Keeping temporary zip file "${tempZipPath}" for inspection due to error`);
+                    }
+                    throw error;
+                }
             }
             else {
-                await visitFile({
-                    filePath: fileName, // Relative path within zip
-                    fileStat: zipFileInfo,
-                    contentType,
-                    labels: [],
-                    zipFilePath: actualZipPath, // Actual filesystem path to the zip file containing this file
-                });
+                // Extract file from zip to temporary file
+                let tempFilePath: string | undefined;
+                try {
+                    const fileBuffer = await zipObject.async('nodebuffer');
+                    const fileExt = path.extname(fileName);
+                    tempFilePath = path.join(tempDir, `${uuidGenerator.generate()}${fileExt}`);
+                    log.verbose(`Extracting file "${fileName}" from zip ${displayPath} to temporary file "${tempFilePath}"`);
+                    await fs.writeFile(tempFilePath, fileBuffer);
+                    
+                    // Verify the file was written correctly
+                    const stats = await fs.stat(tempFilePath);
+                    if (stats.size === 0) {
+                        log.error(`Extracted file "${fileName}" from zip ${displayPath} is empty (0 bytes), skipping`);
+                        state.numFilesFailed++;
+                        log.verbose(`Keeping temporary file "${tempFilePath}" for inspection due to error`);
+                        continue;
+                    }
+
+                    // Create file stat from the actual extracted file
+                    const extractedFileInfo: IFileStat = {
+                        contentType,
+                        length: stats.size,
+                        lastModified: stats.mtime,
+                    };
+
+                    await visitFile({
+                        filePath: tempFilePath, // Temporary file path
+                        fileStat: extractedFileInfo,
+                        contentType,
+                        labels: [],
+                        logicalPath: constructLogicalPath(zipPathStack, fileName), // Logical path showing root zip, parent zips, and file name
+                    });
+                }
+                catch (error) {
+                    // Keep file for inspection on error
+                    if (tempFilePath) {
+                        log.verbose(`Keeping temporary file "${tempFilePath}" for inspection due to error`);
+                    }
+                    throw error;
+                }
             } 
         }
     }
@@ -255,7 +348,9 @@ async function scanDirectory(
     visitFile: SimpleFileCallback, 
     progressCallback: ScanProgressCallback | undefined,
     state: ScannerState,
-    options: ScannerOptions
+    options: ScannerOptions,
+    tempDir: string,
+    uuidGenerator: IUuidGenerator
 ): Promise<void> {
     log.verbose(`Scanning directory "${directoryPath}" for media files.`);
 
@@ -308,7 +403,8 @@ async function scanDirectory(
 
         if (contentType === "application/zip") {
             // If it's a zip file, we need to scan its contents.
-            await scanZipFile(filePath, fileInfo, undefined, undefined, visitFile, progressCallback, state, options);
+            // Start the zip path stack with the root zip file path
+            await scanZipFile(filePath, fileInfo, [filePath], visitFile, progressCallback, state, options, tempDir, uuidGenerator);
         } 
         else {
             // Otherwise, process the file directly.
@@ -317,6 +413,7 @@ async function scanDirectory(
                 fileStat: fileInfo,
                 contentType,
                 labels: [],
+                logicalPath: filePath, // For non-zip files, logicalPath equals filePath
             });
         }
     }
@@ -332,7 +429,9 @@ async function scanPathInternal(
     visitFile: SimpleFileCallback, 
     progressCallback: ScanProgressCallback | undefined,
     state: ScannerState,
-    options: ScannerOptions
+    options: ScannerOptions,
+    tempDir: string,
+    uuidGenerator: IUuidGenerator
 ): Promise<void> {
     let stats;
     try {
@@ -366,15 +465,17 @@ async function scanPathInternal(
 
         if (contentType === "application/zip") {
             // If it's a zip file, we need to scan its contents.
+            // Start the zip path stack with the root zip file path
             await scanZipFile(
                 filePath, 
-                fileInfo, 
-                undefined, // No parent zip
-                undefined, // No relative path in parent
+                fileInfo,
+                [filePath], // Zip path stack starting with root zip path
                 visitFile, 
                 progressCallback,
                 state,
-                options
+                options,
+                tempDir,
+                uuidGenerator
             );
         } 
         else {
@@ -384,11 +485,12 @@ async function scanPathInternal(
                 fileStat: fileInfo,
                 contentType,
                 labels: [],
+                logicalPath: filePath, // For non-zip files, logicalPath equals filePath
             });
         }
     } 
     else if (stats.isDirectory()) {
-        await scanDirectory(filePath, visitFile, progressCallback, state, options);
+        await scanDirectory(filePath, visitFile, progressCallback, state, options, tempDir, uuidGenerator);
     }
 }
 
@@ -399,15 +501,24 @@ export async function scanPaths(
     paths: string[], 
     visitFile: SimpleFileCallback, 
     progressCallback: ScanProgressCallback | undefined,
-    options: ScannerOptions
+    options: ScannerOptions,
+    sessionTempDir: string,
+    uuidGenerator: IUuidGenerator
 ): Promise<void> {
+    // Create a file-scanner subdirectory under the session temp directory
+    const tempDir = path.join(sessionTempDir, 'file-scanner');
+    await fs.mkdir(tempDir, { recursive: true });
+    log.verbose(`Created temporary directory for file scanning: "${tempDir}"`);
+    
     const state: ScannerState = {
         currentlyScanning: undefined,
         numFilesIgnored: 0,
         numFilesFailed: 0,
+        tempDir,
     };
+    
     for (const path of paths) {
-        await scanPathInternal(path, visitFile, progressCallback, state, options);
+        await scanPathInternal(path, visitFile, progressCallback, state, options, tempDir, uuidGenerator);
     }
 }
 
@@ -418,12 +529,21 @@ export async function scanPath(
     filePath: string, 
     visitFile: SimpleFileCallback, 
     progressCallback: ScanProgressCallback | undefined,
-    options: ScannerOptions
+    options: ScannerOptions,
+    sessionTempDir: string,
+    uuidGenerator: IUuidGenerator
 ): Promise<void> {
+    // Create a file-scanner subdirectory under the session temp directory
+    const tempDir = path.join(sessionTempDir, 'file-scanner');
+    await fs.mkdir(tempDir, { recursive: true });
+    log.verbose(`Created temporary directory for file scanning: "${tempDir}"`);
+    
     const state: ScannerState = {
         currentlyScanning: undefined,
         numFilesIgnored: 0,
         numFilesFailed: 0,
+        tempDir,
     };
-    await scanPathInternal(filePath, visitFile, progressCallback, state, options);
+    
+    await scanPathInternal(filePath, visitFile, progressCallback, state, options, tempDir, uuidGenerator);
 }
