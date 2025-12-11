@@ -6,3 +6,4 @@ export * from "./lib/test-timestamp-provider";
 export * from "./lib/test-random-generator";
 export * from "./lib/dir";
 export * from "./lib/fs";
+export * from "./lib/find-available-port";

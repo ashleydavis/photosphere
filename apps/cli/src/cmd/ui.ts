@@ -8,29 +8,10 @@ import { createZipStaticMiddleware } from '../lib/zip-static-middleware';
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { resolveKeyPath } from '../lib/init-cmd';
-import { createServer as createHttpServer } from 'http';
-import { AddressInfo } from 'net';
-
 // @ts-ignore
 import pfe from  "../../pfe.zip" with { type: "file" } ;
 import { getDirectoryForCommand } from '../lib/directory-picker';
-
-//
-// Find an available port by creating a temporary server on port 0
-//
-async function findAvailablePort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-        const server = createHttpServer();
-        server.listen(0, () => {
-            const addressInfo = server.address() as AddressInfo;
-            const port = addressInfo.port;
-            server.close(() => {
-                resolve(port);
-            });
-        });
-        server.on('error', reject);
-    });
-}
+import { findAvailablePort } from 'node-utils';
 
 export interface IUiCommandOptions {
     //
