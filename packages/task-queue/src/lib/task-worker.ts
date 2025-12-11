@@ -5,7 +5,7 @@
 //
 
 import { serializeError } from "serialize-error";
-import { initWorkerContext, type IWorkerContext, type IWorkerOptions } from "./worker-init";
+import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./worker-init";
 
 //
 // Handler registry - handlers are stored in a Map
@@ -41,6 +41,9 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
     const { taskId, taskType, data, workingDirectory } = message;
 
     try {
+        // Set task ID for logging prefix
+        setWorkerTaskId(taskId);
+
         // Get handler (registered statically when worker module loads)
         const registeredTypes = getRegisteredHandlerTypes();
         const handler = getHandler(taskType);
@@ -50,6 +53,9 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
 
         // Execute the handler with context
         const outputs = await handler(data, workingDirectory, context);
+        
+        // Clear task ID from logging
+        setWorkerTaskId(null);
         
         // Send success result back to main thread
         self.postMessage({
@@ -61,7 +67,11 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
                 outputs: outputs
             }
         });
-    } catch (error: any) {
+    }
+    catch (error: any) {
+        // Clear task ID from logging
+        setWorkerTaskId(null);
+        
         // Send error result back to main thread
         self.postMessage({
             type: "error",

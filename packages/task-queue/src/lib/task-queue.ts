@@ -686,7 +686,7 @@ export class TaskQueue implements ITaskQueue {
         // Increment timeout count
         task.timeoutCount++;
 
-        console.error(`[Task Queue] Task ${taskId} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
+        console.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
 
         // Terminate the worker
         try {
@@ -867,6 +867,17 @@ export class TaskQueue implements ITaskQueue {
             this.allTasksResolver = null;
             resolver.resolve();
         }
+    }
+
+    //
+    // Formats a task ID to show only first 2 and last 2 characters.
+    // Example: "12345678-1234-1234-1234-123456789abc" -> "12bc"
+    //
+    private formatTaskId(taskId: string): string {
+        if (taskId.length <= 4) {
+            return taskId;
+        }
+        return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
     }
 
     //
