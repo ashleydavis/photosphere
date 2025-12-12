@@ -713,7 +713,7 @@ jobs:
 
   build-macos-x64:
     timeout-minutes: 20
-    runs-on: macos-13 # x64 architecture
+    runs-on: macos-15-intel # x64 architecture
     needs: [unit-tests, compile]
     if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
