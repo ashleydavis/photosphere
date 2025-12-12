@@ -45,13 +45,25 @@ export class TaskQueueProvider implements ITaskQueueProvider {
                         percentFailed: totalCompleted > 0 ? Math.round((failedCount / totalCompleted) * 100 * 100) / 100 : 0
                     };
                     
+                    // Create bar chart data for tasks processed per worker
+                    const tasksProcessedChart = {
+                        __barChart: true,
+                        title: "Tasks Processed per Worker",
+                        items: workers.map(worker => ({
+                            label: `Worker ${worker.workerId}`,
+                            value: worker.tasksProcessed,
+                            displayValue: worker.tasksProcessed
+                        }))
+                    };
+                    
                     return {
                         workers,
                         taskStats,
                         completedTasks: this.taskQueueInstance!.getAllTaskResults().filter(t => t.status === TaskStatus.Completed || t.status === TaskStatus.Failed),
                         succeededTasks: this.taskQueueInstance!.getSuccessfulTaskResults(),
                         failedTasks: this.taskQueueInstance!.getFailedTaskResults(),
-                        workerStats: this.calculateWorkerStats(workers)
+                        workerStats: this.calculateWorkerStats(workers),
+                        tasksProcessedChart
                     };
                 });
                 
