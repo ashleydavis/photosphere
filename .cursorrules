@@ -74,6 +74,8 @@ catch (error) {
 
 **ALWAYS** run `bun run c` on the entire project before considering work complete. Do not assume the code compiles just because the linter shows no errors. TypeScript compilation may catch errors that the linter doesn't.
 
+**IMPORTANT:** Only run `bun run c` when you are completely finished with a task, not after each individual change. This reduces unnecessary compilation runs and speeds up development.
+
 **Before marking any task as complete:**
 1. Run `bun run c` to compile the entire project
 2. Fix any compilation errors

@@ -4,13 +4,19 @@
 // This is the entry point for all workers created by the CLI package
 //
 
-import { initWorker, initWorkerContext, type IWorkerOptions } from "task-queue";
+import { initWorker, initWorkerContext, type IWorkerOptions, registerHandler } from "task-queue";
 import { initTaskHandlers } from "api";
+import { testSleepHandler } from "./src/lib/test-debug.worker";
 
 //
 // Register all task handlers
 //
 initTaskHandlers();
+
+//
+// Register CLI-specific task handlers
+//
+registerHandler("test-sleep", testSleepHandler);
 
 //
 // Read worker options from environment variable

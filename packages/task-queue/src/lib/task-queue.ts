@@ -83,6 +83,23 @@ export interface IExecutionStats {
 }
 
 //
+// Worker state information for debugging
+//
+export interface IWorkerInfo {
+    workerId: number;
+    isReady: boolean;
+    isIdle: boolean;
+    currentTaskId: string | null;
+    currentTaskType: string | null;
+    currentTaskRunningTimeMs: number | null; // Time in milliseconds the current task has been running, or null if no task is running
+}
+
+//
+// Callback for worker state changes
+//
+export type WorkerStateChangeCallback = (workers: IWorkerInfo[]) => void;
+
+//
 // Task queue interface
 //
 export interface ITaskQueue {
@@ -148,6 +165,16 @@ export interface ITaskQueue {
     getExecutionStats(): IExecutionStats;
 
     //
+    // Gets current state of all workers for debugging.
+    //
+    getWorkerState(): IWorkerInfo[];
+
+    //
+    // Sets a callback to be notified when worker state changes.
+    //
+    onWorkerStateChange(callback: WorkerStateChangeCallback): void;
+
+    //
     // Shuts down the task queue and terminates all workers.
     //
     shutdown(): void;
@@ -184,6 +211,7 @@ export class TaskQueue implements ITaskQueue {
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
     private workerOptions?: IWorkerOptions;
+    private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -418,6 +446,46 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
+    // Gets current state of all workers for debugging.
+    //
+    getWorkerState(): IWorkerInfo[] {
+        return this.workers.map(worker => {
+            let currentTaskRunningTimeMs: number | null = null;
+            if (worker.currentTaskId) {
+                const task = this.tasks.get(worker.currentTaskId);
+                if (task && task.startedAt) {
+                    currentTaskRunningTimeMs = Date.now() - task.startedAt.getTime();
+                }
+            }
+            
+            return {
+                workerId: worker.workerId,
+                isReady: worker.isReady,
+                isIdle: worker.isIdle,
+                currentTaskId: worker.currentTaskId,
+                currentTaskType: worker.currentTaskId ? this.tasks.get(worker.currentTaskId)?.type || null : null,
+                currentTaskRunningTimeMs
+            };
+        });
+    }
+
+    //
+    // Sets a callback to be notified when worker state changes.
+    //
+    onWorkerStateChange(callback: WorkerStateChangeCallback): void {
+        this.workerStateChangeCallback = callback;
+    }
+
+    //
+    // Internal: Notifies callback of worker state changes.
+    //
+    private notifyWorkerStateChange(): void {
+        if (this.workerStateChangeCallback) {
+            this.workerStateChangeCallback(this.getWorkerState());
+        }
+    }
+
+    //
     // Internal: Creates a single worker and adds it to the pool.
     // Returns the worker state.
     //
@@ -472,6 +540,7 @@ export class TaskQueue implements ITaskQueue {
         if (this.workers.length > this.peakWorkers) {
             this.peakWorkers = this.workers.length;
         }
+        this.notifyWorkerStateChange();
         return workerState;
     }
 
@@ -533,6 +602,7 @@ export class TaskQueue implements ITaskQueue {
         task.startedAt = new Date();
         availableWorker.isIdle = false;
         availableWorker.currentTaskId = taskId;
+        this.notifyWorkerStateChange();
 
         // Set up timeout for this task
         const timeoutId = setTimeout(() => {
@@ -571,6 +641,7 @@ export class TaskQueue implements ITaskQueue {
         if (data && typeof data === "object" && "type" in data && data.type === "ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
+            this.notifyWorkerStateChange();
             this.processNextTask(); // Try to process pending tasks now that worker is ready
             return;
         }
@@ -608,6 +679,7 @@ export class TaskQueue implements ITaskQueue {
             workerState.isIdle = true;
             workerState.currentTaskId = null;
 
+            this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(fullResult);
             this.resolveTask(taskId, fullResult);
             this.processNextTask();
@@ -658,6 +730,7 @@ export class TaskQueue implements ITaskQueue {
             workerState.isIdle = true;
             workerState.currentTaskId = null;
 
+            this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
             this.processNextTask();
@@ -776,6 +849,7 @@ export class TaskQueue implements ITaskQueue {
         const index = this.workers.indexOf(oldWorkerState);
         if (index > -1) {
             this.workers.splice(index, 1);
+            this.notifyWorkerStateChange();
         }
 
         // Create replacement worker
@@ -824,6 +898,7 @@ export class TaskQueue implements ITaskQueue {
         });
 
         this.workers.push(newWorkerState);
+        this.notifyWorkerStateChange();
     }
 
     //

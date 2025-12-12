@@ -399,7 +399,7 @@ Resources:
         .command("test-debug", { hidden: true })
         .description("Temporary command for testing the debug REST API. Runs an infinite loop that updates debug data.")
         .option(...verboseOption)
-        .action(testDebugCommand);
+        .action(initContext(testDebugCommand));
 
     program
         .command("version")
