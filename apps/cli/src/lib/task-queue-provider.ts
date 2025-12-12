@@ -71,6 +71,8 @@ export class TaskQueueProvider implements ITaskQueueProvider {
         maxWorkers: number;
         currentWorkers: number;
         allocatedWorkers: number;
+        totalTasksProcessed: number;
+        averageTasksPerWorker: number;
         percentCurrentToMax: number;
         percentAllocatedToCurrent: number;
         percentAllocatedToMax: number;
@@ -78,6 +80,8 @@ export class TaskQueueProvider implements ITaskQueueProvider {
         const maxWorkers = this.maxWorkers;
         const currentWorkers = workers.length;
         const allocatedWorkers = workers.filter(w => w.isReady).length;
+        const totalTasksProcessed = workers.reduce((sum, w) => sum + w.tasksProcessed, 0);
+        const averageTasksPerWorker = currentWorkers > 0 ? totalTasksProcessed / currentWorkers : 0;
         
         const percentCurrentToMax = maxWorkers > 0 ? (currentWorkers / maxWorkers) * 100 : 0;
         const percentAllocatedToCurrent = currentWorkers > 0 ? (allocatedWorkers / currentWorkers) * 100 : 0;
@@ -87,6 +91,8 @@ export class TaskQueueProvider implements ITaskQueueProvider {
             maxWorkers,
             currentWorkers,
             allocatedWorkers,
+            totalTasksProcessed,
+            averageTasksPerWorker: Math.round(averageTasksPerWorker * 100) / 100,
             percentCurrentToMax: Math.round(percentCurrentToMax * 100) / 100,
             percentAllocatedToCurrent: Math.round(percentAllocatedToCurrent * 100) / 100,
             percentAllocatedToMax: Math.round(percentAllocatedToMax * 100) / 100

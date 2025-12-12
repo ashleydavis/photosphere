@@ -92,6 +92,7 @@ export interface IWorkerInfo {
     currentTaskId: string | null;
     currentTaskType: string | null;
     currentTaskRunningTimeMs: number | null; // Time in milliseconds the current task has been running, or null if no task is running
+    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
 }
 
 //
@@ -189,6 +190,7 @@ interface IWorkerState {
     isReady: boolean; // Worker has sent "ready" message and can process tasks
     isIdle: boolean; // Worker is ready and not currently processing a task
     currentTaskId: string | null;
+    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
 }
 
 //
@@ -464,7 +466,8 @@ export class TaskQueue implements ITaskQueue {
                 isIdle: worker.isIdle,
                 currentTaskId: worker.currentTaskId,
                 currentTaskType: worker.currentTaskId ? this.tasks.get(worker.currentTaskId)?.type || null : null,
-                currentTaskRunningTimeMs
+                currentTaskRunningTimeMs,
+                tasksProcessed: worker.tasksProcessed
             };
         });
     }
@@ -517,7 +520,8 @@ export class TaskQueue implements ITaskQueue {
             workerId: this.workers.length + 1,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false, // Will be set to true when worker is ready and idle
-            currentTaskId: null
+            currentTaskId: null,
+            tasksProcessed: 0
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
@@ -678,6 +682,7 @@ export class TaskQueue implements ITaskQueue {
 
             workerState.isIdle = true;
             workerState.currentTaskId = null;
+            workerState.tasksProcessed++;
 
             this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(fullResult);
@@ -729,6 +734,7 @@ export class TaskQueue implements ITaskQueue {
 
             workerState.isIdle = true;
             workerState.currentTaskId = null;
+            workerState.tasksProcessed++;
 
             this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(result);
@@ -880,7 +886,8 @@ export class TaskQueue implements ITaskQueue {
             workerId: oldWorkerState.workerId,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false,
-            currentTaskId: null
+            currentTaskId: null,
+            tasksProcessed: oldWorkerState.tasksProcessed // Preserve task count when replacing worker
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
