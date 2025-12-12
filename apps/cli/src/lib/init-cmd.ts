@@ -288,11 +288,12 @@ export function initContext<TArgs extends any[], TReturn>(
         // Check if command supports --workers and --timeout options and use them if provided
         const workers = options.workers;
         const timeout = options.timeout;
+        const debug = process.argv.includes('--debug');
         const taskQueueProvider = new TaskQueueProvider(workers, timeout, {
             verbose: options.verbose,
             tools: options.tools,
             sessionId,
-        });
+        }, debug);
         
         const context: ICommandContext = {
             uuidGenerator,
