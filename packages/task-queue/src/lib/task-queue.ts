@@ -559,8 +559,13 @@ export class TaskQueue implements ITaskQueue {
             return;
         }
 
-        // Find an available idle worker
-        let availableWorker = this.workers.find(w => w.isIdle);
+        // Find an available idle worker that has processed the least tasks
+        const idleWorkers = this.workers.filter(w => w.isIdle);
+        let availableWorker = idleWorkers.length > 0
+            ? idleWorkers.reduce((least, current) => 
+                current.tasksProcessed < least.tasksProcessed ? current : least
+            )
+            : undefined;
         
         // If no idle worker available and we haven't reached maxWorkers, create workers for pending tasks
         if (!availableWorker && this.workers.length < this.maxWorkers) {
