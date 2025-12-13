@@ -58,9 +58,6 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     if (!hashedFile) {
         // Not in cache - compute hash
         // filePath is always a valid file (already extracted if from zip)
-        const tempDir = path.join(os.tmpdir(), `photosphere`, `check`);
-        await ensureDir(tempDir);
-        
         hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
         if (!hashedFile) {
             return { hashedFile: undefined, alreadyInDatabase: false, hashFromCache: false };
