@@ -411,7 +411,7 @@ Resources:
     if (process.argv.includes('--debug')) {
         try {
             const { url } = await startDebugServer({
-                initialData: { message: "Hello world" },
+                initialData: {},
                 openBrowser: true
             });
             console.log(pc.green(`Debug REST API server started on ${url}`));
