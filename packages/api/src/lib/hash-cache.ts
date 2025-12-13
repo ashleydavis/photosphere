@@ -1,11 +1,14 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { createHash } from "crypto";
 import { ensureDir } from "node-utils";
 
 /**
- * Starts with:
- *  - Version: 4 bytes
- *  - Entry count: 4 bytes
+ * File structure:
+ *  - Version: 4 bytes (uint32)
+ *  - Entry count: 4 bytes (uint32)
+ *  - Entries: variable length
+ *  - Checksum: 32 bytes (SHA-256) at the end
  *
  * Hash cache entry structure:
  * - Path length: 4 bytes (uint32)
@@ -14,6 +17,8 @@ import { ensureDir } from "node-utils";
  * - File size: 6 bytes (uint48)
  * - Last modified: 6 bytes (uint48)
  */
+
+const HASH_CACHE_VERSION = 1;
 
 export class HashCache {
     private buffer: Buffer | null = null;
@@ -41,73 +46,100 @@ export class HashCache {
     }
 
     /**
+     * Computes SHA-256 checksum for corruption detection
+     */
+    private computeChecksum(data: Buffer): Buffer {
+        return createHash('sha256').update(data).digest();
+    }
+
+    /**
      * Loads the hash cache from storage.
      */
     async load(): Promise<boolean> {
         const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
-        try {
-            const cacheData = await fs.readFile(cachePath);
-            if (cacheData) {
-                this.buffer = cacheData;
-                this.createLookupTable();
-                this.initialized = true;
-                return true;
-            }
-        } catch (error) {
-            // File doesn't exist or can't be read - create new cache
+        
+        // Check if file exists first
+        if (!await fs.exists(cachePath)) {
+            // File doesn't exist - create new cache
+            this.buffer = Buffer.alloc(1024); // Start with 1KB
+            this.entryCount = 0;
+            this.initialized = true;
+            return false;
         }
-
-        // Create a new empty cache if it doesn't exist
-        this.buffer = Buffer.alloc(1024); // Start with 1KB
-        this.entryCount = 0;
+        
+        // File exists - read and verify it
+        const cacheData = await fs.readFile(cachePath);
+        if (cacheData.length < 40) {
+            throw new Error(`Hash cache file is too small: expected at least 40 bytes (4 for version + 4 for entry count + 32 for checksum), got ${cacheData.length} bytes`);
+        }
+        
+        // Extract checksum from the last 32 bytes
+        const storedChecksum = cacheData.subarray(cacheData.length - 32);
+        const dataWithoutChecksum = cacheData.subarray(0, cacheData.length - 32);
+        
+        // Verify checksum
+        const computedChecksum = this.computeChecksum(dataWithoutChecksum);
+        if (!computedChecksum.equals(storedChecksum)) {
+            // Checksum mismatch - cache is corrupted
+            throw new Error("Hash cache checksum mismatch - cache may be corrupted");
+        }
+        
+        // Read and verify version
+        const version = dataWithoutChecksum.readUInt32LE(0);
+        if (version < HASH_CACHE_VERSION) {
+            // Older version - delete the cache and start fresh
+            await fs.unlink(cachePath);
+            this.buffer = Buffer.alloc(1024); // Start with 1KB
+            this.entryCount = 0;
+            this.initialized = true;
+            return false;
+        }
+        else if (version > HASH_CACHE_VERSION) {
+            // Newer version - can't read it
+            throw new Error(`Hash cache version is newer than supported: file version ${version}, supported version ${HASH_CACHE_VERSION}`);
+        }
+        
+        this.buffer = dataWithoutChecksum;
+        this.createLookupTable();
         this.initialized = true;
-
-        return false;
+        return true;
     }
 
     /**
      * Create the lookup table of index to offset.
      */
     private createLookupTable(): void {
-        if (!this.buffer || this.buffer.length === 0) {
+        if (!this.buffer || this.buffer.length < 8) {
             this.entryCount = 0;
             this.offsetLookup = [];
             return;
         }
 
-        let offset = 0;
-        let count = 0;
+        // Read entry count from bytes 4-7 (after version header)
+        this.entryCount = this.buffer.readUInt32LE(4);
         this.offsetLookup = [];
 
-        //todo: be good to just load entryCount from the buffer.
+        let offset = 8; // Start after version and entry count headers
 
-        while (offset < this.buffer.length) {
-            // Check if we've reached the end of the entries
-            if (this.buffer[offset] === 0 && this.buffer[offset + 1] === 0) { //todo: needed?
-                break;
+        for (let i = 0; i < this.entryCount; i++) {
+            if (offset + 4 > this.buffer.length) {
+                throw new Error("Hash cache may be corrupted: insufficient data for entry");
             }
 
             // Read path length
             const pathLength = this.buffer.readUInt32LE(offset);
-            if (pathLength === 0) {  //todo: needed?
-                break; // End of entries
+            const entrySize = this.entrySize(pathLength);
+
+            if (offset + entrySize > this.buffer.length) {
+                throw new Error("Hash cache may be corrupted: entry extends beyond buffer");
             }
 
             // Store the offset in our lookup table
             this.offsetLookup.push(offset);
 
             // Skip to the next entry
-            offset += this.entrySize(pathLength);
-            count++;
-
-            // Sanity check to prevent infinite loops
-            if (offset > this.buffer.length) {
-                console.warn("Hash cache may be corrupted");
-                break;
-            }
+            offset += entrySize;
         }
-
-        this.entryCount = count;
     }
 
     /**
@@ -121,9 +153,9 @@ export class HashCache {
             return;
         }
 
-        // Check current usage
-        let usedBytes = 0;
-        let offset = 0;
+        // Check current usage (entries start at offset 8 after version and entry count headers)
+        let usedBytes = 8; // Account for version and entry count headers
+        let offset = 8;
 
         for (let i = 0; i < this.entryCount; i++) {
             const pathLength = this.buffer.readUInt32LE(offset);
@@ -151,22 +183,32 @@ export class HashCache {
 
         const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
 
-        // Calculate actual used size
-        let offset = 0;
+        // Calculate actual used size (entries start at offset 8 after version and entry count headers)
+        let offset = 8; // Start after version and entry count headers
 
         for (let i = 0; i < this.entryCount; i++) {
             const pathLength = this.buffer.readUInt32LE(offset);
             offset += this.entrySize(pathLength);
         }
 
-        // Write only the used portion of the buffer
-        const usedBuffer = this.buffer.slice(0, offset);
+        // Create buffer with version + entry count headers + entries
+        const entryBuffer = this.buffer.subarray(8, offset); // Entries only (skip the 8-byte header area)
+        const headerBuffer = Buffer.alloc(8);
+        headerBuffer.writeUInt32LE(HASH_CACHE_VERSION, 0);
+        headerBuffer.writeUInt32LE(this.entryCount, 4);
+        const dataBuffer = Buffer.concat([headerBuffer, entryBuffer]);
+        
+        // Compute SHA-256 checksum of the data
+        const checksum = this.computeChecksum(dataBuffer);
+        
+        // Create final buffer with checksum appended
+        const finalBuffer = Buffer.concat([dataBuffer, checksum]);
         
         // Use atomic write: write to temp file first, then rename
         // This ensures workers always read a complete file, never a partially written one
         const tempPath = `${cachePath}.tmp`;
         await ensureDir(this.cacheDir);
-        await fs.writeFile(tempPath, usedBuffer);
+        await fs.writeFile(tempPath, finalBuffer);
         
         // Rename is atomic on most filesystems, ensuring workers see either old or new complete file
         await fs.rename(tempPath, cachePath);
@@ -325,7 +367,7 @@ export class HashCache {
             this.ensureCapacity(entrySize);
 
             // Get offset where the new entry should be inserted
-            let newEntryOffset = 0;
+            let newEntryOffset = 8; // Entries start at offset 8 after version and entry count headers
             if (insertionIndex > 0) {
                 newEntryOffset = this.getEntryOffsetByIndex(insertionIndex - 1);
                 if (newEntryOffset >= 0) {
