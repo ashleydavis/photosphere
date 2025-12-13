@@ -1,16 +1,10 @@
 import { createHash } from "node:crypto";
 import { IFileStat } from "./file-scanner";
-import * as fs from "fs/promises";
 import { createReadStream } from "fs";
-import path from "path";
-import os from "os";
-import mime from "mime";
 import { IHashedData } from "merkle-tree";
 import { HashCache } from "./hash-cache";
 import { validateFile } from "./validation";
-import { log, IUuidGenerator } from "utils";
-import { extractFileFromZipRecursive } from "./zip-utils";
-import { writeStreamToFile } from "node-utils";
+import { log } from "utils";
 
 //
 // Computes a hash from a stream.
