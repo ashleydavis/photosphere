@@ -29,7 +29,7 @@ export interface ICheckFileResult {
         lastModified: string; // ISO string
         length: number;
     };
-    alreadyInDatabase: boolean;
+    matchingRecordsCount: number;
     hashFromCache: boolean; // true if hash was loaded from cache, false if computed
 }
 
@@ -54,7 +54,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
         // filePath is always a valid file (already extracted if from zip)
         hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
         if (!hashedFile) {
-            return { hashedFile: undefined, alreadyInDatabase: false, hashFromCache: false };
+            return { hashedFile: undefined, matchingRecordsCount: 0, hashFromCache: false };
         }
     }
     
@@ -67,7 +67,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     // Check if file is already in database
     const localHashStr = hashedFile.hash.toString("hex");
     const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: This is very slow, especially when the hash is not found.
-    const alreadyInDatabase = records.length > 0;
+    const matchingRecordsCount = records.length;
     
     return {
         hashedFile: {
@@ -75,7 +75,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
             lastModified: hashedFile.lastModified.toISOString(),
             length: hashedFile.length,
         },
-        alreadyInDatabase,
+        matchingRecordsCount,
         hashFromCache,
     };
 }
