@@ -135,20 +135,6 @@ export interface ITaskQueue {
     //
     getTaskResult(id: string): ITaskResult | undefined;
 
-    //
-    // Gets results for all tasks.
-    //
-    getAllTaskResults(): ITaskResult[];
-
-    //
-    // Gets results for all successful tasks.
-    //
-    getSuccessfulTaskResults(): ITaskResult[];
-
-    //
-    // Gets results for all failed tasks.
-    //
-    getFailedTaskResults(): ITaskResult[];
 
     //
     // Awaits the completion of all tasks and an empty queue.
@@ -209,6 +195,8 @@ export class TaskQueue implements ITaskQueue {
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private tasksQueued: number = 0;
+    private tasksCompleted: number = 0;
+    private tasksFailed: number = 0;
     private workerPath: string;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
@@ -404,8 +392,6 @@ export class TaskQueue implements ITaskQueue {
     getStatus(): IQueueStatus {
         let pending = 0;
         let running = 0;
-        let completed = 0;
-        let failed = 0;
 
         for (const task of this.tasks.values()) {
             switch (task.status) {
@@ -415,21 +401,15 @@ export class TaskQueue implements ITaskQueue {
                 case TaskStatus.Running:
                     running++;
                     break;
-                case TaskStatus.Completed:
-                    completed++;
-                    break;
-                case TaskStatus.Failed:
-                    failed++;
-                    break;
             }
         }
 
         return {
             pending,
             running,
-            completed,
-            failed,
-            total: this.tasks.size
+            completed: this.tasksCompleted,
+            failed: this.tasksFailed,
+            total: this.tasks.size + this.tasksCompleted + this.tasksFailed
         };
     }
 
@@ -689,9 +669,15 @@ export class TaskQueue implements ITaskQueue {
             workerState.currentTaskId = null;
             workerState.tasksProcessed++;
 
+            this.tasksCompleted++;
+
             this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(fullResult);
             this.resolveTask(taskId, fullResult);
+            
+            // Remove completed task from memory after reporting result
+            this.tasks.delete(taskId);
+            
             this.processNextTask();
             return;
         }
@@ -741,9 +727,15 @@ export class TaskQueue implements ITaskQueue {
             workerState.currentTaskId = null;
             workerState.tasksProcessed++;
 
+            this.tasksFailed++;
+
             this.notifyWorkerStateChange();
             this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
+            
+            // Remove failed task from memory after reporting result
+            this.tasks.delete(taskId);
+            
             this.processNextTask();
             return;
         }
