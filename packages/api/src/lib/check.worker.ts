@@ -44,12 +44,7 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     // Load hash cache (read-only)
     const localHashCache = new HashCache(hashCacheDir, true); // readonly = true
     await localHashCache.load();
-    
-    // Recreate storage and metadata collection in the worker
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
-    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
-    const metadataCollection = database.metadataCollection;
+   
     
     // Check cache first
     let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
@@ -64,6 +59,12 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
         }
     }
     
+    // Recreate storage and metadata collection in the worker
+    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
+    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const metadataCollection = database.metadataCollection;
+
     // Check if file is already in database
     const localHashStr = hashedFile.hash.toString("hex");
     const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: This is very slow, especially when the hash is not found.
