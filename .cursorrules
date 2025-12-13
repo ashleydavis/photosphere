@@ -68,6 +68,35 @@ catch (error) {
 }
 ```
 
+### TypeScript: Avoid `any` type
+
+**NEVER** use the `any` type unless absolutely necessary. When `any` is required, it must be accompanied by a comment explaining why it's necessary and what the actual type should be.
+
+**Why:** Using `any` defeats the purpose of TypeScript's type safety and can lead to runtime errors that could have been caught at compile time.
+
+**Instead:**
+- Use proper TypeScript types
+- Use `unknown` for error handling when the error type is uncertain
+- Use union types with `undefined` for optional values (e.g., `string | undefined`)
+- Use generic types when appropriate
+- If you must use `any`, add a comment explaining why and what the actual type should be
+
+**Bad:**
+```typescript
+let data: any = getData();
+function process(item: any) { ... }
+```
+
+**Good:**
+```typescript
+let data: MyDataType | undefined = getData();
+function process(item: IProcessableItem) { ... }
+catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    // handle error
+}
+```
+
 ## Critical Workflow Rules
 
 ### NEVER finish up until all code is compiling
