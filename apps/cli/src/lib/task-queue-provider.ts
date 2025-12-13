@@ -34,7 +34,7 @@ export class TaskQueueProvider implements ITaskQueueProvider {
                 registerStateProvider("taskQueue", () => {
                     const workers = this.taskQueueInstance!.getWorkerState();
                     const queueStatus = this.taskQueueInstance!.getStatus();
-                    const succeededCount = this.taskQueueInstance!.getSuccessfulTaskResults().length;
+                    const succeededCount = queueStatus.completed;
                     const failedCount = queueStatus.failed;
                     const totalCompleted = succeededCount + failedCount;
                     
@@ -59,9 +59,6 @@ export class TaskQueueProvider implements ITaskQueueProvider {
                     return {
                         workers,
                         taskStats,
-                        completedTasks: this.taskQueueInstance!.getAllTaskResults().filter(t => t.status === TaskStatus.Completed || t.status === TaskStatus.Failed),
-                        succeededTasks: this.taskQueueInstance!.getSuccessfulTaskResults(),
-                        failedTasks: this.taskQueueInstance!.getFailedTaskResults(),
                         workerStats: this.calculateWorkerStats(workers),
                         tasksProcessedChart
                     };
