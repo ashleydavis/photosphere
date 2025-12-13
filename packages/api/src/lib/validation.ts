@@ -1,4 +1,3 @@
-import { IFileInfo } from "storage";
 import { getFileInfo } from "tools";
 import { log } from "utils";
 import { IFileStat } from "./file-scanner";
