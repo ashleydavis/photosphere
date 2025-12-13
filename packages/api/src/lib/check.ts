@@ -6,6 +6,8 @@ import { TaskStatus } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
 import { ITaskQueueProvider } from "./verify";
 import { IStorageDescriptor, IS3Credentials } from "storage";
+import * as os from "os";
+import * as path from "path";
 
 //
 // Progress callback for checkPaths that includes the current summary
@@ -17,15 +19,18 @@ export type CheckPathsProgressCallback = (currentlyScanning: string | undefined,
 //
 export async function checkPaths(
     storageDescriptor: IStorageDescriptor,
-    localHashCache: HashCache,
     paths: string[],
     progressCallback: CheckPathsProgressCallback | undefined,
     taskQueueProvider: ITaskQueueProvider,
-    hashCacheDir: string,
     s3Config: IS3Credentials | undefined,
     uuidGenerator: IUuidGenerator,
     sessionTempDir: string
 ): Promise<IAddSummary> {
+    // Create hash cache for file hashing optimization
+    const hashCacheDir = path.join(os.tmpdir(), "photosphere");
+    const localHashCache = new HashCache(hashCacheDir);
+    await localHashCache.load();
+
     const summary: IAddSummary = {
         filesAdded: 0,
         filesAlreadyAdded: 0,

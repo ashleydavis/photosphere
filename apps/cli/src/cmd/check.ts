@@ -5,9 +5,7 @@ import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { getS3Config } from "../lib/config";
 import { getFileLogger } from "../lib/log";
-import * as os from 'os';
-import * as path from 'path';
-import { checkPaths, HashCache } from "api";
+import { checkPaths } from "api";
 import { FileStorage, IStorageDescriptor } from "storage";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
@@ -19,11 +17,6 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId, sessionTempDir } = context;
     const { databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
-    
-    // Create hash cache for file hashing optimization
-    const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
-    const localHashCache = new HashCache(localHashCachePath);
-    await localHashCache.load();
 
     // Create storage descriptor for passing to workers
     const resolvedKeyPath = await resolveKeyPath(options.key);
@@ -39,7 +32,6 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
 
     const addSummary = await checkPaths(
         storageDescriptor,
-        localHashCache,
         paths,
         (currentlyScanning, summary) => {
             let progressMessage = `Already in DB: ${pc.green(summary.filesAlreadyAdded)}`;
@@ -57,7 +49,6 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
             writeProgress(progressMessage);
         },
         context.taskQueueProvider,
-        localHashCachePath,
         s3Config,
         uuidGenerator,
         sessionTempDir

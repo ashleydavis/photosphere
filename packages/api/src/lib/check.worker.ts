@@ -45,7 +45,6 @@ export async function checkFileHandler(data: ICheckFileData, workingDirectory: s
     const localHashCache = new HashCache(hashCacheDir, true); // readonly = true
     await localHashCache.load();
    
-    
     // Check cache first
     let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
     const hashFromCache = !!hashedFile;
