@@ -74,8 +74,8 @@ export async function checkPaths(
                     
                     // Use database lookup result from worker
                     // Use logicalPath for display (always set)
-                    if (checkResult.alreadyInDatabase) {
-                        log.verbose(`File "${taskData.logicalPath}" with hash "${checkResult.hashedFile.hash}", matches existing records.`);
+                    if (checkResult.matchingRecordsCount > 0) {
+                        log.verbose(`File "${taskData.logicalPath}" with hash "${checkResult.hashedFile.hash}", matches ${checkResult.matchingRecordsCount} existing records.`);
                         summary.filesAlreadyAdded++;
                     } 
                     else {
