@@ -452,22 +452,17 @@ Resources:
 //
 // Handles errors in a consistent way.
 //
-function handleError(error: any) {
+function handleError(error: any, errorType: string | undefined) {
     if (error instanceof FatalError) {
         log.error(`\n\n${pc.red(error.message)}`);
         return;
     }
-    
-    // For other errors, show full details
-    log.error(pc.red('An error occurred:'));
-    if (error.message) {
-        log.error(pc.red(error.message).toString());
-    }
-    if (error.stack) {
-        log.error((pc.red(error.stack).toString()));
-    }
+
+    if (errorType) {
+        log.exception(`An ${errorType} error occurred`, error);    
+    } 
     else {
-        log.error(pc.red(error.toString()).toString());
+        log.exception('An unknown error occurred', error);
     }
 
     console.log('');
@@ -477,18 +472,18 @@ function handleError(error: any) {
 
 // Handle unhandled errors
 process.on('uncaughtException', (error) => {
-    handleError(error);
+    handleError(error, 'uncaughtException');
     process.exit(1);
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-    handleError(reason);
+    handleError(reason, 'unhandledRejection');
     process.exit(1);
 });
 
 main()
     .catch(async (error) => {
-        handleError(error);
+        handleError(error, undefined);
         return exit(1);
     });
