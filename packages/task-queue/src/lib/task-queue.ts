@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { IUuidGenerator } from "utils";
+import { IUuidGenerator, log } from "utils";
 import { serializeError, deserializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
 import type { IWorkerOptions } from "./worker-init";
@@ -508,13 +508,13 @@ export class TaskQueue implements ITaskQueue {
             this.handleWorkerMessage(workerState, event.data);
         });
 
-        worker.addEventListener("error", (error) => {
-            console.error(`[Worker ${workerState.workerId}] Error: ${error.message || "Unknown error"}`);
+        worker.addEventListener("error", (error: any) => {
+            log.exception(`Error from worker ${workerState.workerId}`, error);
             this.handleWorkerCrash(workerState);
         });
 
-        worker.addEventListener("messageerror", (error) => {
-            console.error(`[Worker ${workerState.workerId}] Message error:`, error);
+        worker.addEventListener("messageerror", (error: any) => {
+            log.exception(`Error from worker ${workerState.workerId}`, error);
             this.handleWorkerCrash(workerState);
         });
 
@@ -609,8 +609,9 @@ export class TaskQueue implements ITaskQueue {
                 workingDirectory: task.workingDirectory,
             };
             availableWorker.worker.postMessage(executeMsg);
-        } catch (error) {
-            console.error(`Error sending task to worker ${availableWorker.workerId}:`, error);
+        } 
+        catch (error: any) {
+            log.exception(`Error sending task to worker ${availableWorker.workerId}`, error);
             // Clear timeout on error
             const timeout = this.taskTimeouts.get(taskId);
             if (timeout) {
@@ -703,7 +704,8 @@ export class TaskQueue implements ITaskQueue {
             if (error) {
                 try {
                     deserializedError = deserializeError(error);
-                } catch {
+                } 
+                catch {
                     // If deserialization fails, create a generic error
                     deserializedError = new Error(typeof error === 'string' ? error : JSON.stringify(error));
                 }
@@ -762,13 +764,14 @@ export class TaskQueue implements ITaskQueue {
         // Increment timeout count
         task.timeoutCount++;
 
-        console.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
+        log.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
 
         // Terminate the worker
         try {
             workerState.worker.terminate();
-        } catch (error) {
-            console.error(`[Task Queue] Error terminating worker ${workerState.workerId}:`, error);
+        } 
+        catch (error: any) {
+            log.exception(`[Task Queue] Error terminating worker ${workerState.workerId}`, error);
         }
 
         // Check if we've exceeded the maximum number of timeouts
@@ -891,13 +894,13 @@ export class TaskQueue implements ITaskQueue {
             this.handleWorkerMessage(newWorkerState, event.data);
         });
 
-        worker.addEventListener("error", (error) => {
-            console.error(`[Worker ${newWorkerState.workerId}] Error: ${error.message || "Unknown error"}`);
+        worker.addEventListener("error", (error: any) => {
+            log.exception(`Error from worker ${newWorkerState.workerId}`, error);
             this.handleWorkerCrash(newWorkerState);
         });
 
-        worker.addEventListener("messageerror", (error) => {
-            console.error(`[Worker ${newWorkerState.workerId}] Message error:`, error);
+        worker.addEventListener("messageerror", (error: any) => {
+            log.exception(`Error from worker ${newWorkerState.workerId}]`, error);
             this.handleWorkerCrash(newWorkerState);
         });
 
@@ -913,9 +916,10 @@ export class TaskQueue implements ITaskQueue {
         for (const callback of this.completionCallbacks) {
             try {
                 callback(result);
-            } catch (error) {
+            } 
+            catch (error: any) {
                 // Don't let callback errors break the task queue
-                console.error("Error in task completion callback:", error);
+                log.exception("Error in task completion callback", error);
             }
         }
     }
