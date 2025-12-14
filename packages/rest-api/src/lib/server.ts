@@ -446,7 +446,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
                 // console.log(`Handled ${req.method} ${req.path}`);
             }
             catch (err: any) {
-                console.error(`An error occured handling ${req.method} ${req.path}`);
+                console.error(`An error occurred handling ${req.method} ${req.path}`);
                 console.error(err.stack);
                 res.sendStatus(500);
             }
