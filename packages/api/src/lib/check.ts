@@ -68,7 +68,8 @@ export async function checkPaths(
                         
                         // Save cache periodically (every 100 files added to cache)
                         if (filesAddedToCache % 100 === 0) {
-                            await retry(() => localHashCache.save());
+
+                            await tryOrLog(() => localHashCache.save(), "Periodic hash cache failed - this can happen because worker threads are constantly loading the hash cache.");
                         }
                     }
                     
@@ -129,7 +130,7 @@ export async function checkPaths(
         await queue.awaitAllTasks();
 
         // Final save of hash cache
-        await retry(() => localHashCache.save());
+        await retryOrLog(() => localHashCache.save(), "Failed to save hash cache");
         
         summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
         return summary;

@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
 import { ensureDir } from "node-utils";
+import { log } from "utils";
 
 /**
  * File structure:
@@ -54,59 +55,89 @@ export class HashCache {
 
     /**
      * Loads the hash cache from storage.
+     * This function is 100% safe - it will never throw exceptions.
+     * If there's any problem loading the cache, it logs the error and starts fresh.
      */
     async load(): Promise<boolean> {
         const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
         
-        // Check if file exists first
-        if (!await fs.exists(cachePath)) {
-            // File doesn't exist - create new cache
-            this.buffer = Buffer.alloc(1024); // Start with 1KB
-            this.entryCount = 0;
+        try {
+            // Check if file exists first
+            if (!await fs.exists(cachePath)) {
+                // File doesn't exist - create new cache
+                this.buffer = Buffer.alloc(1024); // Start with 1KB
+                this.entryCount = 0;
+                this.initialized = true;
+                return false;
+            }
+            
+            // File exists - read and verify it
+            const cacheData = await fs.readFile(cachePath);
+            if (cacheData.length < 40) {
+                log.error(`Hash cache file is too small: expected at least 40 bytes (4 for version + 4 for entry count + 32 for checksum), got ${cacheData.length} bytes`);
+                this.initializeFreshCache();
+                return false;
+            }
+            
+            // Extract checksum from the last 32 bytes
+            const storedChecksum = cacheData.subarray(cacheData.length - 32);
+            const dataWithoutChecksum = cacheData.subarray(0, cacheData.length - 32);
+            
+            // Verify checksum
+            const computedChecksum = this.computeChecksum(dataWithoutChecksum);
+            if (!computedChecksum.equals(storedChecksum)) {
+                // Checksum mismatch - cache is corrupted
+                log.error("Hash cache checksum mismatch - cache may be corrupted");
+                this.initializeFreshCache();
+                return false;
+            }
+            
+            // Read and verify version
+            const version = dataWithoutChecksum.readUInt32LE(0);
+            if (version < HASH_CACHE_VERSION) {
+                // Older version - delete the cache and start fresh
+                try {
+                    await fs.unlink(cachePath);
+                }
+                catch (error) {
+                    // Ignore errors deleting old cache file
+                }
+                this.initializeFreshCache();
+                return false;
+            }
+            else if (version > HASH_CACHE_VERSION) {
+                // Newer version - can't read it
+                log.error(`Hash cache version is newer than supported: file version ${version}, supported version ${HASH_CACHE_VERSION}`);
+                this.initializeFreshCache();
+                return false;
+            }
+            
+            this.buffer = dataWithoutChecksum;
+            this.createLookupTable();
             this.initialized = true;
+            return true;
+        }
+        catch (error: any) {
+            log.exception("Failed to load hash cache", error);
+            this.initializeFreshCache();
             return false;
         }
-        
-        // File exists - read and verify it
-        const cacheData = await fs.readFile(cachePath);
-        if (cacheData.length < 40) {
-            throw new Error(`Hash cache file is too small: expected at least 40 bytes (4 for version + 4 for entry count + 32 for checksum), got ${cacheData.length} bytes`);
-        }
-        
-        // Extract checksum from the last 32 bytes
-        const storedChecksum = cacheData.subarray(cacheData.length - 32);
-        const dataWithoutChecksum = cacheData.subarray(0, cacheData.length - 32);
-        
-        // Verify checksum
-        const computedChecksum = this.computeChecksum(dataWithoutChecksum);
-        if (!computedChecksum.equals(storedChecksum)) {
-            // Checksum mismatch - cache is corrupted
-            throw new Error("Hash cache checksum mismatch - cache may be corrupted");
-        }
-        
-        // Read and verify version
-        const version = dataWithoutChecksum.readUInt32LE(0);
-        if (version < HASH_CACHE_VERSION) {
-            // Older version - delete the cache and start fresh
-            await fs.unlink(cachePath);
-            this.buffer = Buffer.alloc(1024); // Start with 1KB
-            this.entryCount = 0;
-            this.initialized = true;
-            return false;
-        }
-        else if (version > HASH_CACHE_VERSION) {
-            // Newer version - can't read it
-            throw new Error(`Hash cache version is newer than supported: file version ${version}, supported version ${HASH_CACHE_VERSION}`);
-        }
-        
-        this.buffer = dataWithoutChecksum;
-        this.createLookupTable();
+    }
+
+    /**
+     * Initializes a fresh, empty cache
+     */
+    private initializeFreshCache(): void {
+        this.buffer = Buffer.alloc(1024); // Start with 1KB
+        this.entryCount = 0;
+        this.offsetLookup = [];
         this.initialized = true;
-        return true;
+        this.isDirty = false;
     }
 
     /**
      * Create the lookup table of index to offset.
+     * This function is safe - it will reset the cache if corruption is detected.
      */
     private createLookupTable(): void {
         if (!this.buffer || this.buffer.length < 8) {
@@ -115,30 +146,40 @@ export class HashCache {
             return;
         }
 
-        // Read entry count from bytes 4-7 (after version header)
-        this.entryCount = this.buffer.readUInt32LE(4);
-        this.offsetLookup = [];
+        try {
+            // Read entry count from bytes 4-7 (after version header)
+            this.entryCount = this.buffer.readUInt32LE(4);
+            this.offsetLookup = [];
 
-        let offset = 8; // Start after version and entry count headers
+            let offset = 8; // Start after version and entry count headers
 
-        for (let i = 0; i < this.entryCount; i++) {
-            if (offset + 4 > this.buffer.length) {
-                throw new Error("Hash cache may be corrupted: insufficient data for entry");
+            for (let i = 0; i < this.entryCount; i++) {
+                if (offset + 4 > this.buffer.length) {
+                    log.error("Hash cache may be corrupted: insufficient data for entry");
+                    this.initializeFreshCache();
+                    return;
+                }
+
+                // Read path length
+                const pathLength = this.buffer.readUInt32LE(offset);
+                const entrySize = this.entrySize(pathLength);
+
+                if (offset + entrySize > this.buffer.length) {
+                    log.error("Hash cache may be corrupted: entry extends beyond buffer");
+                    this.initializeFreshCache();
+                    return;
+                }
+
+                // Store the offset in our lookup table
+                this.offsetLookup.push(offset);
+
+                // Skip to the next entry
+                offset += entrySize;
             }
-
-            // Read path length
-            const pathLength = this.buffer.readUInt32LE(offset);
-            const entrySize = this.entrySize(pathLength);
-
-            if (offset + entrySize > this.buffer.length) {
-                throw new Error("Hash cache may be corrupted: entry extends beyond buffer");
-            }
-
-            // Store the offset in our lookup table
-            this.offsetLookup.push(offset);
-
-            // Skip to the next entry
-            offset += entrySize;
+        }
+        catch (error: any) {
+            log.exception("Failed to create hash cache lookup table", error);
+            this.initializeFreshCache();
         }
     }
 
