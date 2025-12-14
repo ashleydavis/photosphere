@@ -1,4 +1,4 @@
-import { log, retry, tryOrLog, retryOrLog, IUuidGenerator } from "utils";
+import { log, retry, tryOrLog, retryOrLog, swallowError, IUuidGenerator } from "utils";
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
@@ -69,7 +69,7 @@ export async function checkPaths(
                         // Save cache periodically (every 100 files added to cache)
                         if (filesAddedToCache % 100 === 0) {
 
-                            await tryOrLog(() => localHashCache.save(), "Periodic hash cache failed - this can happen because worker threads are constantly loading the hash cache.");
+                            await swallowError(() => localHashCache.save());
                         }
                     }
                     
