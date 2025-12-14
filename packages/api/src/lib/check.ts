@@ -1,4 +1,4 @@
-import { log, retry, IUuidGenerator } from "utils";
+import { log, retry, tryOrLog, retryOrLog, IUuidGenerator } from "utils";
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
