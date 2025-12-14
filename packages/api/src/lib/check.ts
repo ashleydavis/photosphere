@@ -68,8 +68,9 @@ export async function checkPaths(
                         
                         // Save cache periodically (every 100 files added to cache)
                         if (filesAddedToCache % 100 === 0) {
-
-                            await swallowError(() => localHashCache.save());
+                            // This can fail because workers are constantly loading the hash cache. 
+                            // If it fails we just swallow it, the hash cache remains dirty and we'll try to save again in another 100 files.
+                            await swallowError(() => localHashCache.save()); 
                         }
                     }
                     
@@ -129,7 +130,8 @@ export async function checkPaths(
         //
         await queue.awaitAllTasks();
 
-        // Final save of hash cache
+        // Final save of hash cache.
+        // We'd like to retry in case of error, but if it fails we just log it and move on.
         await retryOrLog(() => localHashCache.save(), "Failed to save hash cache");
         
         summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
