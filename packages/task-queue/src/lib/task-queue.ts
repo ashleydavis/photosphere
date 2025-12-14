@@ -58,8 +58,9 @@ export type { TaskHandler };
 
 //
 // Task completion callback
+// Can be synchronous or asynchronous
 //
-export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void;
+export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void | Promise<void>;
 
 //
 // Queue status interface
@@ -505,7 +506,9 @@ export class TaskQueue implements ITaskQueue {
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(workerState, event.data);
+            this.handleWorkerMessage(workerState, event.data).catch((error: any) => {
+                log.exception("Error handling worker message", error);
+            });
         });
 
         worker.addEventListener("error", (error: any) => {
@@ -595,7 +598,9 @@ export class TaskQueue implements ITaskQueue {
 
         // Set up timeout for this task
         const timeoutId = setTimeout(() => {
-            this.handleTaskTimeout(taskId, availableWorker!);
+            this.handleTaskTimeout(taskId, availableWorker!).catch((error: any) => {
+                log.exception("Error handling task timeout", error);
+            });
         }, this.taskTimeout);
         this.taskTimeouts.set(taskId, timeoutId);
 
@@ -626,7 +631,7 @@ export class TaskQueue implements ITaskQueue {
     // Internal: Handles messages from worker threads.
     // Processes task results and errors.
     //
-    private handleWorkerMessage(workerState: IWorkerState, data: any): void {
+    private async handleWorkerMessage(workerState: IWorkerState, data: any): Promise<void> {
         // Handle worker ready message
         if (data && typeof data === "object" && "type" in data && data.type === "ready") {
             workerState.isReady = true;
@@ -673,7 +678,7 @@ export class TaskQueue implements ITaskQueue {
             this.tasksCompleted++;
 
             this.notifyWorkerStateChange();
-            this.notifyCompletionCallbacks(fullResult);
+            await this.notifyCompletionCallbacks(fullResult);
             this.resolveTask(taskId, fullResult);
             
             // Remove completed task from memory after reporting result
@@ -732,7 +737,7 @@ export class TaskQueue implements ITaskQueue {
             this.tasksFailed++;
 
             this.notifyWorkerStateChange();
-            this.notifyCompletionCallbacks(result);
+            await this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
             
             // Remove failed task from memory after reporting result
@@ -747,7 +752,7 @@ export class TaskQueue implements ITaskQueue {
     // Internal: Handles task timeout by terminating the worker, requeuing the task, and replacing the worker.
     // Only allows up to 3 timeouts per task, after which the task is marked as failed.
     //
-    private handleTaskTimeout(taskId: string, workerState: IWorkerState): void {
+    private async handleTaskTimeout(taskId: string, workerState: IWorkerState): Promise<void> {
         const task = this.tasks.get(taskId);
         if (!task || task.status !== TaskStatus.Running) {
             // Task already completed or doesn't exist, ignore timeout
@@ -796,7 +801,7 @@ export class TaskQueue implements ITaskQueue {
             workerState.isIdle = true;
             workerState.currentTaskId = null;
 
-            this.notifyCompletionCallbacks(result);
+            await this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
             this.processNextTask();
 
@@ -891,7 +896,9 @@ export class TaskQueue implements ITaskQueue {
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(newWorkerState, event.data);
+            this.handleWorkerMessage(newWorkerState, event.data).catch((error: any) => {
+                log.exception("Error handling worker message", error);
+            });
         });
 
         worker.addEventListener("error", (error: any) => {
@@ -911,11 +918,12 @@ export class TaskQueue implements ITaskQueue {
     //
     // Internal: Invokes all registered completion callbacks with the task result.
     // Callback errors are caught and logged to prevent breaking the queue.
+    // Async callbacks are awaited to ensure they complete.
     //
-    private notifyCompletionCallbacks(result: ITaskResult): void {
+    private async notifyCompletionCallbacks(result: ITaskResult): Promise<void> {
         for (const callback of this.completionCallbacks) {
             try {
-                callback(result);
+                await callback(result);
             } 
             catch (error: any) {
                 // Don't let callback errors break the task queue
