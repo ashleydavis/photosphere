@@ -2,6 +2,7 @@ export * from "./lib/sleep";
 export * from "./lib/reverse-geocode";
 export * from "./lib/retry";
 export * from "./lib/try-or-log";
+export * from "./lib/swallow-error";
 export * from "./lib/retry-or-log";
 export * from "./lib/uuid-generator";
 export * from "./lib/random-uuid-generator";
