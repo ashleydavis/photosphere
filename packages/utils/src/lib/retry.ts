@@ -1,3 +1,4 @@
+import { log } from "./log";
 import { sleep } from "./sleep";
 
 //
@@ -10,11 +11,9 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
             const result = await operation();
             return result;
         }
-        catch (err: any) {
+        catch (error: any) {
             if (maxAttempts >= 1) {
-                console.error("Operation failed, will retry.");
-                console.error("Error:");
-                console.error(err && err.stack || err);
+                log.exception("Operation failed, will retry.", error);
 
                 await sleep(waitTimeMS);
                 waitTimeMS *= waitTimeScale;
@@ -22,7 +21,7 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
             else {
                 console.error("Operation failed, no more retries allowed.");
 
-                throw err;
+                throw error;
             }
         }
     }
