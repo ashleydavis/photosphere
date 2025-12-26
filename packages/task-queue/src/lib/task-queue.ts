@@ -823,8 +823,9 @@ export class TaskQueue implements ITaskQueue {
         // Terminate the crashed worker
         try {
             workerState.worker.terminate();
-        } catch (e) {
+        } catch (error: any) {
             // Worker may already be terminated
+            log.exception(`[Task Queue] Error terminating worker ${workerState.workerId}`, error);
         }
 
         // If worker had a task, clear its timeout and requeue it
@@ -980,8 +981,8 @@ export class TaskQueue implements ITaskQueue {
         for (const workerState of this.workers) {
             try {
                 workerState.worker.terminate();
-            } catch (e) {
-                // Ignore termination errors
+            } catch (error: any) {
+                log.exception(`[Task Queue] Error terminating worker ${workerState.workerId}`, error);                
             }
         }
         this.workers = [];
