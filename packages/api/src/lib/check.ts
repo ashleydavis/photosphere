@@ -1,4 +1,4 @@
-import { log, retry, tryOrLog, retryOrLog, swallowError, IUuidGenerator } from "utils";
+import { log, retryOrLog, swallowError, IUuidGenerator } from "utils";
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
@@ -48,10 +48,10 @@ export async function checkPaths(
         // Registers a callback to integrate results as tasks complete.
         //
         queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (taskResult) => {
+
+            summary.filesProcessed++;
+
             if (taskResult.status === TaskStatus.Completed) {
-
-                summary.filesProcessed++;
-
                 const checkResult = taskResult.outputs!;
                 const taskData = taskResult.inputs;
                 
@@ -99,7 +99,6 @@ export async function checkPaths(
                     log.error(`Failed to check file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
                 }
                 summary.filesFailed++;
-                summary.filesProcessed++;
             }
         });
 
@@ -136,7 +135,8 @@ export async function checkPaths(
         
         summary.averageSize = summary.filesAdded > 0 ? Math.floor(summary.totalSize / summary.filesAdded) : 0;
         return summary;
-    } finally {
+    } 
+    finally {
         queue.shutdown();
     }
 }

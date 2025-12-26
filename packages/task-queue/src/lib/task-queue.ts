@@ -784,7 +784,7 @@ export class TaskQueue implements ITaskQueue {
             // Mark task as failed after 3 timeouts
             task.status = TaskStatus.Failed;
             task.completedAt = new Date();
-            const error = new Error(`Task timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
+            const error = new Error(`Task ${this.formatTaskId(task.id)} timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
                 error: error,
