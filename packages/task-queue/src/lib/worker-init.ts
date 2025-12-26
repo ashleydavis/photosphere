@@ -17,6 +17,15 @@ export interface IWorkerOptions {
 }
 
 //
+// Options passed to the worker thread
+//
+export interface IWorkerInput {
+    verbose?: boolean;
+    tools?: boolean;
+    sessionId?: string;
+    workerId: number;
+}
+//
 // Common dependencies injected into workers (similar to ICommandContext)
 //
 export interface IWorkerContext {
