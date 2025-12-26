@@ -617,12 +617,7 @@ export class TaskQueue implements ITaskQueue {
         } 
         catch (error: any) {
             log.exception(`Error sending task to worker ${availableWorker.workerId}`, error);
-            // Clear timeout on error
-            const timeout = this.taskTimeouts.get(taskId);
-            if (timeout) {
-                clearTimeout(timeout);
-                this.taskTimeouts.delete(taskId);
-            }
+
             this.handleWorkerCrash(availableWorker);
         }
     }
