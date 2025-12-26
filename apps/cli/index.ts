@@ -51,6 +51,7 @@ async function main() {
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
     const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
     const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
+    const dryRunOption: [string, string, boolean] = ["--dry-run", "Run without making any database changes (merkle tree and metadata updates are skipped)", false];
 
     program
         .name("psi")
@@ -90,6 +91,8 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .option(...sessionIdOption)
+        .option(...dryRunOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(initContext(addCommand));
 

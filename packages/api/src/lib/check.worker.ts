@@ -2,11 +2,7 @@
 // Check worker handler - handles file checking tasks
 //
 
-import * as fs from "fs/promises";
-import { ensureDir } from "node-utils";
-import os from "os";
-import path from "path";
-import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
+import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
 import type { IWorkerContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
