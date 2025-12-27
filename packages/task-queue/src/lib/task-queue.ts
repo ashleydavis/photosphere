@@ -244,7 +244,7 @@ export class TaskQueue implements ITaskQueue {
         this.pendingTasks.push(id);
         this.tasksQueued++;
 
-        log.verbose(`[Task Queue] Added task [${this.formatTaskId(id)}] to queue`);
+        log.verbose(`[Task Queue] Added task [${this.formatTaskId(id)}] (${id}) to queue`);
 
         this.processNextTask();
 
@@ -976,14 +976,15 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Formats a task ID to show only first 2 and last 2 characters.
-    // Example: "12345678-1234-1234-1234-123456789abc" -> "12bc"
+    // Formats a task ID to show first 2, middle 2, and last 2 characters.
+    // Example: "12345678-1234-1234-1234-123456789abc" -> "12abbc"
     //
     private formatTaskId(taskId: string): string {
-        if (taskId.length <= 4) {
+        if (taskId.length <= 6) {
             return taskId;
         }
-        return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+        const middleStart = Math.floor(taskId.length / 2) - 1;
+        return `${taskId.substring(0, 2)}${taskId.substring(middleStart, middleStart + 2)}${taskId.substring(taskId.length - 2)}`;
     }
 
     //
