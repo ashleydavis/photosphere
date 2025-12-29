@@ -1,6 +1,8 @@
 import { TaskQueue } from "../src/lib/task-queue";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { mkdir, writeFile } from "node:fs/promises";
+import { RandomUuidGenerator } from "utils";
 
 //
 // Hello World example demonstrating basic task queue usage
@@ -10,7 +12,9 @@ async function main() {
     console.log("Creating task queue...");
     
     // Create a task queue with 2 workers
-    const queue = new TaskQueue(2);
+    const baseWorkingDirectory = join(tmpdir(), "task-queue");
+    const uuidGenerator = new RandomUuidGenerator();
+    const queue = new TaskQueue(2, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
     // Register a simple "hello-world" task handler
     queue.registerHandler("hello-world", async (data, workingDirectory) => {

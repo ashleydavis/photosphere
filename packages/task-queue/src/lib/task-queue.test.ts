@@ -12,7 +12,7 @@ describe("TaskQueue", () => {
         testWorkingDir = join(tmpdir(), `task-queue-test-${Date.now()}`);
         // Note: Tests need a worker path, but these tests may not actually use workers
         // Using a dummy path - tests that actually need workers should be updated separately
-        queue = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator());
+        queue = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator(), 2400000, {});
     });
 
     afterEach(async () => {
@@ -395,7 +395,7 @@ describe("TaskQueue", () => {
         });
 
         it("should respect maxWorkers limit", async () => {
-            const queueWithLimit = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator());
+            const queueWithLimit = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator(), 2400000, {});
             const concurrentTasks = new Set<number>();
             let maxConcurrent = 0;
 
@@ -562,7 +562,7 @@ describe("TaskQueue", () => {
     describe("constructor options", () => {
         it("should use custom working directory", async () => {
             const customDir = join(tmpdir(), "custom-task-queue");
-            const customQueue = new TaskQueue(2, "./worker.ts", customDir, new TestUuidGenerator());
+            const customQueue = new TaskQueue(2, "./worker.ts", customDir, new TestUuidGenerator(), 2400000, {});
 
             let receivedWorkingDir: string | null = null;
 
@@ -583,7 +583,7 @@ describe("TaskQueue", () => {
 
         it("should use custom UUID generator", () => {
             const customUuidGenerator = new TestUuidGenerator();
-            const customQueue = new TaskQueue(2, "./worker.ts", testWorkingDir, customUuidGenerator);
+            const customQueue = new TaskQueue(2, "./worker.ts", testWorkingDir, customUuidGenerator, 2400000, {});
 
             const taskId1 = customQueue.addTask("test-task", {});
             const taskId2 = customQueue.addTask("test-task", {});
@@ -596,8 +596,8 @@ describe("TaskQueue", () => {
             customQueue.shutdown();
         });
 
-        it("should use default UUID generator when not provided", () => {
-            const defaultQueue = new TaskQueue(2, "./worker.ts");
+        it("should use provided UUID generator", () => {
+            const defaultQueue = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator(), 2400000, {});
 
             const taskId1 = defaultQueue.addTask("test-task", {});
             const taskId2 = defaultQueue.addTask("test-task", {});
@@ -609,8 +609,8 @@ describe("TaskQueue", () => {
             defaultQueue.shutdown();
         });
 
-        it("should use default working directory when not provided", async () => {
-            const defaultQueue = new TaskQueue(2, "./worker.ts");
+        it("should use provided working directory", async () => {
+            const defaultQueue = new TaskQueue(2, "./worker.ts", testWorkingDir, new TestUuidGenerator(), 2400000, {});
 
             let receivedWorkingDir: string | null = null;
 

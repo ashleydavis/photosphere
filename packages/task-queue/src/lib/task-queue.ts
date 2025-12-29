@@ -201,23 +201,24 @@ export class TaskQueue implements ITaskQueue {
     private workerPath: string;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
-    private workerOptions?: IWorkerOptions;
+    private workerOptions: IWorkerOptions;
     private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
 
     //
     // Creates a new task queue with the specified number of workers.
     // Tasks will execute in separate Bun worker threads for true parallelism.
+    // maxWorkers: Maximum number of worker threads to use.
     // workerPath: Path to the worker script file (must be provided by the caller).
-    // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
+    // baseWorkingDirectory: Base directory for worker working directories.
+    // uuidGenerator: UUID generator for task IDs.
+    // taskTimeout: Timeout in milliseconds for tasks.
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000, workerOptions?: IWorkerOptions) {
+    constructor(maxWorkers: number, workerPath: string, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, taskTimeout: number, workerOptions: IWorkerOptions) {
         this.maxWorkers = maxWorkers;
         this.workerPath = workerPath;
-        this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
-        this.uuidGenerator = uuidGenerator || {
-            generate: () => randomUUID()
-        } as IUuidGenerator;
+        this.baseWorkingDirectory = baseWorkingDirectory;
+        this.uuidGenerator = uuidGenerator;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
     }

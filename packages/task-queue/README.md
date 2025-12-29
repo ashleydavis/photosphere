@@ -39,9 +39,14 @@ bun add task-queue
 
 ```typescript
 import { TaskQueue, ITaskQueue } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // Create a task queue with 4 workers
-const queue = new TaskQueue(4);
+const baseWorkingDirectory = join(tmpdir(), "task-queue");
+const uuidGenerator = new RandomUuidGenerator();
+const queue = new TaskQueue(4, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
 // Register a task handler
 queue.registerHandler("process-image", async (data, workingDirectory) => {
@@ -83,8 +88,13 @@ queue.shutdown();
 
 ```typescript
 import { TaskQueue } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-const queue = new TaskQueue(4);
+const baseWorkingDirectory = join(tmpdir(), "task-queue");
+const uuidGenerator = new RandomUuidGenerator();
+const queue = new TaskQueue(4, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
 // Register handler
 queue.registerHandler("upload-file", async (data, workingDirectory) => {
@@ -116,8 +126,13 @@ Register a callback to be notified when tasks complete:
 
 ```typescript
 import { TaskQueue, TaskStatus, ITaskResult } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-const queue = new TaskQueue(4);
+const baseWorkingDirectory = join(tmpdir(), "task-queue");
+const uuidGenerator = new RandomUuidGenerator();
+const queue = new TaskQueue(4, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
 // Register a completion callback
 queue.onTaskComplete((result: ITaskResult) => {
@@ -171,8 +186,13 @@ const failed = queue.getFailedTaskResults();
 
 ```typescript
 import { TaskQueue, TaskStatus } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-const queue = new TaskQueue(2);
+const baseWorkingDirectory = join(tmpdir(), "task-queue");
+const uuidGenerator = new RandomUuidGenerator();
+const queue = new TaskQueue(2, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
 queue.registerHandler("long-running-task", async (data, workingDirectory) => {
     // Simulate long-running work
@@ -196,8 +216,13 @@ console.log(result.message); // "Task completed"
 
 ```typescript
 import { TaskQueue, TaskStatus } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-const queue = new TaskQueue(2);
+const baseWorkingDirectory = join(tmpdir(), "task-queue");
+const uuidGenerator = new RandomUuidGenerator();
+const queue = new TaskQueue(2, "./worker.ts", baseWorkingDirectory, uuidGenerator, 2400000, {});
 
 queue.registerHandler("risky-task", async (data, workingDirectory) => {
     if (data.shouldFail) {
@@ -263,8 +288,11 @@ const uuidGenerator = new RandomUuidGenerator();
 // Create queue with custom settings
 const queue = new TaskQueue(
     8, // max workers
+    "./worker.ts", // worker path
     customWorkingDir, // base working directory
-    uuidGenerator // UUID generator
+    uuidGenerator, // UUID generator
+    2400000, // task timeout (40 minutes)
+    {} // worker options
 );
 ```
 
