@@ -35,14 +35,15 @@ export interface IWorkerContext {
 }
 
 //
-// Formats a task ID to show only first 2 and last 2 characters.
-// Example: "12345678-1234-1234-1234-123456789abc" -> "12bc"
+// Formats a task ID to show first 2, middle 2, and last 2 characters.
+// Example: "12345678-1234-1234-1234-123456789abc" -> "12abbc"
 //
 function formatTaskId(taskId: string): string {
-    if (taskId.length <= 4) {
+    if (taskId.length <= 6) {
         return taskId;
     }
-    return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+    const middleStart = Math.floor(taskId.length / 2) - 1;
+    return `${taskId.substring(0, 2)}${taskId.substring(middleStart, middleStart + 2)}${taskId.substring(taskId.length - 2)}`;
 }
 
 //
@@ -51,11 +52,13 @@ function formatTaskId(taskId: string): string {
 class WorkerLog implements ILog {
     readonly verboseEnabled: boolean;
     private readonly toolsEnabled: boolean;
+    private readonly workerId: number;
     private currentTaskId: string | null = null;
 
-    constructor(verboseEnabled: boolean, toolsEnabled: boolean) {
+    constructor(verboseEnabled: boolean, toolsEnabled: boolean, workerId: number) {
         this.verboseEnabled = verboseEnabled;
         this.toolsEnabled = toolsEnabled;
+        this.workerId = workerId;
     }
 
     setTaskId(taskId: string | null): void {
@@ -64,7 +67,7 @@ class WorkerLog implements ILog {
 
     private prefixMessage(message: string): string {
         if (this.currentTaskId) {
-            return `[${formatTaskId(this.currentTaskId)}] ${message}`;
+            return `[${this.workerId}:${formatTaskId(this.currentTaskId)}] ${message}`;
         }
         return message;
     }
@@ -102,7 +105,7 @@ class WorkerLog implements ILog {
             return;
         }
         
-        const prefix = this.currentTaskId ? `[${formatTaskId(this.currentTaskId)}] ` : "";
+        const prefix = this.currentTaskId ? `[${this.workerId}:${formatTaskId(this.currentTaskId)}] ` : "";
         if (data.stdout) {
             console.log(`${prefix}== ${tool} stdout ==\n${data.stdout}`);
         }
@@ -129,9 +132,9 @@ export function setWorkerTaskId(taskId: string | null): void {
 // Initializes worker context (logging, uuid generator, timestamp provider, etc.)
 // Similar to initContext but adapted for workers that receive options directly.
 //
-export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
+export function initWorkerContext(options: IWorkerInput): IWorkerContext {
     // Configure logging (console only for workers)
-    const workerLog = new WorkerLog(options.verbose || false, options.tools || false);
+    const workerLog = new WorkerLog(options.verbose || false, options.tools || false, options.workerId);
     workerLogInstance = workerLog;
     setLog(workerLog);
     
