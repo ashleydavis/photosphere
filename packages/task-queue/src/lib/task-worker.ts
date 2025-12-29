@@ -6,6 +6,7 @@
 
 import { serializeError } from "serialize-error";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./worker-init";
+import { log } from "utils";
 
 //
 // Handler registry - handlers are stored in a Map
@@ -48,12 +49,29 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
         const registeredTypes = getRegisteredHandlerTypes();
         const handler = getHandler(taskType);
         if (!handler) {
-            throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
+            throw new Error(`No handler registered for task type ${taskType} processing task ${taskId}. Available handlers: ${registeredTypes.join(", ")}`);
         }
 
         // Execute the handler with context
-        const outputs = await handler(data, workingDirectory, context);
+        let outputs: any;
+        try {
+            outputs = await handler(data, workingDirectory, context);
+        }
+        catch (error: any) {
+            log.exception(`Error executing handler for task ${taskId}, type ${taskType}`, error);
+
+            // Send error result back to main thread
+            self.postMessage({
+                type: "error",
+                taskId,
+                error: serializeError(error)
+            });
+
+            return;
+        }
         
+        log.verbose(`Executed task [${taskId}]`);
+
         // Clear task ID from logging
         setWorkerTaskId(null);
         
@@ -69,6 +87,8 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
         });
     }
     catch (error: any) {
+        log.exception(`Error executing task [${taskId}]`, error);
+
         // Clear task ID from logging
         setWorkerTaskId(null);
         
@@ -92,6 +112,9 @@ export function initWorker(context: IWorkerContext): void {
 
         if (message.type === "execute") {
             await executeTask(message, context);
+        }
+        else {
+            log.verbose(`Received unknown message: ${JSON.stringify(message, null, 2)}`);
         }
     };
     
