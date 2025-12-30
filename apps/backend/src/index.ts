@@ -139,13 +139,28 @@ async function main() {
         googleApiKey: process.env.GOOGLE_API_KEY,        
     });
 
+    const server = app.listen(PORT, () => {
+        console.log(`Photosphere listening on port ${PORT}`);
+    });
+
+    //
+    // Closes a server and returns a promise that resolves when the server is closed.
+    //
+    async function close(): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            server.close((err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
     registerTerminationCallback(async () => {
         // Shuts down the server gracefully on termination signals.
         await close();
-    });    
-
-    app.listen(PORT, () => {
-        console.log(`Photosphere listening on port ${PORT}`);
     });
 }
 
