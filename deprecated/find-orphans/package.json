@@ -19,7 +19,6 @@
     "colorthief": "^2.6.0",
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
-    "fs-extra": "^11.3.2",
     "lodash": "^4.17.21",
     "minimist": "^1.2.8",
     "mongodb": "^4.7.0",
@@ -28,7 +27,6 @@
     "utils": "workspace:*"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/lodash": "^4.17.5",
     "@types/node": "^22.9.1",
     "typescript": "^5.6.3"

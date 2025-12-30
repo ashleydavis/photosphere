@@ -1,5 +1,5 @@
 import { exec } from 'child_process';
-import fs from 'fs';
+import * as fs from "fs/promises";
 import path from 'path';
 import { sleep } from 'utils';
 
@@ -85,7 +85,7 @@ export function getContentType(filePath: string): string | undefined {
 async function findImageFiles(directory: string, fileFound: FileFoundFn): Promise<void> {
 
     try {
-        const files = await fs.promises.readdir(directory, { withFileTypes: true });
+        const files = await fs.readdir(directory, { withFileTypes: true });
 
         //
         // Sleep to give the UI time to be responsive.

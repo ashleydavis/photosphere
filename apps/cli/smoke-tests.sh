@@ -410,147 +410,6 @@ log_warning() {
 }
 
 
-generate_test_report() {
-    local report_file="$1"
-    local test_mode="${2:-all}"
-    
-    log_info "Generating comprehensive test report: $report_file"
-    
-    # Create report header
-    cat > "$report_file" << EOF
-================================================================================
-PHOTOSPHERE CLI SMOKE TEST REPORT
-================================================================================
-Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-Test Mode: $test_mode
-Platform: $(detect_platform) $(detect_architecture)
-Working Directory: $(pwd)
-NODE_ENV: ${NODE_ENV:-'(not set)'}
-
-================================================================================
-TEST RESULTS SUMMARY
-================================================================================
-Tests Passed: $TESTS_PASSED
-Tests Failed: $TESTS_FAILED
-EOF
-
-    # Add failed tests if any
-    if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
-        echo "" >> "$report_file"
-        echo "Failed Tests:" >> "$report_file"
-        for failed_test in "${FAILED_TESTS[@]}"; do
-            echo "  - $failed_test" >> "$report_file"
-        done
-    fi
-
-    # Add database information if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
-        echo "" >> "$report_file"
-        echo "=================================================================================" >> "$report_file"
-        echo "DATABASE INFORMATION" >> "$report_file"
-        echo "=================================================================================" >> "$report_file"
-        echo "Database Directory: $TEST_DB_DIR" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Get root hash
-        echo "ROOT HASH:" >> "$report_file"
-        echo "----------" >> "$report_file"
-        $(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get root hash" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Get merkle tree
-        echo "MERKLE TREE STRUCTURE:" >> "$report_file"
-        echo "---------------------" >> "$report_file"
-        $(get_cli_command) debug merkle-tree --db "$TEST_DB_DIR" --yes --records 2>/dev/null >> "$report_file" || echo "Failed to get merkle tree" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Get database summary
-        echo "DATABASE SUMMARY:" >> "$report_file"
-        echo "-----------------" >> "$report_file"
-        $(get_cli_command) summary --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get database summary" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Get database file listing
-        echo "DATABASE FILE LISTING:" >> "$report_file"
-        echo "----------------------" >> "$report_file"
-        $(get_cli_command) list --db "$TEST_DB_DIR" --page-size 50 --yes 2>/dev/null >> "$report_file" || echo "Failed to get database listing" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Get database verification
-        echo "DATABASE VERIFICATION:" >> "$report_file"
-        echo "----------------------" >> "$report_file"
-        $(get_cli_command) verify --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to verify database" >> "$report_file"
-        echo "" >> "$report_file"
-        
-        # Show database directory structure
-        echo "DATABASE DIRECTORY STRUCTURE:" >> "$report_file"
-        echo "-----------------------------" >> "$report_file"
-        if command -v tree &> /dev/null; then
-            tree "$TEST_DB_DIR" 2>/dev/null >> "$report_file" || ls -la "$TEST_DB_DIR" >> "$report_file"
-        else
-            find "$TEST_DB_DIR" -type f | sort >> "$report_file" 2>/dev/null || echo "Failed to list database files" >> "$report_file"
-        fi
-        echo "" >> "$report_file"
-    else
-        echo "" >> "$report_file"
-        echo "=================================================================================" >> "$report_file"
-        echo "DATABASE INFORMATION" >> "$report_file"
-        echo "=================================================================================" >> "$report_file"
-        echo "No database found at: $TEST_DB_DIR" >> "$report_file"
-        echo "" >> "$report_file"
-    fi
-    
-    # Get hash cache information
-    echo "=================================================================================" >> "$report_file"
-    echo "HASH CACHE INFORMATION" >> "$report_file"
-    echo "=================================================================================" >> "$report_file"
-    
-    # Get local and database hash cache info
-    if [ -d "$TEST_DB_DIR" ]; then
-        $(get_cli_command) debug hash-cache --db "$TEST_DB_DIR" --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
-    else
-        $(get_cli_command) debug hash-cache --yes 2>/dev/null >> "$report_file" || echo "Failed to get hash cache information" >> "$report_file"
-    fi
-    echo "" >> "$report_file"
-    
-    # Add system information
-    echo "=================================================================================" >> "$report_file"
-    echo "SYSTEM INFORMATION" >> "$report_file"
-    echo "=================================================================================" >> "$report_file"
-    echo "Operating System: $(uname -a)" >> "$report_file"
-    echo "Current User: $(whoami)" >> "$report_file"
-    echo "Current Directory: $(pwd)" >> "$report_file"
-    echo "Disk Usage:" >> "$report_file"
-    df -h . 2>/dev/null >> "$report_file" || echo "Failed to get disk usage" >> "$report_file"
-    echo "" >> "$report_file"
-    
-    # Add CLI version information
-    echo "CLI VERSION INFORMATION:" >> "$report_file"
-    echo "------------------------" >> "$report_file"
-    $(get_cli_command) version 2>/dev/null >> "$report_file" || echo "Failed to get CLI version" >> "$report_file"
-    echo "" >> "$report_file"
-    
-    # Add tool information
-    echo "TOOL INFORMATION:" >> "$report_file"
-    echo "-----------------" >> "$report_file"
-    $(get_cli_command) tools --yes 2>/dev/null >> "$report_file" || echo "Failed to get tool information" >> "$report_file"
-    echo "" >> "$report_file"
-    
-    # Add report footer
-    echo "=================================================================================" >> "$report_file"
-    echo "END OF REPORT" >> "$report_file"
-    echo "=================================================================================" >> "$report_file"
-    echo "Report generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$report_file"
-    
-    log_success "Test report generated: $report_file"
-    
-    # Show report size
-    if [ -f "$report_file" ]; then
-        local file_size=$(stat -c%s "$report_file" 2>/dev/null || echo "unknown")
-        log_info "Report size: $file_size bytes"
-    fi
-}
-
 # Show test hash summary for local console output
 show_test_hash_summary() {
     if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
@@ -3845,12 +3704,6 @@ run_all_tests() {
     echo ""
     echo -e "${GREEN}ALL SMOKE TESTS PASSED${NC}"
     
-    # Generate comprehensive test report before cleanup
-    echo ""
-    mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report.txt"
-    generate_test_report "$report_file" "all"
-    
     # Preserve test database for further inspection or hash capture
     echo ""
     log_info "Preserving test database for inspection"
@@ -3965,12 +3818,6 @@ run_multiple_commands() {
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
     echo ""
     echo -e "${GREEN}ALL COMMANDS COMPLETED SUCCESSFULLY${NC}"
-    
-    # Generate comprehensive test report
-    echo ""
-    mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report.txt"
-    generate_test_report "$report_file" "multiple"
     
     # Always preserve database for inspection
     echo ""
@@ -4166,12 +4013,6 @@ main() {
     echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
     echo ""
     echo -e "${GREEN}TEST PASSED${NC}"
-    
-    # Generate comprehensive test report
-    echo ""
-    mkdir -p ./tmp/reports
-    local report_file="./tmp/reports/smoke-test-report.txt"
-    generate_test_report "$report_file" "individual"
     
     exit 0
 }

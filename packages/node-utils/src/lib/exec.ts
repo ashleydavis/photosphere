@@ -31,7 +31,7 @@ export async function execLogged(tool: string, command: string, validate?: () =>
         return { stdout, stderr };
     }
     catch (error: any) {
-        const msg = `Failed to execute command: ${command}\nError: ${error instanceof Error ? error.message : String(error)}`;
+        const msg = `Failed to execute command: ${command}`;
         log.exception(msg, error);
         throw new Error(msg);
     }

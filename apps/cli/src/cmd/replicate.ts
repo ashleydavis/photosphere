@@ -5,7 +5,8 @@ import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { pathExists, copy } from 'node-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate } from "api";
 import { confirm, isCancel } from '../lib/clack/prompts';
@@ -208,8 +209,8 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         const publicKeyDest = pathJoin(destMetaPath, 'encryption.pub');
         
         try {
-            if (await fs.pathExists(publicKeySource)) {
-                await fs.copy(publicKeySource, publicKeyDest);
+            if (await pathExists(publicKeySource)) {
+                await copy(publicKeySource, publicKeyDest);
                 log.info(pc.green(`✓ Copied public key to destination database directory`));
             }
         } catch (error) {

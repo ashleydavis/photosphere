@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px 20px 20px 0;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            display: block;
+            column-width: calc(33.333vw - 60px);
+            column-gap: 20px;
+            column-fill: auto;
+            height: calc(100vh - 150px);
+            overflow: auto;
+            margin: 0;
+        }
+        h1 {
+            color: #4ec9b0;
+            margin-bottom: 10px;
+        }
+        .status {
+            color: #808080;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #3e3e42;
+            border-top-color: #4ec9b0;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .spinner.active {
+            opacity: 1;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .section {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            break-inside: auto;
+        }
+        .section-title {
+            color: #4ec9b0;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title:hover {
+            color: #6ed4c3;
+            cursor: pointer;
+        }
+        .section-title::before {
+            content: '▼';
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+        .section.collapsed .section-title::before {
+            transform: rotate(-90deg);
+        }
+        .section-content {
+            transition: opacity 0.3s ease-out, clip-path 0.3s ease-out;
+            clip-path: inset(0 0 0% 0);
+            break-inside: auto;
+        }
+        .section.collapsed .section-content {
+            opacity: 0;
+            clip-path: inset(0 0 100% 0);
+            margin: 0;
+            padding: 0;
+            height: 0;
+        }
+        .key {
+            color: #9cdcfe;
+            font-weight: 500;
+        }
+        .value {
+            color: #ce9178;
+            margin-left: 10px;
+        }
+        .value-number {
+            color: #b5cea8;
+        }
+        .value-string {
+            color: #ce9178;
+        }
+        .value-boolean {
+            color: #569cd6;
+        }
+        .value-null {
+            color: #808080;
+        }
+        .array-item {
+            margin-left: 5px;
+            margin-top: 5px;
+            padding-left: 10px;
+            break-inside: auto;
+        }
+        .object-item {
+            margin-left: 5px;
+            margin-top: 5px;
+            padding-left: 10px;
+            break-inside: auto;
+        }
+        .nested {
+            margin-left: 1px;
+            break-inside: auto;
+        }
+        .error {
+            color: #f48771;
+            background: #3a1d1d;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .loading {
+            color: #808080;
+            font-style: italic;
+        }
+        .btn {
+            background: #3e3e42;
+            border: 1px solid #4ec9b0;
+            color: #4ec9b0;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+        .expand-array-btn {
+            background: #3e3e42;
+            border: 1px solid #4ec9b0;
+            color: #4ec9b0;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            margin-left: 8px;
+        }
+        .expand-array-btn:hover {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+        .bar-chart {
+            margin: 15px 0;
+            padding: 15px;
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            break-inside: auto;
+        }
+        .bar-chart-title {
+            color: #4ec9b0;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .bar-chart-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .bar-chart-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .bar-chart-label {
+            min-width: 100px;
+            color: #d4d4d4;
+            font-size: 13px;
+            text-align: right;
+        }
+        .bar-chart-bar-container {
+            flex: 1;
+            height: 24px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        .bar-chart-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4ec9b0 0%, #6ed4c3 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            color: #1e1e1e;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .bar-chart-value {
+            min-width: 50px;
+            color: #d4d4d4;
+            font-size: 13px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div style="padding-left: 20px;">
+        <h1>Debug Server</h1>
+        <div class="status">
+            <div class="status-left">
+                <span class="spinner" id="refreshSpinner"></span>
+                <span id="status">Loading...</span> | 
+                Last updated: <span id="lastUpdate">Never</span> |
+                <span id="countdown"></span>
+            </div>
+            <div>
+                <button class="btn" id="autoRefreshBtn" onclick="toggleAutoRefresh()">Auto Refresh: ON</button>
+                <button class="btn" onclick="refreshNow()">Refresh Now</button>
+                <button class="btn" onclick="expandAll()">Expand All</button>
+                <button class="btn" onclick="collapseAll()">Collapse All</button>
+            </div>
+        </div>
+    </div>
+    <div id="content" class="container"></div>
+    <script>
+        let expandedArrays = new Set();
+        
+        function formatValue(value, depth = 0, arrayPath = '') {
+            if (value === null) {
+                return '<span class="value-null">null</span>';
+            }
+            if (value === undefined) {
+                return '<span class="value-null">undefined</span>';
+            }
+            if (typeof value === 'boolean') {
+                return '<span class="value-boolean">' + value + '</span>';
+            }
+            if (typeof value === 'number') {
+                return '<span class="value-number">' + value + '</span>';
+            }
+            if (typeof value === 'string') {
+                return '<span class="value-string">"' + escapeHtml(value) + '"</span>';
+            }
+            if (Array.isArray(value)) {
+                if (value.length === 0) {
+                    return '<span class="value">[]</span>';
+                }
+                let html = '<div class="nested">';
+                const maxItems = 5;
+                const currentPath = arrayPath || 'array_' + Math.random().toString(36).substr(2, 9);
+                const isExpanded = expandedArrays.has(currentPath);
+                const displayCount = isExpanded ? value.length : Math.min(value.length, maxItems);
+                
+                for (let index = 0; index < displayCount; index++) {
+                    const item = value[index];
+                    const itemPath = arrayPath ? arrayPath + '.' + index : currentPath + '.' + index;
+                    html += '<div class="array-item">[' + index + ']: ' + formatValue(item, depth + 1, itemPath) + '</div>';
+                }
+                if (value.length > maxItems && !isExpanded) {
+                    html += '<div class="array-item"><span class="value">... (' + (value.length - maxItems) + ' more items)</span> ';
+                    html += '<button class="expand-array-btn" onclick="expandArray(\'' + escapeHtml(currentPath) + '\')">Expand</button></div>';
+                }
+                else if (isExpanded && value.length > maxItems) {
+                    html += '<div class="array-item"><button class="expand-array-btn" onclick="collapseArray(\'' + escapeHtml(currentPath) + '\')">Collapse</button></div>';
+                }
+                html += '</div>';
+                return html;
+            }
+            if (typeof value === 'object') {
+                // Check if this is a bar chart data structure
+                if (value.__barChart === true) {
+                    return renderBarChart(value);
+                }
+                
+                const keys = Object.keys(value);
+                if (keys.length === 0) {
+                    return '<span class="value">{}</span>';
+                }
+                let html = '<div class="nested">';
+                for (const key of keys) {
+                    // Skip internal bar chart marker
+                    if (key === '__barChart') {
+                        continue;
+                    }
+                    const itemPath = arrayPath ? arrayPath + '.' + key : '';
+                    html += '<div class="object-item"><span class="key">' + escapeHtml(key) + '</span>: ' + formatValue(value[key], depth + 1, itemPath) + '</div>';
+                }
+                html += '</div>';
+                return html;
+            }
+            return '<span class="value">' + escapeHtml(String(value)) + '</span>';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function renderBarChart(data) {
+            if (!data || !data.title || !data.items || !Array.isArray(data.items)) {
+                return '';
+            }
+            
+            const items = data.items;
+            if (items.length === 0) {
+                return '';
+            }
+            
+            // Find max value for scaling
+            const maxValue = Math.max(...items.map(item => item.value || 0), 1);
+            
+            let html = '<div class="bar-chart">';
+            html += '<div class="bar-chart-title">' + escapeHtml(data.title) + '</div>';
+            html += '<div class="bar-chart-container">';
+            
+            for (const item of items) {
+                const label = item.label || '';
+                const value = item.value || 0;
+                const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+                const displayValue = typeof item.displayValue !== 'undefined' ? item.displayValue : value;
+                
+                html += '<div class="bar-chart-item">';
+                html += '<div class="bar-chart-label">' + escapeHtml(String(label)) + '</div>';
+                html += '<div class="bar-chart-bar-container">';
+                html += '<div class="bar-chart-bar" style="width: ' + percentage + '%;">';
+                if (percentage > 10) {
+                    html += escapeHtml(String(displayValue));
+                }
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="bar-chart-value">' + escapeHtml(String(displayValue)) + '</div>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+        
+        function getCollapsedSections() {
+            const stored = localStorage.getItem('debugServerCollapsedSections');
+            return stored ? JSON.parse(stored) : [];
+        }
+        
+        function setCollapsedSections(collapsed) {
+            localStorage.setItem('debugServerCollapsedSections', JSON.stringify(collapsed));
+        }
+        
+        function getAutoRefreshEnabled() {
+            const stored = localStorage.getItem('debugServerAutoRefresh');
+            return stored === null ? true : stored === 'true'; // Default to enabled
+        }
+        
+        function setAutoRefreshEnabled(enabled) {
+            localStorage.setItem('debugServerAutoRefresh', String(enabled));
+        }
+        
+        function renderData(data) {
+            const content = document.getElementById('content');
+            const collapsedSections = getCollapsedSections();
+            
+            if (!data || Object.keys(data).length === 0) {
+                content.innerHTML = '<div class="section"><div class="section-title">No Data</div><div class="section-content">No debug data available yet.</div></div>';
+                return;
+            }
+            
+            let html = '';
+            const sortedKeys = Object.keys(data).sort();
+            for (const key of sortedKeys) {
+                const isCollapsed = collapsedSections.includes(key);
+                html += '<div class="section' + (isCollapsed ? ' collapsed' : '') + '" data-section-key="' + escapeHtml(key) + '">';
+                html += '<div class="section-title" onclick="toggleSection(this)">' + escapeHtml(key) + '</div>';
+                html += '<div class="section-content">' + formatValue(data[key]) + '</div>';
+                html += '</div>';
+            }
+            content.innerHTML = html;
+        }
+        
+        function toggleSection(titleElement) {
+            const section = titleElement.closest('.section');
+            const sectionKey = section.getAttribute('data-section-key');
+            const collapsedSections = getCollapsedSections();
+            
+            section.classList.toggle('collapsed');
+            const isCollapsed = section.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                if (!collapsedSections.includes(sectionKey)) {
+                    collapsedSections.push(sectionKey);
+                }
+            }
+            else {
+                const index = collapsedSections.indexOf(sectionKey);
+                if (index > -1) {
+                    collapsedSections.splice(index, 1);
+                }
+            }
+            
+            setCollapsedSections(collapsedSections);
+        }
+        
+        function expandAll() {
+            const sections = document.querySelectorAll('.section');
+            const collapsedSections = [];
+            
+            for (const section of sections) {
+                section.classList.remove('collapsed');
+            }
+            
+            setCollapsedSections(collapsedSections);
+        }
+        
+        function collapseAll() {
+            const sections = document.querySelectorAll('.section');
+            const collapsedSections = [];
+            
+            for (const section of sections) {
+                const sectionKey = section.getAttribute('data-section-key');
+                if (sectionKey) {
+                    section.classList.add('collapsed');
+                    collapsedSections.push(sectionKey);
+                }
+            }
+            
+            setCollapsedSections(collapsedSections);
+        }
+        
+        function showSpinner() {
+            const spinner = document.getElementById('refreshSpinner');
+            if (spinner) {
+                spinner.classList.add('active');
+            }
+        }
+        
+        function hideSpinner() {
+            const spinner = document.getElementById('refreshSpinner');
+            if (spinner) {
+                spinner.classList.remove('active');
+            }
+        }
+        
+        async function fetchData() {
+            try {
+                const response = await fetch('/data');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch data');
+                }
+                const data = await response.json();
+                renderData(data);
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('status').style.color = '#b5cea8';
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                
+                // Hide spinner 1 second after refresh completes
+                setTimeout(() => {
+                    hideSpinner();
+                }, 1000);
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                document.getElementById('status').style.color = '#f48771';
+                document.getElementById('content').innerHTML = '<div class="error">Failed to fetch debug data. Make sure the server is running.</div>';
+                
+                // Hide spinner 1 second after error
+                setTimeout(() => {
+                    hideSpinner();
+                }, 1000);
+            }
+        }
+        
+        // Auto-refresh state
+        let autoRefreshTimeout = null;
+        let countdownInterval = null;
+        let secondsUntilRefresh = 20;
+        let autoRefreshEnabled = getAutoRefreshEnabled();
+        
+        function updateCountdown() {
+            const countdownEl = document.getElementById('countdown');
+            if (!countdownEl) return;
+            
+            if (autoRefreshEnabled) {
+                const minutes = Math.floor(secondsUntilRefresh / 60);
+                const seconds = secondsUntilRefresh % 60;
+                countdownEl.textContent = `Next refresh in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            else {
+                countdownEl.textContent = 'Auto refresh disabled';
+            }
+        }
+        
+        function updateAutoRefreshButton() {
+            const btn = document.getElementById('autoRefreshBtn');
+            if (btn) {
+                btn.textContent = autoRefreshEnabled ? 'Auto Refresh: ON' : 'Auto Refresh: OFF';
+            }
+        }
+        
+        function startCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            countdownInterval = setInterval(() => {
+                if (autoRefreshEnabled && secondsUntilRefresh > 0) {
+                    secondsUntilRefresh--;
+                    updateCountdown();
+                    
+                    // Show spinner 1 second before refresh
+                    if (secondsUntilRefresh === 1) {
+                        showSpinner();
+                    }
+                }
+            }, 1000);
+        }
+        
+        function scheduleNextRefresh() {
+            if (autoRefreshTimeout) {
+                clearTimeout(autoRefreshTimeout);
+            }
+            
+            secondsUntilRefresh = 20;
+            updateCountdown();
+            
+            if (autoRefreshEnabled) {
+                // Refresh after 20 seconds
+                autoRefreshTimeout = setTimeout(() => {
+                    fetchData().then(() => {
+                        // Schedule next refresh
+                        scheduleNextRefresh();
+                    });
+                }, 20000);
+            }
+        }
+        
+        function refreshNow() {
+            // Reset countdown and refresh immediately
+            secondsUntilRefresh = 20;
+            updateCountdown();
+            
+            if (autoRefreshTimeout) {
+                clearTimeout(autoRefreshTimeout);
+            }
+            
+            showSpinner();
+            fetchData().then(() => {
+                // Schedule next refresh
+                scheduleNextRefresh();
+            });
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            setAutoRefreshEnabled(autoRefreshEnabled);
+            updateAutoRefreshButton();
+            updateCountdown();
+            
+            if (autoRefreshEnabled) {
+                scheduleNextRefresh();
+                startCountdown();
+            }
+            else {
+                if (autoRefreshTimeout) {
+                    clearTimeout(autoRefreshTimeout);
+                    autoRefreshTimeout = null;
+                }
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                hideSpinner();
+            }
+        }
+        
+        // Fetch immediately
+        fetchData();
+        
+        // Start auto-refresh if enabled
+        updateAutoRefreshButton();
+        updateCountdown();
+        if (autoRefreshEnabled) {
+            scheduleNextRefresh();
+            startCountdown();
+        }
+        
+        // Live reload check (only in development)
+        let lastReloadCheck = Date.now();
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/reload-check');
+                    const data = await response.json();
+                    if (data.lastModified > lastReloadCheck) {
+                        lastReloadCheck = data.lastModified;
+                        window.location.reload();
+                    }
+                }
+                catch (error) {
+                    // Ignore errors
+                }
+            }, 1000); // Check every second
+        }
+    </script>
+</body>
+</html>
+

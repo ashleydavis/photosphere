@@ -1,7 +1,8 @@
 import pc from "picocolors";
 import { exit } from "node-utils";
 import path from "path";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { ensureDir } from "node-utils";
 import { log } from "utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 
@@ -58,7 +59,7 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
 
     // Prepare output path
     const outputDir = path.dirname(outputPath);
-    await fs.ensureDir(outputDir);
+    await ensureDir(outputDir);
 
     // If output path is a directory, use original filename with type suffix
     const getOutputFileName = (originalName: string, type: AssetType): string => {

@@ -7,7 +7,7 @@ import { createMediaFileDatabase, acquireWriteLock, releaseWriteLock, loadDataba
 import { ITimestampProvider, IUuidGenerator, RandomUuidGenerator, TimestampProvider } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { BsonDatabase, IBsonCollection } from "bdb";
-import type { HashCache, FileScanner } from "api";
+import type { HashCache, ScannerOptions } from "api";
 import type { IAsset } from "defs";
 import { streamAsset, writeAsset } from "api";
 
@@ -50,7 +50,7 @@ export interface IMediaFileDatabaseProvider {
     //
     // Opens a media file database.
     //
-    openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>;
+    openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; scannerOptions: ScannerOptions }>;
 
     //
     // Reads a streaming asset from the storage provider.
@@ -71,7 +71,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Tracks open databases that need to be closed.
     //
-    private databaseMap = new Map<string, { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }>();
+    private databaseMap = new Map<string, { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; scannerOptions: ScannerOptions }>();
     
     constructor(private readonly assetStorage: IStorage, private readonly googleApiKey: string | undefined) {
     }
@@ -79,7 +79,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
     //
     // Opens a media file database.
     //
-    async openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
+    async openDatabase(databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; scannerOptions: ScannerOptions }> {
         let mediaFileDatabase = this.databaseMap.get(databaseId);
         if (!mediaFileDatabase) {
             const assetStorage = new StoragePrefixWrapper(this.assetStorage, databaseId);
@@ -109,6 +109,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
                 timestampProvider,
                 googleApiKey: this.googleApiKey,
                 sessionId,
+                scannerOptions: { ignorePatterns: [/\.db/] },
             };
             this.databaseMap.set(databaseId, mediaFileDatabase);
             console.log(`Opened media file database in ${databaseId}.`);
@@ -160,7 +161,7 @@ export class MultipleMediaFileDatabaseProvider implements IMediaFileDatabaseProv
 //
 export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvider {
 
-    private mediaFileDatabase: { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner } | undefined = undefined;
+    private mediaFileDatabase: { assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; scannerOptions: ScannerOptions } | undefined = undefined;
     
     constructor(private readonly assetStorage: IStorage, private readonly databaseId: string, private readonly databaseName: string, private readonly googleApiKey: string | undefined) {
     }
@@ -168,7 +169,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
     //
     // Opens a media file database.
     //
-    async openDatabase(_databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; localFileScanner: FileScanner }> {
+    async openDatabase(_databaseId: string): Promise<{ assetStorage: IStorage; metadataStorage: IStorage; bsonDatabase: BsonDatabase; sessionId: string; uuidGenerator: IUuidGenerator; timestampProvider: ITimestampProvider; googleApiKey: string | undefined; metadataCollection: IBsonCollection<IAsset>; scannerOptions: ScannerOptions }> {
         if (this.mediaFileDatabase) {
             return this.mediaFileDatabase;
         }
@@ -199,6 +200,7 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
             timestampProvider,
             googleApiKey: this.googleApiKey,
             sessionId,
+            scannerOptions: { ignorePatterns: [/\.db/] },
         };
 
         return this.mediaFileDatabase;
@@ -444,7 +446,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
                 // console.log(`Handled ${req.method} ${req.path}`);
             }
             catch (err: any) {
-                console.error(`An error occured handling ${req.method} ${req.path}`);
+                console.error(`An error occurred handling ${req.method} ${req.path}`);
                 console.error(err.stack);
                 res.sendStatus(500);
             }
@@ -617,8 +619,26 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
             return;
         }
 
-        const readStream = mediaFileDatabaseProvider.readStream(databaseId, assetType, assetId);
-        readStream.pipe(res);
+        try {
+            const readStream = mediaFileDatabaseProvider.readStream(databaseId, assetType, assetId);
+            readStream.on('error', (err: any) => {
+                if (err.code === 'ENOENT') {
+                    res.sendStatus(404);
+                } else {
+                    console.error(`Error reading asset ${assetId}:`, err);
+                    if (!res.headersSent) {
+                        res.sendStatus(500);
+                    }
+                }
+            });
+            readStream.pipe(res);
+        } catch (err: any) {
+            if (err.code === 'ENOENT') {
+                res.sendStatus(404);
+            } else {
+                throw err;
+            }
+        }
     }));
 
     //

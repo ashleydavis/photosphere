@@ -1,4 +1,5 @@
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
 import { ILog } from "utils";
@@ -12,17 +13,23 @@ import { buildMetadata } from "./build-metadata";
 //
 export class FileLogger implements ILog {
     private logFile: string;
+    private errorLogFile: string;
     private startTime: Date;
     private command: string;
     private writeQueue: string[] = [];
+    private errorWriteQueue: string[] = [];
     private isWriting: boolean = false;
+    private isWritingErrors: boolean = false;
     private isClosed: boolean = false;
+    private hasErrors: boolean = false;
+    private errorFileHeaderWritten: boolean = false;
     private consoleLogger: ILog;
     
-    private constructor(consoleLogger: ILog, command: string, logFile: string, startTime: Date) {
+    private constructor(consoleLogger: ILog, command: string, logFile: string, errorLogFile: string, startTime: Date) {
         this.consoleLogger = consoleLogger;
         this.command = command;
         this.logFile = logFile;
+        this.errorLogFile = errorLogFile;
         this.startTime = startTime;
         
         // Register termination callback to flush logs
@@ -37,14 +44,15 @@ export class FileLogger implements ILog {
         // Create logs directory in Photosphere temp
         const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
-        fs.ensureDirSync(logsDir);
+        ensureDirSync(logsDir);
         
         // Create log file with timestamp
         const timestamp = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const logFile = path.join(logsDir, `psi-${timestamp}.log`);
+        const errorLogFile = path.join(logsDir, `psi-${timestamp}-errors.log`);
         
         // Create the logger instance
-        const logger = new FileLogger(consoleLogger, command, logFile, startTime);
+        const logger = new FileLogger(consoleLogger, command, logFile, errorLogFile, startTime);
         
         // Write initial log header
         await logger.writeLogHeader();
@@ -162,6 +170,60 @@ export class FileLogger implements ILog {
         }
     }
     
+    private writeToErrorFile(level: string, message: string): void {
+        if (this.isClosed) {
+            return;
+        }
+        
+        this.hasErrors = true;
+        
+        const timestamp = new Date().toISOString();
+        const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+        
+        // Add to error queue for async writing
+        this.errorWriteQueue.push(logEntry);
+        
+        // Start processing error queue if not already doing so
+        this.processErrorWriteQueue();
+    }
+    
+    private async processErrorWriteQueue(): Promise<void> {
+        if (this.isWritingErrors || this.errorWriteQueue.length === 0) {
+            return;
+        }
+        
+        this.isWritingErrors = true;
+        
+        try {
+            // Create error log file with header if it doesn't exist yet
+            if (!this.errorFileHeaderWritten) {
+                const header = [
+                    '='.repeat(80),
+                    `Photosphere CLI Error Log`,
+                    `Started: ${this.startTime.toISOString()}`,
+                    `Command: ${this.command}`,
+                    `Working Directory: ${process.cwd()}`,
+                    '='.repeat(80),
+                    '',
+                    '--- Error Log Start ---',
+                    ''
+                ].join('\n');
+                await fs.writeFile(this.errorLogFile, header);
+                this.errorFileHeaderWritten = true;
+            }
+            
+            while (this.errorWriteQueue.length > 0) {
+                const entries = this.errorWriteQueue.splice(0); // Take all pending entries
+                const content = entries.join('');
+                await fs.appendFile(this.errorLogFile, content);
+            }
+        } catch (error) {
+            // Silently ignore file write errors - we don't want logging to break the app
+        } finally {
+            this.isWritingErrors = false;
+        }
+    }
+    
     get verboseEnabled(): boolean {
         return this.consoleLogger.verboseEnabled;
     }
@@ -178,17 +240,20 @@ export class FileLogger implements ILog {
     
     error(message: string): void {
         this.writeToFile('error', message);
+        this.writeToErrorFile('error', message);
         this.consoleLogger.error(message);
     }
     
     exception(message: string, error: Error): void {
         const fullMessage = `${message}\nStack trace: ${error.stack || error.message || error}`;
         this.writeToFile('exception', fullMessage);
+        this.writeToErrorFile('exception', fullMessage);
         this.consoleLogger.exception(message, error);
     }
     
     warn(message: string): void {
         this.writeToFile('warn', message);
+        this.writeToErrorFile('warn', message);
         this.consoleLogger.warn(message);
     }
     
@@ -247,6 +312,40 @@ export class FileLogger implements ILog {
         } catch (error) {
             // Silently ignore file write errors during close
         }
+        
+        // Wait for any pending error writes to complete
+        while (this.isWritingErrors) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        
+        // Final flush of remaining error content
+        try {
+            if (this.errorWriteQueue.length > 0) {
+                const content = this.errorWriteQueue.join('');
+                await fs.appendFile(this.errorLogFile, content);
+                this.errorWriteQueue = [];
+            }
+            
+            // Add footer to error log if errors were logged
+            if (this.hasErrors) {
+                const errorFooter = [
+                    '',
+                    '--- Error Log End ---',
+                    `Completed: ${endTime.toISOString()}`,
+                    '='.repeat(80),
+                    ''
+                ].join('\n');
+                await fs.appendFile(this.errorLogFile, errorFooter);
+            }
+        } catch (error) {
+            // Silently ignore file write errors during close
+        }
+        
+        // Show error file location if errors were logged
+        if (this.hasErrors) {
+            console.log('');
+            console.log(`Errors, warnings, and exceptions were logged to: ${this.errorLogFile}`);
+        }
     }
     
     //
@@ -254,5 +353,19 @@ export class FileLogger implements ILog {
     //
     getLogFilePath(): string {
         return this.logFile;
+    }
+    
+    //
+    // Check if any errors, warnings, or exceptions were logged
+    //
+    hasLoggedErrors(): boolean {
+        return this.hasErrors;
+    }
+    
+    //
+    // Get the path to the error log file
+    //
+    getErrorLogFilePath(): string {
+        return this.errorLogFile;
     }
 }

@@ -1,5 +1,6 @@
 import { select, text, confirm, isCancel, outro } from './clack/prompts';
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 import pc from 'picocolors';
 import { exit } from 'node-utils';
@@ -116,7 +117,7 @@ export async function pickDirectory(
                     }
                     // Check if directory already exists
                     const newPath = join(currentPath, value);
-                    if (fs.existsSync(newPath)) {
+                    if (existsSync(newPath)) {
                         return 'Directory already exists';
                     }
                     return undefined;

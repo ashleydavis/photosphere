@@ -1,10 +1,10 @@
-import {  log, retry } from "utils";
+import { log, retry } from "utils";
 import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import { IStorage, IStorageDescriptor } from "storage";
-import { TaskStatus, ITaskResult, ITaskQueue } from "task-queue";
-import { deserializeError } from "serialize-error";
+import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
+import { TaskStatus, ITaskResult, ITaskQueue, registerHandler } from "task-queue";
+import { IVerifyFileData, IVerifyFileResult } from "./verify.worker";
 
 //
 // Provider object that creates and manages task queues.
@@ -26,6 +26,11 @@ export interface IVerifyOptions {
     // Path filter to only verify files matching this path (file or directory).
     //
     pathFilter?: string;
+
+    //
+    // Optional S3 configuration for accessing S3-hosted storage.
+    //
+    s3Config?: IS3Credentials;
 }
 
 //
@@ -88,7 +93,7 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, assetStorage: IStorage, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
@@ -145,10 +150,12 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete((taskResult: ITaskResult) => {
+        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((taskResult) => {
+
+            result.filesProcessed++;
+            
             if (taskResult.status === TaskStatus.Completed) {
-                const fileResult = taskResult.outputs as IVerifyFileResult;
-                result.filesProcessed++;
+                const fileResult = taskResult.outputs!;
 
                 if (progressCallback) {
                     const status = queue.getStatus();
@@ -157,29 +164,22 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
 
                 if (fileResult.status === "removed") {
                     result.removed.push(fileResult.fileName);
-                } else if (fileResult.status === "modified") {
+                }
+                else if (fileResult.status === "modified") {
                     result.modified.push(fileResult.fileName);
-                } else {
+                }
+                else {
                     result.numUnmodified++;
                 }
-            } else if (taskResult.status === TaskStatus.Failed) {
-                // Task failed - track the failure separately
-                let errorMessage: string;
+            } 
+            else if (taskResult.status === TaskStatus.Failed) {
+                const fileName = taskResult.inputs.node?.name || "unknown";
                 if (taskResult.error) {
-                    try {
-                        const errorObj = JSON.parse(taskResult.error);
-                        const deserializedError = deserializeError(errorObj);
-                        errorMessage = deserializedError.message || String(deserializedError);
-                    } catch {
-                        // Error is not JSON, use it as-is
-                        errorMessage = taskResult.error;
-                    }
-                } else {
-                    errorMessage = "Unknown error";
+                    log.exception(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
+                } 
+                else {
+                    log.error(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`);
                 }
-                const fileName = taskResult.inputs?.node?.name || "unknown";
-                log.error(`Failed to verify file "${fileName}": ${errorMessage}`);
-                result.filesProcessed++;
                 result.numFailures++;
             }
         });
@@ -201,7 +201,10 @@ export async function verify(storageDescriptor: IStorageDescriptor, assetStorage
                 queue.addTask("verify-file", {
                     node,
                     storageDescriptor,
-                    options,
+                    s3Config: options?.s3Config,
+                    options: {
+                        full: options?.full,
+                    },
                 });
             }
 

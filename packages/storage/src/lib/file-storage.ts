@@ -1,8 +1,10 @@
-import * as fs from "fs-extra";
+import * as fs from "fs/promises";
+import { createReadStream, createWriteStream } from "fs";
 import * as path from "path";
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { log } from "utils";
+import { ensureDir, pathExists, remove, copy } from "node-utils";
 
 // Write lock timeout in milliseconds (10 seconds)
 const WRITE_LOCK_TIMEOUT_MS = 10000;
@@ -16,7 +18,7 @@ export class FileStorage implements IStorage {
     // Returns true if the specified directory is empty.
     //
     async isEmpty(path: string): Promise<boolean> {
-        if (!await fs.pathExists(path)) {
+        if (!await pathExists(path)) {
             return true;
         }
         const entries = await fs.readdir(path);
@@ -27,7 +29,7 @@ export class FileStorage implements IStorage {
     // List files in storage.
     //
     async listFiles(path: string, max: number, next?: string): Promise<IListResult> {
-        if (!await fs.pathExists(path)) {
+        if (!await pathExists(path)) {
             return {
                 names: [],
                 next: undefined,
@@ -54,7 +56,7 @@ export class FileStorage implements IStorage {
     // List files in storage.
     //
     async listDirs(path: string, max: number, next?: string): Promise<IListResult> {
-        if (!await fs.pathExists(path)) {
+        if (!await pathExists(path)) {
             return {
                 names: [],
                 next: undefined,
@@ -81,7 +83,7 @@ export class FileStorage implements IStorage {
     // Returns true if the specified file exists.
     //
     async fileExists(filePath: string): Promise<boolean> {
-        if (!await fs.pathExists(filePath)) {
+        if (!await pathExists(filePath)) {
             return false;
         }
         
@@ -94,7 +96,7 @@ export class FileStorage implements IStorage {
     // Returns true if the specified directory exists.
     //
     async dirExists(dirPath: string): Promise<boolean> {
-        if (!await fs.pathExists(dirPath)) {
+        if (!await pathExists(dirPath)) {
             return false;
         }
         
@@ -107,7 +109,7 @@ export class FileStorage implements IStorage {
     // Gets info about a file.
     //
     async info(filePath: string): Promise<IFileInfo | undefined> {
-        if (!await fs.pathExists(filePath)) {
+        if (!await pathExists(filePath)) {
             return undefined;
         }
         const stat = await fs.stat(filePath);
@@ -127,7 +129,7 @@ export class FileStorage implements IStorage {
     // Returns undefined if the file doesn't exist.
     //
     async read(filePath: string): Promise<Buffer | undefined> {
-        if (!await fs.pathExists(filePath)) {
+        if (!await pathExists(filePath)) {
             // Returns undefined if the file doesn't exist.
             return undefined;
         }
@@ -140,15 +142,15 @@ export class FileStorage implements IStorage {
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
 
-        await fs.ensureDir(path.dirname(filePath));
+        await ensureDir(path.dirname(filePath));
         await fs.writeFile(filePath, data);
     }
 
     //
     // Streams a file from stroage.
     //
-    readStream(filePath: string): Readable {
-        return fs.createReadStream(filePath);
+        readStream(filePath: string): Readable {
+        return createReadStream(filePath);
     }
 
     //
@@ -157,9 +159,9 @@ export class FileStorage implements IStorage {
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
 
         return new Promise<void>((resolve, reject) => {
-            fs.ensureDir(path.dirname(filePath))
+            ensureDir(path.dirname(filePath))
                 .then(() => {
-                    const fileWriteStream = fs.createWriteStream(filePath);
+                    const fileWriteStream = createWriteStream(filePath);
                     inputStream.pipe(fileWriteStream)
                         .on("error", (err: any) => {
                             reject(err);
@@ -203,8 +205,8 @@ export class FileStorage implements IStorage {
     // Src file path is a full path, dest path is relative to the storage root.
     //
     async copyTo(srcPath: string, destPath: string): Promise<void> {
-        await fs.ensureDir(path.dirname(destPath));
-        await fs.copy(srcPath, destPath);
+        await ensureDir(path.dirname(destPath));
+        await copy(srcPath, destPath);
     }
 
     //
@@ -213,7 +215,7 @@ export class FileStorage implements IStorage {
     //
     async checkWriteLock(filePath: string): Promise<IWriteLockInfo | undefined> {
         try {
-            if (await fs.pathExists(filePath)) {
+            if (await pathExists(filePath)) {
                 const lockContent = await fs.readFile(filePath, 'utf8');
                 const lockData = JSON.parse(lockContent.trim());
                 return {
@@ -243,7 +245,7 @@ export class FileStorage implements IStorage {
         
         try {
             // Check if lock already exists
-            if (await fs.pathExists(filePath)) {
+            if (await pathExists(filePath)) {
                 // Check if existing lock has timed out (10 seconds = 10000ms)
                 const existingLock = await this.checkWriteLock(filePath);
                 if (existingLock) {
@@ -253,7 +255,7 @@ export class FileStorage implements IStorage {
                         if (log.verboseEnabled) {
                             log.verbose(`[LOCK] ${timestamp},ACQUIRE_TIMEOUT_BREAK,${processId},${owner},${filePath},age:${lockAge}ms,oldOwner:${existingLock.owner}`);
                         }
-                        await fs.remove(filePath);
+                        await remove(filePath);
                     } else {
                         // Lock is still valid
                         if (log.verboseEnabled) {
@@ -266,12 +268,12 @@ export class FileStorage implements IStorage {
                     if (log.verboseEnabled) {
                         log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
                     }
-                    await fs.remove(filePath);
+                    await remove(filePath);
                 }
             }
             
             // Ensure directory exists
-            await fs.ensureDir(path.dirname(filePath));
+            await ensureDir(path.dirname(filePath));
             
             // Create lock file with owner and timestamp information
             const lockInfo = {

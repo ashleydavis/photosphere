@@ -1,0 +1,28 @@
+{
+  "name": "debug-server",
+  "version": "1.0.0",
+  "description": "Debug server for exposing internal state of the CLI tool when --debug is enabled.",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
+    "compile": "tsc",
+    "compile:watch": "tsc --watch --preserveWatchOutput",
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo"
+  },
+  "keywords": [],
+  "author": "ashley@codecapers.com.au",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/express": "^4.17.16",
+    "@types/node": "^22.9.1",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "express": "^5.0.0-beta.1",
+    "node-utils": "workspace:*",
+    "open": "^10.1.2"
+  }
+}
+

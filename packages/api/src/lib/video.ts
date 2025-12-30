@@ -1,39 +1,20 @@
 import { getVideoTransformation, ILocation } from "utils";
-import path from "path";
-import fs from "fs-extra";
+import * as fs from "fs/promises";
+import { pathExists } from "node-utils";
 import dayjs from "dayjs";
-import { writeStreamToFile } from "node-utils";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IUuidGenerator } from "utils";
-import { Readable } from "stream";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
 import { getFileInfo, Video } from "tools";
 import { resizeImage, transformImage } from "./image";
-import mime from 'mime';
 
 //
 // Gets the details of a video.
 // 
-export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, openStream?: () => NodeJS.ReadableStream): Promise<IAssetDetails> {
-
-    let videoPath: string;
-
-    if (openStream) {
-        // Choose extension based on content type.            
-        const ext = mime.getExtension(contentType);
-        if (!ext) {
-            throw new Error(`Unsupported content type: ${contentType}`);
-        }
-
-        // If openStream is provided, we need to extract to a temporary file.
-        videoPath = join(tmpdir(), `temp_video_${uuidGenerator.generate()}.${ext}`);
-        await writeStreamToFile(openStream(), videoPath);        
-    }
-    else {
-        // Use the file directly from its location on disk.
-        videoPath = filePath;
-    }
+export async function getVideoDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, logicalPath: string): Promise<IAssetDetails> {
+    // filePath is always a valid file (already extracted if from zip)
+    const videoPath = filePath;
 
     const assetInfo = await getFileInfo(videoPath, contentType);
     if (!assetInfo) {
@@ -70,7 +51,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         // See if we can get photo date from the JSON file.
         //
         const jsonFilePath = filePath + ".json";
-        if (await fs.pathExists(jsonFilePath)) {
+        if (await pathExists(jsonFilePath)) {
             const jsonFileData = await fs.readFile(jsonFilePath);
             const photoData = JSON.parse(jsonFileData.toString());
             if (photoData.photoTakenTime?.timestamp) {

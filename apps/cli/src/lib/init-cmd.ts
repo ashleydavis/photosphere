@@ -1,4 +1,4 @@
-import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase, FileScanner } from "api";
+import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
@@ -6,16 +6,19 @@ import type { IAsset } from "defs";
 import type { ITaskQueueProvider } from "api";
 import { TaskQueueProvider } from "./task-queue-provider";
 import { configureLog } from "./log";
-import { exit, TestUuidGenerator, TestTimestampProvider } from "node-utils";
+import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
+import { pathExists, ensureDir, copy } from 'node-utils';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import { join } from "path";
+import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 
 //
@@ -24,7 +27,7 @@ import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 export async function getAvailableKeys(): Promise<string[]> {
     const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
     
-    if (!await fs.pathExists(keysDir)) {
+    if (!await pathExists(keysDir)) {
         return [];
     }
     
@@ -115,7 +118,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
         const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
         
         // Ensure the ~/.config/photosphere/keys directory exists
-        await fs.ensureDir(keysDir);
+        await ensureDir(keysDir);
 
         // Ask for filename
         const keyFilename = await text({
@@ -132,7 +135,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
                 }
                 // Check if file already exists
                 const keyPath = join(keysDir, value);
-                if (fs.existsSync(keyPath)) {
+                if (existsSync(keyPath)) {
                     return 'File already exists';
                 }
                 return undefined;
@@ -166,7 +169,7 @@ export async function resolveKeyPath(keyPath: string | undefined): Promise<strin
     const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
     const keysPath = join(keysDir, keyPath);
     
-    if (await fs.pathExists(keysPath)) {
+    if (await pathExists(keysPath)) {
         return keysPath;
     }
     
@@ -215,7 +218,8 @@ export interface IBaseCommandOptions {
 
     //
     // Number of worker threads to use for parallel processing.
-    // Supported by commands that use the task queue (e.g., verify).
+    // Defaults to the number of CPU cores.
+    // Supported by commands that use the task queue (e.g., verify, check).
     //
     workers?: number;
 
@@ -245,6 +249,7 @@ export interface ICommandContext {
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
+    sessionTempDir: string;
     taskQueueProvider: ITaskQueueProvider;
 }
 
@@ -273,18 +278,48 @@ export function initContext<TArgs extends any[], TReturn>(
             ? new TestTimestampProvider()
             : new TimestampProvider();
         const sessionId = options.sessionId || uuidGenerator.generate();
+        
+        // Create a session temporary directory for this command execution
+        const sessionTempDir = path.join(os.tmpdir(), 'photosphere', sessionId);
+        await fs.mkdir(sessionTempDir, { recursive: true });
+        log.verbose(`Created temporary directory for command session: "${sessionTempDir}"`);
+        
         // TaskQueueProvider defaults to number of CPUs if not specified
         // Check if command supports --workers and --timeout options and use them if provided
         const workers = options.workers;
         const timeout = options.timeout;
-        const taskQueueProvider = new TaskQueueProvider(workers, timeout);
+        const debug = process.argv.includes('--debug');
+        const taskQueueProvider = new TaskQueueProvider(workers, timeout, {
+            verbose: options.verbose,
+            tools: options.tools,
+            sessionId,
+        }, debug);
         
         const context: ICommandContext = {
             uuidGenerator,
             timestampProvider,
             sessionId,
+            sessionTempDir,
             taskQueueProvider,
         };
+        
+        // Register cleanup handler for termination
+        registerTerminationCallback(async (exitCode: number) => {
+            if (exitCode === 0) {
+                // Successful exit - clean up temp directory
+                try {
+                    await fs.rm(sessionTempDir, { recursive: true, force: true });
+                    log.verbose(`Cleaned up temporary directory "${sessionTempDir}"`);
+                }
+                catch (error: any) {
+                    log.exception(`Failed to clean up temporary directory ${sessionTempDir}`, error);
+                }
+            }
+            else {
+                // Error exit - retain temp directory for inspection
+                log.info(`Temporary files retained for inspection: ${sessionTempDir}`);
+            }
+        });
         
         return command(context, ...args);
     };
@@ -307,7 +342,6 @@ export interface IInitResult {
     bsonDatabase: BsonDatabase;
     sessionId: string;
     metadataCollection: IBsonCollection<IAsset>;
-    localFileScanner: FileScanner;
 
     //
     // The resolved metadata path
@@ -419,7 +453,6 @@ export async function loadDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        localFileScanner: database.localFileScanner,
     };
 }
 
@@ -505,8 +538,8 @@ export async function createDatabase(
         const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
         
         try {
-            if (await fs.pathExists(publicKeySource)) {
-                await fs.copy(publicKeySource, publicKeyDest);
+            if (await pathExists(publicKeySource)) {
+                await copy(publicKeySource, publicKeyDest);
                 // console.log(`Copied public key to database directory: ${publicKeyDest}`);
             }
         } catch (error) {
@@ -522,7 +555,6 @@ export async function createDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        localFileScanner: database.localFileScanner,
     };
 }
 
