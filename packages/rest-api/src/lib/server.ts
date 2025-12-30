@@ -619,8 +619,26 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
             return;
         }
 
-        const readStream = mediaFileDatabaseProvider.readStream(databaseId, assetType, assetId);
-        readStream.pipe(res);
+        try {
+            const readStream = mediaFileDatabaseProvider.readStream(databaseId, assetType, assetId);
+            readStream.on('error', (err: any) => {
+                if (err.code === 'ENOENT') {
+                    res.sendStatus(404);
+                } else {
+                    console.error(`Error reading asset ${assetId}:`, err);
+                    if (!res.headersSent) {
+                        res.sendStatus(500);
+                    }
+                }
+            });
+            readStream.pipe(res);
+        } catch (err: any) {
+            if (err.code === 'ENOENT') {
+                res.sendStatus(404);
+            } else {
+                throw err;
+            }
+        }
     }));
 
     //
