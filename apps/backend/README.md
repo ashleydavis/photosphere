@@ -1,4 +1,4 @@
-# Photosphere Node.js backend
+# Photosphere backend
 
 This is the backend for the Photosphere application. It is a REST API to upload, managed and retrieve assets like photos and videos.
 
