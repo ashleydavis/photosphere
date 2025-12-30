@@ -1,3 +1,5 @@
+import './styles.css';
+
 export { Main } from './main';
 export { ApiContextProvider, useApi } from './context/api-context';
 export { GalleryContextProvider } from './context/gallery-context';

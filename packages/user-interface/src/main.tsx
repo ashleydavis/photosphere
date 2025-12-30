@@ -38,12 +38,16 @@ export interface IMainProps {
     // The "computer page" which is only displayed in the Electron or mobile version.
     //
     computerPage?: JSX.Element;
+    //
+    // Set to true if running on mobile device to enable mobile-specific styles.
+    //
+    isMobile?: boolean;
 }
 
 //
 // The main page of the Photosphere app.
 //
-function __Main({ computerPage }: IMainProps) {
+function __Main({ computerPage, isMobile = false }: IMainProps) {
 
     const {
         appMode,
@@ -125,6 +129,19 @@ function __Main({ computerPage }: IMainProps) {
     const { mode, setMode } = useColorScheme();
 
     setMode("system"); // Automatically choose system mode.
+
+    //
+    // Adds mobile or desktop class to body based on isMobile prop.
+    //
+    useEffect(() => {
+        document.body.classList.remove('mobile', 'desktop');
+        document.body.classList.add(isMobile ? 'mobile' : 'desktop');
+        
+        // Cleanup: remove class on unmount
+        return () => {
+            document.body.classList.remove('mobile', 'desktop');
+        };
+    }, [isMobile]);
 
     //
     // Resets the gallery layout.
@@ -581,13 +598,13 @@ function __Main({ computerPage }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ computerPage }: IMainProps) {
+export function Main({ computerPage, isMobile }: IMainProps) {
     return (
         <CssVarsProvider>
             {!isProduction &&
                 <ModeToggle />
             }
-            <__Main computerPage={computerPage} />
+            <__Main computerPage={computerPage} isMobile={isMobile} />
         </CssVarsProvider>
     );
 }

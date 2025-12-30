@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { App } from "./app";
 import '@fortawesome/fontawesome-free/css/all.css';
 import "./tailwind.css";
-import "./styles.css";
 import { AuthContextProvider } from "user-interface";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Browser } from "@capacitor/browser";

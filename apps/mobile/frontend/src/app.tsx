@@ -17,6 +17,7 @@ export function App() {
                                         <UploadContextProvider>
                                             <Main
                                                 computerPage={<ComputerPage />}
+                                                isMobile={true}
                                             />
                                         </UploadContextProvider>
                                     </GalleryLayoutContextProvider>
