@@ -1,5 +1,6 @@
 import { generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
+import { pathExists } from 'node-utils';
 import { IStorageOptions } from './storage-factory';
 import { ensureParentDirectoryExists } from 'node-utils';
 import { FatalError } from 'utils';
@@ -72,7 +73,7 @@ export async function saveKeyPair(keyPair: IKeyPair, keyFilePath: string): Promi
  */
 export async function loadPrivateKey(keyFilePath: string): Promise<KeyObject | null> {
     try {
-        if (await fs.pathExists(keyFilePath)) {
+        if (await pathExists(keyFilePath)) {
             const privateKeyPem = await fs.readFile(keyFilePath, 'utf8');
             return createPrivateKey(privateKeyPem);
         }
@@ -91,7 +92,7 @@ export async function loadPrivateKey(keyFilePath: string): Promise<KeyObject | n
  */
 export async function loadPublicKey(keyFilePath: string): Promise<KeyObject | null> {
     try {
-        if (await fs.pathExists(keyFilePath)) {
+        if (await pathExists(keyFilePath)) {
             const publicKeyPem = await fs.readFile(keyFilePath, 'utf8');
             return createPublicKey(publicKeyPem);
         }

@@ -38,12 +38,7 @@ export let log: ILog = {
     },
 
     tool(tool: string, data: { stdout?: string; stderr?: string }): void {
-        if (data.stdout) {
-            console.log(`== ${tool} stdout ==\n${data.stdout}`);
-        }
-        if (data.stderr) {
-            console.error(`== ${tool} stderr ==\n${data.stderr}`);
-        }
+        // You have to override this method if you want to use it.
     },
 
     verboseEnabled: false

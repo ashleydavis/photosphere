@@ -41,13 +41,22 @@ main()
 // The name of the file is used as the collection name.
 //
 async function loadFixture(fixturesPath: string, file: string, bsonDatabase: BsonDatabase): Promise<void> {
+    console.log(`Loading fixture ${fixturesPath}/${file}`);
     const fullPath = path.resolve(`${fixturesPath}/${file}`);
     const records = require(fullPath);
     const collectionName = file.replace('.js', '');
     const collection = bsonDatabase.collection(collectionName);
+    
+    // Generate indexes for metadata collection (used by photosphere)
+    if (collectionName === 'metadata') {
+        await collection.ensureSortIndex("hash", "asc", "string");
+        await collection.ensureSortIndex("photoDate", "desc", "date");
+    }
+
     for (const record of records) {
         await collection.insertOne(record);
     }
+    
 }
 
 //

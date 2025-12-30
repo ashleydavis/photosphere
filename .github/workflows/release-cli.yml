@@ -65,7 +65,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -95,7 +95,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -125,7 +125,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -188,7 +188,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -230,7 +230,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -357,7 +357,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -523,7 +523,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -687,7 +687,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -713,7 +713,7 @@ jobs:
 
   build-macos-x64:
     timeout-minutes: 20
-    runs-on: macos-13 # x64 architecture
+    runs-on: macos-15-intel # x64 architecture
     needs: [unit-tests, compile]
     if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
@@ -759,7 +759,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -929,7 +929,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.1
+          bun-version: 1.3.4
 
       - name: Get lockfile hash
         id: lockfile-hash
@@ -1009,7 +1009,6 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
-
 
       - name: Upload smoke test logs
         if: always()

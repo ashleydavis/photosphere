@@ -1,0 +1,111 @@
+# Cursor Rules
+
+## Code Style Guidelines
+
+### DO NOT create import-and-reexport patterns
+
+**NEVER** create patterns like this:
+```typescript
+// In file A.ts
+export { functionFromB } from "./B";
+```
+
+**Why:** This creates unnecessary indirection and makes it harder to find where functions are actually defined. It also creates circular dependency risks and makes refactoring more difficult.
+
+**Instead:** 
+- Export functions directly from their source files
+- If you need to expose them from a package's main index, add them there directly:
+  ```typescript
+  // In packages/api/src/index.ts
+  export { functionFromB } from "./lib/B";
+  ```
+
+**Exception:** Only use re-exports when creating a public API from a package's main index file (like `packages/api/src/index.ts`), and only export from subdirectories/modules, not from peer files at the same level.
+
+### Code Formatting: else statements
+
+**NEVER** put `else` or `else if` on the same line as a closing bracket.
+
+**Bad:**
+```typescript
+if (condition) {
+    // code
+} else {
+    // code
+}
+```
+
+**Good:**
+```typescript
+if (condition) {
+    // code
+}
+else {
+    // code
+}
+```
+
+### Code Formatting: catch blocks
+
+**NEVER** put `catch` on the same line as a closing bracket.
+
+**Bad:**
+```typescript
+try {
+    // code
+} catch (error) {
+    // code
+}
+```
+
+**Good:**
+```typescript
+try {
+    // code
+}
+catch (error) {
+    // code
+}
+```
+
+### TypeScript: Avoid `any` type
+
+**NEVER** use the `any` type unless absolutely necessary. When `any` is required, it must be accompanied by a comment explaining why it's necessary and what the actual type should be.
+
+**Why:** Using `any` defeats the purpose of TypeScript's type safety and can lead to runtime errors that could have been caught at compile time.
+
+**Instead:**
+- Use proper TypeScript types
+- Use `unknown` for error handling when the error type is uncertain
+- Use union types with `undefined` for optional values (e.g., `string | undefined`)
+- Use generic types when appropriate
+- If you must use `any`, add a comment explaining why and what the actual type should be
+
+**Bad:**
+```typescript
+let data: any = getData();
+function process(item: any) { ... }
+```
+
+**Good:**
+```typescript
+let data: MyDataType | undefined = getData();
+function process(item: IProcessableItem) { ... }
+catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    // handle error
+}
+```
+
+## Critical Workflow Rules
+
+### NEVER finish up until all code is compiling
+
+**ALWAYS** run `bun run c` on the entire project before considering work complete. Do not assume the code compiles just because the linter shows no errors. TypeScript compilation may catch errors that the linter doesn't.
+
+**IMPORTANT:** Only run `bun run c` when you are completely finished with a task, not after each individual change. This reduces unnecessary compilation runs and speeds up development.
+
+**Before marking any task as complete:**
+1. Run `bun run c` to compile the entire project
+2. Fix any compilation errors
+3. Only then consider the work done

@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
 import { exec } from 'node-utils';

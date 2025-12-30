@@ -34,7 +34,6 @@
     "@types/express": "^4.17.16",
     "@types/jest": "^29.4.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/fs-extra": "^11.0.4",
     "cross-env": "^7.0.3",
     "jest": "^29.0.1",
     "ts-jest": "^29.0.5"
@@ -47,7 +46,6 @@
     "api": "workspace:*",
     "commander": "^13.1.0",
     "exif-parser": "^0.1.12",
-    "fs-extra": "^11.3.2",
     "is-unicode-supported": "^2.1.0",
     "js-yaml": "^4.1.0",
     "jszip": "^3.10.1",
@@ -64,6 +62,7 @@
     "wrap-ansi": "^9.0.0",
     "bdb": "workspace:*",
     "defs": "workspace:*",
-    "task-queue": "workspace:*"
+    "task-queue": "workspace:*",
+    "debug-server": "workspace:*"
   }
 }

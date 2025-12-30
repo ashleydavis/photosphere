@@ -90,6 +90,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
     
     if (allAvailable) {
         log.info(pc.green('🎉 All tools are available and ready to use!'));
+        await exit(0);
     } else {
         log.info(pc.yellow(`⚠️ ${missingTools.length} tool(s) missing: ${missingTools.join(', ')}`));
         log.info('');

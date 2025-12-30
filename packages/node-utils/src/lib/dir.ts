@@ -1,5 +1,5 @@
-import fs from 'fs-extra';
 import path from 'path';
+import { ensureDir } from './fs';
 
 //
 // Checks if the given directory path is a drive root (e.g., "C:\", "D:\").
@@ -16,7 +16,7 @@ function isDriveRoot(dirPath: string): boolean {
 export async function ensureParentDirectoryExists(filePath: string): Promise<void> {
     const dirname = path.dirname(path.resolve(filePath));
     try {
-        return await fs.ensureDir(dirname);
+        return await ensureDir(dirname);
     }
     catch (error: any) {
         // Ignore EPERM errors for drive roots, but throw other errors.

@@ -25,12 +25,14 @@ import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
 import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
+import { testDebugCommand } from './src/cmd/test-debug';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log, FatalError } from 'utils';
 import { version } from './src/lib/version';
+import { startDebugServer } from 'debug-server';
 
 async function main() {
 
@@ -47,6 +49,8 @@ async function main() {
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
+    const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
+    const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
 
     program
         .name("psi")
@@ -55,6 +59,7 @@ async function main() {
             console.log(version);
             process.exit(0);
         })
+        .option('--debug', 'Enable debug REST API server')
         .addHelpText('after', `
 
 Getting help:
@@ -107,6 +112,8 @@ Resources:
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
+        .option(...workersOption)
+        .option(...timeoutOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(initContext(checkCommand));
@@ -223,7 +230,7 @@ Resources:
         .option(...yesOption)
         .argument("<files...>", "The media files to analyze.")
         .addHelpText('after', getCommandExamplesHelp('info'))
-        .action(infoCommand);
+        .action(initContext(infoCommand));
 
     program
         .command("init")
@@ -382,17 +389,38 @@ Resources:
         .option(...yesOption)
         .option("--full", "Force full verification (bypass cached hash optimization)", false)
         .option("-p, --path <path>", "Verify only files matching this path (file or directory)")
-        .option("--workers <number>", "Number of worker threads to use for parallel verification (default: number of CPU cores)")
-        .option("--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)")
+        .option(...workersOption)
+        .option(...timeoutOption)
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(initContext(verifyCommand));
+
+    program
+        .command("test-debug", { hidden: true })
+        .description("Temporary command for testing the debug REST API. Runs an infinite loop that updates debug data.")
+        .option(...verboseOption)
+        .action(initContext(testDebugCommand));
 
     program
         .command("version")
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
+
+    // Start debug server if --debug flag is set (before parsing so it's available during command execution)
+    if (process.argv.includes('--debug')) {
+        try {
+            const { url } = await startDebugServer({
+                initialData: {},
+                openBrowser: true
+            });
+            console.log(pc.green(`Debug REST API server started on ${url}`));
+            console.log(pc.cyan("Press Ctrl+C in this terminal to stop the server."));
+        }
+        catch (error: any) {
+            console.error(pc.red(`Failed to start debug server: ${error.message}`));
+        }
+    }
 
     // Parse the command line arguments
     try {
@@ -424,22 +452,17 @@ Resources:
 //
 // Handles errors in a consistent way.
 //
-function handleError(error: any) {
+function handleError(error: any, errorType: string | undefined) {
     if (error instanceof FatalError) {
         log.error(`\n\n${pc.red(error.message)}`);
         return;
     }
-    
-    // For other errors, show full details
-    log.error(pc.red('An error occurred:'));
-    if (error.message) {
-        log.error(pc.red(error.message).toString());
-    }
-    if (error.stack) {
-        log.error((pc.red(error.stack).toString()));
-    }
+
+    if (errorType) {
+        log.exception(`An ${errorType} error occurred`, error);    
+    } 
     else {
-        log.error(pc.red(error.toString()).toString());
+        log.exception('An unknown error occurred', error);
     }
 
     console.log('');
@@ -449,18 +472,18 @@ function handleError(error: any) {
 
 // Handle unhandled errors
 process.on('uncaughtException', (error) => {
-    handleError(error);
+    handleError(error, 'uncaughtException');
     process.exit(1);
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-    handleError(reason);
+    handleError(reason, 'unhandledRejection');
     process.exit(1);
 });
 
 main()
     .catch(async (error) => {
-        handleError(error);
+        handleError(error, undefined);
         return exit(1);
     });

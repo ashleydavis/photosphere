@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { IUuidGenerator } from "utils";
-import { serializeError } from "serialize-error";
+import { IUuidGenerator, log } from "utils";
+import { serializeError, deserializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
+import type { IWorkerOptions } from "./worker-init";
 
 //
 // Task status enumeration
@@ -18,12 +19,13 @@ export enum TaskStatus {
 //
 // Task result interface
 //
-export interface ITaskResult {
+export interface ITaskResult<TInputs = any, TOutputs = any> {
     status: TaskStatus;
     message?: string;
-    error?: string;
-    outputs?: any; // The actual result data returned by the handler
-    inputs: any; // The original arguments/data sent to the task
+    error?: Error; // Deserialized error object (automatically deserialized from JSON)
+    errorMessage?: string; // Convenience field: error?.message || "Unknown error"
+    outputs?: TOutputs; // The actual result data returned by the handler
+    inputs: TInputs; // The original arguments/data sent to the task
     taskId: string;
     taskType: string;
     createdAt: Date;
@@ -56,8 +58,9 @@ export type { TaskHandler };
 
 //
 // Task completion callback
+// Can be synchronous or asynchronous
 //
-export type TaskCompletionCallback = (result: ITaskResult) => void;
+export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void | Promise<void>;
 
 //
 // Queue status interface
@@ -81,6 +84,24 @@ export interface IExecutionStats {
 }
 
 //
+// Worker state information for debugging
+//
+export interface IWorkerInfo {
+    workerId: number;
+    isReady: boolean;
+    isIdle: boolean;
+    currentTaskId: string | null;
+    currentTaskType: string | null;
+    currentTaskRunningTimeMs: number | null; // Time in milliseconds the current task has been running, or null if no task is running
+    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
+}
+
+//
+// Callback for worker state changes
+//
+export type WorkerStateChangeCallback = (workers: IWorkerInfo[]) => void;
+
+//
 // Task queue interface
 //
 export interface ITaskQueue {
@@ -98,7 +119,7 @@ export interface ITaskQueue {
     //
     // Registers a callback that will be called when any task completes (success or failure).
     //
-    onTaskComplete(callback: TaskCompletionCallback): void;
+    onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
 
     //
     // Awaits the completion of a particular task.
@@ -115,20 +136,6 @@ export interface ITaskQueue {
     //
     getTaskResult(id: string): ITaskResult | undefined;
 
-    //
-    // Gets results for all tasks.
-    //
-    getAllTaskResults(): ITaskResult[];
-
-    //
-    // Gets results for all successful tasks.
-    //
-    getSuccessfulTaskResults(): ITaskResult[];
-
-    //
-    // Gets results for all failed tasks.
-    //
-    getFailedTaskResults(): ITaskResult[];
 
     //
     // Awaits the completion of all tasks and an empty queue.
@@ -146,6 +153,16 @@ export interface ITaskQueue {
     getExecutionStats(): IExecutionStats;
 
     //
+    // Gets current state of all workers for debugging.
+    //
+    getWorkerState(): IWorkerInfo[];
+
+    //
+    // Sets a callback to be notified when worker state changes.
+    //
+    onWorkerStateChange(callback: WorkerStateChangeCallback): void;
+
+    //
     // Shuts down the task queue and terminates all workers.
     //
     shutdown(): void;
@@ -160,6 +177,7 @@ interface IWorkerState {
     isReady: boolean; // Worker has sent "ready" message and can process tasks
     isIdle: boolean; // Worker is ready and not currently processing a task
     currentTaskId: string | null;
+    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
 }
 
 //
@@ -176,19 +194,24 @@ export class TaskQueue implements ITaskQueue {
     private uuidGenerator: IUuidGenerator;
     private taskResolvers: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
-    private completionCallbacks: TaskCompletionCallback[] = [];
+    private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private tasksQueued: number = 0;
+    private tasksCompleted: number = 0;
+    private tasksFailed: number = 0;
     private workerPath: string;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
+    private workerOptions?: IWorkerOptions;
+    private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
 
     //
     // Creates a new task queue with the specified number of workers.
     // Tasks will execute in separate Bun worker threads for true parallelism.
     // workerPath: Path to the worker script file (must be provided by the caller).
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
+    // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000) {
+    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000, workerOptions?: IWorkerOptions) {
         this.maxWorkers = maxWorkers;
         this.workerPath = workerPath;
         this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
@@ -196,6 +219,7 @@ export class TaskQueue implements ITaskQueue {
             generate: () => randomUUID()
         } as IUuidGenerator;
         this.taskTimeout = taskTimeout;
+        this.workerOptions = workerOptions;
 
         // Workers will be created lazily when tasks are added
     }
@@ -239,8 +263,8 @@ export class TaskQueue implements ITaskQueue {
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     // Multiple callbacks can be registered and will all be called.
     //
-    onTaskComplete(callback: TaskCompletionCallback): void {
-        this.completionCallbacks.push(callback);
+    onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
+        this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
     }
 
     //
@@ -288,6 +312,7 @@ export class TaskQueue implements ITaskQueue {
             status: task.status,
             message: task.result?.message,
             error: task.result?.error,
+            errorMessage: task.result?.errorMessage,
             outputs: task.result?.outputs,
             inputs: task.data,
             taskId: task.id,
@@ -368,8 +393,6 @@ export class TaskQueue implements ITaskQueue {
     getStatus(): IQueueStatus {
         let pending = 0;
         let running = 0;
-        let completed = 0;
-        let failed = 0;
 
         for (const task of this.tasks.values()) {
             switch (task.status) {
@@ -379,21 +402,15 @@ export class TaskQueue implements ITaskQueue {
                 case TaskStatus.Running:
                     running++;
                     break;
-                case TaskStatus.Completed:
-                    completed++;
-                    break;
-                case TaskStatus.Failed:
-                    failed++;
-                    break;
             }
         }
 
         return {
             pending,
             running,
-            completed,
-            failed,
-            total: this.tasks.size
+            completed: this.tasksCompleted,
+            failed: this.tasksFailed,
+            total: this.tasks.size + this.tasksCompleted + this.tasksFailed
         };
     }
 
@@ -412,30 +429,95 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
+    // Gets current state of all workers for debugging.
+    //
+    getWorkerState(): IWorkerInfo[] {
+        return this.workers.map(worker => {
+            let currentTaskRunningTimeMs: number | null = null;
+            if (worker.currentTaskId) {
+                const task = this.tasks.get(worker.currentTaskId);
+                if (task && task.startedAt) {
+                    currentTaskRunningTimeMs = Date.now() - task.startedAt.getTime();
+                }
+            }
+            
+            return {
+                workerId: worker.workerId,
+                isReady: worker.isReady,
+                isIdle: worker.isIdle,
+                currentTaskId: worker.currentTaskId,
+                currentTaskType: worker.currentTaskId ? this.tasks.get(worker.currentTaskId)?.type || null : null,
+                currentTaskRunningTimeMs,
+                tasksProcessed: worker.tasksProcessed
+            };
+        });
+    }
+
+    //
+    // Sets a callback to be notified when worker state changes.
+    //
+    onWorkerStateChange(callback: WorkerStateChangeCallback): void {
+        this.workerStateChangeCallback = callback;
+    }
+
+    //
+    // Internal: Notifies callback of worker state changes.
+    //
+    private notifyWorkerStateChange(): void {
+        if (this.workerStateChangeCallback) {
+            this.workerStateChangeCallback(this.getWorkerState());
+        }
+    }
+
+    //
     // Internal: Creates a single worker and adds it to the pool.
     // Returns the worker state.
     //
     private createWorker(): IWorkerState {
-        const worker = new Worker(this.workerPath);
+        // Pass worker options via environment variable
+        // Also pass through environment variables needed for tmpdir() to work correctly
+        const workerEnv: Record<string, string> = {};
+        
+        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
+        if (process.env.TEMP) {
+            workerEnv.TEMP = process.env.TEMP;
+        }
+        if (process.env.TMP) {
+            workerEnv.TMP = process.env.TMP;
+        }
+        if (process.env.TMPDIR) {
+            workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+        
+        if (this.workerOptions) {
+            workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        } else {
+            workerEnv.WORKER_OPTIONS = JSON.stringify({});
+        }
+        
+        const worker = new Worker(this.workerPath, { env: workerEnv });
         const workerState: IWorkerState = {
             worker,
             workerId: this.workers.length + 1,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false, // Will be set to true when worker is ready and idle
-            currentTaskId: null
+            currentTaskId: null,
+            tasksProcessed: 0
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(workerState, event.data);
+            this.handleWorkerMessage(workerState, event.data).catch((error: any) => {
+                log.exception("Error handling worker message", error);
+            });
         });
 
-        worker.addEventListener("error", (error) => {
-            console.error(`[Worker ${workerState.workerId}] Error: ${error.message || "Unknown error"}`);
+        worker.addEventListener("error", (error: any) => {
+            log.exception(`Error from worker ${workerState.workerId}`, error);
             this.handleWorkerCrash(workerState);
         });
 
-        worker.addEventListener("messageerror", (error) => {
-            console.error(`[Worker ${workerState.workerId}] Message error:`, error);
+        worker.addEventListener("messageerror", (error: any) => {
+            log.exception(`Error from worker ${workerState.workerId}`, error);
             this.handleWorkerCrash(workerState);
         });
 
@@ -445,6 +527,7 @@ export class TaskQueue implements ITaskQueue {
         if (this.workers.length > this.peakWorkers) {
             this.peakWorkers = this.workers.length;
         }
+        this.notifyWorkerStateChange();
         return workerState;
     }
 
@@ -459,8 +542,13 @@ export class TaskQueue implements ITaskQueue {
             return;
         }
 
-        // Find an available idle worker
-        let availableWorker = this.workers.find(w => w.isIdle);
+        // Find an available idle worker that has processed the least tasks
+        const idleWorkers = this.workers.filter(w => w.isIdle);
+        let availableWorker = idleWorkers.length > 0
+            ? idleWorkers.reduce((least, current) => 
+                current.tasksProcessed < least.tasksProcessed ? current : least
+            )
+            : undefined;
         
         // If no idle worker available and we haven't reached maxWorkers, create workers for pending tasks
         if (!availableWorker && this.workers.length < this.maxWorkers) {
@@ -506,10 +594,13 @@ export class TaskQueue implements ITaskQueue {
         task.startedAt = new Date();
         availableWorker.isIdle = false;
         availableWorker.currentTaskId = taskId;
+        this.notifyWorkerStateChange();
 
         // Set up timeout for this task
         const timeoutId = setTimeout(() => {
-            this.handleTaskTimeout(taskId, availableWorker!);
+            this.handleTaskTimeout(taskId, availableWorker!).catch((error: any) => {
+                log.exception("Error handling task timeout", error);
+            });
         }, this.taskTimeout);
         this.taskTimeouts.set(taskId, timeoutId);
 
@@ -523,8 +614,9 @@ export class TaskQueue implements ITaskQueue {
                 workingDirectory: task.workingDirectory,
             };
             availableWorker.worker.postMessage(executeMsg);
-        } catch (error) {
-            console.error(`Error sending task to worker ${availableWorker.workerId}:`, error);
+        } 
+        catch (error: any) {
+            log.exception(`Error sending task to worker ${availableWorker.workerId}`, error);
             // Clear timeout on error
             const timeout = this.taskTimeouts.get(taskId);
             if (timeout) {
@@ -539,11 +631,12 @@ export class TaskQueue implements ITaskQueue {
     // Internal: Handles messages from worker threads.
     // Processes task results and errors.
     //
-    private handleWorkerMessage(workerState: IWorkerState, data: any): void {
+    private async handleWorkerMessage(workerState: IWorkerState, data: any): Promise<void> {
         // Handle worker ready message
         if (data && typeof data === "object" && "type" in data && data.type === "ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
+            this.notifyWorkerStateChange();
             this.processNextTask(); // Try to process pending tasks now that worker is ready
             return;
         }
@@ -580,9 +673,17 @@ export class TaskQueue implements ITaskQueue {
 
             workerState.isIdle = true;
             workerState.currentTaskId = null;
+            workerState.tasksProcessed++;
 
-            this.notifyCompletionCallbacks(fullResult);
+            this.tasksCompleted++;
+
+            this.notifyWorkerStateChange();
+            await this.notifyCompletionCallbacks(fullResult);
             this.resolveTask(taskId, fullResult);
+            
+            // Remove completed task from memory after reporting result
+            this.tasks.delete(taskId);
+            
             this.processNextTask();
             return;
         }
@@ -604,10 +705,22 @@ export class TaskQueue implements ITaskQueue {
 
             task.status = TaskStatus.Failed;
             task.completedAt = new Date();
-            const errorString = error ? JSON.stringify(serializeError(error)) : "Unknown error";
+            let deserializedError: Error | undefined;
+            if (error) {
+                try {
+                    deserializedError = deserializeError(error);
+                } 
+                catch {
+                    // If deserialization fails, create a generic error
+                    deserializedError = new Error(typeof error === 'string' ? error : JSON.stringify(error));
+                }
+            } else {
+                deserializedError = new Error("Unknown error");
+            }
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
-                error: errorString,
+                error: deserializedError,
+                errorMessage: deserializedError.message || "Unknown error",
                 inputs: task.data,
                 taskId: task.id,
                 taskType: task.type,
@@ -619,9 +732,17 @@ export class TaskQueue implements ITaskQueue {
 
             workerState.isIdle = true;
             workerState.currentTaskId = null;
+            workerState.tasksProcessed++;
 
-            this.notifyCompletionCallbacks(result);
+            this.tasksFailed++;
+
+            this.notifyWorkerStateChange();
+            await this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
+            
+            // Remove failed task from memory after reporting result
+            this.tasks.delete(taskId);
+            
             this.processNextTask();
             return;
         }
@@ -631,7 +752,7 @@ export class TaskQueue implements ITaskQueue {
     // Internal: Handles task timeout by terminating the worker, requeuing the task, and replacing the worker.
     // Only allows up to 3 timeouts per task, after which the task is marked as failed.
     //
-    private handleTaskTimeout(taskId: string, workerState: IWorkerState): void {
+    private async handleTaskTimeout(taskId: string, workerState: IWorkerState): Promise<void> {
         const task = this.tasks.get(taskId);
         if (!task || task.status !== TaskStatus.Running) {
             // Task already completed or doesn't exist, ignore timeout
@@ -648,13 +769,14 @@ export class TaskQueue implements ITaskQueue {
         // Increment timeout count
         task.timeoutCount++;
 
-        console.error(`[Task Queue] Task ${taskId} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
+        log.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
 
         // Terminate the worker
         try {
             workerState.worker.terminate();
-        } catch (error) {
-            console.error(`[Task Queue] Error terminating worker ${workerState.workerId}:`, error);
+        } 
+        catch (error: any) {
+            log.exception(`[Task Queue] Error terminating worker ${workerState.workerId}`, error);
         }
 
         // Check if we've exceeded the maximum number of timeouts
@@ -665,7 +787,8 @@ export class TaskQueue implements ITaskQueue {
             const error = new Error(`Task timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
-                error: JSON.stringify(serializeError(error)),
+                error: error,
+                errorMessage: error.message,
                 inputs: task.data,
                 taskId: task.id,
                 taskType: task.type,
@@ -678,7 +801,7 @@ export class TaskQueue implements ITaskQueue {
             workerState.isIdle = true;
             workerState.currentTaskId = null;
 
-            this.notifyCompletionCallbacks(result);
+            await this.notifyCompletionCallbacks(result);
             this.resolveTask(taskId, result);
             this.processNextTask();
 
@@ -737,46 +860,74 @@ export class TaskQueue implements ITaskQueue {
         const index = this.workers.indexOf(oldWorkerState);
         if (index > -1) {
             this.workers.splice(index, 1);
+            this.notifyWorkerStateChange();
         }
 
         // Create replacement worker
-        const worker = new Worker(this.workerPath);
+        // Pass worker options via environment variable
+        // Also pass through environment variables needed for tmpdir() to work correctly
+        const workerEnv: Record<string, string> = {};
+        
+        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
+        if (process.env.TEMP) {
+            workerEnv.TEMP = process.env.TEMP;
+        }
+        if (process.env.TMP) {
+            workerEnv.TMP = process.env.TMP;
+        }
+        if (process.env.TMPDIR) {
+            workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+        
+        if (this.workerOptions) {
+            workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        } else {
+            workerEnv.WORKER_OPTIONS = JSON.stringify({});
+        }
+        
+        const worker = new Worker(this.workerPath, { env: workerEnv });
         const newWorkerState: IWorkerState = {
             worker,
             workerId: oldWorkerState.workerId,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false,
-            currentTaskId: null
+            currentTaskId: null,
+            tasksProcessed: oldWorkerState.tasksProcessed // Preserve task count when replacing worker
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(newWorkerState, event.data);
+            this.handleWorkerMessage(newWorkerState, event.data).catch((error: any) => {
+                log.exception("Error handling worker message", error);
+            });
         });
 
-        worker.addEventListener("error", (error) => {
-            console.error(`[Worker ${newWorkerState.workerId}] Error: ${error.message || "Unknown error"}`);
+        worker.addEventListener("error", (error: any) => {
+            log.exception(`Error from worker ${newWorkerState.workerId}`, error);
             this.handleWorkerCrash(newWorkerState);
         });
 
-        worker.addEventListener("messageerror", (error) => {
-            console.error(`[Worker ${newWorkerState.workerId}] Message error:`, error);
+        worker.addEventListener("messageerror", (error: any) => {
+            log.exception(`Error from worker ${newWorkerState.workerId}]`, error);
             this.handleWorkerCrash(newWorkerState);
         });
 
         this.workers.push(newWorkerState);
+        this.notifyWorkerStateChange();
     }
 
     //
     // Internal: Invokes all registered completion callbacks with the task result.
     // Callback errors are caught and logged to prevent breaking the queue.
+    // Async callbacks are awaited to ensure they complete.
     //
-    private notifyCompletionCallbacks(result: ITaskResult): void {
+    private async notifyCompletionCallbacks(result: ITaskResult): Promise<void> {
         for (const callback of this.completionCallbacks) {
             try {
-                callback(result);
-            } catch (error) {
+                await callback(result);
+            } 
+            catch (error: any) {
                 // Don't let callback errors break the task queue
-                console.error("Error in task completion callback:", error);
+                log.exception("Error in task completion callback", error);
             }
         }
     }
@@ -807,6 +958,17 @@ export class TaskQueue implements ITaskQueue {
             this.allTasksResolver = null;
             resolver.resolve();
         }
+    }
+
+    //
+    // Formats a task ID to show only first 2 and last 2 characters.
+    // Example: "12345678-1234-1234-1234-123456789abc" -> "12bc"
+    //
+    private formatTaskId(taskId: string): string {
+        if (taskId.length <= 4) {
+            return taskId;
+        }
+        return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
     }
 
     //

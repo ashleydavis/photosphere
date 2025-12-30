@@ -6,6 +6,7 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } fr
 import { formatBytes } from "../lib/format";
 import { verify } from "api";
 import { IStorageDescriptor } from "storage";
+import { getS3Config } from "../lib/config";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -17,12 +18,6 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
     // Path to a specific file or directory to verify (instead of entire database).
     //
     path?: string;
-
-    //
-    // Number of worker threads to use for parallel verification.
-    // Defaults to the number of CPU cores.
-    //
-    workers?: number;
 }
 
 //
@@ -30,7 +25,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
 
     // Create storage descriptor for passing to workers
@@ -40,9 +35,13 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         encryptionKeyPath: resolvedKeyPath
     };
     
-    const result = await verify(storageDescriptor, assetStorage, metadataStorage, context.taskQueueProvider, { 
+    // Get S3 config to pass to workers (needed for S3-hosted storage)
+    const s3Config = await getS3Config();
+    
+    const result = await verify(storageDescriptor, metadataStorage, context.taskQueueProvider, { 
         full: options.full,
-        pathFilter: options.path
+        pathFilter: options.path,
+        s3Config
     }, (progress) => {
         writeProgress(`🔍 ${progress}`);
     });

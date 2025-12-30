@@ -1,4 +1,4 @@
-import fs from "fs";
+import * as fs from "fs/promises";
 import { computeHash } from "user-interface";
 import { getImageResolution, IResolution, loadBlobToImage, resizeImageToBlob } from "user-interface";
 
@@ -6,7 +6,7 @@ import { getImageResolution, IResolution, loadBlobToImage, resizeImageToBlob } f
 // Loads a local file into a blob.
 //
 export async function loadFileToBlob(filePath: string, contentType: string): Promise<Blob> {
-    const buffer = await fs.promises.readFile(filePath);
+    const buffer = await fs.readFile(filePath);
     return new Blob([buffer], { type: contentType });
 }    
 
@@ -14,7 +14,7 @@ export async function loadFileToBlob(filePath: string, contentType: string): Pro
 // Loads information about a local file.
 //
 export async function loadFileInfo(filePath: string, contentType: string): Promise<{ resolution: IResolution, hash: string, fileDate: Date }> {
-    const stats = await fs.promises.stat(filePath);
+    const stats = await fs.stat(filePath);
     const blob = await loadFileToBlob(filePath, contentType);
     const image = await loadBlobToImage(blob);
     return {

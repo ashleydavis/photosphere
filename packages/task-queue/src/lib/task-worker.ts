@@ -5,11 +5,12 @@
 //
 
 import { serializeError } from "serialize-error";
+import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./worker-init";
 
 //
 // Handler registry - handlers are stored in a Map
 //
-export type TaskHandler = (data: any, workingDirectory: string) => Promise<any>;
+export type TaskHandler = (data: any, workingDirectory: string, context: IWorkerContext) => Promise<any>;
 
 const handlers = new Map<string, TaskHandler>();
 
@@ -36,10 +37,13 @@ export interface WorkerMessage {
 //
 // Execute a task handler in the worker
 //
-async function executeTask(message: WorkerMessage): Promise<void> {
+async function executeTask(message: WorkerMessage, context: IWorkerContext): Promise<void> {
     const { taskId, taskType, data, workingDirectory } = message;
 
     try {
+        // Set task ID for logging prefix
+        setWorkerTaskId(taskId);
+
         // Get handler (registered statically when worker module loads)
         const registeredTypes = getRegisteredHandlerTypes();
         const handler = getHandler(taskType);
@@ -47,8 +51,11 @@ async function executeTask(message: WorkerMessage): Promise<void> {
             throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
         }
 
-        // Execute the handler
-        const outputs = await handler(data, workingDirectory);
+        // Execute the handler with context
+        const outputs = await handler(data, workingDirectory, context);
+        
+        // Clear task ID from logging
+        setWorkerTaskId(null);
         
         // Send success result back to main thread
         self.postMessage({
@@ -60,7 +67,11 @@ async function executeTask(message: WorkerMessage): Promise<void> {
                 outputs: outputs
             }
         });
-    } catch (error: any) {
+    }
+    catch (error: any) {
+        // Clear task ID from logging
+        setWorkerTaskId(null);
+        
         // Send error result back to main thread
         self.postMessage({
             type: "error",
@@ -73,13 +84,14 @@ async function executeTask(message: WorkerMessage): Promise<void> {
 //
 // Initialize the worker message listener
 // This should be called by application-specific worker files after registering handlers
+// context: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
 //
-export function initWorker(): void {
+export function initWorker(context: IWorkerContext): void {
     self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
 
         if (message.type === "execute") {
-            await executeTask(message);
+            await executeTask(message, context);
         }
     };
     

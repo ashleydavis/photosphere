@@ -82,6 +82,7 @@ export async function versionCommand(): Promise<void> {
     log.info(`  ${pc.bold('Keys')}: ${pc.cyan(keysDir)}`);
     log.info(`  ${pc.bold('Temp')}: ${pc.cyan(join(os.tmpdir(), 'photosphere'))}`);
     log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(os.tmpdir(), 'photosphere', 'logs'))}`);
+    log.info(`  ${pc.bold('Hash cache')}: ${pc.cyan(join(os.tmpdir(), 'photosphere', 'hash-cache-x.dat'))}`);
     log.info('');
     
     // Show overall status
