@@ -6,7 +6,7 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } fr
 import { getS3Config } from "../lib/config";
 import { getFileLogger } from "../lib/log";
 import { checkPaths } from "api";
-import { FileStorage, IStorageDescriptor } from "storage";
+import { IStorageDescriptor } from "storage";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
 }
