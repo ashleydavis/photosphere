@@ -5,7 +5,7 @@
 //
 
 import { serializeError } from "serialize-error";
-import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./worker-init";
+import { setWorkerTaskId, type IWorkerContext } from "./worker-init";
 
 //
 // Handler registry - handlers are stored in a Map
