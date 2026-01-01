@@ -1,6 +1,5 @@
 import express, { Request, Response, Application } from "express";
 import cors from "cors";
-import { auth } from "express-oauth2-jwt-bearer";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { IMediaFileDatabases, IDatabaseOp } from "defs";
 import { createMediaFileDatabase, acquireWriteLock, releaseWriteLock, loadDatabase } from "api";
@@ -29,13 +28,6 @@ const dateFields = [
     "photoDate",
     "uploadDate",
 ];
-
-export interface IAuth0Options {
-    clientId: string;
-    audience: string;
-    domain: string;
-    redirectUrl: string;
-}
 
 /**
  * Provies access to media file databases.
@@ -240,21 +232,6 @@ export class SingleMediaFileDatabaseProvider implements IMediaFileDatabaseProvid
 
 export interface IServerOptions {
     //
-    // Sets the mode of the server.
-    //
-    appMode: string; // "readonly" | "readwrite"
-
-    //
-    // Sets the type of authentication to use.
-    //
-    authType: string; // "auth0" | "no-auth"
-
-    //
-    // Authentication options for auth0.
-    //
-    auth0?: IAuth0Options;
-
-    //
     // The Google API key for reverse geocoding, if provided.
     //
     googleApiKey?: string;
@@ -286,41 +263,7 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
     }
 
     //
-    // Configures authentication in the frontend.
-    //
-    app.get("/auth/config", (req, res) => {
-        if (options.authType === "auth0") {
-            if (!options.auth0) {
-                console.error("Expected auth0 options");
-                res.sendStatus(500);
-                return;
-            }
-
-            res.json({
-                appMode: options.appMode,
-                authMode: "auth0",
-                auth0: {
-                    domain: options.auth0.domain,
-                    clientId: options.auth0.clientId,
-                    audience: options.auth0.audience,
-                    redirectUrl: options.auth0.redirectUrl,
-                },
-            });
-        }
-        else if (options.authType === "no-auth") {
-            res.json({
-                appMode: options.appMode,
-                authMode: "no-auth",
-            });
-        }
-        else {
-            console.error(`Unknown auth type: ${options.authType}`);
-            res.status(500);
-        }
-    });
-
-    //
-    // Extracts JWT from query parameters.
+    // Reject requests to root and favicon.
     //
     app.use((req, res, next) => {
 
@@ -331,71 +274,6 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
 
         next();
     });
-
-    if (options.authType === "auth0") {
-        if (!options.auth0) {
-            throw new Error("Expected auth0 options");
-        }
-
-        if (!db) {
-            throw new Error("Expected database when authentication is enabled.");
-        }
-        
-        const checkJwt = auth({
-            audience: options.auth0.audience,
-            issuerBaseURL: options.auth0.domain,
-            tokenSigningAlg: 'RS256'
-        });
-
-        //
-        // Authenticates a JWT token.
-        //
-        app.use(checkJwt);
-
-        //
-        // Attaches user information to the request.
-        //
-        app.use(async (req, res, next) => {
-            if (!req.auth?.payload.sub) {
-                res.sendStatus(401);
-                return;
-            }
-
-            let userId = req.auth.payload.sub;
-            if (userId.startsWith("auth0|")) {
-                // Removes the auth0| prefix the user id.
-                userId = userId.substring(6);
-
-                let numPadding = 32 - userId.length;
-                if (numPadding < 0) {
-                    console.log(`User ID is too long: ${userId}`);
-                    res.sendStatus(401);
-                    return;
-                }
-
-                userId += '0'.repeat(numPadding); // Pad the user id to 32 characters to match the database.
-            }
-            const user = await db!.collection<IUser>("users").getOne(userId);
-            if (!user) {
-                console.log(`User not found: ${userId}`);
-                res.sendStatus(401);
-                return;
-            }
-
-            req.userId = userId;
-            req.user = Object.assign({}, user, {
-                _id: userId,
-            });
-            next();
-        });
-
-    }
-    else if (options.authType === "no-auth") {
-        console.warn("No authentication enabled.");
-    }
-    else {
-        throw new Error(`Unknown auth type: ${options.authType}`);
-    }
 
     //
     // Gets the value of a header from the request.
@@ -480,11 +358,6 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
     // Applies a set of operations to the asset database.
     //
     app.post("/operations", express.json(), asyncErrorHandler(async (req, res) => {
-        if (options.appMode !== "readwrite") {
-            res.sendStatus(403); // Forbidden in readonly mode.
-            return;
-        }
-
         const ops = getValue<IDatabaseOp[]>(req.body, "ops");
         for (const op of ops) {
             const mediaFileDatabase = await mediaFileDatabaseProvider.openDatabase(op.databaseId);
@@ -546,11 +419,6 @@ export async function createServer(now: () => Date, mediaFileDatabaseProvider: I
     // Uploads a new asset.
     //
     app.post("/asset", asyncErrorHandler(async (req, res) => {
-        if (options.appMode !== "readwrite") {
-            res.sendStatus(403); // Forbidden in readonly mode.
-            return;
-        }
-
         const assetId = getHeader(req, "id");
         const databaseId = getHeader(req, "db");
         const contentType = getHeader(req, "content-type");
