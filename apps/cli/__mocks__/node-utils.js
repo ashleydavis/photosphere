@@ -5,8 +5,13 @@ async function exit(code) {
 }
 
 class TestUuidGenerator {
+    constructor() {
+        this.counter = 0;
+    }
+    
     generate() {
-        return 'test-uuid';
+        this.counter++;
+        return `test-uuid-${this.counter}`;
     }
 }
 

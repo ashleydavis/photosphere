@@ -1,12 +1,11 @@
+//TODO: Might want to make a seperate library out of this called task-handler-registry.
 //
 // Worker infrastructure for task execution
 // This module provides the core worker functionality that can be imported
 // by application-specific worker files
 //
 
-import { serializeError } from "serialize-error";
-import { setWorkerTaskId } from "./worker-init";
-import type { TaskHandler, WorkerMessage, IWorkerContext } from "./types";
+import type { TaskHandler, ITaskContext } from "./types";
 
 const handlers = new Map<string, TaskHandler>();
 
@@ -22,71 +21,23 @@ export function getRegisteredHandlerTypes(): string[] {
     return Array.from(handlers.keys());
 }
 
-// Re-export types for convenience
-export type { TaskHandler, WorkerMessage, IWorkerContext } from "./types";
-
 //
-// Execute a task handler in the worker
+// Shared function to execute a task handler
+// Returns the handler outputs, or throws an error if the handler is not found or execution fails
 //
-async function executeTask(message: WorkerMessage, context: IWorkerContext): Promise<void> {
-    const { taskId, taskType, data, workingDirectory } = message;
-
-    try {
-        // Set task ID for logging prefix
-        setWorkerTaskId(taskId);
-
-        // Get handler (registered statically when worker module loads)
-        const registeredTypes = getRegisteredHandlerTypes();
-        const handler = getHandler(taskType);
-        if (!handler) {
-            throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
-        }
-
-        // Execute the handler with context
-        const outputs = await handler(data, workingDirectory, context);
-        
-        // Clear task ID from logging
-        setWorkerTaskId(null);
-        
-        // Send success result back to main thread
-        self.postMessage({
-            type: "result",
-            taskId,
-            result: {
-                status: "completed",
-                message: typeof outputs === "string" ? outputs : "Task completed successfully",
-                outputs: outputs
-            }
-        });
+export async function executeTaskHandler(
+    taskType: string,
+    data: any,
+    workingDirectory: string,
+    context: ITaskContext
+): Promise<any> {
+    const registeredTypes = getRegisteredHandlerTypes();
+    const handler = getHandler(taskType);
+    if (!handler) {
+        throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
     }
-    catch (error: any) {
-        // Clear task ID from logging
-        setWorkerTaskId(null);
-        
-        // Send error result back to main thread
-        self.postMessage({
-            type: "error",
-            taskId,
-            error: serializeError(error)
-        });
-    }
+
+    return await handler(data, workingDirectory, context);
 }
 
-//
-// Initialize the worker message listener
-// This should be called by application-specific worker files after registering handlers
-// context: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
-//
-export function initWorker(context: IWorkerContext): void {
-    self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-        const message = event.data;
-
-        if (message.type === "execute") {
-            await executeTask(message, context);
-        }
-    };
-    
-    // Send ready message to main thread to indicate worker is initialized and ready for tasks
-    self.postMessage({ type: "ready" });
-}
 

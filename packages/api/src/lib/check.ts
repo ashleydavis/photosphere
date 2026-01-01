@@ -4,7 +4,7 @@ import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
 import { TaskStatus } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
-import { ITaskQueueProvider } from "./verify";
+import type { ITaskQueueProvider } from "task-queue";
 import { IStorageDescriptor, IS3Credentials } from "storage";
 import * as os from "os";
 import * as path from "path";

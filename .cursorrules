@@ -22,6 +22,8 @@ export { functionFromB } from "./B";
 
 **Exception:** Only use re-exports when creating a public API from a package's main index file (like `packages/api/src/index.ts`), and only export from subdirectories/modules, not from peer files at the same level.
 
+**CRITICAL:** NEVER add re-exports (including type re-exports) in internal library files. Re-exports should ONLY be in the package's main index file (e.g., `packages/task-queue/src/index.ts`). Internal files should import directly from their dependencies, not re-export them.
+
 ### Code Formatting: else statements
 
 **NEVER** put `else` or `else if` on the same line as a closing bracket.
@@ -107,6 +109,54 @@ function process(item: IProcessableItem) { ... }
 catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
     // handle error
+}
+```
+
+### TypeScript: Never use dynamic imports
+
+**NEVER** use dynamic imports (like `import("package")`) in type definitions or anywhere else. Always use static imports at the top of the file.
+
+**Why:** Dynamic imports create unnecessary complexity, can cause bundling issues, and make it harder to track dependencies. Static imports are clearer and more predictable.
+
+**Bad:**
+```typescript
+export interface IProps {
+    provider?: import("api").ITaskQueueProvider;
+}
+```
+
+**Good:**
+```typescript
+import type { ITaskQueueProvider } from "api";
+
+export interface IProps {
+    provider?: ITaskQueueProvider;
+}
+```
+
+### JavaScript/TypeScript: Never use lazy requires or imports
+
+**NEVER** use lazy requires or imports (loading modules inside functions, conditionally, or on-demand). Always require/import at the top of the file.
+
+**Why:** Lazy loading makes code harder to understand, can cause module instance mismatches, makes dependency tracking difficult, and can lead to subtle bugs where different parts of the code access different module instances.
+
+**Bad:**
+```javascript
+function getHandler(type) {
+    if (!getHandlerFunction) {
+        const taskQueue = require('task-queue');
+        getHandlerFunction = taskQueue.getHandler;
+    }
+    return getHandlerFunction(type);
+}
+```
+
+**Good:**
+```javascript
+const { getHandler } = require('task-queue');
+
+function getHandler(type) {
+    return getHandler(type);
 }
 ```
 

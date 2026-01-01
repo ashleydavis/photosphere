@@ -25,14 +25,17 @@ export function AppContextProvider({ children }: IProps) {
     // Loads data from the backend.
     //
     async function load(): Promise<void> {
-        //todo: load the list of databases that has been remembered for the user.
-        // if (isOnline) {
-        //     const dbs = await await api.getDatabases();
-        //     if (dbs) {
-        //         setDbs(dbs);
-        //         return;
-        //     }
-        // }
+        // Mock database for development
+        const mockDbs: IMediaFileDatabases = {
+            defaultDb: "default",
+            dbs: [
+                {
+                    id: "default",
+                    name: "Default Database"
+                }
+            ]
+        };
+        setDbs(mockDbs);
     }
 
     useEffect(() => {

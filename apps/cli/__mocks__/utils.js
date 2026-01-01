@@ -25,8 +25,13 @@ class RandomUuidGenerator {
 }
 
 class TestUuidGenerator {
+    constructor() {
+        this.counter = 0;
+    }
+    
     generate() {
-        return 'test-uuid';
+        this.counter++;
+        return `test-uuid-${this.counter}`;
     }
 }
 
@@ -42,7 +47,7 @@ class TestTimestampProvider {
     }
 }
 
-const exports = {
+module.exports = {
     log: mockLog,
     setLog,
     sleep,
@@ -56,5 +61,4 @@ const exports = {
     uuid: jest.fn().mockReturnValue('test-uuid')
 };
 
-module.exports = exports;
-module.exports.default = exports;
+module.exports.default = module.exports;

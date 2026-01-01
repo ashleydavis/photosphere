@@ -6,37 +6,18 @@
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 //
-// Task handler function type
-// Returns the result payload (can be any type)
+// Task context with all dependencies needed for task execution
 //
-export type TaskHandler = (data: any, workingDirectory: string, context: IWorkerContext) => Promise<any>;
-
-//
-// Worker message interface for communication between main thread and workers
-//
-export interface WorkerMessage {
-    type: "execute";
-    taskId: string;
-    taskType: string;
-    data: any;
-    workingDirectory: string;
-}
-
-//
-// Options passed to workers for context initialization
-//
-export interface IWorkerOptions {
-    verbose?: boolean;
-    tools?: boolean;
-    sessionId?: string;
-}
-
-//
-// Common dependencies injected into workers (similar to ICommandContext)
-//
-export interface IWorkerContext {
+export interface ITaskContext {
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
+    sendMessage: (message: any) => void;
 }
+
+//
+// Task handler function type
+// Returns the result payload (can be any type)
+//
+export type TaskHandler = (data: any, workingDirectory: string, context: ITaskContext) => Promise<any>;
 

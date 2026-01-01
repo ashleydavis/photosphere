@@ -1,6 +1,8 @@
-import { TaskQueue, type IWorkerOptions, type IWorkerInfo, TaskStatus } from "task-queue";
+import { TaskQueue } from "./task-queue";
+import { type IWorkerInfo } from "task-queue";
 import type { ITaskQueue } from "task-queue";
-import type { ITaskQueueProvider } from "api";
+import type { IWorkerOptions } from "./worker-init";
+import type { ITaskQueueProvider } from "task-queue";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { registerStateProvider, updateStateProvider } from "debug-server";
@@ -10,14 +12,13 @@ import type { IUuidGenerator } from "utils";
 // Task queue provider that lazily creates task queues when needed.
 //
 export class TaskQueueProvider implements ITaskQueueProvider {
-    private taskQueueInstance: ITaskQueue | null = null;
     private maxWorkers: number;
     private taskTimeout: number;
-    private workerOptions: IWorkerOptions | undefined;
+    private workerOptions: IWorkerOptions;
     private debug: boolean;
     private uuidGenerator: IUuidGenerator;
 
-    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions | undefined, debug: boolean, uuidGenerator: IUuidGenerator) {
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions, debug: boolean, uuidGenerator: IUuidGenerator) {
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
@@ -26,54 +27,53 @@ export class TaskQueueProvider implements ITaskQueueProvider {
     }
 
     async create(): Promise<ITaskQueue> {
-        if (!this.taskQueueInstance) {
-            // Worker path resolved relative to project root (per Bun docs)
-            const baseWorkingDirectory = join(tmpdir(), "task-queue");
-            this.taskQueueInstance = new TaskQueue(this.maxWorkers, "./worker.ts", baseWorkingDirectory, this.uuidGenerator, this.taskTimeout, this.workerOptions);
-            
-            // If debug mode is enabled, register state provider for polling
-            if (this.debug) {
-                // Register state provider that will be polled every minute
-                registerStateProvider("taskQueue", () => {
-                    const workers = this.taskQueueInstance!.getWorkerState();
-                    const queueStatus = this.taskQueueInstance!.getStatus();
-                    const succeededCount = queueStatus.completed;
-                    const failedCount = queueStatus.failed;
-                    const totalCompleted = succeededCount + failedCount;
-                    
-                    const taskStats = {
-                        ...queueStatus,
-                        succeeded: succeededCount,
-                        percentSucceeded: totalCompleted > 0 ? Math.round((succeededCount / totalCompleted) * 100 * 100) / 100 : 0,
-                        percentFailed: totalCompleted > 0 ? Math.round((failedCount / totalCompleted) * 100 * 100) / 100 : 0
-                    };
-                    
-                    // Create bar chart data for tasks processed per worker
-                    const tasksProcessedChart = {
-                        __barChart: true,
-                        title: "Tasks Processed per Worker",
-                        items: workers.map(worker => ({
-                            label: `Worker ${worker.workerId}`,
-                            value: worker.tasksProcessed,
-                            displayValue: worker.tasksProcessed
-                        }))
-                    };
-                    
-                    return {
-                        workers,
-                        taskStats,
-                        workerStats: this.calculateWorkerStats(workers),
-                        tasksProcessedChart
-                    };
-                });
+        const baseWorkingDirectory = join(tmpdir(), "task-queue");
+        const taskQueue = new TaskQueue(this.maxWorkers, baseWorkingDirectory, this.uuidGenerator, this.taskTimeout, this.workerOptions);
+        
+        // If debug mode is enabled, register state provider for polling
+        if (this.debug) {
+            // Register state provider that will be polled every minute
+            // Capture taskQueue in closure for state provider access
+            registerStateProvider("taskQueue", () => {
+                const workers = taskQueue.getWorkerState();
+                const queueStatus = taskQueue.getStatus();
+                const succeededCount = queueStatus.completed;
+                const failedCount = queueStatus.failed;
+                const totalCompleted = succeededCount + failedCount;
                 
-                // Also trigger updates on state changes (for immediate updates)
-                this.taskQueueInstance.onWorkerStateChange(() => {
-                    updateStateProvider("taskQueue");
-                });
-            }
+                const taskStats = {
+                    ...queueStatus,
+                    succeeded: succeededCount,
+                    percentSucceeded: totalCompleted > 0 ? Math.round((succeededCount / totalCompleted) * 100 * 100) / 100 : 0,
+                    percentFailed: totalCompleted > 0 ? Math.round((failedCount / totalCompleted) * 100 * 100) / 100 : 0
+                };
+                
+                // Create bar chart data for tasks processed per worker
+                const tasksProcessedChart = {
+                    __barChart: true,
+                    title: "Tasks Processed per Worker",
+                    items: workers.map(worker => ({
+                        label: `Worker ${worker.workerId}`,
+                        value: worker.tasksProcessed,
+                        displayValue: worker.tasksProcessed
+                    }))
+                };
+                
+                return {
+                    workers,
+                    taskStats,
+                    workerStats: this.calculateWorkerStats(workers),
+                    tasksProcessedChart
+                };
+            });
+            
+            // Also trigger updates on state changes (for immediate updates)
+            taskQueue.onWorkerStateChange(() => {
+                updateStateProvider("taskQueue");
+            });
         }
-        return this.taskQueueInstance;
+        
+        return taskQueue;
     }
 
     //

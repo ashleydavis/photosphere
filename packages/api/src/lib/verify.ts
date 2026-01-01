@@ -3,15 +3,9 @@ import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
-import { TaskStatus, ITaskResult, ITaskQueue, registerHandler } from "task-queue";
-import { IVerifyFileData, IVerifyFileResult } from "./verify.worker";
-
-//
-// Provider object that creates and manages task queues.
-//
-export interface ITaskQueueProvider {
-    create(): Promise<ITaskQueue>;
-}
+import { TaskStatus } from "task-queue";
+import { IVerifyFileData } from "./verify.worker";
+import type { ITaskQueueProvider } from "task-queue";
 
 //
 // Options for verifying the media file database.
@@ -219,8 +213,8 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         //
         // Log debug information about task execution.
         //
-        const stats = queue.getExecutionStats();
-        log.verbose(`Verification complete: ${stats.tasksQueued} tasks queued, ${stats.peakWorkers} workers allocated, ${stats.completed} completed, ${stats.failed} failed`);
+        const status = queue.getStatus();
+        log.verbose(`Verification complete: ${status.tasksQueued} tasks queued, ${status.peakWorkers} workers allocated, ${status.completed} completed, ${status.failed} failed`);
 
         return result;
     } finally {
