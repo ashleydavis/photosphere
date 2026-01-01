@@ -4,11 +4,9 @@ import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { UploadPage } from "./pages/upload";
 import { useUpload } from "./context/upload-context";
-import { useAuth } from "./context/auth-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
-import { useIndexeddb } from "./context/indexeddb-context";
 import Dropdown from '@mui/joy/Dropdown';
 import MenuButton from '@mui/joy/MenuButton';
 import IconButton from '@mui/joy/IconButton';
@@ -45,14 +43,8 @@ export interface IMainProps {
 //
 function __Main({ isMobile = false }: IMainProps) {
 
-    const {
-        appMode,
-        isAuthEnabled,
-        isLoading,
-        isAuthenticated,
-        login,
-        logout,
-    } = useAuth();
+    //todo: Set to true while loading the current database.
+    const isLoading = false;
 
     //
     // Interface to React Router navigation.
@@ -78,10 +70,6 @@ function __Main({ isMobile = false }: IMainProps) {
         moveToDatabase, 
         deleteAssets,
     } = useAssetDatabase();
-
-    const {
-        deleteDatabase
-    } = useIndexeddb();
 
     //
     // Interface to the upload context.
@@ -236,15 +224,6 @@ function __Main({ isMobile = false }: IMainProps) {
     }
 
     //
-    // Logs the user out.
-    //
-    async function onLogOut() {
-        await logout();
-
-        await deleteDatabase();
-    }
-
-    //
     // Moves selected items to the specified database.
     //
     async function onMoveSelectedToDatabase(databaseid: string) {
@@ -252,19 +231,6 @@ function __Main({ isMobile = false }: IMainProps) {
     }
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                <Spinner show={true} />
-            </div>
-        );
-    }
-
-    if (!isAuthenticated) {
-        login()
-            .catch(err => {
-                console.error(`Error on login:`);
-                console.error(err);
-            });
         return (
             <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
                 <Spinner show={true} />
@@ -380,7 +346,7 @@ function __Main({ isMobile = false }: IMainProps) {
                             
                         </div>
 
-                        {(isAuthEnabled || selectedItems.size > 0)
+                        {(selectedItems.size > 0)
                             && <Dropdown>
                                 <MenuButton
                                     sx={{
@@ -418,15 +384,7 @@ function __Main({ isMobile = false }: IMainProps) {
                                             </MenuItem>                                        
                                             <ListDivider />
                                         </>
-                                    }
-                                    {isAuthEnabled
-                                        &&  <MenuItem
-                                            onClick={onLogOut}
-                                            >
-                                            <i className="fa-solid fa-right-from-bracket"></i>
-                                            <span className="ml-1">Log out</span>
-                                        </MenuItem>
-                                    }
+                                    }                                    
                                 </Menu>
                             </Dropdown>
                         }
@@ -555,18 +513,6 @@ function __Main({ isMobile = false }: IMainProps) {
             }
 
             <Fps />
-
-            {(appMode === "readonly")
-                && <Snackbar
-                    open={readonlyMessageOpen}
-                    onClose={() => setReadonlyMessageOpen(false)}
-                    variant="soft"
-                    color="warning"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                    >
-                    Photosphere is in readonly mode. You can't upload, edit or delete assets.
-                </Snackbar>
-            }
         </>
     );
 }
