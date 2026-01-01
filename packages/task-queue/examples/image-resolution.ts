@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import pc from "picocolors";
 
 //
@@ -13,7 +14,9 @@ import pc from "picocolors";
 async function main() {
     console.log(pc.bold(pc.blue("--- Image Resolution Example ---\n")));
 
-    const queue = new TaskQueue(4);
+    const baseWorkingDirectory = join(tmpdir(), "task-queue");
+    const uuidGenerator = { generate: () => randomUUID() };
+    const queue = new TaskQueue(4, "./worker.ts", baseWorkingDirectory, uuidGenerator, 600000, undefined);
 
     // Register handler for getting image resolution
     // Note: This is a simplified example - in a real implementation you'd use
