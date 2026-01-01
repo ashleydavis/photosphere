@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { IUuidGenerator, log } from "utils";
 import { deserializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
@@ -211,13 +209,11 @@ export class TaskQueue implements ITaskQueue {
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number = 4, workerPath: string, baseWorkingDirectory?: string, uuidGenerator?: IUuidGenerator, taskTimeout: number = 600000, workerOptions?: IWorkerOptions) {
+    constructor(maxWorkers: number, workerPath: string, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, taskTimeout: number, workerOptions: IWorkerOptions | undefined) {
         this.maxWorkers = maxWorkers;
         this.workerPath = workerPath;
-        this.baseWorkingDirectory = baseWorkingDirectory || join(tmpdir(), "task-queue");
-        this.uuidGenerator = uuidGenerator || {
-            generate: () => randomUUID()
-        } as IUuidGenerator;
+        this.baseWorkingDirectory = baseWorkingDirectory;
+        this.uuidGenerator = uuidGenerator;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
 

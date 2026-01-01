@@ -286,14 +286,14 @@ export function initContext<TArgs extends any[], TReturn>(
         
         // TaskQueueProvider defaults to number of CPUs if not specified
         // Check if command supports --workers and --timeout options and use them if provided
-        const workers = options.workers;
-        const timeout = options.timeout;
+        const workers = options.workers ?? os.cpus().length;
+        const timeout = options.timeout ?? 600000;
         const debug = process.argv.includes('--debug');
         const taskQueueProvider = new TaskQueueProvider(workers, timeout, {
             verbose: options.verbose,
             tools: options.tools,
             sessionId,
-        }, debug);
+        }, debug, uuidGenerator);
         
         const context: ICommandContext = {
             uuidGenerator,

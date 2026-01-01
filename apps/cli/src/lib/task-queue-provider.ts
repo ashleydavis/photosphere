@@ -1,8 +1,10 @@
 import { TaskQueue, type IWorkerOptions, type IWorkerInfo, TaskStatus } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { ITaskQueueProvider } from "api";
-import os from "node:os";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { registerStateProvider, updateStateProvider } from "debug-server";
+import type { IUuidGenerator } from "utils";
 
 //
 // Task queue provider that lazily creates task queues when needed.
@@ -11,22 +13,23 @@ export class TaskQueueProvider implements ITaskQueueProvider {
     private taskQueueInstance: ITaskQueue | null = null;
     private maxWorkers: number;
     private taskTimeout: number;
-    private workerOptions?: IWorkerOptions;
+    private workerOptions: IWorkerOptions | undefined;
     private debug: boolean;
+    private uuidGenerator: IUuidGenerator;
 
-    constructor(maxWorkers?: number, taskTimeout?: number, workerOptions?: IWorkerOptions, debug: boolean = false) {
-        // Default to number of CPUs if not specified
-        this.maxWorkers = maxWorkers ?? os.cpus().length;
-        // Default to 10 minutes (600000ms) if not specified
-        this.taskTimeout = taskTimeout ?? 600000;
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions | undefined, debug: boolean, uuidGenerator: IUuidGenerator) {
+        this.maxWorkers = maxWorkers;
+        this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
         this.debug = debug;
+        this.uuidGenerator = uuidGenerator;
     }
 
     async create(): Promise<ITaskQueue> {
         if (!this.taskQueueInstance) {
             // Worker path resolved relative to project root (per Bun docs)
-            this.taskQueueInstance = new TaskQueue(this.maxWorkers, "./worker.ts", undefined, undefined, this.taskTimeout, this.workerOptions);
+            const baseWorkingDirectory = join(tmpdir(), "task-queue");
+            this.taskQueueInstance = new TaskQueue(this.maxWorkers, "./worker.ts", baseWorkingDirectory, this.uuidGenerator, this.taskTimeout, this.workerOptions);
             
             // If debug mode is enabled, register state provider for polling
             if (this.debug) {
