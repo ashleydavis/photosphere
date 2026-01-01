@@ -1,23 +1,15 @@
 import './styles.css';
 
 export { Main } from './main';
-export { ApiContextProvider, useApi } from './context/api-context';
 export { GalleryContextProvider } from './context/gallery-context';
 export { GalleryLayoutContextProvider } from './context/gallery-layout-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { UploadContextProvider, useUpload } from './context/upload-context';
-export { IndexeddbContextProvider, useIndexeddb } from './context/indexeddb-context';
 export * from './context/app-context';
 export { type IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";
 export * from "./lib/file";
 export * from "./lib/image";
-export * as indexeddb from "./lib/database/indexeddb/indexeddb";
-export * from "./lib/database/indexeddb/indexeddb-database";
-export * from "./lib/database/indexeddb/indexeddb-database-collection";
-export * from "./lib/sync/persistent-queue";
-export * from "./lib/sync/outgoing-update";
 export * from "./context/gallery-source";
 export * from "./context/asset-database-source";
-export * from "./context/auth-context";

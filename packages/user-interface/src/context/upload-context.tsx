@@ -15,7 +15,6 @@ import { base64StringToBlob } from "blob-util";
 import { useGallery } from "./gallery-context";
 import { RandomUuidGenerator } from "utils";
 import { captureVideoThumbnail, loadVideo, unloadVideo } from "../lib/video";
-import { IApiKeysConfig, useApi } from "./api-context";
 
 // @ts-ignore
 import ColorThief from 'colorthief/dist/color-thief.mjs';
@@ -100,13 +99,6 @@ export function UploadContextProvider({ children }: IProps) {
     //
     const { addGalleryItem, uploadAsset, checkAssetHash } = useGallery();
 
-    const { getApiKeys } = useApi();
-
-    //
-    // The Google API key for reverse geocoding.
-    //
-    const apiKeys = useRef<IApiKeysConfig | undefined>(undefined);
-
     //
     // List of uploads that failed.
     //
@@ -150,20 +142,6 @@ export function UploadContextProvider({ children }: IProps) {
         doNextUpload();
 
     }, [uploads, uploadIndex]);
-
-    useEffect(() => {
-        //
-        // Retreives the Google API key for reverse geocoding.
-        //
-        getApiKeys()
-            .then(_apiKeys => {
-                apiKeys.current = _apiKeys;                
-            }) 
-            .catch(err => {
-                console.error(`Failed to get API keys from backend.`);
-                console.error(err && err.stack || err);
-            });               
-    }, []);
 
     //
     // Do an partial update of an existing upload.
@@ -371,23 +349,24 @@ export function UploadContextProvider({ children }: IProps) {
                 properties.metadata = exif;
 
                 if (exif.GPSLatitude && exif.GPSLongitude) {
-                    const coordinates = convertExifCoordinates(exif);
-                    if (!apiKeys.current?.googleApiKey) {
-                        console.warn(`Reverse geocoding is not supported without a Google API key.`);
-                    }
-                    else if (isLocationInRange(coordinates)) {
-                        const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, apiKeys.current!.googleApiKey!), 3, 5000);
-                        if (reverseGeocodingResult) {
-                            location = reverseGeocodingResult.location;
-                            properties.reverseGeocoding = {
-                                type: reverseGeocodingResult.type,
-                                fullResult: reverseGeocodingResult.fullResult,
-                            };
-                        }
-                    }
-                    else {
-                        console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${uploadDetails.fileName}.`);
-                    }
+                    //TODO: I probably won't maintain this upload code, but if i I do I need to add a Google API key here.
+                    // const coordinates = convertExifCoordinates(exif);
+                    // if (!apiKeys.current?.googleApiKey) {
+                    //     console.warn(`Reverse geocoding is not supported without a Google API key.`);
+                    // }
+                    // else if (isLocationInRange(coordinates)) {
+                    //     const reverseGeocodingResult = await retry(() => reverseGeocode(coordinates, apiKeys.current!.googleApiKey!), 3, 5000);
+                    //     if (reverseGeocodingResult) {
+                    //         location = reverseGeocodingResult.location;
+                    //         properties.reverseGeocoding = {
+                    //             type: reverseGeocodingResult.type,
+                    //             fullResult: reverseGeocodingResult.fullResult,
+                    //         };
+                    //     }
+                    // }
+                    // else {
+                    //     console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${uploadDetails.fileName}.`);
+                    // }
                 }
 
                 const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized", "ModifyDate"];

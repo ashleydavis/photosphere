@@ -2,16 +2,9 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
-import { PersistentQueue } from "../lib/sync/persistent-queue";
 import dayjs from "dayjs";
 import { IAssetRecord } from "../def/asset-record";
-import { IGetAllResponse, useApi } from "./api-context";
 import { useApp } from "./app-context";
-import { applyOperations } from "../lib/apply-operation";
-import { useOnline } from "../lib/use-online";
-import { useIndexeddb } from "./indexeddb-context";
-import { syncOutgoing } from "../lib/sync/sync-outgoing";
-import { IOutgoingUpdate } from "../lib/sync/outgoing-update";
 import { retry, RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 
@@ -44,12 +37,6 @@ export interface IAssetDatabaseProviderProps {
 export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
 
     const { dbs: sets } = useApp();
-    const { isOnline } = useOnline();
-    const api = useApi();
-    const { database } = useIndexeddb();
-
-    const outgoingUpdateQueue = useRef<PersistentQueue<IOutgoingUpdate>>(new PersistentQueue<IOutgoingUpdate>(database, "outgoing-updates"));
-    const periodicSyncStarted = useRef(false);
 
     //
     // Set to true while loading assets.
@@ -158,13 +145,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             }
         ];
 
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingUpdateQueue.current.add({
-            type: "update",
-            ops,
-        });
+        //todo: send to main process to apply to the current database.
     }
 
     //
@@ -191,13 +172,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingUpdateQueue.current.add({
-            type: "update",
-            ops,
-        });
+        //todo: send to main process to apply to the current database.
     }
 
     //
@@ -228,20 +203,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }));        
 
-        await Promise.all([
-            //
-            // Updates the local database.
-            //
-            applyOperations(database, ops),
-
-            //
-            // Queue the updates for upload to the cloud.
-            //
-            outgoingUpdateQueue.current.add({ 
-                type: "update",
-                ops,
-            }),
-        ]);
+        //todo: send to main process to apply to the current database.
     }
 
     //
@@ -275,13 +237,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingUpdateQueue.current.add({
-            type: "update",
-            ops,
-        });
+        //todo: apply operations to the current database.
     }
 
     //
@@ -314,14 +270,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             },
         }];
 
-
-        //
-        // Queue the updates for upload to the cloud.
-        //
-        await outgoingUpdateQueue.current.add({
-            type: "update",
-            ops,
-        })
+        //todo: apply operations to the current database.        
     }
 
     //
@@ -383,7 +332,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             throw new Error("No database id provided.");
         }
 
-        return await api.checkAssetHash(databaseId, hash);
+        //todo: check if the asset is already uploaded to current database.
+        return false;
     }
 
     //
@@ -401,37 +351,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Loads data for an asset from a particular database.
     //
     async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob | undefined> {
-        const assetRecord = await database.collection<IAssetRecord>(assetType).getOne(assetId);
-        if (assetRecord) {
-            return assetRecord.assetData;
-        }
-
-        if (!isOnline) {
-            return undefined;
-        }
-        
-        //
-        // Fallback to cloud.
-        //
-        const assetData = await api.getAsset(databaseId!, assetId, assetType);
-        if (!assetData) {
-            return undefined;
-        }
-
-        //
-        // Save a local version.
-        //
-        database.collection<IAssetRecord>(assetType).setOne({
-                _id: assetId,
-                storeDate: new Date(),
-                assetData,
-            })
-            .catch(err => {
-                console.error(`Failed to store asset locally:`);
-                console.error(err);            
-            });
-
-        return assetData;
+        //todo: load asset data from the current database.
+        return undefined;
     }
 
     //
@@ -449,25 +370,8 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     // Stores an asset to a particular database.
     //
     async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databaseId: string): Promise<void> {
-        // 
-        // Store the asset locally.
-        //
-        await database.collection<IAssetRecord>(assetType).setOne({
-            _id: assetId,
-            storeDate: new Date(),
-            assetData,
-        });
-
-        // 
-        // Queue the asset for upload to the cloud.
-        //
-        await outgoingUpdateQueue.current.add({
-            type: "upload",
-            databaseId,
-            assetId,
-            assetType,
-            assetData,
-        });
+        //todo: store asset data to the current database.
+        //todo: what uses this?
     }
 
     //
@@ -476,66 +380,6 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     function getItemById(assetId: string): IGalleryItem | undefined {
         return loadedAssets.current[assetId];
     }
-
-    //
-    // Periodic synchronization.
-    //
-    useEffect(() => {
-        if (periodicSyncStarted.current) {
-            console.log(`Periodic sync already started.`);
-            return;
-        }
-
-        let timer: NodeJS.Timeout | undefined = undefined;
-        let done = false;
-        
-        if (!isLoading && isOnline && sets) {
-            periodicSyncStarted.current = true;
-
-            // 
-            // Periodic database synchronization.
-            //
-            async function periodicSync() {
-                timer = undefined;
-
-                if (done) {
-                    return;
-                }
-
-                // console.log(`Periodic sync...`);
-
-                try {
-                    await syncOutgoing({
-                        outgoingUpdateQueue: outgoingUpdateQueue.current,
-                        api,
-                    });
-                }
-                catch (err) {
-                    console.error(`Outgoing sync failed:`);
-                    console.error(err);
-                }
-            
-                // console.log(`Periodic sync done.`);
-    
-                timer = setTimeout(periodicSync, SYNC_POLL_PERIOD);
-            }
-
-            //
-            // Starts the periodic syncrhonization process.
-            //
-            periodicSync();
-        }
-
-        return () => {
-            done = true;
-            periodicSyncStarted.current = false;
-            if (timer) {
-                clearTimeout(timer);
-                timer = undefined;
-            }
-        };
-
-    }, [isLoading, isOnline, sets]);
 
     //
     // Load assets into memory.
@@ -561,45 +405,16 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             onReset.current.invoke();
 
-            let next: string  | undefined = undefined;
+            //todo: start a background task iterate assets in sorted order, stream them into 
+            //      the frontend and load them into memory.
 
-            //
-            // Load the assets from the cloud into memory.
-            //
-            do {
-                //
-                // Get a page of assets from the backend.
-                // Assumes the backend gives us the assets in sorted order.
-                //
-                const result: IGetAllResponse<IAsset> = await retry(
-                    () => api.getAll<IAsset>(databaseId, "metadata", next),
-                    5, // Attempts
-                    600, // Starting wait time
-                    2, // Double the weight time on each retry.
-                );
-                if (result.records.length === 0) {
-                    // No more records.
-                    break;
-                }
+            //todo: for each set of items
 
-                //
-                // Continue if the database index matches the current loading index.
-                // This allows loading to be aborted if the user changes what they are looking at.
-                //
-                const shouldContinue = latestLoadingId === loadingId.current;
-                if (!shouldContinue) {
-                    // Request to abort asset loading.
-                    return;
-                }     
+            // _onNewItems(result.records);  // Starts the next request before setting the new assets.
 
-                setTimeout(() => {
-                    _onNewItems(result.records);  // Starts the next request before setting the new assets.
+            // console.log(`Loaded ${result.records.length} assets for database ${databaseId}`);
 
-                    console.log(`Loaded ${result.records.length} assets for database ${databaseId}`);
-                }, 0);
-
-                next = result.next;
-            } while (next);
+            //todo: don't forget to cancel the task if we change databases or unmount the gallery.
         }
         finally {
             loadingCount.current -= 1;
