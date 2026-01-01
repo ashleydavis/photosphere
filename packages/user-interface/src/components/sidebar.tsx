@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Computer, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop, DateRange } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop, DateRange } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
@@ -35,11 +35,6 @@ export interface ISidebarProps {
     // Opens the search input.
     //
     onOpenSearch: () => void;
-
-    //
-    // The "computer page" which is only displayed in the Electron or mobile version.
-    //
-    computerPage?: JSX.Element;
 
     //
     // Navigates to a database.
@@ -391,7 +386,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPage, navigateToDatabase }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, navigateToDatabase }: ISidebarProps) {
 
     const { dbs } = useApp();
     const theme = useTheme();
@@ -481,20 +476,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, computerPag
                         </ListItemButton>
                     </ListItem>
                 </NavLink>
-
-                {computerPage
-                    && <NavLink
-                        to="/computer"
-                        onClick={() => setSidebarOpen(false)}
-                        >
-                        <ListItem>                        
-                            <ListItemButton>
-                                <ListItemDecorator><Computer /></ListItemDecorator>
-                                <ListItemContent>Computer</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    </NavLink>
-                }
 
                 <NavLink
                     to="/upload"

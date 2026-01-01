@@ -35,10 +35,6 @@ const isProduction = (import.meta.env.MODE === "production");
 
 export interface IMainProps {
     //
-    // The "computer page" which is only displayed in the Electron or mobile version.
-    //
-    computerPage?: JSX.Element;
-    //
     // Set to true if running on mobile device to enable mobile-specific styles.
     //
     isMobile?: boolean;
@@ -47,7 +43,7 @@ export interface IMainProps {
 //
 // The main page of the Photosphere app.
 //
-function __Main({ computerPage, isMobile = false }: IMainProps) {
+function __Main({ isMobile = false }: IMainProps) {
 
     const {
         appMode,
@@ -326,18 +322,6 @@ function __Main({ computerPage, isMobile = false }: IMainProps) {
                             </div>
                         </NavLink>
 
-                        {computerPage && 
-                            <NavLink
-                                className="mr-1 sm:mr-3"
-                                to="/computer"
-                                >
-                                <div className="flex flex-row items-center">
-                                    <i className="w-5 text-center fa-solid fa-computer"></i>
-                                    <div className="hidden sm:block ml-2">Computer</div>
-                                </div>
-                            </NavLink>
-                        }
-
                         <NavLink
                             className="mr-1 sm:mr-3"
                             to="/upload"
@@ -525,18 +509,10 @@ function __Main({ computerPage, isMobile = false }: IMainProps) {
                             element={<div/>}
                             />
 
-                        {computerPage 
-                            && <Route
-                                path="/computer"
-                                element={computerPage}
-                                />
-                        }
-
                         <Route 
                             path="/upload/:databaseId" 
                             element={<UploadPage />} 
                             />
-                            
 
                         {/* Placeholder route to avoid the warning before the redirect. */}
                         <Route
@@ -598,13 +574,13 @@ function __Main({ computerPage, isMobile = false }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ computerPage, isMobile }: IMainProps) {
+export function Main({ isMobile }: IMainProps) {
     return (
         <CssVarsProvider>
             {!isProduction &&
                 <ModeToggle />
             }
-            <__Main computerPage={computerPage} isMobile={isMobile} />
+            <__Main isMobile={isMobile} />
         </CssVarsProvider>
     );
 }
