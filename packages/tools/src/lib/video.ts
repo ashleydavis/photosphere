@@ -1,7 +1,6 @@
-import * as fs from 'fs/promises';
 import { AssetInfo, Dimensions, VideoConfig } from './types';
 import { log } from 'utils';
-import { exec } from 'node-utils';
+import { exec, pathExists } from 'node-utils';
 
 export class Video {
     private filePath: string;
@@ -104,7 +103,7 @@ export class Video {
             return this._info;
         }
 
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
         
@@ -187,7 +186,7 @@ export class Video {
         height?: number;
         quality?: number;
     }): Promise<string> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
