@@ -3,8 +3,7 @@
 //
 
 import { createStorage } from "storage";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { ITaskContext } from "task-queue";
 import { createMediaFileDatabase, loadDatabase } from "./media-file-database";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
@@ -24,8 +23,6 @@ export async function loadAssetsHandler(
     // Use hardcoded path to test database (relative to project root)
     // Resolve from current file location: packages/api/src/lib -> project root -> test/dbs/v5
     // In ES modules, we use import.meta.url to get __dirname equivalent
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
     const dbDir = resolve(__dirname, "../../../../test/dbs/v5");
 
     // Create storage without encryption
