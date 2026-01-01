@@ -25,7 +25,6 @@ import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
 import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
-import { testDebugCommand } from './src/cmd/test-debug';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -395,11 +394,6 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('verify'))
         .action(initContext(verifyCommand));
 
-    program
-        .command("test-debug", { hidden: true })
-        .description("Temporary command for testing the debug REST API. Runs an infinite loop that updates debug data.")
-        .option(...verboseOption)
-        .action(initContext(testDebugCommand));
 
     program
         .command("version")
