@@ -3,12 +3,8 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
 import dayjs from "dayjs";
-import { IAssetRecord } from "../def/asset-record";
-import { useApp } from "./app-context";
-import { retry, RandomUuidGenerator } from "utils";
+import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
-
-const SYNC_POLL_PERIOD = 1000; // 1 second.
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -35,8 +31,6 @@ export interface IAssetDatabaseProviderProps {
 }
 
 export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
-
-    const { dbs: sets } = useApp();
 
     //
     // Set to true while loading assets.
