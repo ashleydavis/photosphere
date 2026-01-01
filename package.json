@@ -24,8 +24,6 @@
   },
   "workspaces": [
     "apps/*",
-    "apps/electron/frontend",
-    "apps/mobile/frontend",
     "packages/*",
     "aux/*"
   ]
