@@ -55,11 +55,6 @@ Located in `packages/adb`, implements a content-addressable storage system with:
 - Support for multiple asset types (original, display, thumbnail)
 - Collection-based organization
 
-### Authentication
-Supports two modes via `AUTH_TYPE` environment variable:
-- `auth0`: Full Auth0 integration with JWT tokens
-- `no-auth`: Development mode without authentication
-
 ### Frontend Architecture
 - React 18 with TypeScript
 - Vite for bundling and development
@@ -75,14 +70,12 @@ Supports two modes via `AUTH_TYPE` environment variable:
 ### Key Environment Variables
 Backend:
 - `PORT` (default: 3000)
-- `AUTH_TYPE` (auth0, no-auth)
 - `APP_MODE` (readonly, readwrite)
 - `ASSET_STORAGE_CONNECTION`
 - `DB_STORAGE_CONNECTION`
 
 Frontend:
 - `VITE_BASE_URL` - Backend API URL
-- `VITE_AUTH0_REDIRECT_URL` - Auth0 callback URL
 
 ### Testing Infrastructure
 - The most important tests are the smoke tests in `./apps/cli/smoke-tests.sh`.

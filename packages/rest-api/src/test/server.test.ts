@@ -91,8 +91,6 @@ describe("photosphere backend", () => {
         };
 
         const { app } = await createServer(() => dateNow, mockMediaFileDatabaseProvider, new MockTimestampProvider(), mockStorage, {
-            appMode: "readwrite",
-            authType: "no-auth"
         });
 
         const server = app.listen();

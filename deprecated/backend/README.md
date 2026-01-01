@@ -65,9 +65,6 @@ Set the following environment variables:
 ```bash
 export NODE_ENV=production
 export APP_MODE=readwrite
-export AUTH_TYPE=auth0
-export AUTH0_AUDIENCE=...
-export AUTH0_BASE_URL=...
 export PORT=3000
 export ASSET_STORAGE_CONNECTION=s3:your-s3-bucket-name:/sets
 export DB_STORAGE_CONNECTION=s3:your-s3-bucket-name:/database
@@ -104,7 +101,6 @@ bun run test
 
 - `NODE_ENV` - Set to "production" to enable AWS cloud storage.
 - `APP_MODE` - Can be set to `readonly` or `readwrite`.
-- `AUTH_TYPE` - The type of auth to use, can be set to `auth0` or `no-auth`.
 - `ASSET_STORAGE_CONNECTION` - Defines the connection to storage that contains asset databases, examples:
     - `s3:your-s3-bucket:`
     - `s3:your-s3-bucket/a-sub-directory`
@@ -118,15 +114,6 @@ If using S3 for storage:
 - `AWS_ACCESS_KEY_ID` - The access key for your AWS account.
 - `AWS_SECRET_ACCESS_KEY` - The secret access key for your AWS account.
 - `AWS_ENDPOINT` - Custom endpoint if required. This is used for contecting to Digital Ocean Spaces instead of AWS S3.
-
-
-### Auth0 authentication details:
-
-Set `AUTH_TYPE` TO `auth0`, then set the following from your Auth0 configuration:
-- `AUTH0_DOMAIN`
-- `AUTH0_AUDIENCE`
-- `AUTH0_CLIENT_ID`
-- `AUTH0_REDIRECT_URL`
 
 ## Run the Docker container for testing
 

@@ -81,8 +81,6 @@ export async function uiCommand(options: IUiCommandOptions): Promise<void> {
     // Start the Photosphere REST API.
     //
     const { app } = await createServer(() => new Date(Date.now()), mediaFileDatabaseProvider, new TimestampProvider(), undefined, {
-        appMode: "readwrite", 
-        authType: "no-auth",
         staticMiddleware,
         googleApiKey: process.env.GOOGLE_API_KEY,
     });

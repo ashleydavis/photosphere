@@ -13,7 +13,6 @@ Photosphere can be run locally or self-hosted as a server:
 - Run it locally using the CLI tool (build and view databases on your desktop computer).
 - Host the Docker container and make your files available over the internet.
 - Provide S3 compatible storage (I used Digital Ocean Spaces, but also works with AWS S3).
-- For authentication, use an API key or provide an Auth0 account for authentication.
 
 Contained herein are the code for Photosphere's:
 - Backend

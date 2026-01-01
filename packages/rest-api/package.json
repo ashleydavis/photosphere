@@ -43,7 +43,6 @@
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "express": "^5.0.0-beta.1",
-    "express-oauth2-jwt-bearer": "^1.6.0",
     "cors": "^2.8.5",
     "storage": "workspace:*",
     "node-utils": "workspace:*"

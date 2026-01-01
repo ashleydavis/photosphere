@@ -84,10 +84,3 @@ pnpm test
 
 - `BASE_URL` - Sets the URL for the connection to the backend.
 - `GOOGLE_API_KEY` - Sets to a valid Google API key to enable reverse geocoding of photo location in the browser.
-
-### Auth0 authentication details:
-
-- `AUTH0_DOMAIN`
-- `AUTH0_CLIENT_ID`
-- `AUTH0_AUDIDENCE`
-- `AUTH0_ORIGIN`
