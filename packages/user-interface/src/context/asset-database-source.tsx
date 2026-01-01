@@ -5,6 +5,10 @@ import { IAsset, IDatabaseOp } from "defs";
 import dayjs from "dayjs";
 import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
+import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
+import { TaskStatus } from "task-queue";
+import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
+import type { ITaskQueueProvider } from "task-queue";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -28,9 +32,10 @@ export interface IAssetDatabase extends IGallerySource {
 
 export interface IAssetDatabaseProviderProps {
     children: ReactNode | ReactNode[];
+    taskQueueProvider: ITaskQueueProvider;
 }
 
-export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps) {
+export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDatabaseProviderProps) {
 
     //
     // Set to true while loading assets.
@@ -378,7 +383,7 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
     //
     // Load assets into memory.
     //
-    async function loadAssets(databaseId: string) {
+    async function loadAssets(databaseId: string) { //todo: pass the database id through.
     
         try {
             setIsLoading(true);
@@ -399,16 +404,43 @@ export function AssetDatabaseProvider({ children }: IAssetDatabaseProviderProps)
             //
             onReset.current.invoke();
 
-            //todo: start a background task iterate assets in sorted order, stream them into 
-            //      the frontend and load them into memory.
+            // Create the queue once and reuse it
+            const queue = await taskQueueProvider.create();
 
-            //todo: for each set of items
+            // Set up listener for task completion before queuing the task
+            queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((taskResult) => {
+                // Check if this is the latest load operation
+                if (loadingId.current !== latestLoadingId) {
+                    //todo: this could be automatic, if the queue is cancelled it shouldn't send messages back.
+                    return; // This result is from an older load operation
+                }
 
-            // _onNewItems(result.records);  // Starts the next request before setting the new assets.
+                //todo: need to wrap up loading here.
 
-            // console.log(`Loaded ${result.records.length} assets for database ${databaseId}`);
+                if (taskResult.status === TaskStatus.Completed) {
+                    // Task completed successfully
+                    console.log(`Load assets task completed: ${taskResult.outputs?.totalAssets} assets loaded`);
+                }
+                else if (taskResult.status === TaskStatus.Failed) {
+                    console.error("Load assets task failed:", taskResult.errorMessage);
+                }
+            });
 
-            //todo: don't forget to cancel the task if we change databases or unmount the gallery.
+            // Recieve asset pages.
+            queue.onTaskMessage<IAssetPageMessage>("asset-page", (_messageTaskId, message) => {
+                // Only process messages if we're still on the latest load operation
+                if (loadingId.current !== latestLoadingId) {
+                    return;
+                }
+
+                // Message is guaranteed to be an asset-batch due to the filter
+                if (message.batch && message.batch.length > 0) {
+                    _onNewItems(message.batch);
+                }
+            });
+            
+            // Queue the load-assets task using the same queue instance
+            loadAssetsApi(queue);
         }
         finally {
             loadingCount.current -= 1;

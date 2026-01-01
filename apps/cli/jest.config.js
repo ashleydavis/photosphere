@@ -1,6 +1,7 @@
 export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
+    setupFiles: ['<rootDir>/__mocks__/worker-global.js'],
     setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
     modulePathIgnorePatterns: [
         "dist",
@@ -19,6 +20,7 @@ export default {
         '^tools$': '<rootDir>/__mocks__/tools.js',
         '^adb$': '<rootDir>/__mocks__/adb.js',
         '^../lib/terminal-utils$': '<rootDir>/__mocks__/terminal-utils.js',
-        '^fs-extra$': '<rootDir>/__mocks__/fs-extra.js'
+        '^fs-extra$': '<rootDir>/__mocks__/fs-extra.js',
+        '^serialize-error$': '<rootDir>/__mocks__/serialize-error.js'
     }
 };

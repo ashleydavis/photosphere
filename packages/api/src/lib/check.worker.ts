@@ -7,7 +7,7 @@ import { ensureDir } from "node-utils";
 import os from "os";
 import path from "path";
 import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
-import type { IWorkerContext } from "task-queue";
+import type { ITaskContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
 import { IFileStat } from "./file-scanner";
@@ -37,7 +37,7 @@ export interface ICheckFileResult {
 // Handler for checking a single file
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 //
-export async function checkFileHandler(data: ICheckFileData, workingDirectory: string, context: IWorkerContext): Promise<ICheckFileResult> {
+export async function checkFileHandler(data: ICheckFileData, workingDirectory: string, context: ITaskContext): Promise<ICheckFileResult> {
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config } = data;
     const { uuidGenerator, timestampProvider } = context;
     

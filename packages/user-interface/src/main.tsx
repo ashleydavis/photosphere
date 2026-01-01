@@ -25,7 +25,6 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
 import Input from "@mui/joy/Input/Input";
-import Snackbar from "@mui/joy/Snackbar/Snackbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 
@@ -51,7 +50,6 @@ function __Main({ isMobile = false }: IMainProps) {
     const { 
         isLoading: isGalleryLoading,
         sortedItems,
-        selectedItemId,
         selectedItems,
         clearMultiSelection,
         searchText,
@@ -99,8 +97,6 @@ function __Main({ isMobile = false }: IMainProps) {
     // TODO: This might not be needed.
     //
     const [numLoaded, setNumLoaded] = useState<number>(0);
-
-    const [readonlyMessageOpen, setReadonlyMessageOpen] = useState<boolean>(true);
 
     const { dbs } = useApp();
 
@@ -150,13 +146,21 @@ function __Main({ isMobile = false }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if ((location.pathname === "/cloud" || location.pathname === "/cloud/") && dbs) {
+        if (!dbs) {
+            return;
+        }
+        
+        if (location.pathname === "" 
+            || location.pathname === "/" 
+            || location.pathname === "/cloud" 
+            || location.pathname === "/cloud/") {
             //
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultDatabase("cloud");
         }
-        else if ((location.pathname === "/upload" || location.pathname === "/upload/") && dbs) {
+        else if (location.pathname === "/upload" 
+            || location.pathname === "/upload/") {
             //
             // If the user is logged in, navigate to their default set.
             //
@@ -170,7 +174,6 @@ function __Main({ isMobile = false }: IMainProps) {
             setOpenSearch(true);
         }
     }, [searchText]);
-
 
     //
     // Navigate to the specified database.
@@ -228,13 +231,14 @@ function __Main({ isMobile = false }: IMainProps) {
         await moveToDatabase(Array.from(selectedItems), databaseid);
     }
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                <Spinner show={true} />
-            </div>
-        );
-    }
+    //todo: Might still want this while connecting ???
+    // if (isLoading) {
+    //     return (
+    //         <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
+    //             <Spinner show={true} />
+    //         </div>
+    //     );
+    // }
 
     if (location.pathname === "/cloud") {
         return (

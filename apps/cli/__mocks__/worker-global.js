@@ -1,7 +1,7 @@
 // This file will be loaded to set up the Worker global
 // We'll use a simple approach that accesses handlers synchronously
 
-const taskWorkerModule = require('../src/lib/worker');
+const { getHandler } = require('task-queue/src/lib/worker');
 
 class MockWorker {
     constructor(scriptURL) {
@@ -36,7 +36,7 @@ class MockWorker {
             // Execute handler synchronously using the already-loaded module
             process.nextTick(async () => {
                 try {
-                    const handler = taskWorkerModule.getHandler(taskType);
+                    const handler = getHandler(taskType);
                     if (!handler) {
                         this.dispatchMessage({
                             type: "error",
@@ -49,7 +49,9 @@ class MockWorker {
                         return;
                     }
 
-                    const outputs = await handler(data, workingDirectory);
+                    // Handler signature: (data, workingDirectory, context)
+                    const context = { taskId, sendMessage: () => {} };
+                    const outputs = await handler(data, workingDirectory, context);
                     this.dispatchMessage({
                         type: "result",
                         taskId,
@@ -59,7 +61,8 @@ class MockWorker {
                             outputs: outputs
                         }
                     });
-                } catch (error) {
+                }
+                catch (error) {
                     this.dispatchMessage({
                         type: "error",
                         taskId,

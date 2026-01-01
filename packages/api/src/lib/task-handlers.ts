@@ -1,6 +1,7 @@
-import { registerHandler } from "task-queue";
+import { registerHandler } from "task-queue/src/lib/worker";
 import { verifyFileHandler } from "./verify.worker";
 import { checkFileHandler } from "./check.worker";
+import { loadAssetsHandler } from "./load-assets.worker";
 
 //
 // Register all task handlers
@@ -9,4 +10,5 @@ import { checkFileHandler } from "./check.worker";
 export function initTaskHandlers(): void {
     registerHandler("verify-file", verifyFileHandler);
     registerHandler("check-file", checkFileHandler);
+    registerHandler("load-assets", loadAssetsHandler);
 }

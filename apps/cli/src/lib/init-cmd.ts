@@ -3,7 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
-import type { ITaskQueueProvider } from "api";
+import type { ITaskQueueProvider } from "task-queue";
 import { TaskQueueProvider } from "./task-queue-provider";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";

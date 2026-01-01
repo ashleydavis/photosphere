@@ -4,7 +4,7 @@
 
 import { SortNode } from "merkle-tree";
 import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
-import type { IWorkerContext } from "task-queue";
+import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { formatFileSize, log } from "utils";
 
@@ -26,7 +26,7 @@ export interface IVerifyFileResult {
 //
 // Handler for verifying a single file
 //
-export async function verifyFileHandler(data: IVerifyFileData, workingDirectory: string, context: IWorkerContext): Promise<IVerifyFileResult> {
+export async function verifyFileHandler(data: IVerifyFileData, workingDirectory: string, context: ITaskContext): Promise<IVerifyFileResult> {
     const { node, storageDescriptor, s3Config, options } = data;
     const fileName = node.name!;
 

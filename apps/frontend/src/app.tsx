@@ -6,15 +6,23 @@ import {
     AssetDatabaseProvider,
     GalleryLayoutContextProvider
 } from "user-interface";
-import { useWebSocket } from "./use-web-socket";
+import { useWebSocket } from "./lib/use-web-socket";
+import { WebSocketTaskQueueProvider } from "./lib/websocket-task-queue-provider";
 
 export function App() {
-    useWebSocket();
+    const ws = useWebSocket();
+    
+    if (!ws) {
+        // Wait for WebSocket connection before rendering
+        return <div>Connecting...</div>;
+    }
+    
+    const taskQueueProvider = new WebSocketTaskQueueProvider(ws);
 
     return (
         <HashRouter>
             <AppContextProvider>
-                <AssetDatabaseProvider>
+                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider}>
                     <GalleryContextProvider>
                         <GalleryLayoutContextProvider>
                             <UploadContextProvider>

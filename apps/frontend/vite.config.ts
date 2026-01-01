@@ -8,11 +8,6 @@ export default defineConfig({
     open: true,
     port: 8080,
   },
-  resolve: {
-    alias: {
-      'crypto': 'crypto-browserify',
-    },
-  },
   build: {
     sourcemap: true,
     outDir: 'dist',
