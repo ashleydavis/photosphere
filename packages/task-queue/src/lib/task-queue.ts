@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IUuidGenerator, log } from "utils";
-import { serializeError, deserializeError } from "serialize-error";
+import { deserializeError } from "serialize-error";
 import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
 import type { IWorkerOptions } from "./worker-init";
 
