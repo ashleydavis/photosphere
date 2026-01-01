@@ -1,6 +1,5 @@
-import * as fs from 'fs/promises';
 import type { AssetInfo, Dimensions, ResizeOptions, ImageMagickConfig } from './types';
-import { exec, execLogged } from 'node-utils';
+import { exec, execLogged, pathExists } from 'node-utils';
 import { IUuidGenerator, log, IImageTransformation } from 'utils';
 import path from "path";
 
@@ -138,7 +137,7 @@ export class Image {
             return this._info;
         }
 
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -193,7 +192,7 @@ export class Image {
      * Get EXIF data from the image
      */
     async getExifData(): Promise<Record<string, string>> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -218,7 +217,7 @@ export class Image {
     }
 
     async resize(options: ResizeOptions, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -227,11 +226,11 @@ export class Image {
         const outputPath1 = baseOutputPath + '.' + options.ext;
         const outputPath2 = baseOutputPath + '-0.' + options.ext;
 
-        if (await fs.exists(outputPath1)) {
+        if (await pathExists(outputPath1)) {
             throw new Error(`Output file already exists: ${outputPath1}`);
         }
 
-        if (await fs.exists(outputPath2)) {
+        if (await pathExists(outputPath2)) {
             throw new Error(`Output file already exists: ${outputPath2}`);
         }
 
@@ -268,9 +267,9 @@ export class Image {
 
         await execLogged(`magick`, command, async () => {
             // Validate output file exists
-            if (!await fs.exists(actualOutputPath)) {
+            if (!await pathExists(actualOutputPath)) {
                 actualOutputPath = outputPath2;
-                if (!await fs.exists(actualOutputPath)) {
+                if (!await pathExists(actualOutputPath)) {
                     return `Resize failed, expect to create ${outputPath1} or ${outputPath2}`;
                 }
             }
@@ -280,7 +279,7 @@ export class Image {
     }
 
     async saveAs(outputPath: string, options?: { quality?: number; format?: ResizeOptions['format'] }): Promise<Image> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -304,7 +303,7 @@ export class Image {
      * Returns RGB values as [r, g, b] array
      */
     async getDominantColor(): Promise<[number, number, number]> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -332,7 +331,7 @@ export class Image {
      * Returns RGB values as [r, g, b] array
      */
     async getDominantColorHistogram(colorCount: number = 5): Promise<[number, number, number]> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -389,7 +388,7 @@ export class Image {
      * Returns array of RGB values as [[r, g, b], [r, g, b], ...]
      */
     async getDominantColors(colorCount: number = 5): Promise<Array<[number, number, number]>> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -444,7 +443,7 @@ export class Image {
      * Transform an image with rotation and flip operations
      */
     async transform(options: IImageTransformation, tempDir: string, uuidGenerator: IUuidGenerator): Promise<string> {
-        if (!await fs.exists(this.filePath)) {
+        if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
@@ -465,7 +464,7 @@ export class Image {
             await execLogged('magick', command);
 
             // Check if the output file was created successfully.
-            if (!await fs.exists(outputPath)) { 
+            if (!await pathExists(outputPath)) { 
                 throw new Error(`Image transformation failed, output file not created: ${outputPath}`);
             }
             return outputPath;

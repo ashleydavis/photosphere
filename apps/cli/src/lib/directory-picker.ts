@@ -3,7 +3,7 @@ import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 import pc from 'picocolors';
-import { exit } from 'node-utils';
+import { exit, pathExists } from 'node-utils';
 
 //
 // Checks if a directory is a valid Photosphere media database
@@ -11,12 +11,12 @@ import { exit } from 'node-utils';
 async function isMediaDatabase(dirPath: string): Promise<boolean> {
     try {
         const dbDir = join(dirPath, '.db');
-        if (!await fs.exists(dbDir)) {
+        if (!await pathExists(dbDir)) {
             return false;
         }
 
         const treePath = join(dbDir, 'tree.dat');
-        return await fs.exists(treePath);
+        return await pathExists(treePath);
     } catch (error) {
         return false;
     }
@@ -27,7 +27,7 @@ async function isMediaDatabase(dirPath: string): Promise<boolean> {
 // Checks if a directory is empty or doesn't exist (suitable for init)
 //
 async function isEmptyOrNonExistent(dirPath: string): Promise<boolean> {
-    if (!await fs.exists(dirPath)) {
+    if (!await pathExists(dirPath)) {
         return true;
     }
     
@@ -167,7 +167,7 @@ export async function pickDirectory(
             const resolvedPath = resolve(String(fullPath));
             
             // Create directory if it doesn't exist
-            if (!await fs.exists(resolvedPath)) {
+            if (!await pathExists(resolvedPath)) {
                 try {
                     await fs.mkdir(resolvedPath, { recursive: true });
                 } catch (error) {
@@ -211,7 +211,7 @@ async function validateInitDirectory(path: string): Promise<boolean | string> {
 // Validates directory for other commands (existing media database)
 //
 async function validateExistingDatabase(path: string): Promise<boolean | string> {
-    if (!await fs.exists(path)) {
+    if (!await pathExists(path)) {
         return 'Directory does not exist';
     }
     

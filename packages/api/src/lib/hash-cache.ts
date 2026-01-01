@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
-import { ensureDir } from "node-utils";
+import { ensureDir, pathExists } from "node-utils";
 import { log } from "utils";
 
 /**
@@ -63,7 +63,7 @@ export class HashCache {
         
         try {
             // Check if file exists first
-            if (!await fs.exists(cachePath)) {
+            if (!await pathExists(cachePath)) {
                 // File doesn't exist - create new cache
                 this.buffer = Buffer.alloc(1024); // Start with 1KB
                 this.entryCount = 0;
