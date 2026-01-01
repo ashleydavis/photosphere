@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { IUuidGenerator, log } from "utils";
 import { deserializeError } from "serialize-error";
-import { registerHandler as registerHandlerInStorage, WorkerMessage, type TaskHandler } from "./task-worker";
-import type { IWorkerOptions } from "./worker-init";
+import { registerHandler as registerHandlerInStorage } from "./worker";
+import type { TaskHandler, WorkerMessage, IWorkerOptions } from "./types";
 
 //
 // Task status enumeration

@@ -5,12 +5,8 @@
 //
 
 import { serializeError } from "serialize-error";
-import { setWorkerTaskId, type IWorkerContext } from "./worker-init";
-
-//
-// Handler registry - handlers are stored in a Map
-//
-export type TaskHandler = (data: any, workingDirectory: string, context: IWorkerContext) => Promise<any>;
+import { setWorkerTaskId } from "./worker-init";
+import type { TaskHandler, WorkerMessage, IWorkerContext } from "./types";
 
 const handlers = new Map<string, TaskHandler>();
 
@@ -26,13 +22,8 @@ export function getRegisteredHandlerTypes(): string[] {
     return Array.from(handlers.keys());
 }
 
-export interface WorkerMessage {
-    type: "execute";
-    taskId: string;
-    taskType: string;
-    data: any;
-    workingDirectory: string;
-}
+// Re-export types for convenience
+export type { TaskHandler, WorkerMessage, IWorkerContext } from "./types";
 
 //
 // Execute a task handler in the worker
