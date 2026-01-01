@@ -1,7 +1,7 @@
 // This file will be loaded to set up the Worker global
 // We'll use a simple approach that accesses handlers synchronously
 
-const taskWorkerModule = require('../src/lib/task-worker');
+const taskWorkerModule = require('../src/lib/worker');
 
 class MockWorker {
     constructor(scriptURL) {

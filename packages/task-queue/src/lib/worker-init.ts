@@ -5,25 +5,10 @@
 
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { RandomUuidGenerator, TimestampProvider, setLog, ILog } from "utils";
-import type { IUuidGenerator, ITimestampProvider } from "utils";
+import type { IWorkerOptions, IWorkerContext } from "./types";
 
-//
-// Options passed to workers for context initialization
-//
-export interface IWorkerOptions {
-    verbose?: boolean;
-    tools?: boolean;
-    sessionId?: string;
-}
-
-//
-// Common dependencies injected into workers (similar to ICommandContext)
-//
-export interface IWorkerContext {
-    uuidGenerator: IUuidGenerator;
-    timestampProvider: ITimestampProvider;
-    sessionId: string;
-}
+// Re-export types for convenience
+export type { IWorkerOptions, IWorkerContext } from "./types";
 
 //
 // Formats a task ID to show only first 2 and last 2 characters.
