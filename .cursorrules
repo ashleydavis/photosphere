@@ -68,6 +68,19 @@ catch (error) {
 }
 ```
 
+### File Naming: Use kebab-case
+
+**ALWAYS** use kebab-case (lowercase with hyphens) for file names, not camelCase or snake_case.
+
+**Why:** Consistent naming convention improves code readability and follows common web development practices.
+
+**Examples:**
+- ✅ `use-web-socket.ts`
+- ✅ `user-profile.tsx`
+- ✅ `api-client.ts`
+- ❌ `useWebSocket.ts` (camelCase)
+- ❌ `use_web_socket.ts` (snake_case)
+
 ### TypeScript: Avoid `any` type
 
 **NEVER** use the `any` type unless absolutely necessary. When `any` is required, it must be accompanied by a comment explaining why it's necessary and what the actual type should be.

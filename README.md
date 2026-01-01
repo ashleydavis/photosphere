@@ -60,7 +60,7 @@ bun install
 ## Project layout
 
 - photosphere/
-    - apps - Top level apps live here (frontend, backend, mobile, Electron, cli tool)
+    - apps - Top level apps live here (frontend, backend, mobile, Electron, cli tool, dev-server)
     - packages - Shared code libraries.
     - test - Data for testing.
 
@@ -82,6 +82,8 @@ To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cl
 To start the backend, follow the instructions in [./apps/backend/README.md](./apps/backend/README.md).
 
 To start the web-based frontend, follow the instructions in [./apps/frontend/README.md](./apps/frontend/README.md).
+
+To start the dev-server (WebSocket development server), follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
 
 To start the Electron-based frontend, follow the instructions in [./electron/README.md](./apps/electron/README.md).
 
