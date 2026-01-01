@@ -7,7 +7,6 @@
     "node_modules",
     "build",
     "dist",
-    "./src/service-worker.ts",
     "./vite.config.ts"
   ],
   "compilerOptions": {
