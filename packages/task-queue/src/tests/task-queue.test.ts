@@ -1,4 +1,5 @@
-import { TaskQueue, TaskStatus, ITaskQueue, ITaskResult } from "./task-queue";
+import { TaskQueue, TaskStatus, ITaskResult } from "../lib/task-queue";
+import { registerHandler } from "../lib/worker";
 import { TestUuidGenerator } from "node-utils";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -40,195 +41,11 @@ describe("TaskQueue", () => {
         });
     });
 
-    describe("registerHandler", () => {
-        it("should register a handler for a task type", () => {
-            const handler = jest.fn().mockResolvedValue("success");
-            queue.registerHandler("test-task", handler);
-            // Handler should be registered (no error thrown)
-            expect(true).toBe(true);
-        });
-
-        it("should allow overwriting a handler", async () => {
-            let callCount = 0;
-            
-            queue.registerHandler("test-task", async () => {
-                callCount++;
-                return "first";
-            });
-
-            queue.registerHandler("test-task", async () => {
-                callCount++;
-                return "second";
-            });
-
-            const taskId = queue.addTask("test-task", {});
-            const result = await queue.awaitTask(taskId);
-
-            expect(result.message).toBe("second");
-            expect(callCount).toBe(1); // Only second handler should be called
-        });
-
-        it("should handle multiple different task types", async () => {
-            queue.registerHandler("type-a", async () => "result-a");
-            queue.registerHandler("type-b", async () => "result-b");
-            queue.registerHandler("type-c", async () => "result-c");
-
-            const idA = queue.addTask("type-a", {});
-            const idB = queue.addTask("type-b", {});
-            const idC = queue.addTask("type-c", {});
-
-            const resultA = await queue.awaitTask(idA);
-            const resultB = await queue.awaitTask(idB);
-            const resultC = await queue.awaitTask(idC);
-
-            expect(resultA.message).toBe("result-a");
-            expect(resultB.message).toBe("result-b");
-            expect(resultC.message).toBe("result-c");
-        });
-    });
-
-    describe("taskStatus", () => {
-        it("should return undefined for non-existent task", () => {
-            const status = queue.taskStatus("non-existent-id");
-            expect(status).toBeUndefined();
-        });
-
-        it("should return pending status for newly added task", async () => {
-            // Use a handler that doesn't execute immediately to check pending status
-            queue.registerHandler("test-task", async () => {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                return "done";
-            });
-            const taskId = queue.addTask("test-task", {});
-            // Check status immediately - it might be pending or running depending on timing
-            const status = queue.taskStatus(taskId);
-            expect(status).toBeDefined();
-            // Task should be either pending or running (depending on execution speed)
-            expect([TaskStatus.Pending, TaskStatus.Running]).toContain(status?.status);
-            // Wait for completion
-            await queue.awaitTask(taskId);
-        });
-
-        it("should return completed status after task completes", async () => {
-            queue.registerHandler("test-task", async () => "done");
-
-            const taskId = queue.addTask("test-task", {});
-            await queue.awaitTask(taskId);
-
-            const status = queue.taskStatus(taskId);
-            expect(status?.status).toBe(TaskStatus.Completed);
-            expect(status?.message).toBe("done");
-        });
-
-        it("should return failed status after task fails", async () => {
-            queue.registerHandler("failing-task", async () => {
-                throw new Error("Task error");
-            });
-
-            const taskId = queue.addTask("failing-task", {});
-            await queue.awaitTask(taskId);
-
-            const status = queue.taskStatus(taskId);
-            expect(status?.status).toBe(TaskStatus.Failed);
-            expect(status?.errorMessage).toContain("Task error");
-        });
-
-        it("should return running status while task is executing", async () => {
-            let taskStarted = false;
-            let statusWhileRunning: ITaskResult | undefined;
-
-            queue.registerHandler("slow-task", async () => {
-                taskStarted = true;
-                await new Promise(resolve => setTimeout(resolve, 200));
-                return "done";
-            });
-
-            const taskId = queue.addTask("slow-task", {});
-
-            // Poll until task starts running
-            while (!taskStarted) {
-                await new Promise(resolve => setTimeout(resolve, 10));
-            }
-
-            // Check status while running
-            statusWhileRunning = queue.taskStatus(taskId);
-            expect(statusWhileRunning?.status).toBe(TaskStatus.Running);
-
-            await queue.awaitTask(taskId);
-        });
-    });
-
-    describe("awaitTask", () => {
-        it("should wait for task completion", async () => {
-            queue.registerHandler("test-task", async (data) => {
-                return `Processed: ${data.value}`;
-            });
-
-            const taskId = queue.addTask("test-task", { value: "test" });
-            const result = await queue.awaitTask(taskId);
-
-            expect(result.status).toBe(TaskStatus.Completed);
-            expect(result.message).toBe("Processed: test");
-        });
-
-        it("should handle task errors", async () => {
-            queue.registerHandler("failing-task", async () => {
-                throw new Error("Task failed");
-            });
-
-            const taskId = queue.addTask("failing-task", {});
-            const result = await queue.awaitTask(taskId);
-
-            expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error?.message).toContain("Task failed");
-        });
-
-        it("should fail if no handler is registered", async () => {
-            const taskId = queue.addTask("unhandled-task", {});
-            const result = await queue.awaitTask(taskId);
-
-            expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error?.message).toContain("No handler registered");
-        });
-
-        it("should throw error for non-existent task", async () => {
-            await expect(queue.awaitTask("non-existent-id")).rejects.toThrow("Task non-existent-id not found");
-        });
-
-        it("should return immediately for already completed task", async () => {
-            queue.registerHandler("test-task", async () => "done");
-
-            const taskId = queue.addTask("test-task", {});
-            const result1 = await queue.awaitTask(taskId);
-            expect(result1.status).toBe(TaskStatus.Completed);
-
-            // Second call should return immediately
-            const result2 = await queue.awaitTask(taskId);
-            expect(result2.status).toBe(TaskStatus.Completed);
-            expect(result2.message).toBe("done");
-        });
-
-        it("should return immediately for already failed task", async () => {
-            queue.registerHandler("failing-task", async () => {
-                throw new Error("Failed");
-            });
-
-            const taskId = queue.addTask("failing-task", {});
-            const result1 = await queue.awaitTask(taskId);
-            expect(result1.status).toBe(TaskStatus.Failed);
-
-            // Second call should return immediately
-            const result2 = await queue.awaitTask(taskId);
-            expect(result2.status).toBe(TaskStatus.Failed);
-            expect(result2.error).toBeDefined();
-        });
-    });
-
     describe("workingDirectory", () => {
         it("should provide a unique working directory for each task", async () => {
             let receivedWorkingDir: string | null = null;
 
-            queue.registerHandler("test-task", async (data, workingDirectory) => {
+            registerHandler("test-task", async (data, workingDirectory) => {
                 receivedWorkingDir = workingDirectory;
                 // Create the directory and a file
                 await mkdir(workingDirectory, { recursive: true });
@@ -237,7 +54,7 @@ describe("TaskQueue", () => {
             });
 
             const taskId = queue.addTask("test-task", {});
-            await queue.awaitTask(taskId);
+            await queue.awaitAllTasks();
 
             expect(receivedWorkingDir).toBeDefined();
             expect(receivedWorkingDir).toContain(testWorkingDir);
@@ -252,18 +69,15 @@ describe("TaskQueue", () => {
         it("should provide different working directories for different tasks", async () => {
             const workingDirs: string[] = [];
 
-            queue.registerHandler("test-task", async (data, workingDirectory) => {
+            registerHandler("test-task", async (data, workingDirectory) => {
                 workingDirs.push(workingDirectory);
                 return "done";
             });
 
-            const taskId1 = queue.addTask("test-task", {});
-            const taskId2 = queue.addTask("test-task", {});
+            queue.addTask("test-task", {});
+            queue.addTask("test-task", {});
 
-            await Promise.all([
-                queue.awaitTask(taskId1),
-                queue.awaitTask(taskId2)
-            ]);
+            await queue.awaitAllTasks();
 
             expect(workingDirs.length).toBe(2);
             expect(workingDirs[0]).not.toBe(workingDirs[1]);
@@ -274,7 +88,7 @@ describe("TaskQueue", () => {
         it("should wait for all tasks to complete", async () => {
             let completedCount = 0;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 completedCount++;
                 return `Task ${data.id} completed`;
             });
@@ -295,8 +109,8 @@ describe("TaskQueue", () => {
 
     describe("getStatus", () => {
         it("should return correct status counts", async () => {
-            queue.registerHandler("test-task", async () => "done");
-            queue.registerHandler("failing-task", async () => {
+            registerHandler("test-task", async () => "done");
+            registerHandler("failing-task", async () => {
                 throw new Error("Failed");
             });
 
@@ -318,7 +132,7 @@ describe("TaskQueue", () => {
         });
 
         it("should track pending tasks", () => {
-            queue.registerHandler("slow-task", async () => {
+            registerHandler("slow-task", async () => {
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 return "done";
             });
@@ -343,7 +157,7 @@ describe("TaskQueue", () => {
         });
 
         it("should update status as tasks progress", async () => {
-            queue.registerHandler("test-task", async () => {
+            registerHandler("test-task", async () => {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 return "done";
             });
@@ -375,7 +189,7 @@ describe("TaskQueue", () => {
             const executionOrder: number[] = [];
             const startTimes: Map<number, number> = new Map();
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 const taskId = data.id;
                 startTimes.set(taskId, Date.now());
                 executionOrder.push(taskId);
@@ -400,7 +214,7 @@ describe("TaskQueue", () => {
             const concurrentTasks = new Set<number>();
             let maxConcurrent = 0;
 
-            queueWithLimit.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 const taskId = data.id;
                 concurrentTasks.add(taskId);
                 maxConcurrent = Math.max(maxConcurrent, concurrentTasks.size);
@@ -426,7 +240,7 @@ describe("TaskQueue", () => {
         it("should process tasks in FIFO order", async () => {
             const executionOrder: number[] = [];
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 executionOrder.push(data.id);
                 return "done";
             });
@@ -447,7 +261,7 @@ describe("TaskQueue", () => {
         it("should pass task data to handler", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
@@ -458,8 +272,8 @@ describe("TaskQueue", () => {
                 metadata: { author: "test" }
             };
 
-            const taskId = queue.addTask("test-task", taskData);
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", taskData);
+            await queue.awaitAllTasks();
 
             expect(receivedData).toEqual(taskData);
         });
@@ -467,7 +281,7 @@ describe("TaskQueue", () => {
         it("should handle complex data structures", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
@@ -480,8 +294,8 @@ describe("TaskQueue", () => {
                 date: new Date().toISOString()
             };
 
-            const taskId = queue.addTask("test-task", complexData);
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", complexData);
+            await queue.awaitAllTasks();
 
             expect(receivedData.nested.array).toEqual([1, 2, 3]);
             expect(receivedData.nested.object.key).toBe("value");
@@ -490,13 +304,13 @@ describe("TaskQueue", () => {
         it("should handle null data", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
 
-            const taskId = queue.addTask("test-task", null);
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", null);
+            await queue.awaitAllTasks();
 
             expect(receivedData).toBeNull();
         });
@@ -504,13 +318,13 @@ describe("TaskQueue", () => {
         it("should handle undefined data", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
 
-            const taskId = queue.addTask("test-task", undefined);
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", undefined);
+            await queue.awaitAllTasks();
 
             expect(receivedData).toBeUndefined();
         });
@@ -518,13 +332,13 @@ describe("TaskQueue", () => {
         it("should handle empty object data", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
 
-            const taskId = queue.addTask("test-task", {});
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", {});
+            await queue.awaitAllTasks();
 
             expect(receivedData).toEqual({});
         });
@@ -532,14 +346,14 @@ describe("TaskQueue", () => {
         it("should handle array data", async () => {
             let receivedData: any = null;
 
-            queue.registerHandler("test-task", async (data) => {
+            registerHandler("test-task", async (data) => {
                 receivedData = data;
                 return "done";
             });
 
             const arrayData = [1, 2, 3, "test", { key: "value" }];
-            const taskId = queue.addTask("test-task", arrayData);
-            await queue.awaitTask(taskId);
+            queue.addTask("test-task", arrayData);
+            await queue.awaitAllTasks();
 
             expect(receivedData).toEqual(arrayData);
         });
@@ -567,13 +381,13 @@ describe("TaskQueue", () => {
 
             let receivedWorkingDir: string | null = null;
 
-            customQueue.registerHandler("test-task", async (data, workingDirectory) => {
+            registerHandler("test-task", async (data, workingDirectory) => {
                 receivedWorkingDir = workingDirectory;
                 return "done";
             });
 
-            const taskId = customQueue.addTask("test-task", {});
-            await customQueue.awaitTask(taskId);
+            customQueue.addTask("test-task", {});
+            await customQueue.awaitAllTasks();
 
             expect(receivedWorkingDir).toContain(customDir);
             customQueue.shutdown();
@@ -616,13 +430,13 @@ describe("TaskQueue", () => {
 
             let receivedWorkingDir: string | null = null;
 
-            defaultQueue.registerHandler("test-task", async (data, workingDirectory) => {
+            registerHandler("test-task", async (data, workingDirectory) => {
                 receivedWorkingDir = workingDirectory;
                 return "done";
             });
 
             const taskId = defaultQueue.addTask("test-task", {});
-            await defaultQueue.awaitTask(taskId);
+            await defaultQueue.awaitAllTasks();
 
             expect(receivedWorkingDir).toBeDefined();
             expect(receivedWorkingDir).toContain("task-queue");
@@ -634,8 +448,8 @@ describe("TaskQueue", () => {
 
     describe("awaitAllTasks", () => {
         it("should handle mixed success and failure", async () => {
-            queue.registerHandler("success-task", async () => "success");
-            queue.registerHandler("fail-task", async () => {
+            registerHandler("success-task", async () => "success");
+            registerHandler("fail-task", async () => {
                 throw new Error("Failed");
             });
 
@@ -658,7 +472,7 @@ describe("TaskQueue", () => {
         it("should wait for all tasks including slow ones", async () => {
             let completedCount = 0;
 
-            queue.registerHandler("slow-task", async () => {
+            registerHandler("slow-task", async () => {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 completedCount++;
                 return "done";
@@ -680,40 +494,67 @@ describe("TaskQueue", () => {
 
     describe("error handling", () => {
         it("should handle handler throwing non-Error objects", async () => {
-            queue.registerHandler("throw-string", async () => {
+            const results: ITaskResult[] = [];
+
+            registerHandler("throw-string", async () => {
                 throw "String error";
             });
 
-            const taskId = queue.addTask("throw-string", {});
-            const result = await queue.awaitTask(taskId);
+            queue.onTaskComplete<any, any>((result: ITaskResult) => {
+                if (result.taskType === "throw-string") {
+                    results.push(result);
+                }
+            });
 
-            expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error).toBeDefined();
+            queue.addTask("throw-string", {});
+            await queue.awaitAllTasks();
+
+            expect(results.length).toBe(1);
+            expect(results[0].status).toBe(TaskStatus.Failed);
+            expect(results[0].error).toBeDefined();
         });
 
         it("should handle handler throwing null", async () => {
-            queue.registerHandler("throw-null", async () => {
+            const results: ITaskResult[] = [];
+
+            registerHandler("throw-null", async () => {
                 throw null;
             });
 
-            const taskId = queue.addTask("throw-null", {});
-            const result = await queue.awaitTask(taskId);
+            queue.onTaskComplete<any, any>((result: ITaskResult) => {
+                if (result.taskType === "throw-null") {
+                    results.push(result);
+                }
+            });
 
-            expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error).toBeDefined();
+            queue.addTask("throw-null", {});
+            await queue.awaitAllTasks();
+
+            expect(results.length).toBe(1);
+            expect(results[0].status).toBe(TaskStatus.Failed);
+            expect(results[0].error).toBeDefined();
         });
 
         it("should preserve error messages", async () => {
             const errorMessage = "Custom error message";
-            queue.registerHandler("custom-error", async () => {
+            const results: ITaskResult[] = [];
+
+            registerHandler("custom-error", async () => {
                 throw new Error(errorMessage);
             });
 
-            const taskId = queue.addTask("custom-error", {});
-            const result = await queue.awaitTask(taskId);
+            queue.onTaskComplete<any, any>((result: ITaskResult) => {
+                if (result.taskType === "custom-error") {
+                    results.push(result);
+                }
+            });
 
-            expect(result.status).toBe(TaskStatus.Failed);
-            expect(result.error?.message).toContain(errorMessage);
+            queue.addTask("custom-error", {});
+            await queue.awaitAllTasks();
+
+            expect(results.length).toBe(1);
+            expect(results[0].status).toBe(TaskStatus.Failed);
+            expect(results[0].error?.message).toContain(errorMessage);
         });
     });
 });
