@@ -6,8 +6,11 @@ import {
     AssetDatabaseProvider,
     GalleryLayoutContextProvider
 } from "user-interface";
+import { useWebSocket } from "./use-web-socket";
 
 export function App() {
+    useWebSocket();
+
     return (
         <HashRouter>
             <AppContextProvider>
