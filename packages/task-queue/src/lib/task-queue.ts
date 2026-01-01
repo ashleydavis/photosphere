@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { IUuidGenerator, log } from "utils";
 import { deserializeError } from "serialize-error";
-import { registerHandler as registerHandlerInStorage } from "./worker";
 import type { TaskHandler, WorkerMessage, IWorkerOptions } from "./types";
 
 //
@@ -109,31 +108,9 @@ export interface ITaskQueue {
     addTask(type: string, data: any): string;
 
     //
-    // Registers a task handler that can do some work for a named type of task
-    // (e.g. "upload-image") then return a result payload.
-    //
-    registerHandler(type: string, handler: TaskHandler): void;
-
-    //
     // Registers a callback that will be called when any task completes (success or failure).
     //
     onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
-
-    //
-    // Awaits the completion of a particular task.
-    //
-    awaitTask(id: string): Promise<ITaskResult>;
-
-    //
-    // Retrieves the status of a particular task.
-    //
-    taskStatus(id: string): ITaskResult | undefined;
-
-    //
-    // Gets the full result of a particular task (including payload).
-    //
-    getTaskResult(id: string): ITaskResult | undefined;
-
 
     //
     // Awaits the completion of all tasks and an empty queue.
@@ -183,14 +160,12 @@ interface IWorkerState {
 //
 export class TaskQueue implements ITaskQueue {
     private tasks: Map<string, ITask> = new Map();
-    private handlers: Map<string, TaskHandler> = new Map();
     private pendingTasks: string[] = [];
     private workers: IWorkerState[] = [];
     private maxWorkers: number;
     private peakWorkers: number = 0;
     private baseWorkingDirectory: string;
     private uuidGenerator: IUuidGenerator;
-    private taskResolvers: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private tasksQueued: number = 0;
@@ -247,123 +222,11 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Registers a handler function for a specific task type.
-    // The handler will be called to process tasks of this type.
-    //
-    registerHandler(type: string, handler: TaskHandler): void {
-        this.handlers.set(type, handler);
-        registerHandlerInStorage(type, handler);
-    }
-
-    //
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     // Multiple callbacks can be registered and will all be called.
     //
     onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
         this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
-    }
-
-    //
-    // Waits for a specific task to complete and returns its result.
-    // If the task is already complete, returns immediately.
-    // Throws an error if the task ID is not found.
-    //
-    async awaitTask(id: string): Promise<ITaskResult> {
-        const task = this.tasks.get(id);
-        if (!task) {
-            throw new Error(`Task ${id} not found`);
-        }
-
-        if (task.status === TaskStatus.Completed || task.status === TaskStatus.Failed) {
-            return {
-                status: task.status,
-                message: task.result?.message,
-                error: task.result?.error,
-                outputs: task.result?.outputs,
-                inputs: task.data,
-                taskId: task.id,
-                taskType: task.type,
-                createdAt: task.createdAt,
-                startedAt: task.startedAt,
-                completedAt: task.completedAt
-            };
-        }
-
-        return new Promise<ITaskResult>((resolve, reject) => {
-            this.taskResolvers.set(id, { resolve, reject });
-        });
-    }
-
-    //
-    // Gets the current status and result of a task without waiting.
-    // Returns undefined if the task ID is not found.
-    //
-    taskStatus(id: string): ITaskResult | undefined {
-        const task = this.tasks.get(id);
-        if (!task) {
-            return undefined;
-        }
-
-        return {
-            status: task.status,
-            message: task.result?.message,
-            error: task.result?.error,
-            errorMessage: task.result?.errorMessage,
-            outputs: task.result?.outputs,
-            inputs: task.data,
-            taskId: task.id,
-            taskType: task.type,
-            createdAt: task.createdAt,
-            startedAt: task.startedAt,
-            completedAt: task.completedAt
-        };
-    }
-
-    //
-    // Gets the full result of a specific task (same as taskStatus but more explicit).
-    // Returns undefined if the task ID is not found.
-    //
-    getTaskResult(id: string): ITaskResult | undefined {
-        return this.taskStatus(id);
-    }
-
-    //
-    // Returns results for all tasks (pending, running, completed, and failed).
-    // Useful for getting a complete snapshot of all tasks in the queue.
-    //
-    getAllTaskResults(): ITaskResult[] {
-        const results: ITaskResult[] = [];
-        for (const task of this.tasks.values()) {
-            results.push({
-                status: task.status,
-                message: task.result?.message,
-                error: task.result?.error,
-                outputs: task.result?.outputs,
-                inputs: task.data,
-                taskId: task.id,
-                taskType: task.type,
-                createdAt: task.createdAt,
-                startedAt: task.startedAt,
-                completedAt: task.completedAt
-            });
-        }
-        return results;
-    }
-
-    //
-    // Returns results for all successfully completed tasks.
-    // Useful for processing only successful results.
-    //
-    getSuccessfulTaskResults(): ITaskResult[] {
-        return this.getAllTaskResults().filter(result => result.status === TaskStatus.Completed);
-    }
-
-    //
-    // Returns results for all failed tasks.
-    // Useful for error handling and retry logic.
-    //
-    getFailedTaskResults(): ITaskResult[] {
-        return this.getAllTaskResults().filter(result => result.status === TaskStatus.Failed);
     }
 
     //
@@ -930,16 +793,9 @@ export class TaskQueue implements ITaskQueue {
 
 
     //
-    // Internal: Resolves any promises waiting for this task to complete.
-    // Also checks if all tasks are complete to resolve awaitAllTasks().
+    // Internal: Checks if all tasks are complete to resolve awaitAllTasks().
     //
     private resolveTask(taskId: string, result: ITaskResult): void {
-        const resolver = this.taskResolvers.get(taskId);
-        if (resolver) {
-            this.taskResolvers.delete(taskId);
-            resolver.resolve(result);
-        }
-
         this.checkAllTasksComplete();
     }
 
