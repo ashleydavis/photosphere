@@ -43,9 +43,6 @@ export interface IMainProps {
 //
 function __Main({ isMobile = false }: IMainProps) {
 
-    //todo: Set to true while loading the current database.
-    const isLoading = false;
-
     //
     // Interface to React Router navigation.
     //
@@ -65,6 +62,7 @@ function __Main({ isMobile = false }: IMainProps) {
     } = useGallery();
 
     const { 
+        isLoading,
         isWorking,
         databaseId,
         moveToDatabase, 
