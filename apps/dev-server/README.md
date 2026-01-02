@@ -26,14 +26,7 @@ bun run start:dev
 
 The server listens for WebSocket connections on `ws://localhost:3001`.
 
-When a client connects:
-1. The server logs "WebSocket connection opened"
-2. The client sends "hello-server"
-3. The server receives and logs the message
-4. The server responds with "hello-frontend"
-5. The client receives and logs the message
-
-All messages are logged to the console on both client and server.
+When a client connects, the server logs "WebSocket connection opened" and is ready to receive task queue messages.
 
 ## Development
 

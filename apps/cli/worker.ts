@@ -8,7 +8,7 @@ import { serializeError } from "serialize-error";
 import { executeTaskHandler } from "task-queue/src/lib/worker";
 import type { ITaskContext } from "task-queue";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./src/lib/worker-init";
-import type { WorkerMessage } from "./src/lib/task-queue";
+import type { IWorkerMessage } from "./src/lib/task-queue";
 import { initTaskHandlers } from "api";
 
 //
@@ -38,7 +38,7 @@ catch (error: any) {
 //
 // Execute a task handler in the worker
 //
-async function executeTask(message: WorkerMessage, taskContext: ITaskContext): Promise<void> {
+async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): Promise<void> {
     const { taskId, taskType, data, workingDirectory } = message;
 
     try {
@@ -53,11 +53,9 @@ async function executeTask(message: WorkerMessage, taskContext: ITaskContext): P
         
         // Send success result back to main thread
         self.postMessage({
-            type: "result",
+            type: "task-completed",
             taskId,
             result: {
-                status: "completed",
-                message: typeof outputs === "string" ? outputs : "Task completed successfully",
                 outputs: outputs
             }
         });
@@ -80,7 +78,7 @@ async function executeTask(message: WorkerMessage, taskContext: ITaskContext): P
 // workerContext: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
 //
 function initWorker(workerContext: IWorkerContext): void {
-    self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+    self.onmessage = async (event: MessageEvent<IWorkerMessage>) => {
         const message = event.data;
 
         if (message.type === "execute") {

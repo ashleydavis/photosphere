@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
+import { loadAsset as loadAssetApi } from "api/src/lib/load-asset";
 import { TaskStatus } from "task-queue";
 import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
 import type { ITaskQueueProvider } from "task-queue";
@@ -316,9 +317,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
     //
     // Loads data for an asset from a particular database.
     //
-    async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob | undefined> {
-        //todo: load asset data from the current database.
-        return undefined;
+    async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob> {
+        // Create a queue for this asset load operation
+        const queue = await taskQueueProvider.create(); //todo: this queue should be shared between all asset loads.
+
+        // Load the asset and await the result
+        return await loadAssetApi(queue, assetId, assetType);
     }
 
     //
@@ -394,15 +398,15 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
             });
 
             // Recieve asset pages.
-            queue.onTaskMessage<IAssetPageMessage>("asset-page", (_messageTaskId, message) => {
+            queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
                 // Only process messages if we're still on the latest load operation
                 if (loadingId.current !== latestLoadingId) {
                     return;
                 }
 
-                // Message is guaranteed to be an asset-batch due to the filter
-                if (message.batch && message.batch.length > 0) {
-                    _onNewItems(message.batch);
+                // Message is guaranteed to be an asset-page due to the filter
+                if (data.message.batch && data.message.batch.length > 0) {
+                    _onNewItems(data.message.batch);
                 }
             });
             

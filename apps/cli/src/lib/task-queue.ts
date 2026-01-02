@@ -56,7 +56,8 @@ export class TaskQueue implements ITaskQueue {
     private uuidGenerator: IUuidGenerator;
     private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
-    private messageCallbacks: Array<{ messageType?: string; callback: TaskMessageCallback<any> }> = [];
+    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback<any> }> = [];
+    private anyMessageCallbacks: TaskMessageCallback<any>[] = [];
     private tasksQueued: number = 0;
     private tasksPending: number = 0;
     private tasksRunning: number = 0;
@@ -85,8 +86,8 @@ export class TaskQueue implements ITaskQueue {
     // Adds a task to the queue to be executed. Returns the task ID (UUID).
     // The task will be executed when a worker becomes available.
     //
-    addTask(type: string, data: any): string {
-        const id = this.uuidGenerator.generate();
+    addTask(type: string, data: any, taskId?: string): string {
+        const id = taskId || this.uuidGenerator.generate();
         const workingDirectory = join(this.baseWorkingDirectory, id);
 
         const task: ITask = {
@@ -114,6 +115,47 @@ export class TaskQueue implements ITaskQueue {
     //
     onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
         this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
+    }
+
+    //
+    // Adds a task and waits for it to complete, returning the outputs.
+    // Throws an error if the task fails.
+    //
+    async awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs> {
+        const taskId = this.addTask(type, data);
+
+        return new Promise<TOutputs>((resolve, reject) => {
+            let resolved = false;
+
+            const resolveOnce = (value: TOutputs) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(value);
+                }
+            };
+
+            const rejectOnce = (error: Error) => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(error);
+                }
+            };
+
+            // Set up listener for task completion/errors
+            this.onTaskComplete<TInputs, TOutputs>((taskResult) => {
+                // Verify this is the correct task by checking taskId matches
+                if (taskResult.taskId !== taskId) {
+                    return; // This is a different task, ignore it
+                }
+
+                if (taskResult.status === TaskStatus.Failed) {
+                    rejectOnce(new Error(taskResult.errorMessage || "Task failed"));
+                }
+                else {
+                    resolveOnce(taskResult.outputs as TOutputs);
+                }
+            });
+        });
     }
 
     //
@@ -187,6 +229,10 @@ export class TaskQueue implements ITaskQueue {
     //
     onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): void {
         this.messageCallbacks.push({ messageType, callback: callback as TaskMessageCallback<any> });
+    }
+
+    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): void {
+        this.anyMessageCallbacks.push(callback as TaskMessageCallback<any>);
     }
 
     //
@@ -369,7 +415,7 @@ export class TaskQueue implements ITaskQueue {
         }
 
         // Handle task result
-        if (data && typeof data === "object" && "type" in data && data.type === "result") {
+        if (data && typeof data === "object" && "type" in data && data.type === "task-completed") {
             const { taskId, result } = data;
             const task = this.tasks.get(taskId);
             if (!task) {
@@ -389,7 +435,6 @@ export class TaskQueue implements ITaskQueue {
             this.tasksCompleted++;
             const fullResult: ITaskResult = {
                 status: TaskStatus.Completed,
-                message: result.message,
                 outputs: result.outputs,
                 inputs: task.data,
                 taskId: task.id,
@@ -677,18 +722,29 @@ export class TaskQueue implements ITaskQueue {
     private async notifyMessageCallbacks(taskId: string, message: any): Promise<void> {
         const messageType = message && typeof message === "object" && "type" in message ? message.type : undefined;
         
+        // Notify callbacks registered for specific message types
         for (const { messageType: filterType, callback } of this.messageCallbacks) {
-            // If a filter type is specified, only invoke if it matches
-            if (filterType && messageType !== filterType) {
+            if (messageType !== filterType) {
                 continue;
             }
             
             try {
-                await callback(taskId, message);
+                await callback({ taskId, message });
             }
             catch (error: any) {
                 // Don't let callback errors break the task queue
                 log.exception("Error in task message callback", error);
+            }
+        }
+        
+        // Notify callbacks registered for any message type
+        for (const callback of this.anyMessageCallbacks) {
+            try {
+                await callback({ taskId, message });
+            }
+            catch (error: any) {
+                // Don't let callback errors break the task queue
+                log.exception("Error in any task message callback", error);
             }
         }
     }

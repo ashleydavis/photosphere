@@ -13,6 +13,10 @@ interface IMessageCallback {
     callback: TaskMessageCallback<any>;
 }
 
+interface IAnyMessageCallback {
+    callback: TaskMessageCallback<any>;
+}
+
 interface ITaskExecutionContext {
     taskId: string;
 }
@@ -33,6 +37,7 @@ export class InlineTaskQueue implements ITaskQueue {
     private runningTasks: Set<string> = new Set();
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private messageCallbacks: IMessageCallback[] = [];
+    private anyMessageCallbacks: IAnyMessageCallback[] = [];
     private tasksQueued: number = 0;
     private tasksCompleted: number = 0;
     private tasksFailed: number = 0;
@@ -43,6 +48,7 @@ export class InlineTaskQueue implements ITaskQueue {
     private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
     private taskContexts: Map<string, ITaskExecutionContext> = new Map();
 
+    // Initializes the inline task queue with max concurrent tasks and working directory
     constructor(maxConcurrent: number, baseWorkingDirectory: string, uuidGenerator: RandomUuidGenerator, workerOptions: { verbose?: boolean; sessionId?: string }) {
         this.maxConcurrent = maxConcurrent;
         this.baseWorkingDirectory = baseWorkingDirectory;
@@ -63,8 +69,9 @@ export class InlineTaskQueue implements ITaskQueue {
         };
     }
 
-    addTask(type: string, data: any): string {
-        const id = this.uuidGenerator.generate();
+    // Adds a task to the queue and returns its ID
+    addTask(type: string, data: any, taskId?: string): string {
+        const id = taskId || this.uuidGenerator.generate();
         const workingDirectory = join(this.baseWorkingDirectory, id);
 
         const task: ITask = {
@@ -86,16 +93,57 @@ export class InlineTaskQueue implements ITaskQueue {
         return id;
     }
 
+    // Registers a callback to be invoked when any task completes
     onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
         this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
     }
 
+    // Adds a task and waits for its completion, returning the result
+    async awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs> {
+        const taskId = this.addTask(type, data);
+
+        return new Promise<TOutputs>((resolve, reject) => {
+            let resolved = false;
+
+            const resolveOnce = (value: TOutputs) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(value);
+                }
+            };
+
+            const rejectOnce = (error: Error) => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(error);
+                }
+            };
+
+            // Set up listener for task completion/errors
+            this.onTaskComplete<TInputs, TOutputs>((taskResult) => {
+                // Verify this is the correct task by checking taskId matches
+                if (taskResult.taskId !== taskId) {
+                    return; // This is a different task, ignore it
+                }
+
+                if (taskResult.status === TaskStatus.Failed) {
+                    rejectOnce(new Error(taskResult.errorMessage || "Task failed"));
+                }
+                else {
+                    resolveOnce(taskResult.outputs as TOutputs);
+                }
+            });
+        });
+    }
+
+    // Waits for all pending and running tasks to complete
     async awaitAllTasks(): Promise<void> {
         while (this.pendingTasks.length > 0 || this.runningTasks.size > 0) {
             await new Promise<void>((resolve) => setTimeout(resolve, 100));
         }
     }
 
+    // Returns the current queue status (pending, running, completed, failed counts)
     getStatus(): IQueueStatus {
         return {
             pending: this.pendingTasks.length,
@@ -108,6 +156,7 @@ export class InlineTaskQueue implements ITaskQueue {
         };
     }
 
+    // Returns fake worker state information for compatibility (inline execution doesn't use real workers)
     getWorkerState(): IWorkerInfo[] {
         // Return fake worker info for compatibility
         return Array.from({ length: this.maxConcurrent }, (_, i) => ({
@@ -121,18 +170,27 @@ export class InlineTaskQueue implements ITaskQueue {
         }));
     }
 
+    // Registers a callback for worker state changes (not used in inline execution)
     onWorkerStateChange(callback: WorkerStateChangeCallback): void {
         this.workerStateChangeCallback = callback;
     }
 
+    // Registers a callback for task messages, filtered by message type
     onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): void {
         this.messageCallbacks.push({ messageType, callback: callback as TaskMessageCallback<any> });
     }
 
+    // Registers a callback for any task message, regardless of type
+    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): void {
+        this.anyMessageCallbacks.push({ callback: callback as TaskMessageCallback<any> });
+    }
+
+    // Shuts down the task queue (no-op for inline execution)
     shutdown(): void {
         // Nothing to shut down for inline execution
     }
 
+    // Processes the next pending task if capacity is available
     private async processNextTask(): Promise<void> {
         if (this.pendingTasks.length === 0) {
             return;
@@ -160,6 +218,7 @@ export class InlineTaskQueue implements ITaskQueue {
         });
     }
 
+    // Executes a task inline and handles completion or failure
     private async executeTask(task: ITask): Promise<void> {
         try {
             // Create a task-specific context for this execution
@@ -190,7 +249,6 @@ export class InlineTaskQueue implements ITaskQueue {
             task.completedAt = new Date();
             const result: ITaskResult = {
                 status: TaskStatus.Completed,
-                message: typeof outputs === "string" ? outputs : "Task completed successfully",
                 outputs,
                 inputs: task.data,
                 taskId: task.id,
@@ -244,6 +302,7 @@ export class InlineTaskQueue implements ITaskQueue {
         }
     }
 
+    // Notifies all registered completion callbacks with the task result
     private async notifyCompletionCallbacks(result: ITaskResult): Promise<void> {
         for (const callback of this.completionCallbacks) {
             try {
@@ -255,20 +314,31 @@ export class InlineTaskQueue implements ITaskQueue {
         }
     }
 
+    // Notifies all registered message callbacks that match the message type
     private async notifyMessageCallbacks(taskId: string, message: any): Promise<void> {
-        const messageType = message && typeof message === "object" && "type" in message ? message.type : undefined;
+        const messageType = message && typeof message === "object" && "type" in message ? message.type : "";
         
+        // Notify callbacks registered for specific message types
         for (const { messageType: filterType, callback } of this.messageCallbacks) {
-            // If a filter type is specified, only invoke if it matches
-            if (filterType && messageType !== filterType) {
+            if (messageType !== filterType) {
                 continue;
             }
             
             try {
-                await callback(taskId, message);
+                await callback({ taskId, message });
             }
             catch (error: unknown) {
                 console.error("Error in task message callback:", error);
+            }
+        }
+        
+        // Notify callbacks registered for any message type
+        for (const { callback } of this.anyMessageCallbacks) {
+            try {
+                await callback({ taskId, message });
+            }
+            catch (error: unknown) {
+                console.error("Error in any task message callback:", error);
             }
         }
     }

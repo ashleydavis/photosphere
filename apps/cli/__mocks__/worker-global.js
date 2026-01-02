@@ -53,11 +53,9 @@ class MockWorker {
                     const context = { taskId, sendMessage: () => {} };
                     const outputs = await handler(data, workingDirectory, context);
                     this.dispatchMessage({
-                        type: "result",
+                        type: "task-completed",
                         taskId,
                         result: {
-                            status: "completed",
-                            message: typeof outputs === "string" ? outputs : "Task completed successfully",
                             outputs: outputs
                         }
                     });
