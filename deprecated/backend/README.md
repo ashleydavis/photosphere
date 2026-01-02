@@ -22,7 +22,7 @@ bun run start:dev
 
 ### Run with a single local directory
 
-You can run the backend pointing to a single local directory (similar to the CLI's UI command) using the `--path` argument:
+You can run the backend pointing to a single local directory using the `--path` argument:
 
 ```bash
 bun run start:single /path/to/your/photo/directory

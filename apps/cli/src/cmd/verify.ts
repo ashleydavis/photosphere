@@ -116,9 +116,6 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     log.info('');
     log.info(pc.gray(`    # View database summary and tree hash`));
     log.info(`    psi summary`);
-    log.info('');
-    log.info(pc.gray(`    # Open the web interface to browse your media`));
-    log.info(`    psi ui`);
 
     await exit(0);
 }

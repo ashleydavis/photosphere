@@ -1013,10 +1013,6 @@ test_setup() {
     esac
     cd ../cli
     
-    log_info "Building frontend for platform: $platform"
-    invoke_command "Build frontend" "bun run build-fe-$platform" || {
-        log_warning "Frontend build failed, continuing anyway..."
-    }
     test_passed
 }
 
@@ -3842,7 +3838,7 @@ show_usage() {
     echo "  all                 - Run all tests (assumes executable built and tools available)"
     local test_count=$(get_test_count)
     echo "  to <number>         - Run tests 1 through <number> (1-$test_count)"
-    echo "  setup               - Build executable and frontend"
+    echo "  setup               - Build executable"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
@@ -3869,7 +3865,7 @@ show_usage() {
     echo "  $0 replicate-unrelated-fail # Run test"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
-    echo "  $0 setup                    # Build executable and frontend only"
+    echo "  $0 setup                    # Build executable only"
     echo "  $0 check-tools              # Check tools only"
     echo "  $0 reset                    # Clean up test artifacts"
     echo "  $0 create-database          # Run only database creation test"

@@ -238,9 +238,6 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     log.info('');
     log.info(pc.gray(`    # View summary of the replicated database`));
     log.info(`    psi summary --db ${destDir}`);
-    log.info('');
-    log.info(pc.gray(`    # Open web interface for the replicated database`));
-    log.info(`    psi ui --db ${destDir}`);
 
     await exit(0);
 }
