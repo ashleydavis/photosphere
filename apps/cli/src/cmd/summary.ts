@@ -46,9 +46,6 @@ export async function summaryCommand(context: ICommandContext, options: ISummary
     log.info('');
     log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
     log.info(`    psi sync --db ${databaseDir} --dest <path>`);
-    log.info('');
-    log.info(pc.gray(`    # Open the web interface to browse your media`));
-    log.info(`    psi ui`);
 
     await exit(0);
 }

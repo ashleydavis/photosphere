@@ -28,12 +28,6 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi check --db ./photos ~/Downloads", description: "Checks the directory to see what's already been added." }
     ],
     
-    ui: [
-        { command: "psi ui --db .", description: "Starts the UI for database in current directory." },
-        { command: "psi ui --db ./photos", description: "Starts the UI for database in ./photos directory." },
-        { command: "psi ui --db ./photos --no-open", description: "Starts the UI without opening browser automatically." }
-    ],
-    
     config: [
         { command: "psi config", description: "Interactive wizard to configure S3 credentials and Google API key." },
         { command: "psi config --clear", description: "Clears all configuration files." }

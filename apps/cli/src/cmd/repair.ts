@@ -147,7 +147,6 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
     log.info(pc.bold('Next steps:'));
     log.info(`    ${pc.cyan('psi verify')}                     Verify the repaired database integrity`);
     log.info(`    ${pc.cyan('psi summary')}                   View database summary and tree hash`);
-    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

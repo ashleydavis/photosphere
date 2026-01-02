@@ -15,7 +15,6 @@ export async function examplesCommand(): Promise<void> {
         'Database Management': ['init', 'add', 'check', 'summary', 'verify'],
         'Backup and syncrhonization': ['replicate', 'compare'],
         'Configuration': ['config', 'tools'],
-        'User Interface': ['ui'],
         'File Analysis': ['info'],
         'Help and Support': ['examples', 'bug'],
     };

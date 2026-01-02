@@ -85,7 +85,6 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     }
     log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
     log.info(`    ${pc.cyan('psi summary')}                   View database summary and statistics`);
-    log.info(`    ${pc.cyan('psi ui')}                        Open the web interface to browse your media`);
 
     await exit(0);
 }

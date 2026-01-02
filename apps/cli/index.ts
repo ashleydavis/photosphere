@@ -1,5 +1,4 @@
 import { program } from 'commander';
-import { uiCommand } from './src/cmd/ui';
 import { addCommand } from './src/cmd/add';
 import { checkCommand } from './src/cmd/check';
 import { initCommand } from './src/cmd/init';
@@ -355,16 +354,6 @@ Resources:
         .option(...yesOption)
         .addHelpText('after', getCommandExamplesHelp('tools'))
         .action(toolsCommand);
-
-    program
-        .command("ui")
-        .description("Starts the Photosphere user-interface to view, search and edit photos and videos.")
-        .option(...dbOption)
-        .option(...keyOption)
-        .option("--no-open", "Disables opening the UI in the default browser.", false)
-        .option(...cwdOption)
-        .addHelpText('after', getCommandExamplesHelp('ui'))
-        .action(uiCommand);
 
     program
         .command("upgrade")
