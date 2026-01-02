@@ -23,8 +23,9 @@ export async function loadAssetsHandler(
     // Use hardcoded path to test database (relative to project root)
     // Resolve from current file location: packages/api/src/lib -> project root -> test/dbs/v5
     // In ES modules, we use import.meta.url to get __dirname equivalent
-    // const dbDir = resolve(__dirname, "../../../../test/dbs/50-assets");
-    const dbDir = resolve(__dirname, "../../../../test/dbs/v5");
+    const dbDir = resolve(__dirname, "../../../../test/dbs/50-assets");
+    // const dbDir = resolve(__dirname, "../../../../test/dbs/1-asset");
+    // const dbDir = resolve(__dirname, "../../../../test/dbs/v5");
 
     // Create storage without encryption
     const { storage: assetStorage } = createStorage(dbDir, undefined, undefined);

@@ -15,7 +15,6 @@ export enum TaskStatus {
 //
 export interface ITaskResult<TInputs = any, TOutputs = any> {
     status: TaskStatus;
-    message?: string;
     error?: Error; // Deserialized error object (automatically deserialized from JSON)
     errorMessage?: string; // Convenience field: error?.message || "Unknown error"
     outputs?: TOutputs; // The actual result data returned by the handler
@@ -27,7 +26,6 @@ export interface ITaskResult<TInputs = any, TOutputs = any> {
     completedAt?: Date;
 }
 
-
 //
 // Task completion callback
 // Can be synchronous or asynchronous
@@ -35,10 +33,18 @@ export interface ITaskResult<TInputs = any, TOutputs = any> {
 export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void | Promise<void>;
 
 //
+// Task message data structure
+//
+export interface ITaskMessageData<TMessage = any> {
+    taskId: string;
+    message: TMessage;
+}
+
+//
 // Task message callback
 // Called when a task sends arbitrary messages to the client
 //
-export type TaskMessageCallback<TMessage = any> = (taskId: string, message: TMessage) => void | Promise<void>;
+export type TaskMessageCallback<TMessage = any> = (data: ITaskMessageData<TMessage>) => void | Promise<void>;
 
 //
 // Queue status interface
@@ -77,13 +83,20 @@ export type WorkerStateChangeCallback = (workers: IWorkerInfo[]) => void;
 export interface ITaskQueue {
     //
     // Adds a task to the queue to be run. Returns uuid of the task.
+    // If taskId is provided, it will be used instead of generating a new one.
     //
-    addTask(type: string, data: any): string;
+    addTask(type: string, data: any, taskId?: string): string;
 
     //
     // Registers a callback that will be called when any task completes (success or failure).
     //
     onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
+
+    //
+    // Adds a task and waits for it to complete, returning the outputs.
+    // Throws an error if the task fails.
+    //
+    awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs>;
 
     //
     // Awaits the completion of all tasks and an empty queue.
@@ -109,9 +122,15 @@ export interface ITaskQueue {
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // The callback receives the task ID and the message data.
-    // If messageType is provided, only messages with that type will be passed to the callback.
+    // Only messages with the specified messageType will be passed to the callback.
     //
     onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): void;
+
+    //
+    // Registers a callback that will be called for any task message, regardless of type.
+    // The callback receives the task ID and the message data.
+    //
+    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): void;
 
     //
     // Shuts down the task queue and terminates all workers.

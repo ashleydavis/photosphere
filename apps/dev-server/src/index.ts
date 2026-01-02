@@ -51,11 +51,7 @@ Bun.serve({
             try {
                 const messageData = JSON.parse(message.toString());
 
-                if (messageData.type === "hello") {
-                    console.log("Received hello from client");
-                    ws.send(JSON.stringify({ type: "hello", message: "hello-frontend" }));
-                }
-                else if (messageData.type === "queue-task") {
+                if (messageData.type === "queue-task") {
                     // Get or create task queue for this WebSocket connection
                     let queue = wsTaskQueues.get(ws);
                     if (!queue) {
@@ -65,44 +61,25 @@ Bun.serve({
                         // Set up task completion handler to send results back to client
                         queue.onTaskComplete(async (taskResult) => {
                             ws.send(JSON.stringify({
-                                type: "task-result",
+                                type: "task-completed",
                                 taskId: taskResult.taskId,
                                 result: taskResult,
                             }));
                         });
 
                         // Set up task message handler to send messages back to client
-                        // Register for all message types (no filter)
-                        queue.onTaskMessage("", (taskId: string, message: any) => {
-                            // Handle asset-page messages
-                            if (message && typeof message === "object" && message.type === "asset-page") {
-                                ws.send(JSON.stringify({
-                                    type: "asset-page",
-                                    taskId: taskId,
-                                    batch: message.batch,
-                                }));
-                            }
-                            else {
-                                // Generic task message
-                                ws.send(JSON.stringify({
-                                    type: "task-message",
-                                    taskId: taskId,
-                                    message: message,
-                                }));
-                            }
+                        // Register for all message types
+                        queue.onAnyTaskMessage(data => {
+                            ws.send(JSON.stringify({
+                                type: "task-message",
+                                ...data, // TODO: might be better to just copy reference without spreading.
+                            }));
                         });
                     }
 
-                    // Queue the task
-                    const taskId = queue.addTask(messageData.taskType, messageData.data);
+                    // Queue the task using the client-provided task ID
+                    const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.taskId);
                     console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
-
-                    // Send acknowledgment
-                    ws.send(JSON.stringify({
-                        type: "task-queued",
-                        taskId: messageData.taskId, // Use the client's task ID
-                        serverTaskId: taskId,
-                    }));
                 }
             }
             catch (error) {
