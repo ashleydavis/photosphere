@@ -25,9 +25,7 @@
     "test-simple-database": "rm -rf ./test/db && bun run start -- init ./test/db && bun run start -- add ./test/db ../../test/test.png"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.7",
     "@types/bun": "latest",
-    "@types/express": "^4.17.16",
     "@types/jest": "^29.4.0",
     "@types/js-yaml": "^4.0.9",
     "cross-env": "^7.0.3",
@@ -38,19 +36,16 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "adm-zip": "^0.5.16",
     "api": "workspace:*",
     "commander": "^13.1.0",
     "exif-parser": "^0.1.12",
     "is-unicode-supported": "^2.1.0",
     "js-yaml": "^4.1.0",
-    "jszip": "^3.10.1",
     "merkle-tree": "workspace:*",
     "mime": "^4.0.7",
     "node-utils": "workspace:*",
     "open": "^10.1.2",
     "picocolors": "^1.1.1",
-    "rest-api": "workspace:*",
     "sisteransi": "^1.0.5",
     "storage": "workspace:*",
     "tools": "workspace:*",
