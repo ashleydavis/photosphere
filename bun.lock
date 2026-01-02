@@ -58,18 +58,7 @@
         "typescript": "^5",
       },
     },
-    "apps/dev-server": {
-      "name": "dev-server",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@types/bun": "latest",
-        "typescript": "^5.6.3",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
-      },
-    },
-    "apps/frontend": {
+    "apps/dev-frontend": {
       "name": "photosphere-frontend",
       "version": "1.0.0",
       "dependencies": {
@@ -102,6 +91,17 @@
         "user-interface": "workspace:*",
         "vite": "^5.1.6",
         "wait-port": "^1.0.4",
+      },
+    },
+    "apps/dev-server": {
+      "name": "dev-server",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.6.3",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
       },
     },
     "apps/mk-cli": {
@@ -1626,7 +1626,7 @@
 
     "peek-readable": ["peek-readable@4.1.0", "", {}, "sha512-ZI3LnwUv5nOGbQzD9c2iDG6toheuXSZP5esSHBjopsXH4dg19soufvpUGA3uohi5anFtGb2lhAVdHzH6R/Evvg=="],
 
-    "photosphere-frontend": ["photosphere-frontend@workspace:apps/frontend"],
+    "photosphere-frontend": ["photosphere-frontend@workspace:apps/dev-frontend"],
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 

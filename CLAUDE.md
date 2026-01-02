@@ -21,11 +21,11 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test` - Run backend tests
 - `bun run compile:watch` - Watch mode compilation
 
-### Frontend development (in apps/frontend/):
-- `bun run start` - Start dev server on port 8080
-- `bun run build` - Build production bundle
-- `bun run test-e2e` - Run Playwright E2E tests
-- `bun run test-e2e:debug` - Debug E2E tests with Playwright UI
+### Frontend development (in apps/dev-frontend/):
+    - `bun run start` - Start dev server on port 8080
+    - `bun run build` - Build production bundle
+    - `bun run test-e2e` - Run Playwright E2E tests
+    - `bun run test-e2e:debug` - Debug E2E tests with Playwright UI
 
 ### CLI tool (in apps/cli/):
 - `bun run start -- <command> [db-path]` - Run CLI commands locally
@@ -34,7 +34,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Running a single test:
 - Backend: `cd apps/backend && bun test path/to/test.test.ts`
-- Frontend E2E: `cd apps/frontend && bun run test-e2e path/to/test.test.ts`
+- Frontend E2E: `cd apps/dev-frontend && bun run test-e2e path/to/test.test.ts`
 
 ## Architecture
 

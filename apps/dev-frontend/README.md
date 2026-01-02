@@ -1,28 +1,28 @@
-# Photosphere web frontend
+# Photosphere dev-frontend
 
-This is the web frontend for the Photosphere application. Built on [React](https://reactjs.org/) and bundled with [Webpack](https://webpack.js.org/).
+This is the development frontend for the Photosphere application. Built on [React](https://reactjs.org/) and bundled with [Vite](https://vitejs.dev/).
 
 ## Setup
 
 First, follow the instructions in [the main readme](../../README.md).
 
-Then open a terminal and change directory to the frontend project:
+Then open a terminal and change directory to the dev-frontend project:
 
 ```bash
-cd apps/frontend
+cd apps/dev-frontend
 ```
 
-To enable the frontend you must first run the [backend](../backend/README.md).
+To enable the frontend you must first run the [dev-server](../dev-server/README.md).
 
-## Run the Webpack dev server
+## Run the Vite dev server
 
 Run the dev server like this:
 
 ```bash
-pnpm start
+bun start
 ```
 
-Then click the link or point your browser at the default location for Webpack: [http://localhost:8080](http://localhost:8080).
+Then click the link or point your browser at the default location for Vite: [http://localhost:8080](http://localhost:8080).
 
 ## Build the static web page
 
@@ -41,7 +41,7 @@ set VITE_BASE_URL=http://localhost:3000
 Build the project to a static web page like this:
 
 ```bash
-pnpm run build
+bun run build
 ```
 
 The static web page is output to the `dist` subdirectory.
@@ -75,13 +75,13 @@ The web page should automatically be displayed in your browser.
 Compile the whole project:
 
 ```bash
-pnpm run compile
+bun run compile
 ```
 
 Compile in watch mode in another terminal, if you want to make changes to the code while it is running:
 
 ```bash
-pnpm run compile:watch
+bun run compile:watch
 ```
 
 Set environment variables:
@@ -93,20 +93,20 @@ export VITE_BASE_URL=<photosphere-api-url>
 Run it in prod mode:
 
 ```bash
-cd photosphere/frontend
-pnpm run start:prod
+cd photosphere/dev-frontend
+bun run start:prod
 ```
 
 ## Run automated tests
 
 ```bash
-pnpm test
+bun test
 ```
 
 ## Run e2e tests
 
 ```bash
-pnpm run test-e2e
+bun run test-e2e
 ``` 
 
 Enable this to debug with Playwright:
