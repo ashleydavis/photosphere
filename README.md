@@ -15,7 +15,7 @@ Photosphere can be run locally or self-hosted as a server:
 - Provide S3 compatible storage (I used Digital Ocean Spaces, but also works with AWS S3).
 
 Contained herein are the code for Photosphere's:
-- Backend
+- Dev-server (WebSocket development server)
 - Web frontend
 - CLI tool
 - Electron app
@@ -59,7 +59,7 @@ bun install
 ## Project layout
 
 - photosphere/
-    - apps - Top level apps live here (frontend, backend, mobile, Electron, cli tool, dev-server)
+    - apps - Top level apps live here (dev-frontend, dev-server, cli tool)
     - packages - Shared code libraries.
     - test - Data for testing.
 
@@ -78,19 +78,7 @@ bun run compile
 
 To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cli/README.md).
 
-To start the backend, follow the instructions in [./apps/backend/README.md](./apps/backend/README.md).
-
-To start the web-based frontend, follow the instructions in [./apps/frontend/README.md](./apps/frontend/README.md).
-
 To start the dev-server (WebSocket development server), follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
 
-To start the Electron-based frontend, follow the instructions in [./electron/README.md](./apps/electron/README.md).
-
-To start the mobile frontend, follow the instructions in [./apps/mobile/README.md](./apps/mobile/README.md).
-
-
-
-
-
-
+To start the web-based frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
 
