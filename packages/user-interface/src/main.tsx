@@ -2,8 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Route, Routes, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
-import { UploadPage } from "./pages/upload";
-import { useUpload } from "./context/upload-context";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
@@ -67,10 +65,6 @@ function __Main({ isMobile = false }: IMainProps) {
         deleteAssets,
     } = useAssetDatabase();
 
-    //
-    // Interface to the upload context.
-    //
-    const { numScans, isUploading } = useUpload();
 
     //
     // Set to true to open the sidebar.
@@ -158,13 +152,6 @@ function __Main({ isMobile = false }: IMainProps) {
             // If the user is logged in, navigate to their default set.
             //
             navigateToDefaultDatabase("cloud");
-        }
-        else if (location.pathname === "/upload" 
-            || location.pathname === "/upload/") {
-            //
-            // If the user is logged in, navigate to their default set.
-            //
-            navigateToDefaultDatabase("upload");
         }
     }, [dbs, location]);
 
@@ -292,16 +279,6 @@ function __Main({ isMobile = false }: IMainProps) {
 
                         <NavLink
                             className="mr-1 sm:mr-3"
-                            to="/upload"
-                            >
-                            <div className="flex flex-row items-center">
-                                <i className="w-5 text-center fa-solid fa-upload"></i>
-                                <div className="hidden sm:block ml-2">Upload</div>
-                            </div>
-                        </NavLink>
-
-                        <NavLink
-                            className="mr-1 sm:mr-3"
                             to="/about"
                             >
                             <div className="flex flex-row items-center">
@@ -315,15 +292,6 @@ function __Main({ isMobile = false }: IMainProps) {
                         {(isGalleryLoading)
                             && <div className="flex flex-row items-center ml-1 mr-2">
                                 <span className="text-sm hidden sm:block mr-1">Loading</span>
-                                <div className="mx-1 sm:mx-2">
-                                    <Spinner show={true} />
-                                </div>
-                            </div>
-                        }
-
-                        {(isUploading || numScans > 0)
-                            && <div className="flex flex-row items-center ml-1 mr-2">
-                                <span className="text-sm hidden sm:block mr-1">Uploading</span>
                                 <div className="mx-1 sm:mx-2">
                                     <Spinner show={true} />
                                 </div>
@@ -466,17 +434,6 @@ function __Main({ isMobile = false }: IMainProps) {
                         {/* Placeholder route to avoid the warning before the redirect. */}
                         <Route
                             path="/cloud"
-                            element={<div/>}
-                            />
-
-                        <Route 
-                            path="/upload/:databaseId" 
-                            element={<UploadPage />} 
-                            />
-
-                        {/* Placeholder route to avoid the warning before the redirect. */}
-                        <Route
-                            path="/upload"
                             element={<div/>}
                             />
 

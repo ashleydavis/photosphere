@@ -62,11 +62,6 @@ export interface IGallerySource {
     onItemsDeleted: IObservable<IItemsUpdate>;
 
     //
-    // Adds an asset to the source.
-    //
-    addAsset(asset: IGalleryItem): void;
-
-    //
     // Updates an existing asset.
     //
     updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void>;
@@ -90,11 +85,6 @@ export interface IGallerySource {
     // Deletes the assets.
     //
     deleteAssets(assetIds: string[]): Promise<void>;
-
-    //
-    // Checks if an asset is already uploaded.
-    //
-    checkAssetHash(hash: string): Promise<boolean>;
 
     //
     // Loads data for an asset.

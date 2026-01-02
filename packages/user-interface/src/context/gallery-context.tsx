@@ -110,11 +110,6 @@ export interface IGalleryContext {
     onItemsDeleted: IObservable<IItemsUpdate>;
 
     //
-    // Adds an item to the the gallery.
-    //
-    addGalleryItem(galleryItem: IGalleryItem): void;
-
-    //
     // Updates an item in the gallery by index.
     //
     updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void>;
@@ -133,16 +128,6 @@ export interface IGalleryContext {
     // Deletes the asset.
     //
     deleteAsset(assetId: string): Promise<void>;
-
-    //
-    // Checks if an asset is already uploaded.
-    //
-    checkAssetHash(hash: string): Promise<boolean>;
-
-    //
-    // Uploads an asset.
-    //
-    uploadAsset(assetId: string, assetType: string, assetData: Blob): Promise<void>;
 
     //
     // Loads data for an asset.
@@ -253,12 +238,11 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
-    const { isLoading, addAsset, updateAsset,
+    const { isLoading, updateAsset,
         onReset: __onReset,
         onNewItems: __onNewItems,
         onItemsUpdated: __onItemsUpdated,
         onItemsDeleted: __onItemsDeleted,
-        checkAssetHash: _checkAssetHash,
         loadAsset: _loadAsset, storeAsset,
         addArrayValue: _addArrayValue,
         removeArrayValue: _removeArrayValue,
@@ -465,13 +449,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     //
-    // Adds an asset to the start of the gallery.
-    //
-    function addGalleryItem(galleryItem: IGalleryItem): void {
-        addAsset(galleryItem);
-    }
-
-    //
     // Updates an asset in the gallery by index.
     //
     async function updateGalleryItem(assetId: string, partialGalleryItem: Partial<IGalleryItem>): Promise<void> {
@@ -497,20 +474,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     async function deleteAsset(assetId: string): Promise<void> {
         await _deleteAssets([ assetId ]);
-    }
-
-    //
-    // Checks if an asset is already uploaded.
-    //
-    async function checkAssetHash(hash: string): Promise<boolean> {
-        return await _checkAssetHash(hash);
-    }
-
-    //
-    // Uploads an asset.
-    //
-    async function uploadAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
-        await storeAsset(assetId, assetType, assetData);
     }
 
     //
@@ -842,13 +805,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         onNewItems: onNewItems.current,
         onItemsUpdated: onItemsUpdated.current,
         onItemsDeleted: onItemsDeleted.current,
-        addGalleryItem,
         updateGalleryItem,
         addArrayValue,
         removeArrayValue,
         deleteAsset,
-        checkAssetHash,
-        uploadAsset,
         loadAsset,
         unloadAsset,
         getItemById,

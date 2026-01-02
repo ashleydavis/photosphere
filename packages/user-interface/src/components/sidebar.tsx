@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, Upload, VerticalAlignBottom, VerticalAlignTop, DateRange } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, VerticalAlignBottom, VerticalAlignTop, DateRange } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
@@ -474,18 +474,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, navigateToD
                             <ListItemDecorator><Cloud /></ListItemDecorator>
                             <ListItemContent>Cloud</ListItemContent>
                         </ListItemButton>
-                    </ListItem>
-                </NavLink>
-
-                <NavLink
-                    to="/upload"
-                    onClick={() => setSidebarOpen(false)}
-                    >
-                    <ListItem>
-                            <ListItemButton>
-                                <ListItemDecorator><Upload /></ListItemDecorator>
-                                <ListItemContent>Upload</ListItemContent>
-                            </ListItemButton>
                     </ListItem>
                 </NavLink>
             </List>
