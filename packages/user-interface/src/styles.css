@@ -201,20 +201,6 @@ body.mobile #navbar {
     width: auto !important;
 }
 
-/* Drag and drop */
-
-#upload-drop-area {
-    border: 2px dashed #ccc;
-    border-radius: 20px;
-    max-width: 480px;
-    margin: 150px auto;
-    padding: 30px;
-}
-
-#upload-drop-area.highlight {
-    border-color: blue;
-}
-
 /* Info page */
 
 #info-area {

@@ -1,7 +1,7 @@
 import React from "react";
 import { HashRouter } from "react-router-dom";
 import {
-    AppContextProvider, Main, UploadContextProvider,
+    AppContextProvider, Main,
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider
@@ -25,9 +25,7 @@ export function App() {
                 <AssetDatabaseProvider taskQueueProvider={taskQueueProvider}>
                     <GalleryContextProvider>
                         <GalleryLayoutContextProvider>
-                            <UploadContextProvider>
-                                <Main />
-                            </UploadContextProvider>
+                            <Main />
                         </GalleryLayoutContextProvider>
                     </GalleryContextProvider>
                 </AssetDatabaseProvider>

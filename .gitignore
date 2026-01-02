@@ -1,12 +1,9 @@
-apps/backend/uploads/**
-apps/backend/files/**
 dist
 node_modules
 coverage
 packages/user-interface/build
 apps/frontend/build
 apps/electron/frontend/build
-apps/backend/build
 apps/mobile/frontend/build
 apps/frontend/playwright-report
 aux/testbed/build
@@ -26,7 +23,6 @@ packages/utils/build/
 packages/node-utils/build/
 deprecated/database/storage-test
 /deprecated/find-orphans/build/
-backend/key
 # Vite
 .vite/
 # Local Netlify folder

@@ -105,27 +105,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
     const onItemsDeleted = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
 
     //
-    // Adds an asset to the default database.
-    //
-    function addAsset(item: IGalleryItem): void {
-        if (!databaseId) {
-            throw new Error("No database id provided.");
-        }
-
-        const asset: IAsset = {
-            ...item,
-        };
-
-        _onNewItems([ asset ]); 
-
-        addAssetToDatabase(asset, databaseId)
-            .catch(err => {
-                console.error(`Failed to add asset:`);
-                console.error(err);
-            });
-    }
-
-    //
     // Adds an asset to a particular database.
     //
     async function addAssetToDatabase(asset: IGalleryItem, databaseId: string): Promise<void> {
@@ -138,7 +117,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
                     type: "set",
                     fields: {
                         ...asset,
-                        uploadDate: dayjs().toISOString(),
                     },
                 },
             }
@@ -323,17 +301,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
         }
     }
 
-    //
-    // Checks if an asset is already uploaded.
-    //
-    async function checkAssetHash(hash: string): Promise<boolean> {
-        if (!databaseId) {
-            throw new Error("No database id provided.");
-        }
-
-        //todo: check if the asset is already uploaded to current database.
-        return false;
-    }
 
     //
     // Loads data for an asset from the current database.
@@ -473,13 +440,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
         onNewItems: onNewItems.current,
         onItemsUpdated: onItemsUpdated.current,
         onItemsDeleted: onItemsDeleted.current,
-        addAsset,
         updateAsset,
         updateAssets,
         addArrayValue,
         removeArrayValue,
         deleteAssets,
-        checkAssetHash,
         loadAsset,
         storeAsset,
         getItemById,
