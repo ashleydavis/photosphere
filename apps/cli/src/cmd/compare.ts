@@ -22,6 +22,16 @@ export interface ICompareCommandOptions extends IBaseCommandOptions {
     // Path to destination encryption key file.
     //
     destKey?: string;
+
+    //
+    // Show all differences without truncation.
+    //
+    full?: boolean;
+
+    //
+    // Maximum number of items to show in each category.
+    //
+    max?: number;
 }
 
 //
@@ -110,15 +120,18 @@ export async function compareCommand(context: ICommandContext, options: ICompare
     log.info(pc.yellow(`Found differences: ${summaryParts.join(', ')}`));
     log.info('');
 
+    const showFull = options.full || false;
+    const maxItems = options.max || 10;
+
     // Files only in source
     if (compareResult.onlyInA.length > 0) {
         log.info(pc.cyan(`Files only in source:`));
-        const filesToShow = compareResult.onlyInA.slice(0, 10);
+        const filesToShow = showFull ? compareResult.onlyInA : compareResult.onlyInA.slice(0, maxItems);
         filesToShow.forEach(file => {
             log.info(`  ${pc.cyan('+')} ${file}`);
         });
-        if (compareResult.onlyInA.length > 10) {
-            log.info(pc.gray(`  ... and ${compareResult.onlyInA.length - 10} more`));
+        if (!showFull && compareResult.onlyInA.length > maxItems) {
+            log.info(pc.gray(`  ... and ${compareResult.onlyInA.length - maxItems} more`));
         }
         log.info('');
     }
@@ -126,12 +139,12 @@ export async function compareCommand(context: ICommandContext, options: ICompare
     // Files only in destination
     if (compareResult.onlyInB.length > 0) {
         log.info(pc.magenta(`Files only in destination:`));
-        const filesToShow = compareResult.onlyInB.slice(0, 10);
+        const filesToShow = showFull ? compareResult.onlyInB : compareResult.onlyInB.slice(0, maxItems);
         filesToShow.forEach(file => {
             log.info(`  ${pc.magenta('+')} ${file}`);
         });
-        if (compareResult.onlyInB.length > 10) {
-            log.info(pc.gray(`  ... and ${compareResult.onlyInB.length - 10} more`));
+        if (!showFull && compareResult.onlyInB.length > maxItems) {
+            log.info(pc.gray(`  ... and ${compareResult.onlyInB.length - maxItems} more`));
         }
         log.info('');
     }
@@ -139,12 +152,12 @@ export async function compareCommand(context: ICommandContext, options: ICompare
     // Modified files
     if (compareResult.modified.length > 0) {
         log.info(pc.yellow(`Modified files:`));
-        const filesToShow = compareResult.modified.slice(0, 10);
+        const filesToShow = showFull ? compareResult.modified : compareResult.modified.slice(0, maxItems);
         filesToShow.forEach(file => {
             log.info(`  ${pc.yellow('●')} ${file}`);
         });
-        if (compareResult.modified.length > 10) {
-            log.info(pc.gray(`  ... and ${compareResult.modified.length - 10} more`));
+        if (!showFull && compareResult.modified.length > maxItems) {
+            log.info(pc.gray(`  ... and ${compareResult.modified.length - maxItems} more`));
         }
         log.info('');
     }

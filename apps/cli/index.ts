@@ -49,6 +49,8 @@ async function main() {
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
+    const fullOption: [string, string, boolean] = ["--full", "Show all differences without truncation.", false];
+    const maxOption: [string, string] = ["--max <number>", "Maximum number of items to show in each category (default: 10)"];
     const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
     const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
     const dryRunOption: [string, string, boolean] = ["--dry-run", "Run without making any database changes (merkle tree and metadata updates are skipped)", false];
@@ -137,6 +139,8 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...fullOption)
+        .option(...maxOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(initContext(compareCommand));
 
