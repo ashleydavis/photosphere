@@ -11,7 +11,7 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
-import { debugMerkleTreeCommand } from './src/cmd/debug';
+import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
 import { versionCommand } from './src/cmd/version';
@@ -206,6 +206,40 @@ Resources:
         .option(...recordsOption)
         .option(...allOption)
         .action(initContext(debugMerkleTreeCommand));
+
+    debugCommand
+        .command("find-collisions")
+        .description("Finds hash collisions (same hash, different asset IDs) and writes results to JSON file.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-o, --output <path>", "Output JSON file path (default: collisions.json)", "collisions.json")
+        .action(initContext(debugFindCollisionsCommand));
+
+    debugCommand
+        .command("find-duplicates")
+        .description("Finds duplicate assets by comparing file content. Reads collisions JSON from find-collisions.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-i, --input <path>", "Input JSON file path from find-collisions command (default: collisions.json)", "collisions.json")
+        .option("-o, --output <path>", "Output JSON file path (default: duplicates.json)", "duplicates.json")
+        .action(initContext(debugFindDuplicatesCommand));
+
+    debugCommand
+        .command("remove-duplicates")
+        .description("Removes duplicate assets based on content comparison results from find-duplicates.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-i, --input <path>", "Input JSON file path from find-duplicates command (default: duplicates.json)", "duplicates.json")
+        .action(initContext(debugRemoveDuplicatesCommand));
 
     program
         .command("help [command]")
