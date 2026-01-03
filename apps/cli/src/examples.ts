@@ -73,6 +73,8 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     compare: [
         { command: "psi compare --db ./photos --dest ./backup", description: "Compares an original database with a backup." },
         { command: "psi compare --db . --dest s3:bucket/photos", description: "Compares a local database with an S3 replica." },
+        { command: "psi compare --db ./photos --dest ./backup --full", description: "Shows all differences without truncation." },
+        { command: "psi compare --db ./photos --dest ./backup --max 20", description: "Shows up to 20 items in each category." },
     ],
     
     "bug": [
