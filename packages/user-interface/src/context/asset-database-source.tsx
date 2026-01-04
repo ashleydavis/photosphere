@@ -6,7 +6,7 @@ import dayjs from "dayjs";
 import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
-import { loadAsset as loadAssetApi } from "api/src/lib/load-asset";
+import axios from "axios";
 import { TaskStatus } from "task-queue";
 import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
 import type { ITaskQueueProvider } from "task-queue";
@@ -318,11 +318,13 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
     // Loads data for an asset from a particular database.
     //
     async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob> {
-        // Create a queue for this asset load operation
-        const queue = await taskQueueProvider.create(); //todo: this queue should be shared between all asset loads.
-
-        // Load the asset and await the result
-        return await loadAssetApi(queue, assetId, assetType);
+        const response = await axios.get(
+            `http://localhost:3001/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databaseId)}`,
+            {
+                responseType: "blob",
+            }
+        );
+        return response.data;
     }
 
     //
@@ -428,7 +430,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
         if (databaseId) {
             loadAssets(databaseId)
                 .catch(err => {
-                    console.error(`Failed to load assets:`);
+                    console.error(`xxx Failed to load assets:`);
                     console.error(err);
                 });
         }
