@@ -12,7 +12,7 @@ export async function examplesCommand(): Promise<void> {
 
     // Group commands by category for better organization
     const categories = {
-        'Database Management': ['init', 'add', 'check', 'summary', 'verify'],
+        'Database Management': ['init', 'add', 'check', 'summary', 'verify', 'find-orphans', 'remove-orphans'],
         'Backup and syncrhonization': ['replicate', 'compare'],
         'Configuration': ['config', 'tools'],
         'User Interface': ['ui'],

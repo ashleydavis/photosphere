@@ -17,9 +17,11 @@ import { examplesCommand } from './src/cmd/examples';
 import { versionCommand } from './src/cmd/version';
 import { listCommand } from './src/cmd/list';
 import { exportCommand } from './src/cmd/export';
+import { findOrphansCommand } from './src/cmd/find-orphans';
 import { upgradeCommand } from './src/cmd/upgrade';
 import { repairCommand } from './src/cmd/repair';
 import { removeCommand } from './src/cmd/remove';
+import { removeOrphansCommand } from './src/cmd/remove-orphans';
 import { clearCacheCommand } from './src/cmd/clear-cache';
 import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
@@ -175,6 +177,17 @@ Resources:
         .action(initContext(exportCommand));
 
     program
+        .command("find-orphans")
+        .description("Find and list files that are no longer in the merkle tree.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('find-orphans'))
+        .action(initContext(findOrphansCommand));
+
+    program
         .command("hash")
         .description("Compute the hash of a file using the same algorithm as the database.")
         .argument("<file-path>", "The file path to hash (supports fs:, s3:, and encrypted storage)")
@@ -313,6 +326,17 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('remove'))
         .action(initContext(removeCommand));
+
+    program
+        .command("remove-orphans")
+        .description("Find and remove files that are no longer in the merkle tree.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('remove-orphans'))
+        .action(initContext(removeOrphansCommand));
 
     program
         .command("repair")
