@@ -17,6 +17,4 @@ export * from "./lib/zip-utils";
 export * from "./lib/import";
 export * from "./lib/check";
 export * from "./lib/load-assets";
-export * from "./lib/load-asset";
 export * from "./lib/load-assets.types";
-export * from "./lib/load-asset.types";
