@@ -97,6 +97,17 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
     ],
     
+    "find-orphans": [
+        { command: "psi find-orphans --db .", description: "Finds orphaned files in the current directory database." },
+        { command: "psi find-orphans --db ./photos", description: "Finds orphaned files in the ./photos database." },
+    ],
+    
+    "remove-orphans": [
+        { command: "psi remove-orphans --db .", description: "Removes orphaned files from the current directory database." },
+        { command: "psi remove-orphans --db ./photos", description: "Removes orphaned files from the ./photos database." },
+        { command: "psi remove-orphans --db ./photos --yes", description: "Removes orphaned files without confirmation prompt." },
+    ],
+    
     list: [
         { command: "psi list --db .", description: "Lists all files in the current directory database." },
         { command: "psi list --db ./photos", description: "Lists all files in the ./photos database." },
