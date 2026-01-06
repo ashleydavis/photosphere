@@ -5,9 +5,12 @@ import { cpus } from 'os';
 import type { ITaskQueue } from 'task-queue';
 import { TaskQueueElectronMain } from './task-queue-electron-main';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
+import { createAssetServer } from 'rest-api';
+import type { Server } from 'http';
 
 let mainWindow: BrowserWindow | null = null;
 let taskQueue: ITaskQueue | null = null;
+let assetServer: { server?: Server } | null = null;
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -34,7 +37,12 @@ function createMainWindow() {
     });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Initialize asset server before creating main window
+    await initResetApi();
+    
+    initWorkers();
+    
     createMainWindow();
 
     app.on('activate', () => {
@@ -42,8 +50,6 @@ app.whenReady().then(() => {
             createMainWindow();
         }
     });
-
-    initWorkers();
 });
 
 app.on('window-all-closed', () => {
@@ -57,6 +63,12 @@ app.on('before-quit', () => {
     if (taskQueue) {
         taskQueue.shutdown();
         taskQueue = null;
+    }
+
+    // Cleanup asset server
+    if (assetServer?.server) {
+        assetServer.server.close();
+        assetServer = null;
     }
 });
 
@@ -107,5 +119,22 @@ function initWorkers() {
             });
         }
     });
+}
+
+//
+// Initialize the rest api.
+//
+async function initResetApi() {
+    const uuidGenerator = new RandomUuidGenerator();
+    const timestampProvider = new TimestampProvider();
+    const port = 3001; // Port for asset server in desktop app
+
+    assetServer = await createAssetServer({
+        port,
+        uuidGenerator,
+        timestampProvider,
+    });
+
+    console.log('Asset server initialized');
 }
 
