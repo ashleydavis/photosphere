@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "compile": "tsc --noEmit",
-    "bundle": "bun build ./src/index.tsx --outdir ../desktop/bundle/frontend --target browser --minify --sourcemap && cp index.html ../desktop/bundle/frontend/index.html"
+    "bundle": "vite build"
   },
   "dependencies": {
     "task-queue": "workspace:*",
@@ -18,7 +18,9 @@
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
-    "typescript": "^5.3.3"
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.6"
   }
 }
 
