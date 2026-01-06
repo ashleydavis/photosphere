@@ -15,6 +15,13 @@ export function App() {
         throw new Error('electronAPI not available. desktop-frontend requires Electron.');
     }
 
+    // Extract restApiUrl from query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const restApiUrl = urlParams.get('restApiUrl');
+    if (!restApiUrl) {
+        throw new Error('restApiUrl query parameter is required but was not provided.');
+    }
+
     const taskQueueProvider = new TaskQueueProviderElectron(electronAPI);
 
     return (
@@ -25,7 +32,7 @@ export function App() {
             }}
         >
             <AppContextProvider>
-                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
+                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
                     <GalleryContextProvider>
                         <GalleryLayoutContextProvider>
                             <Main />
