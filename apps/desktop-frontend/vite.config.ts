@@ -10,6 +10,7 @@ export default defineConfig({
     minify: true,
     outDir: '../desktop/bundle/frontend',
     emptyOutDir: true,
+    chunkSizeWarningLimit: Infinity, // Disable chunk size warnings
   },
 });
 
