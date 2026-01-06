@@ -5,7 +5,9 @@ import '@fortawesome/fontawesome-free/css/all.css';
 import "./tailwind.css";
 
 const container = document.getElementById('app');
-const root = createRoot(container!);
-root.render(
-    <App />
-);
+if (!container) {
+    throw new Error('Root element not found');
+}
+
+const root = createRoot(container);
+root.render(<App />);
