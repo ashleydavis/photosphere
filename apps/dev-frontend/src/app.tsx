@@ -10,8 +10,7 @@ import { useWebSocket } from "./lib/use-web-socket";
 import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
 
 export function App() {
-    const ws = useWebSocket();
-    
+    const ws = useWebSocket();    
     if (!ws) {
         // Wait for WebSocket connection before rendering
         return <div>Connecting...</div>;
