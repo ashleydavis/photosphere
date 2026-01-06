@@ -1,0 +1,64 @@
+{
+  "name": "desktop",
+  "version": "1.0.0",
+  "description": "Bun Electron App",
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com"
+  },
+  "homepage": "https://github.com/yourusername/bun-electron",
+  "private": true,
+  "main": "bundle/main.js",
+  "scripts": {
+    "dev": "bun run bundle && electron . --no-sandbox",
+    "compile": "tsc --noEmit",
+    "bundle:main": "bun build ./src/main.ts --outdir ./bundle --target node --format cjs --external electron",
+    "bundle:preload": "bun build ./src/preload.ts --outdir ./bundle --target node --format cjs --external electron",
+    "bundle:worker": "bun build ./src/worker.ts --outdir ./bundle --target node --format cjs",
+    "bundle": "bun bundle:main && bun bundle:preload && bun bundle:worker",
+    "build": "bun run bundle && electron-builder",
+    "test:smoke": "playwright test tests/smoke.spec.ts"
+  },
+  "dependencies": {
+    "task-queue": "workspace:*",
+    "api": "workspace:*",
+    "utils": "workspace:*",
+    "node-utils": "workspace:*",
+    "electron-defs": "workspace:*",
+    "serialize-error": "^11.0.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "@types/node": "^20.10.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "@playwright/test": "^1.57.0"
+  },
+  "build": {
+    "appId": "com.monorepo.electron",
+    "productName": "Bun Electron Test",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "bundle/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"],
+      "executableName": "bun-electron-test"
+    },
+    "win": {
+      "target": ["nsis", "zip"],
+      "executableName": "bun-electron-test"
+    },
+    "linux": {
+      "target": ["deb", "zip"],
+      "maintainer": "your.email@example.com",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "executableName": "bun-electron-test"
+    }
+  }
+}
+

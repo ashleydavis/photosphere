@@ -14,9 +14,8 @@ interface ITaskMessage {
 // WebSocket-based task queue implementation
 // Communicates with dev-server via WebSocket to queue and execute tasks
 //
-export class WebSocketTaskQueue implements ITaskQueue {
+export class TaskQueueWebSocket implements ITaskQueue {
     private ws: WebSocket;
-    private pendingTasks: Map<string, { resolve: (result: ITaskResult) => void; reject: (error: Error) => void }> = new Map();
     private activeTasksCount: number = 0;
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback<any> }> = [];
@@ -25,6 +24,7 @@ export class WebSocketTaskQueue implements ITaskQueue {
     private tasksCompleted: number = 0;
     private tasksFailed: number = 0;
     private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
+    private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
 
     // Initializes the WebSocket task queue with a WebSocket connection
     constructor(ws: WebSocket) {
@@ -37,8 +37,6 @@ export class WebSocketTaskQueue implements ITaskQueue {
         this.ws.addEventListener("message", (event) => {
             try {
                 const message = JSON.parse(event.data);
-                console.log(`[TaskQueue] Received message:`);
-                console.log(JSON.stringify(message, null, 2));
                 this.handleMessage(message);
             }
             catch (error) {
@@ -70,19 +68,8 @@ export class WebSocketTaskQueue implements ITaskQueue {
                 console.log(`[TaskQueue] Task failed: ${taskId} (type: ${taskType}, error: ${errorMessage})`);
             }
             
-            const pendingTask = this.pendingTasks.get(taskId);
-            if (pendingTask) {
-                this.pendingTasks.delete(taskId);
-                
-                if (result.status === TaskStatus.Failed) {
-                    pendingTask.reject(new Error(result.errorMessage || "Task failed"));
-                }
-                else {
-                    pendingTask.resolve(result);
-                }
-            }
-            
             this.notifyCompletionCallbacks(result);
+            this.checkAllTasksComplete();
         }
         else if (message.type === "task-message") {
             const { taskId, message: taskMessage } = message;
@@ -99,16 +86,12 @@ export class WebSocketTaskQueue implements ITaskQueue {
         this.tasksQueued++;
         this.activeTasksCount++;
         
-        const message = {
-            type: "queue-task",
+        this.ws.send(JSON.stringify({
+            type: "add-task",
             taskId: finalTaskId,
             taskType: type,
             data,
-        };
-        
-        this.ws.send(JSON.stringify(message));
-        
-        console.log(`[TaskQueue] Task added: ${finalTaskId} (type: ${type})`);
+        }));
         
         return finalTaskId;
     }
@@ -120,53 +103,62 @@ export class WebSocketTaskQueue implements ITaskQueue {
 
     // Adds a task and waits for its completion, returning the result
     async awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs> {
-
         const taskId = this.addTask(type, data);
 
-        console.log(`[TaskQueue] Awaiting task: ${taskId} (type: ${type})`);
-
         return new Promise<TOutputs>((resolve, reject) => {
-            const pendingTask = this.pendingTasks.get(taskId);
-            if (pendingTask) {
-                // Task already exists, this shouldn't happen but handle it
-                reject(new Error("Task ID collision"));
-                return;
-            }
+            let resolved = false;
 
-            this.pendingTasks.set(taskId, {
-                resolve: (result: ITaskResult) => {
-                    resolve(result.outputs as TOutputs);
-                },
-                reject
+            const resolveOnce = (value: TOutputs) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(value);
+                }
+            };
+
+            const rejectOnce = (error: Error) => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(error);
+                }
+            };
+
+            // Set up listener for task completion/errors
+            this.onTaskComplete<TInputs, TOutputs>((taskResult) => {
+                // Verify this is the correct task by checking taskId matches
+                if (taskResult.taskId !== taskId) {
+                    return; // This is a different task, ignore it
+                }
+
+                if (taskResult.status === TaskStatus.Failed) {
+                    rejectOnce(new Error(taskResult.errorMessage || "Task failed"));
+                }
+                else {
+                    resolveOnce(taskResult.outputs as TOutputs);
+                }
             });
         });
     }
 
     // Waits for all pending tasks to complete
     async awaitAllTasks(): Promise<void> {
-        // Wait for all tasks to complete
-        while (this.activeTasksCount > 0) {
-            await new Promise<void>((resolve) => {
-                const checkInterval = setInterval(() => {
-                    if (this.activeTasksCount === 0) {
-                        clearInterval(checkInterval);
-                        resolve();
-                    }
-                }, 100);
-            });
+        if (this.activeTasksCount === 0) {
+            return;
         }
+
+        return new Promise<void>((resolve, reject) => {
+            this.allTasksResolvers.push({ resolve, reject });
+            this.checkAllTasksComplete();
+        });
     }
 
     // Returns the current queue status (running, completed, failed counts)
     getStatus(): IQueueStatus {
-        const running = this.pendingTasks.size;
         return {
             pending: 0, // WebSocket tasks are sent immediately, no pending state
-            running: running,
+            running: this.activeTasksCount,
             completed: this.tasksCompleted,
             failed: this.tasksFailed,
             total: this.tasksQueued,
-            tasksQueued: this.tasksQueued,
             peakWorkers: 1 // WebSocket connection is single-threaded
         };
     }
@@ -174,12 +166,11 @@ export class WebSocketTaskQueue implements ITaskQueue {
     // Returns worker state information (represents the WebSocket connection as a single worker)
     getWorkerState(): IWorkerInfo[] {
         // Return a single "worker" representing the WebSocket connection
-        const runningTaskIds = Array.from(this.pendingTasks.keys());
         return [{
             workerId: 1,
             isReady: this.ws.readyState === WebSocket.OPEN,
-            isIdle: this.pendingTasks.size === 0,
-            currentTaskId: runningTaskIds.length > 0 ? runningTaskIds[0] : null,
+            isIdle: this.activeTasksCount === 0,
+            currentTaskId: null, // We don't track individual task IDs
             currentTaskType: null, // We don't track this for WebSocket tasks
             currentTaskRunningTimeMs: null,
             tasksProcessed: this.tasksCompleted + this.tasksFailed,
@@ -199,11 +190,6 @@ export class WebSocketTaskQueue implements ITaskQueue {
     // Registers a callback for any task message, regardless of type
     onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): void {
         this.anyMessageCallbacks.push(callback as TaskMessageCallback<any>);
-    }
-
-    // Shuts down the task queue (no-op for WebSocket as connection may be shared)
-    shutdown(): void {
-        // Don't close the WebSocket connection because we don't own it
     }
 
     // Notifies all registered completion callbacks with the task result
@@ -246,5 +232,27 @@ export class WebSocketTaskQueue implements ITaskQueue {
             }
         }
     }
+
+    //
+    // Checks if all tasks are complete and resolves awaitAllTasks() if so
+    // Called after each task completes
+    //
+    private checkAllTasksComplete(): void {
+        if (this.activeTasksCount === 0 && this.allTasksResolvers.length > 0) {
+            const resolvers = this.allTasksResolvers;
+            this.allTasksResolvers = [];
+            for (const resolver of resolvers) {
+                resolver.resolve();
+            }
+        }
+    }
+
+    //
+    // Shuts down the task queue (no-op for WebSocket as connection may be shared)
+    //
+    shutdown(): void {
+        // Don't close the WebSocket connection because we don't own it
+    }
 }
+
 

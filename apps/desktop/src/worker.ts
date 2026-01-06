@@ -1,15 +1,13 @@
 //
-// Worker script for executing tasks
-// This runs in a Bun worker context
-// This is the entry point for all workers created by the CLI package
+// Electron utility process entry point
+// Routes messages to the appropriate handler from shared packages
 //
-
 import { serializeError } from "serialize-error";
 import { executeTaskHandler } from "task-queue/src/lib/worker";
 import type { ITaskContext } from "task-queue";
-import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./src/lib/worker-init";
-import type { IWorkerMessage } from "./src/lib/task-queue-bun";
+import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./lib/worker-init";
 import { initTaskHandlers } from "api";
+import type { IWorkerMessage } from "./task-queue-electron-main";
 
 //
 // Register all task handlers
@@ -28,11 +26,19 @@ if (!workerOptionsJson) {
 let workerOptions: IWorkerOptions;
 try {
     workerOptions = JSON.parse(workerOptionsJson);
-} 
+}
 catch (error: any) {
     console.error(`Failed to parse WORKER_OPTIONS:`);
     console.error(error.stack || error.message || error);
     process.exit(1);
+}
+
+//
+// Post message function for Electron utility process
+//
+const parentPort = (process as any).parentPort;
+if (!parentPort) {
+    throw new Error('parentPort not available - this must run in an Electron utility process');
 }
 
 //
@@ -52,7 +58,7 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         setWorkerTaskId(null);
         
         // Send success result back to main thread
-        self.postMessage({
+        parentPort.postMessage({
             type: "task-completed",
             taskId,
             result: {
@@ -65,7 +71,7 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         setWorkerTaskId(null);
         
         // Send error result back to main thread as task-completed with status failed
-        self.postMessage({
+        parentPort.postMessage({
             type: "task-completed",
             taskId,
             result: {
@@ -81,16 +87,16 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
 // workerContext: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
 //
 function initWorker(workerContext: IWorkerContext): void {
-    self.onmessage = async (event: MessageEvent<IWorkerMessage>) => {
+    parentPort.on('message', async (event: any) => {
         const message = event.data;
 
-        if (message.type === "execute") {
+        if (message.type === 'execute') {
             const { taskId } = message;
 
             // Create a task-specific sendMessage function that captures the task ID in a closure
             // This ensures messages are correctly associated with the current task
             const taskSpecificSendMessage = (message: any): void => {
-                self.postMessage({
+                parentPort.postMessage({
                     type: "task-message",
                     taskId,
                     message
@@ -105,10 +111,13 @@ function initWorker(workerContext: IWorkerContext): void {
 
             await executeTask(message, taskContext);
         }
-    };
+        else {
+            throw new Error(`Unknown message type: ${message.type}`);
+        }
+    });
     
     // Send ready message to main thread to indicate worker is initialized and ready for tasks
-    self.postMessage({ type: "worker-ready" });
+    parentPort.postMessage({ type: "worker-ready" });
 }
 
 //
@@ -117,7 +126,7 @@ function initWorker(workerContext: IWorkerContext): void {
 try {
     const context = initWorkerContext(workerOptions);
     initWorker(context);
-} 
+}
 catch (error: any) {
     console.error(`Failed to initialize worker:`);
     console.error(error.stack || error.message || error);

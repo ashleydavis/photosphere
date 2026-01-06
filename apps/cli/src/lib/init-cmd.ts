@@ -4,7 +4,7 @@ import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
 import type { ITaskQueueProvider } from "task-queue";
-import { TaskQueueProvider } from "./task-queue-provider";
+import { TaskQueueProviderBun } from "./task-queue-provider-bun";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -289,11 +289,11 @@ export function initContext<TArgs extends any[], TReturn>(
         const workers = options.workers ?? os.cpus().length;
         const timeout = options.timeout ?? 600000;
         const debug = process.argv.includes('--debug');
-        const taskQueueProvider = new TaskQueueProvider(workers, timeout, {
+        const taskQueueProvider = new TaskQueueProviderBun(workers, timeout, {
             verbose: options.verbose,
             tools: options.tools,
             sessionId,
-        }, debug, uuidGenerator);
+        }, debug, uuidGenerator, timestampProvider);
         
         const context: ICommandContext = {
             uuidGenerator,

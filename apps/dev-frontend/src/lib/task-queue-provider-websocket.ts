@@ -1,12 +1,12 @@
 import type { ITaskQueue } from "task-queue";
 import type { ITaskQueueProvider } from "task-queue";
-import { WebSocketTaskQueue } from "./websocket-task-queue";
+import { TaskQueueWebSocket } from "./task-queue-websocket";
 
 //
 // WebSocket-based task queue provider
 // Creates task queues that communicate with dev-server via WebSocket
 //
-export class WebSocketTaskQueueProvider implements ITaskQueueProvider {
+export class TaskQueueProviderWebSocket implements ITaskQueueProvider {
     private ws: WebSocket;
 
     constructor(ws: WebSocket) {
@@ -14,7 +14,7 @@ export class WebSocketTaskQueueProvider implements ITaskQueueProvider {
     }
 
     async create(): Promise<ITaskQueue> {
-        return new WebSocketTaskQueue(this.ws);
+        return new TaskQueueWebSocket(this.ws);
     }
 }
 

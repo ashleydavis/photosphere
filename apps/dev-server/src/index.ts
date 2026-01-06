@@ -1,10 +1,7 @@
 import type { ITaskQueue } from "task-queue";
 import { RandomUuidGenerator } from "utils";
-import type { ITaskQueueProvider } from "task-queue";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { InlineTaskQueue } from "./inline-task-queue";
+import { TaskQueueProviderInline } from "./task-queue-provider-inline";
 import { createStorage } from "storage";
 import { createMediaFileDatabase, loadDatabase, streamAsset } from "api/src/lib/media-file-database";
 import { TimestampProvider } from "utils";
@@ -15,31 +12,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 const PORT = 3001;
 
-// Create a task queue provider for dev-server that executes tasks inline
-class DevServerTaskQueueProvider implements ITaskQueueProvider {
-    private uuidGenerator: RandomUuidGenerator;
-    private maxConcurrent = 10;
-
-    constructor(uuidGenerator: RandomUuidGenerator) {
-        this.uuidGenerator = uuidGenerator;
-    }
-
-    async create(): Promise<ITaskQueue> {
-        // Create a new queue for each WebSocket connection
-        const baseWorkingDirectory = join(tmpdir(), "task-queue");
-        return new InlineTaskQueue(
-            this.maxConcurrent,
-            baseWorkingDirectory,
-            this.uuidGenerator,
-            {
-                verbose: true,
-                sessionId: this.uuidGenerator.generate(),
-            }
-        );
-    }
-}
-
-const taskQueueProvider = new DevServerTaskQueueProvider(new RandomUuidGenerator());
+const taskQueueProvider = new TaskQueueProviderInline(new RandomUuidGenerator());
 
 // Map of WebSocket connections to their task queues
 const wsTaskQueues = new Map<WebSocket, ITaskQueue>();
@@ -127,7 +100,7 @@ wss.on("connection", (ws: WebSocket) => {
         try {
             const messageData = JSON.parse(message.toString());
 
-            if (messageData.type === "queue-task") {
+            if (messageData.type === "add-task") {
                 // Get or create task queue for this WebSocket connection
                 let queue = wsTaskQueues.get(ws);
                 if (!queue) {

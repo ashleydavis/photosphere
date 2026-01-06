@@ -20,7 +20,13 @@
     "test": "bun --filter '*' test",
     "test:watch": "bun --filter '*' test:watch",
     "t": "bun run test",
-    "tw": "bun run test:watch"
+    "tw": "bun run test:watch",
+    "dev": "bun run bundle:renderer && bun run --filter=desktop dev",
+    "build": "bun run bundle:renderer && bun run --filter=desktop build",
+    "bundle:main": "bun run --filter=desktop bundle",
+    "bundle:renderer": "bun run --filter=desktop-frontend bundle",
+    "bundle": "bun run bundle:main && bun run bundle:renderer",
+    "test:smoke": "bun run build && bun run --filter=desktop test:smoke"
   },
   "workspaces": [
     "apps/*",
