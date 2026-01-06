@@ -25,7 +25,7 @@ export function App() {
             }}
         >
             <AppContextProvider>
-                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider}>
+                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
                     <GalleryContextProvider>
                         <GalleryLayoutContextProvider>
                             <Main />
