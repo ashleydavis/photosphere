@@ -34,9 +34,10 @@ export interface IAssetDatabase extends IGallerySource {
 export interface IAssetDatabaseProviderProps {
     children: ReactNode | ReactNode[];
     taskQueueProvider: ITaskQueueProvider;
+    restApiUrl: string;
 }
 
-export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDatabaseProviderProps) {
+export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl }: IAssetDatabaseProviderProps) {
 
     //
     // Set to true while loading assets.
@@ -319,7 +320,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider }: IAssetDat
     //
     async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob> {
         const response = await axios.get(
-            `http://localhost:3001/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databaseId)}`,
+            `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databaseId)}`,
             {
                 responseType: "blob",
             }
