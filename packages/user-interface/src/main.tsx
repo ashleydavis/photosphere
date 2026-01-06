@@ -100,7 +100,12 @@ function __Main({ isMobile = false }: IMainProps) {
 
     const { mode, setMode } = useColorScheme();
 
-    setMode("system"); // Automatically choose system mode.
+    //
+    // Automatically choose system mode on mount.
+    //
+    useEffect(() => {
+        setMode("system");
+    }, [setMode]);
 
     //
     // Adds mobile or desktop class to body based on isMobile prop.
