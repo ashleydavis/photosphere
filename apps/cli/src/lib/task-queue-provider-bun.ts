@@ -1,4 +1,4 @@
-import { TaskQueue } from "./task-queue";
+import { TaskQueueBun } from "./task-queue-bun";
 import { type IWorkerInfo } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { IWorkerOptions } from "./worker-init";
@@ -6,29 +6,31 @@ import type { ITaskQueueProvider } from "task-queue";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { registerStateProvider, updateStateProvider } from "debug-server";
-import type { IUuidGenerator } from "utils";
+import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 //
 // Task queue provider that lazily creates task queues when needed.
 //
-export class TaskQueueProvider implements ITaskQueueProvider {
+export class TaskQueueProviderBun implements ITaskQueueProvider {
     private maxWorkers: number;
     private taskTimeout: number;
     private workerOptions: IWorkerOptions;
     private debug: boolean;
     private uuidGenerator: IUuidGenerator;
+    private timestampProvider: ITimestampProvider;
 
-    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions, debug: boolean, uuidGenerator: IUuidGenerator) {
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions, debug: boolean, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
         this.debug = debug;
         this.uuidGenerator = uuidGenerator;
+        this.timestampProvider = timestampProvider;
     }
 
     async create(): Promise<ITaskQueue> {
         const baseWorkingDirectory = join(tmpdir(), "task-queue");
-        const taskQueue = new TaskQueue(this.maxWorkers, baseWorkingDirectory, this.uuidGenerator, this.taskTimeout, this.workerOptions);
+        const taskQueue = new TaskQueueBun(this.maxWorkers, baseWorkingDirectory, this.uuidGenerator, this.timestampProvider, this.taskTimeout, this.workerOptions);
         
         // If debug mode is enabled, register state provider for polling
         if (this.debug) {

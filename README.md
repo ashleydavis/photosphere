@@ -18,7 +18,8 @@ Contained herein are the code for Photosphere's:
 - Dev-server (WebSocket development server)
 - Web frontend
 - CLI tool
-- Electron app
+- Desktop app (Electron)
+- Desktop frontend (React UI for Electron)
 - Android and iOS apps
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://www.manning.com/books/the-feedback-driven-developer).
@@ -39,7 +40,7 @@ To move assets from Google Photos:
 
 ### Pre-reqs
 
-You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.2.11 on Ubuntu Linux, Windows 10/11 and MacOS.
+You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.3 on Ubuntu Linux, Windows 10/11 and MacOS.
 
 ### Setup
 
@@ -51,7 +52,7 @@ git clone git@github.com:ashleydavis/photosphere.git
 
 Then install all dependencies at the root of the monorepo:
 
-```
+```bash
 cd photosphere
 bun install
 ```
@@ -59,7 +60,7 @@ bun install
 ## Project layout
 
 - photosphere/
-    - apps - Top level apps live here (dev-frontend, dev-server, cli tool)
+    - apps - Top level apps live here (dev-frontend, dev-server, cli tool, desktop, desktop-frontend)
     - packages - Shared code libraries.
     - test - Data for testing.
 
@@ -80,5 +81,7 @@ To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cl
 
 To start the dev-server (WebSocket development server), follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
 
-To start the web-based frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
+To start the dev-frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
+
+To run the desktop app (Electron) in development mode, use `bun run dev`. To build the Electron app bundle for distribution, use `bun run build`. For more information on the Electron app, see the readmes in [./apps/desktop/README.md](./apps/desktop/README.md) and [./apps/desktop-frontend/README.md](./apps/desktop-frontend/README.md).
 

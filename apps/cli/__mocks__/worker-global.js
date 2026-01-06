@@ -9,7 +9,7 @@ class MockWorker {
         this.listeners = new Map();
         // Send ready message asynchronously
         process.nextTick(() => {
-            this.dispatchMessage({ type: "ready" });
+            this.dispatchMessage({ type: "worker-ready" });
         });
     }
 

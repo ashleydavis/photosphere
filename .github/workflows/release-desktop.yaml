@@ -1,0 +1,100 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            files: |
+              apps/desktop/release/*.deb
+              apps/desktop/release/*.zip
+          - os: windows-latest
+            files: |
+              apps/desktop/release/*Setup*.exe
+              apps/desktop/release/*.zip
+          - os: macos-15-intel
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+          - os: macos-latest
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Electron app
+        run: bun run build
+
+      - name: Show release directory contents
+        run: |
+          echo "Release directory structure:"
+          ls apps/desktop/release
+
+      - name: Install Xvfb (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Run smoke tests
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bun run --filter=desktop test:smoke
+
+      - name: Run smoke tests
+        if: runner.os != 'Linux'
+        run: bun run --filter=desktop test:smoke
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-build
+          path: ${{ matrix.files }}
+          if-no-files-found: warn
+          retention-days: 2
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release name
+        id: release_name
+        shell: bash
+        run: |
+          RELEASE_NAME=$(date -u +"%Y-%m-%d-%H-%M-%S")
+          echo "name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "Release name: $RELEASE_NAME"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.release_name.outputs.name }}
+          tag_name: v${{ steps.release_name.outputs.name }}
+          files: artifacts/**/*
+          generate_release_notes: true
+

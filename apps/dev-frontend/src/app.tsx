@@ -7,7 +7,7 @@ import {
     GalleryLayoutContextProvider
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
-import { WebSocketTaskQueueProvider } from "./lib/websocket-task-queue-provider";
+import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
 
 export function App() {
     const ws = useWebSocket();
@@ -17,7 +17,7 @@ export function App() {
         return <div>Connecting...</div>;
     }
     
-    const taskQueueProvider = new WebSocketTaskQueueProvider(ws);
+    const taskQueueProvider = new TaskQueueProviderWebSocket(ws);
 
     return (
         <HashRouter>

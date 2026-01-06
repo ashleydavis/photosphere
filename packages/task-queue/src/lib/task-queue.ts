@@ -55,14 +55,13 @@ export interface IQueueStatus {
     completed: number;
     failed: number;
     total: number;
-    tasksQueued: number;
     peakWorkers: number;
 }
 
 //
 // Worker state information for debugging
 //
-export interface IWorkerInfo {
+export interface IWorkerInfo { //todo: This shouldn't be in the core task-queue package which doesn't know anything about workers.
     workerId: number;
     isReady: boolean;
     isIdle: boolean;

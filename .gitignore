@@ -42,3 +42,5 @@ apps/cli/keys
 packages/serialization/build/
 packages/adb/src/test/perf/results/
 tmp/
+bundle/
+release/

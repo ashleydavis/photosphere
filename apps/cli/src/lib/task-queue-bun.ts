@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { IUuidGenerator, log } from "utils";
+import { IUuidGenerator, ITimestampProvider, log } from "utils";
 import { deserializeError } from "serialize-error";
 import { TaskStatus, type ITaskResult, type ITaskQueue, type TaskCompletionCallback, type TaskMessageCallback, type WorkerStateChangeCallback, type IWorkerInfo } from "task-queue";
 import type { IWorkerOptions } from "./worker-init";
@@ -16,6 +16,31 @@ export interface IWorkerMessage {
 }
 
 //
+// Worker response message types
+//
+interface IWorkerReadyMessage {
+    type: "worker-ready";
+}
+
+interface IWorkerTaskCompletedMessage {
+    type: "task-completed";
+    taskId: string;
+    result: {
+        outputs?: unknown;
+        status?: "failed";
+        error?: unknown;
+    };
+}
+
+interface IWorkerTaskMessage {
+    type: "task-message";
+    taskId: string;
+    message: unknown;
+}
+
+type IWorkerResponseMessage = IWorkerReadyMessage | IWorkerTaskCompletedMessage | IWorkerTaskMessage;
+
+//
 // Task data structure
 //
 interface ITask {
@@ -23,12 +48,10 @@ interface ITask {
     type: string;
     status: TaskStatus;
     data: any;
-    result?: ITaskResult;
     workingDirectory: string;
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
-    timeoutCount: number; // Track number of times this task has timed out
 }
 
 //
@@ -40,13 +63,16 @@ interface IWorkerState {
     isReady: boolean; // Worker has sent "ready" message and can process tasks
     isIdle: boolean; // Worker is ready and not currently processing a task
     currentTaskId: string | null;
+    currentTaskType: string | null;
+    currentTaskRunningTimeMs: number | null;
     tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
+    taskStartTime: number | null;
 }
 
 //
 // Task queue implementation using Bun workers
 //
-export class TaskQueue implements ITaskQueue {
+export class TaskQueueBun implements ITaskQueue {
     private tasks: Map<string, ITask> = new Map();
     private pendingTasks: string[] = [];
     private workers: IWorkerState[] = [];
@@ -54,7 +80,8 @@ export class TaskQueue implements ITaskQueue {
     private peakWorkers: number = 0;
     private baseWorkingDirectory: string;
     private uuidGenerator: IUuidGenerator;
-    private allTasksResolver: { resolve: () => void; reject: (error: Error) => void } | null = null;
+    private timestampProvider: ITimestampProvider;
+    private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback<any> }> = [];
     private anyMessageCallbacks: TaskMessageCallback<any>[] = [];
@@ -74,10 +101,11 @@ export class TaskQueue implements ITaskQueue {
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, taskTimeout: number, workerOptions: IWorkerOptions) {
+    constructor(maxWorkers: number, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerOptions: IWorkerOptions) {
         this.maxWorkers = maxWorkers;
         this.baseWorkingDirectory = baseWorkingDirectory;
         this.uuidGenerator = uuidGenerator;
+        this.timestampProvider = timestampProvider;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
     }
@@ -96,8 +124,7 @@ export class TaskQueue implements ITaskQueue {
             status: TaskStatus.Pending,
             data,
             workingDirectory,
-            createdAt: new Date(),
-            timeoutCount: 0
+            createdAt: this.timestampProvider.dateNow()
         };
 
         this.tasks.set(id, task);
@@ -163,13 +190,12 @@ export class TaskQueue implements ITaskQueue {
     // Resolves when the queue is empty (no pending or running tasks).
     //
     async awaitAllTasks(): Promise<void> {
-        const runningCount = this.workers.filter(w => !w.isIdle).length;
-        if (this.pendingTasks.length === 0 && runningCount === 0) {
+        if (this.tasksPending === 0 && this.tasksRunning === 0) {
             return;
         }
 
         return new Promise<void>((resolve, reject) => {
-            this.allTasksResolver = { resolve, reject };
+            this.allTasksResolvers.push({ resolve, reject });
             this.checkAllTasksComplete();
         });
     }
@@ -185,8 +211,7 @@ export class TaskQueue implements ITaskQueue {
             running: this.tasksRunning,
             completed: this.tasksCompleted,
             failed: this.tasksFailed,
-            total: this.tasks.size + this.tasksCompleted + this.tasksFailed,
-            tasksQueued: this.tasksQueued,
+            total: this.tasksQueued,
             peakWorkers: this.peakWorkers
         };
     }
@@ -196,21 +221,17 @@ export class TaskQueue implements ITaskQueue {
     //
     getWorkerState(): IWorkerInfo[] {
         return this.workers.map(worker => {
-            let currentTaskRunningTimeMs: number | null = null;
-            if (worker.currentTaskId) {
-                const task = this.tasks.get(worker.currentTaskId);
-                if (task && task.startedAt) {
-                    currentTaskRunningTimeMs = Date.now() - task.startedAt.getTime();
-                }
-            }
-            
+            const runningTime = worker.taskStartTime
+                ? Date.now() - worker.taskStartTime
+                : null;
+
             return {
                 workerId: worker.workerId,
                 isReady: worker.isReady,
                 isIdle: worker.isIdle,
                 currentTaskId: worker.currentTaskId,
-                currentTaskType: worker.currentTaskId ? this.tasks.get(worker.currentTaskId)?.type || null : null,
-                currentTaskRunningTimeMs,
+                currentTaskType: worker.currentTaskType,
+                currentTaskRunningTimeMs: runningTime,
                 tasksProcessed: worker.tasksProcessed
             };
         });
@@ -273,11 +294,14 @@ export class TaskQueue implements ITaskQueue {
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false, // Will be set to true when worker is ready and idle
             currentTaskId: null,
-            tasksProcessed: 0
+            currentTaskType: null,
+            currentTaskRunningTimeMs: null,
+            tasksProcessed: 0,
+            taskStartTime: null,
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(workerState, event.data).catch((error: any) => {
+            this.handleWorkerMessage(workerState, event.data as IWorkerResponseMessage).catch((error: any) => {
                 log.exception("Error handling worker message", error);
             });
         });
@@ -294,10 +318,10 @@ export class TaskQueue implements ITaskQueue {
 
         this.workers.push(workerState);
 
-        // Update peak workers count
         if (this.workers.length > this.peakWorkers) {
             this.peakWorkers = this.workers.length;
         }
+        
         this.notifyWorkerStateChange();
         return workerState;
     }
@@ -362,11 +386,13 @@ export class TaskQueue implements ITaskQueue {
 
         // Mark task as running and assign to worker
         task.status = TaskStatus.Running;
-        task.startedAt = new Date();
+        task.startedAt = this.timestampProvider.dateNow();
         this.tasksPending--;
         this.tasksRunning++;
         availableWorker.isIdle = false;
         availableWorker.currentTaskId = taskId;
+        availableWorker.currentTaskType = task.type;
+        availableWorker.taskStartTime = Date.now();
         this.notifyWorkerStateChange();
 
         // Set up timeout for this task
@@ -404,9 +430,9 @@ export class TaskQueue implements ITaskQueue {
     // Internal: Handles messages from worker threads.
     // Processes task results and errors.
     //
-    private async handleWorkerMessage(workerState: IWorkerState, data: any): Promise<void> {
+    private async handleWorkerMessage(workerState: IWorkerState, data: IWorkerResponseMessage): Promise<void> {
         // Handle worker ready message
-        if (data && typeof data === "object" && "type" in data && data.type === "ready") {
+        if (data && typeof data === "object" && "type" in data && data.type === "worker-ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
             this.notifyWorkerStateChange();
@@ -414,7 +440,7 @@ export class TaskQueue implements ITaskQueue {
             return;
         }
 
-        // Handle task result
+        // Handle task result (both success and failure)
         if (data && typeof data === "object" && "type" in data && data.type === "task-completed") {
             const { taskId, result } = data;
             const task = this.tasks.get(taskId);
@@ -422,20 +448,24 @@ export class TaskQueue implements ITaskQueue {
                 return;
             }
 
-            // Clear timeout since task completed successfully
+            // Clear timeout since task completed
             const timeout = this.taskTimeouts.get(taskId);
             if (timeout) {
                 clearTimeout(timeout);
                 this.taskTimeouts.delete(taskId);
             }
 
-            task.status = TaskStatus.Completed;
-            task.completedAt = new Date();
+            // Determine if task failed
+            const isFailed = result.status === "failed";
+            
+            // Update task status
+            task.status = isFailed ? TaskStatus.Failed : TaskStatus.Completed;
+            task.completedAt = this.timestampProvider.dateNow();
             this.tasksRunning--;
-            this.tasksCompleted++;
+            
+            // Build result object
             const fullResult: ITaskResult = {
-                status: TaskStatus.Completed,
-                outputs: result.outputs,
+                status: isFailed ? TaskStatus.Failed : TaskStatus.Completed,
                 inputs: task.data,
                 taskId: task.id,
                 taskType: task.type,
@@ -443,93 +473,56 @@ export class TaskQueue implements ITaskQueue {
                 startedAt: task.startedAt,
                 completedAt: task.completedAt
             };
-            task.result = fullResult;
 
+            if (isFailed) {
+                this.tasksFailed++;
+                let deserializedError: Error | undefined;
+                if (result.error) {
+                    try {
+                        deserializedError = deserializeError(result.error);
+                    }
+                    catch {
+                        // If deserialization fails, throw an error
+                        throw new Error(`Failed to deserialize error: ${typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}`);
+                    }
+                }
+                else {
+                    throw new Error("Task failed but no error provided");
+                }
+                fullResult.error = deserializedError;
+                fullResult.errorMessage = deserializedError.message || "Unknown error";
+            }
+            else {
+                this.tasksCompleted++;
+                fullResult.outputs = result.outputs;
+            }
+
+            // Update worker state
             workerState.isIdle = true;
             workerState.currentTaskId = null;
+            workerState.currentTaskType = null;
+            workerState.currentTaskRunningTimeMs = null;
+            workerState.taskStartTime = null;
             workerState.tasksProcessed++;
 
             this.notifyWorkerStateChange();
             await this.notifyCompletionCallbacks(fullResult);
-            this.resolveTask(taskId, fullResult);
-            
-            // Remove completed task from memory after reporting result
+            this.checkAllTasksComplete();
             this.tasks.delete(taskId);
-            
             this.processNextTask();
             return;
         }
 
         // Handle task message
-        if (data && typeof data === "object" && "type" in data && data.type === "message") {
+        if (data && typeof data === "object" && "type" in data && data.type === "task-message") {
             const { taskId, message } = data;
             await this.notifyMessageCallbacks(taskId, message);
-            return;
-        }
-
-        // Handle task error
-        if (data && typeof data === "object" && "type" in data && data.type === "error") {
-            const { taskId, error } = data;
-            const task = this.tasks.get(taskId);
-            if (!task) {
-                return;
-            }
-
-            // Clear timeout since task completed (with error)
-            const timeout = this.taskTimeouts.get(taskId);
-            if (timeout) {
-                clearTimeout(timeout);
-                this.taskTimeouts.delete(taskId);
-            }
-
-            task.status = TaskStatus.Failed;
-            task.completedAt = new Date();
-            this.tasksRunning--;
-            this.tasksFailed++;
-            let deserializedError: Error | undefined;
-            if (error) {
-                try {
-                    deserializedError = deserializeError(error);
-                } 
-                catch {
-                    // If deserialization fails, create a generic error
-                    deserializedError = new Error(typeof error === 'string' ? error : JSON.stringify(error));
-                }
-            } else {
-                deserializedError = new Error("Unknown error");
-            }
-            const result: ITaskResult = {
-                status: TaskStatus.Failed,
-                error: deserializedError,
-                errorMessage: deserializedError.message || "Unknown error",
-                inputs: task.data,
-                taskId: task.id,
-                taskType: task.type,
-                createdAt: task.createdAt,
-                startedAt: task.startedAt,
-                completedAt: task.completedAt
-            };
-            task.result = result;
-
-            workerState.isIdle = true;
-            workerState.currentTaskId = null;
-            workerState.tasksProcessed++;
-
-            this.notifyWorkerStateChange();
-            await this.notifyCompletionCallbacks(result);
-            this.resolveTask(taskId, result);
-            
-            // Remove failed task from memory after reporting result
-            this.tasks.delete(taskId);
-            
-            this.processNextTask();
             return;
         }
     }
 
     //
-    // Internal: Handles task timeout by terminating the worker, requeuing the task, and replacing the worker.
-    // Only allows up to 3 timeouts per task, after which the task is marked as failed.
+    // Internal: Handles task timeout by terminating the worker and marking the task as failed.
     //
     private async handleTaskTimeout(taskId: string, workerState: IWorkerState): Promise<void> {
         const task = this.tasks.get(taskId);
@@ -545,10 +538,7 @@ export class TaskQueue implements ITaskQueue {
             this.taskTimeouts.delete(taskId);
         }
 
-        // Increment timeout count
-        task.timeoutCount++;
-
-        log.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms (timeout count: ${task.timeoutCount}/3)`);
+        log.error(`[Task Queue] Task ${this.formatTaskId(taskId)} timed out after ${this.taskTimeout}ms`);
 
         // Terminate the worker
         try {
@@ -558,47 +548,37 @@ export class TaskQueue implements ITaskQueue {
             log.exception(`[Task Queue] Error terminating worker ${workerState.workerId}`, error);
         }
 
-        // Check if we've exceeded the maximum number of timeouts
-        if (task.timeoutCount >= 3) {
-            // Mark task as failed after 3 timeouts
-            task.status = TaskStatus.Failed;
-            task.completedAt = new Date();
-            this.tasksRunning--;
-            this.tasksFailed++;
-            const error = new Error(`Task timed out ${task.timeoutCount} times (exceeded maximum of 3)`);
-            const result: ITaskResult = {
-                status: TaskStatus.Failed,
-                error: error,
-                errorMessage: error.message,
-                inputs: task.data,
-                taskId: task.id,
-                taskType: task.type,
-                createdAt: task.createdAt,
-                startedAt: task.startedAt,
-                completedAt: task.completedAt
-            };
-            task.result = result;
+        // Mark task as failed immediately
+        task.status = TaskStatus.Failed;
+        task.completedAt = this.timestampProvider.dateNow();
+        this.tasksRunning--;
+        this.tasksFailed++;
+        const error = new Error("Task timeout");
+        const result: ITaskResult = {
+            status: TaskStatus.Failed,
+            error: error,
+            errorMessage: error.message,
+            inputs: task.data,
+            taskId: task.id,
+            taskType: task.type,
+            createdAt: task.createdAt,
+            startedAt: task.startedAt,
+            completedAt: task.completedAt
+        };
 
-            workerState.isIdle = true;
-            workerState.currentTaskId = null;
+        workerState.isIdle = true;
+        workerState.currentTaskId = null;
+        workerState.currentTaskType = null;
+        workerState.currentTaskRunningTimeMs = null;
+        workerState.taskStartTime = null;
 
-            await this.notifyCompletionCallbacks(result);
-            this.resolveTask(taskId, result);
-            this.processNextTask();
+        await this.notifyCompletionCallbacks(result);
+        this.checkAllTasksComplete();
+        this.tasks.delete(taskId);
+        this.processNextTask();
 
-            // Replace the worker
-            this.replaceWorker(workerState);
-        } else {
-            // Requeue the task for retry
-            task.status = TaskStatus.Pending;
-            task.startedAt = undefined;
-            this.tasksRunning--;
-            this.tasksPending++;
-            this.pendingTasks.unshift(taskId); // Add to front of queue for priority
-
-            // Replace the worker
-            this.replaceWorker(workerState);
-        }
+        // Replace the worker
+        this.replaceWorker(workerState);
     }
 
     //
@@ -615,7 +595,7 @@ export class TaskQueue implements ITaskQueue {
             // Worker may already be terminated
         }
 
-        // If worker had a task, clear its timeout and requeue it
+        // If worker had a task, clear its timeout and mark as failed
         if (crashedTaskId) {
             const timeout = this.taskTimeouts.get(crashedTaskId);
             if (timeout) {
@@ -625,11 +605,31 @@ export class TaskQueue implements ITaskQueue {
 
             const task = this.tasks.get(crashedTaskId);
             if (task && task.status === TaskStatus.Running) {
-                task.status = TaskStatus.Pending;
-                task.startedAt = undefined;
+                // Mark task as failed immediately when worker crashes
+                task.status = TaskStatus.Failed;
+                task.completedAt = this.timestampProvider.dateNow();
                 this.tasksRunning--;
-                this.tasksPending++;
-                this.pendingTasks.unshift(crashedTaskId); // Add to front of queue for priority
+                this.tasksFailed++;
+                const error = new Error("Worker crashed");
+                const result: ITaskResult = {
+                    status: TaskStatus.Failed,
+                    error: error,
+                    errorMessage: error.message,
+                    inputs: task.data,
+                    taskId: task.id,
+                    taskType: task.type,
+                    createdAt: task.createdAt,
+                    startedAt: task.startedAt,
+                    completedAt: task.completedAt
+                };
+
+                workerState.currentTaskId = null;
+                workerState.currentTaskType = null;
+                workerState.currentTaskRunningTimeMs = null;
+                workerState.taskStartTime = null;
+                this.notifyCompletionCallbacks(result);
+                this.checkAllTasksComplete();
+                this.tasks.delete(crashedTaskId);
             }
         }
 
@@ -673,11 +673,14 @@ export class TaskQueue implements ITaskQueue {
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false,
             currentTaskId: null,
-            tasksProcessed: oldWorkerState.tasksProcessed // Preserve task count when replacing worker
+            currentTaskType: null,
+            currentTaskRunningTimeMs: null,
+            tasksProcessed: oldWorkerState.tasksProcessed, // Preserve task count when replacing worker
+            taskStartTime: null,
         };
 
         worker.addEventListener("message", (event: MessageEvent) => {
-            this.handleWorkerMessage(newWorkerState, event.data).catch((error: any) => {
+            this.handleWorkerMessage(newWorkerState, event.data as IWorkerResponseMessage).catch((error: any) => {
                 log.exception("Error handling worker message", error);
             });
         });
@@ -751,22 +754,17 @@ export class TaskQueue implements ITaskQueue {
 
 
     //
-    // Internal: Checks if all tasks are complete to resolve awaitAllTasks().
-    //
-    private resolveTask(taskId: string, result: ITaskResult): void {
-        this.checkAllTasksComplete();
-    }
-
-    //
     // Internal: Checks if all tasks are complete and resolves awaitAllTasks() if so.
     // Called after each task completes.
     //
     private checkAllTasksComplete(): void {
         const runningCount = this.workers.filter(w => !w.isIdle).length;
-        if (this.allTasksResolver && this.pendingTasks.length === 0 && runningCount === 0) {
-            const resolver = this.allTasksResolver;
-            this.allTasksResolver = null;
-            resolver.resolve();
+        if (this.pendingTasks.length === 0 && runningCount === 0 && this.allTasksResolvers.length > 0) {
+            const resolvers = this.allTasksResolvers;
+            this.allTasksResolvers = [];
+            for (const resolver of resolvers) {
+                resolver.resolve();
+            }
         }
     }
 
@@ -786,7 +784,7 @@ export class TaskQueue implements ITaskQueue {
     // Terminates all workers and should be called when the queue is no longer needed.
     //
     shutdown(): void {
-        // Clear all timeouts
+        // Clear all timeouts first to prevent any timeout callbacks from running
         for (const timeout of this.taskTimeouts.values()) {
             clearTimeout(timeout);
         }
@@ -800,6 +798,12 @@ export class TaskQueue implements ITaskQueue {
             }
         }
         this.workers = [];
+        this.tasks.clear();
+        this.pendingTasks = [];
+        this.messageCallbacks = [];
+        this.anyMessageCallbacks = [];
+        this.completionCallbacks = [];
     }
 }
+
 

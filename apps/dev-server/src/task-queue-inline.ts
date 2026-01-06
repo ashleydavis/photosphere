@@ -4,9 +4,8 @@ import { executeTaskHandler } from "task-queue/src/lib/worker";
 import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { initTaskHandlers } from "api";
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { RandomUuidGenerator } from "utils";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 
 interface IMessageCallback {
     messageType: string;
@@ -17,10 +16,6 @@ interface IAnyMessageCallback {
     callback: TaskMessageCallback<any>;
 }
 
-interface ITaskExecutionContext {
-    taskId: string;
-}
-
 interface IBaseTaskContext {
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
@@ -28,31 +23,49 @@ interface IBaseTaskContext {
 }
 
 //
+// Task data structure
+//
+interface ITask {
+    id: string;
+    type: string;
+    status: TaskStatus;
+    data: any;
+    workingDirectory: string;
+    createdAt: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+    timeoutCount: number;
+}
+
+//
 // Inline task queue that executes tasks directly without workers
 // Supports up to maxConcurrent tasks running at once
 //
-export class InlineTaskQueue implements ITaskQueue {
+export class TaskQueueInline implements ITaskQueue {
     private tasks: Map<string, ITask> = new Map();
     private pendingTasks: string[] = [];
-    private runningTasks: Set<string> = new Set();
     private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
     private messageCallbacks: IMessageCallback[] = [];
     private anyMessageCallbacks: IAnyMessageCallback[] = [];
     private tasksQueued: number = 0;
+    private tasksPending: number = 0;
+    private tasksRunning: number = 0;
     private tasksCompleted: number = 0;
     private tasksFailed: number = 0;
     private maxConcurrent: number;
     private baseWorkingDirectory: string;
     private uuidGenerator: RandomUuidGenerator;
+    private timestampProvider: ITimestampProvider;
     private baseContext: IBaseTaskContext;
     private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
-    private taskContexts: Map<string, ITaskExecutionContext> = new Map();
+    private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
 
     // Initializes the inline task queue with max concurrent tasks and working directory
-    constructor(maxConcurrent: number, baseWorkingDirectory: string, uuidGenerator: RandomUuidGenerator, workerOptions: { verbose?: boolean; sessionId?: string }) {
+    constructor(maxConcurrent: number, baseWorkingDirectory: string, uuidGenerator: RandomUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
         this.maxConcurrent = maxConcurrent;
         this.baseWorkingDirectory = baseWorkingDirectory;
         this.uuidGenerator = uuidGenerator;
+        this.timestampProvider = timestampProvider;
         
         // Initialize task handlers
         initTaskHandlers();
@@ -60,12 +73,10 @@ export class InlineTaskQueue implements ITaskQueue {
         // Create base worker context (without sendMessage - that will be task-specific)
         // Note: We create our own context here instead of using initWorkerContext
         // because initWorkerContext sets up worker-specific logging which we don't need
-        const timestampProvider = new TimestampProvider();
-        const sessionId = workerOptions.sessionId || this.uuidGenerator.generate();
         this.baseContext = {
             uuidGenerator: this.uuidGenerator,
-            timestampProvider,
-            sessionId,
+            timestampProvider: this.timestampProvider,
+            sessionId: workerOptions.sessionId,
         };
     }
 
@@ -80,14 +91,15 @@ export class InlineTaskQueue implements ITaskQueue {
             status: TaskStatus.Pending,
             data,
             workingDirectory,
-            createdAt: new Date(),
+            createdAt: this.timestampProvider.dateNow(),
             timeoutCount: 0
         };
 
         this.tasks.set(id, task);
         this.pendingTasks.push(id);
         this.tasksQueued++;
-        console.log(`[TaskQueue] Task added: ${id} (type: ${type})`);
+        this.tasksPending++;
+        
         this.processNextTask();
 
         return id;
@@ -138,20 +150,24 @@ export class InlineTaskQueue implements ITaskQueue {
 
     // Waits for all pending and running tasks to complete
     async awaitAllTasks(): Promise<void> {
-        while (this.pendingTasks.length > 0 || this.runningTasks.size > 0) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        if (this.tasksPending === 0 && this.tasksRunning === 0) {
+            return;
         }
+
+        return new Promise<void>((resolve, reject) => {
+            this.allTasksResolvers.push({ resolve, reject });
+            this.checkAllTasksComplete();
+        });
     }
 
     // Returns the current queue status (pending, running, completed, failed counts)
     getStatus(): IQueueStatus {
         return {
-            pending: this.pendingTasks.length,
-            running: this.runningTasks.size,
+            pending: this.tasksPending,
+            running: this.tasksRunning,
             completed: this.tasksCompleted,
             failed: this.tasksFailed,
-            total: this.tasks.size + this.tasksCompleted + this.tasksFailed,
-            tasksQueued: this.tasksQueued,
+            total: this.tasksQueued,
             peakWorkers: this.maxConcurrent
         };
     }
@@ -162,7 +178,7 @@ export class InlineTaskQueue implements ITaskQueue {
         return Array.from({ length: this.maxConcurrent }, (_, i) => ({
             workerId: i + 1,
             isReady: true,
-            isIdle: this.runningTasks.size <= i,
+            isIdle: this.tasksRunning <= i,
             currentTaskId: null, // We don't track which task is on which "worker"
             currentTaskType: null,
             currentTaskRunningTimeMs: null,
@@ -185,18 +201,15 @@ export class InlineTaskQueue implements ITaskQueue {
         this.anyMessageCallbacks.push({ callback: callback as TaskMessageCallback<any> });
     }
 
-    // Shuts down the task queue (no-op for inline execution)
-    shutdown(): void {
-        // Nothing to shut down for inline execution
-    }
-
     // Processes the next pending task if capacity is available
     private async processNextTask(): Promise<void> {
         if (this.pendingTasks.length === 0) {
+            this.checkAllTasksComplete();
             return;
         }
 
-        if (this.runningTasks.size >= this.maxConcurrent) {
+        if (this.tasksRunning >= this.maxConcurrent) {
+            // The maximum number of concurrent tasks is reached, so we don't process any more tasks yet.
             return;
         }
 
@@ -208,23 +221,22 @@ export class InlineTaskQueue implements ITaskQueue {
 
         // Mark task as running
         task.status = TaskStatus.Running;
-        task.startedAt = new Date();
-        this.runningTasks.add(taskId);
-        console.log(`[TaskQueue] Task started: ${taskId} (type: ${task.type})`);
+        task.startedAt = this.timestampProvider.dateNow();
+        this.tasksPending--;
+        this.tasksRunning++;
 
         // Execute task inline
         this.executeTask(task).catch((error) => {
             console.error(`Error executing task ${taskId}:`, error);
         });
+
+        // Process next task if we still have capacity
+        this.processNextTask();
     }
 
     // Executes a task inline and handles completion or failure
     private async executeTask(task: ITask): Promise<void> {
         try {
-            // Create a task-specific context for this execution
-            const taskContext = { taskId: task.id };
-            this.taskContexts.set(task.id, taskContext);
-
             // Create a task-specific sendMessage function that captures the task ID in a closure
             // This ensures each concurrent task routes messages correctly without race conditions
             const taskSpecificSendMessage = (message: any): void => {
@@ -241,12 +253,9 @@ export class InlineTaskQueue implements ITaskQueue {
 
             const outputs = await executeTaskHandler(task.type, task.data, task.workingDirectory, taskContextWithSendMessage);
 
-            // Clean up task context
-            this.taskContexts.delete(task.id);
-
             // Task completed successfully
             task.status = TaskStatus.Completed;
-            task.completedAt = new Date();
+            task.completedAt = this.timestampProvider.dateNow();
             const result: ITaskResult = {
                 status: TaskStatus.Completed,
                 outputs,
@@ -257,25 +266,20 @@ export class InlineTaskQueue implements ITaskQueue {
                 startedAt: task.startedAt,
                 completedAt: task.completedAt
             };
-            task.result = result;
 
             this.tasksCompleted++;
-            this.runningTasks.delete(task.id);
-            const duration = task.completedAt.getTime() - (task.startedAt?.getTime() || task.createdAt.getTime());
-            console.log(`[TaskQueue] Task completed: ${task.id} (type: ${task.type}, duration: ${duration}ms)`);
+            this.tasksRunning--;
             await this.notifyCompletionCallbacks(result);
             this.tasks.delete(task.id);
+            this.checkAllTasksComplete();
 
-            // Process next task
+            // Process next task up to the concurrent limit
             this.processNextTask();
         }
-        catch (error: unknown) {
-            // Clear task context on error
-            this.taskContexts.delete(task.id);
-
+        catch (error: any) {
             // Task failed
             task.status = TaskStatus.Failed;
-            task.completedAt = new Date();
+            task.completedAt = this.timestampProvider.dateNow();
             const err = error instanceof Error ? error : new Error(String(error));
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
@@ -288,14 +292,12 @@ export class InlineTaskQueue implements ITaskQueue {
                 startedAt: task.startedAt,
                 completedAt: task.completedAt
             };
-            task.result = result;
 
             this.tasksFailed++;
-            this.runningTasks.delete(task.id);
-            const duration = task.completedAt.getTime() - (task.startedAt?.getTime() || task.createdAt.getTime());
-            console.log(`[TaskQueue] Task failed: ${task.id} (type: ${task.type}, duration: ${duration}ms, error: ${err.message})`);
+            this.tasksRunning--;
             await this.notifyCompletionCallbacks(result);
             this.tasks.delete(task.id);
+            this.checkAllTasksComplete();
 
             // Process next task
             this.processNextTask();
@@ -343,18 +345,24 @@ export class InlineTaskQueue implements ITaskQueue {
         }
     }
 
-}
+    //
+    // Checks if all tasks are complete and resolves awaitAllTasks() if so
+    // Called after each task completes
+    //
+    private checkAllTasksComplete(): void {
+        if (this.tasksPending === 0 && this.tasksRunning === 0 && this.allTasksResolvers.length > 0) {
+            const resolvers = this.allTasksResolvers;
+            this.allTasksResolvers = [];
+            for (const resolver of resolvers) {
+                resolver.resolve();
+            }
+        }
+    }
 
-interface ITask {
-    id: string;
-    type: string;
-    status: TaskStatus;
-    data: any;
-    result?: ITaskResult;
-    workingDirectory: string;
-    createdAt: Date;
-    startedAt?: Date;
-    completedAt?: Date;
-    timeoutCount: number;
+    //
+    // Shuts down the task queue (no-op for inline execution)
+    //
+    shutdown(): void {
+        // Nothing to shut down for inline execution
+    }
 }
-

@@ -85,13 +85,17 @@ catch (error) {
 
 ### TypeScript: Avoid `any` type
 
-**NEVER** use the `any` type unless absolutely necessary. When `any` is required, it must be accompanied by a comment explaining why it's necessary and what the actual type should be.
+**NEVER** use the `any` type unless the user specifically asks you to do so. This is a critical rule that must be followed strictly.
 
-**Why:** Using `any` defeats the purpose of TypeScript's type safety and can lead to runtime errors that could have been caught at compile time.
+**Why:** Using `any` defeats the purpose of TypeScript's type safety and can lead to runtime errors that could have been caught at compile time. Always use proper types, `unknown`, or create interfaces/types as needed.
+
+**Exceptions:**
+- `any` is acceptable in catch handlers: `catch (error: any) { ... }`
+- `any` is acceptable for task data fields that can be any type: `data: any`
 
 **Instead:**
 - Use proper TypeScript types
-- Use `unknown` for error handling when the error type is uncertain
+- Use `unknown` for error handling when the error type is uncertain (unless in a catch handler)
 - Use union types with `undefined` for optional values (e.g., `string | undefined`)
 - Use generic types when appropriate
 - If you must use `any`, add a comment explaining why and what the actual type should be
@@ -106,9 +110,9 @@ function process(item: any) { ... }
 ```typescript
 let data: MyDataType | undefined = getData();
 function process(item: IProcessableItem) { ... }
-catch (err: unknown) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    // handle error
+catch (error: any) {
+    // any is acceptable in catch handlers
+    console.error(error.message || error);
 }
 ```
 
