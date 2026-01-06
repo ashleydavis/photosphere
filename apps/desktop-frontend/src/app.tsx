@@ -18,7 +18,12 @@ export function App() {
     const taskQueueProvider = new TaskQueueProviderElectron(electronAPI);
 
     return (
-        <HashRouter>
+        <HashRouter
+            future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+            }}
+        >
             <AppContextProvider>
                 <AssetDatabaseProvider taskQueueProvider={taskQueueProvider}>
                     <GalleryContextProvider>
