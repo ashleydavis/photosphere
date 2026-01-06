@@ -11,6 +11,7 @@ import type { Server } from 'http';
 let mainWindow: BrowserWindow | null = null;
 let taskQueue: ITaskQueue | null = null;
 let assetServer: { server?: Server } | null = null;
+const restApiPort: number = 3001;
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -24,8 +25,11 @@ function createMainWindow() {
     });
 
     // Load from built frontend (works in both dev and production)
+    // Pass restApiUrl as query parameter so the frontend can use it
     const htmlPath = join(__dirname, '../bundle/frontend/index.html');
-    mainWindow.loadFile(htmlPath);
+    const restApiUrl = `http://localhost:${restApiPort}`;
+    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}`;
+    mainWindow.loadURL(fileUrl);
     
     // Open dev tools in development
     if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
@@ -127,10 +131,9 @@ function initWorkers() {
 async function initResetApi() {
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
-    const port = 3001; // Port for asset server in desktop app
 
     assetServer = await createAssetServer({
-        port,
+        port: restApiPort,
         uuidGenerator,
         timestampProvider,
     });
