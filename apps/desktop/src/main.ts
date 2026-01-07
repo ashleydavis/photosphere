@@ -1,19 +1,23 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { cpus } from 'os';
 import type { ITaskQueue } from 'task-queue';
 import { TaskQueueElectronMain } from './task-queue-electron-main';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
-import { createAssetServer } from 'rest-api';
-import type { Server } from 'http';
+import { findAvailablePort } from 'node-utils';
 
 let mainWindow: BrowserWindow | null = null;
 let taskQueue: ITaskQueue | null = null;
-let assetServer: { server?: Server } | null = null;
-const restApiPort: number = 3001;
+let restApiWorker: UtilityProcess | null = null;
+let isShuttingDown: boolean = false;
+let restApiPort: number | null = null;
 
 function createMainWindow() {
+    if (restApiPort === null) {
+        throw new Error('REST API port not initialized');
+    }
+
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -42,8 +46,8 @@ function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
-    // Initialize asset server before creating main window
-    await initResetApi();
+    // Initialize REST API before creating main window
+    await initRestApi();
     
     initWorkers();
     
@@ -63,16 +67,21 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    isShuttingDown = true;
+    
     // Cleanup task queue
     if (taskQueue) {
         taskQueue.shutdown();
         taskQueue = null;
     }
 
-    // Cleanup asset server
-    if (assetServer?.server) {
-        assetServer.server.close();
-        assetServer = null;
+    // Cleanup REST API utility process
+    if (restApiWorker) {
+        // Send stop message to utility process
+        restApiWorker.postMessage({ type: 'stop' });
+        // Terminate the process
+        restApiWorker.kill();
+        restApiWorker = null;
     }
 });
 
@@ -126,18 +135,85 @@ function initWorkers() {
 }
 
 //
-// Initialize the rest api.
+// Initialize the rest api in a utility process.
 //
-async function initResetApi() {
-    const uuidGenerator = new RandomUuidGenerator();
-    const timestampProvider = new TimestampProvider();
+async function initRestApi(): Promise<void> {
+    // Find an available port only if we don't already have one
+    // This ensures the browser window doesn't break if the worker restarts
+    if (restApiPort === null) {
+        const port = await findAvailablePort();
+        restApiPort = port;
+        console.log(`Using REST API port: ${port}`);
+    }
 
-    assetServer = await createAssetServer({
-        port: restApiPort,
-        uuidGenerator,
-        timestampProvider,
+    const serverPath = join(__dirname, '../bundle/rest-api-worker.js');
+
+    // Fork the utility process
+    restApiWorker = utilityProcess.fork(serverPath);
+
+    // Set up exit handler
+    restApiWorker.on('exit', async (code) => {
+        if (code !== 0) {
+            console.error(`REST API worker exited with code ${code}`);
+        }
+        restApiWorker = null;
+
+        // Restart the worker if we're not shutting down
+        if (!isShuttingDown) {
+            console.log('Restarting REST API worker...');
+            try {
+                await initRestApi();
+            }
+            catch (error: any) {
+                console.error('Failed to restart REST API worker:', error);
+            }
+        }
     });
 
-    console.log('Asset server initialized');
+    // Wait for the server to be ready
+    await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            restApiWorker?.off('message', messageHandler);
+            restApiWorker?.off('spawn', spawnHandler);
+            reject(new Error('REST API failed to start within timeout'));
+        }, 10000); // 10 second timeout
+
+        const messageHandler = (message: any) => {
+            if (message.type === 'server-ready') {
+                clearTimeout(timeout);
+                restApiWorker?.off('message', messageHandler);
+                restApiWorker?.off('spawn', spawnHandler);
+                console.log(`REST API initialized in utility process on port ${restApiPort}`);
+                resolve();
+            }
+            else if (message.type === 'server-error') {
+                clearTimeout(timeout);
+                restApiWorker?.off('message', messageHandler);
+                restApiWorker?.off('spawn', spawnHandler);
+                console.error('REST API error:', message.error);
+                reject(new Error(`REST API failed to start: ${message.error}`));
+            }
+            else if (message.type === 'server-stopped') {
+                console.log('REST API stopped');
+            }
+        };
+
+        const spawnHandler = () => {
+            console.log('REST API utility process spawned');
+            // Send start message to the utility process with the port
+            // restApiPort should never be null here since we set it above
+            if (restApiWorker && restApiPort !== null) {
+                restApiWorker.postMessage({ type: 'start', port: restApiPort });
+            }
+        };
+
+        if (!restApiWorker) {
+            reject(new Error('Failed to fork REST API utility process'));
+            return;
+        }
+
+        restApiWorker.on('message', messageHandler);
+        restApiWorker.on('spawn', spawnHandler);
+    });
 }
 
