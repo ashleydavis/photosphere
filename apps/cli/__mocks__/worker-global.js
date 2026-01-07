@@ -33,7 +33,7 @@ class MockWorker {
 
     postMessage(message) {
         if (message.type === "execute") {
-            const { taskId, taskType, data, workingDirectory } = message;
+            const { taskId, taskType, data } = message;
             // Execute handler synchronously using the already-loaded module
             process.nextTick(async () => {
                 try {
@@ -53,7 +53,7 @@ class MockWorker {
                         return;
                     }
 
-                    // Handler signature: (data, workingDirectory, context)
+                    // Handler signature: (data, context)
                     // Create a proper context similar to what the real worker does
                     const uuidGenerator = new TestUuidGenerator();
                     const timestampProvider = new TestTimestampProvider();
@@ -64,7 +64,7 @@ class MockWorker {
                         sessionId,
                         sendMessage: () => {} // No-op for tests
                     };
-                    const outputs = await handler(data, workingDirectory, context);
+                    const outputs = await handler(data, context);
                     this.dispatchMessage({
                         type: "task-completed",
                         taskId,

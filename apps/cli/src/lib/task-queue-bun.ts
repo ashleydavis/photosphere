@@ -12,7 +12,6 @@ export interface IWorkerMessage {
     taskId: string;
     taskType: string;
     data: any;
-    workingDirectory: string;
 }
 
 //
@@ -48,7 +47,6 @@ interface ITask {
     type: string;
     status: TaskStatus;
     data: any;
-    workingDirectory: string;
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
@@ -78,7 +76,6 @@ export class TaskQueueBun implements ITaskQueue {
     private workers: IWorkerState[] = [];
     private maxWorkers: number;
     private peakWorkers: number = 0;
-    private baseWorkingDirectory: string;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
     private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
@@ -101,9 +98,8 @@ export class TaskQueueBun implements ITaskQueue {
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerOptions: IWorkerOptions) {
+    constructor(maxWorkers: number, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerOptions: IWorkerOptions) {
         this.maxWorkers = maxWorkers;
-        this.baseWorkingDirectory = baseWorkingDirectory;
         this.uuidGenerator = uuidGenerator;
         this.timestampProvider = timestampProvider;
         this.taskTimeout = taskTimeout;
@@ -116,14 +112,12 @@ export class TaskQueueBun implements ITaskQueue {
     //
     addTask(type: string, data: any, taskId?: string): string {
         const id = taskId || this.uuidGenerator.generate();
-        const workingDirectory = join(this.baseWorkingDirectory, id);
 
         const task: ITask = {
             id,
             type,
             status: TaskStatus.Pending,
             data,
-            workingDirectory,
             createdAt: this.timestampProvider.dateNow()
         };
 
@@ -410,7 +404,6 @@ export class TaskQueueBun implements ITaskQueue {
                 taskId: task.id,
                 taskType: task.type,
                 data: task.data,
-                workingDirectory: task.workingDirectory,
             };
             availableWorker.worker.postMessage(executeMsg);
         } 

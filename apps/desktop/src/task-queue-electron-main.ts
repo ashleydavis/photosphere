@@ -1,11 +1,9 @@
 import type { ITaskQueue, IQueueStatus, IWorkerInfo } from "task-queue";
 import { TaskStatus, type ITaskResult, type TaskCompletionCallback, type WorkerStateChangeCallback, type TaskMessageCallback } from "task-queue";
 import { utilityProcess, type UtilityProcess } from 'electron';
-import { join } from 'path';
 import { deserializeError } from "serialize-error";
 import type { IWorkerOptions } from "./lib/worker-init";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
-import { log } from "utils";
 
 //
 // Worker message interface for communication between main thread and workers
@@ -15,7 +13,6 @@ export interface IWorkerMessage {
     taskId: string;
     taskType: string;
     data: unknown;
-    workingDirectory: string;
 }
 
 //
@@ -54,7 +51,6 @@ interface ITask {
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
-    workingDirectory: string;
 }
 
 //
@@ -82,7 +78,6 @@ export class TaskQueueElectronMain implements ITaskQueue {
     private workers: IWorkerState[] = [];
     private maxWorkers: number;
     private peakWorkers: number = 0;
-    private baseWorkingDirectory: string;
     private workerPath: string;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
@@ -104,10 +99,9 @@ export class TaskQueueElectronMain implements ITaskQueue {
     //
     // Creates a new task queue with the specified number of utility process workers
     //
-    constructor(workerPath: string, maxWorkers: number, baseWorkingDirectory: string, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerOptions: IWorkerOptions) {
+    constructor(workerPath: string, maxWorkers: number, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerOptions: IWorkerOptions) {
         this.workerPath = workerPath;
         this.maxWorkers = maxWorkers;
-        this.baseWorkingDirectory = baseWorkingDirectory;
         this.uuidGenerator = uuidGenerator;
         this.timestampProvider = timestampProvider;
         this.taskTimeout = taskTimeout;
@@ -119,14 +113,12 @@ export class TaskQueueElectronMain implements ITaskQueue {
     //
     addTask(type: string, data: any, taskId?: string): string {
         const id = taskId || this.uuidGenerator.generate();
-        const workingDirectory = join(this.baseWorkingDirectory, id);
 
         const task: ITask = {
             id,
             type,
             status: TaskStatus.Pending,
             data,
-            workingDirectory,
             createdAt: this.timestampProvider.dateNow(),
         };
 
@@ -412,7 +404,6 @@ export class TaskQueueElectronMain implements ITaskQueue {
                 taskId: task.id,
                 taskType: task.type,
                 data: task.data,
-                workingDirectory: task.workingDirectory,
             });
         }
         catch (error: any) {

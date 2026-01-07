@@ -3,8 +3,6 @@ import { type IWorkerInfo } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { IWorkerOptions } from "./worker-init";
 import type { ITaskQueueProvider } from "task-queue";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { registerStateProvider, updateStateProvider } from "debug-server";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
@@ -29,8 +27,7 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
     }
 
     async create(): Promise<ITaskQueue> {
-        const baseWorkingDirectory = join(tmpdir(), "task-queue");
-        const taskQueue = new TaskQueueBun(this.maxWorkers, baseWorkingDirectory, this.uuidGenerator, this.timestampProvider, this.taskTimeout, this.workerOptions);
+        const taskQueue = new TaskQueueBun(this.maxWorkers, this.uuidGenerator, this.timestampProvider, this.taskTimeout, this.workerOptions);
         
         // If debug mode is enabled, register state provider for polling
         if (this.debug) {

@@ -5,7 +5,6 @@
 
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { RandomUuidGenerator, TimestampProvider, setLog, ILog } from "utils";
-import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 //

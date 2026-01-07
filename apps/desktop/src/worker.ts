@@ -45,14 +45,14 @@ if (!parentPort) {
 // Execute a task handler in the worker
 //
 async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): Promise<void> {
-    const { taskId, taskType, data, workingDirectory } = message;
+    const { taskId, taskType, data } = message;
 
     try {
         // Set task ID for logging prefix and progress messages
         setWorkerTaskId(taskId);
 
         // Execute the handler with task-specific context
-        const outputs = await executeTaskHandler(taskType, data, workingDirectory, taskContext);
+        const outputs = await executeTaskHandler(taskType, data, taskContext);
         
         // Clear task ID from logging and progress
         setWorkerTaskId(null);

@@ -19,5 +19,5 @@ export interface ITaskContext {
 // Task handler function type
 // Returns the result payload (can be any type)
 //
-export type TaskHandler = (data: any, workingDirectory: string, context: ITaskContext) => Promise<any>;
+export type TaskHandler = (data: any, context: ITaskContext) => Promise<any>;
 

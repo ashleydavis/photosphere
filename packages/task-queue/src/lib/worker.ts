@@ -28,7 +28,6 @@ export function getRegisteredHandlerTypes(): string[] {
 export async function executeTaskHandler(
     taskType: string,
     data: any,
-    workingDirectory: string,
     context: ITaskContext
 ): Promise<any> {
     const registeredTypes = getRegisteredHandlerTypes();
@@ -37,7 +36,7 @@ export async function executeTaskHandler(
         throw new Error(`No handler registered for task type: ${taskType}. Available handlers: ${registeredTypes.join(", ")}`);
     }
 
-    return await handler(data, workingDirectory, context);
+    return await handler(data, context);
 }
 
 

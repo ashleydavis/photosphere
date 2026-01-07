@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'path';
-import { tmpdir } from 'node:os';
 import { cpus } from 'os';
 import type { ITaskQueue } from 'task-queue';
 import { TaskQueueElectronMain } from './task-queue-electron-main';
@@ -101,7 +100,6 @@ ipcMain.on('add-task', (event, taskType: string, data: any, taskId?: string) => 
 function initWorkers() {
     const workerPath = join(__dirname, '../bundle/worker.js');
     const maxWorkers = cpus().length;
-    const baseWorkingDirectory = join(tmpdir(), "photosphere-electron-task-queue");
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
     const taskTimeout = 600000; // 10 minutes
@@ -110,7 +108,7 @@ function initWorkers() {
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    taskQueue = new TaskQueueElectronMain(workerPath, maxWorkers, baseWorkingDirectory, uuidGenerator, timestampProvider, taskTimeout, workerOptions);
+    taskQueue = new TaskQueueElectronMain(workerPath, maxWorkers, uuidGenerator, timestampProvider, taskTimeout, workerOptions);
     console.log('Task queue initialized');
 
     // Forward task completion events to renderer

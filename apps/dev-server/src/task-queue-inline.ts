@@ -5,7 +5,6 @@ import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { initTaskHandlers } from "api";
 import { RandomUuidGenerator } from "utils";
-import { join } from "node:path";
 
 interface IMessageCallback {
     messageType: string;
@@ -30,7 +29,6 @@ interface ITask {
     type: string;
     status: TaskStatus;
     data: any;
-    workingDirectory: string;
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
@@ -53,7 +51,6 @@ export class TaskQueueInline implements ITaskQueue {
     private tasksCompleted: number = 0;
     private tasksFailed: number = 0;
     private maxConcurrent: number;
-    private baseWorkingDirectory: string;
     private uuidGenerator: RandomUuidGenerator;
     private timestampProvider: ITimestampProvider;
     private baseContext: IBaseTaskContext;
@@ -61,9 +58,8 @@ export class TaskQueueInline implements ITaskQueue {
     private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
 
     // Initializes the inline task queue with max concurrent tasks and working directory
-    constructor(maxConcurrent: number, baseWorkingDirectory: string, uuidGenerator: RandomUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
+    constructor(maxConcurrent: number, uuidGenerator: RandomUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
         this.maxConcurrent = maxConcurrent;
-        this.baseWorkingDirectory = baseWorkingDirectory;
         this.uuidGenerator = uuidGenerator;
         this.timestampProvider = timestampProvider;
         
@@ -83,14 +79,12 @@ export class TaskQueueInline implements ITaskQueue {
     // Adds a task to the queue and returns its ID
     addTask(type: string, data: any, taskId?: string): string {
         const id = taskId || this.uuidGenerator.generate();
-        const workingDirectory = join(this.baseWorkingDirectory, id);
 
         const task: ITask = {
             id,
             type,
             status: TaskStatus.Pending,
             data,
-            workingDirectory,
             createdAt: this.timestampProvider.dateNow(),
             timeoutCount: 0
         };
@@ -251,7 +245,7 @@ export class TaskQueueInline implements ITaskQueue {
                 sendMessage: taskSpecificSendMessage,
             };
 
-            const outputs = await executeTaskHandler(task.type, task.data, task.workingDirectory, taskContextWithSendMessage);
+            const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);
 
             // Task completed successfully
             task.status = TaskStatus.Completed;
