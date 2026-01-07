@@ -42,49 +42,6 @@ describe("TaskQueueBun", () => {
         });
     });
 
-    describe("workingDirectory", () => {
-        it("should provide a unique working directory for each task", async () => {
-            let receivedWorkingDir: string | null = null;
-
-            registerHandler("test-task", async (data, workingDirectory) => {
-                receivedWorkingDir = workingDirectory;
-                // Create the directory and a file
-                await mkdir(workingDirectory, { recursive: true });
-                await writeFile(join(workingDirectory, "test.txt"), "test content");
-                return "done";
-            });
-
-            const taskId = queue.addTask("test-task", {});
-            await queue.awaitAllTasks();
-
-            expect(receivedWorkingDir).toBeDefined();
-            expect(receivedWorkingDir).toContain(testWorkingDir);
-            expect(receivedWorkingDir).toContain(taskId);
-
-            // Verify the file was created
-            const filePath = join(receivedWorkingDir!, "test.txt");
-            const content = await readFile(filePath, "utf-8");
-            expect(content).toBe("test content");
-        });
-
-        it("should provide different working directories for different tasks", async () => {
-            const workingDirs: string[] = [];
-
-            registerHandler("test-task", async (data, workingDirectory) => {
-                workingDirs.push(workingDirectory);
-                return "done";
-            });
-
-            queue.addTask("test-task", {});
-            queue.addTask("test-task", {});
-
-            await queue.awaitAllTasks();
-
-            expect(workingDirs.length).toBe(2);
-            expect(workingDirs[0]).not.toBe(workingDirs[1]);
-        });
-    });
-
     describe("awaitAllTasks", () => {
         it("should wait for all tasks to complete", async () => {
             let completedCount = 0;
@@ -376,27 +333,6 @@ describe("TaskQueueBun", () => {
     });
 
     describe("constructor options", () => {
-        it("should use custom working directory", async () => {
-            const customDir = join(tmpdir(), "custom-task-queue");
-            const customQueue = new TaskQueueBun(2, customDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
-
-            let receivedWorkingDir: string | null = null;
-
-            registerHandler("test-task", async (data, workingDirectory) => {
-                receivedWorkingDir = workingDirectory;
-                return "done";
-            });
-
-            customQueue.addTask("test-task", {});
-            await customQueue.awaitAllTasks();
-
-            expect(receivedWorkingDir).toContain(customDir);
-            customQueue.shutdown();
-
-            // Cleanup
-            await rm(customDir, { recursive: true, force: true }).catch(() => {});
-        });
-
         it("should use custom UUID generator", () => {
             const customUuidGenerator = new TestUuidGenerator();
             const customQueue = new TaskQueueBun(2, testWorkingDir, customUuidGenerator, new TestTimestampProvider(), 600000, {});
@@ -422,26 +358,6 @@ describe("TaskQueueBun", () => {
             expect(taskId1).toBeDefined();
             expect(taskId2).toBeDefined();
             expect(taskId1).not.toBe(taskId2);
-
-            defaultQueue.shutdown();
-        });
-
-        it("should use default working directory when not provided", async () => {
-            const defaultQueue = new TaskQueueBun(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
-
-            let receivedWorkingDir: string | null = null;
-
-            registerHandler("test-task", async (data, workingDirectory) => {
-                receivedWorkingDir = workingDirectory;
-                return "done";
-            });
-
-            const taskId = defaultQueue.addTask("test-task", {});
-            await defaultQueue.awaitAllTasks();
-
-            expect(receivedWorkingDir).toBeDefined();
-            expect(receivedWorkingDir).toContain("task-queue");
-            expect(receivedWorkingDir).toContain(taskId);
 
             defaultQueue.shutdown();
         });

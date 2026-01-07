@@ -14,8 +14,7 @@ import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
 // The actual streaming is handled by the dev-server which sends messages to the frontend
 //
 export async function loadAssetsHandler(
-    _data: ILoadAssetsData,
-    _workingDirectory: string,
+    data: ILoadAssetsData,
     context: ITaskContext
 ): Promise<ILoadAssetsResult> {
     const { uuidGenerator, timestampProvider } = context;

@@ -26,7 +26,7 @@ export interface IVerifyFileResult {
 //
 // Handler for verifying a single file
 //
-export async function verifyFileHandler(data: IVerifyFileData, workingDirectory: string, context: ITaskContext): Promise<IVerifyFileResult> {
+export async function verifyFileHandler(data: IVerifyFileData, context: ITaskContext): Promise<IVerifyFileResult> {
     const { node, storageDescriptor, s3Config, options } = data;
     const fileName = node.name!;
 

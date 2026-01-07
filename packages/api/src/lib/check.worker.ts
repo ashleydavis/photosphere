@@ -37,7 +37,7 @@ export interface ICheckFileResult {
 // Handler for checking a single file
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 //
-export async function checkFileHandler(data: ICheckFileData, workingDirectory: string, context: ITaskContext): Promise<ICheckFileResult> {
+export async function checkFileHandler(data: ICheckFileData, context: ITaskContext): Promise<ICheckFileResult> {
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config } = data;
     const { uuidGenerator, timestampProvider } = context;
     

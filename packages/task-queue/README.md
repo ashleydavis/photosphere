@@ -44,13 +44,9 @@ import { TaskQueue, ITaskQueue } from "task-queue";
 const queue = new TaskQueue(4);
 
 // Register a task handler
-queue.registerHandler("process-image", async (data, workingDirectory) => {
+queue.registerHandler("process-image", async (data) => {
     // data contains the task inputs (parameters object)
     const { imagePath, outputFormat } = data;
-    
-    // workingDirectory is a unique path for this task
-    // You can create files here if needed
-    const outputPath = `${workingDirectory}/output.${outputFormat}`;
     
     // Do your work here
     // ... process the image ...
@@ -58,7 +54,6 @@ queue.registerHandler("process-image", async (data, workingDirectory) => {
     // Return the result outputs (can be any type: object, string, number, etc.)
     return {
         success: true,
-        outputPath: outputPath,
         originalPath: imagePath,
         format: outputFormat
     };
@@ -87,7 +82,7 @@ import { TaskQueue } from "task-queue";
 const queue = new TaskQueue(4);
 
 // Register handler
-queue.registerHandler("upload-file", async (data, workingDirectory) => {
+queue.registerHandler("upload-file", async (data) => {
     const { filePath, destination } = data;
     // Upload logic here
     return `Uploaded ${filePath} to ${destination}`;
@@ -174,7 +169,7 @@ import { TaskQueue, TaskStatus } from "task-queue";
 
 const queue = new TaskQueue(2);
 
-queue.registerHandler("long-running-task", async (data, workingDirectory) => {
+queue.registerHandler("long-running-task", async (data) => {
     // Simulate long-running work
     await new Promise(resolve => setTimeout(resolve, 5000));
     return "Task completed";
@@ -199,7 +194,7 @@ import { TaskQueue, TaskStatus } from "task-queue";
 
 const queue = new TaskQueue(2);
 
-queue.registerHandler("risky-task", async (data, workingDirectory) => {
+queue.registerHandler("risky-task", async (data) => {
     if (data.shouldFail) {
         throw new Error("Task failed intentionally");
     }
@@ -214,36 +209,6 @@ if (result.status === TaskStatus.Failed) {
 } else {
     console.log("Task succeeded:", result.message);
 }
-```
-
-### Working Directory Usage
-
-Each task receives a unique working directory path. The directory is not created automatically - you can create it lazily if needed:
-
-```typescript
-import { TaskQueue } from "task-queue";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-
-const queue = new TaskQueue(2);
-
-queue.registerHandler("file-operation", async (data, workingDirectory) => {
-    // Create the working directory if needed
-    await mkdir(workingDirectory, { recursive: true });
-    
-    // Create files in the working directory
-    const outputFile = join(workingDirectory, "output.txt");
-    await writeFile(outputFile, data.content);
-    
-    return `Created file: ${outputFile}`;
-});
-
-const taskId = queue.addTask("file-operation", {
-    content: "Hello, World!"
-});
-
-const result = await queue.awaitTask(taskId);
-console.log(result.message);
 ```
 
 ### Custom Configuration
@@ -288,7 +253,7 @@ The main interface for the task queue.
   - Parameters:
     - `type`: The task type name
     - `handler`: Async function that processes the task
-      - Signature: `(data: any, workingDirectory: string) => Promise<any>`
+      - Signature: `(data: any) => Promise<any>`
       - Returns the result outputs (can be any type: object, string, number, etc.)
 
 - **`onTaskComplete(callback: TaskCompletionCallback): void`**

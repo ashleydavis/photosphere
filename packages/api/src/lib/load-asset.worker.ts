@@ -34,7 +34,6 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 //
 export async function loadAssetHandler(
     data: ILoadAssetData,
-    _workingDirectory: string,
     context: ITaskContext
 ): Promise<ILoadAssetResult> {
     const { uuidGenerator, timestampProvider } = context;
