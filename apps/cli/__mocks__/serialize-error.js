@@ -24,6 +24,28 @@ function serializeError(error) {
     return { message: String(error) };
 }
 
-module.exports = { serializeError };
-module.exports.default = { serializeError };
+function deserializeError(serialized) {
+    if (!serialized) {
+        return new Error('Unknown error');
+    }
+    
+    // If it's already an Error, return it
+    if (serialized instanceof Error) {
+        return serialized;
+    }
+    
+    // Reconstruct Error from serialized object
+    const error = new Error(serialized.message || 'Unknown error');
+    if (serialized.name) {
+        error.name = serialized.name;
+    }
+    if (serialized.stack) {
+        error.stack = serialized.stack;
+    }
+    
+    return error;
+}
+
+module.exports = { serializeError, deserializeError };
+module.exports.default = { serializeError, deserializeError };
 

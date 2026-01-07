@@ -211,7 +211,7 @@ describe("TaskQueueBun", () => {
         });
 
         it("should respect maxWorkers limit", async () => {
-            const queueWithLimit = new BunTaskQueue(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
+            const queueWithLimit = new TaskQueueBun(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
             const concurrentTasks = new Set<number>();
             let maxConcurrent = 0;
 
@@ -378,7 +378,7 @@ describe("TaskQueueBun", () => {
     describe("constructor options", () => {
         it("should use custom working directory", async () => {
             const customDir = join(tmpdir(), "custom-task-queue");
-            const customQueue = new BunTaskQueue(2, customDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
+            const customQueue = new TaskQueueBun(2, customDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
 
             let receivedWorkingDir: string | null = null;
 
@@ -399,7 +399,7 @@ describe("TaskQueueBun", () => {
 
         it("should use custom UUID generator", () => {
             const customUuidGenerator = new TestUuidGenerator();
-            const customQueue = new BunTaskQueue(2, testWorkingDir, customUuidGenerator, new TestTimestampProvider(), 600000, {});
+            const customQueue = new TaskQueueBun(2, testWorkingDir, customUuidGenerator, new TestTimestampProvider(), 600000, {});
 
             const taskId1 = customQueue.addTask("test-task", {});
             const taskId2 = customQueue.addTask("test-task", {});
@@ -414,7 +414,7 @@ describe("TaskQueueBun", () => {
 
         it("should use default UUID generator when not provided", () => {
             const uuidGenerator = { generate: () => randomUUID() };
-            const defaultQueue = new BunTaskQueue(2, testWorkingDir, uuidGenerator, new TestTimestampProvider(), 600000, {});
+            const defaultQueue = new TaskQueueBun(2, testWorkingDir, uuidGenerator, new TestTimestampProvider(), 600000, {});
 
             const taskId1 = defaultQueue.addTask("test-task", {});
             const taskId2 = defaultQueue.addTask("test-task", {});
@@ -427,7 +427,7 @@ describe("TaskQueueBun", () => {
         });
 
         it("should use default working directory when not provided", async () => {
-            const defaultQueue = new BunTaskQueue(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
+            const defaultQueue = new TaskQueueBun(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
 
             let receivedWorkingDir: string | null = null;
 

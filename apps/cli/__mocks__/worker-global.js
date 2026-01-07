@@ -2,6 +2,7 @@
 // We'll use a simple approach that accesses handlers synchronously
 
 const { getHandler } = require('task-queue/src/lib/worker');
+const { TestUuidGenerator, TestTimestampProvider } = require('./node-utils');
 
 class MockWorker {
     constructor(scriptURL) {
@@ -39,18 +40,30 @@ class MockWorker {
                     const handler = getHandler(taskType);
                     if (!handler) {
                         this.dispatchMessage({
-                            type: "error",
+                            type: "task-completed",
                             taskId,
-                            error: {
-                                name: "Error",
-                                message: `No handler registered for task type: ${taskType}`
+                            result: {
+                                status: "failed",
+                                error: {
+                                    name: "Error",
+                                    message: `No handler registered for task type: ${taskType}`
+                                }
                             }
                         });
                         return;
                     }
 
                     // Handler signature: (data, workingDirectory, context)
-                    const context = { taskId, sendMessage: () => {} };
+                    // Create a proper context similar to what the real worker does
+                    const uuidGenerator = new TestUuidGenerator();
+                    const timestampProvider = new TestTimestampProvider();
+                    const sessionId = uuidGenerator.generate();
+                    const context = {
+                        uuidGenerator,
+                        timestampProvider,
+                        sessionId,
+                        sendMessage: () => {} // No-op for tests
+                    };
                     const outputs = await handler(data, workingDirectory, context);
                     this.dispatchMessage({
                         type: "task-completed",
@@ -61,13 +74,16 @@ class MockWorker {
                     });
                 }
                 catch (error) {
+                    // Serialize error similar to how the real worker does it
+                    const { serializeError } = require('./serialize-error');
+                    const serializedError = serializeError(error);
+                    
                     this.dispatchMessage({
-                        type: "error",
+                        type: "task-completed",
                         taskId,
-                        error: {
-                            name: error?.name || "Error",
-                            message: error?.message || String(error),
-                            stack: error?.stack
+                        result: {
+                            status: "failed",
+                            error: serializedError
                         }
                     });
                 }

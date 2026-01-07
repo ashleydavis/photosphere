@@ -16,8 +16,21 @@ class TestUuidGenerator {
 }
 
 class TestTimestampProvider {
+    constructor() {
+        this.counter = 0;
+    }
+    
     now() {
-        return new Date('2023-01-01T00:00:00Z');
+        const baseTimestamp = new Date('2023-01-01T00:00:00Z').getTime();
+        return baseTimestamp + this.counter++;
+    }
+    
+    dateNow() {
+        return new Date(this.now());
+    }
+    
+    reset() {
+        this.counter = 0;
     }
 }
 
