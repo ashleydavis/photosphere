@@ -8,6 +8,7 @@ import {
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
 
 export function App() {
     const ws = useWebSocket();    
@@ -16,7 +17,9 @@ export function App() {
         return <div>Connecting...</div>;
     }
     
-    const taskQueueProvider = new TaskQueueProviderWebSocket(ws);
+    const uuidGenerator = new RandomUuidGenerator();
+    const timestampProvider = new TimestampProvider();
+    const taskQueueProvider = new TaskQueueProviderWebSocket(ws, uuidGenerator, timestampProvider);
 
     return (
         <HashRouter

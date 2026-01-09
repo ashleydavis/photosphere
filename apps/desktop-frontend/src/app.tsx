@@ -8,6 +8,7 @@ import {
 } from "user-interface";
 import { TaskQueueProviderElectron } from "./lib/task-queue-provider-electron";
 import type { IElectronAPI } from "electron-defs";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
 
 export function App() {
     const electronAPI = typeof window !== 'undefined' ? (window as unknown as { electronAPI: IElectronAPI }).electronAPI : undefined;
@@ -22,7 +23,9 @@ export function App() {
         throw new Error('restApiUrl query parameter is required but was not provided.');
     }
 
-    const taskQueueProvider = new TaskQueueProviderElectron(electronAPI);
+    const uuidGenerator = new RandomUuidGenerator();
+    const timestampProvider = new TimestampProvider();
+    const taskQueueProvider = new TaskQueueProviderElectron(electronAPI, uuidGenerator, timestampProvider);
 
     return (
         <HashRouter

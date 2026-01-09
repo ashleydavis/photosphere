@@ -144,11 +144,11 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((taskResult) => {
+        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((task, taskResult) => {
 
             result.filesProcessed++;
             
-            if (taskResult.status === TaskStatus.Completed) {
+            if (taskResult.status === TaskStatus.Succeeded) {
                 const fileResult = taskResult.outputs!;
 
                 if (progressCallback) {
@@ -167,7 +167,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
-                const fileName = taskResult.inputs.node?.name || "unknown";
+                const fileName = task.data.node.name ?? "unknown";
                 if (taskResult.error) {
                     log.exception(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
                 } 
@@ -214,7 +214,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         // Log debug information about task execution.
         //
         const status = queue.getStatus();
-        log.verbose(`Verification complete: ${status.total} tasks queued, ${status.peakWorkers} workers allocated, ${status.completed} completed, ${status.failed} failed`);
+        log.verbose(`Verification complete: ${status.total} tasks queued, ${status.completed} completed, ${status.failed} failed`);
 
         return result;
     } finally {

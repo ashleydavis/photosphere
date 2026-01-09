@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "bun run bundle && electron . --no-sandbox",
     "compile": "tsc --noEmit",
+    "c": "bun run compile",
     "bundle:main": "bun build ./src/main.ts --outdir ./bundle --target node --format cjs --external electron",
     "bundle:preload": "bun build ./src/preload.ts --outdir ./bundle --target node --format cjs --external electron",
     "bundle:worker": "bun build ./src/worker.ts --outdir ./bundle --target node --format cjs",

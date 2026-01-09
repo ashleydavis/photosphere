@@ -1,4 +1,4 @@
-import { registerHandler } from "task-queue/src/lib/worker";
+import { registerHandler } from "task-queue";
 import { verifyFileHandler } from "./verify.worker";
 import { checkFileHandler } from "./check.worker";
 import { loadAssetsHandler } from "./load-assets.worker";

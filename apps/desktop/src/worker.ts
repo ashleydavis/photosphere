@@ -3,11 +3,11 @@
 // Routes messages to the appropriate handler from shared packages
 //
 import { serializeError } from "serialize-error";
-import { executeTaskHandler } from "task-queue/src/lib/worker";
+import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./lib/worker-init";
 import { initTaskHandlers } from "api";
-import type { IWorkerMessage } from "./task-queue-electron-main";
+import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./lib/worker-backend-electron-main";
 
 //
 // Register all task handlers
@@ -58,27 +58,30 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         setWorkerTaskId(null);
         
         // Send success result back to main thread
-        parentPort.postMessage({
+        const successMessage: IWorkerTaskCompletedMessage = {
             type: "task-completed",
             taskId,
             result: {
+                status: "succeeded",
                 outputs: outputs
             }
-        });
+        };
+        parentPort.postMessage(successMessage);
     }
     catch (error: any) {
         // Clear task ID from logging and progress
         setWorkerTaskId(null);
         
         // Send error result back to main thread as task-completed with status failed
-        parentPort.postMessage({
+        const errorMessage: IWorkerTaskCompletedMessage = {
             type: "task-completed",
             taskId,
             result: {
                 status: "failed",
                 error: serializeError(error)
             }
-        });
+        };
+        parentPort.postMessage(errorMessage);
     }
 }
 
@@ -96,11 +99,12 @@ function initWorker(workerContext: IWorkerContext): void {
             // Create a task-specific sendMessage function that captures the task ID in a closure
             // This ensures messages are correctly associated with the current task
             const taskSpecificSendMessage = (message: any): void => {
-                parentPort.postMessage({
+                const taskMessage: IWorkerTaskMessage = {
                     type: "task-message",
                     taskId,
                     message
-                });
+                };
+                parentPort.postMessage(taskMessage);
             };
 
             // Create a task-specific context with the task-specific sendMessage
@@ -117,7 +121,8 @@ function initWorker(workerContext: IWorkerContext): void {
     });
     
     // Send ready message to main thread to indicate worker is initialized and ready for tasks
-    parentPort.postMessage({ type: "worker-ready" });
+    const readyMessage: IWorkerReadyMessage = { type: "worker-ready" };
+    parentPort.postMessage(readyMessage);
 }
 
 //

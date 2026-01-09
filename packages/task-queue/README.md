@@ -67,7 +67,7 @@ const taskId = queue.addTask("process-image", {
 
 // Wait for the task to complete
 const result = await queue.awaitTask(taskId);
-console.log(result.status); // "completed"
+console.log(result.status); // "succeeded"
 console.log(result.outputs); // { success: true, outputPath: "...", ... }
 
 // Clean up
@@ -116,7 +116,7 @@ const queue = new TaskQueue(4);
 
 // Register a completion callback
 queue.onTaskComplete((result: ITaskResult) => {
-    if (result.status === TaskStatus.Completed) {
+    if (result.status === TaskStatus.Succeeded) {
         console.log(`Task ${result.taskId} succeeded:`, result.outputs);
     } else if (result.status === TaskStatus.Failed) {
         console.error(`Task ${result.taskId} failed:`, result.error);
@@ -179,11 +179,11 @@ const taskId = queue.addTask("long-running-task", { data: "test" });
 
 // Check status without waiting
 const status = queue.taskStatus(taskId);
-console.log(status?.status); // "pending", "running", "completed", or "failed"
+console.log(status?.status); // "pending", "running", "succeeded", or "failed"
 
 // Or wait for completion
 const result = await queue.awaitTask(taskId);
-console.log(result.status); // "completed"
+console.log(result.status); // "succeeded"
 console.log(result.message); // "Task completed"
 ```
 

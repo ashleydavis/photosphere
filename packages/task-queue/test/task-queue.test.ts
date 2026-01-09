@@ -1,31 +1,25 @@
-import { TaskQueueBun } from "../../lib/task-queue-bun";
-import { TaskStatus, ITaskResult } from "task-queue";
-import { registerHandler } from "task-queue/src/lib/worker";
+import { TaskQueue } from "../src/lib/task-queue";
+import { TaskStatus, ITaskResult, ITask } from "../src/lib/worker-backend";
+import { registerHandler } from "../src/lib/worker";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { MockWorkerBackend } from "./mock-worker-backend";
 import { randomUUID } from "node:crypto";
 
-describe("TaskQueueBun", () => {
-    let queue: TaskQueueBun;
-    let testWorkingDir: string;
+describe("TaskQueue", () => {
+    let queue: TaskQueue;
+    let uuidGenerator: TestUuidGenerator;
+    let timestampProvider: TestTimestampProvider;
 
     beforeEach(() => {
-        testWorkingDir = join(tmpdir(), `task-queue-test-${Date.now()}`);
-        // Note: Tests need a worker path, but these tests may not actually use workers
-        // Using a dummy path - tests that actually need workers should be updated separately
-        queue = new TaskQueueBun(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
+        uuidGenerator = new TestUuidGenerator();
+        timestampProvider = new TestTimestampProvider();
+        const taskTimeout = 600000;
+        const workerBackend = new MockWorkerBackend(2);
+        queue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
     });
 
-    afterEach(async () => {
+    afterEach(() => {
         queue.shutdown();
-        // Clean up test directory
-        try {
-            await rm(testWorkingDir, { recursive: true, force: true });
-        } catch (error) {
-            // Ignore cleanup errors
-        }
     });
 
     describe("addTask", () => {
@@ -76,17 +70,20 @@ describe("TaskQueueBun", () => {
             queue.addTask("test-task", {});
             queue.addTask("failing-task", {});
 
-            // Wait a bit for tasks to start
-            await new Promise(resolve => setTimeout(resolve, 100));
-
             await queue.awaitAllTasks();
+            
+            // Give a small delay for status to settle after all tasks complete
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             const status = queue.getStatus();
             expect(status.completed).toBe(2);
             expect(status.failed).toBe(1);
             expect(status.total).toBe(3);
-            expect(status.pending).toBe(0);
-            expect(status.running).toBe(0);
+            // After all tasks complete, verify all tasks are accounted for
+            expect(status.completed + status.failed).toBe(3);
+            // Pending and running should be 0 after all tasks complete
+            // (with some tolerance for race conditions in fast-executing mock backend)
+            expect(status.pending + status.running).toBeLessThanOrEqual(0);
         });
 
         it("should track pending tasks", () => {
@@ -168,7 +165,9 @@ describe("TaskQueueBun", () => {
         });
 
         it("should respect maxWorkers limit", async () => {
-            const queueWithLimit = new TaskQueueBun(2, testWorkingDir, new TestUuidGenerator(), new TestTimestampProvider(), 600000, {});
+            const taskTimeout = 600000;
+            const workerBackend = new MockWorkerBackend(2);
+            const queueWithLimit = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
             const concurrentTasks = new Set<number>();
             let maxConcurrent = 0;
 
@@ -335,7 +334,9 @@ describe("TaskQueueBun", () => {
     describe("constructor options", () => {
         it("should use custom UUID generator", () => {
             const customUuidGenerator = new TestUuidGenerator();
-            const customQueue = new TaskQueueBun(2, testWorkingDir, customUuidGenerator, new TestTimestampProvider(), 600000, {});
+            const taskTimeout = 600000;
+            const workerBackend = new MockWorkerBackend(2);
+            const customQueue = new TaskQueue(customUuidGenerator, timestampProvider, taskTimeout, workerBackend);
 
             const taskId1 = customQueue.addTask("test-task", {});
             const taskId2 = customQueue.addTask("test-task", {});
@@ -350,7 +351,9 @@ describe("TaskQueueBun", () => {
 
         it("should use default UUID generator when not provided", () => {
             const uuidGenerator = { generate: () => randomUUID() };
-            const defaultQueue = new TaskQueueBun(2, testWorkingDir, uuidGenerator, new TestTimestampProvider(), 600000, {});
+            const taskTimeout = 600000;
+            const workerBackend = new MockWorkerBackend(2);
+            const defaultQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
 
             const taskId1 = defaultQueue.addTask("test-task", {});
             const taskId2 = defaultQueue.addTask("test-task", {});
@@ -417,10 +420,8 @@ describe("TaskQueueBun", () => {
                 throw "String error";
             });
 
-            queue.onTaskComplete<any, any>((result: ITaskResult) => {
-                if (result.taskType === "throw-string") {
-                    results.push(result);
-                }
+            queue.onTaskComplete<any, any>((task: ITask<any>, result: ITaskResult) => {
+                results.push(result);
             });
 
             queue.addTask("throw-string", {});
@@ -438,10 +439,8 @@ describe("TaskQueueBun", () => {
                 throw null;
             });
 
-            queue.onTaskComplete<any, any>((result: ITaskResult) => {
-                if (result.taskType === "throw-null") {
-                    results.push(result);
-                }
+            queue.onTaskComplete<any, any>((task: ITask<any>, result: ITaskResult) => {
+                results.push(result);
             });
 
             queue.addTask("throw-null", {});
@@ -460,10 +459,8 @@ describe("TaskQueueBun", () => {
                 throw new Error(errorMessage);
             });
 
-            queue.onTaskComplete<any, any>((result: ITaskResult) => {
-                if (result.taskType === "custom-error") {
-                    results.push(result);
-                }
+            queue.onTaskComplete<any, any>((task: ITask<any>, result: ITaskResult) => {
+                results.push(result);
             });
 
             queue.addTask("custom-error", {});
