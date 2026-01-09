@@ -382,7 +382,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             const queue = await taskQueueProvider.create();
 
             // Set up listener for task completion before queuing the task
-            queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((taskResult) => {
+            queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
                 // Check if this is the latest load operation
                 if (loadingId.current !== latestLoadingId) {
                     //todo: this could be automatic, if the queue is cancelled it shouldn't send messages back.
@@ -391,12 +391,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
 
                 //todo: need to wrap up loading here.
 
-                if (taskResult.status === TaskStatus.Completed) {
+                if (result.status === TaskStatus.Succeeded) {
                     // Task completed successfully
-                    console.log(`Load assets task completed: ${taskResult.outputs?.totalAssets} assets loaded`);
+                    console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
                 }
-                else if (taskResult.status === TaskStatus.Failed) {
-                    console.error("Load assets task failed:", taskResult.errorMessage);
+                else if (result.status === TaskStatus.Failed) {
+                    console.error("Load assets task failed:", result.errorMessage);
                 }
             });
 

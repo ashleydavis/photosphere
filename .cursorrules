@@ -166,6 +166,23 @@ function getHandler(type) {
 
 ## Critical Workflow Rules
 
+### This is a Bun project - use Bun commands, not Node.js/npm
+
+**ALWAYS** use Bun commands instead of Node.js or npm commands unless the user explicitly requests otherwise.
+
+**Why:** This project uses Bun as its runtime and package manager. Using npm or Node.js commands can cause inconsistencies, slower performance, and may not work correctly with Bun's module resolution and features.
+
+**Examples:**
+- ✅ `bun run test` (not `npm test`)
+- ✅ `bun run compile` (not `npm run compile`)
+- ✅ `bun install` (not `npm install`)
+- ✅ `bun test` (not `node test.js` or `jest`)
+- ✅ `bun run c` (not `npm run c`)
+
+**When to use Node.js/npm:**
+- Only when the user explicitly requests it
+- When working with tools that specifically require Node.js (e.g., certain build tools that don't support Bun)
+
 ### NEVER finish up until all code is compiling
 
 **ALWAYS** run `bun run c` on the entire project before considering work complete. Do not assume the code compiles just because the linter shows no errors. TypeScript compilation may catch errors that the linter doesn't.

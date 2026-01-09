@@ -1,8 +1,8 @@
-import { TaskQueueBun } from "./task-queue-bun";
-import { type IWorkerInfo } from "task-queue";
+import { TaskQueue } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { IWorkerOptions } from "./worker-init";
 import type { ITaskQueueProvider } from "task-queue";
+import { WorkerBackendBun, type IWorkerInfo } from "./worker-backend-bun";
 import { registerStateProvider, updateStateProvider } from "debug-server";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
@@ -27,14 +27,15 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
     }
 
     async create(): Promise<ITaskQueue> {
-        const taskQueue = new TaskQueueBun(this.maxWorkers, this.uuidGenerator, this.timestampProvider, this.taskTimeout, this.workerOptions);
+        const workerBackend = new WorkerBackendBun(this.maxWorkers, this.taskTimeout, this.workerOptions);
+        const taskQueue = new TaskQueue(this.uuidGenerator, this.timestampProvider, this.taskTimeout, workerBackend);
         
         // If debug mode is enabled, register state provider for polling
         if (this.debug) {
             // Register state provider that will be polled every minute
-            // Capture taskQueue in closure for state provider access
+            // Capture taskQueue and workerBackend in closure for state provider access
             registerStateProvider("taskQueue", () => {
-                const workers = taskQueue.getWorkerState();
+                const workers = workerBackend.getWorkerState() || [];
                 const queueStatus = taskQueue.getStatus();
                 const succeededCount = queueStatus.completed;
                 const failedCount = queueStatus.failed;
@@ -67,7 +68,7 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
             });
             
             // Also trigger updates on state changes (for immediate updates)
-            taskQueue.onWorkerStateChange(() => {
+            workerBackend.onWorkerStateChange(() => {
                 updateStateProvider("taskQueue");
             });
         }

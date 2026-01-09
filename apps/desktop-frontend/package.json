@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "compile": "tsc --noEmit",
+    "c": "bun run compile",
     "bundle": "vite build"
   },
   "dependencies": {

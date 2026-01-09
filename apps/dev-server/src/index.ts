@@ -8,7 +8,10 @@ import { createAssetServer } from "rest-api";
 
 const PORT = 3001;
 
-const taskQueueProvider = new TaskQueueProviderInline(new RandomUuidGenerator());
+const uuidGenerator = new RandomUuidGenerator();
+const timestampProvider = new TimestampProvider();
+const sessionId = uuidGenerator.generate();
+const taskQueueProvider = new TaskQueueProviderInline(uuidGenerator, timestampProvider, sessionId);
 
 // Map of WebSocket connections to their task queues
 const wsTaskQueues = new Map<WebSocket, ITaskQueue>();
@@ -27,10 +30,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-
-// Initialize asset server
-const uuidGenerator = new RandomUuidGenerator();
-const timestampProvider = new TimestampProvider();
 
 // Attach asset server routes to existing Express app
 await createAssetServer({
@@ -60,11 +59,20 @@ wss.on("connection", (ws: WebSocket) => {
                     wsTaskQueues.set(ws, queue);
 
                     // Set up task completion handler to send results back to client
-                    queue.onTaskComplete(async (taskResult) => {
+                    queue.onTaskComplete(async (task, result) => {
                         ws.send(JSON.stringify({
                             type: "task-completed",
-                            taskId: taskResult.taskId,
-                            result: taskResult,
+                            taskId: result.taskId,
+                            task: {
+                                id: task.id,
+                                type: task.type,
+                                status: task.status,
+                                data: task.data,
+                                createdAt: task.createdAt.toISOString(),
+                                startedAt: task.startedAt?.toISOString(),
+                                completedAt: task.completedAt?.toISOString(),
+                            },
+                            result: result,
                         }));
                     });
 

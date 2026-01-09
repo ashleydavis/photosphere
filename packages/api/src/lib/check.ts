@@ -47,13 +47,13 @@ export async function checkPaths(
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (taskResult) => {
-            if (taskResult.status === TaskStatus.Completed) {
+        queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (task, result) => {
+            if (result.status === TaskStatus.Succeeded) {
 
                 summary.filesProcessed++;
 
-                const checkResult = taskResult.outputs!;
-                const taskData = taskResult.inputs;
+                const checkResult = result.outputs!;
+                const taskData = task.data;
                 
                 // Add hash to cache if computation was successful and hash wasn't already in cache
                 if (checkResult.hashedFile) {
@@ -90,12 +90,14 @@ export async function checkPaths(
                     summary.filesFailed++;
                 }                
             } 
-            else if (taskResult.status === TaskStatus.Failed) {
-                if (taskResult.error) {
-                    log.exception(`Failed to check file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
+            else if (result.status === TaskStatus.Failed) {
+                const taskData = task.data as ICheckFileData;
+                const logicalPath = taskData.logicalPath || "unknown";
+                if (result.error) {
+                    log.exception(`Failed to check file "${logicalPath}": ${result.errorMessage}`, result.error);
                 } 
                 else {
-                    log.error(`Failed to check file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
+                    log.error(`Failed to check file "${logicalPath}": ${result.errorMessage}`);
                 }
                 summary.filesFailed++;
                 summary.filesProcessed++;

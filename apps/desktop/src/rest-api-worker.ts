@@ -7,6 +7,35 @@ import { RandomUuidGenerator, TimestampProvider } from 'utils';
 import type { Server } from 'http';
 
 //
+// REST API worker message types
+//
+export interface IRestApiWorkerStartMessage {
+    type: "start";
+    port: number;
+}
+
+export interface IRestApiWorkerStopMessage {
+    type: "stop";
+}
+
+export type IRestApiWorkerMessage = IRestApiWorkerStartMessage | IRestApiWorkerStopMessage;
+
+export interface IRestApiWorkerServerReadyMessage {
+    type: "server-ready";
+}
+
+export interface IRestApiWorkerServerStoppedMessage {
+    type: "server-stopped";
+}
+
+export interface IRestApiWorkerServerErrorMessage {
+    type: "server-error";
+    error: string;
+}
+
+export type IRestApiWorkerResponseMessage = IRestApiWorkerServerReadyMessage | IRestApiWorkerServerStoppedMessage | IRestApiWorkerServerErrorMessage;
+
+//
 // Post message function for Electron utility process
 //
 const parentPort = (process as any).parentPort;
@@ -33,7 +62,8 @@ async function startServer(port: number): Promise<void> {
     console.log('Asset server initialized in utility process');
 
     // Send ready message to main thread
-    parentPort.postMessage({ type: "server-ready" });
+    const readyMessage: IRestApiWorkerServerReadyMessage = { type: "server-ready" };
+    parentPort.postMessage(readyMessage);
 }
 
 //
@@ -43,26 +73,29 @@ function stopServer(): void {
     if (server) {
         server.close(() => {
             console.log('Asset server stopped');
-            parentPort.postMessage({ type: "server-stopped" });
+            const stoppedMessage: IRestApiWorkerServerStoppedMessage = { type: "server-stopped" };
+            parentPort.postMessage(stoppedMessage);
         });
         server = undefined;
     }
     else {
-        parentPort.postMessage({ type: "server-stopped" });
+        const stoppedMessage: IRestApiWorkerServerStoppedMessage = { type: "server-stopped" };
+        parentPort.postMessage(stoppedMessage);
     }
 }
 
 //
 // Initialize the message listener
 //
-parentPort.on('message', async (event: any) => {
-    const message = event.data;
+parentPort.on('message', async (event: { data: IRestApiWorkerMessage }) => {
+    const message: IRestApiWorkerMessage = event.data;
 
     if (message.type === 'start') {
-        const { port } = message;
+        const port = message.port;
         if (!port) {
             console.error('Port is required to start the server');
-            parentPort.postMessage({ type: "server-error", error: "Port is required" });
+            const errorMessage: IRestApiWorkerServerErrorMessage = { type: "server-error", error: "Port is required" };
+            parentPort.postMessage(errorMessage);
             return;
         }
 
@@ -71,17 +104,15 @@ parentPort.on('message', async (event: any) => {
         }
         catch (error: any) {
             console.error('Failed to start asset server:', error);
-            parentPort.postMessage({ 
+            const errorMessage: IRestApiWorkerServerErrorMessage = { 
                 type: "server-error", 
                 error: error.message || String(error) 
-            });
+            };
+            parentPort.postMessage(errorMessage);
         }
     }
     else if (message.type === 'stop') {
         stopServer();
-    }
-    else {
-        console.error(`Unknown message type: ${message.type}`);
     }
 });
 

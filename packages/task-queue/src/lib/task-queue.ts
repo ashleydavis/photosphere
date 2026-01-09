@@ -1,50 +1,13 @@
-import type { TaskHandler } from "./types";
+import { ITimestampProvider, IUuidGenerator, log } from "utils";
+import { ITask, ITaskResult, IWorkerBackend, TaskMessageCallback, TaskStatus } from "./worker-backend";
 
 //
-// Task status enumeration
-//
-export enum TaskStatus {
-    Pending = "pending",
-    Running = "running",
-    Completed = "completed",
-    Failed = "failed"
-}
-
-//
-// Task result interface
-//
-export interface ITaskResult<TInputs = any, TOutputs = any> {
-    status: TaskStatus;
-    error?: Error; // Deserialized error object (automatically deserialized from JSON)
-    errorMessage?: string; // Convenience field: error?.message || "Unknown error"
-    outputs?: TOutputs; // The actual result data returned by the handler
-    inputs: TInputs; // The original arguments/data sent to the task
-    taskId: string;
-    taskType: string;
-    createdAt: Date;
-    startedAt?: Date;
-    completedAt?: Date;
-}
-
-//
-// Task completion callback
+// Task completion callback for users
 // Can be synchronous or asynchronous
+// Receives the task and result as separate parameters
+// TInputs types the task.data field, TOutputs types the result.outputs field
 //
-export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult<TInputs, TOutputs>) => void | Promise<void>;
-
-//
-// Task message data structure
-//
-export interface ITaskMessageData<TMessage = any> {
-    taskId: string;
-    message: TMessage;
-}
-
-//
-// Task message callback
-// Called when a task sends arbitrary messages to the client
-//
-export type TaskMessageCallback<TMessage = any> = (data: ITaskMessageData<TMessage>) => void | Promise<void>;
+export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (task: ITask<TInputs>, result: ITaskResult & { outputs?: TOutputs }) => void | Promise<void>;
 
 //
 // Queue status interface
@@ -55,26 +18,7 @@ export interface IQueueStatus {
     completed: number;
     failed: number;
     total: number;
-    peakWorkers: number;
 }
-
-//
-// Worker state information for debugging
-//
-export interface IWorkerInfo { //todo: This shouldn't be in the core task-queue package which doesn't know anything about workers.
-    workerId: number;
-    isReady: boolean;
-    isIdle: boolean;
-    currentTaskId: string | null;
-    currentTaskType: string | null;
-    currentTaskRunningTimeMs: number | null; // Time in milliseconds the current task has been running, or null if no task is running
-    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
-}
-
-//
-// Callback for worker state changes
-//
-export type WorkerStateChangeCallback = (workers: IWorkerInfo[]) => void;
 
 //
 // Task queue interface
@@ -89,7 +33,20 @@ export interface ITaskQueue {
     //
     // Registers a callback that will be called when any task completes (success or failure).
     //
-    onTaskComplete<TInputs = any, TOutputs = any>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
+    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
+
+    //
+    // Registers a callback that will be called when a task sends messages to the client.
+    // The callback receives the task ID and the message data.
+    // Only messages with the specified messageType will be passed to the callback.
+    //
+    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): void;
+
+    //
+    // Registers a callback that will be called for any task message, regardless of type.
+    // The callback receives the task ID and the message data.
+    //
+    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void;
 
     //
     // Adds a task and waits for it to complete, returning the outputs.
@@ -109,29 +66,6 @@ export interface ITaskQueue {
     getStatus(): IQueueStatus;
 
     //
-    // Gets current state of all workers for debugging.
-    //
-    getWorkerState(): IWorkerInfo[];
-
-    //
-    // Sets a callback to be notified when worker state changes.
-    //
-    onWorkerStateChange(callback: WorkerStateChangeCallback): void;
-
-    //
-    // Registers a callback that will be called when a task sends messages to the client.
-    // The callback receives the task ID and the message data.
-    // Only messages with the specified messageType will be passed to the callback.
-    //
-    onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): void;
-
-    //
-    // Registers a callback that will be called for any task message, regardless of type.
-    // The callback receives the task ID and the message data.
-    //
-    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): void;
-
-    //
     // Shuts down the task queue and terminates all workers.
     //
     shutdown(): void;
@@ -143,3 +77,302 @@ export interface ITaskQueue {
 export interface ITaskQueueProvider {
     create(): Promise<ITaskQueue>;
 }
+
+//
+// Generic task queue implementation with an abstraction for workers.
+//
+export class TaskQueue implements ITaskQueue {
+    private tasks: Map<string, ITask<any>> = new Map();
+    private pendingTasks: string[] = [];
+    private uuidGenerator: IUuidGenerator;
+    private timestampProvider: ITimestampProvider;
+    private allTasksResolvers: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+
+    private completionCallbacks: TaskCompletionCallback<any, any>[] = [];
+    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
+    private anyMessageCallbacks: TaskMessageCallback[] = [];
+
+    private tasksQueued: number = 0;
+    private tasksPending: number = 0;
+    private tasksRunning: number = 0;
+    private tasksCompleted: number = 0;
+    private tasksFailed: number = 0;
+    private workerBackend: IWorkerBackend;
+
+    //
+    // Creates a new task queue with the specified number of workers.
+    // Tasks will execute in separate Bun worker threads for true parallelism.
+    // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
+    // workerOptions: Options to pass to workers for logging and context initialization.
+    //
+    constructor(uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, taskTimeout: number, workerBackend: IWorkerBackend) {
+        this.uuidGenerator = uuidGenerator;
+        this.timestampProvider = timestampProvider;
+        this.workerBackend = workerBackend;
+        this.workerBackend.onTaskComplete((result: ITaskResult) => {
+            this.notifyCompletionCallbacks(result);
+        });
+        this.workerBackend.onAnyTaskMessage(message => {
+            this.notifyMessageCallbacks(message.taskId, message.message);
+        });
+        this.workerBackend.onWorkerAvailable(() => {
+            this.dispatchNextTask();
+        });
+    }
+
+    //
+    // Adds a task to the queue to be executed. Returns the task ID (UUID).
+    // The task will be executed when a worker becomes available.
+    //
+    addTask(type: string, data: any, taskId?: string): string {
+        const id = taskId || this.uuidGenerator.generate();
+
+        const task: ITask<any> = {
+            id,
+            type,
+            status: TaskStatus.Pending,
+            data,
+            createdAt: this.timestampProvider.dateNow()
+        };
+
+        this.tasks.set(id, task);
+        this.pendingTasks.push(id);
+        this.tasksQueued++;
+        this.tasksPending++;
+        this.dispatchNextTask();
+
+        return id;
+    }
+
+    //
+    // Registers a callback that will be invoked whenever any task completes (success or failure).
+    // Multiple callbacks can be registered and will all be called.
+    //
+    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
+        this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
+    }
+
+    //
+    // Registers a callback that will be called when a task sends messages to the client.
+    // If messageType is provided, only messages with that type will be passed to the callback.
+    //
+    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): void {
+        this.messageCallbacks.push({ messageType, callback });
+    }
+
+    //
+    // Registers a callback that will be called for any task message, regardless of type./
+    //
+    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void {
+        this.anyMessageCallbacks.push(callback);
+    }
+
+    //
+    // Adds a task and waits for it to complete, returning the outputs.
+    // Throws an error if the task fails.
+    //
+    async awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs> {
+        const taskId = this.addTask(type, data);
+
+        return new Promise<any>((resolve, reject) => {
+            let resolved = false;
+
+            const resolveOnce = (value: any) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(value);
+                }
+            };
+
+            const rejectOnce = (error: Error) => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(error);
+                }
+            };
+
+            // Set up listener for task completion/errors
+            this.onTaskComplete((task, result) => {
+                // Verify this is the correct task by checking taskId matches
+                if (result.taskId !== taskId) {
+                    return; // This is a different task, ignore it
+                }
+
+                if (result.status === TaskStatus.Failed) {
+                    rejectOnce(new Error(result.errorMessage || "Task failed"));
+                }
+                else {
+                    resolveOnce(result.outputs);
+                }
+            });
+        });
+    }
+
+    //
+    // Waits for all pending and running tasks to complete.
+    // Resolves when the queue is empty (no pending or running tasks).
+    //
+    async awaitAllTasks(): Promise<void> {
+        if (this.tasksPending === 0 && this.tasksRunning === 0) {
+            return;
+        }
+
+        return new Promise<void>((resolve, reject) => {
+            this.allTasksResolvers.push({ resolve, reject });
+            this.checkAllTasksComplete();
+        });
+    }
+
+    //
+    // Gets a summary of the queue status: counts of pending, running, completed, and failed tasks.
+    // Includes execution statistics: tasks queued, peak workers, completed, and failed.
+    // Useful for monitoring and progress tracking.
+    //
+    getStatus() {
+        return {
+            pending: this.tasksPending,
+            running: this.tasksRunning,
+            completed: this.tasksCompleted,
+            failed: this.tasksFailed,
+            total: this.tasksQueued,
+        };
+    }
+
+    //
+    // Dispatches the next pending task if a worker is available.
+    // Called automatically when tasks are added or completed.
+    //
+    private dispatchNextTask(): void {
+        if (this.pendingTasks.length === 0) {
+            this.checkAllTasksComplete();
+            return;
+        }
+
+        const taskId = this.pendingTasks[0];
+        const task = this.tasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        if (this.workerBackend.dispatchTask(task)) {
+            // Remove the worker from the queue.
+            this.pendingTasks.shift();
+        }
+
+        // Mark task as running and assign to worker
+        task.status = TaskStatus.Running;
+        task.startedAt = this.timestampProvider.dateNow();
+        this.tasksPending--;
+        this.tasksRunning++;
+    }
+
+    //
+    // Invokes all registered completion callbacks with the task result.
+    // Callback errors are caught and logged to prevent breaking the queue.
+    // Async callbacks are awaited to ensure they complete.
+    //
+    private async notifyCompletionCallbacks(result: ITaskResult): Promise<void> {
+
+        const task = this.tasks.get(result.taskId);
+        if (!task) {
+            return;
+        }
+
+        // Determine if task failed
+        const isFailed = result.status === "failed";
+            
+        // Update task status
+        task.status = isFailed ? TaskStatus.Failed : TaskStatus.Succeeded;
+        task.completedAt = this.timestampProvider.dateNow();
+        this.tasksRunning--;
+
+        if (isFailed) {
+            this.tasksFailed++;
+        }
+        else {
+            this.tasksCompleted++;
+        }
+
+        // Call user callbacks with task and result as separate parameters
+        for (const callback of this.completionCallbacks) {
+            try {
+                await callback(task, result);
+            } 
+            catch (error: any) {
+                // Don't let callback errors break the task queue
+                log.exception("Error in task completion callback", error);
+            }
+        }
+
+        this.checkAllTasksComplete();
+        this.tasks.delete(result.taskId);
+        this.dispatchNextTask();
+    }
+
+    //
+    // Invokes all registered message callbacks with the task message.
+    // Only callbacks that match the message type (if specified) will be invoked.
+    // Callback errors are caught and logged to prevent breaking the queue.
+    // Async callbacks are awaited to ensure they complete.
+    //
+    private async notifyMessageCallbacks(taskId: string, message: any): Promise<void> {
+        const messageType = message && typeof message === "object" && "type" in message ? message.type : undefined;
+        
+        // Notify callbacks registered for specific message types
+        for (const { messageType: filterType, callback } of this.messageCallbacks) {
+            if (messageType !== filterType) {
+                continue;
+            }
+            
+            try {
+                await callback({ taskId, message });
+            }
+            catch (error: any) {
+                // Don't let callback errors break the task queue
+                log.exception("Error in task message callback", error);
+            }
+        }
+        
+        // Notify callbacks registered for any message type
+        for (const callback of this.anyMessageCallbacks) {
+            try {
+                await callback({ taskId, message });
+            }
+            catch (error: any) {
+                // Don't let callback errors break the task queue
+                log.exception("Error in any task message callback", error);
+            }
+        }
+    }
+
+    //
+    // Internal: Checks if all tasks are complete and resolves awaitAllTasks() if so.
+    // Called after each task completes.
+    //
+    private checkAllTasksComplete(): void {
+        if (this.pendingTasks.length === 0 && this.workerBackend.isIdle() && this.allTasksResolvers.length > 0) {
+            const resolvers = this.allTasksResolvers;
+            this.allTasksResolvers = [];
+            for (const resolver of resolvers) {
+                resolver.resolve();
+            }
+        }
+    }
+
+    //
+    // Shuts down the task queue and cleans up resources.
+    // Terminates all workers and should be called when the queue is no longer needed.
+    //
+    shutdown(): void {
+        //todo: factor out.
+        this.workerBackend.shutdown();
+        this.tasks.clear();
+        this.pendingTasks = [];
+        this.messageCallbacks = [];
+        this.anyMessageCallbacks = [];
+        this.completionCallbacks = [];
+    }
+}
+
+
+

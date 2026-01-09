@@ -1,10 +1,13 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'path';
 import { cpus } from 'os';
-import type { ITaskQueue } from 'task-queue';
-import { TaskQueueElectronMain } from './task-queue-electron-main';
+import type { ITask, ITaskQueue } from 'task-queue';
+import { TaskQueue } from 'task-queue';
+import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 import { findAvailablePort } from 'node-utils';
+import type { IWorkerOptions } from './lib/worker-init';
+import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 
 let mainWindow: BrowserWindow | null = null;
 let taskQueue: ITaskQueue | null = null;
@@ -77,7 +80,8 @@ app.on('before-quit', () => {
     // Cleanup REST API utility process
     if (restApiWorker) {
         // Send stop message to utility process
-        restApiWorker.postMessage({ type: 'stop' });
+        const stopMessage: IRestApiWorkerStopMessage = { type: 'stop' };
+        restApiWorker.postMessage(stopMessage);
         // Terminate the process
         restApiWorker.kill();
         restApiWorker = null;
@@ -103,16 +107,17 @@ function initWorkers() {
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
     const taskTimeout = 600000; // 10 minutes
-    const workerOptions = {
+    const workerOptions: IWorkerOptions = {
         verbose: false,
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    taskQueue = new TaskQueueElectronMain(workerPath, maxWorkers, uuidGenerator, timestampProvider, taskTimeout, workerOptions);
+    const workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions);
+    taskQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
     console.log('Task queue initialized');
 
     // Forward task completion events to renderer
-    taskQueue.onTaskComplete((result) => {
+    taskQueue.onTaskComplete<ITask<any>, any>((task, result) => {
         if (mainWindow) {
             mainWindow.webContents.send('task-completed', {
                 taskId: result.taskId,
@@ -201,7 +206,8 @@ async function initRestApi(): Promise<void> {
             // Send start message to the utility process with the port
             // restApiPort should never be null here since we set it above
             if (restApiWorker && restApiPort !== null) {
-                restApiWorker.postMessage({ type: 'start', port: restApiPort });
+                const startMessage: IRestApiWorkerStartMessage = { type: 'start', port: restApiPort };
+                restApiWorker.postMessage(startMessage);
             }
         };
 

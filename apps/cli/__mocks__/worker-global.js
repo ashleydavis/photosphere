@@ -1,7 +1,7 @@
 // This file will be loaded to set up the Worker global
 // We'll use a simple approach that accesses handlers synchronously
 
-const { getHandler } = require('task-queue/src/lib/worker');
+const { getHandler } = require('task-queue');
 const { TestUuidGenerator, TestTimestampProvider } = require('./node-utils');
 
 class MockWorker {
