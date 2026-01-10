@@ -1,6 +1,26 @@
 # Photosphere Desktop Frontend
 
-The frontend for Photosphere's Electron desktop application. This frontend provides the user interface for the desktop app and communicates with the Electron main process via IPC.
+The frontend for Photosphere's Electron desktop application. 
+
+## Project Structure
+
+```
+desktop-frontend/
+├── src/
+│   ├── index.tsx                              # React entry point
+│   ├── app.tsx                                # Main app component
+│   ├── index.css                              # Global styles
+│   ├── tailwind.css                           # Tailwind CSS
+│   └── lib/
+│       ├── task-queue-provider-electron.ts    # Electron task queue provider
+│       └── worker-backend-electron-renderer.ts # Electron renderer worker backend
+├── index.html                                  # HTML template
+├── package.json
+├── tsconfig.json
+├── vite.config.ts                              # Vite configuration
+├── tailwind.config.js                          # Tailwind configuration
+└── postcss.config.js                           # PostCSS configuration
+```
 
 ## Getting Started
 
@@ -36,45 +56,5 @@ bun run dev     # Launches Electron with dev tools open
 ```bash
 # Bundle for Electron (outputs to apps/desktop/bundle/frontend)
 bun run bundle
-```
-
-## Task Queue
-
-The frontend uses `ElectronTaskQueue` from the desktop package:
-
-```typescript
-import { ElectronTaskQueue } from '../desktop/src/task-queue-electron';
-
-const taskQueue = new ElectronTaskQueue(window.electronAPI);
-```
-
-The task queue is created as a singleton and used by the shared `App` component from `user-interface`.
-
-## Available Scripts
-
-- `bun run bundle` - Bundle with Bun (outputs to `../desktop/bundle/frontend`)
-- `bun run compile` - Type-check TypeScript code
-
-## Configuration
-
-### Bundling
-
-The frontend is bundled using Bun's built-in bundler. The bundle script:
-- Bundles `src/index.tsx` to `../desktop/bundle/frontend`
-- Targets browser environment
-- Includes minification and source maps
-- Copies `index.html` to the bundle directory
-
-## Project Structure
-
-```
-desktop-frontend/
-├── src/
-│   ├── index.tsx        # React entry point
-│   ├── task-queue.ts    # Task queue setup
-│   └── index.css        # Global styles
-├── index.html           # HTML template
-├── package.json
-└── tsconfig.json
 ```
 

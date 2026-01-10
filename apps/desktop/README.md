@@ -1,6 +1,33 @@
 # Photosphere Desktop App
 
-The Electron desktop application for Photosphere. This is the cross-platform desktop build that allows you to manage your digital media database locally on Windows, macOS, and Linux. Uses Electron IPC for task communication with the renderer process.
+The Electron desktop application for Photosphere. This is the cross-platform desktop build that allows you to manage your digital media database locally on Windows, macOS, and Linux.
+
+## Project Structure
+
+```
+desktop/
+├── src/
+│   ├── main.ts                              # Electron main process
+│   ├── preload.ts                           # Preload script
+│   ├── worker.ts                            # Worker process
+│   ├── rest-api-worker.ts                   # REST API worker process
+│   └── lib/
+│       ├── worker-backend-electron-main.ts   # Electron main process worker backend
+│       └── worker-init.ts                   # Worker initialization utilities
+├── bundle/                                  # Bundled output
+│   ├── main.js
+│   ├── preload.js
+│   ├── worker.js
+│   ├── rest-api-worker.js
+│   ├── file-scanner.worker.js               # From file-scanner package
+│   ├── hash.worker.js                       # From file-hasher package
+│   └── frontend/                            # Bundled frontend from desktop-frontend
+├── release/                                 # Distribution builds
+├── tests/                                   # Playwright tests
+├── playwright.config.ts                     # Playwright configuration
+├── package.json
+└── tsconfig.json
+```
 
 ## Getting Started
 
@@ -44,28 +71,6 @@ This creates platform-specific installers in `apps/desktop/release/`:
 - **Windows**: `.exe` (NSIS installer) or `.zip`
 - **Linux**: `.deb` or `.zip`
 
-## Project Structure
-
-```
-desktop/
-├── src/
-│   ├── main.ts                      # Electron main process
-│   ├── preload.ts                   # Preload script
-│   ├── task-queue-electron-main.ts  # Electron task queue implementation
-│   └── worker.ts                    # Worker process
-├── bundle/                          # Bundled output
-│   ├── main.js
-│   ├── preload.js
-│   ├── worker.js
-│   ├── file-scanner.worker.js       # From file-scanner package
-│   ├── hash.worker.js              # From file-hasher package
-│   └── frontend/                    # Bundled frontend from desktop-frontend
-├── release/                         # Distribution builds
-├── tests/                           # Playwright tests
-├── playwright.config.ts            # Playwright configuration
-├── package.json
-└── tsconfig.json
-```
 ## Testing
 
 ### Smoke Tests

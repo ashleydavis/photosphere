@@ -1,6 +1,6 @@
 import type { ITaskQueue } from "task-queue";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
-import { TaskQueueProviderInline } from "./task-queue-provider-inline";
+import { TaskQueueProviderInline } from "./lib/task-queue-provider-inline";
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, type WebSocket } from "ws";
