@@ -19,7 +19,7 @@ bun run start
 Or for development with hot reload:
 
 ```bash
-bun run start:dev
+bun run dev
 ```
 
 ### WebSocket Connection

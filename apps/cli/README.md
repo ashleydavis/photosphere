@@ -13,7 +13,7 @@ bun install
 
 ```bash
 bun run start -- <command> [options]
-bun run start:dev -- <command> [options]
+bun run dev -- <command> [options]
 ```
 
 Example commands for testing are encoded in this script:
