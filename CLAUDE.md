@@ -15,7 +15,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run clean` - Clean all build artifacts
 
 ### Backend development (in apps/backend/):
-- `bun run start:dev` - Start with sample data (multi-set)
+- `bun run dev` - Start with sample data (multi-set)
 - `bun run start:dev-50-assets` - Start with 50 test assets
 - `bun run start:dev-no-assets` - Start with empty database
 - `bun run test` - Run backend tests
