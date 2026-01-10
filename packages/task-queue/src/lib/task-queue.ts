@@ -49,12 +49,6 @@ export interface ITaskQueue {
     onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void;
 
     //
-    // Adds a task and waits for it to complete, returning the outputs.
-    // Throws an error if the task fails.
-    //
-    awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs>;
-
-    //
     // Awaits the completion of all tasks and an empty queue.
     //
     awaitAllTasks(): Promise<void>;
@@ -165,47 +159,6 @@ export class TaskQueue implements ITaskQueue {
     //
     onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void {
         this.anyMessageCallbacks.push(callback);
-    }
-
-    //
-    // Adds a task and waits for it to complete, returning the outputs.
-    // Throws an error if the task fails.
-    //
-    async awaitTask<TInputs = any, TOutputs = any>(type: string, data: TInputs): Promise<TOutputs> {
-        const taskId = this.addTask(type, data);
-
-        return new Promise<any>((resolve, reject) => {
-            let resolved = false;
-
-            const resolveOnce = (value: any) => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve(value);
-                }
-            };
-
-            const rejectOnce = (error: Error) => {
-                if (!resolved) {
-                    resolved = true;
-                    reject(error);
-                }
-            };
-
-            // Set up listener for task completion/errors
-            this.onTaskComplete((task, result) => {
-                // Verify this is the correct task by checking taskId matches
-                if (result.taskId !== taskId) {
-                    return; // This is a different task, ignore it
-                }
-
-                if (result.status === TaskStatus.Failed) {
-                    rejectOnce(new Error(result.errorMessage || "Task failed"));
-                }
-                else {
-                    resolveOnce(result.outputs);
-                }
-            });
-        });
     }
 
     //

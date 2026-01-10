@@ -38,7 +38,7 @@ bun add task-queue
 ### Basic Example
 
 ```typescript
-import { TaskQueue, ITaskQueue } from "task-queue";
+import { TaskQueue, ITaskQueue, ITaskResult } from "task-queue";
 
 // Create a task queue with 4 workers
 const queue = new TaskQueue(4);
@@ -65,10 +65,19 @@ const taskId = queue.addTask("process-image", {
     outputFormat: "png"
 });
 
-// Wait for the task to complete
-const result = await queue.awaitTask(taskId);
-console.log(result.status); // "succeeded"
-console.log(result.outputs); // { success: true, outputPath: "...", ... }
+// Wait for the task to complete using a callback
+let result: ITaskResult | undefined;
+queue.onTaskComplete((task, taskResult) => {
+    if (taskResult.taskId === taskId) {
+        result = taskResult;
+    }
+});
+
+// Wait for all tasks to complete
+await queue.awaitAllTasks();
+
+console.log(result?.status); // "succeeded"
+console.log(result?.outputs); // { success: true, outputPath: "...", ... }
 
 // Clean up
 queue.shutdown();
@@ -129,7 +138,7 @@ queue.registerHandler("my-task", async (data) => {
 
 const taskId = queue.addTask("my-task", { value: 123 });
 // Callback will be invoked when task completes
-await queue.awaitTask(taskId);
+await queue.awaitAllTasks();
 ```
 
 ### Getting Task Results
@@ -146,7 +155,7 @@ queue.registerHandler("test-task", async (data) => {
 });
 
 const taskId = queue.addTask("test-task", { value: 21 });
-await queue.awaitTask(taskId);
+await queue.awaitAllTasks();
 
 // Get result of a specific task
 const result = queue.getTaskResult(taskId);
@@ -182,9 +191,10 @@ const status = queue.taskStatus(taskId);
 console.log(status?.status); // "pending", "running", "succeeded", or "failed"
 
 // Or wait for completion
-const result = await queue.awaitTask(taskId);
-console.log(result.status); // "succeeded"
-console.log(result.message); // "Task completed"
+await queue.awaitAllTasks();
+const result = queue.getTaskResult(taskId);
+console.log(result?.status); // "succeeded"
+console.log(result?.outputs); // "Task completed"
 ```
 
 ### Error Handling
@@ -203,11 +213,12 @@ queue.registerHandler("risky-task", async (data) => {
 
 const taskId = queue.addTask("risky-task", { shouldFail: true });
 
-const result = await queue.awaitTask(taskId);
-if (result.status === TaskStatus.Failed) {
+await queue.awaitAllTasks();
+const result = queue.getTaskResult(taskId);
+if (result?.status === TaskStatus.Failed) {
     console.error("Task failed:", result.error);
 } else {
-    console.log("Task succeeded:", result.message);
+    console.log("Task succeeded:", result?.outputs);
 }
 ```
 
@@ -261,10 +272,6 @@ The main interface for the task queue.
   - Parameters:
     - `callback`: Function that receives the task result
       - Signature: `(result: ITaskResult) => void`
-
-- **`awaitTask(id: string): Promise<ITaskResult>`**
-  - Waits for a specific task to complete
-  - Returns a promise that resolves with the task result
 
 - **`taskStatus(id: string): ITaskResult | undefined`**
   - Gets the current status of a task without waiting
