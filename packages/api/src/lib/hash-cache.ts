@@ -251,9 +251,14 @@ export class HashCache {
         await ensureDir(this.cacheDir);
         await fs.writeFile(tempPath, finalBuffer);
         
+        //
         // Rename is atomic on most filesystems, ensuring workers see either old or new complete file
+        //
+        // Annoyingly this can fail (because workers are constantly loading the hash cache) and when it does so there is no callstack.
+        // If it fails we handle it at a higher level and the hash cache remains dirty until next time we try to save it.
+        //
         await fs.rename(tempPath, cachePath);
-        
+
         this.isDirty = false;
     }
 
