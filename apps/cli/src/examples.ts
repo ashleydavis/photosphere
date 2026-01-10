@@ -67,6 +67,8 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     compare: [
         { command: "psi compare --db ./photos --dest ./backup", description: "Compares an original database with a backup." },
         { command: "psi compare --db . --dest s3:bucket/photos", description: "Compares a local database with an S3 replica." },
+        { command: "psi compare --db ./photos --dest ./backup --full", description: "Shows all differences without truncation." },
+        { command: "psi compare --db ./photos --dest ./backup --max 20", description: "Shows up to 20 items in each category." },
     ],
     
     "bug": [
@@ -87,6 +89,17 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi export --db ./photos f1e2d3c4-b5a6-7890-cdef-ab1234567890 ./exports/", description: "Exports original asset to a directory (keeps original name)." },
         { command: "psi export --db . 12345678-9abc-def0-1234-567890abcdef ~/Downloads/my-photo.jpg --type display", description: "Exports display version of asset." },
         { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./thumbs/ --type thumb", description: "Exports thumbnail version to directory." }
+    ],
+    
+    "find-orphans": [
+        { command: "psi find-orphans --db .", description: "Finds orphaned files in the current directory database." },
+        { command: "psi find-orphans --db ./photos", description: "Finds orphaned files in the ./photos database." },
+    ],
+    
+    "remove-orphans": [
+        { command: "psi remove-orphans --db .", description: "Removes orphaned files from the current directory database." },
+        { command: "psi remove-orphans --db ./photos", description: "Removes orphaned files from the ./photos database." },
+        { command: "psi remove-orphans --db ./photos --yes", description: "Removes orphaned files without confirmation prompt." },
     ],
     
     list: [

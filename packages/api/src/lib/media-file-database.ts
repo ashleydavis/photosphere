@@ -421,12 +421,17 @@ export async function writeAsset(
 // Removes an asset by ID, including all associated files and metadata.
 // This is the comprehensive removal method that handles storage cleanup.
 //
+// @param recordDeleted - Whether to record the deleted asset ID in deletedAssetIds. Defaults to true.
+//                        Set to false when removing duplicates or performing cleanup operations
+//                        where tracking deleted assets is not desired.
+//
 export async function removeAsset(
     assetStorage: IStorage,
     metadataStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
-    assetId: string
+    assetId: string,
+    recordDeleted?: boolean
 ): Promise<void> {
     if (!await acquireWriteLock(metadataStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
@@ -447,11 +452,14 @@ export async function removeAsset(
                 merkleTree.databaseMetadata.filesImported--;
             }
             
-            if (!merkleTree.databaseMetadata.deletedAssetIds) {
-                merkleTree.databaseMetadata.deletedAssetIds = [];
-            }
-            if (!merkleTree.databaseMetadata.deletedAssetIds.includes(assetId)) {
-                merkleTree.databaseMetadata.deletedAssetIds.push(assetId);
+            // Record deleted asset ID if requested (default: true for backward compatibility)
+            if (recordDeleted !== false) {
+                if (!merkleTree.databaseMetadata.deletedAssetIds) {
+                    merkleTree.databaseMetadata.deletedAssetIds = [];
+                }
+                if (!merkleTree.databaseMetadata.deletedAssetIds.includes(assetId)) {
+                    merkleTree.databaseMetadata.deletedAssetIds.push(assetId);
+                }
             }
         }
 

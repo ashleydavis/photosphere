@@ -158,5 +158,43 @@ describe('BufferSet', () => {
             expect(key.equals(value)).toBe(true);
         }
     });
+    
+    test('should find hash 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14 after adding it', () => {
+        // This test demonstrates a bug in BufferSet.delete() where deleting a buffer from a collision bucket
+        // causes issues finding other buffers in the same bucket
+        // Target hash: 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14
+        // Collision hash: 111111112222222233333333444444445555555566666666777777776094cf5e
+        // Both have the same internal hash value (0x6094cf5e) and will be in the same bucket
+        const hashBuffer = Buffer.from('0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14', 'hex');
+        const collisionBuffer = Buffer.from('111111112222222233333333444444445555555566666666777777776094cf5e', 'hex');
+        
+        // Verify it's 32 bytes (SHA-256)
+        expect(hashBuffer.length).toBe(32);
+        expect(collisionBuffer.length).toBe(32);
+        
+        // Add both buffers to the set (they will collide in the same bucket)
+        bufferSet.add(hashBuffer);
+        bufferSet.add(collisionBuffer);
+        
+        // Verify both were added
+        expect(bufferSet.size).toBe(2);
+        expect(bufferSet.has(hashBuffer)).toBe(true);
+        expect(bufferSet.has(collisionBuffer)).toBe(true);
+        
+        // Delete the collision buffer first (simulating deleting a different node that collides)
+        bufferSet.delete(collisionBuffer);
+        
+        // Verify the collision buffer is gone
+        expect(bufferSet.has(collisionBuffer)).toBe(false);
+        expect(bufferSet.size).toBe(1);
+        
+        // Create a new buffer with the same content as hashBuffer (different reference, simulating nodeA.hash)
+        const hashBuffer2 = Buffer.from('0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14', 'hex');
+        
+        // This should find it, but due to the bug in delete() it doesn't
+        // The bug: After deleting the collision buffer, the target buffer becomes unfindable
+        // even though it's still in the set (size is 1, and setB_debug would find it)
+        expect(bufferSet.has(hashBuffer2)).toBe(true);
+    });
 });
 

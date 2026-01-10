@@ -10,15 +10,17 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
-import { debugMerkleTreeCommand } from './src/cmd/debug';
+import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
 import { versionCommand } from './src/cmd/version';
 import { listCommand } from './src/cmd/list';
 import { exportCommand } from './src/cmd/export';
+import { findOrphansCommand } from './src/cmd/find-orphans';
 import { upgradeCommand } from './src/cmd/upgrade';
 import { repairCommand } from './src/cmd/repair';
 import { removeCommand } from './src/cmd/remove';
+import { removeOrphansCommand } from './src/cmd/remove-orphans';
 import { clearCacheCommand } from './src/cmd/clear-cache';
 import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
@@ -47,8 +49,11 @@ async function main() {
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
+    const fullOption: [string, string, boolean] = ["--full", "Show all differences without truncation.", false];
+    const maxOption: [string, string] = ["--max <number>", "Maximum number of items to show in each category (default: 10)"];
     const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
     const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
+    const dryRunOption: [string, string, boolean] = ["--dry-run", "Run without making any database changes (merkle tree and metadata updates are skipped)", false];
 
     program
         .name("psi")
@@ -88,6 +93,8 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .option(...sessionIdOption)
+        .option(...dryRunOption)
+        .option(...workersOption)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(initContext(addCommand));
 
@@ -132,6 +139,8 @@ Resources:
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...fullOption)
+        .option(...maxOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(initContext(compareCommand));
 
@@ -164,6 +173,17 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('export'))
         .action(initContext(exportCommand));
+
+    program
+        .command("find-orphans")
+        .description("Find and list files that are no longer in the merkle tree.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('find-orphans'))
+        .action(initContext(findOrphansCommand));
 
     program
         .command("hash")
@@ -201,6 +221,40 @@ Resources:
         .option(...recordsOption)
         .option(...allOption)
         .action(initContext(debugMerkleTreeCommand));
+
+    debugCommand
+        .command("find-collisions")
+        .description("Finds hash collisions (same hash, different asset IDs) and writes results to JSON file.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-o, --output <path>", "Output JSON file path (default: collisions.json)", "collisions.json")
+        .action(initContext(debugFindCollisionsCommand));
+
+    debugCommand
+        .command("find-duplicates")
+        .description("Finds duplicate assets by comparing file content. Reads collisions JSON from find-collisions.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-i, --input <path>", "Input JSON file path from find-collisions command (default: collisions.json)", "collisions.json")
+        .option("-o, --output <path>", "Output JSON file path (default: duplicates.json)", "duplicates.json")
+        .action(initContext(debugFindDuplicatesCommand));
+
+    debugCommand
+        .command("remove-duplicates")
+        .description("Removes duplicate assets based on content comparison results from find-duplicates.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option("-i, --input <path>", "Input JSON file path from find-duplicates command (default: duplicates.json)", "duplicates.json")
+        .action(initContext(debugRemoveDuplicatesCommand));
 
     program
         .command("help [command]")
@@ -270,6 +324,17 @@ Resources:
         .option(...cwdOption)
         .addHelpText('after', getCommandExamplesHelp('remove'))
         .action(initContext(removeCommand));
+
+    program
+        .command("remove-orphans")
+        .description("Find and remove files that are no longer in the merkle tree.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('remove-orphans'))
+        .action(initContext(removeOrphansCommand));
 
     program
         .command("repair")

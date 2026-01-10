@@ -966,17 +966,17 @@ export class SortIndex implements ISortIndex {
             // Verify both values are compatible types
             if (inferredType === 'date') {
                 if (!(b instanceof Date) && typeof b !== 'string') {
-                    throw new Error(`Type mismatch in compareValues: first value is Date, second value is ${typeof b}`);
+                    throw new Error(`Type mismatch in compareValues: first value is Date, second value is ${typeof b},\n${JSON.stringify(a, null, 2)}\n${JSON.stringify(b, null, 2)}`);
                 }
             }
             else if (inferredType === 'number') {
                 if (typeof b !== 'number') {
-                    throw new Error(`Type mismatch in compareValues: first value is number, second value is ${typeof b}`);
+                    throw new Error(`Type mismatch in compareValues: first value is number, second value is ${typeof b},\n${JSON.stringify(a, null, 2)}\n${JSON.stringify(b, null, 2)}`);
                 }
             }
             else if (inferredType === 'string') {
                 if (typeof b !== 'string') {
-                    throw new Error(`Type mismatch in compareValues: first value is string, second value is ${typeof b}`);
+                    throw new Error(`Type mismatch in compareValues: first value is string, second value is ${typeof b},\n${JSON.stringify(a, null, 2)}\n${JSON.stringify(b, null, 2)}`);
                 }
             }
         }
@@ -1737,8 +1737,7 @@ export class SortIndex implements ISortIndex {
         // Binary search to find insertion point
         while (left <= right) {
             const mid = Math.floor((left + right) / 2);
-            const compareResult = this.compareValues(value, leafRecords[mid].value);
-            
+            const compareResult = this.compareValues(value, leafRecords[mid].value);            
             if (compareResult < 0) {
                 // New value should go before the middle element
                 // (compareValues already accounts for direction)
