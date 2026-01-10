@@ -8,7 +8,7 @@ import { ensureDir, remove } from "node-utils";
 import os from "os";
 import path from "path";
 import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
-import type { IWorkerContext } from "task-queue";
+import type { ITaskContext } from "task-queue";
 import { validateAndHash, getHashFromCache, computeAssetHash } from "./hash";
 import { HashCache } from "./hash-cache";
 import { IFileStat } from "./file-scanner";
@@ -70,7 +70,7 @@ export interface IImportFileResult {
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 // This handler does CPU-intensive work and file uploads. Database updates are handled in the main thread.
 //
-export async function importFileHandler(data: IImportFileData, workingDirectory: string, context: IWorkerContext): Promise<IImportFileResult> {
+export async function importFileHandler(data: IImportFileData, context: ITaskContext): Promise<IImportFileResult> {
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
     

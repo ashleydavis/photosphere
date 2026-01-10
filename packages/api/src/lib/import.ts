@@ -4,7 +4,7 @@ import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
 import { TaskStatus } from "task-queue";
 import { IImportFileData, IImportFileResult, IImportFileDatabaseData } from "./import.worker";
-import { ITaskQueueProvider } from "./verify";
+import type { ITaskQueueProvider } from "task-queue";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { IBsonCollection } from "bdb";
 import { IAsset } from "defs";
@@ -163,13 +163,13 @@ export async function addPaths(
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete<IImportFileData, IImportFileResult>(async (taskResult) => {
+        queue.onTaskComplete<IImportFileData, IImportFileResult>(async (task, result) => {
             
             summary.filesProcessed++;
 
-            if (taskResult.status === TaskStatus.Completed) {
-                const importResult = taskResult.outputs!;
-                const taskData = taskResult.inputs;
+            if (result.status === TaskStatus.Succeeded) {
+                const importResult = result.outputs!;
+                const taskData = task.data;
                 
                 // Add hash to cache if computation was successful and hash wasn't already in cache
                 if (importResult.hashedFile) {
@@ -229,12 +229,12 @@ export async function addPaths(
                     }
                 }                
             } 
-            else if (taskResult.status === TaskStatus.Failed) {
-                if (taskResult.error) {
-                    log.exception(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
+            else if (result.status === TaskStatus.Failed) {
+                if (result.error) {
+                    log.exception(`Failed to import file "${task.data.logicalPath}": ${result.errorMessage}`, result.error);
                 } 
                 else {
-                    log.error(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
+                    log.error(`Failed to import file "${task.data.logicalPath}": ${result.errorMessage}`);
                 }
                 summary.filesFailed++;
             }
