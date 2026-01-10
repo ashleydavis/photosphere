@@ -4,13 +4,13 @@
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Rapid-Fullstack-Development/photosphere-monorepo.git"
+    "url": "git+https://github.com/ashleydavis/photosphere.git"
   },
   "bugs": {
-    "url": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo/issues"
+    "url": "https://github.com/ashleydavis/photosphere/issues"
   },
   "description": "This monorepo contains the backend and frontend for [the Photosphere application](https://rapidfullstackdevelopment.com/example-application).",
-  "homepage": "https://github.com/Rapid-Fullstack-Development/photosphere-monorepo#readme",
+  "homepage": "https://github.com/ashleydavis/photosphere#readme",
   "keywords": [],
   "license": "MIT",
   "scripts": {
