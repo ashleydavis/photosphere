@@ -2,6 +2,23 @@
 
 The Photosphere CLI tool.
 
+## Project Structure
+
+```
+cli/
+├── index.ts                              # Entry point
+├── worker.ts                             # Worker process for task execution
+├── src/
+│   ├── cmd/                              # CLI commands
+│   ├── lib/                              # Shared libraries
+│   └── test/                             # Unit tests
+├── smoke-tests.sh                        # Comprehensive smoke tests
+├── package.json
+└── tsconfig.json
+```
+
+## Setup
+
 To install dependencies:
 
 ```bash

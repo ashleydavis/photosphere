@@ -2,6 +2,17 @@
 
 A command-line tool for inspecting and managing BSON databases.
 
+## Project Structure
+
+```
+bdb-cli/
+├── src/
+│   ├── index.ts                              # Entry point
+│   └── cmd/                                  # CLI commands
+├── package.json
+└── tsconfig.json
+```
+
 ## Installation
 
 ```bash
@@ -133,9 +144,3 @@ bdb sort-page ./my-database/metadata metadata photoTakenAt desc page-1
 - `-v, --verbose` - Enable verbose logging
 - `--all` - Display all object fields without truncation
 - `--records` - Only show record IDs (for shard command)
-
-## License
-
-MIT
-
-

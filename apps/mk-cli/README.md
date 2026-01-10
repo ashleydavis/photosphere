@@ -2,6 +2,17 @@
 
 A command-line tool for inspecting and visualizing merkle trees.
 
+## Project Structure
+
+```
+mk-cli/
+├── src/
+│   ├── index.ts                              # Entry point
+│   └── cmd/                                  # CLI commands
+├── package.json
+└── tsconfig.json
+```
+
 ## Usage
 
 ```bash

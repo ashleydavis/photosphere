@@ -1,6 +1,19 @@
-# Dev Server
+# Dev-server
 
-A development server with WebSocket support for the Photosphere frontend.
+A development server with for the Dev-frontend that's faster than developing directly wiht Electron.
+
+## Project Structure
+
+```
+dev-server/
+├── src/
+│   ├── index.ts                              # Server entry point
+│   └── lib/
+│       ├── task-queue-provider-inline.ts     # Inline task queue provider
+│       └── worker-backend-inline.ts          # Inline worker backend
+├── package.json
+└── tsconfig.json
+```
 
 ## Features
 
@@ -21,12 +34,6 @@ Or for development with hot reload:
 ```bash
 bun run dev
 ```
-
-### WebSocket Connection
-
-The server listens for WebSocket connections on `ws://localhost:3001`.
-
-When a client connects, the server logs "WebSocket connection opened" and is ready to receive task queue messages.
 
 ## Development
 

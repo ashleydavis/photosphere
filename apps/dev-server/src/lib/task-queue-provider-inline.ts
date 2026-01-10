@@ -1,7 +1,7 @@
 import type { ITaskQueue } from "task-queue";
 import type { ITaskQueueProvider } from "task-queue";
 import { TaskQueue } from "task-queue";
-import { WorkerBackendInline } from "./lib/worker-backend-inline";
+import { WorkerBackendInline } from "./worker-backend-inline";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 //

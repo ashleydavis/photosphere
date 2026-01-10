@@ -2,6 +2,29 @@
 
 This is the development frontend for the Photosphere application. Built on [React](https://reactjs.org/) and bundled with [Vite](https://vitejs.dev/).
 
+## Project Structure
+
+```
+dev-frontend/
+├── src/
+│   ├── index.tsx                              # React entry point
+│   ├── app.tsx                                # Main app component
+│   ├── tailwind.css                           # Tailwind CSS
+│   ├── lib/
+│   │   ├── task-queue-provider-websocket.ts   # WebSocket task queue provider
+│   │   ├── worker-backend-websocket.ts        # WebSocket worker backend
+│   │   └── use-web-socket.ts                  # WebSocket hook
+│   └── test/
+│       └── e2e/
+│           └── frontend.test.ts               # E2E tests
+├── index.html                                 # HTML template
+├── package.json
+├── vite.config.ts                             # Vite configuration
+├── tailwind.config.js                         # Tailwind configuration
+├── postcss.config.js                          # PostCSS configuration
+└── tsconfig.json
+```
+
 ## Setup
 
 First, follow the instructions in [the main readme](../../README.md).
