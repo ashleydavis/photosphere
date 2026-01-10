@@ -13,8 +13,6 @@ export class Image {
 
     constructor(filePath: string) {
         this.filePath = filePath;
-        
-        Image.initializeCommands();
     }
 
     /**
@@ -34,7 +32,9 @@ export class Image {
      * Initialize ImageMagick commands by checking system PATH
      */
     private static async initializeCommands() {
-        if (Image.isInitialized) return;
+        if (Image.isInitialized) {
+            return;
+        }
 
         try {
             // First try modern ImageMagick (magick command)
@@ -141,6 +141,9 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
+
         // Get format, dimensions
         const command = `${Image.identifyCommand} -format "%w %h" "${this.filePath}"`;
         const { stdout } = await execLogged(`magick`, command);
@@ -196,6 +199,9 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
+
         try {
             const command = `${Image.identifyCommand} -format "%[EXIF:*]" "${this.filePath}"`;
             const { stdout } = await execLogged(`magick`, command);
@@ -233,6 +239,9 @@ export class Image {
         if (await pathExists(outputPath2)) {
             throw new Error(`Output file already exists: ${outputPath2}`);
         }
+
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
 
         // Build the resize geometry string
         let geometry = '';
@@ -283,6 +292,9 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
+
         let command = `${Image.convertCommand} "${this.filePath}"`;
 
         if (options?.quality !== undefined) {
@@ -306,6 +318,9 @@ export class Image {
         if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
+
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
 
         try {
             // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
@@ -334,6 +349,9 @@ export class Image {
         if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
+
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
 
         try {
             // First resize to optimize performance, then use histogram analysis
@@ -392,6 +410,9 @@ export class Image {
             throw new Error(`File not found: ${this.filePath}`);
         }
 
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
+
         try {
             let command: string;
             
@@ -446,6 +467,9 @@ export class Image {
         if (!await pathExists(this.filePath)) {
             throw new Error(`File not found: ${this.filePath}`);
         }
+
+        // Ensure ImageMagick commands are initialized before using them
+        await Image.initializeCommands();
 
         let transformCommand = '';
 
