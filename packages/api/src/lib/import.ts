@@ -95,8 +95,8 @@ async function processPendingDatabaseUpdates(
             }
             
             log.verbose(dryRun 
-                ? `[DRY RUN] Would add file "${logicalPath}" to the database.`
-                : `File "${logicalPath}" has been added to the database.`);
+                ? `[DRY RUN] Would add file "${logicalPath}" to the database with id ${assetData.assetId}.`
+                : `File "${logicalPath}" has been added to the database with id ${assetData.assetId}.`);
             summary.filesAdded++;
             summary.totalSize += totalSize;
         }
