@@ -16,7 +16,7 @@ import { createMediaFileDatabase, extractDominantColorFromThumbnail } from "./me
 import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
 import { IAssetDetails } from "./media-file-database";
-import { ILocation, retry, reverseGeocode } from "utils";
+import { ILocation, log, retry, reverseGeocode, swallowError } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { IHashedData } from "merkle-tree";
@@ -306,7 +306,9 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
                 },
             };
         }
-        catch (err: unknown) {
+        catch (err: any) {
+            log.exception(`Error during import of file ${filePath} with asset id ${assetId}`, err);
+
             // Clean up uploaded files on error, then let exception propagate to task queue
             await retry(() => assetStorage.deleteFile(assetPath));
             await retry(() => assetStorage.deleteFile(thumbPath));
@@ -316,7 +318,7 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
     }
     finally {
         if (assetTempDir) {
-            await retry(() => remove(assetTempDir));
+            await swallowError(() => remove(assetTempDir));
         }
     }
 }
