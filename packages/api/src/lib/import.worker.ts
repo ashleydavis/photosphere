@@ -33,6 +33,7 @@ export interface IImportFileData {
     googleApiKey?: string;
     sessionId: string;
     dryRun?: boolean;
+    assetId: string; // Asset ID to use for this import
 }
 
 export interface IImportFileDatabaseData {
@@ -74,6 +75,9 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
     
+    const assetId = data.assetId;
+    log.verbose(`Importing file ${data.logicalPath} to asset database with asset id ${assetId}`);
+
     // Load hash cache (read-only)
     const localHashCache = new HashCache(hashCacheDir, true); // readonly = true
     await localHashCache.load();
@@ -87,7 +91,7 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
         // filePath is always a valid file (already extracted if from zip)
         hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
         if (!hashedFile) {
-            throw new Error(`Failed to validate and hash file "${data.logicalPath}"`);
+            throw new Error(`Failed to validate and hash file ${data.logicalPath} (${assetId})`);
         }
     }
     
@@ -116,7 +120,6 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
     }
     
     // Not in database - extract metadata/details and import
-    const assetId = uuidGenerator.generate();
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
     
@@ -161,12 +164,12 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
 
                 const assetInfo = await retry(() => assetStorage.info(assetPath));
                 if (!assetInfo) {
-                    throw new Error(`Failed to get info for file "${assetPath}"`);
+                    throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
     
                 hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
                 if (Buffer.compare(hashedAsset.hash, hashedFile.hash) !== 0) {
-                    throw new Error(`Hash mismatch for file "${assetPath}": ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
+                    throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
                 }
             }
 
@@ -186,7 +189,7 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
 
                     const thumbInfo = await retry(() => assetStorage.info(thumbPath));
                     if (!thumbInfo) {
-                        throw new Error(`Failed to get info for thumbnail "${thumbPath}"`);
+                        throw new Error(`Failed to get info for thumbnail ${thumbPath} (${assetId})`);
                     }
                     const hashedThumb = await retry(() => computeAssetHash(assetStorage.readStream(thumbPath), thumbInfo));
                     thumbHash = hashedThumb.hash;
@@ -211,7 +214,7 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
 
                     const displayInfo = await retry(() => assetStorage.info(displayPath));
                     if (!displayInfo) {
-                        throw new Error(`Failed to get info for display "${displayPath}"`);
+                        throw new Error(`Failed to get info for display ${displayPath} (${assetId})`);
                     }
                     const hashedDisplay = await retry(() => computeAssetHash(assetStorage.readStream(displayPath), displayInfo));
                     displayHash = hashedDisplay.hash;
@@ -307,7 +310,7 @@ export async function importFileHandler(data: IImportFileData, workingDirectory:
             };
         }
         catch (err: any) {
-            log.exception(`Error during import of file ${filePath} with asset id ${assetId}`, err);
+            log.exception(`Error importing file ${filePath} (${assetId})`, err);
 
             // Clean up uploaded files on error, then let exception propagate to task queue
             await retry(() => assetStorage.deleteFile(assetPath));
