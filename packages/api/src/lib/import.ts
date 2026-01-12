@@ -193,7 +193,7 @@ export async function addPaths(
                 
                 // Process results from worker
                 if (importResult.filesAlreadyAdded) {
-                    log.verbose(`File "${taskData.logicalPath}" is already in the database.`);
+                    log.verbose(`File ${taskData.logicalPath} (${taskData.assetId}) is already in the database.`);
                     summary.filesAlreadyAdded++;
                 }
                 else {
@@ -210,7 +210,7 @@ export async function addPaths(
                         totalSize: importResult.totalSize,
                     });
 
-                    log.verbose(`Added ${taskData.logicalPath} to pending database updates queue.`);
+                    log.verbose(`Added ${taskData.logicalPath} (${taskData.assetId}) to pending database updates queue.`);
                     
                     // Try to process the queue if lock is free (non-blocking - if lock can't be acquired, items stay in queue)
                     const lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
@@ -231,10 +231,10 @@ export async function addPaths(
             } 
             else if (taskResult.status === TaskStatus.Failed) {
                 if (taskResult.error) {
-                    log.exception(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
+                    log.exception(`Failed to import file ${taskResult.inputs.logicalPath} (${taskResult.inputs.assetId}): ${taskResult.errorMessage}`, taskResult.error);
                 } 
                 else {
-                    log.error(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
+                    log.error(`Failed to import file ${taskResult.inputs.logicalPath} (${taskResult.inputs.assetId}): ${taskResult.errorMessage}`);
                 }
                 summary.filesFailed++;
             }
@@ -258,6 +258,7 @@ export async function addPaths(
                 googleApiKey,
                 sessionId,
                 dryRun,
+                assetId: uuidGenerator.generate(),
             } as IImportFileData);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
