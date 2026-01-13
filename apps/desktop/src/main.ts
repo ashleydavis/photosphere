@@ -147,6 +147,50 @@ function initWorkers() {
 }
 
 //
+// Handles log messages from the REST API worker.
+//
+function handleWorkerLogMessage(message: any): void {
+    const level = message.level;
+    const logMessage = message.message;
+    const error = message.error;
+    const toolData = message.toolData;
+
+    switch (level) {
+        case 'info':
+            console.log(`[REST API] ${logMessage}`);
+            break;
+        case 'verbose':
+            console.log(`[REST API] ${logMessage}`);
+            break;
+        case 'error':
+            console.error(`[REST API] ${logMessage}`);
+            break;
+        case 'exception':
+            console.error(`[REST API] ${logMessage}`);
+            if (error) {
+                console.error(`[REST API] ${error}`);
+            }
+            break;
+        case 'warn':
+            console.warn(`[REST API] ${logMessage}`);
+            break;
+        case 'debug':
+            console.debug(`[REST API] ${logMessage}`);
+            break;
+        case 'tool':
+            if (toolData) {
+                if (toolData.stdout) {
+                    console.log(`[REST API] == ${logMessage} stdout ==\n${toolData.stdout}`);
+                }
+                if (toolData.stderr) {
+                    console.log(`[REST API] == ${logMessage} stderr ==\n${toolData.stderr}`);
+                }
+            }
+            break;
+    }
+}
+
+//
 // Initialize the rest api in a utility process.
 //
 async function initRestApi(): Promise<void> {
@@ -208,6 +252,10 @@ async function initRestApi(): Promise<void> {
             else if (message.type === 'server-stopped') {
                 console.log('REST API stopped');
             }
+            else if (message.type === 'log') {
+                // Handle log messages from worker
+                handleWorkerLogMessage(message);
+            }
         };
 
         const spawnHandler = () => {
@@ -227,6 +275,13 @@ async function initRestApi(): Promise<void> {
 
         restApiWorker.on('message', messageHandler);
         restApiWorker.on('spawn', spawnHandler);
+    });
+
+    // Set up persistent log message handler (not just for startup)
+    restApiWorker.on('message', (message: any) => {
+        if (message.type === 'log') {
+            handleWorkerLogMessage(message);
+        }
     });
 }
 

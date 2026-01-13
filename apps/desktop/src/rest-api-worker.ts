@@ -3,8 +3,9 @@
 // Runs the asset server in a separate process
 //
 import { createAssetServer } from 'rest-api';
-import { RandomUuidGenerator, TimestampProvider } from 'utils';
+import { RandomUuidGenerator, TimestampProvider, setLog, log } from 'utils';
 import type { Server } from 'http';
+import { createWorkerLog } from './lib/worker-log-electron';
 
 //
 // REST API worker message types
@@ -43,6 +44,9 @@ if (!parentPort) {
     throw new Error('parentPort not available - this must run in an Electron utility process');
 }
 
+// Initialize logging to send messages to main process
+setLog(createWorkerLog(false, false));
+
 let server: Server | undefined = undefined;
 
 //
@@ -59,7 +63,7 @@ async function startServer(port: number): Promise<void> {
     });
 
     server = result.server;
-    console.log('Asset server initialized in utility process');
+    log.info('Asset server initialized in utility process');
 
     // Send ready message to main thread
     const readyMessage: IRestApiWorkerServerReadyMessage = { type: "server-ready" };
@@ -72,7 +76,7 @@ async function startServer(port: number): Promise<void> {
 function stopServer(): void {
     if (server) {
         server.close(() => {
-            console.log('Asset server stopped');
+            log.info('Asset server stopped');
             const stoppedMessage: IRestApiWorkerServerStoppedMessage = { type: "server-stopped" };
             parentPort.postMessage(stoppedMessage);
         });
@@ -93,7 +97,7 @@ parentPort.on('message', async (event: { data: IRestApiWorkerMessage }) => {
     if (message.type === 'start') {
         const port = message.port;
         if (!port) {
-            console.error('Port is required to start the server');
+            log.error('Port is required to start the server');
             const errorMessage: IRestApiWorkerServerErrorMessage = { type: "server-error", error: "Port is required" };
             parentPort.postMessage(errorMessage);
             return;
@@ -103,7 +107,7 @@ parentPort.on('message', async (event: { data: IRestApiWorkerMessage }) => {
             await startServer(port);
         }
         catch (error: any) {
-            console.error('Failed to start asset server:', error);
+            log.exception('Failed to start asset server', error);
             const errorMessage: IRestApiWorkerServerErrorMessage = { 
                 type: "server-error", 
                 error: error.message || String(error) 
@@ -120,12 +124,13 @@ parentPort.on('message', async (event: { data: IRestApiWorkerMessage }) => {
 // Handle uncaught errors
 //
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception in REST API worker:', error);
+    log.exception('Uncaught exception in REST API worker', error);
     process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled rejection in REST API worker:', reason);
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    log.exception('Unhandled rejection in REST API worker', error);
     process.exit(1);
 });
 
