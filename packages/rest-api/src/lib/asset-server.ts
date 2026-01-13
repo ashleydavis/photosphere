@@ -1,7 +1,6 @@
 import express from "express";
 import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
-import { resolve } from "node:path";
 import { createStorage } from "storage";
 import { createMediaFileDatabase, loadDatabase, streamAsset } from "api/src/lib/media-file-database";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
@@ -30,6 +29,7 @@ export interface IAssetServerOptions {
     // Timestamp provider to use.
     //
     timestampProvider: ITimestampProvider;
+
 }
 
 //
@@ -55,16 +55,14 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
 
     //
     // Helper function to load an asset and return it as a stream
+    // databasePath parameter is the path to the database directory
     //
-    async function loadAssetStream(assetId: string, assetType: string, databaseId: string): Promise<NodeJS.ReadableStream> {
-        // Use hardcoded path to test database (relative to project root)
-        // TODO: Resolve databaseId to actual database path
-        const dbDir = resolve(import.meta.dir, "../../../../test/dbs/50-assets");
-        // const dbDir = resolve(import.meta.dir, "../../../../test/dbs/1-asset");
-        // const dbDir = resolve(import.meta.dir, "../../../../test/dbs/v5");
+    async function loadAssetStream(assetId: string, assetType: string, databasePath: string): Promise<NodeJS.ReadableStream> {
 
+        console.log(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
+        
         // Create storage without encryption
-        const { storage: assetStorage } = createStorage(dbDir, undefined, undefined);
+        const { storage: assetStorage } = createStorage(databasePath, undefined, undefined);
         
         // Create database instance
         const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
@@ -96,7 +94,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     // Handle HTTP GET requests for assets
     app.get("/asset", async (req: Request, res: Response) => {
         const assetId = req.query.id as string;
-        const databaseId = req.query.db as string;
+        const databasePath = req.query.db as string;
         const assetType = req.query.type as string;
 
         if (!assetId) {
@@ -104,7 +102,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             return;
         }
 
-        if (!databaseId) {
+        if (!databasePath) {
             res.status(400).send("Missing 'db' parameter");
             return;
         }
@@ -114,10 +112,10 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             return;
         }
 
-        console.log(`Loading asset stream ${assetId} of type ${assetType} from database ${databaseId}`);
+        console.log(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
 
         try {
-            const assetStream = await loadAssetStream(assetId, assetType, databaseId);
+            const assetStream = await loadAssetStream(assetId, assetType, databasePath);
             
             res.setHeader("Content-Type", "application/octet-stream");
             assetStream.pipe(res);

@@ -63,6 +63,7 @@ function __Main({ isMobile = false }: IMainProps) {
         databaseId,
         moveToDatabase, 
         deleteAssets,
+        openDatabase,
     } = useAssetDatabase();
 
 
@@ -237,6 +238,51 @@ function __Main({ isMobile = false }: IMainProps) {
             <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
                 <Spinner show={true} />
             </div>
+        );
+    }
+
+    // Show initial message if no database is loaded
+    if (!databaseId) {
+        return (
+            <>
+                <div 
+                    id="navbar" 
+                    className="select-none"
+                    style={{
+                        backgroundColor: theme.palette.background.body,
+                        color: theme.palette.text.primary,
+                    }}
+                >
+                    <div className="flex flex-row items-center pl-4 pt-3 pb-2">
+                        <h1 className="ml-3 sm:ml-4">Photosphere</h1>
+                    </div>
+                </div>
+                <div
+                    id="main"
+                    className="select-none flex items-center justify-center"
+                    style={{
+                        backgroundColor: theme.palette.background.body,
+                        color: theme.palette.text.primary,
+                        height: "calc(100vh - 60px)",
+                    }}
+                >
+                    <div className="text-center">
+                        <button
+                            onClick={async () => {
+                                if (openDatabase) {
+                                    await openDatabase();
+                                }
+                            }}
+                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            style={{
+                                backgroundColor: theme.palette.primary[500] || "#3b82f6",
+                            }}
+                        >
+                            Click here to open a database
+                        </button>
+                    </div>
+                </div>
+            </>
         );
     }
    

@@ -19,15 +19,14 @@ export async function loadAssetsHandler(
 ): Promise<ILoadAssetsResult> {
     const { uuidGenerator, timestampProvider } = context;
 
-    // Use hardcoded path to test database (relative to project root)
-    // Resolve from current file location: packages/api/src/lib -> project root -> test/dbs/v5
-    // In ES modules, we use import.meta.url to get __dirname equivalent
-    const dbDir = resolve(__dirname, "../../../../test/dbs/50-assets");
-    // const dbDir = resolve(__dirname, "../../../../test/dbs/1-asset");
-    // const dbDir = resolve(__dirname, "../../../../test/dbs/v5");
+    if (!data.databasePath) {
+        throw new Error("databasePath is required");
+    }
+
+    console.log(`Loading assets from database ${data.databasePath}`);
 
     // Create storage without encryption
-    const { storage: assetStorage } = createStorage(dbDir, undefined, undefined);
+    const { storage: assetStorage } = createStorage(data.databasePath, undefined, undefined);
     
     // Create database instance
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
