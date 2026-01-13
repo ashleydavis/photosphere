@@ -3,7 +3,7 @@ import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
 import { createStorage } from "storage";
 import { createMediaFileDatabase, loadDatabase, streamAsset } from "api/src/lib/media-file-database";
-import type { IUuidGenerator, ITimestampProvider } from "utils";
+import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
 
 //
 // Options for creating the asset server.
@@ -59,7 +59,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     //
     async function loadAssetStream(assetId: string, assetType: string, databasePath: string): Promise<NodeJS.ReadableStream> {
 
-        console.log(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
+        log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
         
         // Create storage without encryption
         const { storage: assetStorage } = createStorage(databasePath, undefined, undefined);
@@ -112,7 +112,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             return;
         }
 
-        console.log(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
+        log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
 
         try {
             const assetStream = await loadAssetStream(assetId, assetType, databasePath);
@@ -120,8 +120,8 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             res.setHeader("Content-Type", "application/octet-stream");
             assetStream.pipe(res);
         }
-        catch (error) {
-            console.error(`Error loading asset ${assetId}:`, error);
+        catch (error: any) {
+            log.exception(`Error loading asset ${assetId}`, error);
             if (!res.headersSent) {
                 res.status(500).send("Error loading asset");
             }
@@ -145,7 +145,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     // Start server
     await new Promise<void>((resolve) => {
         server.listen(port, () => {
-            console.log(`Asset server running on http://localhost:${port}`);
+            log.info(`Asset server running on http://localhost:${port}`);
             resolve();
         });
     });
