@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu } from 'electron';
 import { join } from 'path';
 import { cpus } from 'os';
 import type { ITask, ITaskQueue } from 'task-queue';
@@ -50,7 +50,11 @@ function createMainWindow() {
 app.whenReady().then(async () => {
     // Initialize REST API before creating main window
     await initRestApi();
+
+    // Create application menu
+    createMenu();
     
+    // Start up the backgorund workers
     initWorkers();
     
     createMainWindow();
@@ -96,6 +100,11 @@ ipcMain.on('add-task', (event, taskType: string, data: any, taskId?: string) => 
     }
     
     taskQueue.addTask(taskType, data, taskId);
+});
+
+// IPC handler for opening file dialog
+ipcMain.handle('open-file', async () => {
+    await openDatabase();
 });
 
 //
@@ -219,5 +228,65 @@ async function initRestApi(): Promise<void> {
         restApiWorker.on('message', messageHandler);
         restApiWorker.on('spawn', spawnHandler);
     });
+}
+
+//
+// Opens a database file dialog, lets the user select a database, and notifies the frontend.
+// The REST API can handle multiple databases dynamically via the db query parameter.
+//
+async function openDatabase(): Promise<void> {
+    // Ensure main window is focused before showing modal dialog
+    if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.focus();
+    }
+
+    // Show file dialog to select database (modal when mainWindow is provided)
+    const result = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, {
+            properties: ['openDirectory'],
+            title: 'Open Database',
+        })
+        : await dialog.showOpenDialog({
+            properties: ['openDirectory'],
+            title: 'Open Database',
+        });
+
+    if (result.canceled || result.filePaths.length === 0) {
+        return;
+    }
+
+    const databasePath = result.filePaths[0];
+
+    // Notify frontend to load the database
+    // The REST API doesn't need to be restarted since it handles multiple databases dynamically
+    if (mainWindow) {
+        mainWindow.webContents.send('database-opened', databasePath);
+    }
+}
+
+//
+// Creates the application menu.
+//
+function createMenu(): void {
+    const template: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Open Database...',
+                    accelerator: 'CmdOrCtrl+O',
+                    click: async () => {
+                        await openDatabase();
+                    },
+                },
+            ],
+        },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
 }
 

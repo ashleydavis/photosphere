@@ -10,6 +10,7 @@ import axios from "axios";
 import { TaskStatus } from "task-queue";
 import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
 import type { ITaskQueueProvider } from "task-queue";
+import { usePlatform } from "./platform-context";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -29,6 +30,11 @@ export interface IAssetDatabase extends IGallerySource {
     // Moves assets to another database.
     //
     moveToDatabase(assetIds: string[], databaseId: string): Promise<void>;
+
+    //
+    // Opens a database file dialog (Electron only).
+    //
+    openDatabase?: () => Promise<void>;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -38,6 +44,7 @@ export interface IAssetDatabaseProviderProps {
 }
 
 export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl }: IAssetDatabaseProviderProps) {
+    const platform = usePlatform();
 
     //
     // Set to true while loading assets.
@@ -70,6 +77,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // The database currently being viewed.
     //
     const [ databaseId, setDatabaseId ] = useState<string | undefined>(undefined);
+    
+    //
+    // The database path currently being used.
+    //
+    const [ databasePath, setDatabasePath ] = useState<string | undefined>(undefined);
 
     //
     // Assets that have been loaded.
@@ -265,6 +277,16 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }
 
     //
+    // Opens a database file dialog.
+    //
+    async function openDatabase(): Promise<void> {
+        // Call platform.openDatabase which will trigger the platform to show the dialog
+        // and send a 'database-opened' event when a file is selected
+        await platform.openDatabase();
+        // The database-opened event will be handled by the useEffect listener
+    }
+
+    //
     // Moves assets to another database.
     //
     async function moveToDatabase(assetIds: string[], destSetId: string): Promise<void> {
@@ -308,19 +330,19 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Loads data for an asset from the current database.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
-        return await loadAssetFromDatabase(assetId, assetType, databaseId);
+        return await loadAssetFromDatabase(assetId, assetType, databasePath);
     }
 
     //
     // Loads data for an asset from a particular database.
     //
-    async function loadAssetFromDatabase(assetId: string, assetType: string, databaseId: string): Promise<Blob> {
+    async function loadAssetFromDatabase(assetId: string, assetType: string, databasePath: string): Promise<Blob> {
         const response = await axios.get(
-            `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databaseId)}`,
+            `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
             {
                 responseType: "blob",
             }
@@ -357,7 +379,10 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Load assets into memory.
     //
-    async function loadAssets(databaseId: string) { //todo: pass the database id through.
+    async function loadAssets(dbPath: string) {
+        if (!dbPath) {
+            throw new Error("Database path is required");
+        }
     
         try {
             setIsLoading(true);
@@ -413,8 +438,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                 }
             });
             
-            // Queue the load-assets task using the same queue instance
-            loadAssetsApi(queue);
+            // Queue the load-assets task using the same queue instance with database path
+            loadAssetsApi(queue, dbPath);
         }
         finally {
             loadingCount.current -= 1;
@@ -425,17 +450,35 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }
 
     //
-    // Load assets.
+    // Listen for database-opened events from platform.
     //
     useEffect(() => {
-        if (databaseId) {
-            loadAssets(databaseId)
+        const handleDatabaseOpened = (dbPath: string) => {
+            setDatabasePath(dbPath);
+            // Use the database path as the databaseId for now
+            setDatabaseId(dbPath);
+        };
+
+        // Subscribe to database-opened events
+        const unsubscribe = platform.onDatabaseOpened(handleDatabaseOpened);
+
+        return () => {
+            unsubscribe();
+        };
+    }, [platform]);
+
+    //
+    // Load assets when database path changes.
+    //
+    useEffect(() => {
+        if (databasePath) {
+            loadAssets(databasePath)
                 .catch(err => {
-                    console.error(`xxx Failed to load assets:`);
+                    console.error(`Failed to load assets:`);
                     console.error(err);
                 });
         }
-    }, [databaseId]);
+    }, [databasePath]);
 
     const value: IAssetDatabase = {
         // Gallery source.
@@ -460,6 +503,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         databaseId,
         setDatabaseId,
         moveToDatabase,
+        openDatabase,
     };
     
     return (

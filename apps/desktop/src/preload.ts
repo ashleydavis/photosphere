@@ -14,6 +14,9 @@ const electronAPI: IElectronAPI = {
     removeAllListeners: (messageType: string) => {
         ipcRenderer.removeAllListeners(messageType);
     },
+    openDatabase: (): Promise<void> => {
+        return ipcRenderer.invoke('open-file');
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

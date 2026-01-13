@@ -1,7 +1,7 @@
 import type { IAsset } from "defs";
 
-// No data needed - all configuration is hardcoded in the backend
 export interface ILoadAssetsData {
+    databasePath: string;
 }
 
 export interface ILoadAssetsResult {

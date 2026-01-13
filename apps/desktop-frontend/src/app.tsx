@@ -7,6 +7,7 @@ import {
     GalleryLayoutContextProvider
 } from "user-interface";
 import { TaskQueueProviderElectron } from "./lib/task-queue-provider-electron";
+import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "electron-defs";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 
@@ -35,13 +36,15 @@ export function App() {
             }}
         >
             <AppContextProvider>
-                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
-                    <GalleryContextProvider>
-                        <GalleryLayoutContextProvider>
-                            <Main />
-                        </GalleryLayoutContextProvider>
-                    </GalleryContextProvider>
-                </AssetDatabaseProvider>
+                <PlatformProviderElectron electronAPI={electronAPI}>
+                    <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
+                        <GalleryContextProvider>
+                            <GalleryLayoutContextProvider>
+                                <Main />
+                            </GalleryLayoutContextProvider>
+                        </GalleryContextProvider>
+                    </AssetDatabaseProvider>
+                </PlatformProviderElectron>
             </AppContextProvider>
         </HashRouter>
     );
