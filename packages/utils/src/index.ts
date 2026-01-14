@@ -14,3 +14,4 @@ export * from "./lib/timestamp-provider";
 export * from "./lib/mock-timestamp-provider";
 export * from "./lib/random-generator";
 export * from "./lib/format";
+export * from "./lib/log-exceptions";

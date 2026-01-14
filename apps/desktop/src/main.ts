@@ -4,7 +4,7 @@ import { cpus } from 'os';
 import type { ITask, ITaskQueue } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
-import { RandomUuidGenerator, TimestampProvider } from 'utils';
+import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
 import { findAvailablePort } from 'node-utils';
 import type { IWorkerOptions } from './lib/worker-init';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
@@ -15,6 +15,9 @@ let restApiWorker: UtilityProcess | null = null;
 let isShuttingDown: boolean = false;
 let restApiPort: number | null = null;
 
+//
+// Creates and configures the main browser window for the Electron app.
+//
 function createMainWindow() {
     if (restApiPort === null) {
         throw new Error('REST API port not initialized');
@@ -54,7 +57,7 @@ app.whenReady().then(async () => {
     // Create application menu
     createMenu();
     
-    // Start up the backgorund workers
+    // Start up the background workers
     initWorkers();
     
     createMainWindow();
@@ -103,12 +106,13 @@ ipcMain.on('add-task', (event, taskType: string, data: any, taskId?: string) => 
 });
 
 // IPC handler for opening file dialog
-ipcMain.handle('open-file', async () => {
-    await openDatabase();
-});
+// Note: ipcMain.handle automatically catches errors from async functions and sends them to the renderer.
+// If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
+// The renderer can catch it when calling ipcRenderer.invoke().
+ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
 
 //
-// Initialize the worker pool and task queue.
+// Initializes the worker pool and task queue for background task processing.
 //
 function initWorkers() {
     const workerPath = join(__dirname, '../bundle/worker.js');
@@ -147,7 +151,7 @@ function initWorkers() {
 }
 
 //
-// Handles log messages from the REST API worker.
+// Handles log messages from the REST API worker and forwards them to the main process console.
 //
 function handleWorkerLogMessage(message: any): void {
     const level = message.level;
@@ -191,7 +195,7 @@ function handleWorkerLogMessage(message: any): void {
 }
 
 //
-// Initialize the rest api in a utility process.
+// Initializes the REST API server in a utility process and sets up message handlers.
 //
 async function initRestApi(): Promise<void> {
     // Find an available port only if we don't already have one
@@ -286,7 +290,7 @@ async function initRestApi(): Promise<void> {
 }
 
 //
-// Opens a database file dialog, lets the user select a database, and notifies the frontend.
+// Opens a file dialog for the user to select a database directory, then notifies the frontend.
 // The REST API can handle multiple databases dynamically via the db query parameter.
 //
 async function openDatabase(): Promise<void> {
@@ -323,7 +327,7 @@ async function openDatabase(): Promise<void> {
 }
 
 //
-// Creates the application menu.
+// Creates the application menu bar with File menu and Open Database option.
 //
 function createMenu(): void {
     const template: Electron.MenuItemConstructorOptions[] = [
@@ -333,9 +337,7 @@ function createMenu(): void {
                 {
                     label: 'Open Database...',
                     accelerator: 'CmdOrCtrl+O',
-                    click: async () => {
-                        await openDatabase();
-                    },
+                    click: logExceptions(openDatabase, 'Error opening database from menu'),
                 },
             ],
         },
