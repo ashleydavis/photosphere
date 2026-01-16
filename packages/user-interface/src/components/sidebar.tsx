@@ -39,7 +39,7 @@ export interface ISidebarProps {
     //
     // Navigates to a database.
     //
-    navigateToDatabase: (page: string, databaseId: string) => void;
+    openDatabase: (dbPath: string) => void;
 }
 
 //
@@ -386,11 +386,11 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, navigateToDatabase }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, openDatabase }: ISidebarProps) {
 
     const { dbs } = useApp();
     const theme = useTheme();
-    const { databaseId } = useAssetDatabase();
+    const { databasePath } = useAssetDatabase();
     const { search, setSortBy } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
@@ -494,12 +494,12 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, navigateToD
                             key={dbPath}
                             onClick={() => {
                                 setSidebarOpen(false);
-                                navigateToDatabase("cloud", dbPath)
+                                openDatabase(dbPath)
                             }}
                             >
                             <ListItemButton>
                                 <ListItemDecorator>
-                                    {dbPath === databaseId
+                                    {dbPath === databasePath
                                         ? <FolderOpen />
                                         : <Folder />
                                     }
