@@ -384,69 +384,65 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             throw new Error("Database path is required");
         }
     
-        try {
-            setIsLoading(true);
-            loadingCount.current += 1;
-            loadingId.current += 1;
+        setIsLoading(true);
+        loadingCount.current += 1;
+        loadingId.current += 1;
 
-            const latestLoadingId = loadingId.current;
+        const latestLoadingId = loadingId.current;
 
-            //
-            // Start with no assets.
-            // This clears out any existing database of assets.
-            //
-            loadedAssets.current = {};
+        //
+        // Start with no assets.
+        // This clears out any existing database of assets.
+        //
+        loadedAssets.current = {};
 
-            //
-            // Pass a gallery reset down the line.
-            // This is the starting point for incremental gallery loading.
-            //
-            onReset.current.invoke();
+        //
+        // Pass a gallery reset down the line.
+        // This is the starting point for incremental gallery loading.
+        //
+        onReset.current.invoke();
 
-            // Create the queue once and reuse it
-            const queue = await taskQueueProvider.create();
+        // Create the queue once and reuse it
+        const queue = await taskQueueProvider.create();
 
-            // Set up listener for task completion before queuing the task
-            queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
-                // Check if this is the latest load operation
-                if (loadingId.current !== latestLoadingId) {
-                    //todo: this could be automatic, if the queue is cancelled it shouldn't send messages back.
-                    return; // This result is from an older load operation
-                }
+        // Set up listener for task completion before queuing the task
+        queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
+            // Check if this is the latest load operation
+            if (loadingId.current !== latestLoadingId) {
+                //todo: this could be automatic, if the queue is cancelled it shouldn't send messages back.
+                return; // This result is from an older load operation
+            }
 
-                //todo: need to wrap up loading here.
+            if (result.status === TaskStatus.Succeeded) {
+                // Task completed successfully
+                console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
+            }
+            else if (result.status === TaskStatus.Failed) {
+                console.error("Load assets task failed:", result.errorMessage);
+            }
 
-                if (result.status === TaskStatus.Succeeded) {
-                    // Task completed successfully
-                    console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
-                }
-                else if (result.status === TaskStatus.Failed) {
-                    console.error("Load assets task failed:", result.errorMessage);
-                }
-            });
-
-            // Recieve asset pages.
-            queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
-                // Only process messages if we're still on the latest load operation
-                if (loadingId.current !== latestLoadingId) {
-                    return;
-                }
-
-                // Message is guaranteed to be an asset-page due to the filter
-                if (data.message.batch && data.message.batch.length > 0) {
-                    _onNewItems(data.message.batch);
-                }
-            });
-            
-            // Queue the load-assets task using the same queue instance with database path
-            loadAssetsApi(queue, dbPath);
-        }
-        finally {
+            // Mark loading as complete when the task finishes (succeeded or failed)
             loadingCount.current -= 1;
             if (loadingCount.current <= 0) {
                 setIsLoading(false);
             }
-        }
+        });
+
+        // Recieve asset pages.
+        queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
+            // Only process messages if we're still on the latest load operation
+            if (loadingId.current !== latestLoadingId) {
+                return;
+            }
+
+            // Message is guaranteed to be an asset-page due to the filter
+            if (data.message.batch && data.message.batch.length > 0) {
+                _onNewItems(data.message.batch);
+            }
+        });
+        
+        // Queue the load-assets task using the same queue instance with database path
+        loadAssetsApi(queue, dbPath);
     }
 
     //
