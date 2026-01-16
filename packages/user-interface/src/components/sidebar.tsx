@@ -488,23 +488,23 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, navigateToD
             </Typography>
 
             <List>
-                {dbs?.dbs.map(db => {
+                {dbs.map(dbPath => {
                     return (
                         <ListItem
-                            key={db.id}
+                            key={dbPath}
                             onClick={() => {
                                 setSidebarOpen(false);
-                                navigateToDatabase("cloud", db.id)
+                                navigateToDatabase("cloud", dbPath)
                             }}
                             >
                             <ListItemButton>
                                 <ListItemDecorator>
-                                    {db.id === databaseId
+                                    {dbPath === databaseId
                                         ? <FolderOpen />
                                         : <Folder />
                                     }
                                 </ListItemDecorator>
-                                <ListItemContent>{db.name}</ListItemContent>
+                                <ListItemContent>{dbPath}</ListItemContent>
                             </ListItemButton>
                         </ListItem>
                     );
