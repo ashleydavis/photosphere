@@ -192,7 +192,7 @@ Copied hash: ${copiedHash.toString("hex")}
                     }
                 }
                 
-                await retry(() => copyAsset(merkleNode.name!, merkleNode.hash));
+                await copyAsset(merkleNode.name!, merkleNode.hash);
 
                 if (result.copiedFiles % 100 === 0) {
                     // Save the destination merkle tree periodically
