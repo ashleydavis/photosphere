@@ -5,7 +5,7 @@ import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "util
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
 import { BsonDatabase } from "bdb";
 import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree } from "./tree";
+import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
@@ -196,13 +196,7 @@ Copied hash: ${copiedHash.toString("hex")}
 
                 if (result.copiedFiles % 100 === 0) {
                     // Save the destination merkle tree periodically
-                    await retry(async () => {
-                        if (destMerkleTree!.dirty) {
-                            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
-                            destMerkleTree!.dirty = false;
-                        }
-                        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
-                    });
+                    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
                 }
             }
         } 
@@ -230,13 +224,7 @@ Copied hash: ${copiedHash.toString("hex")}
     //
     // Saves the dest database.
     //
-    await retry(async () => {
-        if (destMerkleTree!.dirty) {
-            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
-            destMerkleTree!.dirty = false;
-        }
-        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
-    });
+    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
 }
 
 //
@@ -502,7 +490,7 @@ export async function replicate(
         sourceTimestampProvider
     );
 
-    const treeExists = await retry(() => destMetadataStorage.fileExists(".db/tree.dat"));
+    const treeExists = await retry(() => merkleTreeExists(destMetadataStorage));
     if (treeExists) {
         log.verbose("Loading existing destination database...");
         await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
