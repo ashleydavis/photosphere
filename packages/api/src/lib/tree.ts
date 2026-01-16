@@ -3,6 +3,13 @@ import { IDatabaseMetadata } from "./media-file-database";
 import { IStorage } from "storage";
 
 //
+// Checks if the merkle tree exists.
+//
+export async function merkleTreeExists(metadataStorage: IStorage): Promise<boolean> {
+    return await metadataStorage.fileExists(".db/tree.dat");
+}
+
+//
 // Saves the merkle tree to disk.
 //
 export async function saveMerkleTree(merkleTree: IMerkleTree<IDatabaseMetadata>, assetStorage: IStorage): Promise<void> {
