@@ -46,7 +46,6 @@ function __Main({ isMobile = false }: IMainProps) {
 	const navigate = useNavigate();
 
     const { 
-        isLoading: isGalleryLoading,
         sortedItems,
         selectedItems,
         clearMultiSelection,
@@ -340,7 +339,7 @@ function __Main({ isMobile = false }: IMainProps) {
 
                         <div className="ml-auto"></div>
 
-                        {(isGalleryLoading)
+                        {(isLoading)
                             && <div className="flex flex-row items-center ml-1 mr-2">
                                 <span className="text-sm hidden sm:block mr-1">Loading</span>
                                 <div className="mx-1 sm:mx-2">
