@@ -512,7 +512,7 @@ export async function replicate(
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await retry(() => createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id));
+        await createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
     }
     
     //
