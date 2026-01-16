@@ -17,24 +17,29 @@ import { usePlatform } from "./platform-context";
 //
 export interface IAssetDatabase extends IGallerySource {
     //
-    // The currently viewed database.
+    // The currently viewed database path.
     //
-    databaseId: string | undefined;
+    databasePath: string | undefined;
 
     //
     // Sets the viewed database.
     //
-    setDatabaseId(databaseId: string): void;
+    setDatabasePath(databasePath: string): void;
 
     //
     // Moves assets to another database.
     //
-    moveToDatabase(assetIds: string[], databaseId: string): Promise<void>;
+    moveToDatabase(assetIds: string[], databasePath: string): Promise<void>;
 
     //
     // Opens a database file dialog (Electron only).
     //
-    openDatabase?: () => Promise<void>;
+    selectAndOpenDatabase(): Promise<void>;
+
+    //
+    // Opens a database by path directly (without showing file dialog).
+    //
+    openDatabase(dbPath: string): void;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -73,11 +78,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     const loadedAssets = useRef<IGalleryItemMap>({});
 
-    //
-    // The database currently being viewed.
-    //
-    const [ databaseId, setDatabaseId ] = useState<string | undefined>(undefined);
-    
     //
     // The database path currently being used.
     //
@@ -121,12 +121,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Adds an asset to a particular database.
     //
-    async function addAssetToDatabase(asset: IGalleryItem, databaseId: string): Promise<void> {
+    async function addAssetToDatabase(asset: IGalleryItem, databasePath: string): Promise<void> {
         const ops: IDatabaseOp[] = [
             {
                 collectionName: "metadata",
                 recordId: asset._id,
-                databaseId,
+                databaseId: databasePath,
                 op: {
                     type: "set",
                     fields: {
@@ -144,8 +144,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     async function updateAsset(assetId: string, partialAsset: Partial<IGalleryItem>): Promise<void> {
 
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
         const updatedAsset = { ...loadedAssets.current[assetId], ...partialAsset };
@@ -156,7 +156,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            databaseId,
+            databaseId: databasePath,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -171,8 +171,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     async function updateAssets(assetUpdates: { assetId: string, partialAsset: Partial<IGalleryItem>}[]): Promise<void> {
 
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
         for (const { assetId, partialAsset } of assetUpdates) {
@@ -187,7 +187,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         const ops: IDatabaseOp[] = assetUpdates.map(({ assetId, partialAsset }) => ({
             collectionName: "metadata",
             recordId: assetId,
-            databaseId,
+            databaseId: databasePath,
             op: {
                 type: "set",
                 fields: partialAsset,
@@ -202,8 +202,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     async function addArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
@@ -220,7 +220,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            databaseId,
+            databaseId: databasePath,
             op: {
                 type: "push",
                 field: field,
@@ -236,8 +236,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     async function removeArrayValue(assetId: string, field: string, value: any): Promise<void> {
 
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
@@ -253,7 +253,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         const ops: IDatabaseOp[] = [{
             collectionName: "metadata",
             recordId: assetId,
-            databaseId,
+            databaseId: databasePath,
             op: {
                 type: "pull",
                 field: field,
@@ -279,12 +279,21 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Opens a database file dialog.
     //
-    async function openDatabase(): Promise<void> {
+    async function selectAndOpenDatabase(): Promise<void> {
         // Call platform.openDatabase which will trigger the platform to show the dialog
         // and send a 'database-opened' event when a file is selected
         await platform.openDatabase();
         // The database-opened event will be handled by the useEffect listener
     }
+
+    //
+    // Opens a database by path directly (without showing file dialog).
+    //
+    function openDatabase(dbPath: string): void {
+        // Directly set the database path to trigger loading
+        setDatabasePath(dbPath);
+    }
+    
 
     //
     // Moves assets to another database.
@@ -354,17 +363,17 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Stores an asset to the current database.
     //
     async function storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
-        if (!databaseId) {
-            throw new Error("No database id provided.");
+        if (!databasePath) {
+            throw new Error("No database path provided.");
         }
 
-        await storeAssetToDatabase(assetId, assetType, assetData, databaseId);
+        await storeAssetToDatabase(assetId, assetType, assetData, databasePath);
     }
 
     //
     // Stores an asset to a particular database.
     //
-    async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databaseId: string): Promise<void> {
+    async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databasePath: string): Promise<void> {
         //todo: store asset data to the current database.
         //todo: what uses this?
     }
@@ -451,8 +460,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     useEffect(() => {
         const handleDatabaseOpened = (dbPath: string) => {
             setDatabasePath(dbPath);
-            // Use the database path as the databaseId for now
-            setDatabaseId(dbPath);
         };
 
         // Subscribe to database-opened events
@@ -496,9 +503,10 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         getItemById,
 
         // Asset database source.
-        databaseId,
-        setDatabaseId,
+        databasePath,
+        setDatabasePath,
         moveToDatabase,
+        selectAndOpenDatabase,
         openDatabase,
     };
     

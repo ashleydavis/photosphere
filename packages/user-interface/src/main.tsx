@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Route, Routes, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Route, Routes, NavLink, Navigate } from "react-router-dom";
 import { Spinner } from "./components/spinner";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { useGallery } from "./context/gallery-context";
@@ -40,11 +40,6 @@ export interface IMainProps {
 //
 function __Main({ isMobile = false }: IMainProps) {
 
-    //
-    // Interface to React Router navigation.
-    //
-	const navigate = useNavigate();
-
     const { 
         sortedItems,
         selectedItems,
@@ -59,9 +54,10 @@ function __Main({ isMobile = false }: IMainProps) {
     const { 
         isLoading,
         isWorking,
-        databaseId,
+        databasePath,
         moveToDatabase, 
         deleteAssets,
+        selectAndOpenDatabase,
         openDatabase,
     } = useAssetDatabase();
 
@@ -93,8 +89,6 @@ function __Main({ isMobile = false }: IMainProps) {
     const [numLoaded, setNumLoaded] = useState<number>(0);
 
     const { dbs } = useApp();
-
-    const location = useLocation();
 
     const theme = useTheme();
 
@@ -145,20 +139,11 @@ function __Main({ isMobile = false }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if (dbs.length === 0) {
-            return;
+        // Open the first available database if there's no database loaded
+        if (!databasePath && dbs.length > 0) {
+            openDatabase(dbs[0]);
         }
-        
-        if (location.pathname === "" 
-            || location.pathname === "/" 
-            || location.pathname === "/cloud" 
-            || location.pathname === "/cloud/") {
-            //
-            // If the user is logged in, navigate to their default set.
-            //
-            navigateToDefaultDatabase("cloud");
-        }
-    }, [dbs, location]);
+    }, [databasePath, dbs, openDatabase]);
 
     useEffect(() => {
         if (searchText.length > 0 && !openSearch) {
@@ -168,30 +153,10 @@ function __Main({ isMobile = false }: IMainProps) {
     }, [searchText]);
 
     //
-    // Navigate to the specified database.
-    //
-    function navigateToDatabase(page: string, databaseId: string): void {
-        navigate(`/${page}/${databaseId}`);
-    }
-
-    //
-    // Navigate to the users default database.
-    //
-    function navigateToDefaultDatabase(page: string): void {
-        if (dbs.length === 0) {
-            throw new Error(`No databases available.`);
-        }
-
-        console.log(`Navigating to first database.`);
-        navigateToDatabase(page, dbs[0]);
-    }
-
-    //
     // Opens the search input.
     //
     function onOpenSearch(): void {
     	setOpenSearch(true);
-        navigateToDefaultDatabase("cloud");
     }
 
     //
@@ -217,16 +182,8 @@ function __Main({ isMobile = false }: IMainProps) {
         await moveToDatabase(Array.from(selectedItems), databaseid);
     }
 
-    if (location.pathname === "/cloud") {
-        return (
-            <div className="flex items-center justify-center absolute bg-white bg-opacity-50 inset-0">
-                <Spinner show={true} />
-            </div>
-        );
-    }
-
     // Show initial message if no database is loaded
-    if (!databaseId) {
+    if (!databasePath) {
         return (
             <>
                 <div 
@@ -253,9 +210,7 @@ function __Main({ isMobile = false }: IMainProps) {
                     <div className="text-center">
                         <button
                             onClick={async () => {
-                                if (openDatabase) {
-                                    await openDatabase();
-                                }
+                                await selectAndOpenDatabase();
                             }}
                             className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                             style={{
@@ -367,7 +322,7 @@ function __Main({ isMobile = false }: IMainProps) {
                                         && <>
                                             <ListSubheader>MOVE TO</ListSubheader>
                                             {dbs.map(dbPath => {
-                                                if (dbPath === databaseId) {
+                                                if (dbPath === databasePath) {
                                                     return null; // Don't show the current database.
                                                 }
                                                 return (
@@ -443,7 +398,7 @@ function __Main({ isMobile = false }: IMainProps) {
                 <Sidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
-                    navigateToDatabase={navigateToDatabase}
+                    openDatabase={openDatabase}
                     onOpenSearch={onOpenSearch}
                     />               
             </Drawer>
@@ -459,7 +414,7 @@ function __Main({ isMobile = false }: IMainProps) {
                 <div id="content" >
                     <Routes>
                         <Route 
-                            path="/cloud/:databaseId/:assetId?" 
+                            path="/cloud/:assetId?" 
                             element={
                                 <GalleryPage
                                     />
