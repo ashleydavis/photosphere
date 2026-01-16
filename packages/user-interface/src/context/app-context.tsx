@@ -1,11 +1,10 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { IMediaFileDatabases } from "defs";
 
 export interface IAppContext {
     //
-    // Available media file databases.
+    // Available media file databases (list of database paths).
     //
-    dbs: IMediaFileDatabases | undefined;
+    dbs: string[];
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -17,16 +16,16 @@ export interface IProps {
 export function AppContextProvider({ children }: IProps) {
     
     //
-    // Available media file databases.
+    // Available media file databases (list of database paths).
     //
-    const [ dbs, setDbs ] = useState<IMediaFileDatabases | undefined>(undefined);
+    const [ dbs, setDbs ] = useState<string[]>([]);
 
     //
     // Loads data from the backend.
     //
     async function load(): Promise<void> {
         // No databases loaded by default - user must open a database
-        setDbs(undefined);
+        setDbs([]);
     }
 
     useEffect(() => {

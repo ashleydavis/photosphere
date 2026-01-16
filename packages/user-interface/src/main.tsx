@@ -145,7 +145,7 @@ function __Main({ isMobile = false }: IMainProps) {
     }, []);
 
     useEffect(() => {
-        if (!dbs) {
+        if (dbs.length === 0) {
             return;
         }
         
@@ -178,18 +178,12 @@ function __Main({ isMobile = false }: IMainProps) {
     // Navigate to the users default database.
     //
     function navigateToDefaultDatabase(page: string): void {
-        if (!dbs) {
-            throw new Error(`No sets available.`);
+        if (dbs.length === 0) {
+            throw new Error(`No databases available.`);
         }
 
-        if (dbs.defaultDb) {
-            console.log(`Navigating to default set.`);
-            navigateToDatabase(page, dbs.defaultDb);
-        }
-        else if (dbs.dbs.length > 0) {
-            console.log(`Navigating to first set.`);
-            navigateToDatabase(page, dbs.dbs[0].id);
-        }
+        console.log(`Navigating to first database.`);
+        navigateToDatabase(page, dbs[0]);
     }
 
     //
@@ -372,16 +366,16 @@ function __Main({ isMobile = false }: IMainProps) {
                                     {selectedItems.size > 0
                                         && <>
                                             <ListSubheader>MOVE TO</ListSubheader>
-                                            {dbs?.dbs.map(db => {
-                                                if (db.id === databaseId) {
-                                                    return null; // Don't show the current set.
+                                            {dbs.map(dbPath => {
+                                                if (dbPath === databaseId) {
+                                                    return null; // Don't show the current database.
                                                 }
                                                 return (
                                                     <MenuItem 
-                                                        key={db.id}
-                                                        onClick={() => onMoveSelectedToDatabase(db.id)}
+                                                        key={dbPath}
+                                                        onClick={() => onMoveSelectedToDatabase(dbPath)}
                                                         >
-                                                        {db.name}                                        
+                                                        {dbPath}                                        
                                                     </MenuItem>
                                                 );
                                             })}
