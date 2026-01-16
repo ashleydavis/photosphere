@@ -70,11 +70,6 @@ const sortingMap: { [key: string]: ISortBy } = {
 export interface IGalleryContext {
 
     //
-    // Set to true when the gallery is loading.
-    //
-    isLoading: boolean;
-
-    //
     // Gets all assets currently loaded (unsorted).
     //
     allItems(): IGalleryItem[];
@@ -238,7 +233,7 @@ export interface IGalleryContextProviderProps {
 
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
-    const { isLoading, updateAsset,
+    const { updateAsset,
         onReset: __onReset,
         onNewItems: __onNewItems,
         onItemsUpdated: __onItemsUpdated,
@@ -796,7 +791,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     const value: IGalleryContext = {
-        isLoading,
         searchText,
         allItems: _allItems,
         searchedItems: _searchedItems,
