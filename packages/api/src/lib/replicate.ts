@@ -518,7 +518,7 @@ export async function replicate(
     //
     // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    let destMerkleTree = await retry(() => loadMerkleTree(destMetadataStorage));
     if (!destMerkleTree) {
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
