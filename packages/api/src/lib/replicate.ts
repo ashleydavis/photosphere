@@ -419,17 +419,17 @@ async function replicateBsonDatabase(
         const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
         if (!destRecord) {
             // Record doesn't exist in destination, add it
-            log.verbose(`Inserting record ${diff.recordId} into collection ${diff.collectionName}`);
             await retry(() => destCollection.insertOne(sourceRecord));
             result.copiedRecords++;
+            log.verbose(`Inserted record ${diff.recordId} into collection ${diff.collectionName}`);
         }
         else {
             // Record exists, check if it's different
             if (!recordsAreEqual(sourceRecord, destRecord)) {
                 // Records are different, update the destination record
-                log.verbose(`Updating record ${diff.recordId} in collection ${diff.collectionName}`);
                 await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
                 result.copiedRecords++;
+                log.verbose(`Updated record ${diff.recordId} in collection ${diff.collectionName}`);
             }
         }
 
@@ -452,9 +452,9 @@ async function replicateBsonDatabase(
         const sourceRecord = await retry(() => sourceCollection.getOne(diff.recordId)); //todo: It's possible we don't need to do this lookup.
         if (!sourceRecord) {
             // Record doesn't exist in source, remove it from dest to match source
-            log.verbose(`Deleting record ${diff.recordId} from collection ${diff.collectionName}`);
             await retry(() => destCollection.deleteOne(diff.recordId));
             result.copiedRecords++;
+            log.verbose(`Deleted record ${diff.recordId} from collection ${diff.collectionName}`);
         }
 
         if (progressCallback && recordsConsidered % 100 === 0) {
