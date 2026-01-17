@@ -30,7 +30,7 @@ export function App() {
             }}
         >
             <AppContextProvider>
-                <PlatformProviderWeb>
+                <PlatformProviderWeb ws={ws}>
                     <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
                         <GalleryContextProvider>
                             <GalleryLayoutContextProvider>

@@ -5,6 +5,10 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 const PORT = 3001;
 
@@ -90,6 +94,10 @@ wss.on("connection", (ws: WebSocket) => {
                 const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.taskId);
                 console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
             }
+            else if (messageData.type === "open-database") {
+                // Handle database opening request
+                await handleOpenDatabase(ws);
+            }
         }
         catch (error) {
             console.error("Error handling WebSocket message:", error);
@@ -110,6 +118,114 @@ wss.on("connection", (ws: WebSocket) => {
         }
     });
 });
+
+//
+// Handles database opening request from client.
+//
+async function handleOpenDatabase(ws: WebSocket): Promise<void> {
+    try {
+        const databasePath = await showDirectoryDialog();
+
+        if (databasePath) {
+            // Send database-opened message back to client
+            ws.send(JSON.stringify({
+                type: "database-opened",
+                databasePath: databasePath,
+            }));
+        }
+    }
+    catch (error: any) {
+        // User cancelled or error occurred
+        if (error.code === 1 || error.userCancelled) {
+            // User cancelled - don't send error, just return
+            console.log("User cancelled database opening");
+            return;
+        }
+        console.error("Error opening database:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error opening database",
+        }));
+    }
+}
+
+//
+// Shows a directory picker dialog using platform-specific tools.
+//
+async function showDirectoryDialog(): Promise<string | null> {
+    const platform = process.platform;
+    
+    if (platform === "linux") {
+        // Try zenity first (GNOME), then kdialog (KDE)
+        try {
+            const { stdout } = await execAsync("zenity --file-selection --directory --title='Open Database'");
+            return stdout.trim() || null;
+        }
+        catch (error: any) {
+            if (error.code === 1) {
+                // User cancelled
+                throw { code: 1, userCancelled: true };
+            }
+            // zenity not available, try kdialog
+            try {
+                const { stdout } = await execAsync("kdialog --getexistingdirectory --title 'Open Database'");
+                return stdout.trim() || null;
+            }
+            catch (kdialogError: any) {
+                if (kdialogError.code === 1) {
+                    // User cancelled
+                    throw { code: 1, userCancelled: true };
+                }
+                throw new Error("Neither zenity nor kdialog is available. Please install one of them.");
+            }
+        }
+    }
+    else if (platform === "darwin") {
+        // macOS - use osascript (AppleScript)
+        const script = `
+            tell application "System Events"
+                activate
+                set folderPath to choose folder with prompt "Open Database"
+                return POSIX path of folderPath
+            end tell
+        `;
+        try {
+            const { stdout } = await execAsync(`osascript -e '${script}'`);
+            return stdout.trim() || null;
+        }
+        catch (error: any) {
+            if (error.code === 1 || error.stderr?.includes("User cancelled")) {
+                throw { code: 1, userCancelled: true };
+            }
+            throw error;
+        }
+    }
+    else if (platform === "win32") {
+        // Windows - use PowerShell
+        const script = `
+            Add-Type -AssemblyName System.Windows.Forms
+            $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+            $folderBrowser.Description = "Open Database"
+            $folderBrowser.ShowNewFolderButton = $false
+            if ($folderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                Write-Output $folderBrowser.SelectedPath
+            }
+        `;
+        try {
+            const { stdout } = await execAsync(`powershell -Command "${script.replace(/\n/g, "; ")}"`);
+            return stdout.trim() || null;
+        }
+        catch (error: any) {
+            if (error.code === 1) {
+                throw { code: 1, userCancelled: true };
+            }
+            throw error;
+        }
+    }
+    else {
+        throw new Error(`Unsupported platform: ${platform}`);
+    }
+}
 
 // Start server
 server.listen(PORT, () => {

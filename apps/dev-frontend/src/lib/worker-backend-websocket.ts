@@ -57,9 +57,7 @@ export class WorkerBackendWebSocket implements IWorkerBackend {
             const { taskId, message: taskMessage } = message;
             this.notifyMessageCallbacks(taskId, taskMessage);
         }
-        else {
-            throw new Error(`Unknown message type: ${message.type}`);
-        }
+        // Ignore other message types (they may be handled by other parts of the app)
     }
 
     //
