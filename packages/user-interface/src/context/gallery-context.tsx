@@ -377,6 +377,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     function _onReset(): void {
         allItems.current = [];
         searchedItems.current = [];
+        sortedItems.current = [];
         setSelectedItems(new Set<string>());
         setSearchText("");
 
