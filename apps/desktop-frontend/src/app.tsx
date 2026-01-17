@@ -35,8 +35,8 @@ export function App() {
                 v7_relativeSplatPath: true,
             }}
         >
-            <AppContextProvider>
-                <PlatformProviderElectron electronAPI={electronAPI}>
+            <PlatformProviderElectron electronAPI={electronAPI}>
+                <AppContextProvider>
                     <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
                         <GalleryContextProvider>
                             <GalleryLayoutContextProvider>
@@ -44,8 +44,8 @@ export function App() {
                             </GalleryLayoutContextProvider>
                         </GalleryContextProvider>
                     </AssetDatabaseProvider>
-                </PlatformProviderElectron>
-            </AppContextProvider>
+                </AppContextProvider>
+            </PlatformProviderElectron>
         </HashRouter>
     );
 }

@@ -7,5 +7,8 @@ export interface IElectronAPI {
     onMessage: (messageType: string, callback: (data: any) => void) => void;
     removeAllListeners: (messageType: string) => void;
     openDatabase: () => Promise<void>;
+    getRecentDatabases: () => Promise<string[]>;
+    removeDatabase: (databasePath: string) => Promise<void>;
+    addRecentDatabase: (databasePath: string) => Promise<void>;
 }
 

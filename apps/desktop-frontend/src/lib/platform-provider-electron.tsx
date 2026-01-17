@@ -45,9 +45,24 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
+    const getRecentDatabases = useCallback(async (): Promise<string[]> => {
+        return await electronAPI.getRecentDatabases();
+    }, [electronAPI]);
+
+    const removeDatabase = useCallback(async (databasePath: string): Promise<void> => {
+        return await electronAPI.removeDatabase(databasePath);
+    }, [electronAPI]);
+
+    const addRecentDatabase = useCallback(async (databasePath: string): Promise<void> => {
+        return await electronAPI.addRecentDatabase(databasePath);
+    }, [electronAPI]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
+        getRecentDatabases,
+        removeDatabase,
+        addRecentDatabase,
     };
 
     return (

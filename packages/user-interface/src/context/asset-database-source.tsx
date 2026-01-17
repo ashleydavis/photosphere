@@ -39,7 +39,7 @@ export interface IAssetDatabase extends IGallerySource {
     //
     // Opens a database by path directly (without showing file dialog).
     //
-    openDatabase(dbPath: string): void;
+    openDatabase(dbPath: string): Promise<void>;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -289,9 +289,14 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Opens a database by path directly (without showing file dialog).
     //
-    function openDatabase(dbPath: string): void {
+    async function openDatabase(dbPath: string): Promise<void> {
         // Directly set the database path to trigger loading
         setDatabasePath(dbPath);
+        // Add to recent databases and update last database (don't await to avoid blocking)
+        platform.addRecentDatabase(dbPath)
+            .catch(err => {
+                console.error("Failed to add database to recent list:", err);
+            });
     }
     
 

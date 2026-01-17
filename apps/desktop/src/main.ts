@@ -1,11 +1,11 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu } from 'electron';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { cpus } from 'os';
 import type { ITask, ITaskQueue } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
-import { findAvailablePort } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder } from 'node-utils';
 import type { IWorkerOptions } from './lib/worker-init';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 
@@ -110,6 +110,24 @@ ipcMain.on('add-task', (event, taskType: string, data: any, taskId?: string) => 
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
 // The renderer can catch it when calling ipcRenderer.invoke().
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
+
+// IPC handler for removing a database from recent list
+ipcMain.handle('remove-database', logExceptions(async (event, databasePath: string) => {
+    await removeRecentDatabase(databasePath);
+    return { success: true };
+}, 'Error removing database'));
+
+// IPC handler for getting recent databases list
+ipcMain.handle('get-recent-databases', logExceptions(async () => {
+    const config = await loadDesktopConfig();
+    return config.recentDatabases || [];
+}, 'Error getting recent databases'));
+
+// IPC handler for adding a database to recent list
+ipcMain.handle('add-recent-database', logExceptions(async (event, databasePath: string) => {
+    await addRecentDatabase(databasePath);
+    return { success: true };
+}, 'Error adding recent database'));
 
 //
 // Initializes the worker pool and task queue for background task processing.
@@ -302,15 +320,20 @@ async function openDatabase(): Promise<void> {
         mainWindow.focus();
     }
 
+    // Load config to get last folder
+    const config = await loadDesktopConfig();
+
     // Show file dialog to select database (modal when mainWindow is provided)
     const result = mainWindow
         ? await dialog.showOpenDialog(mainWindow, {
             properties: ['openDirectory'],
             title: 'Open Database',
+            defaultPath: config.lastFolder,
         })
         : await dialog.showOpenDialog({
             properties: ['openDirectory'],
             title: 'Open Database',
+            defaultPath: config.lastFolder,
         });
 
     if (result.canceled || result.filePaths.length === 0) {
@@ -318,6 +341,11 @@ async function openDatabase(): Promise<void> {
     }
 
     const databasePath = result.filePaths[0];
+
+    // Save to recent databases and update last folder
+    await addRecentDatabase(databasePath);
+    const folderPath = dirname(databasePath);
+    await updateLastFolder(folderPath);
 
     // Notify frontend to load the database
     // The REST API doesn't need to be restarted since it handles multiple databases dynamically

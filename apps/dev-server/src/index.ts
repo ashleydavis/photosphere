@@ -7,6 +7,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder } from "node-utils";
+import * as path from "path";
 
 const execAsync = promisify(exec);
 
@@ -98,6 +100,18 @@ wss.on("connection", (ws: WebSocket) => {
                 // Handle database opening request
                 await handleOpenDatabase(ws);
             }
+            else if (messageData.type === "remove-database") {
+                // Handle database removal request
+                await handleRemoveDatabase(ws, messageData.databasePath);
+            }
+            else if (messageData.type === "get-recent-databases") {
+                // Handle request for recent databases list
+                await handleGetRecentDatabases(ws);
+            }
+            else if (messageData.type === "add-recent-database") {
+                // Handle request to add database to recent list
+                await handleAddRecentDatabase(ws, messageData.databasePath);
+            }
         }
         catch (error) {
             console.error("Error handling WebSocket message:", error);
@@ -124,9 +138,15 @@ wss.on("connection", (ws: WebSocket) => {
 //
 async function handleOpenDatabase(ws: WebSocket): Promise<void> {
     try {
-        const databasePath = await showDirectoryDialog();
+        const config = await loadDesktopConfig();
+        const databasePath = await showDirectoryDialog(config.lastFolder);
 
         if (databasePath) {
+            // Save to recent databases and update last folder
+            await addRecentDatabase(databasePath);
+            const folderPath = path.dirname(databasePath);
+            await updateLastFolder(folderPath);
+
             // Send database-opened message back to client
             ws.send(JSON.stringify({
                 type: "database-opened",
@@ -150,15 +170,80 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
 }
 
 //
-// Shows a directory picker dialog using platform-specific tools.
+// Handles database removal request from client.
 //
-async function showDirectoryDialog(): Promise<string | null> {
+async function handleRemoveDatabase(ws: WebSocket, databasePath: string): Promise<void> {
+    try {
+        await removeRecentDatabase(databasePath);
+        ws.send(JSON.stringify({
+            type: "database-removed",
+            databasePath: databasePath,
+        }));
+    }
+    catch (error: any) {
+        console.error("Error removing database:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error removing database",
+        }));
+    }
+}
+
+//
+// Handles request for recent databases list.
+//
+async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
+    try {
+        const config = await loadDesktopConfig();
+        ws.send(JSON.stringify({
+            type: "recent-databases",
+            databases: config.recentDatabases || [],
+        }));
+    }
+    catch (error: any) {
+        console.error("Error getting recent databases:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error getting recent databases",
+        }));
+    }
+}
+
+//
+// Handles request to add database to recent list.
+//
+async function handleAddRecentDatabase(ws: WebSocket, databasePath: string): Promise<void> {
+    try {
+        await addRecentDatabase(databasePath);
+        ws.send(JSON.stringify({
+            type: "database-added",
+            databasePath: databasePath,
+        }));
+    }
+    catch (error: any) {
+        console.error("Error adding recent database:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error adding recent database",
+        }));
+    }
+}
+
+//
+// Shows a directory picker dialog using platform-specific tools.
+// Uses lastFolder if provided to set the initial directory.
+//
+async function showDirectoryDialog(lastFolder?: string): Promise<string | null> {
     const platform = process.platform;
     
     if (platform === "linux") {
         // Try zenity first (GNOME), then kdialog (KDE)
         try {
-            const { stdout } = await execAsync("zenity --file-selection --directory --title='Open Database'");
+            let command = "zenity --file-selection --directory --title='Open Database'";
+            if (lastFolder) {
+                command += ` --filename="${lastFolder}"`;
+            }
+            const { stdout } = await execAsync(command);
             return stdout.trim() || null;
         }
         catch (error: any) {
@@ -168,7 +253,11 @@ async function showDirectoryDialog(): Promise<string | null> {
             }
             // zenity not available, try kdialog
             try {
-                const { stdout } = await execAsync("kdialog --getexistingdirectory --title 'Open Database'");
+                let command = "kdialog --getexistingdirectory --title 'Open Database'";
+                if (lastFolder) {
+                    command += ` "${lastFolder}"`;
+                }
+                const { stdout } = await execAsync(command);
                 return stdout.trim() || null;
             }
             catch (kdialogError: any) {
@@ -182,13 +271,15 @@ async function showDirectoryDialog(): Promise<string | null> {
     }
     else if (platform === "darwin") {
         // macOS - use osascript (AppleScript)
-        const script = `
+        let script = `
             tell application "System Events"
                 activate
                 set folderPath to choose folder with prompt "Open Database"
                 return POSIX path of folderPath
             end tell
         `;
+        // Note: osascript's choose folder doesn't support setting initial directory directly
+        // We'd need to use a different approach, but for now just use the default
         try {
             const { stdout } = await execAsync(`osascript -e '${script}'`);
             return stdout.trim() || null;
@@ -202,11 +293,13 @@ async function showDirectoryDialog(): Promise<string | null> {
     }
     else if (platform === "win32") {
         // Windows - use PowerShell
+        const initialDir = lastFolder ? `$folderBrowser.SelectedPath = "${lastFolder.replace(/\\/g, "\\\\")}"` : "";
         const script = `
             Add-Type -AssemblyName System.Windows.Forms
             $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
             $folderBrowser.Description = "Open Database"
             $folderBrowser.ShowNewFolderButton = $false
+            ${initialDir}
             if ($folderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 Write-Output $folderBrowser.SelectedPath
             }
