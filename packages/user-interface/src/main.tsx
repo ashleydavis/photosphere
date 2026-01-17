@@ -5,6 +5,7 @@ import { GalleryPage } from "./pages/gallery/gallery";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
 import { useApp } from "./context/app-context";
+import { usePlatform } from "./context/platform-context";
 import Dropdown from '@mui/joy/Dropdown';
 import MenuButton from '@mui/joy/MenuButton';
 import IconButton from '@mui/joy/IconButton';
@@ -89,6 +90,7 @@ function __Main({ isMobile = false }: IMainProps) {
     const [numLoaded, setNumLoaded] = useState<number>(0);
 
     const { dbs } = useApp();
+    const platform = usePlatform();
 
     const theme = useTheme();
 
@@ -138,12 +140,33 @@ function __Main({ isMobile = false }: IMainProps) {
         };
     }, []);
 
+    //
+    // Auto-open last database when no database is loaded (only once on initial mount).
+    //
     useEffect(() => {
-        // Open the first available database if there's no database loaded
-        if (!databasePath && dbs.length > 0) {
-            openDatabase(dbs[0]);
+        async function autoOpenLastDatabase() {
+            // Only auto-open if no database is currently loaded
+            if (databasePath) {
+                return;
+            }
+
+            try {
+                const recentDatabases = await platform.getRecentDatabases();
+                // The first database in the list is the most recently opened (lastDatabase)
+                if (recentDatabases.length > 0) {
+                    const lastDatabase = recentDatabases[0];
+                    // Call openDatabase to properly update the lastDatabase in config
+                    await openDatabase(lastDatabase);
+                }
+            }
+            catch (error) {
+                console.error("Error auto-opening last database:", error);
+            }
         }
-    }, [databasePath, dbs, openDatabase]);
+
+        autoOpenLastDatabase();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount
 
     useEffect(() => {
         if (searchText.length > 0 && !openSearch) {

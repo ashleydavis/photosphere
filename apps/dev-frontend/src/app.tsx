@@ -29,8 +29,8 @@ export function App() {
                 v7_relativeSplatPath: true,
             }}
         >
-            <AppContextProvider>
-                <PlatformProviderWeb ws={ws}>
+            <PlatformProviderWeb ws={ws}>
+                <AppContextProvider>
                     <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
                         <GalleryContextProvider>
                             <GalleryLayoutContextProvider>
@@ -38,8 +38,8 @@ export function App() {
                             </GalleryLayoutContextProvider>
                         </GalleryContextProvider>
                     </AssetDatabaseProvider>
-                </PlatformProviderWeb>
-            </AppContextProvider>
+                </AppContextProvider>
+            </PlatformProviderWeb>
         </HashRouter>
     );
 }

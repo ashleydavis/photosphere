@@ -17,6 +17,15 @@ const electronAPI: IElectronAPI = {
     openDatabase: (): Promise<void> => {
         return ipcRenderer.invoke('open-file');
     },
+    getRecentDatabases: (): Promise<string[]> => {
+        return ipcRenderer.invoke('get-recent-databases');
+    },
+    removeDatabase: (databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('remove-database', databasePath);
+    },
+    addRecentDatabase: (databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('add-recent-database', databasePath);
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

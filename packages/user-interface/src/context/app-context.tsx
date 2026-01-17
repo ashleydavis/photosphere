@@ -1,10 +1,16 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
+import { usePlatform } from "./platform-context";
 
 export interface IAppContext {
     //
     // Available media file databases (list of database paths).
     //
     dbs: string[];
+
+    //
+    // Removes a database from the recent databases list.
+    //
+    removeDatabase: (databasePath: string) => Promise<void>;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -14,6 +20,7 @@ export interface IProps {
 }
 
 export function AppContextProvider({ children }: IProps) {
+    const platform = usePlatform();
     
     //
     // Available media file databases (list of database paths).
@@ -24,8 +31,24 @@ export function AppContextProvider({ children }: IProps) {
     // Loads data from the backend.
     //
     async function load(): Promise<void> {
-        // No databases loaded by default - user must open a database
-        setDbs([]);
+        try {
+            const databases = await platform.getRecentDatabases();
+            setDbs(databases);
+        }
+        catch (err) {
+            console.error(`Failed to load recent databases:`);
+            console.error(err);
+            setDbs([]);
+        }
+    }
+
+    //
+    // Removes a database from the recent databases list.
+    //
+    async function removeDatabase(databasePath: string): Promise<void> {
+        await platform.removeDatabase(databasePath);
+        // Reload the list
+        await load();
     }
 
     useEffect(() => {
@@ -34,10 +57,11 @@ export function AppContextProvider({ children }: IProps) {
                 console.error(`Failed to load sets:`);
                 console.error(err)            
             });
-    }, []);
+    }, [platform]);
 
     const value: IAppContext = {
         dbs,
+        removeDatabase,
     };
     
     return (

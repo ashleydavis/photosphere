@@ -8,6 +8,7 @@ export * from './context/app-context';
 export { type IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";
+export { Sidebar, type ISidebarProps } from "./components/sidebar";
 export * from "./lib/file";
 export * from "./lib/image";
 export * from "./context/gallery-source";

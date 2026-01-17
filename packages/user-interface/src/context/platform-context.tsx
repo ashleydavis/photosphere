@@ -21,6 +21,21 @@ export interface IPlatformContext {
     // Returns an unsubscribe function.
     //
     onDatabaseOpened: (callback: (databasePath: string) => void) => Unsubscribe;
+
+    //
+    // Gets the list of recent databases.
+    //
+    getRecentDatabases: () => Promise<string[]>;
+
+    //
+    // Removes a database from the recent databases list.
+    //
+    removeDatabase: (databasePath: string) => Promise<void>;
+
+    //
+    // Adds a database to the recent databases list and updates last database.
+    //
+    addRecentDatabase: (databasePath: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);
