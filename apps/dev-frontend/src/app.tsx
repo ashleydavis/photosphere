@@ -8,6 +8,7 @@ import {
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
+import { PlatformProviderWeb } from "./lib/platform-provider-web";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 
 export function App() {
@@ -29,13 +30,15 @@ export function App() {
             }}
         >
             <AppContextProvider>
-                <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
-                    <GalleryContextProvider>
-                        <GalleryLayoutContextProvider>
-                            <Main />
-                        </GalleryLayoutContextProvider>
-                    </GalleryContextProvider>
-                </AssetDatabaseProvider>
+                <PlatformProviderWeb>
+                    <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
+                        <GalleryContextProvider>
+                            <GalleryLayoutContextProvider>
+                                <Main />
+                            </GalleryLayoutContextProvider>
+                        </GalleryContextProvider>
+                    </AssetDatabaseProvider>
+                </PlatformProviderWeb>
             </AppContextProvider>
         </HashRouter>
     );
