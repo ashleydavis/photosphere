@@ -1,24 +1,59 @@
-import React, { ReactNode, useCallback } from "react";
+import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { PlatformContextProvider, type IPlatformContext } from "user-interface";
 
 export interface IPlatformProviderWebProps {
     children: ReactNode | ReactNode[];
+    ws: WebSocket;
 }
 
 //
 // Web-specific platform context provider.
-// Provides stub implementations for web environment (database opening not supported in web).
+// Provides database opening functionality via WebSocket to dev-server.
 //
-export function PlatformProviderWeb({ children }: IPlatformProviderWebProps) {
+export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps) {
+    // Store callbacks for database-opened events
+    const callbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
+
+    // Set up message listener for database-opened events
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            try {
+                const messageData = JSON.parse(event.data.toString());
+                
+                if (messageData.type === "database-opened") {
+                    // Notify all subscribers
+                    callbacksRef.current.forEach(callback => {
+                        callback(messageData.databasePath);
+                    });
+                }
+            }
+            catch (error) {
+                // Log parse errors but don't throw - other message handlers may process this message
+                console.error("Error parsing database-opened message:", error);
+            }
+        };
+
+        ws.addEventListener('message', handleMessage);
+
+        return () => {
+            ws.removeEventListener('message', handleMessage);
+        };
+    }, [ws]);
+
     const openDatabase = useCallback(async (): Promise<void> => {
-        // Database opening via file dialog is not supported in web environment
-        throw new Error("Database opening is not supported in web environment. Use openDatabase(path) directly instead.");
-    }, []);
+        // Send open-database request to server
+        ws.send(JSON.stringify({
+            type: "open-database",
+        }));
+    }, [ws]);
 
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
-        // No-op: database-opened events are not used in web environment
+        // Add callback to set
+        callbacksRef.current.add(callback);
+
+        // Return unsubscribe function
         return () => {
-            // Unsubscribe (no-op)
+            callbacksRef.current.delete(callback);
         };
     }, []);
 
