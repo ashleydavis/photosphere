@@ -471,5 +471,219 @@ describe("TaskQueue", () => {
             expect(results[0].error?.message).toContain(errorMessage);
         });
     });
+
+    describe("unsubscribe and shutdown", () => {
+        it("should return unsubscribe function from onTaskComplete", () => {
+            const callback = () => {};
+            const unsubscribe = queue.onTaskComplete(callback);
+            
+            expect(typeof unsubscribe).toBe("function");
+            expect(unsubscribe).toBeDefined();
+        });
+
+        it("should return unsubscribe function from onAnyTaskMessage", () => {
+            const callback = () => {};
+            const unsubscribe = queue.onAnyTaskMessage(callback);
+            
+            expect(typeof unsubscribe).toBe("function");
+            expect(unsubscribe).toBeDefined();
+        });
+
+        it("should return unsubscribe function from onTaskMessage", () => {
+            const callback = () => {};
+            const unsubscribe = queue.onTaskMessage("test-message", callback);
+            
+            expect(typeof unsubscribe).toBe("function");
+            expect(unsubscribe).toBeDefined();
+        });
+
+        it("should return unsubscribe function from onWorkerAvailable", () => {
+            const callback = () => {};
+            const unsubscribe = queue.onWorkerAvailable(callback);
+            
+            expect(typeof unsubscribe).toBe("function");
+            expect(unsubscribe).toBeDefined();
+        });
+
+        it("should prevent callbacks from being called after unsubscribe", async () => {
+            let callback1Called = false;
+            let callback2Called = false;
+
+            const callback1 = () => { callback1Called = true; };
+            const callback2 = () => { callback2Called = true; };
+
+            registerHandler("test-task", async () => "done");
+
+            const unsubscribe1 = queue.onTaskComplete(callback1);
+            const unsubscribe2 = queue.onTaskComplete(callback2);
+
+            // Unsubscribe callback1
+            unsubscribe1();
+
+            queue.addTask("test-task", {});
+            await queue.awaitAllTasks();
+
+            // callback1 should not be called
+            expect(callback1Called).toBe(false);
+            // callback2 should still be called
+            expect(callback2Called).toBe(true);
+        });
+
+        it("should prevent task messages from being received after unsubscribe", async () => {
+            let callback1Called = false;
+            let callback2Called = false;
+
+            const callback1 = () => { callback1Called = true; };
+            const callback2 = () => { callback2Called = true; };
+
+            registerHandler("test-task", async (data, context) => {
+                context.sendMessage({ type: "test-message", data: "test" });
+                return "done";
+            });
+
+            const unsubscribe1 = queue.onTaskMessage("test-message", callback1);
+            const unsubscribe2 = queue.onTaskMessage("test-message", callback2);
+
+            // Unsubscribe callback1
+            unsubscribe1();
+
+            queue.addTask("test-task", {});
+            await queue.awaitAllTasks();
+
+            // callback1 should not be called
+            expect(callback1Called).toBe(false);
+            // callback2 should still be called
+            expect(callback2Called).toBe(true);
+        });
+
+        it("should prevent any task messages from being received after unsubscribe", async () => {
+            let callback1Called = false;
+            let callback2Called = false;
+
+            const callback1 = () => { callback1Called = true; };
+            const callback2 = () => { callback2Called = true; };
+
+            registerHandler("test-task", async (data, context) => {
+                context.sendMessage({ type: "test-message", data: "test" });
+                return "done";
+            });
+
+            const unsubscribe1 = queue.onAnyTaskMessage(callback1);
+            const unsubscribe2 = queue.onAnyTaskMessage(callback2);
+
+            // Unsubscribe callback1
+            unsubscribe1();
+
+            queue.addTask("test-task", {});
+            await queue.awaitAllTasks();
+
+            // callback1 should not be called
+            expect(callback1Called).toBe(false);
+            // callback2 should still be called
+            expect(callback2Called).toBe(true);
+        });
+
+        it("should prevent callbacks from being called after shutdown", async () => {
+            let callbackCalled = false;
+
+            const callback = () => { callbackCalled = true; };
+
+            registerHandler("test-task", async () => "done");
+
+            queue.onTaskComplete(callback);
+
+            // Shutdown the queue
+            queue.shutdown();
+
+            queue.addTask("test-task", {});
+            // Wait a bit to ensure any async callbacks would have fired
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Callback should not be called after shutdown
+            expect(callbackCalled).toBe(false);
+        });
+
+        it("should prevent task messages from being received after shutdown", async () => {
+            let callbackCalled = false;
+
+            const callback = () => { callbackCalled = true; };
+
+            registerHandler("test-task", async (data, context) => {
+                context.sendMessage({ type: "test-message", data: "test" });
+                return "done";
+            });
+
+            queue.onTaskMessage("test-message", callback);
+
+            // Shutdown the queue
+            queue.shutdown();
+
+            queue.addTask("test-task", {});
+            // Wait a bit to ensure any async callbacks would have fired
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Callback should not be called after shutdown
+            expect(callbackCalled).toBe(false);
+        });
+
+        it("should unsubscribe from all worker backend events on shutdown", () => {
+            let onTaskCompleteUnsubscribeCalled = false;
+            let onAnyTaskMessageUnsubscribeCalled = false;
+            let onWorkerAvailableUnsubscribeCalled = false;
+
+            const onTaskCompleteUnsubscribe = () => { onTaskCompleteUnsubscribeCalled = true; };
+            const onAnyTaskMessageUnsubscribe = () => { onAnyTaskMessageUnsubscribeCalled = true; };
+            const onWorkerAvailableUnsubscribe = () => { onWorkerAvailableUnsubscribeCalled = true; };
+
+            // Create a mock worker backend that tracks unsubscribe calls
+            const mockBackend = {
+                dispatchTask: () => true,
+                onTaskComplete: () => onTaskCompleteUnsubscribe,
+                onAnyTaskMessage: () => onAnyTaskMessageUnsubscribe,
+                onWorkerAvailable: () => onWorkerAvailableUnsubscribe,
+                isIdle: () => true,
+                shutdown: () => {},
+            };
+
+            const testQueue = new TaskQueue(uuidGenerator, timestampProvider, 600000, mockBackend as any);
+
+            // Shutdown should call all unsubscribe functions
+            testQueue.shutdown();
+
+            expect(onTaskCompleteUnsubscribeCalled).toBe(true);
+            expect(onAnyTaskMessageUnsubscribeCalled).toBe(true);
+            expect(onWorkerAvailableUnsubscribeCalled).toBe(true);
+        });
+
+        it("should allow multiple unsubscribes of the same callback", () => {
+            const callback = () => {};
+            const unsubscribe1 = queue.onTaskComplete(callback);
+            const unsubscribe2 = queue.onTaskComplete(callback);
+
+            // Both should be valid unsubscribe functions
+            expect(typeof unsubscribe1).toBe("function");
+            expect(typeof unsubscribe2).toBe("function");
+
+            // Both should work independently
+            unsubscribe1();
+            unsubscribe2();
+
+            // Should not throw
+            expect(true).toBe(true);
+        });
+
+        it("should handle unsubscribe being called multiple times", () => {
+            const callback = () => {};
+            const unsubscribe = queue.onTaskComplete(callback);
+
+            // Calling unsubscribe multiple times should not throw
+            unsubscribe();
+            unsubscribe();
+            unsubscribe();
+
+            // Should not throw
+            expect(true).toBe(true);
+        });
+    });
 });
 

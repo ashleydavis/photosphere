@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu } from 'electron';
 import { join, dirname } from 'path';
 import { cpus } from 'os';
-import type { ITask, ITaskQueue } from 'task-queue';
+import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
@@ -11,6 +11,7 @@ import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './re
 
 let mainWindow: BrowserWindow | null = null;
 let taskQueue: ITaskQueue | null = null;
+let workerBackend: IWorkerBackend | null = null;
 let restApiWorker: UtilityProcess | null = null;
 let isShuttingDown: boolean = false;
 let restApiPort: number | null = null;
@@ -83,6 +84,12 @@ app.on('before-quit', () => {
         taskQueue.shutdown();
         taskQueue = null;
     }
+    
+    // Cleanup worker backend
+    if (workerBackend) {
+        workerBackend.shutdown();
+        workerBackend = null;
+    }
 
     // Cleanup REST API utility process
     if (restApiWorker) {
@@ -143,7 +150,7 @@ function initWorkers() {
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    const workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions);
+    workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions);
     taskQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
     console.log('Task queue initialized');
 
