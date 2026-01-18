@@ -163,7 +163,7 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Registers a callback that will be called for any task message, regardless of type./
+    // Registers a callback that will be called for any task message, regardless of type.
     //
     onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void {
         this.anyMessageCallbacks.push(callback);
