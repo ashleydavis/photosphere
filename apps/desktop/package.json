@@ -31,15 +31,16 @@
     "rest-api": "workspace:*"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
+    "electron": "^40.0.0",
     "@types/node": "^20.10.0",
-    "electron-builder": "^24.9.1",
+    "electron-builder": "^26.4.0",
     "typescript": "^5.3.3",
     "@playwright/test": "^1.57.0"
   },
   "build": {
     "appId": "com.monorepo.electron",
     "productName": "Bun Electron Test",
+    "electronVersion": "40.0.0",
     "directories": {
       "output": "release"
     },
